@@ -4,6 +4,7 @@ Streamlit frontend with artistic dark-themed UI + multilingual support (zh/en/ja
 """
 import time
 import json
+import os
 import streamlit as st
 import httpx
 
@@ -345,7 +346,7 @@ st.markdown("""<style>
 <div class="bg-orb bg-orb-3"></div>
 """, unsafe_allow_html=True)
 
-API_BASE = "http://localhost:8000"
+API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
 PHASES = ["query_analysis", "retrieval", "source_evaluation", "conflict_detection",
           "evidence_chain", "report_generation", "self_review"]
 
