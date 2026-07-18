@@ -1,0 +1,47 @@
+{
+  "categories": {
+    "ai_agent_frameworks": {
+      "label": "AI/Agent Frameworks",
+      "subdomains": [
+        "agent_orchestration", "mcp_ecosystem", "tool_calling", "llm_invocation",
+        "multi_agent_collaboration", "prompt_management", "rag_frameworks",
+        "memory_systems", "safety_guardrails", "evaluation_frameworks"
+      ]
+    },
+    "models_and_data": {
+      "label": "Models & Data",
+      "subdomains": [
+        "llm_selection", "embedding_models", "reranker", "vector_databases",
+        "graph_databases", "document_parsing", "data_pipelines",
+        "prompt_strategies", "fine_tuning", "multimodal"
+      ]
+    },
+    "backend_frameworks": {
+      "label": "Backend Frameworks & API",
+      "subdomains": [
+        "web_frameworks", "api_paradigms", "auth_authorization", "serialization",
+        "middleware", "dependency_injection", "async_solutions",
+        "task_queues", "file_storage", "api_gateways"
+      ]
+    },
+    "infrastructure": {
+      "label": "Infrastructure",
+      "subdomains": [
+        "relational_db", "nosql", "caching", "message_queues",
+        "search_engines", "object_storage", "service_discovery",
+        "config_center", "distributed_coordination", "stream_processing"
+      ]
+    },
+    "devops": {
+      "label": "Deployment & Operations",
+      "subdomains": [
+        "container_orchestration", "cicd", "monitoring", "logging",
+        "distributed_tracing", "cloud_platforms", "iac",
+        "canary_releases", "security_scanning", "disaster_recovery"
+      ]
+    }
+  },
+  "scenes": ["solo", "team", "enterprise"],
+  "difficulties": ["simple", "medium", "hard"],
+  "variant_factors": ["language", "cost_sensitivity", "scale", "compliance"]
+}

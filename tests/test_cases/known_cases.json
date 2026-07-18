@@ -1,0 +1,62 @@
+[
+  {
+    "id": "TC-0001",
+    "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "LangGraph",
+    "tech_b": "CrewAI",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph has lower-level control, better for solo dev who needs flexibility. CrewAI has higher-level abstractions but less customizability."
+  },
+  {
+    "id": "TC-0002",
+    "query": "FastAPI vs Flask for REST API in a mid-size team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "FastAPI",
+    "tech_b": "Flask",
+    "expected_winner": "FastAPI",
+    "ground_truth_notes": "FastAPI has built-in async, auto-docs, Pydantic validation. Flask needs extensions. For team REST API, FastAPI is the modern default."
+  },
+  {
+    "id": "TC-0003",
+    "query": "PostgreSQL vs MySQL for enterprise financial data",
+    "category": "Infrastructure",
+    "subdomain": "relational_db",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "PostgreSQL",
+    "tech_b": "MySQL",
+    "expected_winner": "PostgreSQL",
+    "ground_truth_notes": "PostgreSQL has stronger ACID compliance, better analytical queries, richer extension ecosystem. MySQL better for simple read-heavy workloads."
+  },
+  {
+    "id": "TC-0004",
+    "query": "Chroma vs Pinecone for RAG vector database on a budget",
+    "category": "Models & Data",
+    "subdomain": "vector_databases",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Chroma",
+    "tech_b": "Pinecone",
+    "expected_winner": "Chroma",
+    "ground_truth_notes": "Chroma is free, local, open-source. Pinecone is managed, costs money. For solo/small budget, Chroma wins. For scale/production, Pinecone."
+  },
+  {
+    "id": "TC-0005",
+    "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Kubernetes",
+    "tech_b": "Docker Swarm",
+    "expected_winner": "Kubernetes",
+    "ground_truth_notes": "Kubernetes is industry standard, has massive ecosystem. Docker Swarm simpler but dying. For team setting, K8s is the long-term choice despite steeper learning curve."
+  }
+]
