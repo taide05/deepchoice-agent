@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepchoice"
+version = "0.1.0"
+description = "Tech Selection Deep Research Agent"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "langchain-community>=0.3.0",
+    "openai>=1.50.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "fastapi>=0.115.0",
+    "sse-starlette>=2.0.0",
+    "uvicorn>=0.30.0",
+    "streamlit>=1.38.0",
+    "loguru>=0.7.0",
+    "json-repair>=0.30.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
