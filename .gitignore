@@ -23,3 +23,5 @@ Thumbs.db
 chroma_kb/chroma_db/
 outputs/
 .env
+
+docs/
