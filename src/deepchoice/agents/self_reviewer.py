@@ -68,4 +68,5 @@ class SelfReviewerAgent:
         return {
             "confidence": result.get("confidence", "medium"),
             "knowledge_gaps": result.get("knowledge_gaps", []),
+            "retry_count": research_state.get("retry_count", 0) + 1,
         }
