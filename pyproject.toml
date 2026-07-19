@@ -9,6 +9,7 @@ description = "Tech Selection Deep Research Agent"
 requires-python = ">=3.11"
 dependencies = [
     "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=2.0.0",
     "langchain-core>=0.3.0",
     "langchain-community>=0.3.0",
     "openai>=1.50.0",

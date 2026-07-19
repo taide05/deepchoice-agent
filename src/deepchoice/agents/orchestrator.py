@@ -1,5 +1,8 @@
 import time
+import asyncio
+from pathlib import Path
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 from ..state import ResearchState
 from ..utils.views import print_agent_output
 from .query_analyzer import QueryAnalyzerAgent
@@ -10,14 +13,31 @@ from .evidence_chain import EvidenceChainAgent
 from .report_generator import ReportGeneratorAgent
 from .self_reviewer import SelfReviewerAgent
 
+OUTPUT_DIR = Path("./outputs")
+
+
+async def _get_sqlite_saver():
+    try:
+        import aiosqlite
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    except ImportError:
+        return None
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    db_path = str(OUTPUT_DIR / "checkpoints.db")
+    conn = await aiosqlite.connect(db_path)
+    return AsyncSqliteSaver(conn)
+
 
 class ChiefEditorAgent:
-    def __init__(self, task: dict, websocket=None, stream_output=None, headers=None):
+    def __init__(self, task: dict, websocket=None, stream_output=None, headers=None,
+                 checkpointer=None, thread_id=None):
         self.task = task
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers or {}
         self.task_id = str(int(time.time()))
+        self.thread_id = thread_id or self.task_id
+        self.checkpointer = checkpointer if checkpointer is not None else MemorySaver()
 
     def _initialize_agents(self) -> dict:
         return {
@@ -71,14 +91,17 @@ class ChiefEditorAgent:
         if retry_count >= 1:
             return "end"
 
-        state["retry_count"] = retry_count + 1
         if len(gaps) <= 2:
             return "retry_small"
         return "retry_full"
 
     def init_research_team(self, start_from="query_analyzer"):
         agents = self._initialize_agents()
-        return self._create_workflow(agents, start_from=start_from)
+        workflow = self._create_workflow(agents, start_from=start_from)
+        return workflow.compile(checkpointer=self.checkpointer)
+
+    def _make_config(self):
+        return {"configurable": {"thread_id": self.thread_id}}
 
     async def run_research_task(self, task: dict | None = None):
         task = task or self.task
@@ -86,10 +109,38 @@ class ChiefEditorAgent:
         start_from = "multi_retriever" if has_sub_questions else "query_analyzer"
 
         print_agent_output(f"Starting research from: {start_from}", agent="ORCHESTRATOR")
-        workflow = self.init_research_team(start_from=start_from)
-        chain = workflow.compile()
+        chain = self.init_research_team(start_from=start_from)
+        config = self._make_config()
         initial_state = {"task": task}
         if has_sub_questions:
             initial_state["sub_questions"] = task["sub_questions"]
-        result = await chain.ainvoke(initial_state)
+        result = await chain.ainvoke(initial_state, config=config)
+        return result
+
+    async def astream_research_task(self, task: dict | None = None):
+        task = task or self.task
+        has_sub_questions = bool(task.get("sub_questions"))
+        start_from = "multi_retriever" if has_sub_questions else "query_analyzer"
+
+        print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
+        chain = self.init_research_team(start_from=start_from)
+        config = self._make_config()
+        initial_state = {"task": task}
+        if has_sub_questions:
+            initial_state["sub_questions"] = task["sub_questions"]
+
+        async for event in chain.astream(initial_state, config=config, stream_mode="updates"):
+            yield event
+
+    async def get_state(self):
+        chain = self.init_research_team()
+        config = self._make_config()
+        return await chain.aget_state(config)
+
+    async def get_state_history(self):
+        chain = self.init_research_team()
+        config = self._make_config()
+        result = []
+        async for state in chain.aget_state_history(config):
+            result.append(state)
         return result

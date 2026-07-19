@@ -1,9 +1,14 @@
 import json
 import asyncio
+import uuid
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from ..agents.orchestrator import ChiefEditorAgent
+from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
 from .snapshot_store import save_snapshot, load_snapshot, save_report, list_history
 from ..formats.what_why_how import render as render_what_why_how
 from ..formats.evidence_first import render as render_evidence_first
@@ -13,6 +18,7 @@ from .clarify_routes import router as clarify_router
 app = FastAPI(title="DeepChoice API", version="0.1.0")
 app.include_router(clarify_router)
 
+OUTPUT_DIR = Path("./outputs")
 _active_tasks: dict[str, dict] = {}
 FORMAT_RENDERERS = {
     "what_why_how": render_what_why_how,
@@ -28,91 +34,140 @@ async def health():
 
 @app.post("/research")
 async def start_research(task: dict):
-    orchestrator = ChiefEditorAgent(task)
+    checkpointer = await _get_sqlite_saver()
+    thread_id = str(uuid.uuid4())
+    orchestrator = ChiefEditorAgent(
+        task,
+        checkpointer=checkpointer,
+        thread_id=thread_id,
+    )
     task_id = orchestrator.task_id
 
-    state_proxy = {
-        "task": task,
-        "sub_questions": [],
-        "search_results": [],
-        "source_scores": [],
-        "conflicts": [],
-        "evidence_chains": [],
-        "report": "",
-        "confidence": "",
-        "knowledge_gaps": [],
-        "retry_count": 0,
-        "partial_failures": [],
-        "current_phase": "",
+    _active_tasks[task_id] = {
+        "thread_id": thread_id,
+        "orchestrator": orchestrator,
     }
-    _active_tasks[task_id] = state_proxy
 
-    asyncio.create_task(_run_research(task_id, orchestrator, state_proxy))
+    asyncio.create_task(_run_research(task_id, orchestrator))
 
     return {"task_id": task_id, "status": "started"}
 
 
-async def _run_research(task_id: str, orchestrator: ChiefEditorAgent, state_proxy: dict):
+async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
     try:
-        state_proxy["current_phase"] = "query_analysis"
         result = await orchestrator.run_research_task()
 
-        for key in state_proxy:
-            if key in result:
-                state_proxy[key] = result[key]
-
-        state_proxy["current_phase"] = "complete"
         save_snapshot(task_id, result)
         save_report(task_id, result.get("report", ""))
+
+        _active_tasks.pop(task_id, None)
+        _active_tasks[task_id] = {
+            "thread_id": orchestrator.thread_id,
+            "orchestrator": orchestrator,
+            "status": "complete",
+            "result": result,
+        }
     except Exception as e:
-        state_proxy["current_phase"] = "complete"
-        state_proxy["confidence"] = "low"
-        state_proxy["report"] = f"Research failed: {str(e)}"
+        _active_tasks[task_id] = {
+            "thread_id": orchestrator.thread_id,
+            "orchestrator": orchestrator,
+            "status": "failed",
+            "error": str(e),
+        }
 
 
 @app.get("/research/{task_id}/stream")
 async def stream_research(task_id: str):
-    state_proxy = _active_tasks.get(task_id)
-    if not state_proxy:
+    entry = _active_tasks.get(task_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    orchestrator = entry.get("orchestrator")
+    if not orchestrator:
+        raise HTTPException(status_code=404, detail="Orchestrator not found")
+
     async def event_generator():
-        phases = [
-            "query_analysis", "retrieval", "source_evaluation",
-            "conflict_detection", "evidence_chain", "report_generation", "self_review",
-        ]
-        last_phase = None
-        while True:
-            current = state_proxy.get("current_phase", "")
-            if current != last_phase:
-                if last_phase and last_phase != "complete":
-                    yield f"data: {json.dumps({'phase': last_phase, 'status': 'done'})}\n\n"
-                if current and current != "complete":
-                    yield f"data: {json.dumps({'phase': current, 'status': 'running'})}\n\n"
-                last_phase = current
+        try:
+            async for event in orchestrator.astream_research_task():
+                node_name = list(event.keys())[0]
+                node_data = event[node_name]
+                yield f"data: {json.dumps({'node': node_name, 'update': node_data}, ensure_ascii=False, default=str)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-            if current == "complete":
-                yield f"data: {json.dumps({'phase': 'complete', 'status': 'done', 'confidence': state_proxy.get('confidence', '')})}\n\n"
-                break
-
-            await asyncio.sleep(0.3)
+        yield f"data: {json.dumps({'node': '__done__', 'update': {}})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/research/{task_id}/status")
 async def research_status(task_id: str):
-    state_proxy = _active_tasks.get(task_id)
-    if not state_proxy:
+    entry = _active_tasks.get(task_id)
+    if entry and entry.get("status") == "complete":
+        return {
+            "task_id": task_id,
+            "status": "complete",
+            "confidence": entry.get("result", {}).get("confidence", ""),
+        }
+    if entry and entry.get("status") == "failed":
+        return {
+            "task_id": task_id,
+            "status": "failed",
+            "error": entry.get("error", ""),
+        }
+
+    orchestrator = entry.get("orchestrator") if entry else None
+    if orchestrator:
+        try:
+            state = await orchestrator.get_state()
+            if state and state.values:
+                current = state.values.get("current_phase", "running")
+                return {
+                    "task_id": task_id,
+                    "status": "running",
+                    "phase": current,
+                    "checkpoint_step": state.metadata.get("step", -1) if state.metadata else -1,
+                }
+        except Exception:
+            pass
+
+    if not entry:
         snapshot = load_snapshot(task_id)
         if snapshot:
             return {"task_id": task_id, "status": "complete"}
         raise HTTPException(status_code=404, detail="Task not found")
+
     return {
         "task_id": task_id,
         "status": "running",
-        "phase": state_proxy.get("current_phase", ""),
+        "phase": "unknown",
     }
+
+
+@app.get("/research/{task_id}/checkpoints")
+async def research_checkpoints(task_id: str):
+    entry = _active_tasks.get(task_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    orchestrator = entry.get("orchestrator")
+    if not orchestrator:
+        raise HTTPException(status_code=404, detail="Orchestrator not found")
+
+    try:
+        history = await orchestrator.get_state_history()
+        checkpoints = []
+        for state in history:
+            cp = {
+                "step": state.metadata.get("step", "?") if state.metadata else "?",
+                "source": state.metadata.get("source", "?") if state.metadata else "?",
+                "phase": state.values.get("current_phase", "") if state.values else "",
+                "confidence": state.values.get("confidence", "") if state.values else "",
+            }
+            checkpoints.append(cp)
+        return {"task_id": task_id, "checkpoints": checkpoints}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/research/{task_id}/report")
