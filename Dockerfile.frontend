@@ -1,0 +1,15 @@
+# 前端只有 streamlit + httpx，没有 C 扩展需要编译，单阶段足够
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir streamlit httpx
+
+COPY frontend/ /app/
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8501
+
+ENTRYPOINT ["streamlit", "run", "app.py"]
+CMD ["--server.port", "8501", "--server.address", "0.0.0.0"]
