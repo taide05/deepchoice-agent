@@ -1,0 +1,26 @@
+services:
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      # 运行时数据持久化——镜像里没有，容器重建不能丢
+      - outputs:/app/outputs
+      - chroma_db:/app/chroma_kb/chroma_db
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE=http://server:8000
+    depends_on:
+      - server
+
+volumes:
+  outputs:
+  chroma_db:

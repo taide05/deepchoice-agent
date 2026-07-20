@@ -1,0 +1,28 @@
+# Python 编译缓存
+__pycache__/
+*.pyc
+*.egg-info/
+
+# 测试
+.pytest_cache/
+tests/
+
+# Git
+.git/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 运行时挂载的数据
+outputs/
+chroma_kb/chroma_db/
+*.db
+*.db-shm
+*.db-wal
+
+# 开发文件
+docs/
+notes/
+.env

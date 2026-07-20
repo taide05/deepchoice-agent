@@ -26,3 +26,5 @@ outputs/
 
 docs/
 notes/
+.build-hf-cache/
+wheels/
