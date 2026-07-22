@@ -19,7 +19,11 @@ class ArxivSearch(BaseRetriever):
             resp = await client.get(url)
             resp.raise_for_status()
 
-        root = ET.fromstring(resp.text)
+        try:
+            root = ET.fromstring(resp.text)
+        except ET.ParseError as e:
+            raise ValueError(f"Arxiv returned non-XML response: {e}") from e
+
         ns = {"atom": "http://www.w3.org/2005/Atom"}
 
         results = []
