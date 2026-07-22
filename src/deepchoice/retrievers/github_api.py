@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from .base import BaseRetriever
 
@@ -13,12 +14,16 @@ class GitHubSearch(BaseRetriever):
 
         results = []
         async with httpx.AsyncClient(timeout=15) as client:
-            for repo_name in repos[:3]:
-                resp = await client.get(
+            tasks = [
+                client.get(
                     "https://api.github.com/search/repositories",
                     params={"q": repo_name, "sort": "stars", "per_page": 3},
                     headers={"Accept": "application/vnd.github.v3+json"},
                 )
+                for repo_name in repos[:3]
+            ]
+            responses = await asyncio.gather(*tasks)
+            for resp in responses:
                 if resp.status_code != 200:
                     continue
                 data = resp.json()
