@@ -26,6 +26,12 @@ ADAPT_PROMPT = """You are a search query optimizer. Rewrite each sub-question in
 
 6. **official** (official docs): Keywords that would appear in official documentation headings or API references. Include framework/module names. Example: "LangGraph StateGraph add_node add_edge documentation"
 
+## Language
+- Detect the language of the original query. Generate adapted queries in that language.
+- For English-only sources (arxiv, github, official), include English technical terms as a supplement, but still generate queries in the query's language where the source supports it.
+- Tavily and chroma_kb support Chinese queries — generate these in the query's language.
+- This ensures we don't miss high-quality content in the user's language.
+
 ## Rules:
 - Each variant MUST be specific and searchable (not generic like "compare frameworks")
 - Include version numbers or years where relevant

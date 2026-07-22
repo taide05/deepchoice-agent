@@ -25,11 +25,20 @@ class ReportGeneratorAgent:
         if partial_failures:
             total = len(research_state.get("search_results", [])) + len(partial_failures)
             available = total - len(partial_failures)
-            research_state["data_source_note"] = (
-                f"Data coverage: {available}/{total} sources available. "
-                f"Unavailable: {', '.join(partial_failures)}. "
-                f"Conclusions are based on the available sources and may miss perspectives from unavailable ones."
-            )
+            query = research_state["task"].get("query", "")
+            is_zh = any('一' <= c <= '鿿' for c in query)
+            if is_zh:
+                research_state["data_source_note"] = (
+                    f"数据覆盖: {available}/{total} 个来源可用。"
+                    f"不可用: {', '.join(partial_failures)}。"
+                    f"结论基于可用来源，可能遗漏不可用来源的视角。"
+                )
+            else:
+                research_state["data_source_note"] = (
+                    f"Data coverage: {available}/{total} sources available. "
+                    f"Unavailable: {', '.join(partial_failures)}. "
+                    f"Conclusions are based on the available sources and may miss perspectives from unavailable ones."
+                )
 
         renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)
         report = renderer(research_state)
