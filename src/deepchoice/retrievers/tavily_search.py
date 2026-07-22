@@ -6,9 +6,10 @@ from .base import BaseRetriever
 class TavilySearch(BaseRetriever):
     source = "tavily"
 
-    async def _do_search(self, query: str, sub_questions: list[str], max_results: int) -> list[dict]:
+    async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
+                         adapted_queries: list[str] | None = None) -> list[dict]:
         api_key = os.environ.get("TAVILY_API_KEY", "")
-        queries = [query] + sub_questions[:2]
+        queries = adapted_queries if adapted_queries else [query] + sub_questions[:2]
 
         async with httpx.AsyncClient(timeout=15) as client:
             all_results = []

@@ -5,8 +5,9 @@ from .base import BaseRetriever
 class GitHubSearch(BaseRetriever):
     source = "github"
 
-    async def _do_search(self, query: str, sub_questions: list[str], max_results: int) -> list[dict]:
-        keywords = query.lower().replace(" vs ", " ").replace(" versus ", " ").split()
+    async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
+                         adapted_queries: list[str] | None = None) -> list[dict]:
+        keywords = (adapted_queries[0] if adapted_queries else query).lower().replace(" vs ", " ").replace(" versus ", " ").split()
         stopwords = {"for", "and", "or", "in", "the", "a", "of", "to", "with", "using", "building"}
         repos = [w for w in keywords if w not in stopwords]
 

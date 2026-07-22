@@ -12,6 +12,9 @@ REVIEW_PROMPT = """You are a rigorous quality reviewer. Evaluate this research r
 ## Original Sub-Questions
 {sub_questions}
 
+## Pipeline Quality Signals (from upstream agents)
+{quality_signals}
+
 ## Retry Count
 {retry_count}
 
@@ -24,6 +27,7 @@ REVIEW_PROMPT = """You are a rigorous quality reviewer. Evaluate this research r
 6. Are there counter-examples or negative findings not flagged? (List them if yes)
 
 ## Confidence Assessment
+Use the pipeline quality signals above as primary input. Only flag issues that the upstream signals missed.
 - high: 6/6 passed, all evidence chains have strong or moderate strength
 - medium: 1-2 items failed, no critical gaps
 - low: 3+ items failed OR critical information missing
@@ -53,12 +57,19 @@ class SelfReviewerAgent:
     async def run(self, research_state: dict) -> dict:
         print_agent_output("Running self-review quality check", agent="SELF_REVIEWER")
 
+        upstream_signals = research_state.get("quality_signals", [])
+        signals_text = "\n".join(
+            f"- {s.get('agent', 'unknown')}: { {k: v for k, v in s.items() if k != 'agent'} }"
+            for s in upstream_signals
+        ) if upstream_signals else "No upstream quality signals available."
+
         prompt = [{
             "role": "user",
             "content": REVIEW_PROMPT.format(
                 report=research_state.get("report", ""),
                 evidence_chains=str(research_state.get("evidence_chains", [])),
                 sub_questions=str(research_state.get("sub_questions", [])),
+                quality_signals=signals_text,
                 retry_count=research_state.get("retry_count", 0),
             ),
         }]
@@ -69,4 +80,11 @@ class SelfReviewerAgent:
             "confidence": result.get("confidence", "medium"),
             "knowledge_gaps": result.get("knowledge_gaps", []),
             "retry_count": research_state.get("retry_count", 0) + 1,
+            "quality_signals": [{
+                "agent": "self_reviewer",
+                "passed_count": result.get("passed_count", 0),
+                "total_checks": 6,
+                "confidence": result.get("confidence", "medium"),
+                "gaps_found": len(result.get("knowledge_gaps", [])),
+            }],
         }
