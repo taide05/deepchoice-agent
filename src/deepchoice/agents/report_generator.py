@@ -34,4 +34,13 @@ class ReportGeneratorAgent:
         renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)
         report = renderer(research_state)
 
-        return {"report": report}
+        rec = research_state.get("final_recommendation", {})
+        return {
+            "report": report,
+            "quality_signals": [{
+                "agent": "report_generator",
+                "format": fmt,
+                "has_recommendation": bool(rec.get("recommendation")),
+                "recommendation_confidence": rec.get("confidence", "N/A"),
+            }],
+        }

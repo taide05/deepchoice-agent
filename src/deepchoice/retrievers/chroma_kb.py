@@ -15,8 +15,9 @@ class ChromaKB(BaseRetriever):
         self.collection = self.client.get_or_create_collection("tech_kb")
         self.model = SentenceTransformer("BAAI/bge-m3")
 
-    async def _do_search(self, query: str, sub_questions: list[str], max_results: int) -> list[dict]:
-        queries = [query] + sub_questions[:2]
+    async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
+                         adapted_queries: list[str] | None = None) -> list[dict]:
+        queries = adapted_queries if adapted_queries else [query] + sub_questions[:2]
         all_results = []
         seen_urls = set()
 

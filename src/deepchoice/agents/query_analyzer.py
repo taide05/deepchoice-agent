@@ -56,8 +56,16 @@ class QueryAnalyzerAgent:
 
         result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
 
+        sub_questions = result.get("sub_questions", [])
         return {
-            "sub_questions": result.get("sub_questions", []),
+            "sub_questions": sub_questions,
             "scene_context": result.get("scene_context", task.get("scene_context", "team")),
             "constraints": result.get("constraints", task.get("constraints", [])),
+            "quality_signals": [{
+                "agent": "query_analyzer",
+                "sub_question_count": len(sub_questions),
+                "dimensions_covered": 5,
+                "scene_context": result.get("scene_context", "team"),
+                "has_constraints": bool(task.get("constraints")),
+            }],
         }

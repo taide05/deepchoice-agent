@@ -100,7 +100,10 @@ class ConflictDetectorAgent:
 
         pairs = find_contradictions(source_scores)
         if not pairs:
-            return {"conflicts": []}
+            return {
+                "conflicts": [],
+                "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
+            }
 
         conflicts = []
         for pair in pairs:
@@ -137,4 +140,16 @@ class ConflictDetectorAgent:
             except Exception as e:
                 print_agent_output(f"Arbitration failed: {e}", agent="CONFLICT_DETECTOR")
 
-        return {"conflicts": conflicts}
+        resolved_count = sum(
+            1 for c in conflicts
+            if c.get("resolution") not in ("insufficient_data", None)
+        )
+        return {
+            "conflicts": conflicts,
+            "quality_signals": [{
+                "agent": "conflict_detector",
+                "conflicts_found": len(conflicts),
+                "resolved_count": resolved_count,
+                "unresolved_count": len(conflicts) - resolved_count,
+            }],
+        }

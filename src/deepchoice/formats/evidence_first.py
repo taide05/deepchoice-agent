@@ -6,14 +6,23 @@ def render(state: dict) -> str:
     strong = [c for c in chains if c["evidence_strength"] == "strong"]
     top = strong[0] if strong else (chains[0] if chains else None)
 
+    rec = state.get("final_recommendation", {})
     lines = [
         f"# {task.get('query', 'Technology Selection')} — Evidence Brief",
         "",
         "## Conclusion",
-        f"{top['conclusion'] if top else 'Insufficient evidence to draw a conclusion.'}",
+    ]
+    if rec.get("recommendation"):
+        lines.append(rec["recommendation"])
+        if rec.get("confidence_rationale"):
+            lines.append("")
+            lines.append(f"*{rec['confidence_rationale']}*")
+    else:
+        lines.append(top['conclusion'] if top else 'Insufficient evidence to draw a conclusion.')
+    lines.extend([
         "",
         "## Why Trust This Conclusion",
-    ]
+    ])
 
     if top:
         lines.append("### Strongest Evidence")
