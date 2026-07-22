@@ -104,7 +104,7 @@ class ConclusionSynthesizerAgent:
         }]
 
         try:
-            result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
+            result = await call_model(prompt, model="deepseek-v4-pro", response_format="json")
         except Exception as e:
             print_agent_output(f"Synthesis failed: {e}", agent="CONCLUSION_SYNTHESIZER")
             result = {
