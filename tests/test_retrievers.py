@@ -178,7 +178,7 @@ class TestMultiRetriever:
 
         class MockRetriever:
             source = "mock"
-            async def search(self, query, sub_questions, max_results=7):
+            async def search(self, query, sub_questions, max_results=7, adapted_queries=None):
                 return {"source": self.source, "status": "success", "results": [], "error": None, "latency_ms": 100}
 
         agent = MultiRetrieverAgent()
@@ -200,7 +200,7 @@ class TestMultiRetriever:
 
         class FailingRetriever:
             source = "fail"
-            async def search(self, query, sub_questions, max_results=7):
+            async def search(self, query, sub_questions, max_results=7, adapted_queries=None):
                 raise Exception("broken")
 
         agent = MultiRetrieverAgent()
