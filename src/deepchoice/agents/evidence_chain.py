@@ -50,4 +50,14 @@ class EvidenceChainAgent:
             agent="EVIDENCE_CHAIN",
         )
         chains = build_evidence_chain(source_scores, conflicts)
-        return {"evidence_chains": chains}
+        return {
+            "evidence_chains": chains,
+            "quality_signals": [{
+                "agent": "evidence_chain",
+                "total_chains": len(chains),
+                "strong": sum(1 for c in chains if c["evidence_strength"] == "strong"),
+                "moderate": sum(1 for c in chains if c["evidence_strength"] == "moderate"),
+                "weak": sum(1 for c in chains if c["evidence_strength"] == "weak"),
+                "disputed": sum(1 for c in chains if c.get("disputed")),
+            }],
+        }

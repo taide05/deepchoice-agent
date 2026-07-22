@@ -26,6 +26,17 @@ class MultiRetrieverAgent:
     async def run(self, research_state: dict) -> dict:
         query = research_state["task"]["query"]
         sub_questions = research_state.get("sub_questions", [])
+        adapted_queries = research_state.get("adapted_queries", {})
+
+        # On retry, knowledge_gaps are the new search targets
+        knowledge_gaps = research_state.get("knowledge_gaps", [])
+        if knowledge_gaps and research_state.get("retry_count", 0) > 0:
+            sub_questions = knowledge_gaps
+            print_agent_output(
+                f"Retry search targeting {len(knowledge_gaps)} knowledge gaps",
+                agent="MULTI_RETRIEVER",
+            )
+
         print_agent_output(f"Searching 6 sources for: {query}", agent="MULTI_RETRIEVER")
 
         # Fallback: if LLM-decomposed sub_questions are too generic,
@@ -40,7 +51,8 @@ class MultiRetrieverAgent:
         tasks = []
         for name, cls in RETRIEVER_REGISTRY.items():
             retriever = cls()
-            tasks.append(retriever.search(query, sub_questions))
+            adapted = adapted_queries.get(name, []) if adapted_queries else []
+            tasks.append(retriever.search(query, sub_questions, adapted_queries=adapted))
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -58,5 +70,14 @@ class MultiRetrieverAgent:
                 if result["status"] == "failed":
                     partial_failures.append(name)
 
-        return {"search_results": search_results, "partial_failures": partial_failures}
-asyncio.gather
+        return {
+            "search_results": search_results,
+            "partial_failures": partial_failures,
+            "quality_signals": [{
+                "agent": "multi_retriever",
+                "retrievers_used": len(RETRIEVER_REGISTRY),
+                "retrievers_failed": len(partial_failures),
+                "total_results": sum(len(r.get("results", [])) for r in search_results),
+                "had_adapted_queries": bool(adapted_queries),
+            }],
+        }

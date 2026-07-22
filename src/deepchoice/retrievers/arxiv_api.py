@@ -6,8 +6,10 @@ from .base import BaseRetriever
 class ArxivSearch(BaseRetriever):
     source = "arxiv"
 
-    async def _do_search(self, query: str, sub_questions: list[str], max_results: int) -> list[dict]:
-        keywords = query.replace(" vs ", " ").replace(" versus ", " ")[:200]
+    async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
+                         adapted_queries: list[str] | None = None) -> list[dict]:
+        keywords = (adapted_queries[0] if adapted_queries else
+                    query.replace(" vs ", " ").replace(" versus ", " ")[:200])
         url = (
             f"https://export.arxiv.org/api/query"
             f"?search_query=all:{keywords}&max_results={max_results}&sortBy=relevance"

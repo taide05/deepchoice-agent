@@ -5,8 +5,9 @@ from .base import BaseRetriever
 class OfficialSearch(BaseRetriever):
     source = "official"
 
-    async def _do_search(self, query: str, sub_questions: list[str], max_results: int) -> list[dict]:
-        keywords = query.lower().replace(" vs ", " ").split()
+    async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
+                         adapted_queries: list[str] | None = None) -> list[dict]:
+        keywords = (adapted_queries[0] if adapted_queries else query).lower().replace(" vs ", " ").split()
         results = []
 
         async with httpx.AsyncClient(timeout=15) as client:

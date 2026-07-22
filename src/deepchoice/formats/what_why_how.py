@@ -51,14 +51,40 @@ def render(state: dict) -> str:
             lines.append(f"- {g}")
         lines.append("")
 
+    rec = state.get("final_recommendation", {})
     lines.extend([
         "## How: Action Path",
         "",
-        f"**Confidence:** {state.get('confidence', 'unknown')}",
-        "",
-        "### Starting Point",
-        "Based on the evidence above, start with the highest-scored option that matches your scene context.",
-        "",
+    ])
+    if rec.get("recommendation"):
+        lines.append(f"**Recommendation:** {rec['recommendation']}")
+        lines.append("")
+        lines.append(f"**Confidence:** {rec.get('confidence', state.get('confidence', 'unknown'))}")
+        if rec.get("confidence_rationale"):
+            lines.append(f"*{rec['confidence_rationale']}*")
+        lines.append("")
+        if rec.get("ranked_options"):
+            lines.append("### Ranked Options")
+            for opt in rec["ranked_options"]:
+                lines.append(f"- **#{opt['rank']} {opt['name']}**: {opt.get('rationale', '')}")
+            lines.append("")
+        if rec.get("trade_offs"):
+            lines.append("### Trade-offs")
+            for t in rec["trade_offs"]:
+                lines.append(f"- **{t.get('dimension', '')}**: {t.get('finding', '')}")
+            lines.append("")
+        if rec.get("scene_fit_note"):
+            lines.append(f"**Scene Fit:** {rec['scene_fit_note']}")
+            lines.append("")
+    else:
+        lines.extend([
+            f"**Confidence:** {state.get('confidence', 'unknown')}",
+            "",
+            "### Starting Point",
+            "Based on the evidence above, start with the highest-scored option that matches your scene context.",
+            "",
+        ])
+    lines.extend([
         "### References",
     ])
     for c in chains:

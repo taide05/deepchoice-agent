@@ -6,10 +6,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from ..state import ResearchState
 from ..utils.views import print_agent_output
 from .query_analyzer import QueryAnalyzerAgent
+from .query_adapter import QueryAdapterAgent
 from .multi_retriever import MultiRetrieverAgent
 from .source_evaluator import SourceEvaluatorAgent
 from .conflict_detector import ConflictDetectorAgent
 from .evidence_chain import EvidenceChainAgent
+from .conclusion_synthesizer import ConclusionSynthesizerAgent
 from .report_generator import ReportGeneratorAgent
 from .self_reviewer import SelfReviewerAgent
 
@@ -42,10 +44,12 @@ class ChiefEditorAgent:
     def _initialize_agents(self) -> dict:
         return {
             "query_analyzer": QueryAnalyzerAgent(self.websocket, self.stream_output, self.headers),
+            "query_adapter": QueryAdapterAgent(self.websocket, self.stream_output, self.headers),
             "multi_retriever": MultiRetrieverAgent(self.websocket, self.stream_output, self.headers),
             "source_evaluator": SourceEvaluatorAgent(self.websocket, self.stream_output, self.headers),
             "conflict_detector": ConflictDetectorAgent(self.websocket, self.stream_output, self.headers),
             "evidence_chain": EvidenceChainAgent(self.websocket, self.stream_output, self.headers),
+            "conclusion_synthesizer": ConclusionSynthesizerAgent(self.websocket, self.stream_output, self.headers),
             "report_generator": ReportGeneratorAgent(self.websocket, self.stream_output, self.headers),
             "self_reviewer": SelfReviewerAgent(self.websocket, self.stream_output, self.headers),
         }
@@ -54,27 +58,31 @@ class ChiefEditorAgent:
         workflow = StateGraph(ResearchState)
 
         workflow.add_node("query_analyzer", agents["query_analyzer"].run)
+        workflow.add_node("query_adapter", agents["query_adapter"].run)
         workflow.add_node("multi_retriever", agents["multi_retriever"].run)
         workflow.add_node("source_evaluator", agents["source_evaluator"].run)
         workflow.add_node("conflict_detector", agents["conflict_detector"].run)
         workflow.add_node("evidence_chain", agents["evidence_chain"].run)
+        workflow.add_node("conclusion_synthesizer", agents["conclusion_synthesizer"].run)
         workflow.add_node("report_generator", agents["report_generator"].run)
         workflow.add_node("self_reviewer", agents["self_reviewer"].run)
 
         workflow.set_entry_point(start_from)
         if start_from == "query_analyzer":
-            workflow.add_edge("query_analyzer", "multi_retriever")
+            workflow.add_edge("query_analyzer", "query_adapter")
+        workflow.add_edge("query_adapter", "multi_retriever")
         workflow.add_edge("multi_retriever", "source_evaluator")
         workflow.add_edge("source_evaluator", "conflict_detector")
         workflow.add_edge("conflict_detector", "evidence_chain")
-        workflow.add_edge("evidence_chain", "report_generator")
+        workflow.add_edge("evidence_chain", "conclusion_synthesizer")
+        workflow.add_edge("conclusion_synthesizer", "report_generator")
         workflow.add_edge("report_generator", "self_reviewer")
         workflow.add_conditional_edges(
             "self_reviewer",
             self._route_after_review,
             {
                 "end": END,
-                "retry_small": "conflict_detector",
+                "retry_small": "query_adapter",
                 "retry_full": "query_analyzer",
             },
         )
@@ -106,7 +114,7 @@ class ChiefEditorAgent:
     async def run_research_task(self, task: dict | None = None):
         task = task or self.task
         has_sub_questions = bool(task.get("sub_questions"))
-        start_from = "multi_retriever" if has_sub_questions else "query_analyzer"
+        start_from = "query_adapter" if has_sub_questions else "query_analyzer"
 
         print_agent_output(f"Starting research from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
@@ -120,7 +128,7 @@ class ChiefEditorAgent:
     async def astream_research_task(self, task: dict | None = None):
         task = task or self.task
         has_sub_questions = bool(task.get("sub_questions"))
-        start_from = "multi_retriever" if has_sub_questions else "query_analyzer"
+        start_from = "query_adapter" if has_sub_questions else "query_analyzer"
 
         print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
