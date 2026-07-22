@@ -1,16 +1,7 @@
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from ..utils.llm import call_model
 from ..utils.views import print_agent_output
-
-_model = None
-
-
-def _get_model():
-    global _model
-    if _model is None:
-        _model = SentenceTransformer("BAAI/bge-m3")
-    return _model
+from ..utils.embedding import get_embedding_model
 
 
 ARBITRATION_PROMPT = """You are an impartial technical arbitrator. Two sources make claims about the same topic but may disagree.
@@ -50,7 +41,7 @@ NEGATION_WORDS = {
 
 
 def find_contradictions(source_scores: list[dict], threshold: float = 0.6) -> list[dict]:
-    model = _get_model()
+    model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
         return []

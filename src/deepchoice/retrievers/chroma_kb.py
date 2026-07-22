@@ -1,7 +1,7 @@
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 from .base import BaseRetriever
+from ..utils.embedding import get_embedding_model
 
 
 class ChromaKB(BaseRetriever):
@@ -13,16 +13,16 @@ class ChromaKB(BaseRetriever):
             settings=Settings(anonymized_telemetry=False),
         )
         self.collection = self.client.get_or_create_collection("tech_kb")
-        self.model = SentenceTransformer("BAAI/bge-m3")
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
+        model = get_embedding_model()
         queries = adapted_queries if adapted_queries else [query] + sub_questions[:2]
         all_results = []
         seen_urls = set()
 
         for q in queries:
-            q_embedding = self.model.encode(q).tolist()
+            q_embedding = model.encode(q).tolist()
             results = self.collection.query(
                 query_embeddings=[q_embedding],
                 n_results=max(3, max_results // len(queries)),
