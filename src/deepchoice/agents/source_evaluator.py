@@ -161,4 +161,15 @@ class SourceEvaluatorAgent:
         for i, s in enumerate(source_scores):
             s["rank"] = i + 1
 
-        return {"source_scores": source_scores}
+        avg_score = round(sum(s["total_score"] for s in source_scores) / len(source_scores), 1) if source_scores else 0
+
+        return {
+            "source_scores": source_scores,
+            "quality_signals": [{
+                "agent": "source_evaluator",
+                "sources_scored": len(source_scores),
+                "avg_score": avg_score,
+                "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),
+                "low_score_count": sum(1 for s in source_scores if s["total_score"] < 5.0),
+            }],
+        }
