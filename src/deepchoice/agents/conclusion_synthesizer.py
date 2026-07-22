@@ -20,6 +20,11 @@ Total sources scored: {source_count}
 Strong evidence chains (strength=strong): {strong_count}
 Disputed findings: {disputed_count}
 
+## Language
+- Output explanatory/reasoning text (recommendation, rationale, trade-off findings, evidence_summary, confidence_rationale, scene_fit_note) in the SAME language as the original query.
+- Technical terms (framework names, API names, algorithms, protocol names), source titles, and benchmark data MUST stay in their original language — do NOT translate them.
+- This applies to the "name" field in ranked_options as well: keep the framework/library name as-is.
+
 ## Synthesis Rules
 1. Weight strong evidence chains more heavily than moderate or weak ones
 2. Acknowledge disputed findings — don't pretend they don't exist
