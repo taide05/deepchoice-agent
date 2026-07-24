@@ -1,103 +1,140 @@
-# DeepChoice — AI 驱动技术选型深度研究
+# DeepChoice — AI 驱动的技术选型深度研究 Agent
 
-9 Agent 协作的 LangGraph 管道，跨 6 路数据源搜索、信源质量评分、两阶段矛盾仲裁，生成有据可查的技术对比报告。
+DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI vs Flask 该选哪个"就能自动搜索 6 路数据源、给每篇信源打分、检测矛盾观点并用两阶段仲裁解决、最终输出有据可查的对比推荐报告。
 
-## 架构
+## 为什么值得关注
 
-```
-用户查询 → 澄清模块(混合式+软门禁, 最多3轮)
-              ↓
-        LangGraph 管道 (9 Agent)
-    ┌──────────────────────────────────────┐
-    │ QueryAnalyzer  →  QueryAdapter       │
-    │   (查询分解)       (检索词适配)        │
-    │        ↓                ↓            │
-    │     MultiRetriever (6路并行)          │
-    │        ↓                             │
-    │ SourceEvaluator → ConflictDetector   │
-    │   (信源评分)       (两阶段仲裁)        │
-    │        ↓                ↓            │
-    │ EvidenceChain   → ConclusionSynthesizer │
-    │   (证据链组装)       (最终推荐)        │
-    │        ↓                             │
-    │ ReportGenerator → SelfReviewer        │
-    │   (3种报告格式)     (6项质量检查+重试)  │
-    └──────────────────────────────────────┘
-              ↓
-    3 种报告格式 + Streamlit 前端 + FastAPI SSE
-```
+技术选型搜索通常靠开发者自己翻博客、刷 GitHub、看文档，几个小时下来还不确定信源质量。DeepChoice 把这个过程自动化了——不只是搜，而是评分、对比、仲裁、自审，每一句推荐都能追溯到具体来源。
 
-### 两阶段冲突仲裁
+与 Perplexity/ChatGPT 的对比：它们给答案但不展示证据链和矛盾处理过程。DeepChoice 的输出是**可审计的**——你会看到每篇文章的信源评分、冲突观点是怎么仲裁的、结论为什么可信。
 
-```
-所有冲突对 → flash 初裁 (fast, ~3s/pair)
-                ↓
-    low-confidence 对 → 取分数最接近的 1 对
-                ↓
-         pro 重裁 (300s timeout)
-```
+## 核心特性
+
+- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackOverflow/Reddit 社区 + PyPI 官方包信息，`asyncio.gather` 并发跑，单路挂了不炸全局
+- **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
+- **两阶段冲突仲裁**：先让 flash 模型仲裁所有矛盾对（快），再挑出最模糊的一对交给 pro 模型深度重裁（准）。只给一对走 pro，费用可控
+- **自审查 + 定向重试**：最后一环用 6 项清单审查报告质量，发现问题自动补搜知识缺口，区分小缺口（重走检索适配）和大缺口（重走全管道）
+- **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
+- **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
 
 ## 快速开始
 
 ```bash
+# 1. 克隆
 git clone https://github.com/taide05/deepchoice-agent.git
 cd deepchoice-agent
 pip install -e ".[dev]"
 
-# 配置环境变量
-export DEEPSEEK_API_KEY=sk-xxx
-export TAVILY_API_KEY=tvly-xxx
-export GITHUB_TOKEN=ghp_xxx  # 可选, 提升 API 限额
+# 2. 配置 API Key
+# .env 文件中填入：
+#   DEEPSEEK_API_KEY=sk-xxx
+#   TAVILY_API_KEY=tvly-xxx
+#   GITHUB_TOKEN=ghp_xxx（可选，提升 API 限额）
 
-# 启动后端
+# 3. 启动后端
 uvicorn src.deepchoice.server.app:app --reload
 
-# 新终端启动前端
+# 4. 开新终端，启动前端
 streamlit run frontend/app.py
+# 浏览器打开 http://localhost:8501
 ```
 
-## 量化指标 (50-case baseline)
+## 架构概览
 
-| 指标 | 值 | 
-|------|-----|
-| Top-1 推荐准确率 | 56.8% |
-| 任务成功率 | 100% |
-| 声明溯源率 | 92.9% |
-| 端到端延迟 P50 | 107s |
-| 延迟 P95 | 187s |
-| 信源召回率 | 30.4% |
+```
+用户输入 "FastAPI vs Flask"
+        │
+        ▼
+   ┌──────────────┐
+   │  澄清模块      │  多轮对话补齐场景/复杂度/约束（最多 3 轮）
+   │  混合式+软门禁  │  用户不知道该选什么 → 按类别推荐候选技术
+   └──────┬───────┘
+          │ 澄清后的研究任务 + 5 个分解子问题
+          ▼
+   ┌──────────────────────────────────────────────────────┐
+   │              LangGraph 管道（9 Agent）                │
+   │                                                      │
+   │  [1] QueryAnalyzer      查询分解为 5 维子问题         │
+   │         │                                            │
+   │  [2] QueryAdapter       每个子问题 → 6 种检索词       │
+   │         │                                            │
+   │  [3] MultiRetriever     6 路并行搜索                  │
+   │         │                                            │
+   │  [4] SourceEvaluator    4 维加权评分（规则引擎）       │
+   │         │                                            │
+   │  [5] ConflictDetector   BGE-M3 检测矛盾 + 两阶段仲裁  │
+   │         │                                            │
+   │  [6] EvidenceChain      证据链组装 + 强弱标记          │
+   │         │                                            │
+   │  [7] ConclusionSynth    最终推荐 + 排序 + trade-off   │
+   │         │                                            │
+   │  [8] ReportGenerator    3 种格式选一渲染               │
+   │         │                                            │
+   │  [9] SelfReviewer       6 项质量审查                  │
+   │         │              confidence < high → retry ──┐  │
+   │         ▼                                         │  │
+   │       END  ◄──────────────────────────────────────┘  │
+   └──────────────────────────────────────────────────────┘
+          │
+          ▼
+   FastAPI SSE 流式输出 → Streamlit 前端（中/英/日/韩）
+```
+
+**两阶段仲裁细节**：
+```
+所有冲突对 → deepseek-v4-flash 初裁（~3s/对）
+                     │
+    低置信度对 → 取分数差距最小的 1 对
+                     │
+            deepseek-v4-pro 重裁（300s timeout）
+```
+
+## 关键技术决策
+
+**信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
+
+**冲突检测走嵌入相似度而非 LLM 逐对比较**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再检查是否有反转词（"not"、"worse"、"outperforms"），这比让 LLM 逐对读省了大量 token。实际运行时，50 个 case 平均只检测出少量潜在冲突，因为大部分技术选型场景的信源意见本来就不直接矛盾。
+
+## 量化指标（50 手标注 case，单次运行基线）
+
+| 指标 | 值 | 说明 |
+|------|-----|------|
+| Top-1 准确率 | 56.8% | 推荐排名第一的技术是否匹配人工标注正确答案 |
+| 任务成功率 | 100% | 50/50 case 全部跑完，无超时 |
+| 声明溯源率 | 92.9% | 报告中 92.9% 的声明能追溯到具体来源 |
+| 冲突检测率 | 23.9% | 46 个已知矛盾中检出 11 个 |
+| 信源召回率 | 30.4% | 138 个必须匹配的 URL 模式中命中了 42 个 |
+| 端到端延迟 P50 | 107s | 中位数 |
+| 端到端延迟 P95 | 187s | 95 分位 |
 
 ```bash
-# 跑 benchmark
+# 重现 benchmark
 python -m benchmarks.run_baseline --batch 1 --batch-size 10 --verbose
-python -m benchmarks.run_baseline --merge
+python -m benchmarks.run_baseline --merge   # 合并多批结果
 ```
+
+**已知局限**：信源召回率偏低（30.4%），主要漏官方文档域名（redis.io、kubernetes.io、grpc.io 等），Tavily API 会优先返回博客而非官方站。冲突检测率偏低（23.9%），嵌入相似度 + 否定词启发的覆盖面有限。
 
 ## 技术栈
 
-- **编排**: LangGraph (9 Agent + checkpoint + conditional routing + retry)
-- **检索**: ArXiv / GitHub / Tavily / Chroma KB / StackExchange+Reddit / PyPI (6路 asyncio.gather)
-- **后端**: FastAPI + SSE 流式输出 + 9 端点
-- **前端**: Streamlit (深色主题 + 中/英/日/韩多语言)
-- **质量**: 信源评分(4维加权规则引擎) + 两阶段冲突仲裁(flash→pro) + 证据链组装 + 自审查+重试
-- **评估**: GSM 框架 7 指标 + 50 手标注 case + LLM-as-Judge 5 维评分
+LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言） · DeepSeek API · BGE-M3 嵌入 · ChromaDB · Tavily · GitHub/ArXiv/StackExchange API · Pydantic v2 · pytest
 
 ## 项目结构
 
 ```
 src/deepchoice/
-├── agents/          # 9 Agent 节点 (含两阶段仲裁)
-├── retrievers/      # 6 路检索器 (统一 BaseRetriever)
-├── clarify/         # 前置查询澄清模块
-├── formats/         # 3 种报告格式 (What/Why/How, Evidence-First, Comparison Matrix)
-├── server/          # FastAPI 端点
+├── agents/          # 9 Agent 节点
+├── retrievers/      # 6 路检索器（统一 BaseRetriever 接口）
+├── clarify/         # 前置澄清模块
+├── formats/         # 3 种报告格式
+├── server/          # FastAPI（9 端点 + SSE）
 ├── state.py         # ResearchState TypedDict
-└── utils/           # LLM 封装 / BGE-M3 嵌入 / 日志
+└── utils/           # LLM 客户端 / BGE-M3 嵌入
 
 benchmarks/
-├── metrics.py              # 7 指标计算引擎 (GSM 框架)
-├── run_baseline.py         # 分批运行 + 合并 + 趋势对比
-└── annotated_cases.json    # 50 手标注技术选型 case
+├── metrics.py           # 7 指标计算（GSM 框架）
+├── run_baseline.py      # 分批 + 合并 + 趋势对比
+└── annotated_cases.json # 50 手标注 case
 ```
 
 ## License
