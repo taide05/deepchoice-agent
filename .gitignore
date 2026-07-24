@@ -28,3 +28,6 @@ docs/
 notes/
 .build-hf-cache/
 wheels/
+benchmarks/runs/
+benchmarks/missing_cases.json
+tests/test_cases/generated_cases.json
