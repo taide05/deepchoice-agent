@@ -1,0 +1,1814 @@
+[
+  {
+    "id": "TC-0001",
+    "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "LangGraph",
+    "tech_b": "CrewAI",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph gives lower-level control, better for solo dev who needs flexibility. CrewAI has higher-level abstractions but less customizability and breaks down at scale.",
+    "must_find_sources": [
+      {
+        "pattern": "langchain.com",
+        "type": "official_doc",
+        "reason": "LangGraph official documentation"
+      },
+      {
+        "pattern": "github.com/langchain-ai/langgraph",
+        "type": "github_repo",
+        "reason": "LangGraph source repo - stars, activity, issues"
+      },
+      {
+        "pattern": "github.com/crewAIInc/crewAI",
+        "type": "github_repo",
+        "reason": "CrewAI source repo for comparison"
+      },
+      {
+        "pattern": "arxiv.org",
+        "type": "academic",
+        "reason": "Multi-agent framework survey or comparison paper"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ease of use",
+        "position_a": "CrewAI is simpler to start with, higher-level API",
+        "position_b": "CrewAI abstractions become a liability when you need custom behavior",
+        "key_source": "reddit.com/r/LangChain"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0002",
+    "query": "FastAPI vs Flask for REST API in a mid-size team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "FastAPI",
+    "tech_b": "Flask",
+    "expected_winner": "FastAPI",
+    "ground_truth_notes": "FastAPI has built-in async, auto-generated OpenAPI docs, Pydantic validation. Flask needs extensions for all of these. For team REST API, FastAPI is the modern default.",
+    "must_find_sources": [
+      {
+        "pattern": "fastapi.tiangolo.com",
+        "type": "official_doc",
+        "reason": "FastAPI official docs - the authoritative source"
+      },
+      {
+        "pattern": "flask.palletsprojects.com",
+        "type": "official_doc",
+        "reason": "Flask official docs"
+      },
+      {
+        "pattern": "pypi.org/project/fastapi",
+        "type": "package_registry",
+        "reason": "Package stats, version history, dependencies"
+      },
+      {
+        "pattern": "github.com/tiangolo/fastapi",
+        "type": "github_repo",
+        "reason": "FastAPI repo - community size, issue velocity"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Async performance",
+        "position_a": "FastAPI async is a must-have for modern APIs",
+        "position_b": "Most apps don't need async; Flask + gunicorn is sufficient for 90% of use cases",
+        "key_source": "reddit.com/r/Python"
+      }
+    ],
+    "min_expected_sources": 6
+  },
+  {
+    "id": "TC-0003",
+    "query": "PostgreSQL vs MySQL for enterprise financial data",
+    "category": "Infrastructure",
+    "subdomain": "relational_db",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "PostgreSQL",
+    "tech_b": "MySQL",
+    "expected_winner": "PostgreSQL",
+    "ground_truth_notes": "PostgreSQL has stronger ACID compliance, better analytical queries, richer extension ecosystem. MySQL better for simple read-heavy workloads. For financial data, PG's stricter type system and transactional DDL are meaningful advantages.",
+    "must_find_sources": [
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL official documentation"
+      },
+      {
+        "pattern": "dev.mysql.com",
+        "type": "official_doc",
+        "reason": "MySQL official documentation"
+      },
+      {
+        "pattern": "github.com",
+        "type": "community",
+        "reason": "Real-world adoption comparison, ecosystem activity"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Replication maturity",
+        "position_a": "PostgreSQL streaming replication is production-tested and more flexible",
+        "position_b": "MySQL Group Replication is simpler to set up and has longer production history",
+        "key_source": "dba.stackexchange.com"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0004",
+    "query": "Chroma vs Pinecone for RAG vector database on a budget",
+    "category": "Models & Data",
+    "subdomain": "vector_databases",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Chroma",
+    "tech_b": "Pinecone",
+    "expected_winner": "Chroma",
+    "ground_truth_notes": "Chroma is free, local, open-source. Pinecone is managed, costs money. For solo/small budget, Chroma wins. For scale/production, Pinecone. Budget is the deciding factor here.",
+    "must_find_sources": [
+      {
+        "pattern": "github.com/chroma-core/chroma",
+        "type": "github_repo",
+        "reason": "Chroma source repo"
+      },
+      {
+        "pattern": "pinecone.io",
+        "type": "official_doc",
+        "reason": "Pinecone official docs and pricing"
+      },
+      {
+        "pattern": "trychroma.com",
+        "type": "official_doc",
+        "reason": "Chroma official site"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Production readiness",
+        "position_a": "Chroma is fine for prototyping but not production-grade at scale",
+        "position_b": "Chroma's simplicity is an advantage - fewer moving parts means fewer failures",
+        "key_source": "github.com/chroma-core/chroma/issues"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0005",
+    "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Kubernetes",
+    "tech_b": "Docker Swarm",
+    "expected_winner": "Kubernetes",
+    "ground_truth_notes": "Kubernetes is industry standard with massive ecosystem. Docker Swarm simpler but effectively in maintenance mode. For team setting, K8s is the long-term choice despite steeper learning curve.",
+    "must_find_sources": [
+      {
+        "pattern": "kubernetes.io",
+        "type": "official_doc",
+        "reason": "K8s official documentation"
+      },
+      {
+        "pattern": "github.com/kubernetes/kubernetes",
+        "type": "github_repo",
+        "reason": "K8s source repo - community scale"
+      },
+      {
+        "pattern": "docker.com",
+        "type": "official_doc",
+        "reason": "Docker Swarm official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Complexity vs need",
+        "position_a": "K8s is overkill for teams under 50 people; adds operational burden",
+        "position_b": "Managed K8s (EKS/GKE/AKS) removes most operational burden; better to start right than migrate later",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0006",
+    "query": "LlamaIndex vs LangChain for building a RAG application as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "rag_frameworks",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "LlamaIndex",
+    "tech_b": "LangChain",
+    "expected_winner": "LlamaIndex",
+    "ground_truth_notes": "LlamaIndex was purpose-built for RAG/data ingestion pipelines. LangChain is a general-purpose LLM framework. For pure RAG, LlamaIndex has better data connectors, indexing strategies, and retrieval abstractions. LangChain is better when RAG is one piece of a larger agent system.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.llamaindex.ai",
+        "type": "official_doc",
+        "reason": "LlamaIndex official documentation"
+      },
+      {
+        "pattern": "github.com/run-llama/llama_index",
+        "type": "github_repo",
+        "reason": "LlamaIndex source repo"
+      },
+      {
+        "pattern": "python.langchain.com",
+        "type": "official_doc",
+        "reason": "LangChain official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Which is better for RAG",
+        "position_a": "LlamaIndex gives you RAG-specific abstractions out of the box",
+        "position_b": "LangChain's flexibility means you can build a more customized RAG pipeline",
+        "key_source": "reddit.com/r/LangChain"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0007",
+    "query": "Redis vs Memcached for caching in a mid-size team backend",
+    "category": "Infrastructure",
+    "subdomain": "caching",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Redis",
+    "tech_b": "Memcached",
+    "expected_winner": "Redis",
+    "ground_truth_notes": "Redis has richer data structures (lists, hashes, sets, sorted sets), persistence options, and built-in replication. Memcached is purely a key-value cache. For modern backend caching, Redis wins unless you have extreme memory efficiency requirements and only need simple get/set.",
+    "must_find_sources": [
+      {
+        "pattern": "redis.io",
+        "type": "official_doc",
+        "reason": "Redis official documentation"
+      },
+      {
+        "pattern": "memcached.org",
+        "type": "official_doc",
+        "reason": "Memcached official documentation"
+      },
+      {
+        "pattern": "github.com/redis/redis",
+        "type": "github_repo",
+        "reason": "Redis source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Memory efficiency",
+        "position_a": "Memcached is more memory-efficient for simple key-value workloads",
+        "position_b": "Redis' memory overhead is negligible in practice and worth it for the data structure flexibility",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0008",
+    "query": "gRPC vs REST for internal microservice communication in an enterprise",
+    "category": "Backend Frameworks & API",
+    "subdomain": "api_paradigms",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "gRPC",
+    "tech_b": "REST",
+    "expected_winner": "gRPC",
+    "ground_truth_notes": "For internal microservice-to-microservice communication, gRPC wins on performance (Protocol Buffers, HTTP/2 multiplexing), type safety (generated stubs), and streaming support. REST is better for external/public APIs where human readability and browser access matter.",
+    "must_find_sources": [
+      {
+        "pattern": "grpc.io",
+        "type": "official_doc",
+        "reason": "gRPC official documentation"
+      },
+      {
+        "pattern": "github.com/grpc",
+        "type": "github_repo",
+        "reason": "gRPC source repos and ecosystem"
+      },
+      {
+        "pattern": "protobuf.dev",
+        "type": "official_doc",
+        "reason": "Protocol Buffers documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Debugging and tooling",
+        "position_a": "gRPC is harder to debug - can't just curl it like REST",
+        "position_b": "grpcurl and Postman gRPC support have closed the debugging gap; the performance gain is worth the tooling investment",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0009",
+    "query": "MongoDB vs PostgreSQL for a content management system with flexible schema needs",
+    "category": "Infrastructure",
+    "subdomain": "nosql",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "MongoDB",
+    "tech_b": "PostgreSQL",
+    "expected_winner": "PostgreSQL",
+    "ground_truth_notes": "PostgreSQL's JSONB column type gives you document-store flexibility within a relational database. For CMS, you often need both flexible content fields AND relational data (users, permissions, taxonomies). PG gives you both. MongoDB is better for pure document workloads with no relational queries needed.",
+    "must_find_sources": [
+      {
+        "pattern": "mongodb.com",
+        "type": "official_doc",
+        "reason": "MongoDB official documentation"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL JSONB documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Schema flexibility vs data integrity",
+        "position_a": "MongoDB's schemaless design is truly flexible - no migrations needed",
+        "position_b": "Schemaless means schema-in-code; you'll regret not having constraints when the data grows and multiple services write to the same collection",
+        "key_source": "reddit.com/r/programming"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0010",
+    "query": "Pydantic v2 vs Python dataclasses for data validation in a production API",
+    "category": "Backend Frameworks & API",
+    "subdomain": "serialization",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Pydantic v2",
+    "tech_b": "dataclasses",
+    "expected_winner": "Pydantic v2",
+    "ground_truth_notes": "Pydantic v2 adds runtime validation, coercion, nested model support, JSON Schema generation, and serialization. Dataclasses are purely a syntax convenience over writing __init__ manually. For production API validation, Pydantic v2 is the clear winner. Rust core (pydantic-core) makes v2 5-50x faster than v1.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.pydantic.dev",
+        "type": "official_doc",
+        "reason": "Pydantic v2 official documentation"
+      },
+      {
+        "pattern": "github.com/pydantic/pydantic",
+        "type": "github_repo",
+        "reason": "Pydantic source repo"
+      },
+      {
+        "pattern": "pypi.org/project/pydantic",
+        "type": "package_registry",
+        "reason": "Package stats and version history"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance overhead",
+        "position_a": "Pydantic validation adds runtime overhead that dataclasses avoid",
+        "position_b": "Pydantic v2's Rust core is faster than hand-written validation; the overhead argument is outdated",
+        "key_source": "github.com/pydantic/pydantic"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0011",
+    "query": "Docker Compose vs Kubernetes for a small team deploying 5 microservices",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Docker Compose",
+    "tech_b": "Kubernetes",
+    "expected_winner": "Docker Compose",
+    "ground_truth_notes": "For 5 services on a single host, Docker Compose is the right tool. K8s adds meaningful complexity (pod networking, ingress controllers, RBAC, etc.) that only pays off when you need multi-host orchestration, auto-scaling, or rolling updates with zero-downtime. Start with Compose, migrate to K8s when you outgrow it.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.docker.com/compose",
+        "type": "official_doc",
+        "reason": "Docker Compose official documentation"
+      },
+      {
+        "pattern": "kubernetes.io",
+        "type": "official_doc",
+        "reason": "K8s documentation for comparison"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Future-proofing",
+        "position_a": "Start with K8s even for 5 services - migrating later is painful",
+        "position_b": "Docker Compose to K8s migration with Kompose is straightforward for simple setups; premature K8s adoption is the bigger risk",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0012",
+    "query": "Weaviate vs Pinecone for vector search in an enterprise RAG system",
+    "category": "Models & Data",
+    "subdomain": "vector_databases",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Weaviate",
+    "tech_b": "Pinecone",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "No universal winner here. Weaviate wins for self-hosted/on-prem requirements, hybrid search (vector + keyword), and data privacy. Pinecone wins for fully-managed, zero-ops, and fastest time-to-production. Enterprise context (compliance, data residency) usually tips toward Weaviate self-hosted.",
+    "must_find_sources": [
+      {
+        "pattern": "weaviate.io",
+        "type": "official_doc",
+        "reason": "Weaviate official documentation"
+      },
+      {
+        "pattern": "pinecone.io",
+        "type": "official_doc",
+        "reason": "Pinecone official documentation"
+      },
+      {
+        "pattern": "github.com/weaviate/weaviate",
+        "type": "github_repo",
+        "reason": "Weaviate source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Total cost of ownership",
+        "position_a": "Pinecone looks cheaper until you factor in data egress and scaling costs at enterprise volume",
+        "position_b": "Self-hosting Weaviate looks cheaper until you factor in the engineering time to manage, monitor, and upgrade it",
+        "key_source": "reddit.com/r/vectordatabase"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0013",
+    "query": "Celery vs RabbitMQ for async task processing in a Python backend team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "task_queues",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Celery",
+    "tech_b": "RabbitMQ",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "This is a false comparison - Celery is a task queue framework that runs on top of a message broker (often RabbitMQ). The real question should be Celery+Redis vs Celery+RabbitMQ or Celery vs ARQ/RQ. Celery+RabbitMQ is the gold standard for reliability (acks, dead letter exchanges). Celery+Redis is simpler to set up. For a Python team, Celery is the default choice regardless of broker.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.celeryq.dev",
+        "type": "official_doc",
+        "reason": "Celery official documentation"
+      },
+      {
+        "pattern": "rabbitmq.com",
+        "type": "official_doc",
+        "reason": "RabbitMQ official documentation"
+      },
+      {
+        "pattern": "github.com/celery/celery",
+        "type": "github_repo",
+        "reason": "Celery source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Celery complexity",
+        "position_a": "Celery is bloated and hard to debug; use ARQ or SAQ for simpler async task queues",
+        "position_b": "Celery's complexity comes from solving real distributed systems problems; the alternatives are simpler because they solve fewer problems",
+        "key_source": "reddit.com/r/Python"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0014",
+    "query": "GitHub Actions vs Jenkins for CI/CD in a mid-size development team",
+    "category": "Deployment & Operations",
+    "subdomain": "cicd",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "GitHub Actions",
+    "tech_b": "Jenkins",
+    "expected_winner": "GitHub Actions",
+    "ground_truth_notes": "For teams already on GitHub, GitHub Actions wins on integration, maintenance burden (no self-hosted server), and marketplace ecosystem. Jenkins still wins for complex pipelines with custom plugin requirements, air-gapped environments, or multi-repo orchestration that goes beyond GitHub's scope.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.github.com/en/actions",
+        "type": "official_doc",
+        "reason": "GitHub Actions official documentation"
+      },
+      {
+        "pattern": "jenkins.io",
+        "type": "official_doc",
+        "reason": "Jenkins official documentation"
+      },
+      {
+        "pattern": "github.com/features/actions",
+        "type": "product_page",
+        "reason": "GitHub Actions product page with limits and pricing"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Vendor lock-in",
+        "position_a": "GitHub Actions YAML syntax is proprietary; migrating away from GitHub means rewriting all CI",
+        "position_b": "Jenkins' Groovy-based Jenkinsfile is also proprietary in practice; CI migration is always painful regardless of tool",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0015",
+    "query": "Streamlit vs Gradio for building an ML model demo as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "rag_frameworks",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Streamlit",
+    "tech_b": "Gradio",
+    "expected_winner": "Gradio",
+    "ground_truth_notes": "Gradio is purpose-built for ML model demos (built-in chat interface, HuggingFace Spaces one-click deploy). Streamlit is better for general data dashboards and business apps. For the specific use case of 'ML model demo', Gradio wins on ML-specific features like built-in input widgets for images/audio and HF integration.",
+    "must_find_sources": [
+      {
+        "pattern": "streamlit.io",
+        "type": "official_doc",
+        "reason": "Streamlit official documentation"
+      },
+      {
+        "pattern": "gradio.app",
+        "type": "official_doc",
+        "reason": "Gradio official documentation"
+      },
+      {
+        "pattern": "github.com/streamlit/streamlit",
+        "type": "github_repo",
+        "reason": "Streamlit source repo"
+      },
+      {
+        "pattern": "github.com/gradio-app/gradio",
+        "type": "github_repo",
+        "reason": "Gradio source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Production readiness",
+        "position_a": "Streamlit is for prototyping, not production",
+        "position_b": "Gradio has better HuggingFace Spaces integration for sharing demos publicly",
+        "key_source": "reddit.com/r/MachineLearning"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0016",
+    "query": "LangChain vs Semantic Kernel for enterprise AI application with compliance requirements",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_invocation",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "LangChain",
+    "tech_b": "Semantic Kernel",
+    "expected_winner": "Semantic Kernel",
+    "ground_truth_notes": "Semantic Kernel has first-class Azure/enterprise integration, built-in compliance filters, and native C# support which matters for enterprise .NET shops. LangChain is more flexible for Python-only stacks.",
+    "must_find_sources": [
+      {
+        "pattern": "learn.microsoft.com/semantic-kernel",
+        "type": "official_doc",
+        "reason": "Semantic Kernel official docs"
+      },
+      {
+        "pattern": "python.langchain.com",
+        "type": "official_doc",
+        "reason": "LangChain official docs"
+      },
+      {
+        "pattern": "github.com/microsoft/semantic-kernel",
+        "type": "github_repo",
+        "reason": "Semantic Kernel repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Language ecosystem",
+        "position_a": "LangChain's Python-first design is better for AI development",
+        "position_b": "Semantic Kernel's multi-language support (C#, Python, Java) matters for enterprise teams that aren't all Python",
+        "key_source": "github.com/microsoft/semantic-kernel/discussions"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0017",
+    "query": "Dify vs LangFlow for building AI workflows without coding",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Dify",
+    "tech_b": "LangFlow",
+    "expected_winner": "Dify",
+    "ground_truth_notes": "Dify has more complete app-building features (knowledge base, tools, publish), better for building end-to-end AI apps. LangFlow is better for pure LangChain pipeline visualization but lacks app-level features.",
+    "must_find_sources": [
+      {
+        "pattern": "dify.ai",
+        "type": "official_doc",
+        "reason": "Dify official site"
+      },
+      {
+        "pattern": "github.com/langflow-ai/langflow",
+        "type": "github_repo",
+        "reason": "LangFlow source repo"
+      },
+      {
+        "pattern": "github.com/langgenius/dify",
+        "type": "github_repo",
+        "reason": "Dify source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Open source vs platform",
+        "position_a": "LangFlow is more open and less opinionated",
+        "position_b": "Dify's opinionated approach means faster time-to-production for common use cases",
+        "key_source": "reddit.com/r/LocalLLaMA"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0018",
+    "query": "AutoGen vs CrewAI for multi-agent research automation",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "multi_agent_collaboration",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "AutoGen",
+    "tech_b": "CrewAI",
+    "expected_winner": "AutoGen",
+    "ground_truth_notes": "AutoGen has stronger multi-agent conversation patterns, better human-in-the-loop support, and more flexible agent roles. CrewAI is simpler for linear task chains but AutoGen wins for complex research workflows.",
+    "must_find_sources": [
+      {
+        "pattern": "microsoft.github.io/autogen",
+        "type": "official_doc",
+        "reason": "AutoGen official docs"
+      },
+      {
+        "pattern": "docs.crewai.com",
+        "type": "official_doc",
+        "reason": "CrewAI official docs"
+      },
+      {
+        "pattern": "github.com/microsoft/autogen",
+        "type": "github_repo",
+        "reason": "AutoGen source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ease of use",
+        "position_a": "CrewAI is much simpler to get started with; AutoGen has a steep learning curve",
+        "position_b": "AutoGen's complexity comes from solving real multi-agent problems; CrewAI's simplicity limits it for non-trivial use cases",
+        "key_source": "reddit.com/r/AI_Agents"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0019",
+    "query": "Ollama vs vLLM for local LLM inference on a single GPU",
+    "category": "Models & Data",
+    "subdomain": "llm_selection",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Ollama",
+    "tech_b": "vLLM",
+    "expected_winner": "Ollama",
+    "ground_truth_notes": "For single-GPU local use, Ollama is dramatically simpler (one-command install, built-in model management). vLLM is designed for high-throughput serving with tensor parallelism across multiple GPUs — overkill for single-GPU personal use.",
+    "must_find_sources": [
+      {
+        "pattern": "ollama.com",
+        "type": "official_doc",
+        "reason": "Ollama official site"
+      },
+      {
+        "pattern": "github.com/ollama/ollama",
+        "type": "github_repo",
+        "reason": "Ollama source repo"
+      },
+      {
+        "pattern": "docs.vllm.ai",
+        "type": "official_doc",
+        "reason": "vLLM official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance",
+        "position_a": "vLLM has significantly higher throughput for concurrent requests",
+        "position_b": "For single-user single-GPU, Ollama's simplicity and quantization support matter more than raw throughput",
+        "key_source": "reddit.com/r/LocalLLaMA"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0020",
+    "query": "PyTorch vs TensorFlow for deep learning research in 2026",
+    "category": "Models & Data",
+    "subdomain": "llm_selection",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "PyTorch",
+    "tech_b": "TensorFlow",
+    "expected_winner": "PyTorch",
+    "ground_truth_notes": "PyTorch has decisively won the research community (80%+ paper implementations use PyTorch). TensorFlow retains some production/edge deployment advantages but for research, PyTorch is the de facto standard.",
+    "must_find_sources": [
+      {
+        "pattern": "pytorch.org",
+        "type": "official_doc",
+        "reason": "PyTorch official docs"
+      },
+      {
+        "pattern": "tensorflow.org",
+        "type": "official_doc",
+        "reason": "TensorFlow official docs"
+      },
+      {
+        "pattern": "github.com/pytorch/pytorch",
+        "type": "github_repo",
+        "reason": "PyTorch source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Production deployment",
+        "position_a": "TensorFlow Serving and TF Lite are more mature for production",
+        "position_b": "TorchServe and ONNX Runtime have closed the production gap; PyTorch's research momentum makes it the safer long-term bet",
+        "key_source": "reddit.com/r/MachineLearning"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0021",
+    "query": "Qdrant vs Milvus for production vector search at scale",
+    "category": "Models & Data",
+    "subdomain": "vector_databases",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Qdrant",
+    "tech_b": "Milvus",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "Milvus wins for billion-scale deployments with complex indexing strategies. Qdrant wins for simpler deployments with strong filtering needs and Rust-native performance for mid-scale. Choice depends on scale and complexity.",
+    "must_find_sources": [
+      {
+        "pattern": "qdrant.tech",
+        "type": "official_doc",
+        "reason": "Qdrant official docs"
+      },
+      {
+        "pattern": "milvus.io",
+        "type": "official_doc",
+        "reason": "Milvus official docs"
+      },
+      {
+        "pattern": "github.com/qdrant/qdrant",
+        "type": "github_repo",
+        "reason": "Qdrant source repo"
+      },
+      {
+        "pattern": "github.com/milvus-io/milvus",
+        "type": "github_repo",
+        "reason": "Milvus source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Operational complexity",
+        "position_a": "Milvus requires significant infrastructure (etcd, Pulsar/Kafka, MinIO) for distributed mode",
+        "position_b": "Milvus standalone mode is much simpler and Qdrant's Rust performance advantage shrinks at very large scale where Milvus' index diversity matters",
+        "key_source": "reddit.r.com/vectordatabase"
+      }
+    ],
+    "min_expected_sources": 6
+  },
+  {
+    "id": "TC-0022",
+    "query": "HuggingFace Transformers vs sentence-transformers for text embeddings in production",
+    "category": "Models & Data",
+    "subdomain": "embedding_models",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "sentence-transformers",
+    "tech_b": "HuggingFace Transformers",
+    "expected_winner": "sentence-transformers",
+    "ground_truth_notes": "sentence-transformers is purpose-built for embeddings with higher-level API, built-in pooling, and better defaults. Transformers is the underlying engine but requires more boilerplate for embedding use cases.",
+    "must_find_sources": [
+      {
+        "pattern": "sbert.net",
+        "type": "official_doc",
+        "reason": "sentence-transformers official docs"
+      },
+      {
+        "pattern": "huggingface.co/docs/transformers",
+        "type": "official_doc",
+        "reason": "Transformers official docs"
+      },
+      {
+        "pattern": "github.com/UKPLab/sentence-transformers",
+        "type": "github_repo",
+        "reason": "sentence-transformers source repo"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0023",
+    "query": "FastAPI vs Django Ninja for building REST APIs in a Python-first team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "FastAPI",
+    "tech_b": "Django Ninja",
+    "expected_winner": "FastAPI",
+    "ground_truth_notes": "FastAPI has larger community, more extensions, better documentation. Django Ninja is appealing if you already use Django ORM and want to add async APIs to an existing Django project, but for greenfield, FastAPI wins.",
+    "must_find_sources": [
+      {
+        "pattern": "fastapi.tiangolo.com",
+        "type": "official_doc",
+        "reason": "FastAPI official docs"
+      },
+      {
+        "pattern": "django-ninja.dev",
+        "type": "official_doc",
+        "reason": "Django Ninja official docs"
+      },
+      {
+        "pattern": "pypi.org/project/fastapi",
+        "type": "package_registry",
+        "reason": "FastAPI package stats"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Django ecosystem",
+        "position_a": "If you need Django Admin and ORM, Django Ninja gives you FastAPI-like DX within Django",
+        "position_b": "FastAPI + SQLAlchemy + Alembic is a cleaner stack; tying yourself to Django for the admin is a bad architectural decision",
+        "key_source": "reddit.com/r/Python"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0024",
+    "query": "SQLAlchemy vs Django ORM for database access outside of Django projects",
+    "category": "Backend Frameworks & API",
+    "subdomain": "serialization",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "SQLAlchemy",
+    "tech_b": "Django ORM",
+    "expected_winner": "SQLAlchemy",
+    "ground_truth_notes": "SQLAlchemy can be used standalone and has richer query capabilities, relationship handling, and async support (v2.0+). Django ORM is tightly coupled to Django and can't easily be used outside it.",
+    "must_find_sources": [
+      {
+        "pattern": "sqlalchemy.org",
+        "type": "official_doc",
+        "reason": "SQLAlchemy official docs"
+      },
+      {
+        "pattern": "docs.djangoproject.com",
+        "type": "official_doc",
+        "reason": "Django ORM docs"
+      },
+      {
+        "pattern": "github.com/sqlalchemy/sqlalchemy",
+        "type": "github_repo",
+        "reason": "SQLAlchemy source repo"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0025",
+    "query": "gRPC vs WebSocket for real-time bidirectional communication",
+    "category": "Backend Frameworks & API",
+    "subdomain": "api_paradigms",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "gRPC",
+    "tech_b": "WebSocket",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "gRPC wins for microservice-to-microservice communication (strong typing, streaming, multiplexing). WebSocket wins for browser-to-server real-time comms (native browser support, simpler for chat/notifications). The choice depends on client type.",
+    "must_find_sources": [
+      {
+        "pattern": "grpc.io",
+        "type": "official_doc",
+        "reason": "gRPC official docs"
+      },
+      {
+        "pattern": "developer.mozilla.org",
+        "type": "official_doc",
+        "reason": "WebSocket MDN docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Browser support",
+        "position_a": "gRPC-web bridges the gap but adds complexity",
+        "position_b": "WebSocket is natively supported in all browsers with zero additional infrastructure",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0026",
+    "query": "JWT vs session-based authentication for a REST API at scale",
+    "category": "Backend Frameworks & API",
+    "subdomain": "auth_authorization",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "JWT",
+    "tech_b": "Session-based Auth",
+    "expected_winner": "JWT",
+    "ground_truth_notes": "JWT enables stateless auth which scales horizontally without shared session storage. Session-based auth is simpler for monoliths but requires Redis/DB for session sharing across instances. For REST API at scale, JWT + refresh tokens is the modern standard.",
+    "must_find_sources": [
+      {
+        "pattern": "jwt.io",
+        "type": "official_doc",
+        "reason": "JWT official reference"
+      },
+      {
+        "pattern": "auth0.com",
+        "type": "reference",
+        "reason": "Auth0 comparison guides are widely cited"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Token revocation",
+        "position_a": "JWT can't be revoked before expiry, which is a security risk",
+        "position_b": "Short-lived access tokens + refresh token rotation solves revocation; the stateless scaling benefit outweighs the revocation complexity",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0027",
+    "query": "Alembic vs Django Migrations for database schema management",
+    "category": "Backend Frameworks & API",
+    "subdomain": "serialization",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Alembic",
+    "tech_b": "Django Migrations",
+    "expected_winner": "Alembic",
+    "ground_truth_notes": "Alembic is framework-agnostic and works with any SQLAlchemy-based project. Django Migrations only works within Django. For non-Django projects, Alembic is the only choice. For Django projects, Django Migrations is tightly integrated.",
+    "must_find_sources": [
+      {
+        "pattern": "alembic.sqlalchemy.org",
+        "type": "official_doc",
+        "reason": "Alembic official docs"
+      },
+      {
+        "pattern": "docs.djangoproject.com",
+        "type": "official_doc",
+        "reason": "Django migrations docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0028",
+    "query": "SQLite vs PostgreSQL for a single-user desktop application",
+    "category": "Infrastructure",
+    "subdomain": "relational_db",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "SQLite",
+    "tech_b": "PostgreSQL",
+    "expected_winner": "SQLite",
+    "ground_truth_notes": "SQLite is embedded, zero-config, zero-maintenance, and perfect for single-user desktop apps. PostgreSQL requires a separate server process — massive overkill for a desktop app used by one person at a time.",
+    "must_find_sources": [
+      {
+        "pattern": "sqlite.org",
+        "type": "official_doc",
+        "reason": "SQLite official docs"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Concurrency",
+        "position_a": "SQLite has poor concurrent write performance",
+        "position_b": "For a single-user desktop app, there IS no concurrent write — the WAL mode handles single-writer perfectly",
+        "key_source": "sqlite.org/wal.html"
+      }
+    ],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0029",
+    "query": "Kafka vs RabbitMQ for event-driven microservices architecture",
+    "category": "Infrastructure",
+    "subdomain": "message_queues",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Kafka",
+    "tech_b": "RabbitMQ",
+    "expected_winner": "Kafka",
+    "ground_truth_notes": "Kafka is designed for high-throughput event streaming with replay, retention, and partitioning. RabbitMQ is a traditional message broker better for task distribution. For event-driven microservices at enterprise scale, Kafka's log-based architecture wins.",
+    "must_find_sources": [
+      {
+        "pattern": "kafka.apache.org",
+        "type": "official_doc",
+        "reason": "Kafka official docs"
+      },
+      {
+        "pattern": "rabbitmq.com",
+        "type": "official_doc",
+        "reason": "RabbitMQ official docs"
+      },
+      {
+        "pattern": "confluent.io",
+        "type": "reference",
+        "reason": "Confluent Kafka resources"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Complexity vs need",
+        "position_a": "Kafka requires ZooKeeper/KRaft and significant ops; RabbitMQ is simpler to operate",
+        "position_b": "Managed Kafka (Confluent Cloud) removes ops burden; the replay and retention features prevent data loss that RabbitMQ can't guarantee",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0030",
+    "query": "Neo4j vs PostgreSQL for a social network graph query use case",
+    "category": "Infrastructure",
+    "subdomain": "graph_databases",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Neo4j",
+    "tech_b": "PostgreSQL",
+    "expected_winner": "Neo4j",
+    "ground_truth_notes": "Neo4j's native graph storage and Cypher query language handle multi-hop traversals (friends-of-friends) in milliseconds. PostgreSQL with recursive CTEs can do graph queries but performance degrades exponentially with depth. For graph-native workloads, Neo4j wins.",
+    "must_find_sources": [
+      {
+        "pattern": "neo4j.com",
+        "type": "official_doc",
+        "reason": "Neo4j official docs"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL recursive CTE docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Cost",
+        "position_a": "PostgreSQL can handle most graph use cases with recursive CTEs, avoiding another database",
+        "position_b": "Recursive CTE performance collapses past 3-4 hops; the database cost is trivial compared to developer time fighting PostgreSQL for graph workloads",
+        "key_source": "dba.stackexchange.com"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0031",
+    "query": "Elasticsearch vs Meilisearch for full-text search in a mid-size SaaS",
+    "category": "Infrastructure",
+    "subdomain": "search_engines",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Meilisearch",
+    "tech_b": "Elasticsearch",
+    "expected_winner": "Meilisearch",
+    "ground_truth_notes": "Meilisearch is dramatically simpler to deploy and maintain, with excellent relevance out of the box. Elasticsearch is more powerful for complex aggregations and petabyte-scale but is operational overkill for mid-size SaaS search.",
+    "must_find_sources": [
+      {
+        "pattern": "meilisearch.com",
+        "type": "official_doc",
+        "reason": "Meilisearch official docs"
+      },
+      {
+        "pattern": "elastic.co",
+        "type": "official_doc",
+        "reason": "Elasticsearch official docs"
+      },
+      {
+        "pattern": "github.com/meilisearch/meilisearch",
+        "type": "github_repo",
+        "reason": "Meilisearch source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Scalability",
+        "position_a": "Elasticsearch scales horizontally to handle billions of documents",
+        "position_b": "When you reach the scale where Meilisearch isn't enough, you'll have the resources to migrate — premature Elasticsearch adoption costs more in engineering time than it saves",
+        "key_source": "reddit.com/r/elasticsearch"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0032",
+    "query": "Redis vs PostgreSQL for session storage in a web application",
+    "category": "Infrastructure",
+    "subdomain": "caching",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Redis",
+    "tech_b": "PostgreSQL",
+    "expected_winner": "Redis",
+    "ground_truth_notes": "Redis's in-memory storage, TTL-based expiry, and sub-millisecond latency make it the ideal session store. PostgreSQL can store sessions but disk I/O per request adds unnecessary latency for ephemeral session data.",
+    "must_find_sources": [
+      {
+        "pattern": "redis.io",
+        "type": "official_doc",
+        "reason": "Redis official docs"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL for comparison"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Infrastructure simplicity",
+        "position_a": "Using PostgreSQL for sessions means one less service to manage",
+        "position_b": "The latency penalty of disk-based session lookups on every request outweighs the operational simplicity of having one less service",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0033",
+    "query": "Terraform vs Pulumi for infrastructure as code in a DevOps team",
+    "category": "Deployment & Operations",
+    "subdomain": "iac",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Terraform",
+    "tech_b": "Pulumi",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "Terraform wins on ecosystem maturity (more providers, modules, community). Pulumi wins for teams that prefer general-purpose languages over HCL. For a team with strong Python/TypeScript skills, Pulumi is better; for a traditional DevOps team, Terraform HCL is simpler.",
+    "must_find_sources": [
+      {
+        "pattern": "terraform.io",
+        "type": "official_doc",
+        "reason": "Terraform official docs"
+      },
+      {
+        "pattern": "pulumi.com",
+        "type": "official_doc",
+        "reason": "Pulumi official docs"
+      },
+      {
+        "pattern": "github.com/hashicorp/terraform",
+        "type": "github_repo",
+        "reason": "Terraform source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "HCL vs general-purpose languages",
+        "position_a": "HCL is declarative and cleaner for infrastructure definition",
+        "position_b": "General-purpose languages give you loops, functions, and abstractions that HCL can't match without complex workarounds",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0034",
+    "query": "Nginx vs Caddy for reverse proxy in a containerized environment",
+    "category": "Deployment & Operations",
+    "subdomain": "monitoring",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Caddy",
+    "tech_b": "Nginx",
+    "expected_winner": "Caddy",
+    "ground_truth_notes": "Caddy has automatic HTTPS, simpler configuration, and native Docker/container support. Nginx is more battle-tested at extreme scale but for typical containerized deployments, Caddy's zero-config TLS is a decisive advantage.",
+    "must_find_sources": [
+      {
+        "pattern": "caddyserver.com",
+        "type": "official_doc",
+        "reason": "Caddy official docs"
+      },
+      {
+        "pattern": "nginx.org",
+        "type": "official_doc",
+        "reason": "Nginx official docs"
+      },
+      {
+        "pattern": "github.com/caddyserver/caddy",
+        "type": "github_repo",
+        "reason": "Caddy source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance at scale",
+        "position_a": "Nginx consistently outperforms Caddy at 100K+ concurrent connections",
+        "position_b": "If you're at 100K concurrent connections, you can afford to switch proxies — Caddy's TLS automation saves more engineer-hours at normal scale",
+        "key_source": "reddit.com/r/selfhosted"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0035",
+    "query": "Prometheus vs Datadog for application monitoring on a startup budget",
+    "category": "Deployment & Operations",
+    "subdomain": "monitoring",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Prometheus",
+    "tech_b": "Datadog",
+    "expected_winner": "Prometheus",
+    "ground_truth_notes": "Prometheus is free and open-source. Datadog charges per host and can cost thousands/month at scale. For a startup on a budget, Prometheus + Grafana is the clear winner. Datadog wins when you can afford the convenience of managed monitoring.",
+    "must_find_sources": [
+      {
+        "pattern": "prometheus.io",
+        "type": "official_doc",
+        "reason": "Prometheus official docs"
+      },
+      {
+        "pattern": "datadoghq.com",
+        "type": "official_doc",
+        "reason": "Datadog pricing page"
+      },
+      {
+        "pattern": "github.com/prometheus/prometheus",
+        "type": "github_repo",
+        "reason": "Prometheus source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Total cost of ownership",
+        "position_a": "Prometheus is free but requires engineering time to set up and maintain",
+        "position_b": "Datadog's monthly cost for a growing startup quickly exceeds the cost of a part-time engineer managing Prometheus",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0036",
+    "query": "Ansible vs Terraform for server configuration management",
+    "category": "Deployment & Operations",
+    "subdomain": "iac",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Ansible",
+    "tech_b": "Terraform",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "These are complementary, not competing. Terraform provisions infrastructure (VMs, networks, databases). Ansible configures servers (install packages, manage configs, deploy apps). Most teams use both: Terraform for provisioning, Ansible for configuration.",
+    "must_find_sources": [
+      {
+        "pattern": "ansible.com",
+        "type": "official_doc",
+        "reason": "Ansible official docs"
+      },
+      {
+        "pattern": "terraform.io",
+        "type": "official_doc",
+        "reason": "Terraform official docs"
+      },
+      {
+        "pattern": "docs.ansible.com",
+        "type": "official_doc",
+        "reason": "Ansible documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Terraform provisioners vs Ansible",
+        "position_a": "Terraform can configure servers with provisioners, replacing Ansible",
+        "position_b": "Terraform provisioners are intentionally limited and break idempotency — HashiCorp themselves recommend using a dedicated config management tool",
+        "key_source": "terraform.io/docs/provisioners"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0037",
+    "query": "GitLab CI vs GitHub Actions for a self-hosted CI/CD pipeline",
+    "category": "Deployment & Operations",
+    "subdomain": "cicd",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "GitLab CI",
+    "tech_b": "GitHub Actions",
+    "expected_winner": "GitLab CI",
+    "ground_truth_notes": "GitLab CI supports self-hosted runners natively, has better secrets management for on-prem, and doesn't depend on GitHub's cloud. GitHub Actions can use self-hosted runners but the orchestration still depends on github.com. For fully self-hosted enterprise, GitLab CI wins.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.gitlab.com/ee/ci",
+        "type": "official_doc",
+        "reason": "GitLab CI official docs"
+      },
+      {
+        "pattern": "docs.github.com/en/actions",
+        "type": "official_doc",
+        "reason": "GitHub Actions docs"
+      },
+      {
+        "pattern": "about.gitlab.com",
+        "type": "official_doc",
+        "reason": "GitLab product page"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Market momentum",
+        "position_a": "GitHub Actions has larger marketplace and community momentum",
+        "position_b": "GitLab CI's integrated container registry, environments, and self-managed option create a more complete DevOps platform for enterprises that can't use SaaS",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0038",
+    "query": "Playwright vs Selenium for browser automation testing in 2026",
+    "category": "Deployment & Operations",
+    "subdomain": "cicd",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Playwright",
+    "tech_b": "Selenium",
+    "expected_winner": "Playwright",
+    "ground_truth_notes": "Playwright has auto-waiting, better debugging (traces, videos), native mobile emulation, and faster execution. Selenium still wins for legacy WebDriver protocol support and broader language bindings. For new projects in 2026, Playwright is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "playwright.dev",
+        "type": "official_doc",
+        "reason": "Playwright official docs"
+      },
+      {
+        "pattern": "selenium.dev",
+        "type": "official_doc",
+        "reason": "Selenium official docs"
+      },
+      {
+        "pattern": "github.com/microsoft/playwright",
+        "type": "github_repo",
+        "reason": "Playwright source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Language support",
+        "position_a": "Selenium supports Java, C#, Ruby, Python, JS — Playwright is JS/Python/.NET/Java only",
+        "position_b": "Playwright's four languages cover 95%+ of teams; the auto-waiting alone saves more engineering time than broad language support",
+        "key_source": "reddit.com/r/QualityAssurance"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0039",
+    "query": "OpenAI API vs Anthropic Claude API for building a customer-facing chatbot",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_invocation",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Anthropic Claude API",
+    "tech_b": "OpenAI API",
+    "expected_winner": "Anthropic Claude API",
+    "ground_truth_notes": "Claude has stronger safety guardrails, better instruction following, and lower hallucination rates for customer-facing use cases where brand safety matters. OpenAI has broader model selection and multimodal capabilities.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.anthropic.com",
+        "type": "official_doc",
+        "reason": "Claude API docs"
+      },
+      {
+        "pattern": "platform.openai.com",
+        "type": "official_doc",
+        "reason": "OpenAI API docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Multimodal",
+        "position_a": "OpenAI GPT-4o has native vision and audio, which Claude lacks",
+        "position_b": "Most customer-facing chatbots are text-only; vision features add cost without proportional value for standard chatbot use cases",
+        "key_source": "reddit.com/r/ClaudeAI"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0040",
+    "query": "ChromaDB vs FAISS for small-scale RAG vector search on a laptop",
+    "category": "Models & Data",
+    "subdomain": "vector_databases",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "ChromaDB",
+    "tech_b": "FAISS",
+    "expected_winner": "ChromaDB",
+    "ground_truth_notes": "ChromaDB has a simpler Python API, built-in metadata filtering, and persistent storage out of the box. FAISS is faster for pure vector search but requires manual metadata handling and is in-memory only without extra work. For laptop-scale RAG, ChromaDB wins on developer experience.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.trychroma.com",
+        "type": "official_doc",
+        "reason": "ChromaDB official docs"
+      },
+      {
+        "pattern": "github.com/facebookresearch/faiss",
+        "type": "github_repo",
+        "reason": "FAISS source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Search speed",
+        "position_a": "FAISS is 10-100x faster for exact and approximate nearest neighbor search",
+        "position_b": "At laptop scale (<1M vectors), the speed difference is imperceptible; metadata filtering and persistence matter more",
+        "key_source": "github.com/facebookresearch/faiss/wiki"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0041",
+    "query": "Airflow vs Prefect for data pipeline orchestration in a data engineering team",
+    "category": "Infrastructure",
+    "subdomain": "task_queues",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Prefect",
+    "tech_b": "Airflow",
+    "expected_winner": "Prefect",
+    "ground_truth_notes": "Prefect has modern Python-native API (no DAG definition DSL), better dynamic workflow support, and simpler local development. Airflow has larger community and more managed service options. For a new team in 2026, Prefect's DX wins.",
+    "must_find_sources": [
+      {
+        "pattern": "prefect.io",
+        "type": "official_doc",
+        "reason": "Prefect official docs"
+      },
+      {
+        "pattern": "airflow.apache.org",
+        "type": "official_doc",
+        "reason": "Airflow official docs"
+      },
+      {
+        "pattern": "github.com/PrefectHQ/prefect",
+        "type": "github_repo",
+        "reason": "Prefect source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem maturity",
+        "position_a": "Airflow has thousands of providers and a decade of production testing",
+        "position_b": "Prefect can run Airflow-style DAGs via migration tools; the production battle-testing gap has narrowed significantly since 2023",
+        "key_source": "reddit.com/r/dataengineering"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0042",
+    "query": "Pydantic Settings vs python-dotenv for configuration management",
+    "category": "Backend Frameworks & API",
+    "subdomain": "serialization",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Pydantic Settings",
+    "tech_b": "python-dotenv",
+    "expected_winner": "Pydantic Settings",
+    "ground_truth_notes": "Pydantic Settings adds type validation, nested model support, and secret directory integration on top of .env loading. python-dotenv only parses .env files. For any project already using Pydantic (which is most FastAPI projects), Pydantic Settings is the natural choice.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.pydantic.dev",
+        "type": "official_doc",
+        "reason": "Pydantic Settings docs"
+      },
+      {
+        "pattern": "pypi.org/project/python-dotenv",
+        "type": "package_registry",
+        "reason": "python-dotenv package"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0043",
+    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production",
+    "category": "Backend Frameworks & API",
+    "subdomain": "async_solutions",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Uvicorn",
+    "tech_b": "Gunicorn",
+    "expected_winner": "Uvicorn",
+    "ground_truth_notes": "FastAPI is async-native and Uvicorn is the recommended ASGI server. Gunicorn is a WSGI server that needs uvicorn workers to serve async apps. Using Uvicorn directly (or with Gunicorn as a process manager) is the standard deployment. The real answer: Gunicorn + Uvicorn workers for multi-process, standalone Uvicorn for single-process.",
+    "must_find_sources": [
+      {
+        "pattern": "uvicorn.org",
+        "type": "official_doc",
+        "reason": "Uvicorn official docs"
+      },
+      {
+        "pattern": "fastapi.tiangolo.com/deployment",
+        "type": "official_doc",
+        "reason": "FastAPI deployment guide"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Process management",
+        "position_a": "Gunicorn is needed for multi-process management and graceful restarts",
+        "position_b": "Uvicorn has built-in --workers flag; for containerized deployments where the orchestrator handles process management, standalone Uvicorn is simpler",
+        "key_source": "github.com/encode/uvicorn"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0044",
+    "query": "Docker Compose vs Minikube for local Kubernetes development",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Docker Compose",
+    "tech_b": "Minikube",
+    "expected_winner": "Docker Compose",
+    "ground_truth_notes": "Docker Compose is simpler, lighter, and doesn't require running a full Kubernetes cluster locally. Minikube is valuable when you need to test K8s-specific features (Ingress, RBAC, CRDs) but is overkill for general local development.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.docker.com/compose",
+        "type": "official_doc",
+        "reason": "Docker Compose docs"
+      },
+      {
+        "pattern": "minikube.sigs.k8s.io",
+        "type": "official_doc",
+        "reason": "Minikube docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Dev-prod parity",
+        "position_a": "Minikube gives you a real K8s environment, reducing dev-prod drift",
+        "position_b": "Docker Compose to K8s via Kompose or Tilt bridges the gap; running Minikube for every developer laptop is wasteful",
+        "key_source": "reddit.com/r/kubernetes"
+      }
+    ],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0045",
+    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline",
+    "category": "Models & Data",
+    "subdomain": "llm_selection",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Tiktoken",
+    "tech_b": "SentencePiece",
+    "expected_winner": "Tiktoken",
+    "ground_truth_notes": "Tiktoken is faster (Rust implementation), is used by OpenAI models (GPT-4, GPT-4o), and has a simpler API for counting tokens. SentencePiece is more flexible (supports BPE and unigram) and is used by many open-source models. For production OpenAI-compatible pipelines, Tiktoken is the better choice.",
+    "must_find_sources": [
+      {
+        "pattern": "github.com/openai/tiktoken",
+        "type": "github_repo",
+        "reason": "Tiktoken source repo"
+      },
+      {
+        "pattern": "github.com/google/sentencepiece",
+        "type": "github_repo",
+        "reason": "SentencePiece source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Model compatibility",
+        "position_a": "SentencePiece supports more tokenization algorithms and is model-agnostic",
+        "position_b": "For OpenAI-compatible APIs, Tiktoken's token counts match the API billing exactly — SentencePiece estimates will drift",
+        "key_source": "github.com/openai/tiktoken"
+      }
+    ],
+    "min_expected_sources": 3
+  },
+  {
+    "id": "TC-0046",
+    "query": "Ray vs Dask for distributed Python computing in ML pipelines",
+    "category": "Models & Data",
+    "subdomain": "data_pipelines",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Ray",
+    "tech_b": "Dask",
+    "expected_winner": "Ray",
+    "ground_truth_notes": "Ray has native actor model, better GPU support, built-in serving (Ray Serve) and training (Ray Train). Dask is better for pure DataFrame/distributed NumPy workloads. For ML pipelines that mix training + serving + hyperparameter tuning, Ray's unified framework wins.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.ray.io",
+        "type": "official_doc",
+        "reason": "Ray official docs"
+      },
+      {
+        "pattern": "dask.org",
+        "type": "official_doc",
+        "reason": "Dask official docs"
+      },
+      {
+        "pattern": "github.com/ray-project/ray",
+        "type": "github_repo",
+        "reason": "Ray source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Simplicity",
+        "position_a": "Dask's DataFrame API mirrors Pandas, making it easier to adopt",
+        "position_b": "Ray's unified compute model means you learn one framework for training, serving, and tuning — Dask only solves the data-parallel piece",
+        "key_source": "reddit.com/r/MachineLearning"
+      }
+    ],
+    "min_expected_sources": 5
+  },
+  {
+    "id": "TC-0047",
+    "query": "Bun vs Node.js for building a new backend API in 2026",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Bun",
+    "tech_b": "Node.js",
+    "expected_winner": "Node.js",
+    "ground_truth_notes": "Node.js has a mature ecosystem, battle-tested stability, and universal cloud support. Bun is faster and has better DX (built-in TypeScript, bundler, test runner) but is newer and less proven. For production backends in 2026, Node.js' stability still wins for risk-averse teams. Bun wins for side projects and internal tools.",
+    "must_find_sources": [
+      {
+        "pattern": "bun.sh",
+        "type": "official_doc",
+        "reason": "Bun official site"
+      },
+      {
+        "pattern": "nodejs.org",
+        "type": "official_doc",
+        "reason": "Node.js official docs"
+      },
+      {
+        "pattern": "github.com/oven-sh/bun",
+        "type": "github_repo",
+        "reason": "Bun source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance",
+        "position_a": "Bun is 3-5x faster than Node.js in benchmarks",
+        "position_b": "Node.js 22+ with built-in WebSocket and fetch has closed much of the performance gap; raw speed matters less than ecosystem maturity for production",
+        "key_source": "reddit.com/r/node"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0048",
+    "query": "LangGraph vs manual asyncio for building an AI agent orchestration layer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "hard",
+    "tech_a": "LangGraph",
+    "tech_b": "Manual asyncio",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph provides state management, checkpointing, streaming, and conditional routing out of the box — all of which you'd have to build manually with asyncio. For any non-trivial agent pipeline, the framework saves weeks of development. Manual asyncio is only justified for the simplest linear chains.",
+    "must_find_sources": [
+      {
+        "pattern": "langchain-ai.github.io/langgraph",
+        "type": "official_doc",
+        "reason": "LangGraph official docs"
+      },
+      {
+        "pattern": "docs.python.org/library/asyncio",
+        "type": "official_doc",
+        "reason": "Python asyncio docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Framework lock-in",
+        "position_a": "Building with asyncio means zero framework dependency and full control",
+        "position_b": "LangGraph is 15K lines of Python; the lock-in risk is minimal compared to the development speed gained from built-in checkpointing and streaming",
+        "key_source": "github.com/langchain-ai/langgraph"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0049",
+    "query": "Modal vs AWS Lambda for serverless Python ML inference",
+    "category": "Deployment & Operations",
+    "subdomain": "cloud_platforms",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Modal",
+    "tech_b": "AWS Lambda",
+    "expected_winner": "Modal",
+    "ground_truth_notes": "Modal is purpose-built for Python/ML workloads with GPU support, longer timeouts (up to 1 hour), and simpler Python-native API. AWS Lambda has a 15-minute timeout, no GPU, and requires more infrastructure configuration. For ML inference, Modal wins decisively.",
+    "must_find_sources": [
+      {
+        "pattern": "modal.com",
+        "type": "official_doc",
+        "reason": "Modal official docs"
+      },
+      {
+        "pattern": "aws.amazon.com/lambda",
+        "type": "official_doc",
+        "reason": "AWS Lambda official docs"
+      },
+      {
+        "pattern": "github.com/modal-labs/modal-client",
+        "type": "github_repo",
+        "reason": "Modal client source"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Vendor lock-in",
+        "position_a": "Modal is a single-vendor platform; Lambda is on AWS with massive ecosystem",
+        "position_b": "Modal deploys standard Docker images — migration is straightforward; the GPU support and 1-hour timeout enable use cases that Lambda simply can't handle",
+        "key_source": "reddit.com/r/MachineLearning"
+      }
+    ],
+    "min_expected_sources": 4
+  },
+  {
+    "id": "TC-0050",
+    "query": "MCP vs REST API for AI agent tool integration",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "mcp_ecosystem",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "MCP",
+    "tech_b": "REST API",
+    "expected_winner": "MCP",
+    "ground_truth_notes": "MCP (Model Context Protocol) provides standardized tool discovery (list_tools), schema exposure, and lifecycle management that REST APIs don't natively support. For AI agent tool integration specifically, MCP's structured protocol reduces integration boilerplate. REST APIs still work but require manual schema documentation and discovery logic.",
+    "must_find_sources": [
+      {
+        "pattern": "modelcontextprotocol.io",
+        "type": "official_doc",
+        "reason": "MCP official spec"
+      },
+      {
+        "pattern": "github.com/modelcontextprotocol",
+        "type": "github_repo",
+        "reason": "MCP GitHub org"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Adoption and maturity",
+        "position_a": "REST APIs are universally supported; MCP is a newer standard with limited ecosystem",
+        "position_b": "MCP's rapid adoption (Anthropic, OpenAI, Google, Microsoft) and standardized discovery model make it the clear direction for agent-tool integration going forward",
+        "key_source": "modelcontextprotocol.io"
+      }
+    ],
+    "min_expected_sources": 3
+  }
+]
