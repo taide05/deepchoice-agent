@@ -96,11 +96,8 @@ class ConflictDetectorAgent:
                 "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
             }
 
-        conflicts = []
-        for pair in pairs:
-            a = pair["source_a"]
-            b = pair["source_b"]
-            prompt = [{
+        def _make_prompt(a: dict, b: dict) -> list[dict]:
+            return [{
                 "role": "user",
                 "content": ARBITRATION_PROMPT.format(
                     topic=research_state["task"]["query"],
@@ -115,21 +112,68 @@ class ConflictDetectorAgent:
                 ),
             }]
 
+        def _build_conflict(pair: dict, result: dict) -> dict:
+            return {
+                "claim_a": pair["source_a"].get("title", ""),
+                "claim_b": pair["source_b"].get("title", ""),
+                "source_a": {"url": pair["source_a"]["url"], "score": pair["source_a"]["total_score"]},
+                "source_b": {"url": pair["source_b"]["url"], "score": pair["source_b"]["total_score"]},
+                "similarity": pair["similarity"],
+                "resolution": result.get("resolution", "insufficient_data"),
+                "confidence": result.get("confidence", "low"),
+                "reasoning": result.get("reasoning", ""),
+                "key_factor": result.get("key_factor", ""),
+                "arbiter_model": "flash",
+            }
+
+        # Stage 1: Flash arbitration for all pairs
+        conflicts = []
+        low_confidence_pairs: list[dict] = []
+
+        for pair in pairs:
             try:
-                result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
-                conflicts.append({
-                    "claim_a": a.get("title", ""),
-                    "claim_b": b.get("title", ""),
-                    "source_a": {"url": a["url"], "score": a["total_score"]},
-                    "source_b": {"url": b["url"], "score": b["total_score"]},
-                    "similarity": pair["similarity"],
-                    "resolution": result.get("resolution", "insufficient_data"),
-                    "confidence": result.get("confidence", "low"),
-                    "reasoning": result.get("reasoning", ""),
-                    "key_factor": result.get("key_factor", ""),
-                })
+                result = await call_model(
+                    _make_prompt(pair["source_a"], pair["source_b"]),
+                    model="deepseek-v4-flash",
+                    response_format="json",
+                )
+                conflict = _build_conflict(pair, result)
+                conflicts.append(conflict)
+                if conflict["confidence"] == "low":
+                    low_confidence_pairs.append(pair)
             except Exception as e:
-                print_agent_output(f"Arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                print_agent_output(f"Flash arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+
+        # Stage 2: Pro re-arbitration for the most ambiguous low-confidence pair
+        if low_confidence_pairs:
+            # Pick the pair with the smallest score gap (most ambiguous)
+            best = min(low_confidence_pairs, key=lambda p: abs(
+                p["source_a"]["total_score"] - p["source_b"]["total_score"]
+            ))
+            score_gap = abs(best["source_a"]["total_score"] - best["source_b"]["total_score"])
+            print_agent_output(
+                f"Pro re-arbitration: 1 of {len(low_confidence_pairs)} low-confidence pairs "
+                f"(score gap={score_gap:.1f})",
+                agent="CONFLICT_DETECTOR",
+            )
+            try:
+                pro_result = await call_model(
+                    _make_prompt(best["source_a"], best["source_b"]),
+                    model="deepseek-v4-pro",
+                    response_format="json",
+                    timeout=300.0,
+                )
+                # Replace the corresponding flash result in conflicts list
+                pro_conflict = _build_conflict(best, pro_result)
+                pro_conflict["arbiter_model"] = "pro"
+                for i, c in enumerate(conflicts):
+                    if (c["source_a"]["url"] == pro_conflict["source_a"]["url"] and
+                            c["source_b"]["url"] == pro_conflict["source_b"]["url"]):
+                        conflicts[i] = pro_conflict
+                        break
+            except Exception as e:
+                print_agent_output(f"Pro arbitration failed, keeping flash result: {e}",
+                                  agent="CONFLICT_DETECTOR")
 
         resolved_count = sum(
             1 for c in conflicts
