@@ -31,10 +31,14 @@ Disputed findings: {disputed_count}
 3. Consider scene context: solo devs prioritize simplicity, enterprises prioritize reliability
 4. If evidence is insufficient for a definitive answer, say so honestly
 5. Every recommendation MUST cite specific evidence (not just "based on the data")
+6. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
+7. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
 
 ## Output Structure
 Return ONLY a JSON object:
 {{
+  "winner": "Single technology name that wins the comparison (REQUIRED — never leave empty)",
+  "winner_rationale": "One sentence citing the strongest piece of evidence for this choice",
   "recommendation": "One-paragraph actionable recommendation",
   "ranked_options": [
     {{"name": "Option A", "rank": 1, "rationale": "Why this rank based on evidence", "key_strength": "strongest evidence point", "key_weakness": "notable limitation"}}

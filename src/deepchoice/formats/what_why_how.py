@@ -77,27 +77,39 @@ def render(state: dict) -> str:
     rec = state.get("final_recommendation", {})
     lines.extend([T["how"][lang], ""])
 
-    if rec.get("recommendation"):
-        lines.append(f"**{T['recommendation'][lang]}:** {rec['recommendation']}")
+    winner = rec.get("winner", "")
+    if not winner and rec.get("ranked_options"):
+        winner = rec["ranked_options"][0]["name"]
+
+    if winner:
+        lines.append(f"**Winner: {winner}**")
+        if rec.get("winner_rationale"):
+            lines.append(f"*{rec['winner_rationale']}*")
         lines.append("")
         lines.append(f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}")
         if rec.get("confidence_rationale"):
             lines.append(f"*{rec['confidence_rationale']}*")
         lines.append("")
-        if rec.get("ranked_options"):
-            lines.append(T["ranked_options"][lang])
-            for opt in rec["ranked_options"]:
-                lines.append(f"- **#{opt['rank']} {opt['name']}**: {opt.get('rationale', '')}")
-            lines.append("")
-        if rec.get("trade_offs"):
-            lines.append(T["trade_offs"][lang])
-            for t in rec["trade_offs"]:
-                lines.append(f"- **{t.get('dimension', '')}**: {t.get('finding', '')}")
-            lines.append("")
-        if rec.get("scene_fit_note"):
-            lines.append(f"**{T['scene_fit'][lang]}:** {rec['scene_fit_note']}")
-            lines.append("")
-    else:
+
+    if rec.get("recommendation"):
+        lines.append(f"**{T['recommendation'][lang]}:** {rec['recommendation']}")
+        lines.append("")
+
+    if rec.get("ranked_options"):
+        lines.append(T["ranked_options"][lang])
+        for opt in rec["ranked_options"]:
+            lines.append(f"- **#{opt['rank']} {opt['name']}**: {opt.get('rationale', '')}")
+        lines.append("")
+    if rec.get("trade_offs"):
+        lines.append(T["trade_offs"][lang])
+        for t in rec["trade_offs"]:
+            lines.append(f"- **{t.get('dimension', '')}**: {t.get('finding', '')}")
+        lines.append("")
+    if rec.get("scene_fit_note"):
+        lines.append(f"**{T['scene_fit'][lang]}:** {rec['scene_fit_note']}")
+        lines.append("")
+
+    if not winner and not rec.get("recommendation"):
         lines.extend([
             f"**{T['confidence'][lang]}:** {state.get('confidence', 'unknown')}",
             "",

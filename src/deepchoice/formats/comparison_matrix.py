@@ -133,10 +133,19 @@ def render(state: dict) -> str:
         lines.append(L["no_disputes"][lang])
 
     rec = state.get("final_recommendation", {})
+    winner = rec.get("winner", "")
+    if not winner and rec.get("ranked_options"):
+        winner = rec["ranked_options"][0]["name"]
+
     lines.extend(["", L["recommendation_title"][lang], ""])
     scene = task.get("scene_context", "team")
     scene_map = {"solo": L["scene_solo"][lang], "team": L["scene_team"][lang], "enterprise": L["scene_enterprise"][lang]}
     lines.append(f"{L['scene'][lang]}: **{scene_map.get(scene, scene)}**")
+
+    if winner:
+        lines.append(f"\n**Winner: {winner}**")
+        if rec.get("winner_rationale"):
+            lines.append(f"*{rec['winner_rationale']}*")
 
     if rec.get("recommendation"):
         lines.append("")
