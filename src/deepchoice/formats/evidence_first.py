@@ -32,11 +32,20 @@ def render(state: dict) -> str:
     top = strong[0] if strong else (chains[0] if chains else None)
 
     rec = state.get("final_recommendation", {})
+    winner = rec.get("winner", "")
+    if not winner and rec.get("ranked_options"):
+        winner = rec["ranked_options"][0]["name"]
+
     lines = [
         f"# {query}{T['title_suffix'][lang]}",
         "",
         T["conclusion"][lang],
     ]
+    if winner:
+        lines.append(f"**Winner: {winner}**")
+        if rec.get("winner_rationale"):
+            lines.append(f"*{rec['winner_rationale']}*")
+        lines.append("")
     if rec.get("recommendation"):
         lines.append(rec["recommendation"])
         if rec.get("confidence_rationale"):
