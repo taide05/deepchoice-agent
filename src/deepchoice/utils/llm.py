@@ -9,18 +9,19 @@ DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
 DEFAULT_PRO_MODEL = "deepseek-v4-pro"
 
 
-def _get_client() -> AsyncOpenAI:
+def _get_client(timeout: float = 120.0) -> AsyncOpenAI:
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     base_url = os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
-    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
+    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
 async def call_model(
     prompt: list[dict],
     model: str = DEFAULT_FLASH_MODEL,
     response_format: str | None = None,
+    timeout: float = 120.0,
 ) -> dict | str:
-    client = _get_client()
+    client = _get_client(timeout=timeout)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
     if response_format == "json":
         kwargs["response_format"] = {"type": "json_object"}
