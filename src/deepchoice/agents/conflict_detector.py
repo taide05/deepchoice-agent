@@ -116,7 +116,7 @@ class ConflictDetectorAgent:
             }]
 
             try:
-                result = await call_model(prompt, model="deepseek-v4-pro", response_format="json")
+                result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
                 conflicts.append({
                     "claim_a": a.get("title", ""),
                     "claim_b": b.get("title", ""),

@@ -12,7 +12,7 @@ DEFAULT_PRO_MODEL = "deepseek-v4-pro"
 def _get_client() -> AsyncOpenAI:
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     base_url = os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
-    return AsyncOpenAI(api_key=api_key, base_url=base_url)
+    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
 
 
 async def call_model(
