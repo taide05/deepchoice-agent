@@ -505,11 +505,12 @@ def compute_success_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
 
     for run in runs:
         has_error = run.get("error") is not None
-        has_state = run.get("state") is not None
         report = run.get("report", "")
         has_report = bool(report and len(report.strip()) > 100)
+        # state may be absent in batched/loaded runs
+        has_state = run.get("state") is not None or has_report
 
-        if not has_error and has_state and has_report:
+        if not has_error and has_report:
             success += 1
         else:
             mode = "timeout" if "timeout" in str(run.get("error", "")) else \

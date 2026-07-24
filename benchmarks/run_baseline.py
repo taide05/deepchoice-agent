@@ -202,6 +202,7 @@ async def run_baseline(
     with_judge: bool = False,
     batch: int = 0,
     batch_size: int = 10,
+    cases_file: Path | None = None,
 ) -> Path:
     """Run the full benchmark suite.
 
@@ -216,7 +217,8 @@ async def run_baseline(
         Path to the saved benchmark report.
     """
     # Load annotated cases
-    cases = json.loads(ANNOTATED_CASES_PATH.read_text(encoding="utf-8"))
+    source_path = cases_file if cases_file else ANNOTATED_CASES_PATH
+    cases = json.loads(source_path.read_text(encoding="utf-8"))
 
     # Handle batching
     batch_label = ""
@@ -225,8 +227,8 @@ async def run_baseline(
         end_idx = start_idx + batch_size
         cases = cases[start_idx:end_idx]
         batch_label = f"-batch{batch:02d}"
-        print(f"Batch {batch}: cases {start_idx+1}-{min(end_idx, len(cases))} "
-              f"(batch_size={batch_size}, total available={len(json.loads(ANNOTATED_CASES_PATH.read_text(encoding='utf-8')))})")
+        total_in_file = len(cases)
+        print(f"Batch {batch}: cases running (batch_size={batch_size}, cases in this batch={len(cases)})")
     elif n_cases and n_cases > 0:
         cases = cases[:n_cases]
 
@@ -445,12 +447,17 @@ if __name__ == "__main__":
         "--merge", action="store_true",
         help="Merge all batch results into final aggregate report",
     )
+    parser.add_argument(
+        "--cases-file", type=str, default=None,
+        help="Path to custom annotated cases JSON file",
+    )
     args = parser.parse_args()
 
     if args.merge:
         asyncio.run(merge_all_batches(verbose=args.verbose))
     else:
         n = args.cases if args.cases > 0 else None
+        cf = Path(args.cases_file) if args.cases_file else None
         path = asyncio.run(
             run_baseline(
                 n_cases=n,
@@ -458,6 +465,7 @@ if __name__ == "__main__":
                 with_judge=args.judge,
                 batch=args.batch,
                 batch_size=args.batch_size,
+                cases_file=cf,
             )
         )
         print(f"\nDone. Report: {path}")
