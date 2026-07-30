@@ -47,7 +47,10 @@ class ChiefEditorAgent:
             "query_adapter": QueryAdapterAgent(self.websocket, self.stream_output, self.headers),
             "multi_retriever": MultiRetrieverAgent(self.websocket, self.stream_output, self.headers),
             "source_evaluator": SourceEvaluatorAgent(self.websocket, self.stream_output, self.headers),
-            "conflict_detector": ConflictDetectorAgent(self.websocket, self.stream_output, self.headers),
+            "conflict_detector": ConflictDetectorAgent(
+                self.websocket, self.stream_output, self.headers,
+                gather_evidence=self.task.get("gather_evidence", True),
+            ),
             "evidence_chain": EvidenceChainAgent(self.websocket, self.stream_output, self.headers),
             "conclusion_synthesizer": ConclusionSynthesizerAgent(self.websocket, self.stream_output, self.headers),
             "report_generator": ReportGeneratorAgent(self.websocket, self.stream_output, self.headers),

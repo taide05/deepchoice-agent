@@ -42,6 +42,23 @@ NEGATION_WORDS = {
     "instead", "rather than", "prefer", "drawback", "downside",
 }
 
+STOP_WORDS = {
+    "a", "an", "the", "for", "in", "of", "as", "or", "vs", "and",
+    "with", "to", "is", "on", "by", "at", "it", "be", "no", "not",
+    "from", "that", "this", "are", "was", "were", "has", "have",
+    "than", "its", "can", "will", "more", "using", "when", "which",
+    "your", "their", "into", "over", "also", "how", "what", "all",
+}
+
+def _extract_keywords(text: str) -> set[str]:
+    """Extract meaningful tech keywords from a query string."""
+    import re
+    words = re.findall(r'[A-Za-z0-9_+#.-]+', text)
+    return {
+        w.lower() for w in words
+        if len(w) > 2 and w.lower() not in STOP_WORDS
+    }
+
 # ---------------------------------------------------------------------------
 # Inline multi-turn evidence gathering — 6 search tools
 # ---------------------------------------------------------------------------
@@ -376,11 +393,14 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 # ---------------------------------------------------------------------------
 
 
-def find_contradictions(source_scores: list[dict], threshold: float = 0.6) -> list[dict]:
+def find_contradictions(source_scores: list[dict], query_topic: str = "",
+                         threshold: float = 0.6) -> list[dict]:
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
         return []
+
+    query_keywords = _extract_keywords(query_topic) if query_topic else set()
 
     titles = [s.get("title", "") for s in high_score_sources]
     embeddings = model.encode(titles)
@@ -399,12 +419,21 @@ def find_contradictions(source_scores: list[dict], threshold: float = 0.6) -> li
             if sim >= threshold:
                 neg_a = any(w in title_a.lower() for w in NEGATION_WORDS)
                 neg_b = any(w in title_b.lower() for w in NEGATION_WORDS)
-                if neg_a != neg_b:
-                    pairs.append({
-                        "source_a": high_score_sources[i],
-                        "source_b": high_score_sources[j],
-                        "similarity": round(sim, 3),
-                    })
+                if neg_a == neg_b:
+                    continue
+
+                # Relevance filter: at least one source must mention query keywords
+                if query_keywords:
+                    words_a = set(title_a.lower().split())
+                    words_b = set(title_b.lower().split())
+                    if not (words_a & query_keywords or words_b & query_keywords):
+                        continue
+
+                pairs.append({
+                    "source_a": high_score_sources[i],
+                    "source_b": high_score_sources[j],
+                    "similarity": round(sim, 3),
+                })
 
     return pairs
 
@@ -415,10 +444,12 @@ def find_contradictions(source_scores: list[dict], threshold: float = 0.6) -> li
 
 
 class ConflictDetectorAgent:
-    def __init__(self, websocket=None, stream_output=None, headers=None):
+    def __init__(self, websocket=None, stream_output=None, headers=None,
+                 gather_evidence: bool = True):
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers
+        self.gather_evidence = gather_evidence
 
     async def run(self, research_state: dict) -> dict:
         source_scores = research_state.get("source_scores", [])
@@ -427,7 +458,8 @@ class ConflictDetectorAgent:
             agent="CONFLICT_DETECTOR",
         )
 
-        pairs = find_contradictions(source_scores)
+        pairs = find_contradictions(source_scores,
+                                     query_topic=research_state["task"]["query"])
         if not pairs:
             return {
                 "conflicts": [],
@@ -485,7 +517,7 @@ class ConflictDetectorAgent:
             except Exception as e:
                 print_agent_output(f"Flash arbitration failed: {e}", agent="CONFLICT_DETECTOR")
 
-        # Stage 2: Gather evidence from all 6 sources + pro re-arbitration
+        # Stage 2: Gather evidence (when enabled) + pro re-arbitration
         if low_confidence_pairs:
             print_agent_output(
                 f"Evidence-gathering re-arbitration: {len(low_confidence_pairs)} pair(s)",
@@ -501,15 +533,16 @@ class ConflictDetectorAgent:
                     agent="CONFLICT_DETECTOR",
                 )
                 evidence = ""
-                try:
-                    evidence = await _gather_evidence(
-                        topic=research_state["task"]["query"],
-                        claim_a=a.get("title", ""),
-                        claim_b=b.get("title", ""),
-                        max_iterations=3,
-                    )
-                except Exception as e:
-                    print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+                if self.gather_evidence:
+                    try:
+                        evidence = await _gather_evidence(
+                            topic=research_state["task"]["query"],
+                            claim_a=a.get("title", ""),
+                            claim_b=b.get("title", ""),
+                            max_iterations=3,
+                        )
+                    except Exception as e:
+                        print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
 
                 enriched_claim_a = a.get("title", "")
                 enriched_claim_b = b.get("title", "")
