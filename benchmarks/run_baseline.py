@@ -119,7 +119,8 @@ def _build_report_from_state(state: dict) -> str:
     return ""
 
 
-async def run_single_case(case: dict, verbose: bool = False) -> dict:
+async def run_single_case(case: dict, verbose: bool = False,
+                           gather_evidence: bool = True) -> dict:
     """Run DeepChoice pipeline for one annotated case.
 
     Returns a dict with everything needed for metrics calculation.
@@ -132,6 +133,7 @@ async def run_single_case(case: dict, verbose: bool = False) -> dict:
         "scene_context": case.get("scene", "solo"),
         "constraints": [],
         "report_format": "what_why_how",
+        "gather_evidence": gather_evidence,
     }
 
     if verbose:
@@ -203,6 +205,7 @@ async def run_baseline(
     batch: int = 0,
     batch_size: int = 10,
     cases_file: Path | None = None,
+    gather_evidence: bool = True,
 ) -> Path:
     """Run the full benchmark suite.
 
@@ -256,7 +259,7 @@ async def run_baseline(
     for i, case in enumerate(cases):
         if verbose:
             print(f"[{i+1}/{len(cases)}]", end=" ")
-        result = await run_single_case(case, verbose=verbose)
+        result = await run_single_case(case, verbose=verbose, gather_evidence=gather_evidence)
         runs.append(result)
         latencies.append(result["elapsed_s"])
         if result["error"] is None:
@@ -451,6 +454,10 @@ if __name__ == "__main__":
         "--cases-file", type=str, default=None,
         help="Path to custom annotated cases JSON file",
     )
+    parser.add_argument(
+        "--no-evidence", action="store_true",
+        help="Disable multi-turn evidence gathering in Stage 2 arbitration",
+    )
     args = parser.parse_args()
 
     if args.merge:
@@ -466,6 +473,7 @@ if __name__ == "__main__":
                 batch=args.batch,
                 batch_size=args.batch_size,
                 cases_file=cf,
+                gather_evidence=not args.no_evidence,
             )
         )
         print(f"\nDone. Report: {path}")
