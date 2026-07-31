@@ -46,7 +46,7 @@ from benchmarks.metrics import (
 BENCHMARKS_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BENCHMARKS_DIR / "runs"
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
-TIMEOUT_PER_CASE_S = 300  # 5 minutes per case
+TIMEOUT_PER_CASE_S = 480  # 8 minutes per case (evidence gathering adds latency)
 
 
 # ---------------------------------------------------------------------------
