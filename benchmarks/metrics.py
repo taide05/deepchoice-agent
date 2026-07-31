@@ -439,6 +439,111 @@ def compute_conflict_detection_rate(
         "total_known": total_known,
         "total_detected": total_detected,
         "per_case": details,
+        "method": "keyword",
+    }
+
+
+RESOLVED_RESOLUTIONS = frozenset({"A_correct", "B_correct"})
+
+
+async def compute_conflict_detection_rate_llm(
+    runs: list[dict[str, Any]],
+    annotated_cases: list[dict[str, Any]],
+    judge_fn,
+) -> dict[str, Any]:
+    """LLM-enhanced conflict detection rate.
+
+    Only counts conflicts with resolution A_correct/B_correct
+    (excludes both_partial and insufficient_data as noise).
+    Two-stage: keyword pre-match (fast), then LLM judge re-examines
+    missed topics (accurate).
+
+    Args:
+        runs: Pipeline run results.
+        annotated_cases: Annotated test cases.
+        judge_fn: async callable(detected_conflicts, topic) -> bool.
+
+    Returns:
+        Dict with detection_rate, detected, total_known, per_case, method.
+    """
+    case_map = {c["id"]: c for c in annotated_cases}
+    total_known = 0
+    total_detected = 0
+    kw_matched = 0
+    llm_matched = 0
+    details = []
+
+    for run in runs:
+        case_id = run.get("case_id", "")
+        case = case_map.get(case_id)
+        if not case:
+            continue
+
+        known = case.get("known_contradictions", [])
+        if not known:
+            continue
+
+        # Only consider resolved (A_correct/B_correct) conflicts
+        all_conflicts = run.get("conflicts", [])
+        resolved_conflicts = [
+            c for c in all_conflicts
+            if c.get("resolution") in RESOLVED_RESOLUTIONS
+        ]
+        detected_text = " ".join(str(c) for c in resolved_conflicts).lower()
+
+        detected_count = 0
+        matched_topics = []
+        still_missed = []
+        llm_candidates = []
+
+        for kc in known:
+            topic = kc["topic"].lower()
+            topic_words = set(re.findall(r'\w+', topic))
+            detected_words = set(re.findall(r'\w+', detected_text))
+            overlap = topic_words & detected_words
+
+            if len(overlap) >= 2:
+                detected_count += 1
+                kw_matched += 1
+                matched_topics.append({"topic": kc["topic"], "method": "keyword"})
+            elif resolved_conflicts:
+                llm_candidates.append(kc)
+            else:
+                still_missed.append(kc)
+
+        # Stage 2: LLM re-evaluates keyword-missed topics
+        for kc in llm_candidates:
+            try:
+                ok = await judge_fn(resolved_conflicts, kc["topic"])
+                if ok:
+                    detected_count += 1
+                    llm_matched += 1
+                    matched_topics.append({"topic": kc["topic"], "method": "llm"})
+                else:
+                    still_missed.append(kc)
+            except Exception:
+                still_missed.append(kc)
+
+        total_known += len(known)
+        total_detected += detected_count
+        details.append({
+            "case_id": case_id,
+            "known_count": len(known),
+            "detected": detected_count,
+            "matched": matched_topics,
+            "missed": [k["topic"] for k in still_missed],
+        })
+
+    rate = total_detected / total_known if total_known > 0 else 0.0
+    return {
+        "metric": "conflict_detection_rate",
+        "value": round(rate, 3),
+        "total_known": total_known,
+        "total_detected": total_detected,
+        "keyword_matched": kw_matched,
+        "llm_matched": llm_matched,
+        "per_case": details,
+        "method": "keyword+llm",
     }
 
 

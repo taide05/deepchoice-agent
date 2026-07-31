@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -8,6 +9,15 @@ from ..utils.llm import call_model
 from ..utils.views import print_agent_output
 from ..utils.embedding import get_embedding_model
 
+# ---------------------------------------------------------------------------
+# Concurrency limits (DeepSeek rate limits: flash 500/min, pro 50/min)
+# ---------------------------------------------------------------------------
+FLASH_SEM = asyncio.Semaphore(30)
+PRO_SEM = asyncio.Semaphore(10)
+
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
 
 ARBITRATION_PROMPT = """You are an impartial technical arbitrator. Two sources make claims about the same topic but may disagree.
 
@@ -34,14 +44,24 @@ Return ONLY a JSON object:
   "key_factor": "The single most decisive factor"
 }}"""
 
-NEGATION_WORDS = {
-    "not", "no", "never", "fail", "worse", "slow", "bad", "broken", "cannot",
-    "doesn't", "don't", "isn't", "won't", "without", "lack", "lacks", "missing",
-    "better than", "outperforms", "superior", "inferior", "however",
-    "but", "although", "unlike", "versus", "vs", "contrary", "disagree",
-    "instead", "rather than", "prefer", "drawback", "downside",
-}
 
+CONTRADICTION_SCAN_PROMPT = """You are checking if two technical sources contradict each other on a specific topic.
+
+Query: {query}
+
+Source A: {title_a}
+Description: {snippet_a}
+
+Source B: {title_b}
+Description: {snippet_b}
+
+Do these two sources present directly conflicting claims about "{query}"?
+Consider: do they recommend different technologies, disagree on performance rankings,
+or make opposite claims about the same capability?
+Answer ONLY "yes" or "no"."""
+
+
+# Keyword extraction (kept for 2-keyword pre-filter)
 STOP_WORDS = {
     "a", "an", "the", "for", "in", "of", "as", "or", "vs", "and",
     "with", "to", "is", "on", "by", "at", "it", "be", "no", "not",
@@ -405,12 +425,42 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 
 
 # ---------------------------------------------------------------------------
-# Conflict detection
+# Candidate scanning (LLM replaces negation-word matching)
 # ---------------------------------------------------------------------------
 
 
-def find_contradictions(source_scores: list[dict], query_topic: str = "",
-                         threshold: float = 0.6) -> list[dict]:
+async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> bool:
+    """Ask flash model whether two sources genuinely contradict on a query.
+
+    Returns True only when the model answers "yes".
+    """
+    snippet_a = src_a.get("snippet", "")[:200]
+    snippet_b = src_b.get("snippet", "")[:200]
+    prompt = CONTRADICTION_SCAN_PROMPT.format(
+        query=query,
+        title_a=src_a.get("title", ""),
+        snippet_a=snippet_a if snippet_a else "(no description)",
+        title_b=src_b.get("title", ""),
+        snippet_b=snippet_b if snippet_b else "(no description)",
+    )
+    try:
+        async with FLASH_SEM:
+            result = await call_model(
+                [{"role": "user", "content": prompt}],
+                model="deepseek-v4-flash",
+            )
+        return str(result).strip().lower().startswith("yes")
+    except Exception:
+        return False
+
+
+async def find_contradictions(source_scores: list[dict], query_topic: str = "",
+                               threshold: float = 0.6) -> list[dict]:
+    """Find contradictory source pairs using LLM semantic scan.
+
+    Pipeline: BGE similarity → 2-keyword relevance pre-filter →
+    LLM contradiction scan (replaces old negation-word matching).
+    """
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
@@ -422,43 +472,60 @@ def find_contradictions(source_scores: list[dict], query_topic: str = "",
     embeddings = model.encode(titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
-    def _full_text(src: dict) -> str:
-        """Join title + snippet for richer negation detection."""
-        parts = [src.get("title", ""), src.get("snippet", "")]
-        return " ".join(p for p in parts if p).lower()
-
-    pairs = []
+    # Build candidate pairs (BGE similarity + keyword pre-filter)
+    candidates: list[tuple[int, int, float,
+                             str, dict, dict]] = []
     for i in range(len(high_score_sources)):
         for j in range(i + 1, len(high_score_sources)):
-            title_a = titles[i]
-            title_b = titles[j]
-            if not title_a or not title_b:
+            if not titles[i] or not titles[j]:
+                continue
+            sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
+            if sim < threshold:
                 continue
 
-            sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
-
-            if sim >= threshold:
-                text_a = _full_text(high_score_sources[i])
-                text_b = _full_text(high_score_sources[j])
-                neg_a = any(w in text_a for w in NEGATION_WORDS)
-                neg_b = any(w in text_b for w in NEGATION_WORDS)
-                if neg_a == neg_b:
+            # 2-keyword relevance pre-filter
+            if query_keywords:
+                text_a = " ".join(filter(None, [
+                    high_score_sources[i].get("title", ""),
+                    high_score_sources[i].get("snippet", ""),
+                ])).lower()
+                text_b = " ".join(filter(None, [
+                    high_score_sources[j].get("title", ""),
+                    high_score_sources[j].get("snippet", ""),
+                ])).lower()
+                overlap = set(text_a.split()) & query_keywords
+                overlap |= set(text_b.split()) & query_keywords
+                if len(overlap) < 2:
                     continue
 
-                # Relevance filter: require >=2 keyword overlap to avoid
-                # single-generic-word matches (e.g. "system", "api")
-                if query_keywords:
-                    all_text = text_a + " " + text_b
-                    words_in_sources = set(all_text.split())
-                    overlap = words_in_sources & query_keywords
-                    if len(overlap) < 2:
-                        continue
+            candidates.append((i, j, sim))
 
-                pairs.append({
-                    "source_a": high_score_sources[i],
-                    "source_b": high_score_sources[j],
-                    "similarity": round(sim, 3),
-                })
+    if not candidates:
+        return []
+
+    # LLM scan in parallel
+    async def _scan(cand):
+        i, j, sim = cand
+        ok = await _scan_pair_contradiction(
+            high_score_sources[i], high_score_sources[j], query_topic,
+        )
+        return (i, j, sim) if ok else None
+
+    print_agent_output(
+        f"LLM scanning {len(candidates)} candidate pairs for contradictions",
+        agent="CONFLICT_DETECTOR",
+    )
+    scan_results = await asyncio.gather(*[_scan(c) for c in candidates])
+
+    pairs = []
+    for r in scan_results:
+        if r is not None:
+            i, j, sim = r
+            pairs.append({
+                "source_a": high_score_sources[i],
+                "source_b": high_score_sources[j],
+                "similarity": round(sim, 3),
+            })
 
     return pairs
 
@@ -478,34 +545,38 @@ class ConflictDetectorAgent:
 
     async def run(self, research_state: dict) -> dict:
         source_scores = research_state.get("source_scores", [])
+        query = research_state["task"]["query"]
         print_agent_output(
             f"Detecting conflicts among {len(source_scores)} sources",
             agent="CONFLICT_DETECTOR",
         )
 
-        pairs = find_contradictions(source_scores,
-                                     query_topic=research_state["task"]["query"])
+        pairs = await find_contradictions(source_scores, query_topic=query)
         if not pairs:
+            print_agent_output("No contradictory pairs found after LLM scan", agent="CONFLICT_DETECTOR")
             return {
                 "conflicts": [],
                 "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
             }
 
+        print_agent_output(
+            f"LLM scan confirmed {len(pairs)} contradictory pairs, running flash arbitration",
+            agent="CONFLICT_DETECTOR",
+        )
+
         def _make_prompt(a: dict, b: dict) -> list[dict]:
-            claim_a = a.get("title", "")
-            claim_b = b.get("title", "")
             return [{
                 "role": "user",
                 "content": ARBITRATION_PROMPT.format(
-                    topic=research_state["task"]["query"],
+                    topic=query,
                     score_a=a["total_score"],
                     authority_a=a["scores"]["authority"],
                     evidence_a=a.get("evidence_type", "citation"),
-                    claim_a=claim_a,
+                    claim_a=a.get("title", ""),
                     score_b=b["total_score"],
                     authority_b=b["scores"]["authority"],
                     evidence_b=b.get("evidence_type", "citation"),
-                    claim_b=claim_b,
+                    claim_b=b.get("title", ""),
                 ),
             }]
 
@@ -524,76 +595,99 @@ class ConflictDetectorAgent:
                 "evidence_collected": result.get("evidence_collected", ""),
             }
 
-        # Stage 1: Flash arbitration for all pairs
-        conflicts = []
-        low_confidence_pairs: list[dict] = []
-
-        for pair in pairs:
-            try:
+        # --- Stage 1: Flash arbitration (parallel) ---
+        async def _arbitrate_one(pair: dict) -> dict:
+            async with FLASH_SEM:
                 result = await call_model(
                     _make_prompt(pair["source_a"], pair["source_b"]),
                     model="deepseek-v4-flash",
                     response_format="json",
                 )
-                conflict = _build_conflict(pair, result, model="flash")
-                conflicts.append(conflict)
-                if conflict["confidence"] == "low":
-                    low_confidence_pairs.append(pair)
-            except Exception as e:
-                print_agent_output(f"Flash arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+            return _build_conflict(pair, result, model="flash")
 
-        # Stage 2: Gather evidence (when enabled) + pro re-arbitration
-        if low_confidence_pairs:
+        raw_conflicts = await asyncio.gather(
+            *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
+        )
+
+        conflicts = []
+        low_confidence_pairs = []
+        for pair, result in zip(pairs, raw_conflicts):
+            if isinstance(result, Exception):
+                print_agent_output(f"Flash arbitration failed: {result}", agent="CONFLICT_DETECTOR")
+                continue
+            conflicts.append(result)
+            if result["confidence"] == "low":
+                low_confidence_pairs.append(pair)
+
+        # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
+        if low_confidence_pairs and self.gather_evidence:
             print_agent_output(
                 f"Evidence-gathering re-arbitration: {len(low_confidence_pairs)} pair(s)",
                 agent="CONFLICT_DETECTOR",
             )
-            for pair in low_confidence_pairs:
-                a = pair["source_a"]
-                b = pair["source_b"]
-                score_gap = abs(a["total_score"] - b["total_score"])
-                print_agent_output(
-                    f"  Gathering evidence for: \"{a.get('title', '')[:60]}\" vs "
-                    f"\"{b.get('title', '')[:60]}\" (gap={score_gap:.1f})",
-                    agent="CONFLICT_DETECTOR",
-                )
-                evidence = ""
-                if self.gather_evidence:
+            sem = asyncio.Semaphore(3)  # Evidence gathering is heavy (multi-API per pair)
+
+            async def _re_arbitrate(idx: int, pair: dict) -> int | None:
+                async with sem:
+                    a = pair["source_a"]
+                    b = pair["source_b"]
+                    evidence = ""
                     try:
                         evidence = await _gather_evidence(
-                            topic=research_state["task"]["query"],
+                            topic=query,
                             claim_a=a.get("title", ""),
                             claim_b=b.get("title", ""),
-                            max_iterations=3,
                         )
                     except Exception as e:
                         print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
 
-                enriched_claim_a = a.get("title", "")
-                enriched_claim_b = b.get("title", "")
-                if evidence:
-                    enriched_claim_a = f"{a.get('title', '')}\n\n[Evidence from additional search: {evidence}]"
-                    enriched_claim_b = f"{b.get('title', '')}\n\n[Evidence from additional search: {evidence}]"
+                    enriched_claim_a = a.get("title", "")
+                    enriched_claim_b = b.get("title", "")
+                    if evidence:
+                        enriched_claim_a = (
+                            f"{a.get('title', '')}\n\n"
+                            f"[Evidence from additional search: {evidence}]"
+                        )
+                        enriched_claim_b = (
+                            f"{b.get('title', '')}\n\n"
+                            f"[Evidence from additional search: {evidence}]"
+                        )
 
-                enriched_a = dict(a, title=enriched_claim_a)
-                enriched_b = dict(b, title=enriched_claim_b)
+                    enriched_a = dict(a, title=enriched_claim_a)
+                    enriched_b = dict(b, title=enriched_claim_b)
 
-                try:
-                    pro_result = await call_model(
-                        _make_prompt(enriched_a, enriched_b),
-                        model="deepseek-v4-pro",
-                        response_format="json",
-                        timeout=300.0,
-                    )
+                    try:
+                        async with PRO_SEM:
+                            pro_result = await call_model(
+                                _make_prompt(enriched_a, enriched_b),
+                                model="deepseek-v4-pro",
+                                response_format="json",
+                                timeout=300.0,
+                            )
+                    except Exception as e:
+                        print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                        return None
+
                     pro_conflict = _build_conflict(pair, pro_result, model="pro+evidence")
                     pro_conflict["evidence_collected"] = evidence[:500] if evidence else ""
-                    for i, c in enumerate(conflicts):
-                        if (c["source_a"]["url"] == pro_conflict["source_a"]["url"] and
-                                c["source_b"]["url"] == pro_conflict["source_b"]["url"]):
-                            conflicts[i] = pro_conflict
-                            break
-                except Exception as e:
-                    print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                    return idx, pro_conflict
+
+            re_results = await asyncio.gather(
+                *[_re_arbitrate(i, p) for i, p in enumerate(low_confidence_pairs)],
+                return_exceptions=True,
+            )
+            for r in re_results:
+                if isinstance(r, Exception):
+                    continue
+                if r is not None:
+                    idx, pro_conflict = r
+                    if idx < len(conflicts):
+                        conflicts[idx] = pro_conflict
+        elif low_confidence_pairs:
+            print_agent_output(
+                f"Skipping evidence gathering (disabled): {len(low_confidence_pairs)} pair(s)",
+                agent="CONFLICT_DETECTOR",
+            )
 
         resolved_count = sum(
             1 for c in conflicts

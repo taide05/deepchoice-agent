@@ -35,6 +35,7 @@ from deepchoice.utils.llm import call_model
 
 from benchmarks.metrics import (
     compute_all_metrics,
+    compute_conflict_detection_rate_llm,
     save_benchmark,
     trend_report,
 )
@@ -92,6 +93,46 @@ async def judge_report(query: str, report: str) -> dict:
         return result
     except Exception as exc:
         return {"error": str(exc), "total": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# LLM Judge for Conflict Detection
+# ---------------------------------------------------------------------------
+
+CONFLICT_JUDGE_PROMPT = """You are evaluating a conflict detection system for a tech comparison research tool.
+
+Detected conflicts (from the pipeline):
+{conflicts_text}
+
+Known contradiction topic: "{topic}"
+
+Does ANY of the detected conflicts address or relate to this topic?
+The conflict doesn't need to use the exact words — semantic overlap counts.
+Answer ONLY "yes" or "no"."""
+
+
+async def _judge_conflict_match(detected_conflicts: list[dict], topic: str) -> bool:
+    """Ask flash model if any detected conflict relates to the topic."""
+    if not detected_conflicts:
+        return False
+    # Summarize conflicts: claim_a vs claim_b + resolution + reasoning
+    parts = []
+    for c in detected_conflicts[:5]:  # Cap at 5 to keep prompt small
+        parts.append(
+            f"- {c.get('claim_a', '')[:80]} vs {c.get('claim_b', '')[:80]}\n"
+            f"  resolution={c.get('resolution', '')} reasoning={c.get('reasoning', '')[:120]}"
+        )
+    conflicts_text = "\n".join(parts)
+    try:
+        result = await call_model(
+            [{"role": "user", "content": CONFLICT_JUDGE_PROMPT.format(
+                conflicts_text=conflicts_text, topic=topic)}],
+            model="deepseek-v4-flash",
+            response_format="text",
+        )
+        return "yes" in str(result).strip().lower()
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +361,16 @@ async def run_baseline(
         latencies_s=latencies,
         before_after_pairs=before_after_pairs,
     )
+
+    # Phase 3.5: LLM-judged conflict detection (replaces keyword metric)
+    print("  Running LLM judge on conflict detection...")
+    llm_cd = await compute_conflict_detection_rate_llm(
+        runs, cases, _judge_conflict_match,
+    )
+    report["quality"]["conflict_detection"] = llm_cd
+    report["summary"]["conflict_detection_rate"] = llm_cd["value"]
+    print(f"  LLM judge: {llm_cd['keyword_matched']} keyword + "
+          f"{llm_cd['llm_matched']} LLM = {llm_cd['total_detected']}/{llm_cd['total_known']}")
 
     # Print summary
     s = report["summary"]
