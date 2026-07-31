@@ -322,17 +322,19 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
 
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
-                           max_iterations: int = 3) -> str:
+                           max_iterations: int = 2,
+                           per_call_timeout: float = 45.0) -> str:
     """Inline multi-turn evidence gathering via DeepSeek native tool calling.
 
     Returns a plain-text summary of collected evidence suitable for
     enriching claim descriptions in the arbitration prompt.
     """
+    import asyncio as _asyncio
     from openai import AsyncOpenAI
 
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=120.0)
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=60.0)
 
     messages = [
         {"role": "system", "content": (
@@ -352,12 +354,18 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 
     for _ in range(max_iterations):
         try:
-            response = await client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=messages,
-                tools=SEARCH_TOOLS,
-                temperature=0,
+            response = await _asyncio.wait_for(
+                client.chat.completions.create(
+                    model="deepseek-v4-flash",
+                    messages=messages,
+                    tools=SEARCH_TOOLS,
+                    temperature=0,
+                ),
+                timeout=per_call_timeout,
             )
+        except _asyncio.TimeoutError:
+            print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
+            break
         except Exception as e:
             print_agent_output(f"Evidence gathering LLM error: {e}", agent="CONFLICT_DETECTOR")
             break
@@ -378,7 +386,15 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 arguments = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
                 arguments = {}
-            result = await _execute_search(tool_name, arguments)
+            try:
+                result = await _asyncio.wait_for(
+                    _execute_search(tool_name, arguments),
+                    timeout=20.0,
+                )
+            except _asyncio.TimeoutError:
+                result = json.dumps({"error": f"{tool_name} timed out"})
+            except Exception as e:
+                result = json.dumps({"error": str(e)})
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
@@ -406,6 +422,11 @@ def find_contradictions(source_scores: list[dict], query_topic: str = "",
     embeddings = model.encode(titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
+    def _full_text(src: dict) -> str:
+        """Join title + snippet for richer negation detection."""
+        parts = [src.get("title", ""), src.get("snippet", "")]
+        return " ".join(p for p in parts if p).lower()
+
     pairs = []
     for i in range(len(high_score_sources)):
         for j in range(i + 1, len(high_score_sources)):
@@ -417,16 +438,20 @@ def find_contradictions(source_scores: list[dict], query_topic: str = "",
             sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
 
             if sim >= threshold:
-                neg_a = any(w in title_a.lower() for w in NEGATION_WORDS)
-                neg_b = any(w in title_b.lower() for w in NEGATION_WORDS)
+                text_a = _full_text(high_score_sources[i])
+                text_b = _full_text(high_score_sources[j])
+                neg_a = any(w in text_a for w in NEGATION_WORDS)
+                neg_b = any(w in text_b for w in NEGATION_WORDS)
                 if neg_a == neg_b:
                     continue
 
-                # Relevance filter: at least one source must mention query keywords
+                # Relevance filter: require >=2 keyword overlap to avoid
+                # single-generic-word matches (e.g. "system", "api")
                 if query_keywords:
-                    words_a = set(title_a.lower().split())
-                    words_b = set(title_b.lower().split())
-                    if not (words_a & query_keywords or words_b & query_keywords):
+                    all_text = text_a + " " + text_b
+                    words_in_sources = set(all_text.split())
+                    overlap = words_in_sources & query_keywords
+                    if len(overlap) < 2:
                         continue
 
                 pairs.append({

@@ -136,6 +136,7 @@ class SourceEvaluatorAgent:
             source_scores.append({
                 "url": url,
                 "title": result.get("title", ""),
+                "snippet": result.get("snippet", ""),
                 "source_type": source_type,
                 "evidence_type": evidence_type,
                 "scores": scores,
