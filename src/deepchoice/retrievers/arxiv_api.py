@@ -26,16 +26,34 @@ class ArxivSearch(BaseRetriever):
 
         ns = {"atom": "http://www.w3.org/2005/Atom"}
 
+        # Extract content-bearing words from query for relevance filtering
+        stop_words = {"a", "an", "the", "and", "or", "but", "in", "on", "at", "to",
+                      "for", "of", "with", "by", "from", "is", "are", "was", "were",
+                      "be", "been", "being", "have", "has", "had", "do", "does", "did",
+                      "will", "would", "can", "could", "may", "might", "shall", "should",
+                      "vs", "versus", "compare", "comparison", "between", "which", "what",
+                      "how", "does", "than", "not", "no"}
+        query_words = [w.lower() for w in keywords.replace(",", " ").split()
+                       if len(w) >= 3 and w.lower() not in stop_words]
+
+        def _has_overlap(title, snippet):
+            text = (title + " " + snippet).lower()
+            return any(qw in text for qw in query_words) if query_words else True
+
         results = []
         for entry in root.findall("atom:entry", ns)[:max_results]:
             title_el = entry.find("atom:title", ns)
             summary_el = entry.find("atom:summary", ns)
             link_el = entry.find("atom:id", ns)
             published_el = entry.find("atom:published", ns)
+            title = title_el.text.strip() if title_el is not None else ""
+            snippet = (summary_el.text or "")[:500].strip() if summary_el is not None else ""
+            if not _has_overlap(title, snippet):
+                continue
             results.append({
                 "url": link_el.text.strip() if link_el is not None else "",
-                "title": title_el.text.strip() if title_el is not None else "",
-                "snippet": (summary_el.text or "")[:500].strip() if summary_el is not None else "",
+                "title": title,
+                "snippet": snippet,
                 "date": (published_el.text or "")[:10] if published_el is not None else "",
             })
         return results

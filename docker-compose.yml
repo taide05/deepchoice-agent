@@ -5,6 +5,8 @@ services:
       - "8000:8000"
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
     volumes:
       # 运行时数据持久化——镜像里没有，容器重建不能丢
       - outputs:/app/outputs
