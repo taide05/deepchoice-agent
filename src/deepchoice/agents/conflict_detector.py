@@ -473,7 +473,7 @@ Return ONLY a JSON object:
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
-                               threshold: float = 0.5) -> list[dict]:
+                               threshold: float = 0.6) -> list[dict]:
     """Find contradictory source pairs using LLM semantic scan.
 
     Pipeline: BGE similarity → 2-keyword relevance pre-filter →
