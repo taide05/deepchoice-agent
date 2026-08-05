@@ -4,6 +4,7 @@ from .base import BaseRetriever
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.
 TECH_DOCS: dict[str, dict[str, str]] = {
+    # Web frameworks
     "react": {"url": "https://react.dev", "title": "React — Official Documentation"},
     "vue": {"url": "https://vuejs.org", "title": "Vue.js — Official Documentation"},
     "angular": {"url": "https://angular.dev", "title": "Angular — Official Documentation"},
@@ -11,25 +12,104 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "django": {"url": "https://docs.djangoproject.com", "title": "Django — Official Documentation"},
     "flask": {"url": "https://flask.palletsprojects.com", "title": "Flask — Official Documentation"},
     "fastapi": {"url": "https://fastapi.tiangolo.com", "title": "FastAPI — Official Documentation"},
-    "sqlalchemy": {"url": "https://docs.sqlalchemy.org", "title": "SQLAlchemy — Official Documentation"},
+    "django-ninja": {"url": "https://django-ninja.dev", "title": "Django Ninja — Official Documentation"},
+    "bun": {"url": "https://bun.sh", "title": "Bun — Official Documentation"},
+    "node.js": {"url": "https://nodejs.org", "title": "Node.js — Official Documentation"},
+    "nodejs": {"url": "https://nodejs.org", "title": "Node.js — Official Documentation"},
+    # Databases
     "postgresql": {"url": "https://www.postgresql.org/docs/", "title": "PostgreSQL — Official Documentation"},
     "mysql": {"url": "https://dev.mysql.com/doc/", "title": "MySQL — Official Documentation"},
     "redis": {"url": "https://redis.io/docs/", "title": "Redis — Official Documentation"},
     "mongodb": {"url": "https://www.mongodb.com/docs/", "title": "MongoDB — Official Documentation"},
+    "sqlite": {"url": "https://sqlite.org", "title": "SQLite — Official Documentation"},
+    "neo4j": {"url": "https://neo4j.com", "title": "Neo4j — Official Documentation"},
+    "memcached": {"url": "https://memcached.org", "title": "Memcached — Official Documentation"},
+    # ORM / DB tools
+    "sqlalchemy": {"url": "https://docs.sqlalchemy.org", "title": "SQLAlchemy — Official Documentation"},
+    "alembic": {"url": "https://alembic.sqlalchemy.org", "title": "Alembic — Official Documentation"},
+    # Container / orchestration / CI/CD
     "docker": {"url": "https://docs.docker.com", "title": "Docker — Official Documentation"},
     "kubernetes": {"url": "https://kubernetes.io/docs/", "title": "Kubernetes — Official Documentation"},
+    "docker-compose": {"url": "https://docs.docker.com/compose", "title": "Docker Compose — Official Documentation"},
+    "minikube": {"url": "https://minikube.sigs.k8s.io", "title": "Minikube — Official Documentation"},
+    "github-actions": {"url": "https://docs.github.com/en/actions", "title": "GitHub Actions — Official Documentation"},
+    "jenkins": {"url": "https://jenkins.io", "title": "Jenkins — Official Documentation"},
+    "gitlab-ci": {"url": "https://docs.gitlab.com/ee/ci", "title": "GitLab CI — Official Documentation"},
+    # Web server / proxy / comms
     "nginx": {"url": "https://nginx.org/en/docs/", "title": "nginx — Official Documentation"},
+    "caddy": {"url": "https://caddyserver.com", "title": "Caddy — Official Documentation"},
+    "grpc": {"url": "https://grpc.io", "title": "gRPC — Official Documentation"},
+    "websocket": {"url": "https://developer.mozilla.org", "title": "WebSocket API — MDN Documentation"},
+    "uvicorn": {"url": "https://uvicorn.org", "title": "Uvicorn — Official Documentation"},
+    "gunicorn": {"url": "https://docs.gunicorn.org", "title": "Gunicorn — Official Documentation"},
+    # ML / AI frameworks
     "pytorch": {"url": "https://pytorch.org/docs/", "title": "PyTorch — Official Documentation"},
     "tensorflow": {"url": "https://www.tensorflow.org/api_docs", "title": "TensorFlow — Official Documentation"},
+    "huggingface": {"url": "https://huggingface.co/docs/transformers", "title": "HuggingFace Transformers — Official Documentation"},
+    "sentence-transformers": {"url": "https://sbert.net", "title": "Sentence-Transformers — Official Documentation"},
+    "ollama": {"url": "https://ollama.com", "title": "Ollama — Official Documentation"},
+    "vllm": {"url": "https://docs.vllm.ai", "title": "vLLM — Official Documentation"},
+    "ray": {"url": "https://docs.ray.io", "title": "Ray — Official Documentation"},
+    "dask": {"url": "https://dask.org", "title": "Dask — Official Documentation"},
+    "tiktoken": {"url": "https://github.com/openai/tiktoken", "title": "tiktoken — Official Repository"},
+    "sentencepiece": {"url": "https://github.com/google/sentencepiece", "title": "SentencePiece — Official Repository"},
+    # Agent frameworks
     "langchain": {"url": "https://python.langchain.com/docs/", "title": "LangChain — Official Documentation"},
     "langgraph": {"url": "https://langchain-ai.github.io/langgraph/", "title": "LangGraph — Official Documentation"},
+    "llamaindex": {"url": "https://docs.llamaindex.ai", "title": "LlamaIndex — Official Documentation"},
+    "crewai": {"url": "https://docs.crewai.com", "title": "CrewAI — Official Documentation"},
+    "autogen": {"url": "https://microsoft.github.io/autogen", "title": "AutoGen — Official Documentation"},
+    "semantic-kernel": {"url": "https://learn.microsoft.com/semantic-kernel", "title": "Semantic Kernel — Official Documentation"},
+    "dify": {"url": "https://dify.ai", "title": "Dify — Official Documentation"},
+    "langflow": {"url": "https://docs.langflow.org", "title": "LangFlow — Official Documentation"},
+    "mcp": {"url": "https://modelcontextprotocol.io", "title": "MCP — Official Documentation"},
+    # Vector DBs
+    "chroma": {"url": "https://docs.trychroma.com", "title": "Chroma — Official Documentation"},
+    "chromadb": {"url": "https://docs.trychroma.com", "title": "ChromaDB — Official Documentation"},
+    "pinecone": {"url": "https://pinecone.io", "title": "Pinecone — Official Documentation"},
+    "weaviate": {"url": "https://weaviate.io", "title": "Weaviate — Official Documentation"},
+    "qdrant": {"url": "https://qdrant.tech", "title": "Qdrant — Official Documentation"},
+    "milvus": {"url": "https://milvus.io", "title": "Milvus — Official Documentation"},
+    "faiss": {"url": "https://github.com/facebookresearch/faiss", "title": "FAISS — Official Repository"},
+    "elasticsearch": {"url": "https://elastic.co", "title": "Elasticsearch — Official Documentation"},
+    "meilisearch": {"url": "https://meilisearch.com", "title": "Meilisearch — Official Documentation"},
+    # Infra / messaging / config
+    "kafka": {"url": "https://kafka.apache.org", "title": "Apache Kafka — Official Documentation"},
+    "rabbitmq": {"url": "https://rabbitmq.com", "title": "RabbitMQ — Official Documentation"},
+    "celery": {"url": "https://docs.celeryq.dev", "title": "Celery — Official Documentation"},
+    "terraform": {"url": "https://terraform.io", "title": "Terraform — Official Documentation"},
+    "pulumi": {"url": "https://pulumi.com", "title": "Pulumi — Official Documentation"},
+    "ansible": {"url": "https://docs.ansible.com", "title": "Ansible — Official Documentation"},
+    "airflow": {"url": "https://airflow.apache.org", "title": "Apache Airflow — Official Documentation"},
+    "prefect": {"url": "https://prefect.io", "title": "Prefect — Official Documentation"},
+    "prometheus": {"url": "https://prometheus.io", "title": "Prometheus — Official Documentation"},
+    "datadog": {"url": "https://datadoghq.com", "title": "Datadog — Official Documentation"},
+    "pydantic": {"url": "https://docs.pydantic.dev", "title": "Pydantic — Official Documentation"},
+    "pydantic-settings": {"url": "https://docs.pydantic.dev", "title": "Pydantic Settings — Official Documentation"},
+    "python-dotenv": {"url": "https://github.com/theskumar/python-dotenv", "title": "python-dotenv — Official Repository"},
+    # Frontend / tools
+    "streamlit": {"url": "https://streamlit.io", "title": "Streamlit — Official Documentation"},
+    "gradio": {"url": "https://gradio.app", "title": "Gradio — Official Documentation"},
+    "playwright": {"url": "https://playwright.dev", "title": "Playwright — Official Documentation"},
+    "selenium": {"url": "https://selenium.dev", "title": "Selenium — Official Documentation"},
     "next.js": {"url": "https://nextjs.org/docs", "title": "Next.js — Official Documentation"},
     "nuxt": {"url": "https://nuxt.com/docs", "title": "Nuxt — Official Documentation"},
     "tailwind": {"url": "https://tailwindcss.com/docs", "title": "Tailwind CSS — Official Documentation"},
+    # Languages
     "python": {"url": "https://docs.python.org/3/", "title": "Python — Official Documentation"},
     "go": {"url": "https://go.dev/doc/", "title": "Go — Official Documentation"},
     "rust": {"url": "https://doc.rust-lang.org/", "title": "Rust — Official Documentation"},
     "typescript": {"url": "https://www.typescriptlang.org/docs/", "title": "TypeScript — Official Documentation"},
+    # Cloud / serverless
+    "aws-lambda": {"url": "https://aws.amazon.com/lambda", "title": "AWS Lambda — Official Documentation"},
+    "modal": {"url": "https://modal.com", "title": "Modal — Official Documentation"},
+    # Auth
+    "jwt": {"url": "https://jwt.io", "title": "JWT — Official Documentation"},
+    # LLM APIs
+    "openai": {"url": "https://platform.openai.com", "title": "OpenAI API — Official Documentation"},
+    "anthropic": {"url": "https://docs.anthropic.com", "title": "Anthropic Claude API — Official Documentation"},
+    # Version control / Git
+    "gitlab": {"url": "https://about.gitlab.com", "title": "GitLab — Official Documentation"},
 }
 
 
@@ -38,7 +118,8 @@ class OfficialSearch(BaseRetriever):
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
-        keywords = (adapted_queries[0] if adapted_queries else query).lower().replace(" vs ", " ").split()
+        all_text = " ".join(adapted_queries) if adapted_queries else query
+        keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
         results = []
         matched_techs = set()
 

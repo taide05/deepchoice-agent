@@ -31,7 +31,7 @@ Disputed findings: {disputed_count}
 3. Consider scene context: solo devs prioritize simplicity, enterprises prioritize reliability
 4. ANTI-BIAS: Prefer the technology that best fits the stated constraints and scene context over the more popular or newer option. If a less popular tool better matches the specific requirements (budget, team size, compliance, scalability needs), recommend it even if the competitor has more GitHub stars or search results.
 5. If evidence is insufficient for a definitive answer, say so honestly
-6. Every recommendation MUST cite specific evidence (not just "based on the data")
+6. INLINE CITATIONS REQUIRED: Every claim in the recommendation, ranked_options rationale, and trade_offs finding MUST include inline source citations using [Source: title] notation. Example: "FastAPI's async support gives it a performance edge [Source: FastAPI Benchmarks 2025]". The "How" section must contain at least 5 inline source citations total.
 7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
 

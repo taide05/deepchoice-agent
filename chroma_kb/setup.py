@@ -1,9 +1,18 @@
 """Initialize the Chroma knowledge base with documents from data/ directories."""
 import sys
+import os
 from pathlib import Path
+
+# Force offline mode before any HF imports
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
+
+# Use project's shared embedding module (handles offline mode)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from deepchoice.utils.embedding import get_embedding_model
 
 KB_DIR = Path(__file__).parent
 DB_DIR = KB_DIR / "chroma_db"
@@ -44,7 +53,7 @@ def main():
         print("No documents found. Add .md files to chroma_kb/data/ directories.")
         return
 
-    model = SentenceTransformer("BAAI/bge-m3")
+    model = get_embedding_model()
     print("Encoding documents...")
 
     client = chromadb.PersistentClient(
