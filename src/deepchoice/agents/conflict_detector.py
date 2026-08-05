@@ -13,7 +13,7 @@ from ..utils.embedding import get_embedding_model
 # Concurrency limits (DeepSeek rate limits: flash 500/min, pro 50/min)
 # ---------------------------------------------------------------------------
 FLASH_SEM = asyncio.Semaphore(80)
-PRO_SEM = asyncio.Semaphore(10)
+PRO_SEM = asyncio.Semaphore(20)
 
 # ---------------------------------------------------------------------------
 # Prompts
