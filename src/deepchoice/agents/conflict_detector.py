@@ -504,6 +504,10 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     if not candidates:
         return []
 
+    # Cap at top-20 by similarity to prevent O(n²) explosion with many sources
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    candidates = candidates[:20]
+
     # LLM scan in parallel
     async def _scan(cand):
         i, j, sim = cand
