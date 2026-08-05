@@ -12,7 +12,7 @@ from ..utils.embedding import get_embedding_model
 # ---------------------------------------------------------------------------
 # Concurrency limits (DeepSeek rate limits: flash 500/min, pro 50/min)
 # ---------------------------------------------------------------------------
-FLASH_SEM = asyncio.Semaphore(30)
+FLASH_SEM = asyncio.Semaphore(80)
 PRO_SEM = asyncio.Semaphore(10)
 
 # ---------------------------------------------------------------------------
@@ -625,6 +625,9 @@ class ConflictDetectorAgent:
             conflicts.append(result)
             if result["confidence"] == "low":
                 low_confidence_pairs.append(pair)
+
+        # Cap evidence gathering at top-2 most ambiguous pairs (sorted by confidence gap)
+        low_confidence_pairs = low_confidence_pairs[:2]
 
         # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
         if low_confidence_pairs and self.gather_evidence:
