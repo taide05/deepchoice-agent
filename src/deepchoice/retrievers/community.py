@@ -18,12 +18,12 @@ class CommunitySearch(BaseRetriever):
             so_resp = await client.get(
                 "https://api.stackexchange.com/2.3/search",
                 params={
-                    "q": keywords, "site": "stackoverflow",
+                    "intitle": keywords, "site": "stackoverflow",
                     "pagesize": max(2, max_results),
                     "order": "desc", "sort": "votes",
                     "key": se_key,
                 } if se_key else {
-                    "q": keywords, "site": "stackoverflow",
+                    "intitle": keywords, "site": "stackoverflow",
                     "pagesize": max(2, max_results),
                     "order": "desc", "sort": "votes",
                 },
