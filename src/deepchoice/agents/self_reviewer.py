@@ -28,9 +28,9 @@ REVIEW_PROMPT = """You are a rigorous quality reviewer. Evaluate this research r
 
 ## Confidence Assessment
 Use the pipeline quality signals above as primary input. Only flag issues that the upstream signals missed.
-- high: 6/6 passed, all evidence chains have strong or moderate strength
-- medium: 1-2 items failed, no critical gaps
-- low: 3+ items failed OR critical information missing
+- high: 5-6/6 passed, no critical gaps
+- medium: 3-4 items passed, no critical gaps
+- low: 0-2 items passed OR critical information missing
 
 ## Gap Analysis
 If confidence is not "high", list the specific information gaps. Each gap should be a specific search query that could fill the gap.
@@ -75,6 +75,9 @@ class SelfReviewerAgent:
         }]
 
         result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
+
+        if not isinstance(result, dict):
+            result = {}
 
         return {
             "confidence": result.get("confidence", "medium"),

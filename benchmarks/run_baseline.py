@@ -1,14 +1,14 @@
 """DeepChoice Baseline Benchmark Runner.
 
 Runs the full DeepChoice pipeline against annotated test cases, collects
-all metrics, optionally runs LLM-as-Judge evaluation, and saves timestamped
-results for trend tracking.
+all metrics, and saves timestamped results for trend tracking.
 
 Usage:
     cd D:/deepchoice-agent
-    python -m benchmarks.run_baseline              # all 15 cases
-    python -m benchmarks.run_baseline --cases 5    # first 5 cases (quick)
-    python -m benchmarks.run_baseline --cases 3 --judge  # with LLM-as-Judge
+    python -m benchmarks.run_baseline              # 50 annotated cases (serial)
+    python -m benchmarks.run_baseline --full        # 200 cases (serial)
+    python -m benchmarks.run_baseline --full --concurrency 10  # 200 cases (10 concurrent)
+    python -m benchmarks.run_baseline --cases 5     # first 5 cases (quick)
 
 Requires: .env with DEEPSEEK_API_KEY, TAVILY_API_KEY, GITHUB_TOKEN
 """
@@ -39,6 +39,7 @@ from benchmarks.metrics import (
     save_benchmark,
     trend_report,
 )
+from benchmarks.report_quality import evaluate_batch, grade as quality_grade
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -47,7 +48,9 @@ from benchmarks.metrics import (
 BENCHMARKS_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BENCHMARKS_DIR / "runs"
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
+FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
 TIMEOUT_PER_CASE_S = 480  # 8 minutes per case (evidence gathering adds latency)
+DEFAULT_CONCURRENCY = 5
 
 
 # ---------------------------------------------------------------------------
@@ -106,8 +109,10 @@ Detected conflicts (from the pipeline):
 
 Known contradiction topic: "{topic}"
 
-Does ANY of the detected conflicts address or relate to this topic?
-The conflict doesn't need to use the exact words — semantic overlap counts.
+Does ANY of the detected conflicts involve the same subject matter as this topic?
+Answer "yes" if the detected conflict and the known topic are about the same technology,
+performance characteristic, design trade-off, or usage scenario — even if they use different wording.
+Only answer "no" if the detected conflicts are clearly about completely different subjects.
 Answer ONLY "yes" or "no"."""
 
 
@@ -161,7 +166,8 @@ def _build_report_from_state(state: dict) -> str:
 
 
 async def run_single_case(case: dict, verbose: bool = False,
-                           gather_evidence: bool = True) -> dict:
+                           gather_evidence: bool = True,
+                           with_clarify: bool = False) -> dict:
     """Run DeepChoice pipeline for one annotated case.
 
     Returns a dict with everything needed for metrics calculation.
@@ -177,6 +183,26 @@ async def run_single_case(case: dict, verbose: bool = False,
         "gather_evidence": gather_evidence,
     }
 
+    clarify_used = False
+    if with_clarify:
+        try:
+            from deepchoice.clarify.clarification_agent import ClarificationAgent
+            from deepchoice.clarify.session_manager import SessionManager
+            sm = SessionManager()
+            session = sm.create_session(case["query"])
+            agent = ClarificationAgent()
+            result = await agent.decide_and_respond(session)
+            if result.get("action") == "confirm":
+                sub_questions = result.get("payload", {}).get("sub_questions", [])
+                if sub_questions:
+                    task["sub_questions"] = sub_questions
+                    clarify_used = True
+                    if verbose:
+                        print(f"  [{case_id}] Clarify: generated {len(sub_questions)} sub_questions")
+        except Exception as exc:
+            if verbose:
+                print(f"  [{case_id}] Clarify skipped: {exc}")
+
     if verbose:
         print(f"  [{case_id}] Starting: {case['query'][:80]}...")
 
@@ -191,8 +217,12 @@ async def run_single_case(case: dict, verbose: bool = False,
         if verbose:
             n_sources = len(state.get("search_results", []))
             confidence = state.get("confidence", "unknown")
+            agent_timing = state.get("agent_timing", {})
+            timing_str = ""
+            if agent_timing:
+                timing_str = f" | agent_timing={ {k: f'{v}s' for k, v in agent_timing.items()} }"
             print(f"  [{case_id}] Done in {elapsed}s | confidence={confidence} | "
-                  f"sources={n_sources} | report={len(report)} chars")
+                  f"sources={n_sources} | report={len(report)} chars{timing_str}")
 
         return {
             "case_id": case_id,
@@ -206,6 +236,8 @@ async def run_single_case(case: dict, verbose: bool = False,
             "search_results": state.get("search_results", []),
             "conflicts": state.get("conflicts", []),
             "knowledge_gaps": state.get("knowledge_gaps", []),
+            "agent_timing": state.get("agent_timing", {}),
+            "clarify_used": clarify_used,
         }
 
     except asyncio.TimeoutError:
@@ -242,20 +274,24 @@ async def run_single_case(case: dict, verbose: bool = False,
 async def run_baseline(
     n_cases: int | None = None,
     verbose: bool = False,
-    with_judge: bool = False,
     batch: int = 0,
     batch_size: int = 10,
     cases_file: Path | None = None,
     gather_evidence: bool = True,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    with_clarify: bool = False,
+    profile_agents: bool = False,
 ) -> Path:
     """Run the full benchmark suite.
 
     Args:
         n_cases: Number of cases to run (None = all).
         verbose: Print per-case progress.
-        with_judge: Run LLM-as-Judge evaluation (costs API credits).
         batch: Batch number (1-indexed, 0 = run all).
         batch_size: Cases per batch (default 10).
+        concurrency: Max concurrent cases (default 5). Case execution is I/O-bound
+            (API calls + LLM), so parallelism cuts total wall-clock time roughly
+            by concurrency factor.
 
     Returns:
         Path to the saved benchmark report.
@@ -292,63 +328,52 @@ async def run_baseline(
     print(f"PHASE 1: Running {len(cases)} cases through DeepChoice pipeline")
     print(f"{'=' * 60}\n")
 
-    runs = []
-    latencies = []
-    ok = 0
-    fail = 0
+    # Phase 1: Run all cases (parallel — each case is fully independent)
+    sem = asyncio.Semaphore(concurrency)
 
-    for i, case in enumerate(cases):
-        if verbose:
-            print(f"[{i+1}/{len(cases)}]", end=" ")
-        result = await run_single_case(case, verbose=verbose, gather_evidence=gather_evidence)
-        runs.append(result)
-        latencies.append(result["elapsed_s"])
-        if result["error"] is None:
-            ok += 1
-        else:
-            fail += 1
+    async def _run_with_semaphore(case: dict) -> dict:
+        async with sem:
+            return await run_single_case(case, verbose=verbose, gather_evidence=gather_evidence,
+                                         with_clarify=with_clarify)
+
+    if verbose:
+        print(f"  Concurrency: {concurrency}")
+    tasks = [_run_with_semaphore(case) for case in cases]
+    runs = await asyncio.gather(*tasks)
+
+    latencies = [r["elapsed_s"] for r in runs]
+    ok = sum(1 for r in runs if r["error"] is None)
+    fail = len(runs) - ok
 
     print(f"\nPhase 1 complete: {ok} success / {fail} failure")
 
-    # Phase 2: LLM-as-Judge (optional)
+    # Phase 2: Report Quality Checklist (deterministic, no LLM)
+    print(f"\n{'=' * 60}")
+    print("PHASE 2: Report Quality Checklist")
+    print(f"{'=' * 60}\n")
+
+    quality_stats = evaluate_batch(runs)
+    qs = quality_stats
+    print(f"  Grade distribution: A={qs['grade_distribution']['A']} "
+          f"B={qs['grade_distribution']['B']} "
+          f"C={qs['grade_distribution']['C']} "
+          f"D={qs['grade_distribution']['D']}")
+    print(f"  Mean pass count: {qs['mean_pass_count']}/5")
+    print(f"  Check pass rates:")
+    for cid, rate in qs['check_pass_rates'].items():
+        print(f"    {cid}: {rate:.0f}%")
+
+    # Build retry pairs (Retry Score Delta — still computed but always 0 without pre-retry snapshots)
     before_after_pairs = []
-    if with_judge:
-        print(f"\n{'=' * 60}")
-        print("PHASE 2: LLM-as-Judge Evaluation")
-        print(f"{'=' * 60}\n")
-
-        judge_results = []
-        for i, run in enumerate(runs):
-            if run["error"] or not run["report"]:
-                continue
-            if verbose:
-                print(f"[{i+1}/{len(runs)}] Judging {run['case_id']}...")
-            scores = await judge_report(run["query"], run["report"])
-            run["judge_scores"] = scores
-            judge_results.append({
+    for run in runs:
+        if run.get("retry_count", 0) > 0:
+            before_after_pairs.append({
                 "case_id": run["case_id"],
-                "total": scores.get("total", 0),
+                "score_before": 0,
+                "score_after": 0,
+                "retry_triggered": True,
+                "retry_type": "full" if len(run.get("knowledge_gaps", [])) > 2 else "small",
             })
-            if verbose:
-                print(f"  Score: {scores.get('total', 'ERR')}/5")
-
-        avg_judge = (
-            sum(j["total"] for j in judge_results) / len(judge_results)
-            if judge_results
-            else 0
-        )
-        print(f"\nAverage judge score: {avg_judge:.2f}/5 ({len(judge_results)} reports)")
-
-        # Build retry pairs for runs that triggered retry
-        for run in runs:
-            if run.get("retry_count", 0) > 0 and "judge_scores" in run:
-                before_after_pairs.append({
-                    "case_id": run["case_id"],
-                    "score_before": 0,  # Would need pre-retry state snapshot
-                    "score_after": run["judge_scores"].get("total", 0),
-                    "retry_triggered": True,
-                    "retry_type": "full" if run.get("knowledge_gaps", 0) > 2 else "small",
-                })
 
     # Phase 3: Compute metrics
     print(f"\n{'=' * 60}")
@@ -372,6 +397,45 @@ async def run_baseline(
     print(f"  LLM judge: {llm_cd['keyword_matched']} keyword + "
           f"{llm_cd['llm_matched']} LLM = {llm_cd['total_detected']}/{llm_cd['total_known']}")
 
+    # Add report quality stats
+    report["quality"]["report_quality"] = quality_stats
+    report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]
+
+    # Phase 3.6: Source recall by retriever type
+    from benchmarks.metrics import compute_source_recall_by_source
+    src_split = compute_source_recall_by_source(runs, cases)
+    report["quality"]["source_recall_by_source"] = src_split
+    print(f"\n  Source recall by type:")
+    for src_type, data in sorted(src_split.items()):
+        if src_type == "metric":
+            continue
+        print(f"    {src_type}: {data['recall']:.1%} ({data['found']}/{data['total']})")
+
+    # Phase 3.7: Agent timing summary (if --profile-agents used)
+    agent_timings = []
+    for run in runs:
+        at = run.get("agent_timing", {})
+        if at:
+            agent_timings.append(at)
+    if agent_timings:
+        from collections import defaultdict
+        agent_stats = defaultdict(list)
+        for at in agent_timings:
+            for agent_name, elapsed in at.items():
+                agent_stats[agent_name].append(elapsed)
+        print(f"\n  Agent timing (avg across {len(agent_timings)} runs):")
+        agent_summary = {}
+        for agent_name in ["query_analyzer", "query_adapter", "multi_retriever",
+                           "source_evaluator", "conflict_detector", "evidence_chain",
+                           "conclusion_synthesizer", "report_generator", "self_reviewer"]:
+            times = agent_stats.get(agent_name, [])
+            if times:
+                avg = sum(times) / len(times)
+                p95 = sorted(times)[int(len(times) * 0.95)] if len(times) >= 20 else max(times)
+                agent_summary[agent_name] = {"avg_s": round(avg, 1), "p95_s": round(p95, 1), "n": len(times)}
+                print(f"    {agent_name}: avg={avg:.1f}s, p95={p95:.1f}s (n={len(times)})")
+        report["efficiency"]["agent_timing"] = agent_summary
+
     # Print summary
     s = report["summary"]
     print("Summary:")
@@ -381,7 +445,7 @@ async def run_baseline(
     print(f"  Conflict Detection:     {s['conflict_detection_rate']:.1%}")
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
-    print(f"  Retry Score Delta:      {s['retry_mean_delta']:+.2f}")
+    print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
 
     # Phase 4: Save
     path = save_benchmark(report, RUNS_DIR, label=batch_label)
@@ -445,6 +509,14 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
 
     print(f"Total runs loaded: {len(all_runs)}")
 
+    # Run quality checklist on all reports
+    quality_stats = evaluate_batch(all_runs)
+    qs = quality_stats
+    print(f"\nReport Quality (aggregate):")
+    print(f"  A={qs['grade_distribution']['A']} B={qs['grade_distribution']['B']} "
+          f"C={qs['grade_distribution']['C']} D={qs['grade_distribution']['D']}")
+    print(f"  Mean pass count: {qs['mean_pass_count']}/5")
+
     # Compute aggregate metrics
     latencies = [r.get("elapsed_s", 0) for r in all_runs]
     before_after_pairs = []  # Not available from batch runs without state
@@ -457,6 +529,9 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
         before_after_pairs=before_after_pairs,
     )
 
+    report["quality"]["report_quality"] = quality_stats
+    report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]
+
     # Print summary
     s = report["summary"]
     print("\n" + "=" * 60)
@@ -468,7 +543,7 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     print(f"  Conflict Detection:     {s['conflict_detection_rate']:.1%}")
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
-    print(f"  Retry Score Delta:      {s['retry_mean_delta']:+.2f}")
+    print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
 
     path = save_benchmark(report, RUNS_DIR)
     print(f"\nFinal report saved to: {path}")
@@ -484,10 +559,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--verbose", action="store_true",
         help="Print per-case progress",
-    )
-    parser.add_argument(
-        "--judge", action="store_true",
-        help="Run LLM-as-Judge evaluation (costs API credits)",
     )
     parser.add_argument(
         "--batch", type=int, default=0,
@@ -509,6 +580,22 @@ if __name__ == "__main__":
         "--no-evidence", action="store_true",
         help="Disable multi-turn evidence gathering in Stage 2 arbitration",
     )
+    parser.add_argument(
+        "--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+        help=f"Max concurrent cases (default: {DEFAULT_CONCURRENCY})",
+    )
+    parser.add_argument(
+        "--full", action="store_true",
+        help="Use cases_200.json (200 cases) instead of annotated_cases.json (50 cases)",
+    )
+    parser.add_argument(
+        "--with-clarify", action="store_true",
+        help="Run clarify module before pipeline to generate scene-aware sub_questions",
+    )
+    parser.add_argument(
+        "--profile-agents", action="store_true",
+        help="Record per-agent timing in pipeline state (agent_timing dict)",
+    )
     args = parser.parse_args()
 
     if args.merge:
@@ -516,15 +603,20 @@ if __name__ == "__main__":
     else:
         n = args.cases if args.cases > 0 else None
         cf = Path(args.cases_file) if args.cases_file else None
+        if cf is None and args.full:
+            cf = FULL_CASES_PATH
+            print(f"Using full 200-case benchmark ({cf})")
         path = asyncio.run(
             run_baseline(
                 n_cases=n,
                 verbose=args.verbose,
-                with_judge=args.judge,
                 batch=args.batch,
                 batch_size=args.batch_size,
                 cases_file=cf,
                 gather_evidence=not args.no_evidence,
+                concurrency=args.concurrency,
+                with_clarify=args.with_clarify,
+                profile_agents=args.profile_agents,
             )
         )
         print(f"\nDone. Report: {path}")

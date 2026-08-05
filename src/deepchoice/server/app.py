@@ -203,6 +203,12 @@ async def regenerate_report(task_id: str, format: str = "what_why_how"):
     return {"task_id": task_id, "report": report, "format": format}
 
 
+@app.get("/tasks/{task_id}")
+async def task_status(task_id: str):
+    """Convenience alias for /research/{task_id}/status."""
+    return await research_status(task_id)
+
+
 @app.get("/history")
 async def history():
     return {"tasks": list_history()}
