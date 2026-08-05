@@ -29,10 +29,11 @@ Disputed findings: {disputed_count}
 1. Weight strong evidence chains more heavily than moderate or weak ones
 2. Acknowledge disputed findings — don't pretend they don't exist
 3. Consider scene context: solo devs prioritize simplicity, enterprises prioritize reliability
-4. If evidence is insufficient for a definitive answer, say so honestly
-5. Every recommendation MUST cite specific evidence (not just "based on the data")
-6. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
-7. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
+4. ANTI-BIAS: Prefer the technology that best fits the stated constraints and scene context over the more popular or newer option. If a less popular tool better matches the specific requirements (budget, team size, compliance, scalability needs), recommend it even if the competitor has more GitHub stars or search results.
+5. If evidence is insufficient for a definitive answer, say so honestly
+6. Every recommendation MUST cite specific evidence (not just "based on the data")
+7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
+8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
 
 ## Output Structure
 Return ONLY a JSON object:

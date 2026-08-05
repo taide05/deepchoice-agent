@@ -86,16 +86,20 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
     if not report:
         return None
 
-    # Pattern 1: Explicit recommendation header
+    # Pattern 1: Find "Recommendation:" section, then locate tech_a or tech_b nearby.
+    # All report formats: "**Recommendation:** <context>, <TechName> is/choose/adopt..."
     m = re.search(
-        r'(?im)^(?:#{1,3}\s*)?(?:\*\*)?(?:recommendation|推荐)(?:\*\*)?\s*:\s*'
-        r'\*{0,2}([A-Za-z0-9+\-_. ]+?)\*{0,2}\s*$',
+        r'(?im)(?:\*\*)?(?:recommendation|推荐)(?:\*\*)?\s*:\s*',
         report,
     )
     if m:
-        result = _clean_tech_name(m.group(1))
-        if result:
-            return result
+        after = report[m.end():m.end() + 250].lower()
+        # Search for tech_a or tech_b as whole words in the recommendation text
+        for tech in (tech_a, tech_b):
+            if tech and re.search(r'\b' + re.escape(tech.lower()) + r'\b', after):
+                result = _clean_tech_name(tech)
+                if result:
+                    return result
 
     # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer)
     m = re.search(
@@ -116,7 +120,7 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
     if how_section:
         how_text = how_section.group(1)
         m = re.search(
-            r'(?i)(?:start with|verdict|recommend|推荐|pick|choose)\s*:?\s*'
+            r'(?i)(?:start with|verdict|recommendation|recommended\b|recommend\b|推荐|pick|choose)\s*:?\s*'
             r'\*{0,2}([A-Za-z0-9+\-_.]+(?:\s[A-Za-z0-9+\-_.]+){0,2})'
             r'(?:\*{0,2}|\.|,)',
             how_text,
@@ -315,6 +319,60 @@ def compute_source_recall(
         "total_found": total_found,
         "per_case": details,
     }
+
+
+def compute_source_recall_by_source(
+    runs: list[dict[str, Any]],
+    annotated_cases: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compute source recall split by retriever source type.
+
+    Groups must_find_sources by their 'type' field (official_doc, github_repo,
+    academic, community, package_registry) and computes per-type recall.
+    """
+    case_map = {c["id"]: c for c in annotated_cases}
+    per_source: dict[str, dict] = {}
+
+    for run in runs:
+        case_id = run.get("case_id", "")
+        case = case_map.get(case_id)
+        if not case:
+            continue
+
+        must_find = case.get("must_find_sources", [])
+        if not must_find:
+            continue
+
+        retrieved_urls: list[str] = []
+        search_results = run.get("search_results", [])
+        if not search_results:
+            state = run.get("state")
+            if isinstance(state, dict):
+                search_results = state.get("search_results", [])
+        for sr in search_results:
+            for result in sr.get("results", []):
+                url = result.get("url", "")
+                if url:
+                    retrieved_urls.append(url)
+
+        for mf in must_find:
+            src_type = mf.get("type", "unknown")
+            if src_type not in per_source:
+                per_source[src_type] = {"total": 0, "found": 0}
+            per_source[src_type]["total"] += 1
+            pattern = mf["pattern"]
+            if any(_url_matches_pattern(url, pattern) for url in retrieved_urls):
+                per_source[src_type]["found"] += 1
+
+    result = {"metric": "source_recall_by_source"}
+    for src_type, counts in sorted(per_source.items()):
+        recall = counts["found"] / counts["total"] if counts["total"] > 0 else 0.0
+        result[src_type] = {
+            "recall": round(recall, 3),
+            "found": counts["found"],
+            "total": counts["total"],
+        }
+    return result
 
 
 # ---------------------------------------------------------------------------

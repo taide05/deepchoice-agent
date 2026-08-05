@@ -57,18 +57,30 @@ class ChiefEditorAgent:
             "self_reviewer": SelfReviewerAgent(self.websocket, self.stream_output, self.headers),
         }
 
+    def _timed_node(self, name: str, fn):
+        """Wrap an agent node with per-node timing, recording to state['agent_timing']."""
+        async def _wrapper(state: dict) -> dict:
+            t0 = time.monotonic()
+            result = await fn(state)
+            elapsed = round(time.monotonic() - t0, 2)
+            timing = state.setdefault("agent_timing", {})
+            timing[name] = elapsed
+            result["agent_timing"] = timing
+            return result
+        return _wrapper
+
     def _create_workflow(self, agents, start_from="query_analyzer"):
         workflow = StateGraph(ResearchState)
 
-        workflow.add_node("query_analyzer", agents["query_analyzer"].run)
-        workflow.add_node("query_adapter", agents["query_adapter"].run)
-        workflow.add_node("multi_retriever", agents["multi_retriever"].run)
-        workflow.add_node("source_evaluator", agents["source_evaluator"].run)
-        workflow.add_node("conflict_detector", agents["conflict_detector"].run)
-        workflow.add_node("evidence_chain", agents["evidence_chain"].run)
-        workflow.add_node("conclusion_synthesizer", agents["conclusion_synthesizer"].run)
-        workflow.add_node("report_generator", agents["report_generator"].run)
-        workflow.add_node("self_reviewer", agents["self_reviewer"].run)
+        workflow.add_node("query_analyzer", self._timed_node("query_analyzer", agents["query_analyzer"].run))
+        workflow.add_node("query_adapter", self._timed_node("query_adapter", agents["query_adapter"].run))
+        workflow.add_node("multi_retriever", self._timed_node("multi_retriever", agents["multi_retriever"].run))
+        workflow.add_node("source_evaluator", self._timed_node("source_evaluator", agents["source_evaluator"].run))
+        workflow.add_node("conflict_detector", self._timed_node("conflict_detector", agents["conflict_detector"].run))
+        workflow.add_node("evidence_chain", self._timed_node("evidence_chain", agents["evidence_chain"].run))
+        workflow.add_node("conclusion_synthesizer", self._timed_node("conclusion_synthesizer", agents["conclusion_synthesizer"].run))
+        workflow.add_node("report_generator", self._timed_node("report_generator", agents["report_generator"].run))
+        workflow.add_node("self_reviewer", self._timed_node("self_reviewer", agents["self_reviewer"].run))
 
         workflow.set_entry_point(start_from)
         if start_from == "query_analyzer":
