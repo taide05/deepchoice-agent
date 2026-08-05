@@ -95,15 +95,43 @@ def render(state: dict) -> str:
         lines.append(f"**{T['recommendation'][lang]}:** {rec['recommendation']}")
         lines.append("")
 
+    # Build source citation lookup from evidence chains (keyword -> source info)
+    chain_sources: dict[str, list[str]] = {}
+    for c in chains:
+        conclusion = c.get("conclusion", "").lower()
+        for src in c.get("sources", []):
+            title = src.get("title", "")
+            url = src.get("url", "")
+            if title and url:
+                chain_sources.setdefault(conclusion, []).append(f"[{title}]({url})")
+
     if rec.get("ranked_options"):
         lines.append(T["ranked_options"][lang])
         for opt in rec["ranked_options"]:
-            lines.append(f"- **#{opt['rank']} {opt['name']}**: {opt.get('rationale', '')}")
+            rationale = opt.get('rationale', '')
+            lines.append(f"- **#{opt['rank']} {opt['name']}**: {rationale}")
+            # Inject matching source citations
+            matched = []
+            rationale_lower = rationale.lower()
+            for conclusion, srcs in chain_sources.items():
+                if any(w in rationale_lower for w in conclusion.split()[:5]):
+                    matched.extend(srcs[:1])  # max 1 per chain
+            if matched:
+                lines.append(f"  *Sources: {'; '.join(matched[:3])}*")
         lines.append("")
     if rec.get("trade_offs"):
         lines.append(T["trade_offs"][lang])
         for t in rec["trade_offs"]:
-            lines.append(f"- **{t.get('dimension', '')}**: {t.get('finding', '')}")
+            finding = t.get('finding', '')
+            lines.append(f"- **{t.get('dimension', '')}**: {finding}")
+            # Inject matching source citations
+            matched = []
+            finding_lower = finding.lower()
+            for conclusion, srcs in chain_sources.items():
+                if any(w in finding_lower for w in conclusion.split()[:5]):
+                    matched.extend(srcs[:1])
+            if matched:
+                lines.append(f"  *Sources: {'; '.join(matched[:3])}*")
         lines.append("")
     if rec.get("scene_fit_note"):
         lines.append(f"**{T['scene_fit'][lang]}:** {rec['scene_fit_note']}")

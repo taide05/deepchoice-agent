@@ -45,7 +45,7 @@ Return ONLY a JSON object:
 }}"""
 
 
-CONTRADICTION_SCAN_PROMPT = """You are checking if two technical sources contradict each other on a specific topic.
+CONTRADICTION_SCAN_PROMPT = """You are checking if two technical sources present meaningfully different perspectives about a technology comparison.
 
 Query: {query}
 
@@ -55,9 +55,16 @@ Description: {snippet_a}
 Source B: {title_b}
 Description: {snippet_b}
 
-Do these two sources present directly conflicting claims about "{query}"?
-Consider: do they recommend different technologies, disagree on performance rankings,
-or make opposite claims about the same capability?
+Do these two sources present meaningfully different perspectives, recommendations, or claims?
+Consider ANY of these as a "difference worth flagging":
+1. Different winner recommendations (e.g. Source A says pick X, Source B says pick Y)
+2. Vendor bias (one source is from a vendor comparing itself to competitors)
+3. Contradictory trade-off assessments (one says "X is faster", another says "Y is faster")
+4. Different weight given to the same evidence (one prioritizes simplicity, another scalability)
+5. Source A and B draw opposite conclusions from similar facts
+
+A "difference" does NOT require factual contradiction. Different recommendations
+based on different priorities or use cases also count.
 Answer ONLY "yes" or "no"."""
 
 
@@ -429,13 +436,13 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 # ---------------------------------------------------------------------------
 
 
-async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> bool:
-    """Ask flash model whether two sources genuinely contradict on a query.
+async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> dict | None:
+    """Ask flash model whether two sources present meaningfully different perspectives.
 
-    Returns True only when the model answers "yes".
+    Returns a dict with contradiction info if detected, None otherwise.
     """
-    snippet_a = src_a.get("snippet", "")[:200]
-    snippet_b = src_b.get("snippet", "")[:200]
+    snippet_a = src_a.get("snippet", "")[:400]
+    snippet_b = src_b.get("snippet", "")[:400]
     prompt = CONTRADICTION_SCAN_PROMPT.format(
         query=query,
         title_a=src_a.get("title", ""),
@@ -443,19 +450,30 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> bool
         title_b=src_b.get("title", ""),
         snippet_b=snippet_b if snippet_b else "(no description)",
     )
+    prompt += """
+
+Return ONLY a JSON object:
+{{
+  "has_difference": true/false,
+  "type": "winner_disagreement|tradeoff_disagreement|vendor_bias|none",
+  "explanation": "One sentence explaining the difference (or why there is none)"
+}}"""
     try:
         async with FLASH_SEM:
             result = await call_model(
                 [{"role": "user", "content": prompt}],
                 model="deepseek-v4-flash",
+                response_format="json",
             )
-        return str(result).strip().lower().startswith("yes")
+        if isinstance(result, dict) and result.get("has_difference"):
+            return result
+        return None
     except Exception:
-        return False
+        return None
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
-                               threshold: float = 0.6) -> list[dict]:
+                               threshold: float = 0.5) -> list[dict]:
     """Find contradictory source pairs using LLM semantic scan.
 
     Pipeline: BGE similarity → 2-keyword relevance pre-filter →
@@ -472,9 +490,8 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     embeddings = model.encode(titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
-    # Build candidate pairs (BGE similarity + keyword pre-filter)
-    candidates: list[tuple[int, int, float,
-                             str, dict, dict]] = []
+    # Build candidate pairs (BGE similarity — LLM handles semantic filtering)
+    candidates: list[tuple[int, int, float]] = []
     for i in range(len(high_score_sources)):
         for j in range(i + 1, len(high_score_sources)):
             if not titles[i] or not titles[j]:
@@ -482,22 +499,6 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
             sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
             if sim < threshold:
                 continue
-
-            # 2-keyword relevance pre-filter
-            if query_keywords:
-                text_a = " ".join(filter(None, [
-                    high_score_sources[i].get("title", ""),
-                    high_score_sources[i].get("snippet", ""),
-                ])).lower()
-                text_b = " ".join(filter(None, [
-                    high_score_sources[j].get("title", ""),
-                    high_score_sources[j].get("snippet", ""),
-                ])).lower()
-                overlap = set(text_a.split()) & query_keywords
-                overlap |= set(text_b.split()) & query_keywords
-                if len(overlap) < 2:
-                    continue
-
             candidates.append((i, j, sim))
 
     if not candidates:
@@ -506,10 +507,10 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     # LLM scan in parallel
     async def _scan(cand):
         i, j, sim = cand
-        ok = await _scan_pair_contradiction(
+        info = await _scan_pair_contradiction(
             high_score_sources[i], high_score_sources[j], query_topic,
         )
-        return (i, j, sim) if ok else None
+        return (i, j, sim, info) if info else None
 
     print_agent_output(
         f"LLM scanning {len(candidates)} candidate pairs for contradictions",
@@ -520,11 +521,13 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     pairs = []
     for r in scan_results:
         if r is not None:
-            i, j, sim = r
+            i, j, sim, info = r
             pairs.append({
                 "source_a": high_score_sources[i],
                 "source_b": high_score_sources[j],
                 "similarity": round(sim, 3),
+                "difference_type": info.get("type", "unknown"),
+                "difference_explanation": info.get("explanation", ""),
             })
 
     return pairs

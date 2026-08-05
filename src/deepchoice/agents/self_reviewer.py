@@ -63,11 +63,23 @@ class SelfReviewerAgent:
             for s in upstream_signals
         ) if upstream_signals else "No upstream quality signals available."
 
+        # Summarize evidence chains (avoid dumping full dict with URLs/snippets)
+        chains_summary = []
+        for c in research_state.get("evidence_chains", []):
+            strength = c.get("evidence_strength", "unknown")
+            conclusion = c.get("conclusion", "")[:200]
+            sources = c.get("sources", [])
+            source_titles = [s.get("title", "?")[:80] for s in sources[:2]]
+            chains_summary.append(
+                f"[{strength}] {conclusion} (sources: {', '.join(source_titles)})"
+            )
+        chains_text = "\n".join(chains_summary) if chains_summary else "No evidence chains."
+
         prompt = [{
             "role": "user",
             "content": REVIEW_PROMPT.format(
                 report=research_state.get("report", ""),
-                evidence_chains=str(research_state.get("evidence_chains", [])),
+                evidence_chains=chains_text,
                 sub_questions=str(research_state.get("sub_questions", [])),
                 quality_signals=signals_text,
                 retry_count=research_state.get("retry_count", 0),
