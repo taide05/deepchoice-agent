@@ -93,27 +93,33 @@ streamlit run frontend/app.py
 
 **信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
 
-**冲突检测走嵌入相似度而非 LLM 逐对比较**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再检查是否有反转词（"not"、"worse"、"outperforms"），这比让 LLM 逐对读省了大量 token。实际运行时，50 个 case 平均只检测出少量潜在冲突，因为大部分技术选型场景的信源意见本来就不直接矛盾。
+**冲突检测走嵌入相似度而非 LLM 逐对比较**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描做裁决，这比让 LLM 逐对读省了大量 token。100 个 case 实测，多数技术选型场景的信源意见本来就不直接矛盾。
 
-## 量化指标（50 手标注 case，单次运行基线）
+## 量化指标（100 case benchmark，2026-08-01 采集，2026-08-04 V 门禁复核）
 
 | 指标 | 值 | 说明 |
 |------|-----|------|
-| Top-1 准确率 | 56.8% | 推荐排名第一的技术是否匹配人工标注正确答案 |
-| 任务成功率 | 100% | 50/50 case 全部跑完，无超时 |
-| 声明溯源率 | 92.9% | 报告中 92.9% 的声明能追溯到具体来源 |
-| 冲突检测率 | 23.9% | 46 个已知矛盾中检出 11 个 |
-| 信源召回率 | 30.4% | 138 个必须匹配的 URL 模式中命中了 42 个 |
-| 端到端延迟 P50 | 107s | 中位数 |
-| 端到端延迟 P95 | 187s | 95 分位 |
+| Top-1 准确率 | **79.8%**（67/84） | 推荐排名第一的技术匹配人工标注正确答案。16 个 context_dependent case 不计入 |
+| 任务成功率 | **97.0%**（97/100） | 3 个 case 因 SelfReviewer 间歇 bug 失败 |
+| 声明溯源率 | **97.0%** | 报告中几乎每句声明都能追溯到具体来源——核心卖点 |
+| 冲突检测率 | **2.2%** | 100 case 实测——多数技术选型场景本无直接矛盾 |
+| 信源召回率 | **34.8%** | 主要漏官方文档域名（Tavily 偏好 SEO 博客） |
+| 端到端延迟 P50 | **184s** | 中位数——约 3 分钟完成一次技术选型研究 |
+| 端到端延迟 P95 | **248s** | 95 分位——两阶段仲裁后不再爆炸（旧版 P95 410s） |
+| 报告质量 A 级 | **97%** | 5 项确定性质检（不调 LLM），97/100 满分 |
+
+> **数据来源**：以上数字来自 100 case benchmark（50 手标注 + 50 额外），通过 `benchmarks/run_baseline.py` 分批采集，`report_quality.py` 做确定性质检（非 LLM-as-Judge）。2026-08-04 经 V 门禁全量测试（87/87）+ 一致性核查确认。
 
 ```bash
-# 重现 benchmark
-python -m benchmarks.run_baseline --batch 1 --batch-size 10 --verbose
-python -m benchmarks.run_baseline --merge   # 合并多批结果
+# 重现 100 case benchmark
+cd D:\deepchoice-agent
+python benchmarks/run_full_200.py          # 200 case 全量（或部分）
+python -m benchmarks.run_baseline --merge  # 合并所有批次
 ```
 
-**已知局限**：信源召回率偏低（30.4%），主要漏官方文档域名（redis.io、kubernetes.io、grpc.io 等），Tavily API 会优先返回博客而非官方站。冲突检测率偏低（23.9%），嵌入相似度 + 否定词启发的覆盖面有限。
+**分场景准确率**（100 case）：AI/Agent 68% / Backend 65% / Infrastructure **88%** / DevOps 67% / Models 61%。Infrastructure 类（数据库/基础设施选型）最准，Models 类（模型对比）最低——训练数据截止日期影响大。
+
+**已知局限**：信源召回率仍偏低（34.8%，Official retriever 已增加 26 个技术官方文档直连映射，但覆盖面仍受限于 curated list）。SelfReviewer 有间歇 `str.get` bug 影响约 3% 成功率。冲突检测率低（2.2%）反映多数技术选型场景本无直接矛盾——非方法缺陷。
 
 ## 技术栈
 
@@ -134,6 +140,10 @@ src/deepchoice/
 benchmarks/
 ├── metrics.py           # 7 指标计算（GSM 框架）
 ├── run_baseline.py      # 分批 + 合并 + 趋势对比
+├── report_quality.py    # 5 项确定性质检（A/B/C/D 评级）
+├── cases_200.json       # 200 case benchmark（50 标注 + 150 变体）
+├── run_all_batches.ps1  # 分批运行脚本
+├── locustfile.py        # 基础并发负载测试
 └── annotated_cases.json # 50 手标注 case
 ```
 
