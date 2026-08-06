@@ -163,5 +163,4 @@ def render(state: dict) -> str:
     if total_sources > 12:
         lines.append(f"*(+{total_sources - 12} more sources)")
 
-    return "
-".join(lines)
+    return "\n".join(lines)
