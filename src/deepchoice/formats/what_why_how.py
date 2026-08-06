@@ -49,12 +49,15 @@ def render(state: dict) -> str:
 
     lines.extend(["", T["why"][lang], ""])
 
-    for c in chains:
+    for c in chains[:10]:
         tag = " [DISPUTED]" if c["disputed"] else ""
         lines.append(f"### {c['conclusion']}{tag}")
         lines.append(f"**{T['evidence_strength'][lang]}:** {c['evidence_strength']}")
-        for src in c["sources"]:
+        for src in c["sources"][:2]:
             lines.append(f"- [{src['title']}]({src['url']}) — score: {src['score']}")
+        lines.append("")
+    if len(chains) > 10:
+        lines.append(f"*(+{len(chains) - 10} more evidence chains — see full report via API)*")
         lines.append("")
 
     if conflicts:
@@ -147,8 +150,18 @@ def render(state: dict) -> str:
         ])
 
     lines.append(T["references"][lang])
+    ref_count = 0
+    total_sources = sum(len(c.get("sources", [])) for c in chains)
     for c in chains:
         for src in c["sources"]:
-            lines.append(f"- [{src['title']}]({src['url']})")
+            if ref_count >= 12:
+                break
+            lines.append(f"- [{src["title"]}]({src["url"]})")
+            ref_count += 1
+        if ref_count >= 12:
+            break
+    if total_sources > 12:
+        lines.append(f"*(+{total_sources - 12} more sources)")
 
-    return "\n".join(lines)
+    return "
+".join(lines)
