@@ -124,57 +124,12 @@ SEARCH_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "search_code",
-            "description": "Search GitHub repos for implementation examples, benchmark code, issues.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Code/tech search query"},
-                    "max_results": {"type": "integer", "description": "Max results (1-5)", "default": 3},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "search_kb",
             "description": "Search local knowledge base for previously researched tech comparison data.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Knowledge base query"},
-                    "max_results": {"type": "integer", "description": "Max results (1-5)", "default": 3},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_community",
-            "description": "Search StackOverflow and Reddit for real-world developer experiences and opinions.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Community search query"},
-                    "max_results": {"type": "integer", "description": "Max results (1-5)", "default": 3},
-                },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_official",
-            "description": "Search official documentation and package registries (PyPI, npm).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Package/tech name for official docs search"},
                     "max_results": {"type": "integer", "description": "Max results (1-5)", "default": 3},
                 },
                 "required": ["query"],
@@ -349,8 +304,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
 
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
-                           max_iterations: int = 2,
-                           per_call_timeout: float = 45.0) -> str:
+                           max_iterations: int = 1,
+                           per_call_timeout: float = 30.0) -> str:
     """Inline multi-turn evidence gathering via DeepSeek native tool calling.
 
     Returns a plain-text summary of collected evidence suitable for
@@ -373,7 +328,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             f"Topic: {topic}\n"
             f"Claim A: {claim_a}\n"
             f"Claim B: {claim_b}\n\n"
-            f"Search for evidence using at least 2 different tools."
+            f"Search for evidence using at least 1 different tool."
         )},
     ]
 
@@ -600,6 +555,8 @@ class ConflictDetectorAgent:
                 "key_factor": result.get("key_factor", ""),
                 "arbiter_model": model,
                 "evidence_collected": result.get("evidence_collected", ""),
+                "difference_type": pair.get("difference_type", "unknown"),
+                "difference_explanation": pair.get("difference_explanation", ""),
             }
 
         # --- Stage 1: Flash arbitration (parallel) ---
@@ -627,7 +584,7 @@ class ConflictDetectorAgent:
                 low_confidence_pairs.append(pair)
 
         # Cap evidence gathering at top-2 most ambiguous pairs (sorted by confidence gap)
-        low_confidence_pairs = low_confidence_pairs[:2]
+        low_confidence_pairs = low_confidence_pairs[:1]
 
         # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
         if low_confidence_pairs and self.gather_evidence:

@@ -30,5 +30,11 @@ async def call_model(
     content = response.choices[0].message.content
 
     if response_format == "json":
-        return parse_json_markdown(content, parser=json_repair.loads)
+        try:
+            result = parse_json_markdown(content, parser=json_repair.loads)
+            if isinstance(result, dict):
+                return result
+            return {}
+        except Exception:
+            return {}
     return content

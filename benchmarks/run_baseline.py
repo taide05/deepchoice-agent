@@ -50,7 +50,7 @@ RUNS_DIR = BENCHMARKS_DIR / "runs"
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
 FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
 TIMEOUT_PER_CASE_S = 480  # 8 minutes per case (evidence gathering adds latency)
-DEFAULT_CONCURRENCY = 5
+DEFAULT_CONCURRENCY = 8
 
 
 # ---------------------------------------------------------------------------
