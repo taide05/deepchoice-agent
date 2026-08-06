@@ -501,7 +501,7 @@ def compute_conflict_detection_rate(
     }
 
 
-RESOLVED_RESOLUTIONS = frozenset({"A_correct", "B_correct"})
+RESOLVED_RESOLUTIONS = frozenset({"A_correct", "B_correct", "both_partial"})
 
 
 async def compute_conflict_detection_rate_llm(
