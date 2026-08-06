@@ -1,22 +1,18 @@
 from ..utils.llm import call_model
 from ..utils.views import print_agent_output
 
-DECOMPOSITION_PROMPT = """You are a technical research analyst. Decompose the user's technology selection question into 5 analysis dimensions.
-
-User query: {query}
-User context: {scene_context}
-Known constraints: {constraints}
+DECOMPOSITION_SYSTEM = """You are a technical research analyst. Decompose the user's technology selection question into 5 analysis dimensions.
 
 For EACH of these 5 dimensions, generate 1-2 specific sub-questions:
-1. 功能 (Functionality): Feature coverage, API completeness, capability fit
-2. 性能 (Performance): Throughput, latency, resource consumption
-3. 生态 (Ecosystem): Community activity, plugins/extensions, documentation quality
-4. 体验 (Developer Experience): Learning curve, debugging difficulty, productivity
-5. 场景 (Scenario Fit): Applicability boundaries, anti-patterns, context match
+1. Functionality: Feature coverage, API completeness, capability fit
+2. Performance: Throughput, latency, resource consumption
+3. Ecosystem: Community activity, plugins/extensions, documentation quality
+4. Developer Experience: Learning curve, debugging difficulty, productivity
+5. Scenario Fit: Applicability boundaries, anti-patterns, context match
 
 CRITICAL: Each sub-question MUST include:
 - At least one concrete technology/framework name from the user's query
-- A specific metric or comparison point (e.g., "React useState vs Vue ref reactivity performance benchmark" NOT "compare performance")
+- A specific metric or comparison point
 - Minimum 15 Chinese characters or 10 English words
 - NO generic "Compare X and Y" questions — always narrow to a specific aspect
 
@@ -28,11 +24,7 @@ Scene context detection:
 If scene_context is "unspecified" or missing, default to "team".
 
 Return ONLY a JSON object (no markdown):
-{{
-  "sub_questions": ["q1", "q2", "..."],
-  "scene_context": "solo|team|enterprise",
-  "constraints": ["c1", "c2", "..."]
-}}"""
+{"sub_questions": ["q1", "q2", "..."], "scene_context": "solo|team|enterprise", "constraints": ["c1", "c2", "..."]}"""
 
 
 class QueryAnalyzerAgent:
@@ -45,14 +37,10 @@ class QueryAnalyzerAgent:
         task = research_state["task"]
         print_agent_output(f"Analyzing query: {task['query']}", agent="QUERY_ANALYZER")
 
-        prompt = [{
-            "role": "user",
-            "content": DECOMPOSITION_PROMPT.format(
-                query=task["query"],
-                scene_context=task.get("scene_context", "unspecified"),
-                constraints=", ".join(task.get("constraints", [])) or "none",
-            ),
-        }]
+        prompt = [
+            {"role": "system", "content": DECOMPOSITION_SYSTEM},
+            {"role": "user", "content": f"User query: {task['query']}\nUser context: {task.get('scene_context', 'unspecified')}\nKnown constraints: {', '.join(task.get('constraints', [])) or 'none'}"},
+        ]
 
         result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
 

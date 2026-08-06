@@ -35,23 +35,30 @@ Disputed findings: {disputed_count}
 7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
 
+## Output Length Limits (CRITICAL — exceed and output will be rejected)
+- recommendation: max 200 words
+- each ranked_option rationale: max 80 words
+- each trade_off finding: max 60 words
+- evidence_summary: max 150 words
+- scene_fit_note: max 80 words
+
 ## Output Structure
 Return ONLY a JSON object:
 {{
-  "winner": "Single technology name that wins the comparison (REQUIRED — never leave empty)",
-  "winner_rationale": "One sentence citing the strongest piece of evidence for this choice",
-  "recommendation": "One-paragraph actionable recommendation",
+  "winner": "Single technology name (REQUIRED)",
+  "winner_rationale": "One sentence citing strongest evidence (max 40 words)",
+  "recommendation": "Actionable recommendation paragraph (max 200 words)",
   "ranked_options": [
-    {{"name": "Option A", "rank": 1, "rationale": "Why this rank based on evidence", "key_strength": "strongest evidence point", "key_weakness": "notable limitation"}}
+    {{"name": "Option A", "rank": 1, "rationale": "Why this rank (max 80 words)", "key_strength": "strongest evidence point (max 30 words)", "key_weakness": "notable limitation (max 30 words)"}}
   ],
   "trade_offs": [
-    {{"dimension": "e.g. Performance vs Developer Experience", "finding": "what the evidence shows", "impact": "who this matters for"}}
+    {{"dimension": "Performance vs DX etc.", "finding": "what evidence shows (max 60 words)", "impact": "who this matters for (max 40 words)"}}
   ],
-  "evidence_summary": "2-3 sentence summary of the evidence landscape",
+  "evidence_summary": "Concise summary of evidence landscape (max 150 words)",
   "confidence": "high|medium|low",
-  "confidence_rationale": "Why this confidence level — cite evidence strength distribution and gaps",
-  "unresolved_questions": ["question that evidence couldn't answer"],
-  "scene_fit_note": "How this recommendation fits the scene context"
+  "confidence_rationale": "Why this confidence (max 50 words)",
+  "unresolved_questions": ["question evidence couldn't answer"],
+  "scene_fit_note": "Fit to scene context (max 80 words)"
 }}"""
 
 

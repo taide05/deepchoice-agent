@@ -19,53 +19,28 @@ PRO_SEM = asyncio.Semaphore(20)
 # Prompts
 # ---------------------------------------------------------------------------
 
-ARBITRATION_PROMPT = """You are an impartial technical arbitrator. Two sources make claims about the same topic but may disagree.
+ARBITRATION_SYSTEM = """You are an impartial technical arbitrator. Two sources make claims about the same topic but may disagree.
 
-## Topic
-{topic}
-
-## Source A (score: {score_a}/10, authority: {authority_a}, evidence: {evidence_a})
-Claim: {claim_a}
-
-## Source B (score: {score_b}/10, authority: {authority_b}, evidence: {evidence_b})
-Claim: {claim_b}
-
-## Rules
+Rules:
 1. If scores differ by >=2.5 points, the higher-scored source is more likely correct
 2. If both have code/benchmark evidence, both may be partially right (different contexts)
 3. If neither has strong evidence, declare "insufficient_data"
 4. Your reasoning MUST cite the score difference or evidence type difference
 
 Return ONLY a JSON object:
-{{
-  "resolution": "A_correct|B_correct|both_partial|insufficient_data",
-  "confidence": "high|medium|low",
-  "reasoning": "Specific reason citing score/evidence difference",
-  "key_factor": "The single most decisive factor"
-}}"""
+{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Specific reason citing score/evidence difference", "key_factor": "The single most decisive factor"}"""
 
 
-CONTRADICTION_SCAN_PROMPT = """You are checking if two technical sources present meaningfully different perspectives about a technology comparison.
+CONTRADICTION_SCAN_SYSTEM = """You are checking if two technical sources present meaningfully different perspectives about a technology comparison.
 
-Query: {query}
-
-Source A: {title_a}
-Description: {snippet_a}
-
-Source B: {title_b}
-Description: {snippet_b}
-
-Do these two sources present meaningfully different perspectives, recommendations, or claims?
 Consider ANY of these as a "difference worth flagging":
-1. Different winner recommendations (e.g. Source A says pick X, Source B says pick Y)
+1. Different winner recommendations (Source A says pick X, Source B says pick Y)
 2. Vendor bias (one source is from a vendor comparing itself to competitors)
-3. Contradictory trade-off assessments (one says "X is faster", another says "Y is faster")
+3. Contradictory trade-off assessments (one says X is faster, another says Y is faster)
 4. Different weight given to the same evidence (one prioritizes simplicity, another scalability)
 5. Source A and B draw opposite conclusions from similar facts
 
-A "difference" does NOT require factual contradiction. Different recommendations
-based on different priorities or use cases also count.
-Answer ONLY "yes" or "no"."""
+A "difference" does NOT require factual contradiction. Different recommendations based on different priorities or use cases also count."""
 
 
 # Keyword extraction (kept for 2-keyword pre-filter)
@@ -398,13 +373,15 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> dict
     """
     snippet_a = src_a.get("snippet", "")[:400]
     snippet_b = src_b.get("snippet", "")[:400]
-    prompt = CONTRADICTION_SCAN_PROMPT.format(
-        query=query,
-        title_a=src_a.get("title", ""),
-        snippet_a=snippet_a if snippet_a else "(no description)",
-        title_b=src_b.get("title", ""),
-        snippet_b=snippet_b if snippet_b else "(no description)",
-    )
+    prompt = [
+        {"role": "system", "content": CONTRADICTION_SCAN_SYSTEM},
+        {"role": "user", "content": (
+            f"Query: {query}\n\n"
+            f"Source A: {src_a.get('title', '')}\nDescription: {snippet_a if snippet_a else '(no description)'}\n\n"
+            f"Source B: {src_b.get('title', '')}\nDescription: {snippet_b if snippet_b else '(no description)'}\n\n"
+            f"Do these two sources present meaningfully different perspectives? Return JSON."
+        )},
+    ]
     prompt += """
 
 Return ONLY a JSON object:
@@ -461,7 +438,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
 
     # Cap at top-20 by similarity to prevent O(n²) explosion with many sources
     candidates.sort(key=lambda x: x[2], reverse=True)
-    candidates = candidates[:20]
+    candidates = candidates[:15]
 
     # LLM scan in parallel
     async def _scan(cand):
@@ -527,20 +504,14 @@ class ConflictDetectorAgent:
         )
 
         def _make_prompt(a: dict, b: dict) -> list[dict]:
-            return [{
-                "role": "user",
-                "content": ARBITRATION_PROMPT.format(
-                    topic=query,
-                    score_a=a["total_score"],
-                    authority_a=a["scores"]["authority"],
-                    evidence_a=a.get("evidence_type", "citation"),
-                    claim_a=a.get("title", ""),
-                    score_b=b["total_score"],
-                    authority_b=b["scores"]["authority"],
-                    evidence_b=b.get("evidence_type", "citation"),
-                    claim_b=b.get("title", ""),
-                ),
-            }]
+            return [
+                {"role": "system", "content": ARBITRATION_SYSTEM},
+                {"role": "user", "content": (
+                    f"## Topic\n{query}\n\n"
+                    f"## Source A (score: {a['total_score']}/10, authority: {a['scores']['authority']}, evidence: {a.get('evidence_type', 'citation')})\nClaim: {a.get('title', '')}\n\n"
+                    f"## Source B (score: {b['total_score']}/10, authority: {b['scores']['authority']}, evidence: {b.get('evidence_type', 'citation')})\nClaim: {b.get('title', '')}"
+                )},
+            ]
 
         def _build_conflict(pair: dict, result: dict, model: str = "flash") -> dict:
             return {

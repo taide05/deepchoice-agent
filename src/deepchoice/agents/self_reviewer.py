@@ -1,51 +1,25 @@
 from ..utils.llm import call_model
 from ..utils.views import print_agent_output
 
-REVIEW_PROMPT = """You are a rigorous quality reviewer. Evaluate this research report against a 6-item checklist.
+REVIEW_SYSTEM = """You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
 
-## Report
-{report}
-
-## Evidence Chains
-{evidence_chains}
-
-## Original Sub-Questions
-{sub_questions}
-
-## Pipeline Quality Signals (from upstream agents)
-{quality_signals}
-
-## Retry Count
-{retry_count}
-
-## Checklist — Answer YES or NO for each, with a brief note:
-1. Does every conclusion have source support? (If not, list unsupported conclusions)
-2. Are there any unsourced claims? (List them if yes)
+Answer YES or NO for each, with a brief note:
+1. Does every conclusion have source support?
+2. Are there any unsourced claims?
 3. Does the recommendation cover all 5 comparison dimensions? (Functionality, Performance, Ecosystem, Developer Experience, Scenario Fit)
-4. Are there unlabeled information conflicts? (List them if yes)
-5. Are any user sub-questions unanswered? (List which ones)
-6. Are there counter-examples or negative findings not flagged? (List them if yes)
+4. Are there unlabeled information conflicts?
+5. Are any user sub-questions unanswered?
+6. Are there counter-examples or negative findings not flagged?
 
-## Confidence Assessment
-Use the pipeline quality signals above as primary input. Only flag issues that the upstream signals missed.
+Confidence Assessment:
 - high: 5-6/6 passed, no critical gaps
 - medium: 3-4 items passed, no critical gaps
 - low: 0-2 items passed OR critical information missing
 
-## Gap Analysis
-If confidence is not "high", list the specific information gaps. Each gap should be a specific search query that could fill the gap.
+If confidence is not "high", list specific information gaps as search queries.
 
 Return ONLY a JSON object:
-{{
-  "checks": [
-    {{"item": 1, "passed": true, "note": "..."}},
-    ...
-  ],
-  "passed_count": N,
-  "confidence": "high|medium|low",
-  "knowledge_gaps": ["gap query 1", "gap query 2"],
-  "critical_gaps": ["critical gap"]
-}}"""
+{"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": N, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"]}"""
 
 
 class SelfReviewerAgent:
@@ -63,7 +37,6 @@ class SelfReviewerAgent:
             for s in upstream_signals
         ) if upstream_signals else "No upstream quality signals available."
 
-        # Summarize evidence chains (avoid dumping full dict with URLs/snippets)
         chains_summary = []
         for c in research_state.get("evidence_chains", []):
             strength = c.get("evidence_strength", "unknown")
@@ -75,16 +48,25 @@ class SelfReviewerAgent:
             )
         chains_text = "\n".join(chains_summary) if chains_summary else "No evidence chains."
 
-        prompt = [{
-            "role": "user",
-            "content": REVIEW_PROMPT.format(
-                report=research_state.get("report", ""),
-                evidence_chains=chains_text,
-                sub_questions=str(research_state.get("sub_questions", [])),
-                quality_signals=signals_text,
-                retry_count=research_state.get("retry_count", 0),
-            ),
-        }]
+        user_content = f"""## Report
+{research_state.get("report", "")}
+
+## Evidence Chains
+{chains_text}
+
+## Original Sub-Questions
+{research_state.get("sub_questions", [])}
+
+## Pipeline Quality Signals
+{signals_text}
+
+## Retry Count
+{research_state.get("retry_count", 0)}"""
+
+        prompt = [
+            {"role": "system", "content": REVIEW_SYSTEM},
+            {"role": "user", "content": user_content},
+        ]
 
         result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
 
