@@ -1,58 +1,26 @@
 from ..utils.llm import call_model
 from ..utils.views import print_agent_output
 
-ADAPT_PROMPT = """You are a search query optimizer. Rewrite each sub-question into 6 retriever-specific queries.
+ADAPT_SYSTEM = """You are a search query optimizer. Rewrite each sub-question into 6 retriever-specific queries.
 
-## Sub-questions to adapt:
-{sub_questions}
+For EACH sub-question, generate 6 query variants:
 
-## Original query context:
-{query}
+1. tavily (web search): Natural language, 1-2 sentences. Include technology names and version years if relevant. Best for finding blog posts, comparisons, news.
+2. arxiv (academic papers): Keywords separated by spaces. Include technical terms, method names, framework names.
+3. github (code/issues): GitHub search syntax. Use repo: qualifier if known, otherwise keyword search. Include language filter if applicable.
+4. chroma_kb (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search.
+5. community (StackOverflow): Include tags. Example: "site:stackoverflow.com [langgraph] agent state management"
+6. official (official docs): Keywords in documentation headings or API references.
 
-## Constraints:
-{constraints}
+Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma_kb). For English-only sources (arxiv/github/official), use English technical terms.
 
-## For EACH sub-question, generate 6 query variants:
-
-1. **tavily** (web search): Natural language, 1-2 sentences. Include technology names and version years if relevant. Best for finding blog posts, comparisons, news.
-
-2. **arxiv** (academic papers): Keywords separated by spaces. Include technical terms, method names, framework names. Best for finding research papers. Example: "large language model agent reasoning ReAct Chain-of-Thought"
-
-3. **github** (code/issues): GitHub search syntax. Use `repo:` qualifier if a known repo is relevant, otherwise use keyword search. Include language filter if applicable. Example: "langgraph agent orchestration language:python stars:>100"
-
-4. **chroma_kb** (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search against stored documents.
-
-5. **community** (StackOverflow/Reddit): Include site filters and relevant tags. Example: "site:stackoverflow.com [langgraph] agent state management" or "site:reddit.com r/MachineLearning LLM agent framework"
-
-6. **official** (official docs): Keywords that would appear in official documentation headings or API references. Include framework/module names. Example: "LangGraph StateGraph add_node add_edge documentation"
-
-## Language
-- Detect the language of the original query. Generate adapted queries in that language.
-- For English-only sources (arxiv, github, official), include English technical terms as a supplement, but still generate queries in the query's language where the source supports it.
-- Tavily and chroma_kb support Chinese queries — generate these in the query's language.
-- This ensures we don't miss high-quality content in the user's language.
-
-## Rules:
-- Each variant MUST be specific and searchable (not generic like "compare frameworks")
+Rules:
+- Each variant MUST be specific and searchable
 - Include version numbers or years where relevant
 - If a sub-question doesn't fit a particular retriever type, still generate the best possible query
-- For community and official retrievers, include site or domain hints where helpful
 
 Return ONLY a JSON object:
-{{
-  "adapted": [
-    {{
-      "sub_question_index": 0,
-      "sub_question": "original sub-question text",
-      "tavily": "optimized web search query",
-      "arxiv": "academic keyword string",
-      "github": "GitHub search syntax",
-      "chroma_kb": "natural language question",
-      "community": "forum search with site filters",
-      "official": "documentation search terms"
-    }}
-  ]
-}}"""
+{"adapted": [{"sub_question_index": 0, "sub_question": "...", "tavily": "...", "arxiv": "...", "github": "...", "chroma_kb": "...", "community": "...", "official": "..."}]}"""
 
 RETRIEVER_KEYS = ["tavily", "arxiv", "github", "chroma_kb", "community", "official"]
 
@@ -87,14 +55,10 @@ class QueryAdapterAgent:
             agent="QUERY_ADAPTER",
         )
 
-        prompt = [{
-            "role": "user",
-            "content": ADAPT_PROMPT.format(
-                sub_questions="\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions)),
-                query=task["query"],
-                constraints=", ".join(task.get("constraints", [])) or "none",
-            ),
-        }]
+        prompt = [
+            {"role": "system", "content": ADAPT_SYSTEM},
+            {"role": "user", "content": f"Sub-questions:\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions)) + f"\n\nOriginal query: {task['query']}\nConstraints: {', '.join(task.get('constraints', [])) or 'none'}"},
+        ]
 
         try:
             result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
