@@ -338,9 +338,42 @@ async def run_baseline(
 
     if verbose:
         print(f"  Concurrency: {concurrency}")
-    tasks = [_run_with_semaphore(case) for case in cases]
-    runs = await asyncio.gather(*tasks)
+    # Process in chunks of 50, saving checkpoint after each chunk
+    CHUNK = 50
+    all_runs = []
+    for chunk_start in range(0, len(cases), CHUNK):
+        chunk_cases = cases[chunk_start:chunk_start + CHUNK]
+        chunk_idx = chunk_start // CHUNK + 1
+        total_chunks = (len(cases) + CHUNK - 1) // CHUNK
+        print(f"\n  --- Chunk {chunk_idx}/{total_chunks}: cases {chunk_start+1}-{min(chunk_start+CHUNK, len(cases))} ---")
+        tasks = [_run_with_semaphore(case) for case in chunk_cases]
+        chunk_runs = await asyncio.gather(*tasks)
+        all_runs.extend(chunk_runs)
+        chunk_ok = sum(1 for r in chunk_runs if r["error"] is None)
+        chunk_fail = len(chunk_runs) - chunk_ok
+        print(f"  Chunk {chunk_idx} done: {chunk_ok} success / {chunk_fail} failure")
+        # Save checkpoint
+        if len(cases) > CHUNK:
+            ckpt_path = RUNS_DIR / f"checkpoint-chunk{chunk_idx:02d}.json"
+            ckpt_data = {
+                "checkpoint_chunk": chunk_idx,
+                "cases_so_far": len(all_runs),
+                "runs": [{
+                    "case_id": r["case_id"], "query": r["query"],
+                    "report": r.get("report", ""), "error": r.get("error"),
+                    "elapsed_s": r.get("elapsed_s", 0),
+                    "search_results": r.get("search_results", []),
+                    "conflicts": r.get("conflicts", []),
+                    "retry_count": r.get("retry_count", 0),
+                    "confidence": r.get("confidence", ""),
+                    "knowledge_gaps": r.get("knowledge_gaps", []),
+                    "agent_timing": r.get("agent_timing", {}),
+                } for r in chunk_runs],
+            }
+            ckpt_path.write_text(json.dumps(ckpt_data, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"  Checkpoint saved: {ckpt_path.name}")
 
+    runs = all_runs
     latencies = [r["elapsed_s"] for r in runs]
     ok = sum(1 for r in runs if r["error"] is None)
     fail = len(runs) - ok
