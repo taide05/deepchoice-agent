@@ -280,7 +280,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                            max_iterations: int = 1,
-                           per_call_timeout: float = 30.0) -> str:
+                           per_call_timeout: float = 30.0,
+                           usage: list | None = None) -> str:
     """Inline multi-turn evidence gathering via DeepSeek native tool calling.
 
     Returns a plain-text summary of collected evidence suitable for
@@ -326,6 +327,16 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         except Exception as e:
             print_agent_output(f"Evidence gathering LLM error: {e}", agent="CONFLICT_DETECTOR")
             break
+
+        # Capture token usage (same 4-field shape as call_model) so the
+        # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
+        if usage is not None and getattr(response, "usage", None) is not None:
+            usage.append({
+                "model": getattr(response, "model", None) or "deepseek-v4-flash",
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            })
 
         msg = response.choices[0].message
         messages.append(msg.model_dump(exclude_none=True))
@@ -583,6 +594,7 @@ class ConflictDetectorAgent:
                             topic=query,
                             claim_a=a.get("title", ""),
                             claim_b=b.get("title", ""),
+                            usage=local_usage,
                         )
                     except Exception as e:
                         print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")

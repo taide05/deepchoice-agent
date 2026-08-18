@@ -36,6 +36,26 @@ def _fake_client(response):
     )
 
 
+def _gather_fake_response(content="evidence found", model="deepseek-v4-flash",
+                          prompt_tokens=150, completion_tokens=60):
+    """Fake OpenAI response for _gather_evidence: assistant message with
+    model_dump() and no tool_calls, plus a usage block."""
+    message = types.SimpleNamespace(
+        content=content,
+        tool_calls=[],
+        model_dump=lambda exclude_none=None: {"role": "assistant", "content": content},
+    )
+    return types.SimpleNamespace(
+        model=model,
+        usage=types.SimpleNamespace(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        ),
+        choices=[types.SimpleNamespace(message=message)],
+    )
+
+
 class TestCallModelUsageCapture:
     @pytest.mark.asyncio
     async def test_appends_usage_record_after_successful_call(self):
@@ -266,3 +286,29 @@ class TestAgentTokenUsageWiring:
         assert len(rows) == 1
         assert rows[0]["agent"] == "conflict_detector"
         assert rows[0]["calls"] == 0
+
+
+class TestGatherEvidenceUsageCapture:
+    @pytest.mark.asyncio
+    async def test_gather_evidence_appends_usage_row(self):
+        """_gather_evidence builds AsyncOpenAI directly (not via call_model),
+        so its client is mocked by patching openai.AsyncOpenAI — the local
+        `from openai import AsyncOpenAI` inside the function picks it up."""
+        usage = []
+        client = _fake_client(
+            _gather_fake_response("Benchmarks favor async under concurrent load"))
+        with patch("openai.AsyncOpenAI", return_value=client):
+            evidence = await cd_module._gather_evidence(
+                topic="FastAPI async performance",
+                claim_a="Async endpoints are slower than sync",
+                claim_b="Async endpoints are faster under concurrency",
+                usage=usage,
+            )
+
+        assert evidence == "Benchmarks favor async under concurrent load"
+        assert usage == [{
+            "model": "deepseek-v4-flash",
+            "prompt_tokens": 150,
+            "completion_tokens": 60,
+            "total_tokens": 210,
+        }]
