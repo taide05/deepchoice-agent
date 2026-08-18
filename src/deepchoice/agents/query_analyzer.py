@@ -1,4 +1,4 @@
-from ..utils.llm import call_model
+from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 DECOMPOSITION_SYSTEM = """You are a technical research analyst. Decompose the user's technology selection question into 5 analysis dimensions.
@@ -42,7 +42,9 @@ class QueryAnalyzerAgent:
             {"role": "user", "content": f"User query: {task['query']}\nUser context: {task.get('scene_context', 'unspecified')}\nKnown constraints: {', '.join(task.get('constraints', [])) or 'none'}"},
         ]
 
-        result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
+        local_usage: list = []
+        result = await call_model(prompt, model="deepseek-v4-flash", response_format="json",
+                                  usage=local_usage)
 
         sub_questions = result.get("sub_questions", [])
         return {
@@ -56,4 +58,6 @@ class QueryAnalyzerAgent:
                 "scene_context": result.get("scene_context", "team"),
                 "has_constraints": bool(task.get("constraints")),
             }],
+            "token_usage": research_state.get("token_usage", [])
+            + [summarize_usage("query_analyzer", local_usage)],
         }

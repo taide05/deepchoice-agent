@@ -15,11 +15,47 @@ def _get_client(timeout: float = 120.0) -> AsyncOpenAI:
     return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
+def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
+    """Aggregate per-call usage records into one state row for an agent.
+
+    Returns a dict ready to append to ResearchState["token_usage"]:
+    {"agent", "model", "calls", "prompt_tokens", "completion_tokens", "total_tokens"}.
+    If all calls used the same model, "model" is that name; otherwise the
+    comma-joined unique model names in first-seen order.
+    """
+    if not usage:
+        return {
+            "agent": agent_name,
+            "model": "",
+            "calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+
+    models = [u.get("model", "") for u in usage]
+    unique = list(dict.fromkeys(models))
+    if len(unique) == 1:
+        model = unique[0]
+    else:
+        model = ",".join(m for m in unique if m)
+
+    return {
+        "agent": agent_name,
+        "model": model,
+        "calls": len(usage),
+        "prompt_tokens": sum(u.get("prompt_tokens", 0) for u in usage),
+        "completion_tokens": sum(u.get("completion_tokens", 0) for u in usage),
+        "total_tokens": sum(u.get("total_tokens", 0) for u in usage),
+    }
+
+
 async def call_model(
     prompt: list[dict],
     model: str = DEFAULT_FLASH_MODEL,
     response_format: str | None = None,
     timeout: float = 120.0,
+    usage: list | None = None,
 ) -> dict | str:
     client = _get_client(timeout=timeout)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
@@ -27,6 +63,17 @@ async def call_model(
         kwargs["response_format"] = {"type": "json_object"}
 
     response = await client.chat.completions.create(**kwargs)
+
+    # Capture token usage before content parsing so calls whose JSON parsing
+    # fails are still counted.
+    if usage is not None and response.usage is not None:
+        usage.append({
+            "model": getattr(response, "model", None) or model,
+            "prompt_tokens": response.usage.prompt_tokens,
+            "completion_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+        })
+
     content = response.choices[0].message.content
 
     if response_format == "json":

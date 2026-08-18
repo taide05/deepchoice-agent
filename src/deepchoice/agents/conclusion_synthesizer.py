@@ -1,4 +1,4 @@
-from ..utils.llm import call_model
+from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all evidence into a final, actionable recommendation.
@@ -120,8 +120,10 @@ class ConclusionSynthesizerAgent:
             ),
         }]
 
+        local_usage: list = []
         try:
-            result = await call_model(prompt, model="deepseek-v4-pro", response_format="json")
+            result = await call_model(prompt, model="deepseek-v4-pro", response_format="json",
+                                      usage=local_usage)
         except Exception as e:
             print_agent_output(f"Synthesis failed: {e}", agent="CONCLUSION_SYNTHESIZER")
             result = {
@@ -147,4 +149,6 @@ class ConclusionSynthesizerAgent:
         return {
             "final_recommendation": result,
             "quality_signals": quality_signals,
+            "token_usage": research_state.get("token_usage", [])
+            + [summarize_usage("conclusion_synthesizer", local_usage)],
         }

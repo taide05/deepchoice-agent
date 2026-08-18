@@ -1,4 +1,4 @@
-from ..utils.llm import call_model
+from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 REVIEW_SYSTEM = """You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
@@ -68,7 +68,9 @@ class SelfReviewerAgent:
             {"role": "user", "content": user_content},
         ]
 
-        result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
+        local_usage: list = []
+        result = await call_model(prompt, model="deepseek-v4-flash", response_format="json",
+                                  usage=local_usage)
 
         if not isinstance(result, dict):
             result = {}
@@ -84,4 +86,6 @@ class SelfReviewerAgent:
                 "confidence": result.get("confidence", "medium"),
                 "gaps_found": len(result.get("knowledge_gaps", [])),
             }],
+            "token_usage": research_state.get("token_usage", [])
+            + [summarize_usage("self_reviewer", local_usage)],
         }

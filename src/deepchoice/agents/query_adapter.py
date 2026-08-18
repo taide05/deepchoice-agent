@@ -1,4 +1,4 @@
-from ..utils.llm import call_model
+from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 ADAPT_SYSTEM = """You are a search query optimizer. Rewrite each sub-question into 6 retriever-specific queries.
@@ -48,6 +48,8 @@ class QueryAdapterAgent:
             return {
                 "adapted_queries": {},
                 "quality_signals": [{"agent": "query_adapter", "adapted_count": 0, "covered_retrievers": []}],
+                "token_usage": research_state.get("token_usage", [])
+                + [summarize_usage("query_adapter", [])],
             }
 
         print_agent_output(
@@ -60,8 +62,10 @@ class QueryAdapterAgent:
             {"role": "user", "content": f"Sub-questions:\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions)) + f"\n\nOriginal query: {task['query']}\nConstraints: {', '.join(task.get('constraints', [])) or 'none'}"},
         ]
 
+        local_usage: list = []
         try:
-            result = await call_model(prompt, model="deepseek-v4-flash", response_format="json")
+            result = await call_model(prompt, model="deepseek-v4-flash", response_format="json",
+                                      usage=local_usage)
             adapted_items = result.get("adapted", [])
         except Exception as e:
             print_agent_output(f"Query adaptation failed: {e}, using raw sub_questions", agent="QUERY_ADAPTER")
@@ -88,4 +92,9 @@ class QueryAdapterAgent:
             "fallback_retrievers": [k for k in RETRIEVER_KEYS if not adapted_queries.get(k)],
         }]
 
-        return {"adapted_queries": adapted_queries, "quality_signals": quality_signals}
+        return {
+            "adapted_queries": adapted_queries,
+            "quality_signals": quality_signals,
+            "token_usage": research_state.get("token_usage", [])
+            + [summarize_usage("query_adapter", local_usage)],
+        }

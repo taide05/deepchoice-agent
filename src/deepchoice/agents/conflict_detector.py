@@ -5,7 +5,7 @@ import os
 import numpy as np
 import httpx
 
-from ..utils.llm import call_model
+from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from ..utils.embedding import get_embedding_model
 
@@ -366,7 +366,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 # ---------------------------------------------------------------------------
 
 
-async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> dict | None:
+async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str,
+                                   usage: list | None = None) -> dict | None:
     """Ask flash model whether two sources present meaningfully different perspectives.
 
     Returns a dict with contradiction info if detected, None otherwise.
@@ -380,9 +381,7 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str) -> dict
             f"Source A: {src_a.get('title', '')}\nDescription: {snippet_a if snippet_a else '(no description)'}\n\n"
             f"Source B: {src_b.get('title', '')}\nDescription: {snippet_b if snippet_b else '(no description)'}\n\n"
             f"Do these two sources present meaningfully different perspectives? Return JSON."
-        )},
-    ]
-    prompt += """
+            """
 
 Return ONLY a JSON object:
 {{
@@ -390,12 +389,15 @@ Return ONLY a JSON object:
   "type": "winner_disagreement|tradeoff_disagreement|vendor_bias|none",
   "explanation": "One sentence explaining the difference (or why there is none)"
 }}"""
+        )},
+    ]
     try:
         async with FLASH_SEM:
             result = await call_model(
-                [{"role": "user", "content": prompt}],
+                prompt,
                 model="deepseek-v4-flash",
                 response_format="json",
+                usage=usage,
             )
         if isinstance(result, dict) and result.get("has_difference"):
             return result
@@ -405,7 +407,8 @@ Return ONLY a JSON object:
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
-                               threshold: float = 0.6) -> list[dict]:
+                               threshold: float = 0.6,
+                               usage: list | None = None) -> list[dict]:
     """Find contradictory source pairs using LLM semantic scan.
 
     Pipeline: BGE similarity → 2-keyword relevance pre-filter →
@@ -445,6 +448,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
         i, j, sim = cand
         info = await _scan_pair_contradiction(
             high_score_sources[i], high_score_sources[j], query_topic,
+            usage=usage,
         )
         return (i, j, sim, info) if info else None
 
@@ -490,12 +494,15 @@ class ConflictDetectorAgent:
             agent="CONFLICT_DETECTOR",
         )
 
-        pairs = await find_contradictions(source_scores, query_topic=query)
+        local_usage: list = []
+        pairs = await find_contradictions(source_scores, query_topic=query, usage=local_usage)
         if not pairs:
             print_agent_output("No contradictory pairs found after LLM scan", agent="CONFLICT_DETECTOR")
             return {
                 "conflicts": [],
                 "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
+                "token_usage": research_state.get("token_usage", [])
+                + [summarize_usage("conflict_detector", local_usage)],
             }
 
         print_agent_output(
@@ -537,6 +544,7 @@ class ConflictDetectorAgent:
                     _make_prompt(pair["source_a"], pair["source_b"]),
                     model="deepseek-v4-flash",
                     response_format="json",
+                    usage=local_usage,
                 )
             return _build_conflict(pair, result, model="flash")
 
@@ -601,6 +609,7 @@ class ConflictDetectorAgent:
                                 model="deepseek-v4-pro",
                                 response_format="json",
                                 timeout=300.0,
+                                usage=local_usage,
                             )
                     except Exception as e:
                         print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
@@ -639,4 +648,6 @@ class ConflictDetectorAgent:
                 "resolved_count": resolved_count,
                 "unresolved_count": len(conflicts) - resolved_count,
             }],
+            "token_usage": research_state.get("token_usage", [])
+            + [summarize_usage("conflict_detector", local_usage)],
         }
