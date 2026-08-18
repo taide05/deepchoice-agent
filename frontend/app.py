@@ -350,6 +350,21 @@ API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
 PHASES = ["query_analysis", "retrieval", "source_evaluation", "conflict_detection",
           "evidence_chain", "report_generation", "self_review"]
 
+# Fallback copy of NODE_TO_PHASE from src/deepchoice/server/app.py (server is the
+# single source of truth — keep the two tables in sync). Used only when a stream
+# event is missing its "phase" field.
+NODE_TO_PHASE = {
+    "query_analyzer": "query_analysis",
+    "query_adapter": "query_analysis",
+    "multi_retriever": "retrieval",
+    "source_evaluator": "source_evaluation",
+    "conflict_detector": "conflict_detection",
+    "evidence_chain": "evidence_chain",
+    "conclusion_synthesizer": "evidence_chain",
+    "report_generator": "report_generation",
+    "self_reviewer": "self_review",
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Session State
 # ═══════════════════════════════════════════════════════════════════════════
@@ -359,6 +374,7 @@ DEFAULTS = {
     "clarify_messages": [],
     "clarified_data": None,
     "research_task_id": None,
+    "research_started": False,
     "research_running": False,
     "research_complete": False,
     "research_events": [],
@@ -624,25 +640,51 @@ def _start_research(task: dict, sub_questions: list[str]):
 def _render_research_progress():
     task_id = st.session_state.research_task_id
     progress_bar = st.progress(0, text=t("progress_init", lang))
+    max_idx = 0
+
+    def _complete():
+        progress_bar.progress(1.0, text=t("progress_done", lang))
+        st.session_state.research_running = False
+        st.session_state.research_complete = True
+        st.rerun()
 
     try:
         with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream", timeout=300) as resp:
+            got_done = False
             for line in resp.iter_lines():
                 if not line.startswith("data:"):
                     continue
                 event = json.loads(line[5:])
-                phase = event.get("phase", "")
+                node = event.get("node")
 
-                if phase != "complete" and phase in PHASES:
-                    idx = PHASES.index(phase)
-                    name = PHASE_NAME_MAP.get(phase, {}).get(lang, phase)
-                    progress_bar.progress(idx / len(PHASES), text=t("progress_phase", lang, idx=idx+1, name=name))
-
-                elif phase == "complete":
-                    progress_bar.progress(1.0, text=t("progress_done", lang))
+                if node == "__done__":
+                    got_done = True
+                    _complete()
+                elif node == "__error__":
+                    st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
                     st.session_state.research_running = False
-                    st.session_state.research_complete = True
-                    st.rerun()
+                    return
+                else:
+                    phase = event.get("phase") or NODE_TO_PHASE.get(node, "")
+                    if phase in PHASES:
+                        idx = PHASES.index(phase)
+                        # Monotonic: self_reviewer retries revisit earlier nodes.
+                        max_idx = max(max_idx, idx)
+                        name = PHASE_NAME_MAP.get(phase, {}).get(lang, phase)
+                        progress_bar.progress(max_idx / len(PHASES), text=t("progress_phase", lang, idx=idx+1, name=name))
+
+            # Stream ended (EOF) without __done__ — the server may have crashed
+            # mid-run. Ask /status once before declaring the connection lost.
+            if not got_done:
+                try:
+                    status = httpx.get(f"{API_BASE}/research/{task_id}/status", timeout=10).json()
+                except Exception:
+                    status = {}
+                if status.get("status") == "complete":
+                    _complete()
+                else:
+                    st.error(t("loss_connection", lang))
+                    st.session_state.research_running = False
     except Exception as e:
         st.error(f"{t('loss_connection', lang)} {e}")
         st.session_state.research_running = False
