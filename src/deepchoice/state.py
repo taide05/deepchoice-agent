@@ -17,3 +17,4 @@ class ResearchState(TypedDict):
     partial_failures: list[str]
     quality_signals: list[dict]
     current_phase: str
+    agent_timing: dict

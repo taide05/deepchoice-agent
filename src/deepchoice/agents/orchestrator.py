@@ -40,6 +40,7 @@ class ChiefEditorAgent:
         self.task_id = str(int(time.time()))
         self.thread_id = thread_id or self.task_id
         self.checkpointer = checkpointer if checkpointer is not None else MemorySaver()
+        self.live_phase = None
 
     def _initialize_agents(self) -> dict:
         return {
@@ -60,12 +61,14 @@ class ChiefEditorAgent:
     def _timed_node(self, name: str, fn):
         """Wrap an agent node with per-node timing, recording to state['agent_timing']."""
         async def _wrapper(state: dict) -> dict:
+            self.live_phase = name
             t0 = time.monotonic()
             result = await fn(state)
             elapsed = round(time.monotonic() - t0, 2)
             timing = state.setdefault("agent_timing", {})
             timing[name] = elapsed
             result["agent_timing"] = timing
+            result["current_phase"] = name
             return result
         return _wrapper
 

@@ -1,4 +1,5 @@
 import json
+import time
 import asyncio
 import uuid
 from pathlib import Path
@@ -24,6 +25,20 @@ FORMAT_RENDERERS = {
     "what_why_how": render_what_why_how,
     "evidence_first": render_evidence_first,
     "comparison_matrix": render_comparison_matrix,
+}
+
+# Single source of truth: workflow node name -> progress phase. The 7 phase names
+# match the frontend PHASES list; keep the fallback copy in frontend/app.py in sync.
+NODE_TO_PHASE = {
+    "query_analyzer": "query_analysis",
+    "query_adapter": "query_analysis",
+    "multi_retriever": "retrieval",
+    "source_evaluator": "source_evaluation",
+    "conflict_detector": "conflict_detection",
+    "evidence_chain": "evidence_chain",
+    "conclusion_synthesizer": "evidence_chain",
+    "report_generator": "report_generation",
+    "self_reviewer": "self_review",
 }
 
 
@@ -91,9 +106,10 @@ async def stream_research(task_id: str):
             async for event in orchestrator.astream_research_task():
                 node_name = list(event.keys())[0]
                 node_data = event[node_name]
-                yield f"data: {json.dumps({'node': node_name, 'update': node_data}, ensure_ascii=False, default=str)}\n\n"
+                yield f"data: {json.dumps({'node': node_name, 'update': node_data, 'phase': NODE_TO_PHASE.get(node_name), 'ts': time.time()}, ensure_ascii=False, default=str)}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'node': '__error__', 'update': {}, 'detail': str(e), 'ts': time.time()}, ensure_ascii=False, default=str)}\n\n"
+            return
 
         yield f"data: {json.dumps({'node': '__done__', 'update': {}})}\n\n"
 
@@ -119,6 +135,12 @@ async def research_status(task_id: str):
     orchestrator = entry.get("orchestrator") if entry else None
     if orchestrator:
         try:
+            if orchestrator.live_phase:
+                return {
+                    "task_id": task_id,
+                    "status": "running",
+                    "phase": orchestrator.live_phase,
+                }
             state = await orchestrator.get_state()
             if state and state.values:
                 current = state.values.get("current_phase", "running")

@@ -83,6 +83,13 @@ class TestFullPipeline:
         assert result["report"] == MOCK_REPORT
         assert len(result["evidence_chains"]) == 1
         assert result.get("retry_count", 0) == 0
+        assert result["current_phase"] == "self_reviewer"
+        all_nodes = {
+            "query_analyzer", "query_adapter", "multi_retriever", "source_evaluator",
+            "conflict_detector", "evidence_chain", "conclusion_synthesizer",
+            "report_generator", "self_reviewer",
+        }
+        assert all_nodes <= set(result["agent_timing"].keys())
 
     @pytest.mark.asyncio
     async def test_pipeline_triggers_retry_on_low_confidence(self):
@@ -110,6 +117,7 @@ class TestFullPipeline:
 
         assert call_count["review"] >= 2, "SelfReviewer should be called at least twice (retry after low confidence)"
         assert result["confidence"] == "medium"
+        assert result["current_phase"] == "self_reviewer"
 
     @pytest.mark.asyncio
     async def test_clarify_integration_skips_query_analyzer(self):
