@@ -943,6 +943,13 @@ def _render_research_progress():
                                     "seconds": max(seg["end"] - seg["start"], 0.0),
                                     "running": False,
                                 })
+                        # live_running is the workflow-order successor, which has
+                        # not emitted a completion event yet, so it is never in
+                        # live_order on a normal forward run. Append its pulsing
+                        # running row explicitly (self_reviewer retries revisit
+                        # earlier nodes — those already match inside the loop).
+                        if live_running and live_running not in live_order:
+                            entries.append({"label": _node_label(live_running, lang), "running": True})
                         live.container().markdown(
                             _timeline_html(entries, total_elapsed, lang),
                             unsafe_allow_html=True,
