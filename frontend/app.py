@@ -5,6 +5,7 @@ Streamlit frontend with artistic dark-themed UI + multilingual support (zh/en/ja
 import time
 import json
 import os
+import html as _html
 import streamlit as st
 import httpx
 
@@ -68,6 +69,44 @@ T = {
         "footer": "DeepChoice — AI 驱动的技术选型研究",
         "footer_tag": "证据支撑。冲突透明。可追溯。",
         "new_research_btn": "开始新研究",
+        "tab_observability": "  观测  ",
+        "obs_timeline_title": "运行轨迹时间轴",
+        "obs_total_elapsed": "总耗时",
+        "obs_no_timing": "暂无运行时间数据",
+        "obs_running": "运行中",
+        "obs_retrieval_title": "检索明细",
+        "obs_status_ok": "成功",
+        "obs_status_error": "失败",
+        "obs_results_count": "{n} 条结果",
+        "obs_latency_label": "耗时",
+        "obs_error_label": "错误",
+        "obs_partial_failures": "{n} 个来源部分失败：{list}",
+        "obs_no_results": "暂无检索数据",
+        "obs_conflict_title": "冲突仲裁",
+        "obs_claim_score": "得分 {score}",
+        "obs_resolution_label": "仲裁结果",
+        "obs_res_a_correct": "A 正确",
+        "obs_res_b_correct": "B 正确",
+        "obs_res_both_partial": "双方部分成立",
+        "obs_res_insufficient": "证据不足",
+        "obs_confidence_label": "置信度",
+        "obs_reasoning_label": "推理",
+        "obs_key_factor_label": "关键因素",
+        "obs_no_conflicts": "未发现矛盾——各来源观点一致",
+        "obs_token_title": "Token 统计",
+        "obs_token_agent_label": "Agent",
+        "obs_token_model_label": "模型",
+        "obs_token_calls_label": "调用",
+        "obs_token_prompt_label": "输入 Tokens",
+        "obs_token_completion_label": "输出 Tokens",
+        "obs_token_total_label": "总 Tokens",
+        "obs_token_totals_row": "合计",
+        "obs_no_token_data": "暂无 Token 数据",
+        "obs_nodes": {
+            "query_analyzer": "查询分析", "query_adapter": "查询适配", "multi_retriever": "多源检索",
+            "source_evaluator": "来源评估", "conflict_detector": "矛盾检测", "evidence_chain": "证据链构建",
+            "conclusion_synthesizer": "结论合成", "report_generator": "报告生成", "self_reviewer": "自我审查",
+        },
         "tech_map": {"candidate_techs": "候选技术", "scene": "使用场景", "complexity": "复杂度"},
     },
     "en": {
@@ -119,6 +158,44 @@ T = {
         "footer": "DeepChoice — AI-powered technology selection research",
         "footer_tag": "Evidence-backed. Conflict-aware. Transparent.",
         "new_research_btn": "Start New Research",
+        "tab_observability": "  Observability  ",
+        "obs_timeline_title": "Run Timeline",
+        "obs_total_elapsed": "Total elapsed",
+        "obs_no_timing": "No timing data available",
+        "obs_running": "Running",
+        "obs_retrieval_title": "Retrieval Details",
+        "obs_status_ok": "Success",
+        "obs_status_error": "Failed",
+        "obs_results_count": "{n} result(s)",
+        "obs_latency_label": "Latency",
+        "obs_error_label": "Error",
+        "obs_partial_failures": "{n} source(s) partially failed: {list}",
+        "obs_no_results": "No retrieval data",
+        "obs_conflict_title": "Conflict Arbitration",
+        "obs_claim_score": "Score {score}",
+        "obs_resolution_label": "Resolution",
+        "obs_res_a_correct": "A correct",
+        "obs_res_b_correct": "B correct",
+        "obs_res_both_partial": "Both partially",
+        "obs_res_insufficient": "Insufficient data",
+        "obs_confidence_label": "Confidence",
+        "obs_reasoning_label": "Reasoning",
+        "obs_key_factor_label": "Key factor",
+        "obs_no_conflicts": "No conflicts found — all sources agree",
+        "obs_token_title": "Token Usage",
+        "obs_token_agent_label": "Agent",
+        "obs_token_model_label": "Model",
+        "obs_token_calls_label": "Calls",
+        "obs_token_prompt_label": "Prompt Tokens",
+        "obs_token_completion_label": "Completion Tokens",
+        "obs_token_total_label": "Total Tokens",
+        "obs_token_totals_row": "Total",
+        "obs_no_token_data": "No token usage data",
+        "obs_nodes": {
+            "query_analyzer": "Query Analysis", "query_adapter": "Query Adaptation", "multi_retriever": "Multi-Source Retrieval",
+            "source_evaluator": "Source Evaluation", "conflict_detector": "Conflict Detection", "evidence_chain": "Evidence Chain",
+            "conclusion_synthesizer": "Conclusion Synthesis", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
+        },
         "tech_map": {"candidate_techs": "Tech candidates", "scene": "Usage scene", "complexity": "Complexity"},
     },
     "ja": {
@@ -170,6 +247,44 @@ T = {
         "footer": "DeepChoice — AI深層リサーチによる技術選定",
         "footer_tag": "証拠に基づく。矛盾を検知。透明性。",
         "new_research_btn": "新しい研究を開始",
+        "tab_observability": "  観測  ",
+        "obs_timeline_title": "実行タイムライン",
+        "obs_total_elapsed": "合計時間",
+        "obs_no_timing": "タイミングデータがありません",
+        "obs_running": "実行中",
+        "obs_retrieval_title": "検索詳細",
+        "obs_status_ok": "成功",
+        "obs_status_error": "失敗",
+        "obs_results_count": "{n}件の結果",
+        "obs_latency_label": "所要時間",
+        "obs_error_label": "エラー",
+        "obs_partial_failures": "{n}個の情報源で部分障害: {list}",
+        "obs_no_results": "検索データがありません",
+        "obs_conflict_title": "競合調停",
+        "obs_claim_score": "スコア {score}",
+        "obs_resolution_label": "調停結果",
+        "obs_res_a_correct": "A が正しい",
+        "obs_res_b_correct": "B が正しい",
+        "obs_res_both_partial": "両方とも部分的",
+        "obs_res_insufficient": "証拠不十分",
+        "obs_confidence_label": "信頼度",
+        "obs_reasoning_label": "推論",
+        "obs_key_factor_label": "決め手",
+        "obs_no_conflicts": "矛盾は検出されませんでした",
+        "obs_token_title": "トークン統計",
+        "obs_token_agent_label": "エージェント",
+        "obs_token_model_label": "モデル",
+        "obs_token_calls_label": "呼び出し",
+        "obs_token_prompt_label": "入力トークン",
+        "obs_token_completion_label": "出力トークン",
+        "obs_token_total_label": "合計トークン",
+        "obs_token_totals_row": "合計",
+        "obs_no_token_data": "トークンデータがありません",
+        "obs_nodes": {
+            "query_analyzer": "クエリ分析", "query_adapter": "クエリ適応", "multi_retriever": "マルチソース検索",
+            "source_evaluator": "情報源評価", "conflict_detector": "矛盾検出", "evidence_chain": "証拠チェーン",
+            "conclusion_synthesizer": "結論合成", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
+        },
         "tech_map": {"candidate_techs": "候補技術", "scene": "利用シーン", "complexity": "複雑さ"},
     },
     "ko": {
@@ -221,6 +336,44 @@ T = {
         "footer": "DeepChoice — AI 기반 기술 선택 연구",
         "footer_tag": "증거 기반. 충돌 인식. 투명성.",
         "new_research_btn": "새 연구 시작",
+        "tab_observability": "  관측  ",
+        "obs_timeline_title": "실행 타임라인",
+        "obs_total_elapsed": "총 소요 시간",
+        "obs_no_timing": "타이밍 데이터 없음",
+        "obs_running": "실행 중",
+        "obs_retrieval_title": "검색 상세",
+        "obs_status_ok": "성공",
+        "obs_status_error": "실패",
+        "obs_results_count": "{n}개 결과",
+        "obs_latency_label": "소요 시간",
+        "obs_error_label": "오류",
+        "obs_partial_failures": "{n}개 출처 부분 실패: {list}",
+        "obs_no_results": "검색 데이터 없음",
+        "obs_conflict_title": "충돌 중재",
+        "obs_claim_score": "점수 {score}",
+        "obs_resolution_label": "중재 결과",
+        "obs_res_a_correct": "A 정답",
+        "obs_res_b_correct": "B 정답",
+        "obs_res_both_partial": "둘 다 일부 정답",
+        "obs_res_insufficient": "증거 부족",
+        "obs_confidence_label": "신뢰도",
+        "obs_reasoning_label": "추론",
+        "obs_key_factor_label": "핵심 요인",
+        "obs_no_conflicts": "충돌이 발견되지 않았습니다 — 모든 출처가 일치합니다",
+        "obs_token_title": "토큰 통계",
+        "obs_token_agent_label": "에이전트",
+        "obs_token_model_label": "모델",
+        "obs_token_calls_label": "호출",
+        "obs_token_prompt_label": "입력 토큰",
+        "obs_token_completion_label": "출력 토큰",
+        "obs_token_total_label": "총 토큰",
+        "obs_token_totals_row": "합계",
+        "obs_no_token_data": "토큰 데이터 없음",
+        "obs_nodes": {
+            "query_analyzer": "쿼리 분석", "query_adapter": "쿼리 어댑터", "multi_retriever": "다중 소스 검색",
+            "source_evaluator": "출처 평가", "conflict_detector": "충돌 탐지", "evidence_chain": "증거 체인",
+            "conclusion_synthesizer": "결론 합성", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
+        },
         "tech_map": {"candidate_techs": "후보 기술", "scene": "사용 환경", "complexity": "복잡도"},
     },
 }
@@ -324,6 +477,24 @@ st.markdown("""<style>
     .stat-value { font-size: 1.6rem; font-weight: 700; color: #e4e4e7; }
     .stat-label { font-size: 0.75rem; color: #52525b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
 
+    /* ── Observability: timeline waterfall bars ── */
+    .tl-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .tl-label { width: 150px; flex-shrink: 0; font-size: 0.78rem; color: #a1a1aa; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tl-track { flex: 1; background: rgba(255,255,255,0.04); border-radius: 6px; height: 16px; overflow: hidden; }
+    .tl-bar { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #7c3aed, #a855f7, #ec4899); min-width: 28px; }
+    .tl-bar-running { animation: tlPulse 1.5s ease-in-out infinite; }
+    @keyframes tlPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+    .tl-time { width: 74px; flex-shrink: 0; font-size: 0.72rem; color: #71717a; font-family: 'JetBrains Mono', monospace; text-align: right; }
+    .tl-time-running { color: #a78bfa; font-weight: 600; font-family: 'Inter', sans-serif; }
+
+    /* ── Observability: conflict arbitration cards ── */
+    .cf-claims { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .cf-side { flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; color: #e4e4e7; }
+    .cf-vs { color: #52525b; font-weight: 700; font-size: 0.8rem; flex-shrink: 0; }
+    .cf-reason { margin-top: 10px; font-size: 0.82rem; color: #a1a1aa; line-height: 1.5; }
+    .cf-key { margin-top: 6px; font-size: 0.78rem; color: #c4b5fd; }
+    .cf-meta { font-size: 0.75rem; color: #71717a; margin-left: 8px; }
+
     .report-container { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 18px; padding: 36px; }
     .report-container h1 { font-size: 1.6rem; color: #e4e4e7; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
     .report-container h2 { font-size: 1.2rem; color: #a78bfa; margin-top: 28px; }
@@ -364,6 +535,69 @@ NODE_TO_PHASE = {
     "report_generator": "report_generation",
     "self_reviewer": "self_review",
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Observability helpers (Task 3: timeline waterfall + panels)
+# ═══════════════════════════════════════════════════════════════════════════
+def _esc(text) -> str:
+    """Escape source-provided text before injecting into HTML."""
+    return _html.escape(str(text or ""), quote=True)
+
+
+def _node_label(node: str, lang_code: str) -> str:
+    """Display name for a workflow node in the current language."""
+    return t("obs_nodes", lang_code).get(node, node)
+
+
+def _fmt_latency(ms) -> str:
+    try:
+        ms = float(ms)
+    except (TypeError, ValueError):
+        return "—"
+    if ms >= 1000:
+        return f"{ms / 1000:.2f}s"
+    return f"{ms:.0f} ms"
+
+
+def _next_node_in_order(node: str) -> str | None:
+    """Workflow-order successor of a node (None after the last node)."""
+    keys = list(NODE_TO_PHASE.keys())
+    if node not in keys:
+        return None
+    i = keys.index(node)
+    return keys[i + 1] if i + 1 < len(keys) else None
+
+
+def _timeline_html(entries: list[dict], total_seconds: float, lang_code: str) -> str:
+    """Render horizontal waterfall bars (shared by live + post-completion views).
+
+    entries: list of {"label", "seconds"} (completed) or {"label", "running"}.
+    """
+    rows = []
+    for e in entries:
+        label = _esc(e.get("label", ""))
+        if e.get("running"):
+            width = max(float(e.get("width") or 6), 1.0)
+            rows.append(
+                f'<div class="tl-row">'
+                f'<div class="tl-label">{label}</div>'
+                f'<div class="tl-track"><div class="tl-bar tl-bar-running" style="width:{width:.1f}%"></div></div>'
+                f'<div class="tl-time tl-time-running">{t("obs_running", lang_code)}</div>'
+                f'</div>'
+            )
+        else:
+            sec = max(float(e.get("seconds") or 0), 0.0)
+            pct = (sec / total_seconds * 100) if total_seconds > 0 else 0
+            pct = max(min(pct, 100.0), 2.0)
+            rows.append(
+                f'<div class="tl-row">'
+                f'<div class="tl-label">{label}</div>'
+                f'<div class="tl-track"><div class="tl-bar" style="width:{pct:.2f}%"></div></div>'
+                f'<div class="tl-time">{sec:.1f}s</div>'
+                f'</div>'
+            )
+    return "".join(rows)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Session State
@@ -640,7 +874,15 @@ def _start_research(task: dict, sub_questions: list[str]):
 def _render_research_progress():
     task_id = st.session_state.research_task_id
     progress_bar = st.progress(0, text=t("progress_init", lang))
+    live = st.empty()
     max_idx = 0
+    # Live waterfall state (local to this script run; the authoritative
+    # post-completion version renders from snapshot["agent_timing"]).
+    live_nodes: dict = {}      # node -> last completed segment {"start": ts, "end": ts}
+    live_order: list = []      # first-appearance order
+    live_running = None        # node inferred to be running right now
+    first_ts = None
+    last_ts = None
 
     def _complete():
         progress_bar.progress(1.0, text=t("progress_done", lang))
@@ -673,6 +915,39 @@ def _render_research_progress():
                         name = PHASE_NAME_MAP.get(phase, {}).get(lang, phase)
                         progress_bar.progress(max_idx / len(PHASES), text=t("progress_phase", lang, idx=idx+1, name=name))
 
+                    # Live waterfall: the stream emits updates-mode events, so an
+                    # event means node N just COMPLETED at ts. The next node in
+                    # workflow order is the one currently running.
+                    if node:
+                        ts_val = float(event.get("ts") or 0)
+                        if ts_val <= 0:
+                            ts_val = time.time()
+                        seg_start = last_ts if last_ts is not None else ts_val
+                        if node not in live_nodes:
+                            live_order.append(node)
+                        live_nodes[node] = {"start": seg_start, "end": ts_val}
+                        if first_ts is None:
+                            first_ts = seg_start
+                        last_ts = ts_val
+                        live_running = _next_node_in_order(node)
+
+                        total_elapsed = max(last_ts - first_ts, 0.001)
+                        entries = []
+                        for name in live_order:
+                            if name == live_running:
+                                entries.append({"label": _node_label(name, lang), "running": True})
+                            else:
+                                seg = live_nodes[name]
+                                entries.append({
+                                    "label": _node_label(name, lang),
+                                    "seconds": max(seg["end"] - seg["start"], 0.0),
+                                    "running": False,
+                                })
+                        live.container().markdown(
+                            _timeline_html(entries, total_elapsed, lang),
+                            unsafe_allow_html=True,
+                        )
+
             # Stream ended (EOF) without __done__ — the server may have crashed
             # mid-run. Ask /status once before declaring the connection lost.
             if not got_done:
@@ -688,6 +963,254 @@ def _render_research_progress():
     except Exception as e:
         st.error(f"{t('loss_connection', lang)} {e}")
         st.session_state.research_running = False
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Observability Tab — four panels rendered from the research snapshot
+# ═══════════════════════════════════════════════════════════════════════════
+def _render_obs_panels(snapshot: dict):
+    st.markdown(f"### {t('obs_timeline_title', lang)}")
+    _render_timeline_panel(snapshot)
+    st.markdown(f"### {t('obs_retrieval_title', lang)}")
+    _render_retrieval_panel(snapshot)
+    st.markdown(f"### {t('obs_conflict_title', lang)}")
+    _render_conflict_panel(snapshot)
+    st.markdown(f"### {t('obs_token_title', lang)}")
+    _render_token_panel(snapshot)
+
+
+def _render_timeline_panel(snapshot: dict):
+    timing = snapshot.get("agent_timing") or {}
+    if not timing:
+        st.markdown(
+            f'<div class="glass-card" style="padding:16px; color:#71717a; font-size:0.85rem;">{t("obs_no_timing", lang)}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    total = 0.0
+    entries = []
+    for node in NODE_TO_PHASE.keys():
+        if node not in timing:
+            continue
+        sec = float(timing.get(node) or 0)
+        total += sec
+        entries.append({"label": _node_label(node, lang), "seconds": sec, "running": False})
+
+    st.markdown(_timeline_html(entries, total, lang), unsafe_allow_html=True)
+    st.caption(f"{t('obs_total_elapsed', lang)}: {total:.1f}s")
+
+
+def _render_retrieval_panel(snapshot: dict):
+    results = snapshot.get("search_results") or []
+    failures = [str(f) for f in (snapshot.get("partial_failures") or [])]
+
+    if not results:
+        st.markdown(
+            f'<div class="glass-card" style="padding:16px; color:#71717a; font-size:0.85rem;">{t("obs_no_results", lang)}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    if failures:
+        st.markdown(
+            f'<div class="glass-card" style="padding:14px; margin-bottom:10px; border-color:rgba(239,68,68,0.25);">'
+            f'<span class="badge badge-weak">{t("obs_partial_failures", lang, n=len(failures), list=", ".join(failures))}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        source = _esc(item.get("source") or "?")
+        ok = str(item.get("status") or "").lower() == "success"
+        badge_cls = "badge-success" if ok else "badge-weak"
+        status_txt = t("obs_status_ok" if ok else "obs_status_error", lang)
+        count = len(item.get("results") or [])
+        error = item.get("error")
+        error_html = (
+            f'<div style="margin-top:8px; font-size:0.78rem; color:#f87171; '
+            f'font-family:JetBrains Mono,monospace; word-break:break-all;">'
+            f'{t("obs_error_label", lang)}: {_esc(str(error)[:300])}</div>'
+            if error else ""
+        )
+        st.markdown(
+            f"""
+            <div class="glass-card" style="padding:16px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:#e4e4e7">{source}</strong>
+                    <span class="badge {badge_cls}">{status_txt}</span>
+                </div>
+                <div style="margin-top:6px; font-size:0.78rem; color:#71717a;">
+                    {t("obs_results_count", lang, n=count)} · {t("obs_latency_label", lang)}: {_fmt_latency(item.get("latency_ms"))}
+                </div>
+                {error_html}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+_RESOLUTION_BADGE = {
+    "A_correct": ("obs_res_a_correct", "badge-success"),
+    "B_correct": ("obs_res_b_correct", "badge-success"),
+    "both_partial": ("obs_res_both_partial", "badge-moderate"),
+    "insufficient_data": ("obs_res_insufficient", "badge-info"),
+}
+
+
+def _render_conflict_panel(snapshot: dict):
+    conflicts = snapshot.get("conflicts") or []
+    if not conflicts:
+        st.markdown(
+            f'<div class="glass-card" style="padding:16px; color:#71717a; font-size:0.85rem;">{t("obs_no_conflicts", lang)}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    for c in conflicts:
+        if not isinstance(c, dict):
+            continue
+        claim_a = _esc(c.get("claim_a") or "—")
+        claim_b = _esc(c.get("claim_b") or "—")
+        score_a = (c.get("source_a") or {}).get("score")
+        score_b = (c.get("source_b") or {}).get("score")
+        score_a_html = (
+            f' <span class="badge badge-info">{t("obs_claim_score", lang, score=score_a)}</span>'
+            if score_a is not None else ""
+        )
+        score_b_html = (
+            f' <span class="badge badge-info">{t("obs_claim_score", lang, score=score_b)}</span>'
+            if score_b is not None else ""
+        )
+
+        resolution = str(c.get("resolution") or "unknown")
+        res_key, res_cls = _RESOLUTION_BADGE.get(resolution, (None, "badge-info"))
+        res_txt = t(res_key, lang) if res_key else _esc(resolution)
+
+        confidence = c.get("confidence")
+        conf_html = (
+            f'<span class="cf-meta">{t("obs_confidence_label", lang)}: {_esc(str(confidence))}</span>'
+            if confidence else ""
+        )
+        reasoning = c.get("reasoning")
+        reason_html = (
+            f'<div class="cf-reason">{t("obs_reasoning_label", lang)}: {_esc(str(reasoning))}</div>'
+            if reasoning else ""
+        )
+        key_factor = c.get("key_factor")
+        key_html = (
+            f'<div class="cf-key">{t("obs_key_factor_label", lang)}: {_esc(str(key_factor))}</div>'
+            if key_factor else ""
+        )
+
+        st.markdown(
+            f"""
+            <div class="glass-card" style="padding:16px; margin-bottom:10px;">
+                <div class="cf-claims">
+                    <div class="cf-side">{claim_a}{score_a_html}</div>
+                    <div class="cf-vs">VS</div>
+                    <div class="cf-side">{claim_b}{score_b_html}</div>
+                </div>
+                <div>
+                    <span style="font-size:0.75rem; color:#52525b;">{t("obs_resolution_label", lang)}</span>
+                    <span class="badge {res_cls}">{res_txt}</span>
+                    {conf_html}
+                </div>
+                {reason_html}
+                {key_html}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def _render_token_panel(snapshot: dict):
+    rows = snapshot.get("token_usage")
+    if not rows:
+        st.markdown(
+            f'<div class="glass-card" style="padding:16px; color:#71717a; font-size:0.85rem;">{t("obs_no_token_data", lang)}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # Rows are per-node-invocation: self_reviewer may appear multiple times
+    # (retry loops). Group by agent, sum calls + tokens, merge models.
+    grouped: dict = {}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        try:
+            calls = int(r.get("calls") or 0)
+            prompt = int(r.get("prompt_tokens") or 0)
+            completion = int(r.get("completion_tokens") or 0)
+            total = int(r.get("total_tokens") or 0)
+        except (TypeError, ValueError):
+            continue  # malformed row — skip entirely
+        agent = r.get("agent") or "unknown"
+        g = grouped.setdefault(agent, {"models": [], "calls": 0, "prompt": 0, "completion": 0, "total": 0})
+        model = r.get("model") or ""
+        if model and model not in g["models"]:
+            g["models"].append(model)
+        g["calls"] += calls
+        g["prompt"] += prompt
+        g["completion"] += completion
+        g["total"] += total
+
+    if not grouped:
+        st.markdown(
+            f'<div class="glass-card" style="padding:16px; color:#71717a; font-size:0.85rem;">{t("obs_no_token_data", lang)}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    body = []
+    tot = {"calls": 0, "prompt": 0, "completion": 0, "total": 0}
+    for agent, g in grouped.items():
+        tot["calls"] += g["calls"]
+        tot["prompt"] += g["prompt"]
+        tot["completion"] += g["completion"]
+        tot["total"] += g["total"]
+        models = ", ".join(g["models"]) or "—"
+        body.append(
+            f'<tr>'
+            f'<td>{_esc(_node_label(agent, lang))}</td>'
+            f'<td>{_esc(models)}</td>'
+            f'<td style="text-align:right">{g["calls"]:,}</td>'
+            f'<td style="text-align:right">{g["prompt"]:,}</td>'
+            f'<td style="text-align:right">{g["completion"]:,}</td>'
+            f'<td style="text-align:right">{g["total"]:,}</td>'
+            f'</tr>'
+        )
+    body.append(
+        f'<tr style="border-top:1px solid rgba(255,255,255,0.12);">'
+        f'<td><strong>{t("obs_token_totals_row", lang)}</strong></td><td></td>'
+        f'<td style="text-align:right"><strong>{tot["calls"]:,}</strong></td>'
+        f'<td style="text-align:right"><strong>{tot["prompt"]:,}</strong></td>'
+        f'<td style="text-align:right"><strong>{tot["completion"]:,}</strong></td>'
+        f'<td style="text-align:right"><strong>{tot["total"]:,}</strong></td>'
+        f'</tr>'
+    )
+
+    st.markdown(
+        f'''
+        <div class="report-container" style="padding:16px;">
+        <table>
+            <tr>
+                <th>{t("obs_token_agent_label", lang)}</th>
+                <th>{t("obs_token_model_label", lang)}</th>
+                <th style="text-align:right">{t("obs_token_calls_label", lang)}</th>
+                <th style="text-align:right">{t("obs_token_prompt_label", lang)}</th>
+                <th style="text-align:right">{t("obs_token_completion_label", lang)}</th>
+                <th style="text-align:right">{t("obs_token_total_label", lang)}</th>
+            </tr>
+            {''.join(body)}
+        </table>
+        </div>
+        ''',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_results():
@@ -712,7 +1235,15 @@ def _render_results():
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs([t("tab_report", lang), t("tab_evidence", lang), t("tab_raw", lang)])
+    tab_obs, tab1, tab2, tab3 = st.tabs([
+        t("tab_observability", lang),
+        t("tab_report", lang),
+        t("tab_evidence", lang),
+        t("tab_raw", lang),
+    ])
+
+    with tab_obs:
+        _render_obs_panels(snapshot)
 
     with tab1:
         fmt = st.selectbox(
