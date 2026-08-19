@@ -23,7 +23,14 @@ APP_PATH = str(Path(__file__).resolve().parents[1] / "frontend" / "app.py")
 
 SNAP = {
     "task": {"query": "FastAPI vs Flask"},
-    "evidence_chains": [{"conclusion": "c1", "evidence_strength": "strong", "sources": [{"x": 1}]}],
+    "evidence_chains": [
+        {
+            "conclusion": "c1",
+            "evidence_strength": "strong",
+            "disputed": False,
+            "sources": [{"title": "Bench", "url": "https://example.com/bench", "score": 8}],
+        }
+    ],
     "conflicts": [
         {
             "claim_a": "FastAPI is faster",
@@ -57,10 +64,10 @@ SNAP = {
 
 
 class _FakeResp:
-    status_code = 200
-
-    def __init__(self, payload):
+    def __init__(self, payload, status_code=200, content=None):
+        self.status_code = status_code
         self._payload = payload
+        self.content = content
 
     def json(self):
         return self._payload
@@ -95,6 +102,13 @@ class _FakeBackend:
             return _FakeResp(SNAP)
         if url.endswith("/report"):
             return _FakeResp({"report": SNAP["report"]})
+        if url.endswith("/annotated"):
+            return _FakeResp(ANNOTATED)
+        if "/export" in url:
+            fmt = kw.get("params", {}).get("format", "md")
+            if fmt == "pdf":
+                return _FakeResp({"detail": "not installed"}, status_code=501)
+            return _FakeResp({}, content=b"# Fake report\n")
         if url.endswith("/status"):
             return _FakeResp({"status": "complete"} if self.status_complete else {"status": "started"})
         return _FakeResp({"status": "started"})
@@ -104,6 +118,22 @@ class _FakeBackend:
 
     def stream(self, method, url, **kw):
         return _FakeStream(self.stream_events)
+
+
+ANNOTATED = {
+    "report": (
+        '<span id="sec-1"></span>\n# Fake report\n\n'
+        'See Bench<sup><a class="cite" href="#ev-1">[1]</a></sup> for details.'
+    ),
+    "toc": [{"id": "sec-1", "level": 1, "text": "Fake report"}],
+    "citations": [{"n": 1, "url": "https://example.com/bench", "title": "Bench", "chain_idx": 0}],
+}
+
+
+def _enter_results_phase(at):
+    _enter_research_phase(at)
+    at.session_state["research_running"] = False
+    at.session_state["research_complete"] = True
 
 
 def _enter_research_phase(at):
@@ -190,3 +220,44 @@ def test_results_phase_renders_observability_panels(monkeypatch):
                    "A 正确", "得分 8.2", "Token 统计", "deepseek-v4-flash", "195"):
         assert needle in md, f"missing {needle!r} in rendered markdown"
     assert "129.5s" in cap, f"total elapsed caption missing: {cap!r}"
+
+
+def test_report_tab_reading_view(monkeypatch):
+    """Task 4: the 报告 tab renders the annotated report with TOC navigation,
+    citation badges, evidence cards with #ev-N anchors, and download buttons
+    (MD served, PDF unavailable -> print hint caption)."""
+    backend = _FakeBackend(stream_events=[], status_complete=True)
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    assert not at.exception, f"initial run: {at.exception}"
+
+    _enter_results_phase(at)
+    at.run()
+    assert not at.exception, f"results run: {at.exception}"
+
+    md = _md_text(at)
+    cap = "\n".join(str(c.value) for c in at.caption)
+
+    # TOC column: heading link to #sec-1
+    assert "目录" in md, "TOC title missing"
+    assert 'href="#sec-1"' in md, "TOC anchor link missing"
+    assert "Fake report" in md, "TOC entry text missing"
+
+    # Report body: citation badge injected
+    assert 'class="cite" href="#ev-1"' in md, "citation badge missing"
+    assert "[1]" in md, "citation number missing"
+
+    # Evidence cards at report tab bottom with anchor id
+    assert 'id="ev-1"' in md, "evidence anchor missing"
+    assert "c1" in md, "evidence chain conclusion missing"
+    assert "example.com/bench" in md, "evidence source link missing"
+    assert "引用角标" in cap, f"anchor note caption missing: {cap!r}"
+
+    # Download: MD button rendered, PDF fallback hint shown
+    dl_buttons = at.get("download_button")
+    assert len(dl_buttons) >= 1, f"MD download button missing: {dl_buttons!r}"
+    assert "PDF 不可用" in cap, f"PDF fallback caption missing: {cap!r}"

@@ -107,6 +107,13 @@ T = {
             "source_evaluator": "来源评估", "conflict_detector": "矛盾检测", "evidence_chain": "证据链构建",
             "conclusion_synthesizer": "结论合成", "report_generator": "报告生成", "self_reviewer": "自我审查",
         },
+        "rv_toc_title": "目录",
+        "rv_download_md": "下载 Markdown",
+        "rv_download_pdf": "下载 PDF",
+        "rv_pdf_unavailable": "PDF 不可用：请使用浏览器打印 (Ctrl+P)",
+        "rv_download_failed": "下载失败",
+        "rv_citations_empty": "本报告格式无引用标注",
+        "rv_chain_anchor_note": "引用角标 [N] 对应下方证据链",
         "tech_map": {"candidate_techs": "候选技术", "scene": "使用场景", "complexity": "复杂度"},
     },
     "en": {
@@ -196,6 +203,13 @@ T = {
             "source_evaluator": "Source Evaluation", "conflict_detector": "Conflict Detection", "evidence_chain": "Evidence Chain",
             "conclusion_synthesizer": "Conclusion Synthesis", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
         },
+        "rv_toc_title": "Contents",
+        "rv_download_md": "Download Markdown",
+        "rv_download_pdf": "Download PDF",
+        "rv_pdf_unavailable": "PDF unavailable — use browser print (Ctrl+P)",
+        "rv_download_failed": "Download failed",
+        "rv_citations_empty": "This report format has no citations",
+        "rv_chain_anchor_note": "Citation badges [N] link to evidence chains below",
         "tech_map": {"candidate_techs": "Tech candidates", "scene": "Usage scene", "complexity": "Complexity"},
     },
     "ja": {
@@ -285,6 +299,13 @@ T = {
             "source_evaluator": "情報源評価", "conflict_detector": "矛盾検出", "evidence_chain": "証拠チェーン",
             "conclusion_synthesizer": "結論合成", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
         },
+        "rv_toc_title": "目次",
+        "rv_download_md": "Markdown をダウンロード",
+        "rv_download_pdf": "PDF をダウンロード",
+        "rv_pdf_unavailable": "PDF 利用不可：ブラウザで印刷してください (Ctrl+P)",
+        "rv_download_failed": "ダウンロード失敗",
+        "rv_citations_empty": "このレポート形式には引用がありません",
+        "rv_chain_anchor_note": "引用バッジ [N] は以下の証拠チェーンに対応",
         "tech_map": {"candidate_techs": "候補技術", "scene": "利用シーン", "complexity": "複雑さ"},
     },
     "ko": {
@@ -374,6 +395,13 @@ T = {
             "source_evaluator": "출처 평가", "conflict_detector": "충돌 탐지", "evidence_chain": "증거 체인",
             "conclusion_synthesizer": "결론 합성", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
         },
+        "rv_toc_title": "목차",
+        "rv_download_md": "Markdown 다운로드",
+        "rv_download_pdf": "PDF 다운로드",
+        "rv_pdf_unavailable": "PDF 사용 불가 — 브라우저 인쇄 사용 (Ctrl+P)",
+        "rv_download_failed": "다운로드 실패",
+        "rv_citations_empty": "이 보고서 형식에는 인용이 없습니다",
+        "rv_chain_anchor_note": "인용 배지 [N]은 아래 증거 체인에 연결",
         "tech_map": {"candidate_techs": "후보 기술", "scene": "사용 환경", "complexity": "복잡도"},
     },
 }
@@ -507,6 +535,15 @@ st.markdown("""<style>
     .report-container ul, .report-container ol { color: #a1a1aa; }
     .report-container code { font-family: 'JetBrains Mono', monospace; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
     .report-container blockquote { border-left: 3px solid rgba(124, 58, 237, 0.3); padding-left: 16px; color: #71717a; margin-left: 0; }
+
+    .report-container sup a.cite { font-size: 0.65rem; font-weight: 700; color: #a78bfa; text-decoration: none; padding: 1px 5px; border-radius: 8px; background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(124, 58, 237, 0.3); margin: 0 2px; }
+    .report-container sup a.cite:hover { background: rgba(124, 58, 237, 0.3); color: #e4e4e7; }
+    .toc-nav { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 14px; padding: 16px 18px; }
+    .toc-nav a { color: #a1a1aa; text-decoration: none; display: block; padding: 3px 0; font-size: 0.82rem; line-height: 1.45; border-left: 2px solid transparent; padding-left: 10px; }
+    .toc-nav a:hover { color: #c4b5fd; border-left-color: #7c3aed; }
+    .toc-nav a.lvl2 { padding-left: 22px; font-size: 0.78rem; }
+    .toc-nav a.lvl3 { padding-left: 34px; font-size: 0.75rem; color: #71717a; }
+    .evidence-anchor { scroll-margin-top: 20px; }
 
     .app-footer { text-align: center; padding: 32px 0 16px; color: #3f3f46; font-size: 0.75rem; }
     .app-footer span { font-size: 0.7rem; }
@@ -1220,6 +1257,36 @@ def _render_token_panel(snapshot: dict):
     )
 
 
+def _render_download_buttons(task_id: str):
+    try:
+        resp = httpx.get(f"{API_BASE}/research/{task_id}/export", params={"format": "md"}, timeout=30)
+        if resp.status_code == 200:
+            st.download_button(
+                t("rv_download_md", lang), data=resp.content,
+                file_name=f"deepchoice-report-{task_id}.md",
+                mime="text/markdown", key="dl_md",
+            )
+        else:
+            st.caption(f"{t('rv_download_failed', lang)}")
+    except Exception:
+        st.caption(f"{t('rv_download_failed', lang)}")
+
+    try:
+        resp = httpx.get(f"{API_BASE}/research/{task_id}/export", params={"format": "pdf"}, timeout=60)
+        if resp.status_code == 200:
+            st.download_button(
+                t("rv_download_pdf", lang), data=resp.content,
+                file_name=f"deepchoice-report-{task_id}.pdf",
+                mime="application/pdf", key="dl_pdf",
+            )
+        elif resp.status_code == 501:
+            st.caption(t("rv_pdf_unavailable", lang))
+        else:
+            st.caption(f"{t('rv_download_failed', lang)}")
+    except Exception:
+        st.caption(f"{t('rv_download_failed', lang)}")
+
+
 def _render_results():
     task_id = st.session_state.research_task_id
 
@@ -1260,46 +1327,71 @@ def _render_results():
             key="report_fmt",
         )
         try:
-            resp = httpx.get(f"{API_BASE}/research/{task_id}/report", params={"format": fmt}, timeout=10)
+            resp = httpx.get(f"{API_BASE}/research/{task_id}/annotated", params={"format": fmt}, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
-                st.markdown(f'<div class="report-container">{data["report"]}</div>', unsafe_allow_html=True)
+                citations = data.get("citations", [])
+
+                toc_col, report_col = st.columns([1, 3.6])
+                with toc_col:
+                    toc = data.get("toc", [])
+                    if toc:
+                        st.markdown(f"**{t('rv_toc_title', lang)}**")
+                        links = "".join(
+                            f'<a class="lvl{entry["level"]}" href="#{entry["id"]}">{_esc(entry["text"])}</a>'
+                            for entry in toc
+                        )
+                        st.markdown(f'<div class="toc-nav">{links}</div>', unsafe_allow_html=True)
+                    _render_download_buttons(task_id)
+
+                with report_col:
+                    st.markdown(f'<div class="report-container">{data["report"]}</div>', unsafe_allow_html=True)
+
+                if citations:
+                    st.markdown(f"### {t('evidence_chains_title', lang)}")
+                    st.caption(t("rv_chain_anchor_note", lang))
+                    chains = snapshot.get("evidence_chains", [])
+                    for cit in citations:
+                        chain = chains[cit["chain_idx"]] if cit["chain_idx"] < len(chains) else {}
+                        strength = chain.get("evidence_strength", "weak")
+                        disputed = chain.get("disputed", False)
+                        badge = "badge-disputed" if disputed else f"badge-{strength}"
+                        src_lines = "".join(
+                            f'<div style="font-size:0.78rem; color:#71717a;">'
+                            f'[{cit["n"]}] <a href="{_esc(src.get("url", ""))}" target="_blank" '
+                            f'style="color:#a78bfa; text-decoration:none;">{_esc(src.get("title", ""))}</a>'
+                            f' (score: {_esc(src.get("score", ""))})</div>'
+                            for src in chain.get("sources", [])
+                        )
+                        st.markdown(f"""
+                        <div class="glass-card evidence-anchor" id="ev-{cit["n"]}" style="padding:16px; margin-bottom:10px;">
+                            <strong style="color:#e4e4e7">{_esc(chain.get("conclusion", "Finding")[:150])}</strong><br>
+                            <span class="badge {badge}">{strength.upper()}</span>
+                            {f'<span class="badge badge-disputed">DISPUTED</span>' if disputed else ''}
+                            {src_lines}
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.caption(t("rv_citations_empty", lang))
         except Exception as e:
             st.error(str(e))
 
     with tab2:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown(f"### {t('evidence_chains_title', lang)}")
-            for c in snapshot.get("evidence_chains", [])[:12]:
-                strength = c.get("evidence_strength", "weak")
-                disputed = c.get("disputed", False)
-                badge = "badge-disputed" if disputed else f"badge-{strength}"
-                st.markdown(f"""
-                <div class="glass-card" style="padding:16px; margin-bottom:10px;">
-                    <strong style="color:#e4e4e7">{c.get("conclusion", "Finding")[:100]}</strong><br>
-                    <span class="badge {badge}">{strength.upper()}</span>
-                    {f'<span class="badge badge-disputed">DISPUTED</span>' if disputed else ''}
-                    <div style="margin-top:8px; font-size:0.8rem; color:#71717a;">{t("sources_label", lang, n=len(c.get("sources", [])))}</div>
+        st.markdown(f"### {t('source_ratings_title', lang)}")
+        for s in snapshot.get("source_scores", [])[:12]:
+            score = s.get("total_score", 0)
+            score_color = "#4ade80" if score >= 7 else ("#fbbf24" if score >= 5 else "#f87171")
+            st.markdown(f"""
+            <div class="glass-card" style="padding:14px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:#e4e4e7; font-size:0.9rem;">{_esc(str(s.get("title", "Source"))[:70])}</strong>
+                    <span style="color:{score_color}; font-weight:700; font-size:1rem;">{score}</span>
                 </div>
-                """, unsafe_allow_html=True)
-
-        with col_b:
-            st.markdown(f"### {t('source_ratings_title', lang)}")
-            for s in snapshot.get("source_scores", [])[:12]:
-                score = s.get("total_score", 0)
-                score_color = "#4ade80" if score >= 7 else ("#fbbf24" if score >= 5 else "#f87171")
-                st.markdown(f"""
-                <div class="glass-card" style="padding:14px; margin-bottom:8px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="color:#e4e4e7; font-size:0.9rem;">{s.get("title", "Source")[:70]}</strong>
-                        <span style="color:{score_color}; font-weight:700; font-size:1rem;">{score}</span>
-                    </div>
-                    <div style="font-size:0.75rem; color:#52525b; margin-top:4px;">
-                        {t("authority_label", lang)}: {s["scores"]["authority"]} | {t("time_label", lang)}: {s["scores"]["timeliness"]} | {t("evidence_label", lang)}: {s["scores"]["verifiability"]}
-                    </div>
+                <div style="font-size:0.75rem; color:#52525b; margin-top:4px;">
+                    {t("authority_label", lang)}: {s["scores"]["authority"]} | {t("time_label", lang)}: {s["scores"]["timeliness"]} | {t("evidence_label", lang)}: {s["scores"]["verifiability"]}
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+            """, unsafe_allow_html=True)
 
     with tab3:
         st.json(snapshot)
