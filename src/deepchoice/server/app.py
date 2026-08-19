@@ -8,12 +8,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
 from .snapshot_store import save_snapshot, load_snapshot, save_report, list_history
 from ..formats.what_why_how import render as render_what_why_how
 from ..formats.evidence_first import render as render_evidence_first
 from ..formats.comparison_matrix import render as render_comparison_matrix
+from ..formats.citations import number_sources, inject_citations, build_toc
+from ..formats.pdf import render_pdf
 from .clarify_routes import router as clarify_router
 
 app = FastAPI(title="DeepChoice API", version="0.1.0")
@@ -203,6 +205,70 @@ async def research_report(task_id: str, format: str = ""):
     report = renderer(snapshot)
 
     return {"task_id": task_id, "report": report, "format": requested_format}
+
+
+@app.get("/research/{task_id}/annotated")
+async def research_annotated(task_id: str, format: str = ""):
+    """Report with numbered citation badges and TOC anchors for the reading view."""
+    snapshot = load_snapshot(task_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    requested_format = format or snapshot.get("task", {}).get("report_format", "what_why_how")
+    renderer = FORMAT_RENDERERS.get(requested_format, render_what_why_how)
+    report = renderer(snapshot)
+
+    registry = number_sources(snapshot.get("evidence_chains", []))
+    report = inject_citations(report, registry)
+    toc, report = build_toc(report)
+
+    return {
+        "task_id": task_id,
+        "format": requested_format,
+        "report": report,
+        "toc": toc,
+        "citations": registry,
+    }
+
+
+@app.get("/research/{task_id}/export")
+async def research_export(task_id: str, format: str = "md"):
+    snapshot = load_snapshot(task_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    requested_format = format or snapshot.get("task", {}).get("report_format", "what_why_how")
+    renderer = FORMAT_RENDERERS.get(requested_format, render_what_why_how)
+    report = renderer(snapshot)
+
+    filename = f"deepchoice-report-{task_id}"
+    export_format = format or "md"
+
+    if export_format == "md":
+        return Response(
+            content=report,
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.md"'},
+        )
+
+    if export_format == "pdf":
+        registry = number_sources(snapshot.get("evidence_chains", []))
+        report = inject_citations(report, registry)
+        _, report = build_toc(report)
+        try:
+            pdf_bytes = render_pdf(report)
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail="PDF support not installed (xhtml2pdf). Use format=md or browser print.",
+            )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+        )
+
+    raise HTTPException(status_code=400, detail=f"Unsupported format: {export_format}")
 
 
 @app.get("/research/{task_id}/snapshot")

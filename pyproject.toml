@@ -24,6 +24,8 @@ dependencies = [
     "loguru>=0.7.0",
     "json-repair>=0.30.0",
     "python-dotenv>=1.0.0",
+    "markdown>=3.5",
+    "xhtml2pdf>=0.2.16",
 ]
 
 [project.optional-dependencies]
