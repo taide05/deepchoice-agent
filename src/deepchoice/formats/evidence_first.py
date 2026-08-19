@@ -2,6 +2,11 @@ def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
 
+def _link(text: str, src: dict) -> str:
+    url = (src or {}).get("url", "")
+    return f"[{text}]({url})" if url else text
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
@@ -20,6 +25,8 @@ def render(state: dict) -> str:
         "no_counter": {"en": "No significant counter-evidence found.", "zh": "未发现显著反面证据。"},
         "disputes": {"en": "## Disputes", "zh": "## 争议"},
         "no_disputes": {"en": "No major disputes detected.", "zh": "未检测到重大争议。"},
+        "claim_a": {"en": "Claim A", "zh": "主张 A"},
+        "claim_b": {"en": "Claim B", "zh": "主张 B"},
         "unknown": {"en": "## What We Don't Know", "zh": "## 知识盲区"},
         "confidence": {"en": "Confidence", "zh": "置信度"},
         "decision": {"en": "## If You're Making a Decision", "zh": "## 决策建议"},
@@ -77,6 +84,8 @@ def render(state: dict) -> str:
     if conflicts:
         for c in conflicts:
             lines.append(f"- {c.get('resolution', 'unresolved')}: {c.get('reasoning', '')[:200]}")
+            lines.append(f"  - {T['claim_a'][lang]}: {_link(c.get('claim_a', ''), c.get('source_a', {}))}")
+            lines.append(f"  - {T['claim_b'][lang]}: {_link(c.get('claim_b', ''), c.get('source_b', {}))}")
     else:
         lines.append(T["no_disputes"][lang])
 

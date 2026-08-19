@@ -2,6 +2,11 @@ def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
 
+def _link(text: str, src: dict) -> str:
+    url = (src or {}).get("url", "")
+    return f"[{text}]({url})" if url else text
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Comparison")
@@ -124,8 +129,8 @@ def render(state: dict) -> str:
     if conflicts:
         for i, c in enumerate(conflicts):
             lines.append(f"### {L['dispute'][lang]} {i+1}")
-            lines.append(f"- {L['claim_a'][lang]}: {c.get('claim_a', 'N/A')}")
-            lines.append(f"- {L['claim_b'][lang]}: {c.get('claim_b', 'N/A')}")
+            lines.append(f"- {L['claim_a'][lang]}: {_link(c.get('claim_a', 'N/A'), c.get('source_a', {}))}")
+            lines.append(f"- {L['claim_b'][lang]}: {_link(c.get('claim_b', 'N/A'), c.get('source_b', {}))}")
             lines.append(f"- {L['resolution'][lang]}: **{c.get('resolution', L['unresolved'][lang])}**")
             lines.append(f"- {L['basis'][lang]}: {c.get('reasoning', '')}")
             lines.append("")

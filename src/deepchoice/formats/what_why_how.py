@@ -2,6 +2,11 @@ def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
 
+def _link(text: str, src: dict) -> str:
+    url = (src or {}).get("url", "")
+    return f"[{text}]({url})" if url else text
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
@@ -64,8 +69,8 @@ def render(state: dict) -> str:
         lines.extend([T["disputes"][lang], ""])
         for i, c in enumerate(conflicts):
             lines.append(f"### {T['conflict'][lang]} {i+1}: {c.get('resolution', 'unresolved')}")
-            lines.append(f"- {T['claim_a'][lang]}: {c.get('claim_a', '')} (score: {c.get('source_a', {}).get('score', 'N/A')})")
-            lines.append(f"- {T['claim_b'][lang]}: {c.get('claim_b', '')} (score: {c.get('source_b', {}).get('score', 'N/A')})")
+            lines.append(f"- {T['claim_a'][lang]}: {_link(c.get('claim_a', ''), c.get('source_a', {}))} (score: {c.get('source_a', {}).get('score', 'N/A')})")
+            lines.append(f"- {T['claim_b'][lang]}: {_link(c.get('claim_b', ''), c.get('source_b', {}))} (score: {c.get('source_b', {}).get('score', 'N/A')})")
             lines.append(f"- {T['resolution'][lang]}: {c.get('reasoning', '')}")
             lines.append(f"- {T['key_factor'][lang]}: {c.get('key_factor', '')}")
             lines.append(f"- {T['confidence'][lang]}: {c.get('confidence', 'low')}")
