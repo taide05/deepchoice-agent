@@ -1,7 +1,14 @@
 import json
+import re
 from pathlib import Path
 
 OUTPUT_DIR = Path("./outputs")
+
+_TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _valid_task_id(task_id: str) -> bool:
+    return bool(_TASK_ID_RE.match(task_id))
 
 
 def save_snapshot(task_id: str, state: dict) -> Path:
@@ -17,6 +24,8 @@ def save_snapshot(task_id: str, state: dict) -> Path:
 
 
 def load_snapshot(task_id: str) -> dict | None:
+    if not _valid_task_id(task_id):
+        return None
     snapshot_path = OUTPUT_DIR / task_id / "research_snapshot.json"
     if not snapshot_path.exists():
         return None

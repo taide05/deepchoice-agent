@@ -630,7 +630,7 @@ def _timeline_html(entries: list[dict], total_seconds: float, lang_code: str) ->
                 f'<div class="tl-row">'
                 f'<div class="tl-label">{label}</div>'
                 f'<div class="tl-track"><div class="tl-bar" style="width:{pct:.2f}%"></div></div>'
-                f'<div class="tl-time">{sec:.1f}s</div>'
+                f'<div class="tl-time">{sec:.2f}s</div>'
                 f'</div>'
             )
     return "".join(rows)
@@ -1042,7 +1042,7 @@ def _render_timeline_panel(snapshot: dict):
         entries.append({"label": _node_label(node, lang), "seconds": sec, "running": False})
 
     st.markdown(_timeline_html(entries, total, lang), unsafe_allow_html=True)
-    st.caption(f"{t('obs_total_elapsed', lang)}: {total:.1f}s")
+    st.caption(f"{t('obs_total_elapsed', lang)}: {total:.2f}s")
 
 
 def _render_retrieval_panel(snapshot: dict):
@@ -1257,9 +1257,12 @@ def _render_token_panel(snapshot: dict):
     )
 
 
-def _render_download_buttons(task_id: str):
+def _render_download_buttons(task_id: str, report_format: str):
     try:
-        resp = httpx.get(f"{API_BASE}/research/{task_id}/export", params={"format": "md"}, timeout=30)
+        resp = httpx.get(
+            f"{API_BASE}/research/{task_id}/export",
+            params={"format": "md", "report_format": report_format}, timeout=30,
+        )
         if resp.status_code == 200:
             st.download_button(
                 t("rv_download_md", lang), data=resp.content,
@@ -1272,7 +1275,10 @@ def _render_download_buttons(task_id: str):
         st.caption(f"{t('rv_download_failed', lang)}")
 
     try:
-        resp = httpx.get(f"{API_BASE}/research/{task_id}/export", params={"format": "pdf"}, timeout=60)
+        resp = httpx.get(
+            f"{API_BASE}/research/{task_id}/export",
+            params={"format": "pdf", "report_format": report_format}, timeout=60,
+        )
         if resp.status_code == 200:
             st.download_button(
                 t("rv_download_pdf", lang), data=resp.content,
@@ -1342,7 +1348,7 @@ def _render_results():
                             for entry in toc
                         )
                         st.markdown(f'<div class="toc-nav">{links}</div>', unsafe_allow_html=True)
-                    _render_download_buttons(task_id)
+                    _render_download_buttons(task_id, fmt)
 
                 with report_col:
                     st.markdown(f'<div class="report-container">{data["report"]}</div>', unsafe_allow_html=True)
@@ -1351,17 +1357,26 @@ def _render_results():
                     st.markdown(f"### {t('evidence_chains_title', lang)}")
                     st.caption(t("rv_chain_anchor_note", lang))
                     chains = snapshot.get("evidence_chains", [])
+                    url_to_n = {c["url"]: c["n"] for c in citations}
                     for cit in citations:
                         chain = chains[cit["chain_idx"]] if cit["chain_idx"] < len(chains) else {}
                         strength = chain.get("evidence_strength", "weak")
                         disputed = chain.get("disputed", False)
                         badge = "badge-disputed" if disputed else f"badge-{strength}"
+                        src_parts = []
+                        for src in chain.get("sources", []):
+                            url = str(src.get("url", ""))
+                            n = url_to_n.get(url, cit["n"])
+                            title = _esc(src.get("title", ""))
+                            if url.startswith(("http://", "https://")):
+                                link = (f'<a href="{_esc(url)}" target="_blank" '
+                                        f'style="color:#a78bfa; text-decoration:none;">{title}</a>')
+                            else:
+                                link = title
+                            src_parts.append(f'[{n}] {link} (score: {_esc(src.get("score", ""))})')
                         src_lines = "".join(
-                            f'<div style="font-size:0.78rem; color:#71717a;">'
-                            f'[{cit["n"]}] <a href="{_esc(src.get("url", ""))}" target="_blank" '
-                            f'style="color:#a78bfa; text-decoration:none;">{_esc(src.get("title", ""))}</a>'
-                            f' (score: {_esc(src.get("score", ""))})</div>'
-                            for src in chain.get("sources", [])
+                            f'<div style="font-size:0.78rem; color:#71717a;">{p}</div>'
+                            for p in src_parts
                         )
                         st.markdown(f"""
                         <div class="glass-card evidence-anchor" id="ev-{cit["n"]}" style="padding:16px; margin-bottom:10px;">

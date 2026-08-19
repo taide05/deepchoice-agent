@@ -21,9 +21,10 @@ COPY .build-hf-cache/hub/models--BAAI--bge-m3 /root/.cache/huggingface/hub/model
 # ===== Stage 2: Runtime =====
 FROM python:3.13-slim
 
-# CJK font for PDF report export (xhtml2pdf)
+# CJK font for PDF report export (xhtml2pdf). fonts-wqy-zenhei is TrueType-outlined
+# (reportlab can open it with subfontIndex=0); NotoSansCJK is CFF-based and cannot.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && apt-get install -y --no-install-recommends fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages

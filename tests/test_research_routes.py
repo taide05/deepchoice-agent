@@ -1,7 +1,8 @@
 """Tests for the research progress SSE stream and /status endpoints.
 
 Follows the TestClient + module-level _active_tasks injection pattern from
-tests/clarify/test_clarify_routes.py.
+tests/clarify/test_clarify_routes.py (injection into the shared app module's
+dict, which is the right fit here — no app rebuild needed).
 """
 import json
 

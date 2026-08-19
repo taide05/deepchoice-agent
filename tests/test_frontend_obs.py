@@ -178,7 +178,7 @@ def test_live_waterfall_shows_running_row_for_successor(monkeypatch):
     md = _md_text(at)
     # Completed bars for the two finished nodes.
     assert "查询分析" in md
-    assert "多源检索" in md and "30.0s" in md
+    assert "多源检索" in md and "30.00s" in md
     # The running row: successor of multi_retriever is source_evaluator, which
     # has NOT emitted a completion event — the row must still be appended.
     assert "tl-bar-running" in md, "running row missing from live waterfall"
@@ -219,7 +219,7 @@ def test_results_phase_renders_observability_panels(monkeypatch):
     for needle in ("运行轨迹时间轴", "tl-bar", "检索明细", "tavily", "冲突仲裁",
                    "A 正确", "得分 8.2", "Token 统计", "deepseek-v4-flash", "195"):
         assert needle in md, f"missing {needle!r} in rendered markdown"
-    assert "129.5s" in cap, f"total elapsed caption missing: {cap!r}"
+    assert "129.49s" in cap, f"total elapsed caption missing: {cap!r}"
 
 
 def test_report_tab_reading_view(monkeypatch):

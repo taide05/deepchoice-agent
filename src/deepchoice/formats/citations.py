@@ -1,4 +1,5 @@
 """Post-processing for the report reading view: numbered citations and TOC anchors."""
+import html
 import re
 
 MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
@@ -42,7 +43,7 @@ def inject_citations(md: str, registry: list[dict]) -> str:
         n = by_url.get(url)
         if n is None:
             return match.group(0)
-        return f'{title}<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>'
+        return f'{html.escape(title)}<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>'
 
     return MD_LINK_RE.sub(_sub, md)
 

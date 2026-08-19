@@ -91,6 +91,31 @@ class TestExportEndpoint:
         resp = client.get(f"/research/{TASK_ID}/export", params={"format": "docx"})
         assert resp.status_code == 400
 
+    def test_report_format_param_controls_renderer(self):
+        """Regression (final review): exported content must match the on-screen
+        format, not silently fall back to what_why_how."""
+        resp = client.get(
+            f"/research/{TASK_ID}/export",
+            params={"format": "md", "report_format": "evidence_first"},
+        )
+        assert resp.status_code == 200
+        assert "Evidence Brief" in resp.text
+
+        resp = client.get(
+            f"/research/{TASK_ID}/export",
+            params={"format": "md", "report_format": "comparison_matrix"},
+        )
+        assert resp.status_code == 200
+        assert "5-Dimension Comparison Matrix" in resp.text
+
+    def test_stored_report_format_used_when_param_absent(self, monkeypatch):
+        snap = dict(SNAPSHOT)
+        snap["task"] = {**SNAPSHOT["task"], "report_format": "evidence_first"}
+        monkeypatch.setattr(app_module, "load_snapshot", lambda tid: snap)
+        resp = client.get(f"/research/{TASK_ID}/export", params={"format": "md"})
+        assert resp.status_code == 200
+        assert "Evidence Brief" in resp.text
+
     def test_404_on_missing_task(self, monkeypatch):
         monkeypatch.setattr(app_module, "load_snapshot", lambda tid: None)
         resp = client.get(f"/research/{TASK_ID}/export", params={"format": "md"})

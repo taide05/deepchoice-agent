@@ -9,12 +9,12 @@ export is the canonical format.
 from pathlib import Path
 
 FONT_CANDIDATES = [
-    # Plain TTFs first: reportlab cannot open .ttc collections
+    # Plain TTFs first; .ttc needs reportlab's subfontIndex and must be
+    # TrueType-outlined (NotoSansCJK is CFF-based — reportlab cannot open it)
     Path("C:/Windows/Fonts/simhei.ttf"),
     Path("C:/Windows/Fonts/msyh.ttc"),
     Path("C:/Windows/Fonts/simsun.ttc"),
-    # Linux / Docker (fonts-noto-cjk)
-    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    # Linux / Docker (fonts-wqy-zenhei: TrueType-outlined TTC)
     Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
 ]
 
@@ -53,13 +53,13 @@ def _register_cjk_font() -> str:
     if not _registered:
         for path in FONT_CANDIDATES:
             try:
-                TTFont(FAMILY, str(path))
+                TTFont(FAMILY, str(path), subfontIndex=0)
             except Exception:
                 continue
             try:
                 pdfmetrics.getFont(FAMILY)
             except KeyError:
-                pdfmetrics.registerFont(TTFont(FAMILY, str(path)))
+                pdfmetrics.registerFont(TTFont(FAMILY, str(path), subfontIndex=0))
             DEFAULT_FONT[FAMILY] = {
                 "normal": str(path),
                 "bold": str(path),

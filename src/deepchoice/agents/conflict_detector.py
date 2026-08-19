@@ -43,24 +43,6 @@ Consider ANY of these as a "difference worth flagging":
 A "difference" does NOT require factual contradiction. Different recommendations based on different priorities or use cases also count."""
 
 
-# Keyword extraction (kept for 2-keyword pre-filter)
-STOP_WORDS = {
-    "a", "an", "the", "for", "in", "of", "as", "or", "vs", "and",
-    "with", "to", "is", "on", "by", "at", "it", "be", "no", "not",
-    "from", "that", "this", "are", "was", "were", "has", "have",
-    "than", "its", "can", "will", "more", "using", "when", "which",
-    "your", "their", "into", "over", "also", "how", "what", "all",
-}
-
-def _extract_keywords(text: str) -> set[str]:
-    """Extract meaningful tech keywords from a query string."""
-    import re
-    words = re.findall(r'[A-Za-z0-9_+#.-]+', text)
-    return {
-        w.lower() for w in words
-        if len(w) > 2 and w.lower() not in STOP_WORDS
-    }
-
 # ---------------------------------------------------------------------------
 # Inline multi-turn evidence gathering — 6 search tools
 # ---------------------------------------------------------------------------
@@ -422,15 +404,13 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
                                usage: list | None = None) -> list[dict]:
     """Find contradictory source pairs using LLM semantic scan.
 
-    Pipeline: BGE similarity → 2-keyword relevance pre-filter →
-    LLM contradiction scan (replaces old negation-word matching).
+    Pipeline: BGE similarity pre-filter → LLM contradiction scan
+    (replaces old negation-word matching).
     """
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
         return []
-
-    query_keywords = _extract_keywords(query_topic) if query_topic else set()
 
     titles = [s.get("title", "") for s in high_score_sources]
     embeddings = model.encode(titles)

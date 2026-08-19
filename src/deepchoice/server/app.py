@@ -232,13 +232,15 @@ async def research_annotated(task_id: str, format: str = ""):
 
 
 @app.get("/research/{task_id}/export")
-async def research_export(task_id: str, format: str = "md"):
+async def research_export(task_id: str, format: str = "md", report_format: str = ""):
     snapshot = load_snapshot(task_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    requested_format = format or snapshot.get("task", {}).get("report_format", "what_why_how")
-    renderer = FORMAT_RENDERERS.get(requested_format, render_what_why_how)
+    renderer = FORMAT_RENDERERS.get(
+        report_format or snapshot.get("task", {}).get("report_format", "what_why_how"),
+        render_what_why_how,
+    )
     report = renderer(snapshot)
 
     filename = f"deepchoice-report-{task_id}"
