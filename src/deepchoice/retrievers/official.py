@@ -1,8 +1,14 @@
 import httpx
 from .base import BaseRetriever
+from .learned_docs import load_learned, learn, domain_label_match
+from ..utils.llm import call_model
 
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.
+# Self-updates at runtime: learned pairs (harvest + LLM fallback) persist
+# to learned_docs.json and are consulted before this seed dict.
+
+_LLM_FALLBACK_MAX = 3
 TECH_DOCS: dict[str, dict[str, str]] = {
     # Web frameworks
     "react": {"url": "https://react.dev", "title": "React — Official Documentation"},
@@ -116,25 +122,77 @@ TECH_DOCS: dict[str, dict[str, str]] = {
 class OfficialSearch(BaseRetriever):
     source = "official"
 
+    async def _propose_official_url(self, term: str) -> str | None:
+        """LLM fallback: propose an official docs URL for an unmapped term."""
+        result = await call_model(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You map technology terms to their official documentation URLs. "
+                        'Reply with JSON {"url": "https://..."} or {"url": null} if unsure. '
+                        "Only well-known official sites — never guess or invent."
+                    ),
+                },
+                {"role": "user", "content": f"Official documentation URL for: {term}"},
+            ],
+            model="deepseek-v4-flash",
+            response_format="json",
+        )
+        if isinstance(result, dict):
+            return result.get("url")
+        return None
+
+    async def _verify_reachable(self, url: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                resp = await client.get(url)
+            return resp.status_code == 200 and "text/html" in resp.headers.get("content-type", "")
+        except Exception:
+            return False
+
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
         all_text = " ".join(adapted_queries) if adapted_queries else query
         keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
+        learned = load_learned()
+        lookup = {**TECH_DOCS, **learned}
         results = []
-        matched_techs = set()
+        matched_terms = set()
 
-        # Pass 1: check curated tech docs for known technologies
+        # Pass 1: curated seed + learned cache
         for kw in keywords:
             kw_clean = kw.strip().rstrip(".").rstrip(",")
-            if kw_clean in TECH_DOCS and kw_clean not in matched_techs:
-                matched_techs.add(kw_clean)
-                doc = TECH_DOCS[kw_clean]
+            if kw_clean in lookup and kw_clean not in matched_terms:
+                matched_terms.add(kw_clean)
+                doc = lookup[kw_clean]
                 results.append({
                     "url": doc["url"],
                     "title": doc["title"],
                     "snippet": f"Official documentation site for {kw_clean}",
                     "date": "",
                 })
+
+        # Pass 1.5: LLM fallback for unmapped candidate terms (validated + learned)
+        unmapped = []
+        for kw in keywords:
+            kw_clean = kw.strip().rstrip(".").rstrip(",")
+            if len(kw_clean) > 2 and kw_clean not in lookup and kw_clean not in unmapped:
+                unmapped.append(kw_clean)
+        for kw in unmapped[:_LLM_FALLBACK_MAX]:
+            url = await self._propose_official_url(kw)
+            if not url or not domain_label_match(kw, url):
+                continue
+            if not await self._verify_reachable(url):
+                continue
+            learn(kw, url, f"{kw} — Official Documentation", via="llm")
+            lookup[kw] = {"url": url, "title": f"{kw} — Official Documentation"}
+            results.append({
+                "url": url,
+                "title": f"{kw} — Official Documentation",
+                "snippet": f"Official documentation site for {kw}",
+                "date": "",
+            })
 
         # Pass 2: PyPI search for packages (same as before)
         async with httpx.AsyncClient(timeout=15) as client:

@@ -1,5 +1,6 @@
 import asyncio
 from ..retrievers import RETRIEVER_REGISTRY
+from ..retrievers.learned_docs import extract_terms, harvest
 from ..utils.views import print_agent_output
 
 
@@ -69,6 +70,18 @@ class MultiRetrieverAgent:
                 search_results.append(result)
                 if result["status"] == "failed":
                     partial_failures.append(name)
+
+        # Self-updating official docs: learn term -> URL pairs from search evidence
+        official_terms = extract_terms(
+            " ".join(adapted_queries.get("official", [])) if adapted_queries else query
+        )
+        learned_new = harvest(official_terms, search_results)
+        if learned_new:
+            print_agent_output(
+                f"Learned {len(learned_new)} official docs: "
+                f"{', '.join(e['term'] for e in learned_new)}",
+                agent="MULTI_RETRIEVER",
+            )
 
         return {
             "search_results": search_results,

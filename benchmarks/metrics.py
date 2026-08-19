@@ -103,7 +103,7 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
 
     # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer)
     m = re.search(
-        r'(?im)\*\*Winner:\s*\*\s*([A-Za-z0-9+\-_.]+(?:\s[A-Za-z0-9+\-_.]+){0,2})\*\*',
+        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.]+(?:\s[A-Za-z0-9+\-_.]+){0,2})\*\*',
         report,
     )
     if m:
@@ -203,6 +203,7 @@ def compute_top1_accuracy(
         if not case:
             continue
         expected = case.get("expected_winner", "").lower()
+        acceptable = [w.lower() for w in case.get("acceptable_winners", [])]
         if expected == "context_dependent":
             # Context-dependent cases are scored separately (see notes)
             continue
@@ -213,13 +214,19 @@ def compute_top1_accuracy(
             tech_a=case.get("tech_a", ""),
             tech_b=case.get("tech_b", ""),
         )
-        is_correct = predicted and expected in predicted
+        if acceptable:
+            # Open-scenario case: any acceptable winner counts
+            is_correct = bool(predicted) and any(w in predicted for w in acceptable)
+            expected_label = "/".join(acceptable)
+        else:
+            is_correct = predicted and expected in predicted
+            expected_label = expected
         if is_correct:
             correct += 1
         total += 1
         details.append({
             "case_id": case_id,
-            "expected": expected,
+            "expected": expected_label,
             "predicted": predicted,
             "correct": is_correct,
         })

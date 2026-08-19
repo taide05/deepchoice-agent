@@ -145,7 +145,9 @@ class TestOfficialSearch:
             }
         }
         retriever = OfficialSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get, \
+             patch("deepchoice.retrievers.official.call_model",
+                   new_callable=AsyncMock, return_value={"url": None}):
             mock_get.return_value = mock_resp
             result = await retriever.search("test fastapi", [])
         assert result["source"] == "official"
