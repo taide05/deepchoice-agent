@@ -88,6 +88,25 @@ def _summarize_conflicts(conflicts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+_GENERIC_WINNER_WORDS = {
+    "flag", "gradual", "feature", "api", "app", "tool", "platform",
+    "service", "system", "framework", "solution", "library", "package",
+}
+
+
+def _validate_winner(result: dict) -> dict:
+    """Reject non-technology winners (repo paths, generic words) and fall back
+    to the first valid ranked option."""
+    winner = (result.get("winner") or "").strip()
+    if not winner or "/" in winner or winner.lower() in _GENERIC_WINNER_WORDS:
+        for opt in result.get("ranked_options", []):
+            name = (opt.get("name") or "").strip()
+            if name and "/" not in name and name.lower() not in _GENERIC_WINNER_WORDS:
+                result["winner"] = name
+                break
+    return result
+
+
 class ConclusionSynthesizerAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None):
         self.websocket = websocket
@@ -145,6 +164,8 @@ class ConclusionSynthesizerAgent:
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
         }]
+
+        _validate_winner(result)
 
         return {
             "final_recommendation": result,

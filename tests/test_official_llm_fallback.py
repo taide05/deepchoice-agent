@@ -21,6 +21,7 @@ class _FakeResp:
 class _FakeClient:
     def __init__(self, fail_urls=()):
         self.fail_urls = fail_urls
+        self.called_urls = []
 
     async def __aenter__(self):
         return self
@@ -29,6 +30,7 @@ class _FakeClient:
         return False
 
     async def get(self, url):
+        self.called_urls.append(url)
         if url in self.fail_urls:
             return type("R", (), {"status_code": 404, "headers": {}})()
         if "pypi.org" in url:
@@ -82,3 +84,38 @@ class TestLLMFallback:
         import asyncio
         out = asyncio.run(_run_search(monkeypatch, {"url": None}))
         assert all(r["url"] != "" and "supabase" not in r["url"] for r in out)
+
+
+class TestPyPIPassRestriction:
+    """Regression (open-scenario poisoning): the PyPI fallback must only run
+    for vs-style comparison queries. On scenario queries, generic words like
+    'feature'/'flags'/'gradual' polluted evidence chains with junk packages
+    (e.g. the 'flag' PyPI package) and the synthesizer recommended them."""
+
+    def _client_with_recorder(self, monkeypatch):
+        client = _FakeClient()
+        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
+            "AsyncClient": lambda *a, **kw: client,
+        })())
+        return client
+
+    async def _search(self, query, monkeypatch, llm_result=None):
+        async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
+            return llm_result if llm_result is not None else {"url": None}
+        monkeypatch.setattr(official_mod, "call_model", fake_call_model)
+        retriever = official_mod.OfficialSearch()
+        return await retriever._do_search(query, [], 10, None)
+
+    def test_scenario_query_skips_pypi(self, monkeypatch):
+        import asyncio
+        client = self._client_with_recorder(monkeypatch)
+        asyncio.run(self._search(
+            "Our team wants feature flags with gradual rollout", monkeypatch))
+        assert not any("pypi.org" in u for u in client.called_urls), \
+            f"PyPI called on scenario query: {client.called_urls}"
+
+    def test_vs_query_still_uses_pypi(self, monkeypatch):
+        import asyncio
+        client = self._client_with_recorder(monkeypatch)
+        asyncio.run(self._search("FastAPI vs Flask", monkeypatch))
+        assert any("pypi.org" in u for u in client.called_urls)

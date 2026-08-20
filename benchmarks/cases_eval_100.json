@@ -1945,7 +1945,8 @@
   "acceptable_winners": [
    "refine",
    "react-admin",
-   "retool"
+   "retool",
+   "appsmith"
   ],
   "ground_truth_notes": "Low-code or framework-based admin panel solutions all satisfy the constraint of few frontend specialists.",
   "must_find_sources": [
@@ -2422,7 +2423,8 @@
   "acceptable_winners": [
    "clickhouse",
    "timescaledb",
-   "materialize"
+   "materialize",
+   "druid"
   ],
   "ground_truth_notes": "OLAP column stores or streaming-materialized views are the valid routes.",
   "must_find_sources": [
@@ -2489,7 +2491,9 @@
   "acceptable_winners": [
    "qdrant",
    "milvus",
-   "pgvector"
+   "pgvector",
+   "chroma",
+   "chromadb"
   ],
   "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
   "must_find_sources": [
@@ -2549,7 +2553,9 @@
   "acceptable_winners": [
    "openmetadata",
    "datahub",
-   "amundsen"
+   "amundsen",
+   "wrenai",
+   "canner"
   ],
   "ground_truth_notes": "The three open-source catalogs overlap heavily in capability.",
   "must_find_sources": [
@@ -2833,7 +2839,8 @@
   "acceptable_winners": [
    "unstructured",
    "marker",
-   "docling"
+   "docling",
+   "markitdown"
   ],
   "ground_truth_notes": "Document parsing libraries with different strengths; any is acceptable for an indexing pipeline.",
   "must_find_sources": [
@@ -2863,7 +2870,9 @@
   "acceptable_winners": [
    "ragas",
    "deepeval",
-   "promptfoo"
+   "promptfoo",
+   "hugging face evaluate",
+   "evaluate"
   ],
   "ground_truth_notes": "LLM evaluation harnesses all integrate into CI; metric suites differ.",
   "must_find_sources": [
@@ -2893,7 +2902,8 @@
   "acceptable_winners": [
    "fly",
    "render",
-   "vercel"
+   "vercel",
+   "heroku"
   ],
   "ground_truth_notes": "PaaS platforms are interchangeable for side projects.",
   "must_find_sources": [
@@ -2923,7 +2933,8 @@
   "acceptable_winners": [
    "github-actions",
    "gitlab-ci",
-   "jenkins"
+   "jenkins",
+   "harness"
   ],
   "ground_truth_notes": "Any mainstream CI platform supports preview environments with plugins.",
   "must_find_sources": [
@@ -3087,7 +3098,8 @@
   "acceptable_winners": [
    "uptime-kuma",
    "betterstack",
-   "grafana"
+   "grafana",
+   "uptimerobot"
   ],
   "ground_truth_notes": "Self-hosted or SaaS uptime monitors both fit three services.",
   "must_find_sources": [
@@ -3237,7 +3249,8 @@
   "acceptable_winners": [
    "powersync",
    "watermelondb",
-   "realm"
+   "realm",
+   "pouchdb"
   ],
   "ground_truth_notes": "Offline-first sync engines are the hard requirement; each has a different data model.",
   "must_find_sources": [
@@ -3334,7 +3347,8 @@
   "acceptable_winners": [
    "temporal",
    "postgresql",
-   "oso"
+   "oso",
+   "drools"
   ],
   "ground_truth_notes": "Durable execution, plain SQL rules, or an authorization engine are all defensible starting points.",
   "must_find_sources": [

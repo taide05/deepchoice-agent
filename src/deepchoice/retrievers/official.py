@@ -9,6 +9,12 @@ from ..utils.llm import call_model
 # to learned_docs.json and are consulted before this seed dict.
 
 _LLM_FALLBACK_MAX = 3
+
+_VS_MARKERS = (" vs ", " versus ", " 对比 ", " 比较 ")
+
+
+def _is_vs_query(query: str) -> bool:
+    return any(m in query.lower() for m in _VS_MARKERS)
 TECH_DOCS: dict[str, dict[str, str]] = {
     # Web frameworks
     "react": {"url": "https://react.dev", "title": "React — Official Documentation"},
@@ -194,19 +200,23 @@ class OfficialSearch(BaseRetriever):
                 "date": "",
             })
 
-        # Pass 2: PyPI search for packages (same as before)
-        async with httpx.AsyncClient(timeout=15) as client:
-            for kw in keywords[:3]:
-                if len(kw) < 3:
-                    continue
-                resp = await client.get(f"https://pypi.org/pypi/{kw}/json")
-                if resp.status_code != 200:
-                    continue
-                info = resp.json().get("info", {})
-                results.append({
-                    "url": info.get("package_url", f"https://pypi.org/project/{kw}/"),
-                    "title": f"{kw} (PyPI)",
-                    "snippet": f"Version: {info.get('version', 'N/A')}, Summary: {info.get('summary', '')}",
-                    "date": "",
-                })
+        # Pass 2: PyPI search for packages. Restricted to vs-style comparison
+        # queries — on open-scenario queries the tokens are ordinary English
+        # words ('feature', 'team', 'wants'), and PyPI matches polluted the
+        # evidence chains with junk packages (recommended "flag (PyPI)" once).
+        if _is_vs_query(query):
+            async with httpx.AsyncClient(timeout=15) as client:
+                for kw in keywords[:3]:
+                    if len(kw) < 3:
+                        continue
+                    resp = await client.get(f"https://pypi.org/pypi/{kw}/json")
+                    if resp.status_code != 200:
+                        continue
+                    info = resp.json().get("info", {})
+                    results.append({
+                        "url": info.get("package_url", f"https://pypi.org/project/{kw}/"),
+                        "title": f"{kw} (PyPI)",
+                        "snippet": f"Version: {info.get('version', 'N/A')}, Summary: {info.get('summary', '')}",
+                        "date": "",
+                    })
         return results[:max_results]

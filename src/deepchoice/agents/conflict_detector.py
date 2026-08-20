@@ -8,6 +8,7 @@ import httpx
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from ..utils.embedding import get_embedding_model
+from ..retrievers.tavily_keypool import post_with_failover
 
 # ---------------------------------------------------------------------------
 # Concurrency limits (DeepSeek rate limits: flash 500/min, pro 50/min)
@@ -102,16 +103,19 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
     max_results = min(arguments.get("max_results", 3), 5)
 
     if tool_name == "search_web":
-        api_key = os.environ.get("TAVILY_API_KEY", "")
-        if not api_key:
-            return json.dumps({"error": "TAVILY_API_KEY not set"})
         async with httpx.AsyncClient(timeout=15.0) as client:
+
+            async def post(url, json=None, **kw):
+                return await client.post(url, json=json, **kw)
+
             try:
-                resp = await client.post(
-                    "https://api.tavily.com/search",
-                    json={"api_key": api_key, "query": query,
-                          "search_depth": "basic", "max_results": max_results},
-                )
+                resp, _ = await post_with_failover(post, {
+                    "query": query,
+                    "search_depth": "basic",
+                    "max_results": max_results,
+                })
+                if resp is None:
+                    return json.dumps({"error": "no Tavily API key available"})
                 resp.raise_for_status()
                 data = resp.json()
                 results = data.get("results", [])[:max_results]
