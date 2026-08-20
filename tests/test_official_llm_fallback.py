@@ -130,6 +130,45 @@ class TestFallbackGenericFilter:
         assert calls == [], f"LLM called for generic terms: {calls}"
 
 
+class TestNGramMatching:
+    """Regression: multi-word seed keys ('aws-lambda', 'github-actions') were
+    unreachable — query tokens are space-separated, so 'AWS Lambda' could
+    never match the 'aws-lambda' key. N-gram normalized matching fixes it."""
+
+    async def _search(self, query, monkeypatch, llm_calls):
+        async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
+            llm_calls.append(prompt[-1]["content"])
+            return {"url": None}
+        monkeypatch.setattr(official_mod, "call_model", fake_call_model)
+        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
+            "AsyncClient": lambda *a, **kw: _FakeClient(),
+        })())
+        retriever = official_mod.OfficialSearch()
+        return await retriever._do_search(query, [], 10, None)
+
+    def test_space_separated_multiword_matches_seed(self, monkeypatch):
+        import asyncio
+        llm_calls = []
+        out = asyncio.run(self._search("AWS Lambda vs Azure Functions", monkeypatch, llm_calls))
+        urls = [r["url"] for r in out]
+        assert any("aws.amazon.com/lambda" in u for u in urls), urls
+        assert not any("for: aws" in c or "for: lambda" in c for c in llm_calls), llm_calls
+
+    def test_hyphenated_and_dotted_multiword_match(self, monkeypatch):
+        import asyncio
+        llm_calls = []
+        out = asyncio.run(self._search("github actions vs gitlab ci", monkeypatch, llm_calls))
+        urls = [r["url"] for r in out]
+        assert any("docs.github.com" in u for u in urls), urls
+        assert any("docs.gitlab.com" in u for u in urls), urls
+
+    def test_ngram_components_skip_llm_fallback(self, monkeypatch):
+        import asyncio
+        llm_calls = []
+        asyncio.run(self._search("AWS Lambda", monkeypatch, llm_calls))
+        assert llm_calls == [], f"fallback fired for n-gram components: {llm_calls}"
+
+
 class TestPyPIPassRestriction:
     """Regression (open-scenario poisoning): the PyPI fallback must only run
     for vs-style comparison queries. On scenario queries, generic words like

@@ -34,6 +34,7 @@ Disputed findings: {disputed_count}
 6. INLINE CITATIONS REQUIRED: Every claim in the recommendation, ranked_options rationale, and trade_offs finding MUST include inline source citations using [Source: title] notation. Example: "FastAPI's async support gives it a performance edge [Source: FastAPI Benchmarks 2025]". The "How" section must contain at least 5 inline source citations total.
 7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
+9. CRITICAL: The winner MUST be a widely-used, established product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/...") — if the strongest evidence only supports such an item, pick the closest mainstream alternative instead and note it in winner_rationale.
 
 ## Output Length Limits (CRITICAL — exceed and output will be rejected)
 - recommendation: max 200 words

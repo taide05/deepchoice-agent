@@ -15,6 +15,11 @@ _VS_MARKERS = (" vs ", " versus ", " 对比 ", " 比较 ")
 
 def _is_vs_query(query: str) -> bool:
     return any(m in query.lower() for m in _VS_MARKERS)
+
+
+def _normalize(s: str) -> str:
+    """Lowercase, alphanumerics only — 'AWS Lambda' and 'aws-lambda' both normalize to 'awslambda'."""
+    return "".join(c for c in s.lower() if c.isalnum())
 TECH_DOCS: dict[str, dict[str, str]] = {
     # Web frameworks
     "react": {"url": "https://react.dev", "title": "React — Official Documentation"},
@@ -169,16 +174,26 @@ class OfficialSearch(BaseRetriever):
         results = []
         matched_terms = set()
 
-        # Pass 1: curated seed + learned cache
-        for kw in keywords:
-            kw_clean = kw.strip().rstrip(".").rstrip(",")
-            if kw_clean in lookup and kw_clean not in matched_terms:
-                matched_terms.add(kw_clean)
-                doc = lookup[kw_clean]
+        # Pass 1: curated seed + learned cache via normalized n-gram matching.
+        # Space-separated multi-word terms ('AWS Lambda') match hyphenated or
+        # dotted keys ('aws-lambda', 'next.js') through alnum normalization.
+        norm_lookup = {_normalize(k): k for k in lookup}
+        matched_norms: set[str] = set()
+        matched_ngram_components: set[str] = set()
+        for n in (1, 2, 3):
+            for i in range(len(keywords) - n + 1):
+                phrase = " ".join(keywords[i:i + n])
+                norm = _normalize(phrase)
+                key = norm_lookup.get(norm)
+                if key is None or norm in matched_norms:
+                    continue
+                matched_norms.add(norm)
+                matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
+                doc = lookup[key]
                 results.append({
                     "url": doc["url"],
                     "title": doc["title"],
-                    "snippet": f"Official documentation site for {kw_clean}",
+                    "snippet": f"Official documentation site for {key}",
                     "date": "",
                 })
 
@@ -187,7 +202,8 @@ class OfficialSearch(BaseRetriever):
         for kw in keywords:
             kw_clean = kw.strip().rstrip(".").rstrip(",")
             if (kw_clean not in lookup and kw_clean not in unmapped
-                    and is_plausible_term(kw_clean)):
+                    and is_plausible_term(kw_clean)
+                    and _normalize(kw_clean) not in matched_ngram_components):
                 unmapped.append(kw_clean)
         for kw in unmapped[:_LLM_FALLBACK_MAX]:
             url = await self._propose_official_url(kw)

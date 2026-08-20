@@ -28,6 +28,13 @@ def _fake_call_model(result):
     return fake
 
 
+class TestPromptGuards:
+    def test_synthesis_prompt_forbids_research_paper_winners(self):
+        """Regression (OS-0035 FedMon): the prompt must forbid research papers
+        and prototypes as winners — the code-side validator cannot detect them."""
+        assert "NEVER recommend a research paper" in cs_mod.SYNTHESIS_PROMPT
+
+
 class TestWinnerValidation:
     def test_repo_path_winner_falls_back_to_ranked_option(self, monkeypatch):
         monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({

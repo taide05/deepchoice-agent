@@ -454,6 +454,7 @@ def compute_conflict_detection_rate(
     case_map = {c["id"]: c for c in annotated_cases}
     total_known = 0
     total_detected = 0
+    total_resolved = 0
     details = []
 
     for run in runs:
@@ -467,43 +468,50 @@ def compute_conflict_detection_rate(
             continue
 
         detected_conflicts = run.get("conflicts", [])
-        # Build a set of keywords from all detected conflicts
-        detected_text = " ".join(
-            str(c) for c in detected_conflicts
-        ).lower()
 
         detected_count = 0
+        resolved_count = 0
         matched_topics = []
         missed_topics = []
         for kc in known:
             topic = kc["topic"].lower()
-            # Check if the topic keywords appear in detected conflicts
             topic_words = set(re.findall(r'\w+', topic))
-            detected_words = set(re.findall(r'\w+', detected_text))
-            overlap = topic_words & detected_words
-            # Require at least 2 keyword matches to count as detected
-            if len(overlap) >= 2:
+            matched_conflicts = []
+            for c in detected_conflicts:
+                c_words = set(re.findall(r'\w+', str(c).lower()))
+                # Require at least 2 keyword matches to count as detected
+                if len(topic_words & c_words) >= 2:
+                    matched_conflicts.append(c)
+            if matched_conflicts:
                 detected_count += 1
                 matched_topics.append(kc["topic"])
+                if any(isinstance(c, dict) and c.get("resolution") in RESOLVED_RESOLUTIONS
+                       for c in matched_conflicts):
+                    resolved_count += 1
             else:
                 missed_topics.append(kc["topic"])
 
         total_known += len(known)
         total_detected += detected_count
+        total_resolved += resolved_count
         details.append({
             "case_id": case_id,
             "known_count": len(known),
             "detected": detected_count,
+            "resolved": resolved_count,
             "matched": matched_topics,
             "missed": missed_topics,
         })
 
     rate = total_detected / total_known if total_known > 0 else 0.0
+    resolved_rate = total_resolved / total_known if total_known > 0 else 0.0
     return {
         "metric": "conflict_detection_rate",
         "value": round(rate, 3),
         "total_known": total_known,
         "total_detected": total_detected,
+        "total_resolved": total_resolved,
+        "resolved_rate": round(resolved_rate, 3),
         "per_case": details,
         "method": "keyword",
     }

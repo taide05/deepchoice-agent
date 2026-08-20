@@ -37,6 +37,31 @@ class TestOpenScenarioTop1:
         assert result["correct"] == 1 and result["total"] == 1
 
 
+class TestConflictResolutionSplit:
+    """Detection vs resolution: a conflict the pipeline found but could not
+    arbitrate (insufficient_data) is detected-but-unresolved."""
+
+    def test_detected_but_unresolved(self):
+        from benchmarks.metrics import compute_conflict_detection_rate
+        case = {"id": "C1", "known_contradictions": [
+            {"topic": "Ease of use", "position_a": "a", "position_b": "b"}]}
+        runs = [{"case_id": "C1", "conflicts": [
+            {"claim_a": "ease of use", "claim_b": "ease", "resolution": "insufficient_data"}]}]
+        r = compute_conflict_detection_rate(runs, [case])
+        assert r["total_detected"] == 1
+        assert r["total_resolved"] == 0
+
+    def test_detected_and_resolved(self):
+        from benchmarks.metrics import compute_conflict_detection_rate
+        case = {"id": "C1", "known_contradictions": [
+            {"topic": "Ease of use", "position_a": "a", "position_b": "b"}]}
+        runs = [{"case_id": "C1", "conflicts": [
+            {"claim_a": "ease of use", "claim_b": "ease", "resolution": "A_correct"}]}]
+        r = compute_conflict_detection_rate(runs, [case])
+        assert r["total_detected"] == 1
+        assert r["total_resolved"] == 1
+
+
 class TestWinnerExtractionParens:
     """Regression: '**Winner: Firebase Cloud Messaging (FCM)**' — parenthesized
     suffixes broke the Winner regex (second bug in this pattern family),
