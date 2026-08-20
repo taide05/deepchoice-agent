@@ -21,7 +21,7 @@ _DOCS_SIGNALS = ("docs.", "/docs", "readthedocs", "documentation", "learn.")
 # 'kernel' etc. were learned as "official docs" entries and polluted the
 # official retriever's results.
 _GENERIC_TERMS = frozenset({
-    "docs", "code", "url", "dom", "dev", "flow", "metrics", "drift",
+    "docs", "code", "url", "dom", "dev", "flow", "metrics", "drift", "json",
     "persistent", "pivot", "rich", "encoding", "kernel", "apache",
     "api", "app", "apps", "web", "data", "team", "tool", "tools", "service",
     "services", "platform", "framework", "solution", "library", "package",

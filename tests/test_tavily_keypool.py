@@ -101,6 +101,29 @@ class TestFailover:
         assert key == DUMMY[1]
         assert kp._dead == {DUMMY[0]}
 
+    def test_429_retries_same_key_without_blacklisting(self, monkeypatch):
+        import asyncio
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        monkeypatch.setattr(kp, "_RATE_LIMIT_BACKOFF_S", 0.0)
+        calls = {"n": 0}
+        statuses = [429, 200]
+
+        async def post(url, json=None, **kw):
+            if (json or {}).get("query") == "test":
+                return _FakeResp(200)  # probe passes for all keys
+            s = statuses[min(calls["n"], 1)]
+            calls["n"] += 1
+            return _FakeResp(s)
+
+        async def run():
+            resp, key = await kp.post_with_failover(post, {"query": "q"})
+            return resp.status_code, key
+
+        status, key = asyncio.run(run())
+        assert status == 200 and key == DUMMY[0]
+        assert kp._dead == set(), "429 must not blacklist a key"
+        assert calls["n"] == 2
+
     def test_no_keys_available_returns_none(self, monkeypatch):
         import asyncio
         monkeypatch.delenv("TAVILY_API_KEYS", raising=False)

@@ -10,7 +10,11 @@ the next alive key — at most one rotation per request.
 import asyncio
 import os
 
-_DEAD_CODES = (401, 403, 429, 432)
+# Permanent dead codes: invalid key (401) or monthly usage exhausted (432).
+# 429 (rate limit) is TRANSIENT — blacklisting the only alive key on a 429
+# burst killed Tavily for the rest of the process in the 100-case run.
+_DEAD_CODES = (401, 432)
+_RATE_LIMIT_BACKOFF_S = 10.0
 _PROBE_PAYLOAD = {"query": "test", "search_depth": "basic", "max_results": 1}
 
 _pool: list[str] = []
@@ -91,4 +95,7 @@ async def post_with_failover(post, payload: dict):
         key = await current()
         if key:
             resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
+    elif resp.status_code == 429:
+        await asyncio.sleep(_RATE_LIMIT_BACKOFF_S)
+        resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
     return resp, key
