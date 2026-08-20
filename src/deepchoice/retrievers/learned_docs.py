@@ -16,6 +16,31 @@ LEARNED_DOCS_PATH = Path("./learned_docs.json")
 
 _DOCS_SIGNALS = ("docs.", "/docs", "readthedocs", "documentation", "learn.")
 
+# Generic English words that are never tech names in context. Observed
+# pollution (100-case run): 'docs', 'code', 'url', 'dom', 'flow', 'metrics',
+# 'kernel' etc. were learned as "official docs" entries and polluted the
+# official retriever's results.
+_GENERIC_TERMS = frozenset({
+    "docs", "code", "url", "dom", "dev", "flow", "metrics", "drift",
+    "persistent", "pivot", "rich", "encoding", "kernel", "apache",
+    "api", "app", "apps", "web", "data", "team", "tool", "tools", "service",
+    "services", "platform", "framework", "solution", "library", "package",
+    "system", "agent", "agents", "model", "models", "cloud", "server",
+    "client", "feature", "features", "flags", "search", "query", "database",
+    "storage", "network", "security", "testing", "building", "using", "with",
+    "for", "and", "the", "vs", "solo", "developer", "developers", "learning",
+    "support", "open", "source", "free", "best", "top", "new", "fast",
+    "simple", "modern", "scalable", "production", "analytics", "dashboard",
+    "management", "monitoring", "deployment", "language", "languages",
+    "documentation", "reference", "guide", "tutorial", "comparison",
+})
+
+
+def is_plausible_term(term: str) -> bool:
+    """True if the token looks like a technology name, not a generic word."""
+    t = term.lower().strip()
+    return len(t) > 2 and t not in _GENERIC_TERMS
+
 
 def load_learned() -> dict[str, dict]:
     if not LEARNED_DOCS_PATH.exists():
@@ -68,7 +93,7 @@ def harvest(terms: list[str], search_results: list[dict],
     known = set(existing or []) | set(docs.keys())
     learned = []
     for term in terms:
-        if term in known:
+        if term in known or not is_plausible_term(term):
             continue
         for sr in search_results:
             for item in sr.get("results", []) or []:

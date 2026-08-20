@@ -6,8 +6,23 @@ from deepchoice.retrievers.learned_docs import (
     extract_terms,
     domain_label_match,
     harvest,
+    is_plausible_term,
     load_learned,
 )
+
+
+class TestIsPlausibleTerm:
+    def test_generic_english_words_rejected(self):
+        for w in ("docs", "code", "url", "dom", "flow", "dev", "apache", "kernel"):
+            assert not is_plausible_term(w), w
+
+    def test_real_tech_names_accepted(self):
+        for w in ("supabase", "liveblocks", "windmill", "yjs", "tauri"):
+            assert is_plausible_term(w), w
+
+    def test_too_short_rejected(self):
+        assert not is_plausible_term("ai")
+        assert not is_plausible_term("go")
 
 
 class TestExtractTerms:
@@ -81,3 +96,14 @@ class TestHarvest:
         harvest(["supabase"], results)
         loaded = json.loads((tmp_path / "learned.json").read_text(encoding="utf-8"))
         assert "supabase" in loaded
+
+    def test_generic_words_not_learned(self, monkeypatch, tmp_path):
+        """Regression: the word 'docs' matched docs.pydantic.dev via label match
+        and polluted the cache; generic English words must never be learned."""
+        self._patch_path(monkeypatch, tmp_path)
+        results = [
+            {"source": "tavily", "status": "success",
+             "results": [{"url": "https://docs.pydantic.dev/latest", "title": "Pydantic docs"}]},
+        ]
+        assert harvest(["docs"], results) == []
+        assert load_learned() == {}

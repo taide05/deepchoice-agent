@@ -86,6 +86,50 @@ class TestLLMFallback:
         assert all(r["url"] != "" and "supabase" not in r["url"] for r in out)
 
 
+class TestSeedPrecedence:
+    """Regression: a harvested entry for a term that exists in the curated
+    TECH_DOCS seed must NEVER override the seed (e.g. 'python' was learned
+    as python.langchain.com, shadowing the real docs.python.org)."""
+
+    def test_seed_wins_over_learned_entry(self, monkeypatch):
+        import asyncio
+        monkeypatch.setattr(official_mod, "load_learned",
+                            lambda: {"python": {"url": "https://python.langchain.com/docs",
+                                                "title": "wrong", "via": "harvest"}})
+        async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
+            return {"url": None}
+        monkeypatch.setattr(official_mod, "call_model", fake_call_model)
+        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
+            "AsyncClient": lambda *a, **kw: _FakeClient(),
+        })())
+
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
+            "python vs go", [], 10, None))
+        urls = [r["url"] for r in out]
+        assert any("docs.python.org" in u for u in urls), urls
+        assert not any("python.langchain.com" in u for u in urls)
+
+
+class TestFallbackGenericFilter:
+    """Regression: generic English words ('docs', 'code', 'url') must not
+    trigger the LLM fallback — they are not tech names."""
+
+    def test_generic_term_never_reaches_llm(self, monkeypatch):
+        import asyncio
+        calls = []
+        async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
+            calls.append(prompt[-1]["content"])
+            return {"url": None}
+        monkeypatch.setattr(official_mod, "call_model", fake_call_model)
+        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
+            "AsyncClient": lambda *a, **kw: _FakeClient(),
+        })())
+
+        asyncio.run(official_mod.OfficialSearch()._do_search(
+            "docs", [], 10, ["docs", "code", "url"]))
+        assert calls == [], f"LLM called for generic terms: {calls}"
+
+
 class TestPyPIPassRestriction:
     """Regression (open-scenario poisoning): the PyPI fallback must only run
     for vs-style comparison queries. On scenario queries, generic words like

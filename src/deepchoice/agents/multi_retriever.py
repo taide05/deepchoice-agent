@@ -1,6 +1,7 @@
 import asyncio
 from ..retrievers import RETRIEVER_REGISTRY
 from ..retrievers.learned_docs import extract_terms, harvest
+from ..retrievers.official import TECH_DOCS
 from ..utils.views import print_agent_output
 
 
@@ -72,10 +73,11 @@ class MultiRetrieverAgent:
                     partial_failures.append(name)
 
         # Self-updating official docs: learn term -> URL pairs from search evidence
+        # (curated seed terms are never re-learned)
         official_terms = extract_terms(
             " ".join(adapted_queries.get("official", [])) if adapted_queries else query
         )
-        learned_new = harvest(official_terms, search_results)
+        learned_new = harvest(official_terms, search_results, existing=set(TECH_DOCS))
         if learned_new:
             print_agent_output(
                 f"Learned {len(learned_new)} official docs: "

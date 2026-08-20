@@ -1,6 +1,6 @@
 import httpx
 from .base import BaseRetriever
-from .learned_docs import load_learned, learn, domain_label_match
+from .learned_docs import load_learned, learn, domain_label_match, is_plausible_term
 from ..utils.llm import call_model
 
 # Mapping of known tech terms to their official documentation sites.
@@ -162,7 +162,10 @@ class OfficialSearch(BaseRetriever):
         all_text = " ".join(adapted_queries) if adapted_queries else query
         keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
         learned = load_learned()
-        lookup = {**TECH_DOCS, **learned}
+        # Curated seed always wins: a learned entry must never shadow a
+        # hand-verified mapping (e.g. a harvested 'python' entry once
+        # overrode docs.python.org with python.langchain.com).
+        lookup = {**learned, **TECH_DOCS}
         results = []
         matched_terms = set()
 
@@ -183,7 +186,8 @@ class OfficialSearch(BaseRetriever):
         unmapped = []
         for kw in keywords:
             kw_clean = kw.strip().rstrip(".").rstrip(",")
-            if len(kw_clean) > 2 and kw_clean not in lookup and kw_clean not in unmapped:
+            if (kw_clean not in lookup and kw_clean not in unmapped
+                    and is_plausible_term(kw_clean)):
                 unmapped.append(kw_clean)
         for kw in unmapped[:_LLM_FALLBACK_MAX]:
             url = await self._propose_official_url(kw)
