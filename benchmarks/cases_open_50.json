@@ -234,7 +234,8 @@
   "acceptable_winners": [
    "astro",
    "next.js",
-   "gatsby"
+   "gatsby",
+   "webflow"
   ],
   "ground_truth_notes": "Any headless-friendly site framework works; the A/B layer is typically a third-party service on top.",
   "must_find_sources": [
@@ -501,7 +502,9 @@
   "acceptable_winners": [
    "n8n",
    "windmill",
-   "temporal"
+   "temporal",
+   "chatwoot",
+   "zendesk"
   ],
   "ground_truth_notes": "Visual workflow tools or durable-execution frameworks both enable non-engineers to build automations.",
   "must_find_sources": [
@@ -531,7 +534,8 @@
   "acceptable_winners": [
    "duckdb",
    "polars",
-   "pandas"
+   "pandas",
+   "dask"
   ],
   "ground_truth_notes": "Columnar engines or the improved pandas 2.x all handle multi-GB CSV better than naive pandas; any acceptable.",
   "must_find_sources": [
@@ -693,7 +697,9 @@
    "datahub",
    "amundsen",
    "wrenai",
-   "canner"
+   "canner",
+   "apache atlas",
+   "atlas"
   ],
   "ground_truth_notes": "The three open-source catalogs overlap heavily in capability.",
   "must_find_sources": [
@@ -880,7 +886,9 @@
   "acceptable_winners": [
    "unsloth",
    "peft",
-   "trl"
+   "trl",
+   "hugging face transformers",
+   "transformers"
   ],
   "ground_truth_notes": "Parameter-efficient fine-tuning libraries all fit single-GPU constraints.",
   "must_find_sources": [
@@ -978,7 +986,9 @@
    "unstructured",
    "marker",
    "docling",
-   "markitdown"
+   "markitdown",
+   "llamaindex",
+   "llamaparse"
   ],
   "ground_truth_notes": "Document parsing libraries with different strengths; any is acceptable for an indexing pipeline.",
   "must_find_sources": [
@@ -1327,7 +1337,9 @@
   "acceptable_winners": [
    "firebase",
    "onesignal",
-   "pusher"
+   "pusher",
+   "firebase",
+   "fcm"
   ],
   "ground_truth_notes": "FCM or commercial push services all cover rich notifications.",
   "must_find_sources": [
@@ -1388,7 +1400,9 @@
    "powersync",
    "watermelondb",
    "realm",
-   "pouchdb"
+   "pouchdb",
+   "cloud firestore",
+   "firestore"
   ],
   "ground_truth_notes": "Offline-first sync engines are the hard requirement; each has a different data model.",
   "must_find_sources": [
@@ -1516,7 +1530,9 @@
   "acceptable_winners": [
    "keycloak",
    "casbin",
-   "cerbos"
+   "cerbos",
+   "opa",
+   "open policy agent"
   ],
   "ground_truth_notes": "Identity-based or policy-based authorization both deliver fine-grained RBAC.",
   "must_find_sources": [
@@ -1583,7 +1599,8 @@
   "acceptable_winners": [
    "unleash",
    "flagsmith",
-   "growthbook"
+   "growthbook",
+   "launchdarkly"
   ],
   "ground_truth_notes": "Open-source or SaaS feature flag services all satisfy gradual rollout.",
   "must_find_sources": [

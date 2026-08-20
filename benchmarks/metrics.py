@@ -101,9 +101,10 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
                 if result:
                     return result
 
-    # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer)
+    # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer).
+    # Parenthesized suffixes like "Firebase Cloud Messaging (FCM)" are allowed.
     m = re.search(
-        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.]+(?:\s[A-Za-z0-9+\-_.]+){0,2})\*\*',
+        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.]+(?:\s[A-Za-z0-9+\-_.]+){0,2})(?:\s*\([^)]*\))?\*\*',
         report,
     )
     if m:
