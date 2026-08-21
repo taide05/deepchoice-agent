@@ -11,7 +11,9 @@
    "next.js",
    "vue",
    "nuxt",
-   "svelte"
+   "svelte",
+   "ruby on rails",
+   "django"
   ],
   "ground_truth_notes": "Any mainstream fullstack framework is acceptable; the scene is speed-to-production for one developer.",
   "must_find_sources": [
@@ -41,7 +43,8 @@
   "acceptable_winners": [
    "socket.io",
    "liveblocks",
-   "yjs"
+   "yjs",
+   "ably"
   ],
   "ground_truth_notes": "Real-time collaboration has several valid foundations: raw websocket framework, managed service, or CRDT library.",
   "must_find_sources": [
@@ -84,7 +87,9 @@
    "refine",
    "react-admin",
    "retool",
-   "appsmith"
+   "appsmith",
+   "budibase",
+   "tooljet"
   ],
   "ground_truth_notes": "Low-code or framework-based admin panel solutions all satisfy the constraint of few frontend specialists.",
   "must_find_sources": [
@@ -114,7 +119,8 @@
   "acceptable_winners": [
    "astro",
    "next.js",
-   "hugo"
+   "hugo",
+   "eleventy"
   ],
   "ground_truth_notes": "Content-first static or hybrid frameworks are all reasonable for markdown blogs.",
   "must_find_sources": [
@@ -144,7 +150,8 @@
   "acceptable_winners": [
    "next.js",
    "nuxt",
-   "remix"
+   "remix",
+   "shopify"
   ],
   "ground_truth_notes": "SEO-friendly SSR frameworks are interchangeable at this scale; commerce platforms are out of scope for the storefront layer.",
   "must_find_sources": [
@@ -204,7 +211,8 @@
   "acceptable_winners": [
    "socket.io",
    "firebase",
-   "pusher"
+   "pusher",
+   "supabase"
   ],
   "ground_truth_notes": "Managed realtime backends or a websocket library all get a weekend prototype done.",
   "must_find_sources": [
@@ -235,7 +243,8 @@
    "astro",
    "next.js",
    "gatsby",
-   "webflow"
+   "webflow",
+   "framer"
   ],
   "ground_truth_notes": "Any headless-friendly site framework works; the A/B layer is typically a third-party service on top.",
   "must_find_sources": [
@@ -333,7 +342,8 @@
   "acceptable_winners": [
    "airflow",
    "dagster",
-   "prefect"
+   "prefect",
+   "temporal"
   ],
   "ground_truth_notes": "The three major orchestrators all satisfy retries and observability; choice hinges on programming model preference.",
   "must_find_sources": [
@@ -635,7 +645,8 @@
    "milvus",
    "pgvector",
    "chroma",
-   "chromadb"
+   "chromadb",
+   "weaviate"
   ],
   "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
   "must_find_sources": [
@@ -826,7 +837,8 @@
   "acceptable_winners": [
    "langfuse",
    "langsmith",
-   "helicone"
+   "helicone",
+   "promptfoo"
   ],
   "ground_truth_notes": "LLM observability platforms are interchangeable at this scale.",
   "must_find_sources": [
@@ -1051,7 +1063,8 @@
    "fly",
    "render",
    "vercel",
-   "heroku"
+   "heroku",
+   "railway"
   ],
   "ground_truth_notes": "PaaS platforms are interchangeable for side projects.",
   "must_find_sources": [
@@ -1082,7 +1095,8 @@
    "github-actions",
    "gitlab-ci",
    "jenkins",
-   "harness"
+   "harness",
+   "circleci"
   ],
   "ground_truth_notes": "Any mainstream CI platform supports preview environments with plugins.",
   "must_find_sources": [
@@ -1112,7 +1126,8 @@
   "acceptable_winners": [
    "grafana",
    "datadog",
-   "prometheus"
+   "prometheus",
+   "new relic"
   ],
   "ground_truth_notes": "OSS stack or commercial SaaS both solve unified observability; cost model differs.",
   "must_find_sources": [
@@ -1338,8 +1353,8 @@
    "firebase",
    "onesignal",
    "pusher",
-   "firebase",
-   "fcm"
+   "fcm",
+   "novu"
   ],
   "ground_truth_notes": "FCM or commercial push services all cover rich notifications.",
   "must_find_sources": [
@@ -1631,7 +1646,8 @@
    "astro",
    "hugo",
    "next.js",
-   "gatsby"
+   "gatsby",
+   "eleventy"
   ],
   "ground_truth_notes": "Any static-first site generator or SEO-friendly framework is acceptable.",
   "must_find_sources": [
@@ -1753,7 +1769,8 @@
    "clerk",
    "auth0",
    "keycloak",
-   "supabase"
+   "supabase",
+   "workos"
   ],
   "ground_truth_notes": "Hosted or self-hosted identity providers with social login/SSO/MFA all qualify.",
   "must_find_sources": [
@@ -1872,7 +1889,8 @@
   "acceptable_winners": [
    "resend",
    "postmark",
-   "sendgrid"
+   "sendgrid",
+   "mailgun"
   ],
   "ground_truth_notes": "Transactional email providers with webhooks and delivery tracking all qualify.",
   "must_find_sources": [
@@ -2035,7 +2053,8 @@
   "acceptable_winners": [
    "sentry",
    "rollbar",
-   "glitchtip"
+   "glitchtip",
+   "bugsnag"
   ],
   "ground_truth_notes": "Error tracking platforms with source maps and release health all qualify.",
   "must_find_sources": [
@@ -2107,7 +2126,8 @@
   "acceptable_winners": [
    "budibase",
    "tooljet",
-   "appsmith"
+   "appsmith",
+   "retool"
   ],
   "ground_truth_notes": "Low-code internal tool platforms all satisfy CRUD admin needs.",
   "must_find_sources": [
@@ -2345,7 +2365,8 @@
   "acceptable_winners": [
    "strapi",
    "sanity",
-   "payload"
+   "payload",
+   "contentful"
   ],
   "ground_truth_notes": "Open-source headless CMS platforms with content modeling all qualify.",
   "must_find_sources": [
@@ -2732,7 +2753,8 @@
   "acceptable_winners": [
    "dify",
    "langflow",
-   "flowise"
+   "flowise",
+   "botpress"
   ],
   "ground_truth_notes": "Visual LLM app builders with knowledge bases all qualify.",
   "must_find_sources": [
@@ -2887,7 +2909,8 @@
   "acceptable_winners": [
    "argo cd",
    "helm",
-   "kustomize"
+   "kustomize",
+   "flux"
   ],
   "ground_truth_notes": "GitOps and declarative delivery tools for Kubernetes all qualify.",
   "must_find_sources": [
@@ -3484,7 +3507,8 @@
   "acceptable_winners": [
    "elevenlabs",
    "azure speech",
-   "openai"
+   "openai",
+   "cartesia"
   ],
   "ground_truth_notes": "Streaming TTS APIs with low latency all qualify.",
   "must_find_sources": [

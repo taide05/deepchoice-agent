@@ -7,12 +7,30 @@
   "subdomain": "web_fullstack",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["astro", "hugo", "next.js", "gatsby"],
+  "acceptable_winners": [
+   "astro",
+   "hugo",
+   "next.js",
+   "gatsby",
+   "eleventy"
+  ],
   "ground_truth_notes": "Any static-first site generator or SEO-friendly framework is acceptable.",
   "must_find_sources": [
-   {"pattern": "astro.build", "type": "official_doc", "reason": "Astro official docs"},
-   {"pattern": "gohugo.io", "type": "official_doc", "reason": "Hugo official docs"},
-   {"pattern": "nextjs.org", "type": "official_doc", "reason": "Next.js official docs"}
+   {
+    "pattern": "astro.build",
+    "type": "official_doc",
+    "reason": "Astro official docs"
+   },
+   {
+    "pattern": "gohugo.io",
+    "type": "official_doc",
+    "reason": "Hugo official docs"
+   },
+   {
+    "pattern": "nextjs.org",
+    "type": "official_doc",
+    "reason": "Next.js official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -26,12 +44,29 @@
   "subdomain": "dev_tools",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["nx", "turborepo", "bazel", "pnpm"],
+  "acceptable_winners": [
+   "nx",
+   "turborepo",
+   "bazel",
+   "pnpm"
+  ],
   "ground_truth_notes": "Monorepo build tools with caching and affected-project detection all solve this.",
   "must_find_sources": [
-   {"pattern": "nx.dev", "type": "official_doc", "reason": "Nx official docs"},
-   {"pattern": "bazel.build", "type": "official_doc", "reason": "Bazel official docs"},
-   {"pattern": "pnpm.io", "type": "official_doc", "reason": "pnpm workspace docs"}
+   {
+    "pattern": "nx.dev",
+    "type": "official_doc",
+    "reason": "Nx official docs"
+   },
+   {
+    "pattern": "bazel.build",
+    "type": "official_doc",
+    "reason": "Bazel official docs"
+   },
+   {
+    "pattern": "pnpm.io",
+    "type": "official_doc",
+    "reason": "pnpm workspace docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -52,12 +87,29 @@
   "subdomain": "infra_deploy",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["kong", "traefik", "nginx", "apisix"],
+  "acceptable_winners": [
+   "kong",
+   "traefik",
+   "nginx",
+   "apisix"
+  ],
   "ground_truth_notes": "API gateways with plugin ecosystems for auth/rate-limit/observability are all valid.",
   "must_find_sources": [
-   {"pattern": "docs.konghq.com", "type": "official_doc", "reason": "Kong official docs"},
-   {"pattern": "doc.traefik.io", "type": "official_doc", "reason": "Traefik official docs"},
-   {"pattern": "apisix.apache.org", "type": "official_doc", "reason": "APISIX official docs"}
+   {
+    "pattern": "docs.konghq.com",
+    "type": "official_doc",
+    "reason": "Kong official docs"
+   },
+   {
+    "pattern": "doc.traefik.io",
+    "type": "official_doc",
+    "reason": "Traefik official docs"
+   },
+   {
+    "pattern": "apisix.apache.org",
+    "type": "official_doc",
+    "reason": "APISIX official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -78,12 +130,30 @@
   "subdomain": "security",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["clerk", "auth0", "keycloak", "supabase"],
+  "acceptable_winners": [
+   "clerk",
+   "auth0",
+   "keycloak",
+   "supabase",
+   "workos"
+  ],
   "ground_truth_notes": "Hosted or self-hosted identity providers with social login/SSO/MFA all qualify.",
   "must_find_sources": [
-   {"pattern": "clerk.com", "type": "official_doc", "reason": "Clerk official docs"},
-   {"pattern": "auth0.com", "type": "official_doc", "reason": "Auth0 official docs"},
-   {"pattern": "keycloak.org", "type": "official_doc", "reason": "Keycloak official docs"}
+   {
+    "pattern": "clerk.com",
+    "type": "official_doc",
+    "reason": "Clerk official docs"
+   },
+   {
+    "pattern": "auth0.com",
+    "type": "official_doc",
+    "reason": "Auth0 official docs"
+   },
+   {
+    "pattern": "keycloak.org",
+    "type": "official_doc",
+    "reason": "Keycloak official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -104,12 +174,28 @@
   "subdomain": "data_visualization",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["metabase", "grafana", "superset"],
+  "acceptable_winners": [
+   "metabase",
+   "grafana",
+   "superset"
+  ],
   "ground_truth_notes": "Self-hosted BI tools that connect directly to Postgres are all acceptable.",
   "must_find_sources": [
-   {"pattern": "metabase.com", "type": "official_doc", "reason": "Metabase official docs"},
-   {"pattern": "grafana.com", "type": "official_doc", "reason": "Grafana official docs"},
-   {"pattern": "superset.apache.org", "type": "official_doc", "reason": "Superset official docs"}
+   {
+    "pattern": "metabase.com",
+    "type": "official_doc",
+    "reason": "Metabase official docs"
+   },
+   {
+    "pattern": "grafana.com",
+    "type": "official_doc",
+    "reason": "Grafana official docs"
+   },
+   {
+    "pattern": "superset.apache.org",
+    "type": "official_doc",
+    "reason": "Superset official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -123,12 +209,28 @@
   "subdomain": "infra_messaging",
   "scene": "enterprise",
   "difficulty": "medium",
-  "acceptable_winners": ["kafka", "rabbitmq", "redis"],
+  "acceptable_winners": [
+   "kafka",
+   "rabbitmq",
+   "redis"
+  ],
   "ground_truth_notes": "Message brokers with delivery guarantees and consumer groups all qualify.",
   "must_find_sources": [
-   {"pattern": "kafka.apache.org", "type": "official_doc", "reason": "Kafka official docs"},
-   {"pattern": "rabbitmq.com", "type": "official_doc", "reason": "RabbitMQ official docs"},
-   {"pattern": "redis.io", "type": "official_doc", "reason": "Redis Streams docs"}
+   {
+    "pattern": "kafka.apache.org",
+    "type": "official_doc",
+    "reason": "Kafka official docs"
+   },
+   {
+    "pattern": "rabbitmq.com",
+    "type": "official_doc",
+    "reason": "RabbitMQ official docs"
+   },
+   {
+    "pattern": "redis.io",
+    "type": "official_doc",
+    "reason": "Redis Streams docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -149,12 +251,29 @@
   "subdomain": "api_backend",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["resend", "postmark", "sendgrid"],
+  "acceptable_winners": [
+   "resend",
+   "postmark",
+   "sendgrid",
+   "mailgun"
+  ],
   "ground_truth_notes": "Transactional email providers with webhooks and delivery tracking all qualify.",
   "must_find_sources": [
-   {"pattern": "resend.com", "type": "official_doc", "reason": "Resend official docs"},
-   {"pattern": "postmarkapp.com", "type": "official_doc", "reason": "Postmark official docs"},
-   {"pattern": "sendgrid.com", "type": "official_doc", "reason": "SendGrid official docs"}
+   {
+    "pattern": "resend.com",
+    "type": "official_doc",
+    "reason": "Resend official docs"
+   },
+   {
+    "pattern": "postmarkapp.com",
+    "type": "official_doc",
+    "reason": "Postmark official docs"
+   },
+   {
+    "pattern": "sendgrid.com",
+    "type": "official_doc",
+    "reason": "SendGrid official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -168,12 +287,28 @@
   "subdomain": "ecommerce",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["paddle", "lemonsqueezy", "stripe"],
+  "acceptable_winners": [
+   "paddle",
+   "lemonsqueezy",
+   "stripe"
+  ],
   "ground_truth_notes": "Merchant-of-record billing platforms simplify tax compliance; Stripe also qualifies.",
   "must_find_sources": [
-   {"pattern": "paddle.com", "type": "official_doc", "reason": "Paddle official docs"},
-   {"pattern": "lemonsqueezy.com", "type": "official_doc", "reason": "Lemon Squeezy docs"},
-   {"pattern": "stripe.com", "type": "official_doc", "reason": "Stripe official docs"}
+   {
+    "pattern": "paddle.com",
+    "type": "official_doc",
+    "reason": "Paddle official docs"
+   },
+   {
+    "pattern": "lemonsqueezy.com",
+    "type": "official_doc",
+    "reason": "Lemon Squeezy docs"
+   },
+   {
+    "pattern": "stripe.com",
+    "type": "official_doc",
+    "reason": "Stripe official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -194,12 +329,29 @@
   "subdomain": "ai_infra",
   "scene": "team",
   "difficulty": "hard",
-  "acceptable_winners": ["langfuse", "langsmith", "promptfoo", "helicone"],
+  "acceptable_winners": [
+   "langfuse",
+   "langsmith",
+   "promptfoo",
+   "helicone"
+  ],
   "ground_truth_notes": "LLM observability and evaluation platforms all satisfy tracing and eval needs.",
   "must_find_sources": [
-   {"pattern": "langfuse.com", "type": "official_doc", "reason": "Langfuse official docs"},
-   {"pattern": "docs.smith.langchain.com", "type": "official_doc", "reason": "LangSmith official docs"},
-   {"pattern": "promptfoo.dev", "type": "official_doc", "reason": "Promptfoo official docs"}
+   {
+    "pattern": "langfuse.com",
+    "type": "official_doc",
+    "reason": "Langfuse official docs"
+   },
+   {
+    "pattern": "docs.smith.langchain.com",
+    "type": "official_doc",
+    "reason": "LangSmith official docs"
+   },
+   {
+    "pattern": "promptfoo.dev",
+    "type": "official_doc",
+    "reason": "Promptfoo official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -220,12 +372,29 @@
   "subdomain": "data_platform",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["airflow", "prefect", "dagster", "temporal"],
+  "acceptable_winners": [
+   "airflow",
+   "prefect",
+   "dagster",
+   "temporal"
+  ],
   "ground_truth_notes": "Workflow orchestrators with DAG scheduling, retries and backfills all qualify.",
   "must_find_sources": [
-   {"pattern": "airflow.apache.org", "type": "official_doc", "reason": "Airflow official docs"},
-   {"pattern": "prefect.io", "type": "official_doc", "reason": "Prefect official docs"},
-   {"pattern": "dagster.io", "type": "official_doc", "reason": "Dagster official docs"}
+   {
+    "pattern": "airflow.apache.org",
+    "type": "official_doc",
+    "reason": "Airflow official docs"
+   },
+   {
+    "pattern": "prefect.io",
+    "type": "official_doc",
+    "reason": "Prefect official docs"
+   },
+   {
+    "pattern": "dagster.io",
+    "type": "official_doc",
+    "reason": "Dagster official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -246,11 +415,24 @@
   "subdomain": "infra_observability",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["sentry", "rollbar", "glitchtip"],
+  "acceptable_winners": [
+   "sentry",
+   "rollbar",
+   "glitchtip",
+   "bugsnag"
+  ],
   "ground_truth_notes": "Error tracking platforms with source maps and release health all qualify.",
   "must_find_sources": [
-   {"pattern": "sentry.io", "type": "official_doc", "reason": "Sentry official docs"},
-   {"pattern": "rollbar.com", "type": "official_doc", "reason": "Rollbar official docs"}
+   {
+    "pattern": "sentry.io",
+    "type": "official_doc",
+    "reason": "Sentry official docs"
+   },
+   {
+    "pattern": "rollbar.com",
+    "type": "official_doc",
+    "reason": "Rollbar official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 2,
@@ -264,12 +446,28 @@
   "subdomain": "mobile",
   "scene": "solo",
   "difficulty": "medium",
-  "acceptable_winners": ["flutter", "react native", "expo"],
+  "acceptable_winners": [
+   "flutter",
+   "react native",
+   "expo"
+  ],
   "ground_truth_notes": "Cross-platform mobile frameworks sharing one codebase are all acceptable.",
   "must_find_sources": [
-   {"pattern": "flutter.dev", "type": "official_doc", "reason": "Flutter official docs"},
-   {"pattern": "reactnative.dev", "type": "official_doc", "reason": "React Native official docs"},
-   {"pattern": "expo.dev", "type": "official_doc", "reason": "Expo official docs"}
+   {
+    "pattern": "flutter.dev",
+    "type": "official_doc",
+    "reason": "Flutter official docs"
+   },
+   {
+    "pattern": "reactnative.dev",
+    "type": "official_doc",
+    "reason": "React Native official docs"
+   },
+   {
+    "pattern": "expo.dev",
+    "type": "official_doc",
+    "reason": "Expo official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -290,12 +488,29 @@
   "subdomain": "internal_tools",
   "scene": "team",
   "difficulty": "easy",
-  "acceptable_winners": ["budibase", "tooljet", "appsmith"],
+  "acceptable_winners": [
+   "budibase",
+   "tooljet",
+   "appsmith",
+   "retool"
+  ],
   "ground_truth_notes": "Low-code internal tool platforms all satisfy CRUD admin needs.",
   "must_find_sources": [
-   {"pattern": "budibase.com", "type": "official_doc", "reason": "Budibase official docs"},
-   {"pattern": "tooljet.com", "type": "official_doc", "reason": "ToolJet official docs"},
-   {"pattern": "appsmith.com", "type": "official_doc", "reason": "Appsmith official docs"}
+   {
+    "pattern": "budibase.com",
+    "type": "official_doc",
+    "reason": "Budibase official docs"
+   },
+   {
+    "pattern": "tooljet.com",
+    "type": "official_doc",
+    "reason": "ToolJet official docs"
+   },
+   {
+    "pattern": "appsmith.com",
+    "type": "official_doc",
+    "reason": "Appsmith official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -309,12 +524,28 @@
   "subdomain": "security",
   "scene": "enterprise",
   "difficulty": "medium",
-  "acceptable_winners": ["vault", "doppler", "infisical"],
+  "acceptable_winners": [
+   "vault",
+   "doppler",
+   "infisical"
+  ],
   "ground_truth_notes": "Secrets managers with rotation and audit features all qualify.",
   "must_find_sources": [
-   {"pattern": "hashicorp.com", "type": "official_doc", "reason": "HashiCorp Vault docs"},
-   {"pattern": "doppler.com", "type": "official_doc", "reason": "Doppler official docs"},
-   {"pattern": "infisical.com", "type": "official_doc", "reason": "Infisical official docs"}
+   {
+    "pattern": "hashicorp.com",
+    "type": "official_doc",
+    "reason": "HashiCorp Vault docs"
+   },
+   {
+    "pattern": "doppler.com",
+    "type": "official_doc",
+    "reason": "Doppler official docs"
+   },
+   {
+    "pattern": "infisical.com",
+    "type": "official_doc",
+    "reason": "Infisical official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -335,12 +566,28 @@
   "subdomain": "ai_infra",
   "scene": "solo",
   "difficulty": "hard",
-  "acceptable_winners": ["ollama", "vllm", "llamacpp"],
+  "acceptable_winners": [
+   "ollama",
+   "vllm",
+   "llamacpp"
+  ],
   "ground_truth_notes": "Local LLM serving runtimes all qualify for self-hosted inference.",
   "must_find_sources": [
-   {"pattern": "ollama.com", "type": "official_doc", "reason": "Ollama official docs"},
-   {"pattern": "docs.vllm.ai", "type": "official_doc", "reason": "vLLM official docs"},
-   {"pattern": "github.com/ggml-org/llama.cpp", "type": "github_repo", "reason": "llama.cpp repo"}
+   {
+    "pattern": "ollama.com",
+    "type": "official_doc",
+    "reason": "Ollama official docs"
+   },
+   {
+    "pattern": "docs.vllm.ai",
+    "type": "official_doc",
+    "reason": "vLLM official docs"
+   },
+   {
+    "pattern": "github.com/ggml-org/llama.cpp",
+    "type": "github_repo",
+    "reason": "llama.cpp repo"
+   }
   ],
   "known_contradictions": [
    {
@@ -361,12 +608,28 @@
   "subdomain": "ecommerce",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["meilisearch", "typesense", "algolia"],
+  "acceptable_winners": [
+   "meilisearch",
+   "typesense",
+   "algolia"
+  ],
   "ground_truth_notes": "Search engines with typo tolerance and facets all qualify.",
   "must_find_sources": [
-   {"pattern": "meilisearch.com", "type": "official_doc", "reason": "Meilisearch official docs"},
-   {"pattern": "typesense.org", "type": "official_doc", "reason": "Typesense official docs"},
-   {"pattern": "algolia.com", "type": "official_doc", "reason": "Algolia official docs"}
+   {
+    "pattern": "meilisearch.com",
+    "type": "official_doc",
+    "reason": "Meilisearch official docs"
+   },
+   {
+    "pattern": "typesense.org",
+    "type": "official_doc",
+    "reason": "Typesense official docs"
+   },
+   {
+    "pattern": "algolia.com",
+    "type": "official_doc",
+    "reason": "Algolia official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -387,12 +650,28 @@
   "subdomain": "infra_deploy",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["terraform", "pulumi", "crossplane"],
+  "acceptable_winners": [
+   "terraform",
+   "pulumi",
+   "crossplane"
+  ],
   "ground_truth_notes": "Multi-cloud IaC tools all qualify; Crossplane's control-plane approach also counts.",
   "must_find_sources": [
-   {"pattern": "terraform.io", "type": "official_doc", "reason": "Terraform official docs"},
-   {"pattern": "pulumi.com", "type": "official_doc", "reason": "Pulumi official docs"},
-   {"pattern": "crossplane.io", "type": "official_doc", "reason": "Crossplane official docs"}
+   {
+    "pattern": "terraform.io",
+    "type": "official_doc",
+    "reason": "Terraform official docs"
+   },
+   {
+    "pattern": "pulumi.com",
+    "type": "official_doc",
+    "reason": "Pulumi official docs"
+   },
+   {
+    "pattern": "crossplane.io",
+    "type": "official_doc",
+    "reason": "Crossplane official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -413,12 +692,28 @@
   "subdomain": "internal_tools",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["n8n", "make", "zapier"],
+  "acceptable_winners": [
+   "n8n",
+   "make",
+   "zapier"
+  ],
   "ground_truth_notes": "No-code automation platforms with visual builders all qualify.",
   "must_find_sources": [
-   {"pattern": "n8n.io", "type": "official_doc", "reason": "n8n official docs"},
-   {"pattern": "make.com", "type": "official_doc", "reason": "Make official docs"},
-   {"pattern": "zapier.com", "type": "official_doc", "reason": "Zapier official docs"}
+   {
+    "pattern": "n8n.io",
+    "type": "official_doc",
+    "reason": "n8n official docs"
+   },
+   {
+    "pattern": "make.com",
+    "type": "official_doc",
+    "reason": "Make official docs"
+   },
+   {
+    "pattern": "zapier.com",
+    "type": "official_doc",
+    "reason": "Zapier official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -432,12 +727,29 @@
   "subdomain": "content_platform",
   "scene": "team",
   "difficulty": "easy",
-  "acceptable_winners": ["strapi", "sanity", "payload"],
+  "acceptable_winners": [
+   "strapi",
+   "sanity",
+   "payload",
+   "contentful"
+  ],
   "ground_truth_notes": "Open-source headless CMS platforms with content modeling all qualify.",
   "must_find_sources": [
-   {"pattern": "strapi.io", "type": "official_doc", "reason": "Strapi official docs"},
-   {"pattern": "sanity.io", "type": "official_doc", "reason": "Sanity official docs"},
-   {"pattern": "payloadcms.com", "type": "official_doc", "reason": "Payload CMS official docs"}
+   {
+    "pattern": "strapi.io",
+    "type": "official_doc",
+    "reason": "Strapi official docs"
+   },
+   {
+    "pattern": "sanity.io",
+    "type": "official_doc",
+    "reason": "Sanity official docs"
+   },
+   {
+    "pattern": "payloadcms.com",
+    "type": "official_doc",
+    "reason": "Payload CMS official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -451,12 +763,28 @@
   "subdomain": "data_platform",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["feast", "tecton", "hopsworks"],
+  "acceptable_winners": [
+   "feast",
+   "tecton",
+   "hopsworks"
+  ],
   "ground_truth_notes": "Feature stores with point-in-time joins between training and serving all qualify.",
   "must_find_sources": [
-   {"pattern": "feast.dev", "type": "official_doc", "reason": "Feast official docs"},
-   {"pattern": "tecton.ai", "type": "official_doc", "reason": "Tecton official docs"},
-   {"pattern": "hopsworks.ai", "type": "official_doc", "reason": "Hopsworks official docs"}
+   {
+    "pattern": "feast.dev",
+    "type": "official_doc",
+    "reason": "Feast official docs"
+   },
+   {
+    "pattern": "tecton.ai",
+    "type": "official_doc",
+    "reason": "Tecton official docs"
+   },
+   {
+    "pattern": "hopsworks.ai",
+    "type": "official_doc",
+    "reason": "Hopsworks official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -477,12 +805,28 @@
   "subdomain": "data_platform",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["statsig", "optimizely", "eppo"],
+  "acceptable_winners": [
+   "statsig",
+   "optimizely",
+   "eppo"
+  ],
   "ground_truth_notes": "Experimentation platforms with flags and metric readouts all qualify.",
   "must_find_sources": [
-   {"pattern": "statsig.com", "type": "official_doc", "reason": "Statsig official docs"},
-   {"pattern": "optimizely.com", "type": "official_doc", "reason": "Optimizely official docs"},
-   {"pattern": "geteppo.com", "type": "official_doc", "reason": "Eppo official docs"}
+   {
+    "pattern": "statsig.com",
+    "type": "official_doc",
+    "reason": "Statsig official docs"
+   },
+   {
+    "pattern": "optimizely.com",
+    "type": "official_doc",
+    "reason": "Optimizely official docs"
+   },
+   {
+    "pattern": "geteppo.com",
+    "type": "official_doc",
+    "reason": "Eppo official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -496,12 +840,28 @@
   "subdomain": "mobile",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["novu", "onesignal", "fcm"],
+  "acceptable_winners": [
+   "novu",
+   "onesignal",
+   "fcm"
+  ],
   "ground_truth_notes": "Notification platforms abstracting push delivery all qualify, including Firebase Cloud Messaging.",
   "must_find_sources": [
-   {"pattern": "novu.co", "type": "official_doc", "reason": "Novu official docs"},
-   {"pattern": "onesignal.com", "type": "official_doc", "reason": "OneSignal official docs"},
-   {"pattern": "firebase.google.com", "type": "official_doc", "reason": "FCM official docs"}
+   {
+    "pattern": "novu.co",
+    "type": "official_doc",
+    "reason": "Novu official docs"
+   },
+   {
+    "pattern": "onesignal.com",
+    "type": "official_doc",
+    "reason": "OneSignal official docs"
+   },
+   {
+    "pattern": "firebase.google.com",
+    "type": "official_doc",
+    "reason": "FCM official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -522,12 +882,28 @@
   "subdomain": "internal_tools",
   "scene": "enterprise",
   "difficulty": "medium",
-  "acceptable_winners": ["zendesk", "freshdesk", "intercom"],
+  "acceptable_winners": [
+   "zendesk",
+   "freshdesk",
+   "intercom"
+  ],
   "ground_truth_notes": "Customer support platforms with ticketing and shared inbox all qualify.",
   "must_find_sources": [
-   {"pattern": "zendesk.com", "type": "official_doc", "reason": "Zendesk official docs"},
-   {"pattern": "freshworks.com", "type": "official_doc", "reason": "Freshdesk official docs"},
-   {"pattern": "intercom.com", "type": "official_doc", "reason": "Intercom official docs"}
+   {
+    "pattern": "zendesk.com",
+    "type": "official_doc",
+    "reason": "Zendesk official docs"
+   },
+   {
+    "pattern": "freshworks.com",
+    "type": "official_doc",
+    "reason": "Freshdesk official docs"
+   },
+   {
+    "pattern": "intercom.com",
+    "type": "official_doc",
+    "reason": "Intercom official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -541,12 +917,28 @@
   "subdomain": "realtime_app",
   "scene": "team",
   "difficulty": "hard",
-  "acceptable_winners": ["partykit", "liveblocks", "ably"],
+  "acceptable_winners": [
+   "partykit",
+   "liveblocks",
+   "ably"
+  ],
   "ground_truth_notes": "Realtime infrastructure for presence and sync all qualify.",
   "must_find_sources": [
-   {"pattern": "partykit.io", "type": "official_doc", "reason": "PartyKit official docs"},
-   {"pattern": "liveblocks.io", "type": "official_doc", "reason": "Liveblocks official docs"},
-   {"pattern": "ably.com", "type": "official_doc", "reason": "Ably official docs"}
+   {
+    "pattern": "partykit.io",
+    "type": "official_doc",
+    "reason": "PartyKit official docs"
+   },
+   {
+    "pattern": "liveblocks.io",
+    "type": "official_doc",
+    "reason": "Liveblocks official docs"
+   },
+   {
+    "pattern": "ably.com",
+    "type": "official_doc",
+    "reason": "Ably official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -567,12 +959,29 @@
   "subdomain": "dev_tools",
   "scene": "solo",
   "difficulty": "medium",
-  "acceptable_winners": ["docker compose", "devcontainer", "vagrant", "lima"],
+  "acceptable_winners": [
+   "docker compose",
+   "devcontainer",
+   "vagrant",
+   "lima"
+  ],
   "ground_truth_notes": "Environment-as-code tools that reproduce local stacks all qualify.",
   "must_find_sources": [
-   {"pattern": "docker.com", "type": "official_doc", "reason": "Docker Compose official docs"},
-   {"pattern": "containers.dev", "type": "official_doc", "reason": "Dev Containers spec"},
-   {"pattern": "vagrantup.com", "type": "official_doc", "reason": "Vagrant official docs"}
+   {
+    "pattern": "docker.com",
+    "type": "official_doc",
+    "reason": "Docker Compose official docs"
+   },
+   {
+    "pattern": "containers.dev",
+    "type": "official_doc",
+    "reason": "Dev Containers spec"
+   },
+   {
+    "pattern": "vagrantup.com",
+    "type": "official_doc",
+    "reason": "Vagrant official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -586,12 +995,28 @@
   "subdomain": "api_backend",
   "scene": "team",
   "difficulty": "hard",
-  "acceptable_winners": ["connectrpc", "grpc", "twirp"],
+  "acceptable_winners": [
+   "connectrpc",
+   "grpc",
+   "twirp"
+  ],
   "ground_truth_notes": "RPC frameworks with generated types and streaming all qualify.",
   "must_find_sources": [
-   {"pattern": "connectrpc.com", "type": "official_doc", "reason": "Connect RPC official docs"},
-   {"pattern": "grpc.io", "type": "official_doc", "reason": "gRPC official docs"},
-   {"pattern": "github.com/twitchtv/twirp", "type": "github_repo", "reason": "Twirp repo"}
+   {
+    "pattern": "connectrpc.com",
+    "type": "official_doc",
+    "reason": "Connect RPC official docs"
+   },
+   {
+    "pattern": "grpc.io",
+    "type": "official_doc",
+    "reason": "gRPC official docs"
+   },
+   {
+    "pattern": "github.com/twitchtv/twirp",
+    "type": "github_repo",
+    "reason": "Twirp repo"
+   }
   ],
   "known_contradictions": [
    {
@@ -612,12 +1037,28 @@
   "subdomain": "infra_storage",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["minio", "ceph", "seaweedfs"],
+  "acceptable_winners": [
+   "minio",
+   "ceph",
+   "seaweedfs"
+  ],
   "ground_truth_notes": "Self-hosted S3-compatible object stores with redundancy all qualify.",
   "must_find_sources": [
-   {"pattern": "min.io", "type": "official_doc", "reason": "MinIO official docs"},
-   {"pattern": "ceph.io", "type": "official_doc", "reason": "Ceph official docs"},
-   {"pattern": "github.com/seaweedfs/seaweedfs", "type": "github_repo", "reason": "SeaweedFS repo"}
+   {
+    "pattern": "min.io",
+    "type": "official_doc",
+    "reason": "MinIO official docs"
+   },
+   {
+    "pattern": "ceph.io",
+    "type": "official_doc",
+    "reason": "Ceph official docs"
+   },
+   {
+    "pattern": "github.com/seaweedfs/seaweedfs",
+    "type": "github_repo",
+    "reason": "SeaweedFS repo"
+   }
   ],
   "known_contradictions": [
    {
@@ -638,12 +1079,29 @@
   "subdomain": "content_platform",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["docusaurus", "mkdocs", "vitepress", "mintlify"],
+  "acceptable_winners": [
+   "docusaurus",
+   "mkdocs",
+   "vitepress",
+   "mintlify"
+  ],
   "ground_truth_notes": "Static documentation site generators with versioning/search all qualify.",
   "must_find_sources": [
-   {"pattern": "docusaurus.io", "type": "official_doc", "reason": "Docusaurus official docs"},
-   {"pattern": "mkdocs.org", "type": "official_doc", "reason": "MkDocs official docs"},
-   {"pattern": "vitepress.dev", "type": "official_doc", "reason": "VitePress official docs"}
+   {
+    "pattern": "docusaurus.io",
+    "type": "official_doc",
+    "reason": "Docusaurus official docs"
+   },
+   {
+    "pattern": "mkdocs.org",
+    "type": "official_doc",
+    "reason": "MkDocs official docs"
+   },
+   {
+    "pattern": "vitepress.dev",
+    "type": "official_doc",
+    "reason": "VitePress official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -657,12 +1115,29 @@
   "subdomain": "ai_application",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["dify", "langflow", "flowise"],
+  "acceptable_winners": [
+   "dify",
+   "langflow",
+   "flowise",
+   "botpress"
+  ],
   "ground_truth_notes": "Visual LLM app builders with knowledge bases all qualify.",
   "must_find_sources": [
-   {"pattern": "dify.ai", "type": "official_doc", "reason": "Dify official docs"},
-   {"pattern": "docs.langflow.org", "type": "official_doc", "reason": "Langflow official docs"},
-   {"pattern": "flowiseai.com", "type": "official_doc", "reason": "Flowise official docs"}
+   {
+    "pattern": "dify.ai",
+    "type": "official_doc",
+    "reason": "Dify official docs"
+   },
+   {
+    "pattern": "docs.langflow.org",
+    "type": "official_doc",
+    "reason": "Langflow official docs"
+   },
+   {
+    "pattern": "flowiseai.com",
+    "type": "official_doc",
+    "reason": "Flowise official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -676,12 +1151,28 @@
   "subdomain": "data_platform",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["delta lake", "iceberg", "hudi"],
+  "acceptable_winners": [
+   "delta lake",
+   "iceberg",
+   "hudi"
+  ],
   "ground_truth_notes": "Open table formats bringing ACID to data lakes all qualify.",
   "must_find_sources": [
-   {"pattern": "delta.io", "type": "official_doc", "reason": "Delta Lake official docs"},
-   {"pattern": "iceberg.apache.org", "type": "official_doc", "reason": "Apache Iceberg official docs"},
-   {"pattern": "hudi.apache.org", "type": "official_doc", "reason": "Apache Hudi official docs"}
+   {
+    "pattern": "delta.io",
+    "type": "official_doc",
+    "reason": "Delta Lake official docs"
+   },
+   {
+    "pattern": "iceberg.apache.org",
+    "type": "official_doc",
+    "reason": "Apache Iceberg official docs"
+   },
+   {
+    "pattern": "hudi.apache.org",
+    "type": "official_doc",
+    "reason": "Apache Hudi official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -702,12 +1193,29 @@
   "subdomain": "security",
   "scene": "team",
   "difficulty": "easy",
-  "acceptable_winners": ["renovate", "dependabot", "snyk", "trivy"],
+  "acceptable_winners": [
+   "renovate",
+   "dependabot",
+   "snyk",
+   "trivy"
+  ],
   "ground_truth_notes": "Dependency scanners with auto-PR updates all qualify.",
   "must_find_sources": [
-   {"pattern": "docs.renovatebot.com", "type": "official_doc", "reason": "Renovate official docs"},
-   {"pattern": "github.com/dependabot", "type": "github_repo", "reason": "Dependabot repo"},
-   {"pattern": "snyk.io", "type": "official_doc", "reason": "Snyk official docs"}
+   {
+    "pattern": "docs.renovatebot.com",
+    "type": "official_doc",
+    "reason": "Renovate official docs"
+   },
+   {
+    "pattern": "github.com/dependabot",
+    "type": "github_repo",
+    "reason": "Dependabot repo"
+   },
+   {
+    "pattern": "snyk.io",
+    "type": "official_doc",
+    "reason": "Snyk official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -721,12 +1229,28 @@
   "subdomain": "mobile",
   "scene": "solo",
   "difficulty": "hard",
-  "acceptable_winners": ["sqlite", "watermelondb", "realm"],
+  "acceptable_winners": [
+   "sqlite",
+   "watermelondb",
+   "realm"
+  ],
   "ground_truth_notes": "Offline-first local databases with sync paths all qualify.",
   "must_find_sources": [
-   {"pattern": "sqlite.org", "type": "official_doc", "reason": "SQLite official docs"},
-   {"pattern": "github.com/Nozbe/WatermelonDB", "type": "github_repo", "reason": "WatermelonDB repo"},
-   {"pattern": "github.com/realm/realm-js", "type": "github_repo", "reason": "Realm JS repo"}
+   {
+    "pattern": "sqlite.org",
+    "type": "official_doc",
+    "reason": "SQLite official docs"
+   },
+   {
+    "pattern": "github.com/Nozbe/WatermelonDB",
+    "type": "github_repo",
+    "reason": "WatermelonDB repo"
+   },
+   {
+    "pattern": "github.com/realm/realm-js",
+    "type": "github_repo",
+    "reason": "Realm JS repo"
+   }
   ],
   "known_contradictions": [
    {
@@ -747,12 +1271,29 @@
   "subdomain": "infra_deploy",
   "scene": "enterprise",
   "difficulty": "medium",
-  "acceptable_winners": ["argo cd", "helm", "kustomize"],
+  "acceptable_winners": [
+   "argo cd",
+   "helm",
+   "kustomize",
+   "flux"
+  ],
   "ground_truth_notes": "GitOps and declarative delivery tools for Kubernetes all qualify.",
   "must_find_sources": [
-   {"pattern": "argo-cd.readthedocs.io", "type": "official_doc", "reason": "Argo CD official docs"},
-   {"pattern": "helm.sh", "type": "official_doc", "reason": "Helm official docs"},
-   {"pattern": "kustomize.io", "type": "official_doc", "reason": "Kustomize official docs"}
+   {
+    "pattern": "argo-cd.readthedocs.io",
+    "type": "official_doc",
+    "reason": "Argo CD official docs"
+   },
+   {
+    "pattern": "helm.sh",
+    "type": "official_doc",
+    "reason": "Helm official docs"
+   },
+   {
+    "pattern": "kustomize.io",
+    "type": "official_doc",
+    "reason": "Kustomize official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -773,12 +1314,29 @@
   "subdomain": "ai_infra",
   "scene": "team",
   "difficulty": "hard",
-  "acceptable_winners": ["langfuse", "promptfoo", "agenta", "portkey"],
+  "acceptable_winners": [
+   "langfuse",
+   "promptfoo",
+   "agenta",
+   "portkey"
+  ],
   "ground_truth_notes": "Prompt management platforms with versioning and evals all qualify.",
   "must_find_sources": [
-   {"pattern": "langfuse.com", "type": "official_doc", "reason": "Langfuse official docs"},
-   {"pattern": "promptfoo.dev", "type": "official_doc", "reason": "Promptfoo official docs"},
-   {"pattern": "portkey.ai", "type": "official_doc", "reason": "Portkey official docs"}
+   {
+    "pattern": "langfuse.com",
+    "type": "official_doc",
+    "reason": "Langfuse official docs"
+   },
+   {
+    "pattern": "promptfoo.dev",
+    "type": "official_doc",
+    "reason": "Promptfoo official docs"
+   },
+   {
+    "pattern": "portkey.ai",
+    "type": "official_doc",
+    "reason": "Portkey official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -792,12 +1350,28 @@
   "subdomain": "ecommerce",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["shopify", "medusa", "saleor"],
+  "acceptable_winners": [
+   "shopify",
+   "medusa",
+   "saleor"
+  ],
   "ground_truth_notes": "Commerce platforms with storefront APIs all qualify.",
   "must_find_sources": [
-   {"pattern": "shopify.com", "type": "official_doc", "reason": "Shopify official docs"},
-   {"pattern": "medusajs.com", "type": "official_doc", "reason": "Medusa official docs"},
-   {"pattern": "saleor.io", "type": "official_doc", "reason": "Saleor official docs"}
+   {
+    "pattern": "shopify.com",
+    "type": "official_doc",
+    "reason": "Shopify official docs"
+   },
+   {
+    "pattern": "medusajs.com",
+    "type": "official_doc",
+    "reason": "Medusa official docs"
+   },
+   {
+    "pattern": "saleor.io",
+    "type": "official_doc",
+    "reason": "Saleor official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -818,12 +1392,28 @@
   "subdomain": "infra_messaging",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["emqx", "nats", "zeromq"],
+  "acceptable_winners": [
+   "emqx",
+   "nats",
+   "zeromq"
+  ],
   "ground_truth_notes": "Lightweight messaging systems for device-to-cloud all qualify.",
   "must_find_sources": [
-   {"pattern": "emqx.io", "type": "official_doc", "reason": "EMQX official docs"},
-   {"pattern": "docs.nats.io", "type": "official_doc", "reason": "NATS official docs"},
-   {"pattern": "zeromq.org", "type": "official_doc", "reason": "ZeroMQ official docs"}
+   {
+    "pattern": "emqx.io",
+    "type": "official_doc",
+    "reason": "EMQX official docs"
+   },
+   {
+    "pattern": "docs.nats.io",
+    "type": "official_doc",
+    "reason": "NATS official docs"
+   },
+   {
+    "pattern": "zeromq.org",
+    "type": "official_doc",
+    "reason": "ZeroMQ official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -844,12 +1434,28 @@
   "subdomain": "ai_infra",
   "scene": "enterprise",
   "difficulty": "medium",
-  "acceptable_winners": ["mlflow", "wandb", "neptune"],
+  "acceptable_winners": [
+   "mlflow",
+   "wandb",
+   "neptune"
+  ],
   "ground_truth_notes": "ML experiment tracking platforms with model registry all qualify.",
   "must_find_sources": [
-   {"pattern": "mlflow.org", "type": "official_doc", "reason": "MLflow official docs"},
-   {"pattern": "wandb.ai", "type": "official_doc", "reason": "Weights & Biases docs"},
-   {"pattern": "neptune.ai", "type": "official_doc", "reason": "Neptune official docs"}
+   {
+    "pattern": "mlflow.org",
+    "type": "official_doc",
+    "reason": "MLflow official docs"
+   },
+   {
+    "pattern": "wandb.ai",
+    "type": "official_doc",
+    "reason": "Weights & Biases docs"
+   },
+   {
+    "pattern": "neptune.ai",
+    "type": "official_doc",
+    "reason": "Neptune official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -870,12 +1476,28 @@
   "subdomain": "api_backend",
   "scene": "solo",
   "difficulty": "medium",
-  "acceptable_winners": ["celery", "dramatiq", "huey"],
+  "acceptable_winners": [
+   "celery",
+   "dramatiq",
+   "huey"
+  ],
   "ground_truth_notes": "Python background task queues with retries all qualify.",
   "must_find_sources": [
-   {"pattern": "docs.celeryq.dev", "type": "official_doc", "reason": "Celery official docs"},
-   {"pattern": "dramatiq.io", "type": "official_doc", "reason": "Dramatiq official docs"},
-   {"pattern": "github.com/coleifer/huey", "type": "github_repo", "reason": "Huey repo"}
+   {
+    "pattern": "docs.celeryq.dev",
+    "type": "official_doc",
+    "reason": "Celery official docs"
+   },
+   {
+    "pattern": "dramatiq.io",
+    "type": "official_doc",
+    "reason": "Dramatiq official docs"
+   },
+   {
+    "pattern": "github.com/coleifer/huey",
+    "type": "github_repo",
+    "reason": "Huey repo"
+   }
   ],
   "known_contradictions": [
    {
@@ -896,12 +1518,29 @@
   "subdomain": "api_backend",
   "scene": "team",
   "difficulty": "easy",
-  "acceptable_winners": ["fastapi", "nestjs", "rails", "laravel"],
+  "acceptable_winners": [
+   "fastapi",
+   "nestjs",
+   "rails",
+   "laravel"
+  ],
   "ground_truth_notes": "Batteries-included backend frameworks with generators all qualify.",
   "must_find_sources": [
-   {"pattern": "fastapi.tiangolo.com", "type": "official_doc", "reason": "FastAPI official docs"},
-   {"pattern": "docs.nestjs.com", "type": "official_doc", "reason": "NestJS official docs"},
-   {"pattern": "rubyonrails.org", "type": "official_doc", "reason": "Rails official docs"}
+   {
+    "pattern": "fastapi.tiangolo.com",
+    "type": "official_doc",
+    "reason": "FastAPI official docs"
+   },
+   {
+    "pattern": "docs.nestjs.com",
+    "type": "official_doc",
+    "reason": "NestJS official docs"
+   },
+   {
+    "pattern": "rubyonrails.org",
+    "type": "official_doc",
+    "reason": "Rails official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -915,12 +1554,28 @@
   "subdomain": "security",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["semgrep", "codeql", "sonarqube"],
+  "acceptable_winners": [
+   "semgrep",
+   "codeql",
+   "sonarqube"
+  ],
   "ground_truth_notes": "Static application security testing tools with CI integration all qualify.",
   "must_find_sources": [
-   {"pattern": "semgrep.dev", "type": "official_doc", "reason": "Semgrep official docs"},
-   {"pattern": "codeql.github.com", "type": "official_doc", "reason": "CodeQL official docs"},
-   {"pattern": "sonarsource.com", "type": "official_doc", "reason": "SonarQube official docs"}
+   {
+    "pattern": "semgrep.dev",
+    "type": "official_doc",
+    "reason": "Semgrep official docs"
+   },
+   {
+    "pattern": "codeql.github.com",
+    "type": "official_doc",
+    "reason": "CodeQL official docs"
+   },
+   {
+    "pattern": "sonarsource.com",
+    "type": "official_doc",
+    "reason": "SonarQube official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -941,12 +1596,28 @@
   "subdomain": "content_platform",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["beehiiv", "convertkit", "mailchimp"],
+  "acceptable_winners": [
+   "beehiiv",
+   "convertkit",
+   "mailchimp"
+  ],
   "ground_truth_notes": "Newsletter platforms with subscriber management all qualify.",
   "must_find_sources": [
-   {"pattern": "beehiiv.com", "type": "official_doc", "reason": "beehiiv official docs"},
-   {"pattern": "convertkit.com", "type": "official_doc", "reason": "ConvertKit official docs"},
-   {"pattern": "mailchimp.com", "type": "official_doc", "reason": "Mailchimp official docs"}
+   {
+    "pattern": "beehiiv.com",
+    "type": "official_doc",
+    "reason": "beehiiv official docs"
+   },
+   {
+    "pattern": "convertkit.com",
+    "type": "official_doc",
+    "reason": "ConvertKit official docs"
+   },
+   {
+    "pattern": "mailchimp.com",
+    "type": "official_doc",
+    "reason": "Mailchimp official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -960,12 +1631,28 @@
   "subdomain": "data_visualization",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["streamlit", "dash", "shiny"],
+  "acceptable_winners": [
+   "streamlit",
+   "dash",
+   "shiny"
+  ],
   "ground_truth_notes": "Python data app frameworks with embeddable dashboards all qualify.",
   "must_find_sources": [
-   {"pattern": "streamlit.io", "type": "official_doc", "reason": "Streamlit official docs"},
-   {"pattern": "dash.plotly.com", "type": "official_doc", "reason": "Dash official docs"},
-   {"pattern": "shiny.posit.co", "type": "official_doc", "reason": "Shiny for Python docs"}
+   {
+    "pattern": "streamlit.io",
+    "type": "official_doc",
+    "reason": "Streamlit official docs"
+   },
+   {
+    "pattern": "dash.plotly.com",
+    "type": "official_doc",
+    "reason": "Dash official docs"
+   },
+   {
+    "pattern": "shiny.posit.co",
+    "type": "official_doc",
+    "reason": "Shiny for Python docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -986,12 +1673,28 @@
   "subdomain": "internal_tools",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["camunda", "temporal", "airflow"],
+  "acceptable_winners": [
+   "camunda",
+   "temporal",
+   "airflow"
+  ],
   "ground_truth_notes": "Workflow engines supporting human tasks and durability all qualify.",
   "must_find_sources": [
-   {"pattern": "camunda.com", "type": "official_doc", "reason": "Camunda official docs"},
-   {"pattern": "temporal.io", "type": "official_doc", "reason": "Temporal official docs"},
-   {"pattern": "airflow.apache.org", "type": "official_doc", "reason": "Airflow official docs"}
+   {
+    "pattern": "camunda.com",
+    "type": "official_doc",
+    "reason": "Camunda official docs"
+   },
+   {
+    "pattern": "temporal.io",
+    "type": "official_doc",
+    "reason": "Temporal official docs"
+   },
+   {
+    "pattern": "airflow.apache.org",
+    "type": "official_doc",
+    "reason": "Airflow official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -1012,12 +1715,28 @@
   "subdomain": "security",
   "scene": "solo",
   "difficulty": "easy",
-  "acceptable_winners": ["supabase", "firebase", "lucia"],
+  "acceptable_winners": [
+   "supabase",
+   "firebase",
+   "lucia"
+  ],
   "ground_truth_notes": "Auth-as-a-service or auth libraries with social providers all qualify.",
   "must_find_sources": [
-   {"pattern": "supabase.com", "type": "official_doc", "reason": "Supabase Auth docs"},
-   {"pattern": "firebase.google.com", "type": "official_doc", "reason": "Firebase Auth docs"},
-   {"pattern": "lucia-auth.com", "type": "official_doc", "reason": "Lucia auth library docs"}
+   {
+    "pattern": "supabase.com",
+    "type": "official_doc",
+    "reason": "Supabase Auth docs"
+   },
+   {
+    "pattern": "firebase.google.com",
+    "type": "official_doc",
+    "reason": "Firebase Auth docs"
+   },
+   {
+    "pattern": "lucia-auth.com",
+    "type": "official_doc",
+    "reason": "Lucia auth library docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -1031,12 +1750,28 @@
   "subdomain": "infra_observability",
   "scene": "team",
   "difficulty": "medium",
-  "acceptable_winners": ["loki", "elastic", "datadog"],
+  "acceptable_winners": [
+   "loki",
+   "elastic",
+   "datadog"
+  ],
   "ground_truth_notes": "Log aggregation platforms with query and alerting all qualify.",
   "must_find_sources": [
-   {"pattern": "grafana.com", "type": "official_doc", "reason": "Grafana Loki docs"},
-   {"pattern": "elastic.co", "type": "official_doc", "reason": "Elastic Stack docs"},
-   {"pattern": "datadoghq.com", "type": "official_doc", "reason": "Datadog official docs"}
+   {
+    "pattern": "grafana.com",
+    "type": "official_doc",
+    "reason": "Grafana Loki docs"
+   },
+   {
+    "pattern": "elastic.co",
+    "type": "official_doc",
+    "reason": "Elastic Stack docs"
+   },
+   {
+    "pattern": "datadoghq.com",
+    "type": "official_doc",
+    "reason": "Datadog official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -1057,12 +1792,28 @@
   "subdomain": "infra_deploy",
   "scene": "enterprise",
   "difficulty": "hard",
-  "acceptable_winners": ["istio", "linkerd", "cilium"],
+  "acceptable_winners": [
+   "istio",
+   "linkerd",
+   "cilium"
+  ],
   "ground_truth_notes": "Service meshes providing mTLS and traffic policies all qualify.",
   "must_find_sources": [
-   {"pattern": "istio.io", "type": "official_doc", "reason": "Istio official docs"},
-   {"pattern": "linkerd.io", "type": "official_doc", "reason": "Linkerd official docs"},
-   {"pattern": "cilium.io", "type": "official_doc", "reason": "Cilium official docs"}
+   {
+    "pattern": "istio.io",
+    "type": "official_doc",
+    "reason": "Istio official docs"
+   },
+   {
+    "pattern": "linkerd.io",
+    "type": "official_doc",
+    "reason": "Linkerd official docs"
+   },
+   {
+    "pattern": "cilium.io",
+    "type": "official_doc",
+    "reason": "Cilium official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -1083,12 +1834,28 @@
   "subdomain": "dev_tools",
   "scene": "team",
   "difficulty": "easy",
-  "acceptable_winners": ["readme", "mintlify", "postman"],
+  "acceptable_winners": [
+   "readme",
+   "mintlify",
+   "postman"
+  ],
   "ground_truth_notes": "API documentation platforms consuming OpenAPI all qualify.",
   "must_find_sources": [
-   {"pattern": "readme.com", "type": "official_doc", "reason": "ReadMe official docs"},
-   {"pattern": "mintlify.com", "type": "official_doc", "reason": "Mintlify official docs"},
-   {"pattern": "postman.com", "type": "official_doc", "reason": "Postman official docs"}
+   {
+    "pattern": "readme.com",
+    "type": "official_doc",
+    "reason": "ReadMe official docs"
+   },
+   {
+    "pattern": "mintlify.com",
+    "type": "official_doc",
+    "reason": "Mintlify official docs"
+   },
+   {
+    "pattern": "postman.com",
+    "type": "official_doc",
+    "reason": "Postman official docs"
+   }
   ],
   "known_contradictions": [],
   "min_expected_sources": 3,
@@ -1102,12 +1869,29 @@
   "subdomain": "ai_application",
   "scene": "solo",
   "difficulty": "hard",
-  "acceptable_winners": ["elevenlabs", "azure speech", "openai"],
+  "acceptable_winners": [
+   "elevenlabs",
+   "azure speech",
+   "openai",
+   "cartesia"
+  ],
   "ground_truth_notes": "Streaming TTS APIs with low latency all qualify.",
   "must_find_sources": [
-   {"pattern": "elevenlabs.io", "type": "official_doc", "reason": "ElevenLabs official docs"},
-   {"pattern": "learn.microsoft.com", "type": "official_doc", "reason": "Azure Speech docs"},
-   {"pattern": "platform.openai.com", "type": "official_doc", "reason": "OpenAI audio docs"}
+   {
+    "pattern": "elevenlabs.io",
+    "type": "official_doc",
+    "reason": "ElevenLabs official docs"
+   },
+   {
+    "pattern": "learn.microsoft.com",
+    "type": "official_doc",
+    "reason": "Azure Speech docs"
+   },
+   {
+    "pattern": "platform.openai.com",
+    "type": "official_doc",
+    "reason": "OpenAI audio docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -1128,12 +1912,28 @@
   "subdomain": "infra_storage",
   "scene": "enterprise",
   "difficulty": "medium",
-  "acceptable_winners": ["redis", "memcached", "dragonfly"],
+  "acceptable_winners": [
+   "redis",
+   "memcached",
+   "dragonfly"
+  ],
   "ground_truth_notes": "Distributed in-memory caches with clustering all qualify.",
   "must_find_sources": [
-   {"pattern": "redis.io", "type": "official_doc", "reason": "Redis official docs"},
-   {"pattern": "memcached.org", "type": "official_doc", "reason": "Memcached official docs"},
-   {"pattern": "dragonflydb.io", "type": "official_doc", "reason": "Dragonfly official docs"}
+   {
+    "pattern": "redis.io",
+    "type": "official_doc",
+    "reason": "Redis official docs"
+   },
+   {
+    "pattern": "memcached.org",
+    "type": "official_doc",
+    "reason": "Memcached official docs"
+   },
+   {
+    "pattern": "dragonflydb.io",
+    "type": "official_doc",
+    "reason": "Dragonfly official docs"
+   }
   ],
   "known_contradictions": [
    {
@@ -1154,12 +1954,28 @@
   "subdomain": "ai_application",
   "scene": "team",
   "difficulty": "hard",
-  "acceptable_winners": ["mem0", "letta", "zep"],
+  "acceptable_winners": [
+   "mem0",
+   "letta",
+   "zep"
+  ],
   "ground_truth_notes": "Agent memory layers with retrieval and profile persistence all qualify.",
   "must_find_sources": [
-   {"pattern": "mem0.ai", "type": "official_doc", "reason": "Mem0 official docs"},
-   {"pattern": "letta.com", "type": "official_doc", "reason": "Letta official docs"},
-   {"pattern": "getzep.com", "type": "official_doc", "reason": "Zep official docs"}
+   {
+    "pattern": "mem0.ai",
+    "type": "official_doc",
+    "reason": "Mem0 official docs"
+   },
+   {
+    "pattern": "letta.com",
+    "type": "official_doc",
+    "reason": "Letta official docs"
+   },
+   {
+    "pattern": "getzep.com",
+    "type": "official_doc",
+    "reason": "Zep official docs"
+   }
   ],
   "known_contradictions": [
    {
