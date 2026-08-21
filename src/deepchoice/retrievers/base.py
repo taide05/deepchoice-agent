@@ -1,6 +1,12 @@
 import time
 
 
+def error_text(e: Exception) -> str:
+    """Type-prefixed error text; httpx timeouts carry an empty str() message."""
+    msg = str(e)
+    return f"{type(e).__name__}: {msg}" if msg else f"{type(e).__name__}()"
+
+
 class BaseRetriever:
     source: str = "base"
 
@@ -22,7 +28,7 @@ class BaseRetriever:
                 "source": self.source,
                 "status": "failed",
                 "results": [],
-                "error": str(e),
+                "error": error_text(e),
                 "latency_ms": round((time.monotonic() - t0) * 1000),
             }
 

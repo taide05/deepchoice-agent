@@ -1,5 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
+import httpx
+from deepchoice.retrievers.base import BaseRetriever
 from deepchoice.retrievers.tavily_search import TavilySearch
 from deepchoice.retrievers.github_api import GitHubSearch
 from deepchoice.retrievers.arxiv_api import ArxivSearch
@@ -159,6 +161,61 @@ class TestOfficialSearch:
             result = await retriever.search("test fastapi", [])
         assert result["source"] == "official"
         assert result["status"] == "success"
+
+
+class TestErrorReporting:
+    """Empty-str exceptions (e.g. httpx.ReadTimeout('')) must not produce empty error fields."""
+
+    class _RaisingRetriever(BaseRetriever):
+        source = "raise_test"
+
+        def __init__(self, exc: Exception):
+            self._exc = exc
+
+        async def _do_search(self, query, sub_questions, max_results, adapted_queries=None):
+            raise self._exc
+
+    @pytest.mark.asyncio
+    async def test_empty_message_exception_gets_type_name(self):
+        retriever = self._RaisingRetriever(Exception())
+        result = await retriever.search("test", [])
+        assert result["status"] == "failed"
+        assert result["error"] == "Exception()"
+
+    @pytest.mark.asyncio
+    async def test_httpx_read_timeout_empty_message(self):
+        retriever = self._RaisingRetriever(httpx.ReadTimeout(""))
+        result = await retriever.search("test", [])
+        assert result["status"] == "failed"
+        assert result["error"] == "ReadTimeout()"
+
+    @pytest.mark.asyncio
+    async def test_message_exception_keeps_type_prefix(self):
+        retriever = self._RaisingRetriever(Exception("API timeout"))
+        result = await retriever.search("test", [])
+        assert result["error"] == "Exception: API timeout"
+
+    @pytest.mark.asyncio
+    async def test_multi_retriever_gather_error_not_empty(self):
+        state = {
+            "task": {"query": "test", "scene_context": "solo", "constraints": [], "report_format": "what_why_how"},
+            "sub_questions": [],
+        }
+
+        class EmptyErrRetriever:
+            source = "empty_err"
+            async def search(self, query, sub_questions, max_results=7, adapted_queries=None):
+                raise httpx.ReadTimeout("")
+
+        agent = MultiRetrieverAgent()
+        with patch.dict(
+            "deepchoice.agents.multi_retriever.RETRIEVER_REGISTRY",
+            {"empty_err": EmptyErrRetriever},
+            clear=True,
+        ):
+            result = await agent.run(state)
+        assert result["search_results"][0]["status"] == "failed"
+        assert result["search_results"][0]["error"] == "ReadTimeout()"
 
 
 class TestRetrieverRegistry:

@@ -1,5 +1,6 @@
 import asyncio
 from ..retrievers import RETRIEVER_REGISTRY
+from ..retrievers.base import error_text
 from ..retrievers.learned_docs import extract_terms, harvest
 from ..retrievers.official import TECH_DOCS
 from ..utils.views import print_agent_output
@@ -64,7 +65,7 @@ class MultiRetrieverAgent:
             if isinstance(result, Exception):
                 search_results.append({
                     "source": name, "status": "failed",
-                    "results": [], "error": str(result), "latency_ms": 0,
+                    "results": [], "error": error_text(result), "latency_ms": 0,
                 })
                 partial_failures.append(name)
             else:
