@@ -1,4 +1,7 @@
 """Tavily key pool: quota-aware failover with startup probing (mock-tested, no real keys)."""
+import json
+import time
+
 import pytest
 
 from deepchoice.retrievers import tavily_keypool as kp
@@ -7,12 +10,17 @@ DUMMY = ["tvly-dev-aaaa", "tvly-dev-bbbb", "tvly-dev-cccc"]
 
 
 @pytest.fixture(autouse=True)
-def _reset(monkeypatch):
+def _reset(monkeypatch, tmp_path):
     kp._pool = []
-    kp._dead = set()
-    kp._index = 0
+    kp._exhausted = {}
     kp._probed = False
+    monkeypatch.setenv("TAVILY_KEY_STATE_PATH", str(tmp_path / "state.json"))
     yield
+
+
+def _hash(key):
+    import hashlib
+    return hashlib.sha256(key.encode()).hexdigest()
 
 
 class _FakeResp:
@@ -61,7 +69,7 @@ class TestProbe:
         import asyncio
         statuses = {DUMMY[0]: 432, DUMMY[1]: 200, DUMMY[2]: 401}
         asyncio.run(self._probe(monkeypatch, statuses))
-        assert kp._dead == {DUMMY[0], DUMMY[2]}
+        assert set(kp._exhausted) == {_hash(DUMMY[0]), _hash(DUMMY[2])}
         assert kp._pool == [DUMMY[1]]
 
     def test_network_error_keeps_key_alive(self, monkeypatch):
@@ -70,7 +78,7 @@ class TestProbe:
         async def post(url, json=None, **kw):
             raise Exception("network down")
         asyncio.run(kp.probe(post))
-        assert kp._dead == set()
+        assert kp._exhausted == {}
         assert set(kp._pool) == set(DUMMY)
 
     def test_probe_only_runs_once(self, monkeypatch):
@@ -83,6 +91,72 @@ class TestProbe:
         asyncio.run(kp.ensure_probed(post))
         asyncio.run(kp.ensure_probed(post))
         assert calls["n"] == len(DUMMY)
+
+
+class TestStateFile:
+    def _write_state(self, tmp_path, exhausted: dict):
+        path = tmp_path / "state.json"
+        path.write_text(json.dumps({"exhausted": exhausted}), encoding="utf-8")
+        return path
+
+    def test_dead_key_persisted_after_probe(self, monkeypatch, tmp_path):
+        import asyncio
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        statuses = {DUMMY[0]: 432}
+        asyncio.run(kp.probe(_fake_post_factory(statuses)))
+        path = tmp_path / "state.json"
+        assert path.exists()
+        state = json.loads(path.read_text(encoding="utf-8"))
+        assert _hash(DUMMY[0]) in state["exhausted"]
+        assert _hash(DUMMY[1]) not in state["exhausted"]
+
+    def test_state_file_never_contains_plaintext_key(self, monkeypatch, tmp_path):
+        import asyncio
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        statuses = {DUMMY[0]: 432}
+        asyncio.run(kp.probe(_fake_post_factory(statuses)))
+        raw = (tmp_path / "state.json").read_text(encoding="utf-8")
+        assert DUMMY[0] not in raw
+        assert "tvly-" not in raw
+
+    def test_fresh_exhausted_key_skipped_on_startup(self, monkeypatch, tmp_path):
+        import asyncio
+        self._write_state(tmp_path, {_hash(DUMMY[0]): time.time()})
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        probed_keys = []
+        async def post(url, json=None, **kw):
+            probed_keys.append((json or {}).get("api_key", ""))
+            return _FakeResp(200)
+        asyncio.run(kp.probe(post))
+        assert DUMMY[0] not in probed_keys
+        assert kp._pool == [DUMMY[1], DUMMY[2]]
+
+    def test_expired_exhausted_key_reprobed_and_recovered(self, monkeypatch, tmp_path):
+        import asyncio
+        self._write_state(tmp_path, {_hash(DUMMY[0]): time.time() - 29 * 86400})
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        probed_keys = []
+        async def post(url, json=None, **kw):
+            probed_keys.append((json or {}).get("api_key", ""))
+            return _FakeResp(200)
+        asyncio.run(kp.probe(post))
+        assert DUMMY[0] in probed_keys
+        assert kp._pool == DUMMY
+        state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+        assert state["exhausted"] == {}
+
+    def test_reprobe_env_forces_probe_of_exhausted(self, monkeypatch, tmp_path):
+        import asyncio
+        self._write_state(tmp_path, {_hash(DUMMY[0]): time.time()})
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        monkeypatch.setenv("TAVILY_REPROBE", "1")
+        probed_keys = []
+        async def post(url, json=None, **kw):
+            probed_keys.append((json or {}).get("api_key", ""))
+            return _FakeResp(200)
+        asyncio.run(kp.probe(post))
+        assert probed_keys == DUMMY
+        assert kp._pool == DUMMY
 
 
 class TestFailover:
@@ -99,7 +173,15 @@ class TestFailover:
         status, key = asyncio.run(run())
         assert status == 200
         assert key == DUMMY[1]
-        assert kp._dead == {DUMMY[0]}
+        assert set(kp._exhausted) == {_hash(DUMMY[0])}
+
+    def test_432_persists_to_state_file(self, monkeypatch, tmp_path):
+        import asyncio
+        monkeypatch.setenv("TAVILY_API_KEYS", ",".join(DUMMY))
+        statuses = {DUMMY[0]: 432}
+        asyncio.run(kp.post_with_failover(_fake_post_factory(statuses), {"query": "q"}))
+        state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+        assert _hash(DUMMY[0]) in state["exhausted"]
 
     def test_429_retries_same_key_without_blacklisting(self, monkeypatch):
         import asyncio
@@ -121,7 +203,7 @@ class TestFailover:
 
         status, key = asyncio.run(run())
         assert status == 200 and key == DUMMY[0]
-        assert kp._dead == set(), "429 must not blacklist a key"
+        assert kp._exhausted == {}, "429 must not blacklist a key"
         assert calls["n"] == 2
 
     def test_no_keys_available_returns_none(self, monkeypatch):

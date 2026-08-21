@@ -13,8 +13,9 @@ from deepchoice.agents.multi_retriever import MultiRetrieverAgent
 
 class TestTavilySearch:
     @pytest.fixture(autouse=True)
-    def _tavily_env(self, monkeypatch):
+    def _tavily_env(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TAVILY_API_KEYS", "tvly-dev-test")
+        monkeypatch.setenv("TAVILY_KEY_STATE_PATH", str(tmp_path / "state.json"))
         from deepchoice.retrievers import tavily_keypool
         tavily_keypool._reset_for_tests()
         yield

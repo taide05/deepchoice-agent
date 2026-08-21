@@ -38,5 +38,8 @@ tests/test_cases/generated_cases.json
 # Self-updating official docs cache (runtime-learned)
 learned_docs.json
 
+# Tavily exhausted-key state (SHA256 hashes only, still never committed)
+tavily_key_state.json
+
 # Personal Claude Code settings (machine-specific permissions)
 .claude/settings.local.json
