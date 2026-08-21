@@ -1,0 +1,3602 @@
+[
+ {
+  "id": "OS-0001",
+  "case_type": "open_scenario",
+  "query": "I am a solo developer building a SaaS dashboard and need a web framework that gets me to production fastest",
+  "category": "Open Scenario",
+  "subdomain": "web_fullstack",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "next.js",
+   "vue",
+   "nuxt",
+   "svelte"
+  ],
+  "ground_truth_notes": "Any mainstream fullstack framework is acceptable; the scene is speed-to-production for one developer.",
+  "must_find_sources": [
+   {
+    "pattern": "nextjs.org",
+    "type": "official_doc",
+    "reason": "Next.js official docs"
+   },
+   {
+    "pattern": "vuejs.org",
+    "type": "official_doc",
+    "reason": "Vue official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 200
+ },
+ {
+  "id": "OS-0002",
+  "case_type": "open_scenario",
+  "query": "Our 5-person team is building a real-time collaborative whiteboard; which sync engine should we build on?",
+  "category": "Open Scenario",
+  "subdomain": "realtime_app",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "socket.io",
+   "liveblocks",
+   "yjs"
+  ],
+  "ground_truth_notes": "Real-time collaboration has several valid foundations: raw websocket framework, managed service, or CRDT library.",
+  "must_find_sources": [
+   {
+    "pattern": "socket.io",
+    "type": "official_doc",
+    "reason": "Socket.IO official docs"
+   },
+   {
+    "pattern": "liveblocks.io",
+    "type": "official_doc",
+    "reason": "Liveblocks official docs"
+   },
+   {
+    "pattern": "github.com/yjs/yjs",
+    "type": "github_repo",
+    "reason": "Yjs CRDT repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "CRDT vs operational transform",
+    "position_a": "CRDTs (Yjs) handle offline and conflicts better for modern apps",
+    "position_b": "Operational transforms (OT) are battle-tested in Google Docs-style systems",
+    "key_source": "yjs.dev"
+   }
+  ],
+  "min_expected_sources": 4,
+  "_idx": 201
+ },
+ {
+  "id": "OS-0003",
+  "case_type": "open_scenario",
+  "query": "Enterprise wants internal admin panels for dozens of backend services without hiring frontend specialists",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "refine",
+   "react-admin",
+   "retool",
+   "appsmith"
+  ],
+  "ground_truth_notes": "Low-code or framework-based admin panel solutions all satisfy the constraint of few frontend specialists.",
+  "must_find_sources": [
+   {
+    "pattern": "refine.dev",
+    "type": "official_doc",
+    "reason": "Refine official docs"
+   },
+   {
+    "pattern": "retool.com",
+    "type": "official_doc",
+    "reason": "Retool official site"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 202
+ },
+ {
+  "id": "OS-0004",
+  "case_type": "open_scenario",
+  "query": "I need a content-first site for a personal blog with excellent performance and markdown support",
+  "category": "Open Scenario",
+  "subdomain": "content_platform",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "astro",
+   "next.js",
+   "hugo"
+  ],
+  "ground_truth_notes": "Content-first static or hybrid frameworks are all reasonable for markdown blogs.",
+  "must_find_sources": [
+   {
+    "pattern": "astro.build",
+    "type": "official_doc",
+    "reason": "Astro official docs"
+   },
+   {
+    "pattern": "gohugo.io",
+    "type": "official_doc",
+    "reason": "Hugo official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 203
+ },
+ {
+  "id": "OS-0005",
+  "case_type": "open_scenario",
+  "query": "Our 8-person startup is launching an e-commerce storefront and needs fast time-to-market with SEO",
+  "category": "Open Scenario",
+  "subdomain": "ecommerce",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "next.js",
+   "nuxt",
+   "remix"
+  ],
+  "ground_truth_notes": "SEO-friendly SSR frameworks are interchangeable at this scale; commerce platforms are out of scope for the storefront layer.",
+  "must_find_sources": [
+   {
+    "pattern": "nextjs.org",
+    "type": "official_doc",
+    "reason": "Next.js official docs"
+   },
+   {
+    "pattern": "remix.run",
+    "type": "official_doc",
+    "reason": "Remix official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 204
+ },
+ {
+  "id": "OS-0006",
+  "case_type": "open_scenario",
+  "query": "We need a design system with living documentation shared across three product teams",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "storybook",
+   "ladle",
+   "zeroheight"
+  ],
+  "ground_truth_notes": "Component documentation platforms; any of the three is a valid choice.",
+  "must_find_sources": [
+   {
+    "pattern": "storybook.js.org",
+    "type": "official_doc",
+    "reason": "Storybook official docs"
+   },
+   {
+    "pattern": "github.com/storybookjs/storybook",
+    "type": "github_repo",
+    "reason": "Storybook repo"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 205
+ },
+ {
+  "id": "OS-0007",
+  "case_type": "open_scenario",
+  "query": "I want to prototype a chat app with presence indicators and typing events over the weekend",
+  "category": "Open Scenario",
+  "subdomain": "realtime_app",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "socket.io",
+   "firebase",
+   "pusher"
+  ],
+  "ground_truth_notes": "Managed realtime backends or a websocket library all get a weekend prototype done.",
+  "must_find_sources": [
+   {
+    "pattern": "socket.io",
+    "type": "official_doc",
+    "reason": "Socket.IO docs"
+   },
+   {
+    "pattern": "pusher.com",
+    "type": "official_doc",
+    "reason": "Pusher official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 206
+ },
+ {
+  "id": "OS-0008",
+  "case_type": "open_scenario",
+  "query": "Marketing team needs a landing page builder with A/B testing that developers can extend with code",
+  "category": "Open Scenario",
+  "subdomain": "web_fullstack",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "astro",
+   "next.js",
+   "gatsby",
+   "webflow"
+  ],
+  "ground_truth_notes": "Any headless-friendly site framework works; the A/B layer is typically a third-party service on top.",
+  "must_find_sources": [
+   {
+    "pattern": "astro.build",
+    "type": "official_doc",
+    "reason": "Astro docs"
+   },
+   {
+    "pattern": "gatsbyjs.com",
+    "type": "official_doc",
+    "reason": "Gatsby docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 207
+ },
+ {
+  "id": "OS-0009",
+  "case_type": "open_scenario",
+  "query": "I need a Python REST API for a small internal service, written today, maintainable for years",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "fastapi",
+   "litestar",
+   "flask",
+   "django"
+  ],
+  "ground_truth_notes": "Any mainstream Python web framework satisfies the constraint; preferences differ on async and batteries-included.",
+  "must_find_sources": [
+   {
+    "pattern": "fastapi.tiangolo.com",
+    "type": "official_doc",
+    "reason": "FastAPI docs"
+   },
+   {
+    "pattern": "litestar.dev",
+    "type": "official_doc",
+    "reason": "Litestar docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 208
+ },
+ {
+  "id": "OS-0010",
+  "case_type": "open_scenario",
+  "query": "Our team wants a unified GraphQL API over ten microservices",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "apollo",
+   "hasura",
+   "graphql-yoga"
+  ],
+  "ground_truth_notes": "Federation gateways or an instant-GraphQL layer are the two mainstream routes; both valid.",
+  "must_find_sources": [
+   {
+    "pattern": "apollographql.com",
+    "type": "official_doc",
+    "reason": "Apollo official docs"
+   },
+   {
+    "pattern": "hasura.io",
+    "type": "official_doc",
+    "reason": "Hasura official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Code-first vs DB-first GraphQL",
+    "position_a": "Code-first schemas keep the API explicit and versionable",
+    "position_b": "DB-first (Hasura) removes boilerplate for CRUD-heavy services",
+    "key_source": "hasura.io"
+   }
+  ],
+  "min_expected_sources": 4,
+  "_idx": 209
+ },
+ {
+  "id": "OS-0011",
+  "case_type": "open_scenario",
+  "query": "Enterprise data team needs to orchestrate hundreds of interdependent pipelines with retries and observability",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "airflow",
+   "dagster",
+   "prefect"
+  ],
+  "ground_truth_notes": "The three major orchestrators all satisfy retries and observability; choice hinges on programming model preference.",
+  "must_find_sources": [
+   {
+    "pattern": "airflow.apache.org",
+    "type": "official_doc",
+    "reason": "Airflow docs"
+   },
+   {
+    "pattern": "dagster.io",
+    "type": "official_doc",
+    "reason": "Dagster docs"
+   },
+   {
+    "pattern": "prefect.io",
+    "type": "official_doc",
+    "reason": "Prefect docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "DAG-first vs asset-first",
+    "position_a": "DAG-first (Airflow) matches the mental model of ops engineers",
+    "position_b": "Asset-first (Dagster) reduces coupling and improves reuse",
+    "key_source": "dagster.io"
+   }
+  ],
+  "min_expected_sources": 5,
+  "_idx": 210
+ },
+ {
+  "id": "OS-0012",
+  "case_type": "open_scenario",
+  "query": "I need background job processing in a Python monolith without adding heavy infrastructure",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "celery",
+   "rq",
+   "dramatiq"
+  ],
+  "ground_truth_notes": "Any lightweight Python task queue fits; broker requirements differ slightly.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.celeryq.dev",
+    "type": "official_doc",
+    "reason": "Celery docs"
+   },
+   {
+    "pattern": "python-rq.org",
+    "type": "official_doc",
+    "reason": "RQ docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 211
+ },
+ {
+  "id": "OS-0013",
+  "case_type": "open_scenario",
+  "query": "Our platform needs reliable asynchronous events between services with at-least-once delivery",
+  "category": "Open Scenario",
+  "subdomain": "infra_messaging",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "rabbitmq",
+   "kafka",
+   "redis"
+  ],
+  "ground_truth_notes": "Classic broker vs log vs lightweight streams tradeoff; all three can satisfy the requirement.",
+  "must_find_sources": [
+   {
+    "pattern": "rabbitmq.com",
+    "type": "official_doc",
+    "reason": "RabbitMQ docs"
+   },
+   {
+    "pattern": "kafka.apache.org",
+    "type": "official_doc",
+    "reason": "Kafka docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Broker vs log",
+    "position_a": "Brokers give per-message routing and acknowledgements",
+    "position_b": "Logs give replayability and ordering at scale",
+    "key_source": "kafka.apache.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 212
+ },
+ {
+  "id": "OS-0014",
+  "case_type": "open_scenario",
+  "query": "Enterprise is standardizing internal service-to-service communication across polyglot teams",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "grpc",
+   "openapi",
+   "thrift"
+  ],
+  "ground_truth_notes": "RPC frameworks or contract-first REST both standardize communication; each has ecosystem tradeoffs.",
+  "must_find_sources": [
+   {
+    "pattern": "grpc.io",
+    "type": "official_doc",
+    "reason": "gRPC docs"
+   },
+   {
+    "pattern": "openapis.org",
+    "type": "official_doc",
+    "reason": "OpenAPI spec site"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 213
+ },
+ {
+  "id": "OS-0015",
+  "case_type": "open_scenario",
+  "query": "I need object storage for user uploads in a self-hosted deployment",
+  "category": "Open Scenario",
+  "subdomain": "infra_storage",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "minio",
+   "s3",
+   "cloudflare"
+  ],
+  "ground_truth_notes": "Self-hosted S3-compatible or managed object storage both meet the requirement.",
+  "must_find_sources": [
+   {
+    "pattern": "min.io",
+    "type": "official_doc",
+    "reason": "MinIO docs"
+   },
+   {
+    "pattern": "aws.amazon.com/s3",
+    "type": "official_doc",
+    "reason": "AWS S3 docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 214
+ },
+ {
+  "id": "OS-0016",
+  "case_type": "open_scenario",
+  "query": "Our support team wants to automate ticket triage and internal workflows without a dedicated engineering effort",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "n8n",
+   "windmill",
+   "temporal",
+   "chatwoot",
+   "zendesk"
+  ],
+  "ground_truth_notes": "Visual workflow tools or durable-execution frameworks both enable non-engineers to build automations.",
+  "must_find_sources": [
+   {
+    "pattern": "n8n.io",
+    "type": "official_doc",
+    "reason": "n8n docs"
+   },
+   {
+    "pattern": "windmill.dev",
+    "type": "official_doc",
+    "reason": "Windmill docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 215
+ },
+ {
+  "id": "OS-0017",
+  "case_type": "open_scenario",
+  "query": "I analyze multi-gigabyte CSV exports on my laptop and pandas is too slow",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "duckdb",
+   "polars",
+   "pandas",
+   "dask"
+  ],
+  "ground_truth_notes": "Columnar engines or the improved pandas 2.x all handle multi-GB CSV better than naive pandas; any acceptable.",
+  "must_find_sources": [
+   {
+    "pattern": "duckdb.org",
+    "type": "official_doc",
+    "reason": "DuckDB docs"
+   },
+   {
+    "pattern": "pola.rs",
+    "type": "official_doc",
+    "reason": "Polars docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 216
+ },
+ {
+  "id": "OS-0018",
+  "case_type": "open_scenario",
+  "query": "Our team needs sub-second dashboards over billions of events",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "clickhouse",
+   "timescaledb",
+   "materialize",
+   "druid"
+  ],
+  "ground_truth_notes": "OLAP column stores or streaming-materialized views are the valid routes.",
+  "must_find_sources": [
+   {
+    "pattern": "clickhouse.com",
+    "type": "official_doc",
+    "reason": "ClickHouse docs"
+   },
+   {
+    "pattern": "timescale.com",
+    "type": "official_doc",
+    "reason": "TimescaleDB docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 217
+ },
+ {
+  "id": "OS-0019",
+  "case_type": "open_scenario",
+  "query": "Enterprise wants an open lakehouse architecture on S3-compatible storage",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "delta",
+   "iceberg",
+   "hudi"
+  ],
+  "ground_truth_notes": "The three open table formats are all valid; ecosystem integration differs.",
+  "must_find_sources": [
+   {
+    "pattern": "delta.io",
+    "type": "official_doc",
+    "reason": "Delta Lake docs"
+   },
+   {
+    "pattern": "iceberg.apache.org",
+    "type": "official_doc",
+    "reason": "Apache Iceberg docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Table format convergence",
+    "position_a": "Delta Lake has the deepest Spark/Databricks integration",
+    "position_b": "Iceberg is the neutral standard with broadest engine support",
+    "key_source": "iceberg.apache.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 218
+ },
+ {
+  "id": "OS-0020",
+  "case_type": "open_scenario",
+  "query": "I want semantic search over my personal notes and documents, self-hosted",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "qdrant",
+   "milvus",
+   "pgvector",
+   "chroma",
+   "chromadb"
+  ],
+  "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
+  "must_find_sources": [
+   {
+    "pattern": "qdrant.tech",
+    "type": "official_doc",
+    "reason": "Qdrant docs"
+   },
+   {
+    "pattern": "github.com/pgvector/pgvector",
+    "type": "github_repo",
+    "reason": "pgvector repo"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 219
+ },
+ {
+  "id": "OS-0021",
+  "case_type": "open_scenario",
+  "query": "Our ML team needs a feature store shared between training and inference",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "feast",
+   "redis",
+   "tecton"
+  ],
+  "ground_truth_notes": "Dedicated feature store or a Redis-based custom layer both satisfy train/serve consistency.",
+  "must_find_sources": [
+   {
+    "pattern": "feast.dev",
+    "type": "official_doc",
+    "reason": "Feast docs"
+   },
+   {
+    "pattern": "redis.io",
+    "type": "official_doc",
+    "reason": "Redis docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 220
+ },
+ {
+  "id": "OS-0022",
+  "case_type": "open_scenario",
+  "query": "Enterprise needs a data catalog so analysts can discover and trust datasets",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "openmetadata",
+   "datahub",
+   "amundsen",
+   "wrenai",
+   "canner",
+   "apache atlas",
+   "atlas"
+  ],
+  "ground_truth_notes": "The three open-source catalogs overlap heavily in capability.",
+  "must_find_sources": [
+   {
+    "pattern": "open-metadata.org",
+    "type": "official_doc",
+    "reason": "OpenMetadata docs"
+   },
+   {
+    "pattern": "datahubproject.io",
+    "type": "official_doc",
+    "reason": "DataHub docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 221
+ },
+ {
+  "id": "OS-0023",
+  "case_type": "open_scenario",
+  "query": "I need to collect and alert on metrics from a handful of self-hosted services",
+  "category": "Open Scenario",
+  "subdomain": "infra_observability",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "prometheus",
+   "influxdb",
+   "victoriametrics"
+  ],
+  "ground_truth_notes": "Any time-series metrics stack satisfies small-scale monitoring.",
+  "must_find_sources": [
+   {
+    "pattern": "prometheus.io",
+    "type": "official_doc",
+    "reason": "Prometheus docs"
+   },
+   {
+    "pattern": "influxdata.com",
+    "type": "official_doc",
+    "reason": "InfluxDB docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 222
+ },
+ {
+  "id": "OS-0024",
+  "case_type": "open_scenario",
+  "query": "Our analytics team wants version-controlled SQL transformations with testing",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "dbt",
+   "sqlmesh",
+   "airflow"
+  ],
+  "ground_truth_notes": "dbt is the default but SQLMesh and hand-rolled Airflow SQL are defensible.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.getdbt.com",
+    "type": "official_doc",
+    "reason": "dbt docs"
+   },
+   {
+    "pattern": "sqlmesh.com",
+    "type": "official_doc",
+    "reason": "SQLMesh docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 223
+ },
+ {
+  "id": "OS-0025",
+  "case_type": "open_scenario",
+  "query": "I want to build a RAG chatbot over my company's internal docs",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "langchain",
+   "llamaindex",
+   "haystack"
+  ],
+  "ground_truth_notes": "The three RAG frameworks all cover retrieval, prompting, and evaluation.",
+  "must_find_sources": [
+   {
+    "pattern": "python.langchain.com",
+    "type": "official_doc",
+    "reason": "LangChain docs"
+   },
+   {
+    "pattern": "docs.llamaindex.ai",
+    "type": "official_doc",
+    "reason": "LlamaIndex docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Framework vs DIY",
+    "position_a": "Frameworks accelerate iteration but hide retrieval details",
+    "position_b": "DIY gives control and fewer abstractions to debug",
+    "key_source": "llamaindex.ai"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 224
+ },
+ {
+  "id": "OS-0026",
+  "case_type": "open_scenario",
+  "query": "Our team ships an LLM product and needs tracing, evals, and prompt management",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "langfuse",
+   "langsmith",
+   "helicone"
+  ],
+  "ground_truth_notes": "LLM observability platforms are interchangeable at this scale.",
+  "must_find_sources": [
+   {
+    "pattern": "langfuse.com",
+    "type": "official_doc",
+    "reason": "Langfuse docs"
+   },
+   {
+    "pattern": "docs.smith.langchain.com",
+    "type": "official_doc",
+    "reason": "LangSmith docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 225
+ },
+ {
+  "id": "OS-0027",
+  "case_type": "open_scenario",
+  "query": "Enterprise must serve open-weight LLMs on-premises with high throughput",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "vllm",
+   "ollama",
+   "sglang"
+  ],
+  "ground_truth_notes": "Any production-capable inference server fits; throughput and model support differ.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.vllm.ai",
+    "type": "official_doc",
+    "reason": "vLLM docs"
+   },
+   {
+    "pattern": "ollama.com",
+    "type": "official_doc",
+    "reason": "Ollama docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 226
+ },
+ {
+  "id": "OS-0028",
+  "case_type": "open_scenario",
+  "query": "I want to fine-tune a small open model on one GPU for a niche task",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "unsloth",
+   "peft",
+   "trl",
+   "hugging face transformers",
+   "transformers"
+  ],
+  "ground_truth_notes": "Parameter-efficient fine-tuning libraries all fit single-GPU constraints.",
+  "must_find_sources": [
+   {
+    "pattern": "github.com/unslothai/unsloth",
+    "type": "github_repo",
+    "reason": "Unsloth repo"
+   },
+   {
+    "pattern": "huggingface.co/docs/peft",
+    "type": "official_doc",
+    "reason": "PEFT docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 227
+ },
+ {
+  "id": "OS-0029",
+  "case_type": "open_scenario",
+  "query": "Our team is building a multi-agent research system and needs an orchestration framework",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "langgraph",
+   "crewai",
+   "autogen"
+  ],
+  "ground_truth_notes": "Graph-based, role-based, or conversation-based agent orchestration are all valid models.",
+  "must_find_sources": [
+   {
+    "pattern": "langchain-ai.github.io/langgraph",
+    "type": "official_doc",
+    "reason": "LangGraph docs"
+   },
+   {
+    "pattern": "docs.crewai.com",
+    "type": "official_doc",
+    "reason": "CrewAI docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Control vs ease",
+    "position_a": "Explicit graphs give control and debuggability",
+    "position_b": "Role abstractions ship agents faster",
+    "key_source": "langchain-ai.github.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 228
+ },
+ {
+  "id": "OS-0030",
+  "case_type": "open_scenario",
+  "query": "Enterprise ML platform team needs experiment tracking and model registry with governance",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "mlflow",
+   "kubeflow",
+   "wandb"
+  ],
+  "ground_truth_notes": "Any MLOps platform with registry + governance fits; deployment stack differs.",
+  "must_find_sources": [
+   {
+    "pattern": "mlflow.org",
+    "type": "official_doc",
+    "reason": "MLflow docs"
+   },
+   {
+    "pattern": "kubeflow.org",
+    "type": "official_doc",
+    "reason": "Kubeflow docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 229
+ },
+ {
+  "id": "OS-0031",
+  "case_type": "open_scenario",
+  "query": "I need to parse messy PDFs and Office files into clean markdown for an indexing pipeline",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "unstructured",
+   "marker",
+   "docling",
+   "markitdown",
+   "llamaindex",
+   "llamaparse"
+  ],
+  "ground_truth_notes": "Document parsing libraries with different strengths; any is acceptable for an indexing pipeline.",
+  "must_find_sources": [
+   {
+    "pattern": "github.com/unstructured-io/unstructured",
+    "type": "github_repo",
+    "reason": "Unstructured repo"
+   },
+   {
+    "pattern": "github.com/DS4SD/docling",
+    "type": "github_repo",
+    "reason": "Docling repo"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 230
+ },
+ {
+  "id": "OS-0032",
+  "case_type": "open_scenario",
+  "query": "Our team needs automated evaluation of LLM outputs in CI before every release",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "ragas",
+   "deepeval",
+   "promptfoo",
+   "hugging face evaluate",
+   "evaluate"
+  ],
+  "ground_truth_notes": "LLM evaluation harnesses all integrate into CI; metric suites differ.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.ragas.io",
+    "type": "official_doc",
+    "reason": "RAGAS docs"
+   },
+   {
+    "pattern": "promptfoo.dev",
+    "type": "official_doc",
+    "reason": "promptfoo docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 231
+ },
+ {
+  "id": "OS-0033",
+  "case_type": "open_scenario",
+  "query": "I deploy small side projects and want near-zero DevOps overhead",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "fly",
+   "render",
+   "vercel",
+   "heroku"
+  ],
+  "ground_truth_notes": "PaaS platforms are interchangeable for side projects.",
+  "must_find_sources": [
+   {
+    "pattern": "fly.io",
+    "type": "official_doc",
+    "reason": "Fly.io docs"
+   },
+   {
+    "pattern": "render.com",
+    "type": "official_doc",
+    "reason": "Render docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 232
+ },
+ {
+  "id": "OS-0034",
+  "case_type": "open_scenario",
+  "query": "Our 6-person team wants CI/CD with preview environments for pull requests",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "github-actions",
+   "gitlab-ci",
+   "jenkins",
+   "harness"
+  ],
+  "ground_truth_notes": "Any mainstream CI platform supports preview environments with plugins.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.github.com",
+    "type": "official_doc",
+    "reason": "GitHub Actions docs"
+   },
+   {
+    "pattern": "docs.gitlab.com",
+    "type": "official_doc",
+    "reason": "GitLab CI docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 233
+ },
+ {
+  "id": "OS-0035",
+  "case_type": "open_scenario",
+  "query": "Enterprise runs hundreds of Kubernetes clusters and needs unified dashboards and alerting",
+  "category": "Open Scenario",
+  "subdomain": "infra_observability",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "grafana",
+   "datadog",
+   "prometheus"
+  ],
+  "ground_truth_notes": "OSS stack or commercial SaaS both solve unified observability; cost model differs.",
+  "must_find_sources": [
+   {
+    "pattern": "grafana.com",
+    "type": "official_doc",
+    "reason": "Grafana docs"
+   },
+   {
+    "pattern": "prometheus.io",
+    "type": "official_doc",
+    "reason": "Prometheus docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "OSS vs SaaS",
+    "position_a": "OSS stacks avoid vendor lock-in and per-host fees",
+    "position_b": "SaaS observability is cheaper to operate at enterprise scale",
+    "key_source": "grafana.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 234
+ },
+ {
+  "id": "OS-0036",
+  "case_type": "open_scenario",
+  "query": "I want reproducible local dev environments for my side projects",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "docker",
+   "devcontainers",
+   "nix"
+  ],
+  "ground_truth_notes": "Containers or Nix both give reproducible environments.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.docker.com",
+    "type": "official_doc",
+    "reason": "Docker docs"
+   },
+   {
+    "pattern": "nixos.org",
+    "type": "official_doc",
+    "reason": "Nix docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 235
+ },
+ {
+  "id": "OS-0037",
+  "case_type": "open_scenario",
+  "query": "Our team needs secrets management with audit logs and rotation",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "vault",
+   "doppler",
+   "infisical"
+  ],
+  "ground_truth_notes": "Any secrets manager with audit + rotation satisfies the requirement.",
+  "must_find_sources": [
+   {
+    "pattern": "vaultproject.io",
+    "type": "official_doc",
+    "reason": "HashiCorp Vault docs"
+   },
+   {
+    "pattern": "infisical.com",
+    "type": "official_doc",
+    "reason": "Infisical docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 236
+ },
+ {
+  "id": "OS-0038",
+  "case_type": "open_scenario",
+  "query": "Enterprise platform team is choosing infrastructure-as-code for multi-cloud",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "terraform",
+   "pulumi",
+   "crossplane"
+  ],
+  "ground_truth_notes": "Declarative DSL, general-purpose languages, or Kubernetes-native control loops are the three valid schools.",
+  "must_find_sources": [
+   {
+    "pattern": "terraform.io",
+    "type": "official_doc",
+    "reason": "Terraform docs"
+   },
+   {
+    "pattern": "pulumi.com",
+    "type": "official_doc",
+    "reason": "Pulumi docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "DSL vs general-purpose",
+    "position_a": "DSLs are safer and declarative by construction",
+    "position_b": "General-purpose languages enable real logic and reuse",
+    "key_source": "pulumi.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 237
+ },
+ {
+  "id": "OS-0039",
+  "case_type": "open_scenario",
+  "query": "I need uptime monitoring with status pages for three small services",
+  "category": "Open Scenario",
+  "subdomain": "infra_observability",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "uptime-kuma",
+   "betterstack",
+   "grafana",
+   "uptimerobot"
+  ],
+  "ground_truth_notes": "Self-hosted or SaaS uptime monitors both fit three services.",
+  "must_find_sources": [
+   {
+    "pattern": "github.com/louislam/uptime-kuma",
+    "type": "github_repo",
+    "reason": "Uptime Kuma repo"
+   },
+   {
+    "pattern": "betterstack.com",
+    "type": "official_doc",
+    "reason": "Better Stack docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 238
+ },
+ {
+  "id": "OS-0040",
+  "case_type": "open_scenario",
+  "query": "Our 40-engineer org wants an internal developer portal with service catalog and docs",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "backstage",
+   "port",
+   "opslevel"
+  ],
+  "ground_truth_notes": "Backstage or commercial portals both deliver catalogs and docs; effort differs sharply.",
+  "must_find_sources": [
+   {
+    "pattern": "backstage.io",
+    "type": "official_doc",
+    "reason": "Backstage docs"
+   },
+   {
+    "pattern": "getport.io",
+    "type": "official_doc",
+    "reason": "Port docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 239
+ },
+ {
+  "id": "OS-0041",
+  "case_type": "open_scenario",
+  "query": "I want one codebase for an iOS and Android app as a solo developer",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "flutter",
+   "react-native",
+   "expo"
+  ],
+  "ground_truth_notes": "Cross-platform frameworks all deliver one codebase for both platforms.",
+  "must_find_sources": [
+   {
+    "pattern": "flutter.dev",
+    "type": "official_doc",
+    "reason": "Flutter docs"
+   },
+   {
+    "pattern": "reactnative.dev",
+    "type": "official_doc",
+    "reason": "React Native docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 240
+ },
+ {
+  "id": "OS-0042",
+  "case_type": "open_scenario",
+  "query": "Our team needs push notifications for a mobile app with rich media support",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "team",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "firebase",
+   "onesignal",
+   "pusher",
+   "firebase",
+   "fcm"
+  ],
+  "ground_truth_notes": "FCM or commercial push services all cover rich notifications.",
+  "must_find_sources": [
+   {
+    "pattern": "firebase.google.com",
+    "type": "official_doc",
+    "reason": "Firebase docs"
+   },
+   {
+    "pattern": "onesignal.com",
+    "type": "official_doc",
+    "reason": "OneSignal docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 241
+ },
+ {
+  "id": "OS-0043",
+  "case_type": "open_scenario",
+  "query": "Enterprise needs SSO with SAML and OIDC for internal tools, self-hosted",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "keycloak",
+   "authentik",
+   "zitadel"
+  ],
+  "ground_truth_notes": "Open-source identity providers all support SAML and OIDC.",
+  "must_find_sources": [
+   {
+    "pattern": "keycloak.org",
+    "type": "official_doc",
+    "reason": "Keycloak docs"
+   },
+   {
+    "pattern": "authentik.io",
+    "type": "official_doc",
+    "reason": "Authentik docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 242
+ },
+ {
+  "id": "OS-0044",
+  "case_type": "open_scenario",
+  "query": "I am building an offline-first notes app that syncs across devices",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "solo",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "powersync",
+   "watermelondb",
+   "realm",
+   "pouchdb",
+   "cloud firestore",
+   "firestore"
+  ],
+  "ground_truth_notes": "Offline-first sync engines are the hard requirement; each has a different data model.",
+  "must_find_sources": [
+   {
+    "pattern": "powersync.com",
+    "type": "official_doc",
+    "reason": "PowerSync docs"
+   },
+   {
+    "pattern": "watermelondb.dev",
+    "type": "official_doc",
+    "reason": "WatermelonDB docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 243
+ },
+ {
+  "id": "OS-0045",
+  "case_type": "open_scenario",
+  "query": "Our team ships a cross-platform desktop app and wants a small bundle and native feel",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "tauri",
+   "electron",
+   "flutter"
+  ],
+  "ground_truth_notes": "Any cross-platform desktop framework qualifies; bundle size and native feel are the tradeoffs.",
+  "must_find_sources": [
+   {
+    "pattern": "tauri.app",
+    "type": "official_doc",
+    "reason": "Tauri docs"
+   },
+   {
+    "pattern": "electronjs.org",
+    "type": "official_doc",
+    "reason": "Electron docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Webview vs native rendering",
+    "position_a": "Webviews reuse web skills and UI libraries",
+    "position_b": "Native rendering gives performance and true native widgets",
+    "key_source": "tauri.app"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 244
+ },
+ {
+  "id": "OS-0046",
+  "case_type": "open_scenario",
+  "query": "I am adding subscriptions and billing to a small SaaS product",
+  "category": "Open Scenario",
+  "subdomain": "ecommerce",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "stripe",
+   "paddle",
+   "lemonsqueezy"
+  ],
+  "ground_truth_notes": "Payment providers with subscription APIs all fit; merchant-of-record status differs.",
+  "must_find_sources": [
+   {
+    "pattern": "stripe.com",
+    "type": "official_doc",
+    "reason": "Stripe docs"
+   },
+   {
+    "pattern": "paddle.com",
+    "type": "official_doc",
+    "reason": "Paddle docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 245
+ },
+ {
+  "id": "OS-0047",
+  "case_type": "open_scenario",
+  "query": "Our team needs a rules engine for fraud detection with human-review workflows",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "temporal",
+   "postgresql",
+   "oso",
+   "drools"
+  ],
+  "ground_truth_notes": "Durable execution, plain SQL rules, or an authorization engine are all defensible starting points.",
+  "must_find_sources": [
+   {
+    "pattern": "temporal.io",
+    "type": "official_doc",
+    "reason": "Temporal docs"
+   },
+   {
+    "pattern": "postgresql.org",
+    "type": "official_doc",
+    "reason": "PostgreSQL docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 246
+ },
+ {
+  "id": "OS-0048",
+  "case_type": "open_scenario",
+  "query": "Enterprise needs role-based access control with fine-grained permissions across microservices",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "keycloak",
+   "casbin",
+   "cerbos",
+   "opa",
+   "open policy agent"
+  ],
+  "ground_truth_notes": "Identity-based or policy-based authorization both deliver fine-grained RBAC.",
+  "must_find_sources": [
+   {
+    "pattern": "keycloak.org",
+    "type": "official_doc",
+    "reason": "Keycloak docs"
+   },
+   {
+    "pattern": "cerbos.dev",
+    "type": "official_doc",
+    "reason": "Cerbos docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Centralized vs embedded policies",
+    "position_a": "A central policy service gives one place to audit",
+    "position_b": "Embedded policy engines avoid a network hop per request",
+    "key_source": "cerbos.dev"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 247
+ },
+ {
+  "id": "OS-0049",
+  "case_type": "open_scenario",
+  "query": "I need to scrape product data from e-commerce sites, handling JavaScript rendering",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "playwright",
+   "scrapy",
+   "puppeteer"
+  ],
+  "ground_truth_notes": "Browser automation or request-based scraping both handle JS sites with different tradeoffs.",
+  "must_find_sources": [
+   {
+    "pattern": "playwright.dev",
+    "type": "official_doc",
+    "reason": "Playwright docs"
+   },
+   {
+    "pattern": "scrapy.org",
+    "type": "official_doc",
+    "reason": "Scrapy docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 248
+ },
+ {
+  "id": "OS-0050",
+  "case_type": "open_scenario",
+  "query": "Our team wants feature flags with gradual rollout and per-team permissions",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "unleash",
+   "flagsmith",
+   "growthbook",
+   "launchdarkly"
+  ],
+  "ground_truth_notes": "Open-source or SaaS feature flag services all satisfy gradual rollout.",
+  "must_find_sources": [
+   {
+    "pattern": "getunleash.io",
+    "type": "official_doc",
+    "reason": "Unleash docs"
+   },
+   {
+    "pattern": "flagsmith.com",
+    "type": "official_doc",
+    "reason": "Flagsmith docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 249
+ },
+ {
+  "id": "OS-0051",
+  "case_type": "open_scenario",
+  "query": "I am a solo developer building a personal portfolio and technical blog and care mostly about SEO and fast page loads",
+  "category": "Open Scenario",
+  "subdomain": "web_fullstack",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "astro",
+   "hugo",
+   "next.js",
+   "gatsby"
+  ],
+  "ground_truth_notes": "Any static-first site generator or SEO-friendly framework is acceptable.",
+  "must_find_sources": [
+   {
+    "pattern": "astro.build",
+    "type": "official_doc",
+    "reason": "Astro official docs"
+   },
+   {
+    "pattern": "gohugo.io",
+    "type": "official_doc",
+    "reason": "Hugo official docs"
+   },
+   {
+    "pattern": "nextjs.org",
+    "type": "official_doc",
+    "reason": "Next.js official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 250
+ },
+ {
+  "id": "OS-0052",
+  "case_type": "open_scenario",
+  "query": "Our team's monorepo CI takes 25 minutes; we want faster builds and test caching",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "nx",
+   "turborepo",
+   "bazel",
+   "pnpm"
+  ],
+  "ground_truth_notes": "Monorepo build tools with caching and affected-project detection all solve this.",
+  "must_find_sources": [
+   {
+    "pattern": "nx.dev",
+    "type": "official_doc",
+    "reason": "Nx official docs"
+   },
+   {
+    "pattern": "bazel.build",
+    "type": "official_doc",
+    "reason": "Bazel official docs"
+   },
+   {
+    "pattern": "pnpm.io",
+    "type": "official_doc",
+    "reason": "pnpm workspace docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "task graph vs package manager workspaces",
+    "position_a": "Dedicated build tools (Nx/Bazel) scale to large monorepos with fine-grained caching",
+    "position_b": "pnpm workspaces with simple scripts are enough below ~10 packages",
+    "key_source": "nx.dev"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 251
+ },
+ {
+  "id": "OS-0053",
+  "case_type": "open_scenario",
+  "query": "An enterprise needs a single entry point for all north-south API traffic with auth, rate limiting and observability",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "kong",
+   "traefik",
+   "nginx",
+   "apisix"
+  ],
+  "ground_truth_notes": "API gateways with plugin ecosystems for auth/rate-limit/observability are all valid.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.konghq.com",
+    "type": "official_doc",
+    "reason": "Kong official docs"
+   },
+   {
+    "pattern": "doc.traefik.io",
+    "type": "official_doc",
+    "reason": "Traefik official docs"
+   },
+   {
+    "pattern": "apisix.apache.org",
+    "type": "official_doc",
+    "reason": "APISIX official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "gateway vs service mesh",
+    "position_a": "A dedicated API gateway handles north-south traffic best",
+    "position_b": "A service mesh like Istio subsumes gateway concerns for east-west and north-south alike",
+    "key_source": "doc.traefik.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 252
+ },
+ {
+  "id": "OS-0054",
+  "case_type": "open_scenario",
+  "query": "Our SaaS startup needs authentication with social login, SSO and MFA without building it ourselves",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "clerk",
+   "auth0",
+   "keycloak",
+   "supabase"
+  ],
+  "ground_truth_notes": "Hosted or self-hosted identity providers with social login/SSO/MFA all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "clerk.com",
+    "type": "official_doc",
+    "reason": "Clerk official docs"
+   },
+   {
+    "pattern": "auth0.com",
+    "type": "official_doc",
+    "reason": "Auth0 official docs"
+   },
+   {
+    "pattern": "keycloak.org",
+    "type": "official_doc",
+    "reason": "Keycloak official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "build vs buy auth",
+    "position_a": "Managed identity providers reduce compliance and maintenance burden",
+    "position_b": "Self-hosted Keycloak keeps data on-prem and avoids per-user pricing",
+    "key_source": "keycloak.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 253
+ },
+ {
+  "id": "OS-0055",
+  "case_type": "open_scenario",
+  "query": "I want to give my small team self-serve dashboards over a Postgres database without writing a frontend",
+  "category": "Open Scenario",
+  "subdomain": "data_visualization",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "metabase",
+   "grafana",
+   "superset"
+  ],
+  "ground_truth_notes": "Self-hosted BI tools that connect directly to Postgres are all acceptable.",
+  "must_find_sources": [
+   {
+    "pattern": "metabase.com",
+    "type": "official_doc",
+    "reason": "Metabase official docs"
+   },
+   {
+    "pattern": "grafana.com",
+    "type": "official_doc",
+    "reason": "Grafana official docs"
+   },
+   {
+    "pattern": "superset.apache.org",
+    "type": "official_doc",
+    "reason": "Superset official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 254
+ },
+ {
+  "id": "OS-0056",
+  "case_type": "open_scenario",
+  "query": "An e-commerce company needs reliable event delivery between order, payment and inventory services",
+  "category": "Open Scenario",
+  "subdomain": "infra_messaging",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "kafka",
+   "rabbitmq",
+   "redis"
+  ],
+  "ground_truth_notes": "Message brokers with delivery guarantees and consumer groups all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "kafka.apache.org",
+    "type": "official_doc",
+    "reason": "Kafka official docs"
+   },
+   {
+    "pattern": "rabbitmq.com",
+    "type": "official_doc",
+    "reason": "RabbitMQ official docs"
+   },
+   {
+    "pattern": "redis.io",
+    "type": "official_doc",
+    "reason": "Redis Streams docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "log-based vs queue-based messaging",
+    "position_a": "Kafka's replayable log is better for event sourcing and multi-consumer fan-out",
+    "position_b": "RabbitMQ's routing and per-message acking fit request-reply workloads better",
+    "key_source": "kafka.apache.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 255
+ },
+ {
+  "id": "OS-0057",
+  "case_type": "open_scenario",
+  "query": "Our app sends welcome emails, receipts and password resets; we want reliable delivery with webhooks",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "resend",
+   "postmark",
+   "sendgrid"
+  ],
+  "ground_truth_notes": "Transactional email providers with webhooks and delivery tracking all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "resend.com",
+    "type": "official_doc",
+    "reason": "Resend official docs"
+   },
+   {
+    "pattern": "postmarkapp.com",
+    "type": "official_doc",
+    "reason": "Postmark official docs"
+   },
+   {
+    "pattern": "sendgrid.com",
+    "type": "official_doc",
+    "reason": "SendGrid official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 256
+ },
+ {
+  "id": "OS-0058",
+  "case_type": "open_scenario",
+  "query": "I am an indie developer launching a SaaS and want subscription billing with the least tax and compliance hassle",
+  "category": "Open Scenario",
+  "subdomain": "ecommerce",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "paddle",
+   "lemonsqueezy",
+   "stripe"
+  ],
+  "ground_truth_notes": "Merchant-of-record billing platforms simplify tax compliance; Stripe also qualifies.",
+  "must_find_sources": [
+   {
+    "pattern": "paddle.com",
+    "type": "official_doc",
+    "reason": "Paddle official docs"
+   },
+   {
+    "pattern": "lemonsqueezy.com",
+    "type": "official_doc",
+    "reason": "Lemon Squeezy docs"
+   },
+   {
+    "pattern": "stripe.com",
+    "type": "official_doc",
+    "reason": "Stripe official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "merchant of record vs direct processor",
+    "position_a": "Merchant-of-record platforms absorb global tax and compliance",
+    "position_b": "Direct processors like Stripe offer lower fees and more control",
+    "key_source": "paddle.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 257
+ },
+ {
+  "id": "OS-0059",
+  "case_type": "open_scenario",
+  "query": "Our team ships LLM features and needs to trace, evaluate and debug prompt quality in production",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "langfuse",
+   "langsmith",
+   "promptfoo",
+   "helicone"
+  ],
+  "ground_truth_notes": "LLM observability and evaluation platforms all satisfy tracing and eval needs.",
+  "must_find_sources": [
+   {
+    "pattern": "langfuse.com",
+    "type": "official_doc",
+    "reason": "Langfuse official docs"
+   },
+   {
+    "pattern": "docs.smith.langchain.com",
+    "type": "official_doc",
+    "reason": "LangSmith official docs"
+   },
+   {
+    "pattern": "promptfoo.dev",
+    "type": "official_doc",
+    "reason": "Promptfoo official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "open source vs managed LLM observability",
+    "position_a": "Self-hosted Langfuse keeps traces in-house",
+    "position_b": "Managed LangSmith reduces ops burden for LangChain users",
+    "key_source": "langfuse.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 258
+ },
+ {
+  "id": "OS-0060",
+  "case_type": "open_scenario",
+  "query": "A data team needs to orchestrate hundreds of batch jobs with retries, backfills and dependencies",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "airflow",
+   "prefect",
+   "dagster",
+   "temporal"
+  ],
+  "ground_truth_notes": "Workflow orchestrators with DAG scheduling, retries and backfills all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "airflow.apache.org",
+    "type": "official_doc",
+    "reason": "Airflow official docs"
+   },
+   {
+    "pattern": "prefect.io",
+    "type": "official_doc",
+    "reason": "Prefect official docs"
+   },
+   {
+    "pattern": "dagster.io",
+    "type": "official_doc",
+    "reason": "Dagster official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "schedule-driven vs durable execution",
+    "position_a": "DAG schedulers like Airflow are the standard for batch pipelines",
+    "position_b": "Durable execution engines like Temporal handle long-running and event-driven flows better",
+    "key_source": "temporal.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 259
+ },
+ {
+  "id": "OS-0061",
+  "case_type": "open_scenario",
+  "query": "Our team wants error tracking with source maps, release tracking and alerting for a Next.js app",
+  "category": "Open Scenario",
+  "subdomain": "infra_observability",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "sentry",
+   "rollbar",
+   "glitchtip"
+  ],
+  "ground_truth_notes": "Error tracking platforms with source maps and release health all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "sentry.io",
+    "type": "official_doc",
+    "reason": "Sentry official docs"
+   },
+   {
+    "pattern": "rollbar.com",
+    "type": "official_doc",
+    "reason": "Rollbar official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 260
+ },
+ {
+  "id": "OS-0062",
+  "case_type": "open_scenario",
+  "query": "I want one codebase for an iOS and Android app with a small team and no native specialists",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "flutter",
+   "react native",
+   "expo"
+  ],
+  "ground_truth_notes": "Cross-platform mobile frameworks sharing one codebase are all acceptable.",
+  "must_find_sources": [
+   {
+    "pattern": "flutter.dev",
+    "type": "official_doc",
+    "reason": "Flutter official docs"
+   },
+   {
+    "pattern": "reactnative.dev",
+    "type": "official_doc",
+    "reason": "React Native official docs"
+   },
+   {
+    "pattern": "expo.dev",
+    "type": "official_doc",
+    "reason": "Expo official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "compiled vs JS-bridged cross-platform",
+    "position_a": "Flutter's compiled rendering gives more consistent UI across platforms",
+    "position_b": "React Native reuses web skills and has a larger ecosystem",
+    "key_source": "flutter.dev"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 261
+ },
+ {
+  "id": "OS-0063",
+  "case_type": "open_scenario",
+  "query": "Our small team needs an internal admin UI for CRUD operations without building a frontend from scratch",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "team",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "budibase",
+   "tooljet",
+   "appsmith"
+  ],
+  "ground_truth_notes": "Low-code internal tool platforms all satisfy CRUD admin needs.",
+  "must_find_sources": [
+   {
+    "pattern": "budibase.com",
+    "type": "official_doc",
+    "reason": "Budibase official docs"
+   },
+   {
+    "pattern": "tooljet.com",
+    "type": "official_doc",
+    "reason": "ToolJet official docs"
+   },
+   {
+    "pattern": "appsmith.com",
+    "type": "official_doc",
+    "reason": "Appsmith official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 262
+ },
+ {
+  "id": "OS-0064",
+  "case_type": "open_scenario",
+  "query": "An enterprise needs secrets management with rotation, audit logs and approval workflows",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "vault",
+   "doppler",
+   "infisical"
+  ],
+  "ground_truth_notes": "Secrets managers with rotation and audit features all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "hashicorp.com",
+    "type": "official_doc",
+    "reason": "HashiCorp Vault docs"
+   },
+   {
+    "pattern": "doppler.com",
+    "type": "official_doc",
+    "reason": "Doppler official docs"
+   },
+   {
+    "pattern": "infisical.com",
+    "type": "official_doc",
+    "reason": "Infisical official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "self-hosted vs SaaS secrets management",
+    "position_a": "Self-hosted Vault keeps secrets inside the perimeter",
+    "position_b": "SaaS secret managers are faster to adopt for cloud-native teams",
+    "key_source": "hashicorp.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 263
+ },
+ {
+  "id": "OS-0065",
+  "case_type": "open_scenario",
+  "query": "I want to run open-weight LLMs on my own GPU server for internal prototyping",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "solo",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "ollama",
+   "vllm",
+   "llamacpp"
+  ],
+  "ground_truth_notes": "Local LLM serving runtimes all qualify for self-hosted inference.",
+  "must_find_sources": [
+   {
+    "pattern": "ollama.com",
+    "type": "official_doc",
+    "reason": "Ollama official docs"
+   },
+   {
+    "pattern": "docs.vllm.ai",
+    "type": "official_doc",
+    "reason": "vLLM official docs"
+   },
+   {
+    "pattern": "github.com/ggml-org/llama.cpp",
+    "type": "github_repo",
+    "reason": "llama.cpp repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "throughput engine vs ease of use",
+    "position_a": "vLLM maximizes throughput for production serving",
+    "position_b": "Ollama's simple CLI suits prototyping on laptops and small servers",
+    "key_source": "docs.vllm.ai"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 264
+ },
+ {
+  "id": "OS-0066",
+  "case_type": "open_scenario",
+  "query": "Our e-commerce site needs typo-tolerant product search with facets under 50ms",
+  "category": "Open Scenario",
+  "subdomain": "ecommerce",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "meilisearch",
+   "typesense",
+   "algolia"
+  ],
+  "ground_truth_notes": "Search engines with typo tolerance and facets all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "meilisearch.com",
+    "type": "official_doc",
+    "reason": "Meilisearch official docs"
+   },
+   {
+    "pattern": "typesense.org",
+    "type": "official_doc",
+    "reason": "Typesense official docs"
+   },
+   {
+    "pattern": "algolia.com",
+    "type": "official_doc",
+    "reason": "Algolia official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "self-hosted vs managed search",
+    "position_a": "Self-hosted Meilisearch/Typesense keeps cost flat at scale",
+    "position_b": "Managed Algolia removes infra burden and tuning effort",
+    "key_source": "typesense.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 265
+ },
+ {
+  "id": "OS-0067",
+  "case_type": "open_scenario",
+  "query": "An enterprise runs workloads on AWS and Azure and wants one infrastructure-as-code layer for both",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "terraform",
+   "pulumi",
+   "crossplane"
+  ],
+  "ground_truth_notes": "Multi-cloud IaC tools all qualify; Crossplane's control-plane approach also counts.",
+  "must_find_sources": [
+   {
+    "pattern": "terraform.io",
+    "type": "official_doc",
+    "reason": "Terraform official docs"
+   },
+   {
+    "pattern": "pulumi.com",
+    "type": "official_doc",
+    "reason": "Pulumi official docs"
+   },
+   {
+    "pattern": "crossplane.io",
+    "type": "official_doc",
+    "reason": "Crossplane official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "declarative vs imperative IaC",
+    "position_a": "Declarative HCL (Terraform) is safer for review-heavy enterprise change",
+    "position_b": "General-purpose languages (Pulumi) enable real logic and reuse",
+    "key_source": "pulumi.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 266
+ },
+ {
+  "id": "OS-0068",
+  "case_type": "open_scenario",
+  "query": "I want to automate personal workflows like RSS-to-newsletter and form-to-Slack without coding",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "n8n",
+   "make",
+   "zapier"
+  ],
+  "ground_truth_notes": "No-code automation platforms with visual builders all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "n8n.io",
+    "type": "official_doc",
+    "reason": "n8n official docs"
+   },
+   {
+    "pattern": "make.com",
+    "type": "official_doc",
+    "reason": "Make official docs"
+   },
+   {
+    "pattern": "zapier.com",
+    "type": "official_doc",
+    "reason": "Zapier official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 267
+ },
+ {
+  "id": "OS-0069",
+  "case_type": "open_scenario",
+  "query": "Our marketing team needs to publish blog posts and landing pages with a headless CMS our developers can extend",
+  "category": "Open Scenario",
+  "subdomain": "content_platform",
+  "scene": "team",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "strapi",
+   "sanity",
+   "payload"
+  ],
+  "ground_truth_notes": "Open-source headless CMS platforms with content modeling all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "strapi.io",
+    "type": "official_doc",
+    "reason": "Strapi official docs"
+   },
+   {
+    "pattern": "sanity.io",
+    "type": "official_doc",
+    "reason": "Sanity official docs"
+   },
+   {
+    "pattern": "payloadcms.com",
+    "type": "official_doc",
+    "reason": "Payload CMS official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 268
+ },
+ {
+  "id": "OS-0070",
+  "case_type": "open_scenario",
+  "query": "Our ML platform team wants consistent features between training and serving with point-in-time correctness",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "feast",
+   "tecton",
+   "hopsworks"
+  ],
+  "ground_truth_notes": "Feature stores with point-in-time joins between training and serving all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "feast.dev",
+    "type": "official_doc",
+    "reason": "Feast official docs"
+   },
+   {
+    "pattern": "tecton.ai",
+    "type": "official_doc",
+    "reason": "Tecton official docs"
+   },
+   {
+    "pattern": "hopsworks.ai",
+    "type": "official_doc",
+    "reason": "Hopsworks official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "open source vs managed feature store",
+    "position_a": "Self-hosted Feast avoids vendor lock-in",
+    "position_b": "Managed Tecton handles streaming features and ops",
+    "key_source": "feast.dev"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 269
+ },
+ {
+  "id": "OS-0071",
+  "case_type": "open_scenario",
+  "query": "Our product team wants A/B experiments with feature flags and automatic readout of business metrics",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "statsig",
+   "optimizely",
+   "eppo"
+  ],
+  "ground_truth_notes": "Experimentation platforms with flags and metric readouts all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "statsig.com",
+    "type": "official_doc",
+    "reason": "Statsig official docs"
+   },
+   {
+    "pattern": "optimizely.com",
+    "type": "official_doc",
+    "reason": "Optimizely official docs"
+   },
+   {
+    "pattern": "geteppo.com",
+    "type": "official_doc",
+    "reason": "Eppo official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 270
+ },
+ {
+  "id": "OS-0072",
+  "case_type": "open_scenario",
+  "query": "I want push and in-app notifications for a small mobile app without managing a backend",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "novu",
+   "onesignal",
+   "fcm"
+  ],
+  "ground_truth_notes": "Notification platforms abstracting push delivery all qualify, including Firebase Cloud Messaging.",
+  "must_find_sources": [
+   {
+    "pattern": "novu.co",
+    "type": "official_doc",
+    "reason": "Novu official docs"
+   },
+   {
+    "pattern": "onesignal.com",
+    "type": "official_doc",
+    "reason": "OneSignal official docs"
+   },
+   {
+    "pattern": "firebase.google.com",
+    "type": "official_doc",
+    "reason": "FCM official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "self-hosted vs managed notifications",
+    "position_a": "Self-hosted Novu keeps notification data in-house",
+    "position_b": "Managed OneSignal handles device tokens and delivery optimization",
+    "key_source": "novu.co"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 271
+ },
+ {
+  "id": "OS-0073",
+  "case_type": "open_scenario",
+  "query": "Our support team needs shared inboxes, ticketing and canned responses that scale to thousands of tickets",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "zendesk",
+   "freshdesk",
+   "intercom"
+  ],
+  "ground_truth_notes": "Customer support platforms with ticketing and shared inbox all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "zendesk.com",
+    "type": "official_doc",
+    "reason": "Zendesk official docs"
+   },
+   {
+    "pattern": "freshworks.com",
+    "type": "official_doc",
+    "reason": "Freshdesk official docs"
+   },
+   {
+    "pattern": "intercom.com",
+    "type": "official_doc",
+    "reason": "Intercom official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 272
+ },
+ {
+  "id": "OS-0074",
+  "case_type": "open_scenario",
+  "query": "Our team is building multiplayer collaboration with presence cursors and live document sync",
+  "category": "Open Scenario",
+  "subdomain": "realtime_app",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "partykit",
+   "liveblocks",
+   "ably"
+  ],
+  "ground_truth_notes": "Realtime infrastructure for presence and sync all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "partykit.io",
+    "type": "official_doc",
+    "reason": "PartyKit official docs"
+   },
+   {
+    "pattern": "liveblocks.io",
+    "type": "official_doc",
+    "reason": "Liveblocks official docs"
+   },
+   {
+    "pattern": "ably.com",
+    "type": "official_doc",
+    "reason": "Ably official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "self-hosted realtime vs managed service",
+    "position_a": "PartyKit runs co-located with your app logic",
+    "position_b": "Managed Ably guarantees global latency SLAs",
+    "key_source": "ably.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 273
+ },
+ {
+  "id": "OS-0075",
+  "case_type": "open_scenario",
+  "query": "I want a reproducible local development environment with all services as code",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "docker compose",
+   "devcontainer",
+   "vagrant",
+   "lima"
+  ],
+  "ground_truth_notes": "Environment-as-code tools that reproduce local stacks all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "docker.com",
+    "type": "official_doc",
+    "reason": "Docker Compose official docs"
+   },
+   {
+    "pattern": "containers.dev",
+    "type": "official_doc",
+    "reason": "Dev Containers spec"
+   },
+   {
+    "pattern": "vagrantup.com",
+    "type": "official_doc",
+    "reason": "Vagrant official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 274
+ },
+ {
+  "id": "OS-0076",
+  "case_type": "open_scenario",
+  "query": "Our team wants type-safe RPC between a Go backend and TypeScript frontend with streaming support",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "connectrpc",
+   "grpc",
+   "twirp"
+  ],
+  "ground_truth_notes": "RPC frameworks with generated types and streaming all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "connectrpc.com",
+    "type": "official_doc",
+    "reason": "Connect RPC official docs"
+   },
+   {
+    "pattern": "grpc.io",
+    "type": "official_doc",
+    "reason": "gRPC official docs"
+   },
+   {
+    "pattern": "github.com/twitchtv/twirp",
+    "type": "github_repo",
+    "reason": "Twirp repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "gRPC vs HTTP-first RPC",
+    "position_a": "gRPC offers the richest streaming and ecosystem",
+    "position_b": "Connect's HTTP-first protocol is friendlier to browsers and proxies",
+    "key_source": "connectrpc.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 275
+ },
+ {
+  "id": "OS-0077",
+  "case_type": "open_scenario",
+  "query": "An enterprise wants S3-compatible object storage on its own hardware with erasure coding",
+  "category": "Open Scenario",
+  "subdomain": "infra_storage",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "minio",
+   "ceph",
+   "seaweedfs"
+  ],
+  "ground_truth_notes": "Self-hosted S3-compatible object stores with redundancy all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "min.io",
+    "type": "official_doc",
+    "reason": "MinIO official docs"
+   },
+   {
+    "pattern": "ceph.io",
+    "type": "official_doc",
+    "reason": "Ceph official docs"
+   },
+   {
+    "pattern": "github.com/seaweedfs/seaweedfs",
+    "type": "github_repo",
+    "reason": "SeaweedFS repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "distributed consensus vs simplicity",
+    "position_a": "Ceph's RADOS gives full distributed consistency at scale",
+    "position_b": "MinIO's simpler architecture is easier to operate for moderate scale",
+    "key_source": "ceph.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 276
+ },
+ {
+  "id": "OS-0078",
+  "case_type": "open_scenario",
+  "query": "I want to publish developer docs with versioning and search for my open-source project",
+  "category": "Open Scenario",
+  "subdomain": "content_platform",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "docusaurus",
+   "mkdocs",
+   "vitepress",
+   "mintlify"
+  ],
+  "ground_truth_notes": "Static documentation site generators with versioning/search all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "docusaurus.io",
+    "type": "official_doc",
+    "reason": "Docusaurus official docs"
+   },
+   {
+    "pattern": "mkdocs.org",
+    "type": "official_doc",
+    "reason": "MkDocs official docs"
+   },
+   {
+    "pattern": "vitepress.dev",
+    "type": "official_doc",
+    "reason": "VitePress official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 277
+ },
+ {
+  "id": "OS-0079",
+  "case_type": "open_scenario",
+  "query": "Our support team wants a visual LLM chatbot builder with drag-and-drop workflows and knowledge bases",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "dify",
+   "langflow",
+   "flowise"
+  ],
+  "ground_truth_notes": "Visual LLM app builders with knowledge bases all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "dify.ai",
+    "type": "official_doc",
+    "reason": "Dify official docs"
+   },
+   {
+    "pattern": "docs.langflow.org",
+    "type": "official_doc",
+    "reason": "Langflow official docs"
+   },
+   {
+    "pattern": "flowiseai.com",
+    "type": "official_doc",
+    "reason": "Flowise official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 278
+ },
+ {
+  "id": "OS-0080",
+  "case_type": "open_scenario",
+  "query": "Our data platform needs ACID transactions on Parquet files in a data lake",
+  "category": "Open Scenario",
+  "subdomain": "data_platform",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "delta lake",
+   "iceberg",
+   "hudi"
+  ],
+  "ground_truth_notes": "Open table formats bringing ACID to data lakes all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "delta.io",
+    "type": "official_doc",
+    "reason": "Delta Lake official docs"
+   },
+   {
+    "pattern": "iceberg.apache.org",
+    "type": "official_doc",
+    "reason": "Apache Iceberg official docs"
+   },
+   {
+    "pattern": "hudi.apache.org",
+    "type": "official_doc",
+    "reason": "Apache Hudi official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "lakehouse format war",
+    "position_a": "Delta Lake has the deepest ecosystem with Databricks",
+    "position_b": "Iceberg is engine-neutral and adopted by Snowflake and AWS",
+    "key_source": "iceberg.apache.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 279
+ },
+ {
+  "id": "OS-0081",
+  "case_type": "open_scenario",
+  "query": "Our team wants automated dependency vulnerability scanning and update pull requests in CI",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "team",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "renovate",
+   "dependabot",
+   "snyk",
+   "trivy"
+  ],
+  "ground_truth_notes": "Dependency scanners with auto-PR updates all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.renovatebot.com",
+    "type": "official_doc",
+    "reason": "Renovate official docs"
+   },
+   {
+    "pattern": "github.com/dependabot",
+    "type": "github_repo",
+    "reason": "Dependabot repo"
+   },
+   {
+    "pattern": "snyk.io",
+    "type": "official_doc",
+    "reason": "Snyk official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 280
+ },
+ {
+  "id": "OS-0082",
+  "case_type": "open_scenario",
+  "query": "I am building an offline-first mobile app that must sync local data with the server later",
+  "category": "Open Scenario",
+  "subdomain": "mobile",
+  "scene": "solo",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "sqlite",
+   "watermelondb",
+   "realm"
+  ],
+  "ground_truth_notes": "Offline-first local databases with sync paths all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "sqlite.org",
+    "type": "official_doc",
+    "reason": "SQLite official docs"
+   },
+   {
+    "pattern": "github.com/Nozbe/WatermelonDB",
+    "type": "github_repo",
+    "reason": "WatermelonDB repo"
+   },
+   {
+    "pattern": "github.com/realm/realm-js",
+    "type": "github_repo",
+    "reason": "Realm JS repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "SQL vs object database for mobile",
+    "position_a": "SQLite with a sync layer is predictable and battle-tested",
+    "position_b": "Realm's object model and live queries simplify reactive UIs",
+    "key_source": "sqlite.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 281
+ },
+ {
+  "id": "OS-0083",
+  "case_type": "open_scenario",
+  "query": "An enterprise needs declarative Kubernetes application delivery with GitOps and rollbacks",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "argo cd",
+   "helm",
+   "kustomize"
+  ],
+  "ground_truth_notes": "GitOps and declarative delivery tools for Kubernetes all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "argo-cd.readthedocs.io",
+    "type": "official_doc",
+    "reason": "Argo CD official docs"
+   },
+   {
+    "pattern": "helm.sh",
+    "type": "official_doc",
+    "reason": "Helm official docs"
+   },
+   {
+    "pattern": "kustomize.io",
+    "type": "official_doc",
+    "reason": "Kustomize official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "templating vs overlays",
+    "position_a": "Helm's templating is the ecosystem standard for packaging",
+    "position_b": "Kustomize overlays avoid template logic and stay pure YAML",
+    "key_source": "helm.sh"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 282
+ },
+ {
+  "id": "OS-0084",
+  "case_type": "open_scenario",
+  "query": "Our team manages hundreds of prompts across applications and wants versioning, evals and collaborative review",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "langfuse",
+   "promptfoo",
+   "agenta",
+   "portkey"
+  ],
+  "ground_truth_notes": "Prompt management platforms with versioning and evals all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "langfuse.com",
+    "type": "official_doc",
+    "reason": "Langfuse official docs"
+   },
+   {
+    "pattern": "promptfoo.dev",
+    "type": "official_doc",
+    "reason": "Promptfoo official docs"
+   },
+   {
+    "pattern": "portkey.ai",
+    "type": "official_doc",
+    "reason": "Portkey official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 283
+ },
+ {
+  "id": "OS-0085",
+  "case_type": "open_scenario",
+  "query": "I am launching an online store and want a composable commerce backend with a modern developer experience",
+  "category": "Open Scenario",
+  "subdomain": "ecommerce",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "shopify",
+   "medusa",
+   "saleor"
+  ],
+  "ground_truth_notes": "Commerce platforms with storefront APIs all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "shopify.com",
+    "type": "official_doc",
+    "reason": "Shopify official docs"
+   },
+   {
+    "pattern": "medusajs.com",
+    "type": "official_doc",
+    "reason": "Medusa official docs"
+   },
+   {
+    "pattern": "saleor.io",
+    "type": "official_doc",
+    "reason": "Saleor official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "hosted vs headless commerce",
+    "position_a": "Shopify removes all infra concerns",
+    "position_b": "Open-source Medusa/Saleor allow full customization",
+    "key_source": "medusajs.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 284
+ },
+ {
+  "id": "OS-0086",
+  "case_type": "open_scenario",
+  "query": "Our team needs lightweight pub/sub messaging between edge devices and the cloud with tiny payloads",
+  "category": "Open Scenario",
+  "subdomain": "infra_messaging",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "emqx",
+   "nats",
+   "zeromq"
+  ],
+  "ground_truth_notes": "Lightweight messaging systems for device-to-cloud all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "emqx.io",
+    "type": "official_doc",
+    "reason": "EMQX official docs"
+   },
+   {
+    "pattern": "docs.nats.io",
+    "type": "official_doc",
+    "reason": "NATS official docs"
+   },
+   {
+    "pattern": "zeromq.org",
+    "type": "official_doc",
+    "reason": "ZeroMQ official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "brokered vs brokerless messaging",
+    "position_a": "Brokered systems (NATS/EMQX) give delivery guarantees and routing",
+    "position_b": "Brokerless ZeroMQ minimizes latency and moving parts",
+    "key_source": "docs.nats.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 285
+ },
+ {
+  "id": "OS-0087",
+  "case_type": "open_scenario",
+  "query": "Our ML team wants experiment tracking with model registry and hyperparameter comparison",
+  "category": "Open Scenario",
+  "subdomain": "ai_infra",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "mlflow",
+   "wandb",
+   "neptune"
+  ],
+  "ground_truth_notes": "ML experiment tracking platforms with model registry all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "mlflow.org",
+    "type": "official_doc",
+    "reason": "MLflow official docs"
+   },
+   {
+    "pattern": "wandb.ai",
+    "type": "official_doc",
+    "reason": "Weights & Biases docs"
+   },
+   {
+    "pattern": "neptune.ai",
+    "type": "official_doc",
+    "reason": "Neptune official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "open source vs managed experiment tracking",
+    "position_a": "Self-hosted MLflow avoids per-seat pricing",
+    "position_b": "Managed W&B provides collaboration and integrations out of the box",
+    "key_source": "mlflow.org"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 286
+ },
+ {
+  "id": "OS-0088",
+  "case_type": "open_scenario",
+  "query": "I need background job processing with retries and scheduled tasks in a small Python service",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "solo",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "celery",
+   "dramatiq",
+   "huey"
+  ],
+  "ground_truth_notes": "Python background task queues with retries all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "docs.celeryq.dev",
+    "type": "official_doc",
+    "reason": "Celery official docs"
+   },
+   {
+    "pattern": "dramatiq.io",
+    "type": "official_doc",
+    "reason": "Dramatiq official docs"
+   },
+   {
+    "pattern": "github.com/coleifer/huey",
+    "type": "github_repo",
+    "reason": "Huey repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "full-featured vs lightweight task queue",
+    "position_a": "Celery's ecosystem covers every broker and workflow pattern",
+    "position_b": "Dramatiq/Huey are simpler and adequate for most services",
+    "key_source": "docs.celeryq.dev"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 287
+ },
+ {
+  "id": "OS-0089",
+  "case_type": "open_scenario",
+  "query": "Our team wants to scaffold a CRUD REST API with auth, validation and OpenAPI docs in days",
+  "category": "Open Scenario",
+  "subdomain": "api_backend",
+  "scene": "team",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "fastapi",
+   "nestjs",
+   "rails",
+   "laravel"
+  ],
+  "ground_truth_notes": "Batteries-included backend frameworks with generators all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "fastapi.tiangolo.com",
+    "type": "official_doc",
+    "reason": "FastAPI official docs"
+   },
+   {
+    "pattern": "docs.nestjs.com",
+    "type": "official_doc",
+    "reason": "NestJS official docs"
+   },
+   {
+    "pattern": "rubyonrails.org",
+    "type": "official_doc",
+    "reason": "Rails official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 288
+ },
+ {
+  "id": "OS-0090",
+  "case_type": "open_scenario",
+  "query": "An enterprise wants security scanning inside pull requests without slowing down developers",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "semgrep",
+   "codeql",
+   "sonarqube"
+  ],
+  "ground_truth_notes": "Static application security testing tools with CI integration all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "semgrep.dev",
+    "type": "official_doc",
+    "reason": "Semgrep official docs"
+   },
+   {
+    "pattern": "codeql.github.com",
+    "type": "official_doc",
+    "reason": "CodeQL official docs"
+   },
+   {
+    "pattern": "sonarsource.com",
+    "type": "official_doc",
+    "reason": "SonarQube official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "pattern matching vs semantic analysis",
+    "position_a": "Semgrep's rule patterns are fast and easy to write",
+    "position_b": "CodeQL's semantic queries find deeper data-flow issues",
+    "key_source": "semgrep.dev"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 289
+ },
+ {
+  "id": "OS-0091",
+  "case_type": "open_scenario",
+  "query": "I am starting a paid newsletter and want subscriber management with landing pages and analytics",
+  "category": "Open Scenario",
+  "subdomain": "content_platform",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "beehiiv",
+   "convertkit",
+   "mailchimp"
+  ],
+  "ground_truth_notes": "Newsletter platforms with subscriber management all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "beehiiv.com",
+    "type": "official_doc",
+    "reason": "beehiiv official docs"
+   },
+   {
+    "pattern": "convertkit.com",
+    "type": "official_doc",
+    "reason": "ConvertKit official docs"
+   },
+   {
+    "pattern": "mailchimp.com",
+    "type": "official_doc",
+    "reason": "Mailchimp official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 290
+ },
+ {
+  "id": "OS-0092",
+  "case_type": "open_scenario",
+  "query": "Our data team wants interactive Python dashboards embedded in an internal web app",
+  "category": "Open Scenario",
+  "subdomain": "data_visualization",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "streamlit",
+   "dash",
+   "shiny"
+  ],
+  "ground_truth_notes": "Python data app frameworks with embeddable dashboards all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "streamlit.io",
+    "type": "official_doc",
+    "reason": "Streamlit official docs"
+   },
+   {
+    "pattern": "dash.plotly.com",
+    "type": "official_doc",
+    "reason": "Dash official docs"
+   },
+   {
+    "pattern": "shiny.posit.co",
+    "type": "official_doc",
+    "reason": "Shiny for Python docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "script-first vs component-first dashboards",
+    "position_a": "Streamlit's script model is fastest to prototype",
+    "position_b": "Dash's component model gives finer layout control",
+    "key_source": "dash.plotly.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 291
+ },
+ {
+  "id": "OS-0093",
+  "case_type": "open_scenario",
+  "query": "An enterprise needs long-running business processes with human approval steps and audit trails",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "camunda",
+   "temporal",
+   "airflow"
+  ],
+  "ground_truth_notes": "Workflow engines supporting human tasks and durability all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "camunda.com",
+    "type": "official_doc",
+    "reason": "Camunda official docs"
+   },
+   {
+    "pattern": "temporal.io",
+    "type": "official_doc",
+    "reason": "Temporal official docs"
+   },
+   {
+    "pattern": "airflow.apache.org",
+    "type": "official_doc",
+    "reason": "Airflow official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "BPMN modeling vs code-first workflows",
+    "position_a": "BPMN lets business analysts design processes visually",
+    "position_b": "Code-first Temporal is more testable and versionable for engineers",
+    "key_source": "temporal.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 292
+ },
+ {
+  "id": "OS-0094",
+  "case_type": "open_scenario",
+  "query": "I want login for a hobby web app with email verification and social providers in one afternoon",
+  "category": "Open Scenario",
+  "subdomain": "security",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "supabase",
+   "firebase",
+   "lucia"
+  ],
+  "ground_truth_notes": "Auth-as-a-service or auth libraries with social providers all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "supabase.com",
+    "type": "official_doc",
+    "reason": "Supabase Auth docs"
+   },
+   {
+    "pattern": "firebase.google.com",
+    "type": "official_doc",
+    "reason": "Firebase Auth docs"
+   },
+   {
+    "pattern": "lucia-auth.com",
+    "type": "official_doc",
+    "reason": "Lucia auth library docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 293
+ },
+ {
+  "id": "OS-0095",
+  "case_type": "open_scenario",
+  "query": "Our team needs centralized log aggregation with querying and alerting for Kubernetes workloads",
+  "category": "Open Scenario",
+  "subdomain": "infra_observability",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "loki",
+   "elastic",
+   "datadog"
+  ],
+  "ground_truth_notes": "Log aggregation platforms with query and alerting all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "grafana.com",
+    "type": "official_doc",
+    "reason": "Grafana Loki docs"
+   },
+   {
+    "pattern": "elastic.co",
+    "type": "official_doc",
+    "reason": "Elastic Stack docs"
+   },
+   {
+    "pattern": "datadoghq.com",
+    "type": "official_doc",
+    "reason": "Datadog official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "self-hosted vs SaaS logs",
+    "position_a": "Self-hosted Loki keeps log storage cost predictable",
+    "position_b": "SaaS Datadog removes operational burden",
+    "key_source": "grafana.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 294
+ },
+ {
+  "id": "OS-0096",
+  "case_type": "open_scenario",
+  "query": "An enterprise running 200 microservices needs service-to-service traffic management with mTLS and retries",
+  "category": "Open Scenario",
+  "subdomain": "infra_deploy",
+  "scene": "enterprise",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "istio",
+   "linkerd",
+   "cilium"
+  ],
+  "ground_truth_notes": "Service meshes providing mTLS and traffic policies all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "istio.io",
+    "type": "official_doc",
+    "reason": "Istio official docs"
+   },
+   {
+    "pattern": "linkerd.io",
+    "type": "official_doc",
+    "reason": "Linkerd official docs"
+   },
+   {
+    "pattern": "cilium.io",
+    "type": "official_doc",
+    "reason": "Cilium official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "sidecar vs sidecarless service mesh",
+    "position_a": "Sidecar-based Istio has the richest feature set",
+    "position_b": "Sidecarless approaches (Cilium, ambient) cut resource overhead",
+    "key_source": "istio.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 295
+ },
+ {
+  "id": "OS-0097",
+  "case_type": "open_scenario",
+  "query": "Our team wants beautiful API reference docs auto-generated from OpenAPI specs",
+  "category": "Open Scenario",
+  "subdomain": "dev_tools",
+  "scene": "team",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "readme",
+   "mintlify",
+   "postman"
+  ],
+  "ground_truth_notes": "API documentation platforms consuming OpenAPI all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "readme.com",
+    "type": "official_doc",
+    "reason": "ReadMe official docs"
+   },
+   {
+    "pattern": "mintlify.com",
+    "type": "official_doc",
+    "reason": "Mintlify official docs"
+   },
+   {
+    "pattern": "postman.com",
+    "type": "official_doc",
+    "reason": "Postman official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 296
+ },
+ {
+  "id": "OS-0098",
+  "case_type": "open_scenario",
+  "query": "I want to add natural-sounding voice to my AI assistant with low latency streaming",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "solo",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "elevenlabs",
+   "azure speech",
+   "openai"
+  ],
+  "ground_truth_notes": "Streaming TTS APIs with low latency all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "elevenlabs.io",
+    "type": "official_doc",
+    "reason": "ElevenLabs official docs"
+   },
+   {
+    "pattern": "learn.microsoft.com",
+    "type": "official_doc",
+    "reason": "Azure Speech docs"
+   },
+   {
+    "pattern": "platform.openai.com",
+    "type": "official_doc",
+    "reason": "OpenAI audio docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "voice quality vs latency",
+    "position_a": "ElevenLabs leads on naturalness",
+    "position_b": "Azure/OpenAI streaming offers lower latency and cheaper scale",
+    "key_source": "elevenlabs.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 297
+ },
+ {
+  "id": "OS-0099",
+  "case_type": "open_scenario",
+  "query": "An enterprise needs a distributed caching layer with persistence options and cluster mode",
+  "category": "Open Scenario",
+  "subdomain": "infra_storage",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "redis",
+   "memcached",
+   "dragonfly"
+  ],
+  "ground_truth_notes": "Distributed in-memory caches with clustering all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "redis.io",
+    "type": "official_doc",
+    "reason": "Redis official docs"
+   },
+   {
+    "pattern": "memcached.org",
+    "type": "official_doc",
+    "reason": "Memcached official docs"
+   },
+   {
+    "pattern": "dragonflydb.io",
+    "type": "official_doc",
+    "reason": "Dragonfly official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "data structures vs raw speed",
+    "position_a": "Redis data structures enable queues, streams and pub/sub in one system",
+    "position_b": "Memcached's simplicity delivers raw cache speed",
+    "key_source": "redis.io"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 298
+ },
+ {
+  "id": "OS-0100",
+  "case_type": "open_scenario",
+  "query": "Our team wants persistent memory for AI agents across conversations with retrieval and personalization",
+  "category": "Open Scenario",
+  "subdomain": "ai_application",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "mem0",
+   "letta",
+   "zep"
+  ],
+  "ground_truth_notes": "Agent memory layers with retrieval and profile persistence all qualify.",
+  "must_find_sources": [
+   {
+    "pattern": "mem0.ai",
+    "type": "official_doc",
+    "reason": "Mem0 official docs"
+   },
+   {
+    "pattern": "letta.com",
+    "type": "official_doc",
+    "reason": "Letta official docs"
+   },
+   {
+    "pattern": "getzep.com",
+    "type": "official_doc",
+    "reason": "Zep official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "memory as a service vs embedded library",
+    "position_a": "Memory services centralize profiles across sessions and users",
+    "position_b": "Embedded libraries keep memory local and simple",
+    "key_source": "letta.com"
+   }
+  ],
+  "min_expected_sources": 3,
+  "_idx": 299
+ }
+]

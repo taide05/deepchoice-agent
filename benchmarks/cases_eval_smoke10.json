@@ -1,0 +1,371 @@
+[
+ {
+  "id": "TC-0001",
+  "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
+  "category": "AI/Agent Frameworks",
+  "subdomain": "agent_orchestration",
+  "scene": "solo",
+  "difficulty": "medium",
+  "tech_a": "LangGraph",
+  "tech_b": "CrewAI",
+  "expected_winner": "LangGraph",
+  "ground_truth_notes": "LangGraph gives lower-level control, better for solo dev who needs flexibility. CrewAI has higher-level abstractions but less customizability and breaks down at scale.",
+  "must_find_sources": [
+   {
+    "pattern": "langchain.com",
+    "type": "official_doc",
+    "reason": "LangGraph official documentation"
+   },
+   {
+    "pattern": "github.com/langchain-ai/langgraph",
+    "type": "github_repo",
+    "reason": "LangGraph source repo - stars, activity, issues"
+   },
+   {
+    "pattern": "github.com/crewAIInc/crewAI",
+    "type": "github_repo",
+    "reason": "CrewAI source repo for comparison"
+   },
+   {
+    "pattern": "arxiv.org",
+    "type": "academic",
+    "reason": "Multi-agent framework survey or comparison paper"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Ease of use",
+    "position_a": "CrewAI is simpler to start with, higher-level API",
+    "position_b": "CrewAI abstractions become a liability when you need custom behavior",
+    "key_source": "reddit.com/r/LangChain"
+   }
+  ],
+  "min_expected_sources": 5,
+  "_idx": 0
+ },
+ {
+  "id": "TC-0002",
+  "query": "FastAPI vs Flask for REST API in a mid-size team",
+  "category": "Backend Frameworks & API",
+  "subdomain": "web_frameworks",
+  "scene": "team",
+  "difficulty": "simple",
+  "tech_a": "FastAPI",
+  "tech_b": "Flask",
+  "expected_winner": "FastAPI",
+  "ground_truth_notes": "FastAPI has built-in async, auto-generated OpenAPI docs, Pydantic validation. Flask needs extensions for all of these. For team REST API, FastAPI is the modern default.",
+  "must_find_sources": [
+   {
+    "pattern": "fastapi.tiangolo.com",
+    "type": "official_doc",
+    "reason": "FastAPI official docs - the authoritative source"
+   },
+   {
+    "pattern": "flask.palletsprojects.com",
+    "type": "official_doc",
+    "reason": "Flask official docs"
+   },
+   {
+    "pattern": "pypi.org/project/fastapi",
+    "type": "package_registry",
+    "reason": "Package stats, version history, dependencies"
+   },
+   {
+    "pattern": "github.com/tiangolo/fastapi",
+    "type": "github_repo",
+    "reason": "FastAPI repo - community size, issue velocity"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Async performance",
+    "position_a": "FastAPI async is a must-have for modern APIs",
+    "position_b": "Most apps don't need async; Flask + gunicorn is sufficient for 90% of use cases",
+    "key_source": "reddit.com/r/Python"
+   }
+  ],
+  "min_expected_sources": 6,
+  "_idx": 1
+ },
+ {
+  "id": "TC-0003",
+  "query": "PostgreSQL vs MySQL for enterprise financial data",
+  "category": "Infrastructure",
+  "subdomain": "relational_db",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "tech_a": "PostgreSQL",
+  "tech_b": "MySQL",
+  "expected_winner": "PostgreSQL",
+  "ground_truth_notes": "PostgreSQL has stronger ACID compliance, better analytical queries, richer extension ecosystem. MySQL better for simple read-heavy workloads. For financial data, PG's stricter type system and transactional DDL are meaningful advantages.",
+  "must_find_sources": [
+   {
+    "pattern": "postgresql.org",
+    "type": "official_doc",
+    "reason": "PostgreSQL official documentation"
+   },
+   {
+    "pattern": "dev.mysql.com",
+    "type": "official_doc",
+    "reason": "MySQL official documentation"
+   },
+   {
+    "pattern": "github.com",
+    "type": "community",
+    "reason": "Real-world adoption comparison, ecosystem activity"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Replication maturity",
+    "position_a": "PostgreSQL streaming replication is production-tested and more flexible",
+    "position_b": "MySQL Group Replication is simpler to set up and has longer production history",
+    "key_source": "dba.stackexchange.com"
+   }
+  ],
+  "min_expected_sources": 5,
+  "_idx": 2
+ },
+ {
+  "id": "TC-0004",
+  "query": "Chroma vs Pinecone for RAG vector database on a budget",
+  "category": "Models & Data",
+  "subdomain": "vector_databases",
+  "scene": "solo",
+  "difficulty": "simple",
+  "tech_a": "Chroma",
+  "tech_b": "Pinecone",
+  "expected_winner": "Chroma",
+  "ground_truth_notes": "Chroma is free, local, open-source. Pinecone is managed, costs money. For solo/small budget, Chroma wins. For scale/production, Pinecone. Budget is the deciding factor here.",
+  "must_find_sources": [
+   {
+    "pattern": "github.com/chroma-core/chroma",
+    "type": "github_repo",
+    "reason": "Chroma source repo"
+   },
+   {
+    "pattern": "pinecone.io",
+    "type": "official_doc",
+    "reason": "Pinecone official docs and pricing"
+   },
+   {
+    "pattern": "trychroma.com",
+    "type": "official_doc",
+    "reason": "Chroma official site"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Production readiness",
+    "position_a": "Chroma is fine for prototyping but not production-grade at scale",
+    "position_b": "Chroma's simplicity is an advantage - fewer moving parts means fewer failures",
+    "key_source": "github.com/chroma-core/chroma/issues"
+   }
+  ],
+  "min_expected_sources": 4,
+  "_idx": 3
+ },
+ {
+  "id": "TC-0005",
+  "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment",
+  "category": "Deployment & Operations",
+  "subdomain": "container_orchestration",
+  "scene": "team",
+  "difficulty": "medium",
+  "tech_a": "Kubernetes",
+  "tech_b": "Docker Swarm",
+  "expected_winner": "Kubernetes",
+  "ground_truth_notes": "Kubernetes is industry standard with massive ecosystem. Docker Swarm simpler but effectively in maintenance mode. For team setting, K8s is the long-term choice despite steeper learning curve.",
+  "must_find_sources": [
+   {
+    "pattern": "kubernetes.io",
+    "type": "official_doc",
+    "reason": "K8s official documentation"
+   },
+   {
+    "pattern": "github.com/kubernetes/kubernetes",
+    "type": "github_repo",
+    "reason": "K8s source repo - community scale"
+   },
+   {
+    "pattern": "docker.com",
+    "type": "official_doc",
+    "reason": "Docker Swarm official docs"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "Complexity vs need",
+    "position_a": "K8s is overkill for teams under 50 people; adds operational burden",
+    "position_b": "Managed K8s (EKS/GKE/AKS) removes most operational burden; better to start right than migrate later",
+    "key_source": "reddit.com/r/devops"
+   }
+  ],
+  "min_expected_sources": 5,
+  "_idx": 4
+ },
+ {
+  "id": "OS-0001",
+  "case_type": "open_scenario",
+  "query": "I am a solo developer building a SaaS dashboard and need a web framework that gets me to production fastest",
+  "category": "Open Scenario",
+  "subdomain": "web_fullstack",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "next.js",
+   "vue",
+   "nuxt",
+   "svelte"
+  ],
+  "ground_truth_notes": "Any mainstream fullstack framework is acceptable; the scene is speed-to-production for one developer.",
+  "must_find_sources": [
+   {
+    "pattern": "nextjs.org",
+    "type": "official_doc",
+    "reason": "Next.js official docs"
+   },
+   {
+    "pattern": "vuejs.org",
+    "type": "official_doc",
+    "reason": "Vue official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 200
+ },
+ {
+  "id": "OS-0002",
+  "case_type": "open_scenario",
+  "query": "Our 5-person team is building a real-time collaborative whiteboard; which sync engine should we build on?",
+  "category": "Open Scenario",
+  "subdomain": "realtime_app",
+  "scene": "team",
+  "difficulty": "hard",
+  "acceptable_winners": [
+   "socket.io",
+   "liveblocks",
+   "yjs"
+  ],
+  "ground_truth_notes": "Real-time collaboration has several valid foundations: raw websocket framework, managed service, or CRDT library.",
+  "must_find_sources": [
+   {
+    "pattern": "socket.io",
+    "type": "official_doc",
+    "reason": "Socket.IO official docs"
+   },
+   {
+    "pattern": "liveblocks.io",
+    "type": "official_doc",
+    "reason": "Liveblocks official docs"
+   },
+   {
+    "pattern": "github.com/yjs/yjs",
+    "type": "github_repo",
+    "reason": "Yjs CRDT repo"
+   }
+  ],
+  "known_contradictions": [
+   {
+    "topic": "CRDT vs operational transform",
+    "position_a": "CRDTs (Yjs) handle offline and conflicts better for modern apps",
+    "position_b": "Operational transforms (OT) are battle-tested in Google Docs-style systems",
+    "key_source": "yjs.dev"
+   }
+  ],
+  "min_expected_sources": 4,
+  "_idx": 201
+ },
+ {
+  "id": "OS-0003",
+  "case_type": "open_scenario",
+  "query": "Enterprise wants internal admin panels for dozens of backend services without hiring frontend specialists",
+  "category": "Open Scenario",
+  "subdomain": "internal_tools",
+  "scene": "enterprise",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "refine",
+   "react-admin",
+   "retool",
+   "appsmith"
+  ],
+  "ground_truth_notes": "Low-code or framework-based admin panel solutions all satisfy the constraint of few frontend specialists.",
+  "must_find_sources": [
+   {
+    "pattern": "refine.dev",
+    "type": "official_doc",
+    "reason": "Refine official docs"
+   },
+   {
+    "pattern": "retool.com",
+    "type": "official_doc",
+    "reason": "Retool official site"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 202
+ },
+ {
+  "id": "OS-0004",
+  "case_type": "open_scenario",
+  "query": "I need a content-first site for a personal blog with excellent performance and markdown support",
+  "category": "Open Scenario",
+  "subdomain": "content_platform",
+  "scene": "solo",
+  "difficulty": "easy",
+  "acceptable_winners": [
+   "astro",
+   "next.js",
+   "hugo"
+  ],
+  "ground_truth_notes": "Content-first static or hybrid frameworks are all reasonable for markdown blogs.",
+  "must_find_sources": [
+   {
+    "pattern": "astro.build",
+    "type": "official_doc",
+    "reason": "Astro official docs"
+   },
+   {
+    "pattern": "gohugo.io",
+    "type": "official_doc",
+    "reason": "Hugo official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 2,
+  "_idx": 203
+ },
+ {
+  "id": "OS-0005",
+  "case_type": "open_scenario",
+  "query": "Our 8-person startup is launching an e-commerce storefront and needs fast time-to-market with SEO",
+  "category": "Open Scenario",
+  "subdomain": "ecommerce",
+  "scene": "team",
+  "difficulty": "medium",
+  "acceptable_winners": [
+   "next.js",
+   "nuxt",
+   "remix"
+  ],
+  "ground_truth_notes": "SEO-friendly SSR frameworks are interchangeable at this scale; commerce platforms are out of scope for the storefront layer.",
+  "must_find_sources": [
+   {
+    "pattern": "nextjs.org",
+    "type": "official_doc",
+    "reason": "Next.js official docs"
+   },
+   {
+    "pattern": "remix.run",
+    "type": "official_doc",
+    "reason": "Remix official docs"
+   }
+  ],
+  "known_contradictions": [],
+  "min_expected_sources": 3,
+  "_idx": 204
+ }
+]
