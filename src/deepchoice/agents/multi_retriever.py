@@ -46,7 +46,7 @@ class MultiRetrieverAgent:
         # inject the original query as a concrete search dimension.
         if _is_too_generic(sub_questions, query):
             print_agent_output(
-                f"Sub-questions too generic (avg_len < 20), supplementing with original query",
+                "Sub-questions too generic (avg_len < 20), supplementing with original query",
                 agent="MULTI_RETRIEVER",
             )
             sub_questions = _supplement_sub_questions(sub_questions, query)

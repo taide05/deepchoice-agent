@@ -1,6 +1,6 @@
 import time
 import pytest
-from deepchoice.clarify.session_manager import SessionManager, SessionState
+from deepchoice.clarify.session_manager import SessionManager
 
 
 class TestSessionManagerCreate:

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
 from .snapshot_store import save_snapshot, load_snapshot, save_report, list_history

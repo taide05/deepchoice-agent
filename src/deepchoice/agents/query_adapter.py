@@ -59,7 +59,7 @@ class QueryAdapterAgent:
 
         prompt = [
             {"role": "system", "content": ADAPT_SYSTEM},
-            {"role": "user", "content": f"Sub-questions:\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions)) + f"\n\nOriginal query: {task['query']}\nConstraints: {', '.join(task.get('constraints', [])) or 'none'}"},
+            {"role": "user", "content": "Sub-questions:\n" + "\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions)) + f"\n\nOriginal query: {task['query']}\nConstraints: {', '.join(task.get('constraints', [])) or 'none'}"},
         ]
 
         local_usage: list = []

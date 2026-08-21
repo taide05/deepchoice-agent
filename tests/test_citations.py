@@ -1,6 +1,4 @@
 """Tests for report citation injection and TOC building (formats/citations.py)."""
-import pytest
-
 from deepchoice.formats.citations import number_sources, inject_citations, build_toc
 
 

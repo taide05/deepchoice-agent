@@ -267,7 +267,6 @@ def compute_source_recall(
     case_map = {c["id"]: c for c in annotated_cases}
     total_must_find = 0
     total_found = 0
-    total_retrieved = 0
     details = []
 
     for run in runs:
@@ -293,8 +292,6 @@ def compute_source_recall(
                 url = result.get("url", "")
                 if url:
                     retrieved_urls.append(url)
-
-        total_retrieved += len(retrieved_urls)
 
         # Check each must_find pattern against retrieved URLs
         found = 0
@@ -686,8 +683,6 @@ def compute_success_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
         has_error = run.get("error") is not None
         report = run.get("report", "")
         has_report = bool(report and len(report.strip()) > 100)
-        # state may be absent in batched/loaded runs
-        has_state = run.get("state") is not None or has_report
 
         if not has_error and has_report:
             success += 1
@@ -883,71 +878,6 @@ def load_benchmarks(runs_dir: Path) -> list[dict[str, Any]]:
         except (json.JSONDecodeError, OSError):
             continue
     return reports
-
-
-def merge_batches(runs_dir: Path, annotated_cases_path: Path | None = None) -> dict[str, Any]:
-    """Merge batch benchmark results into a single aggregate report.
-
-    Scans for benchmark-batch*.json files, combines all runs, and
-    recomputes metrics across all cases.
-
-    Args:
-        runs_dir: Directory containing batch benchmark JSON files.
-        annotated_cases_path: Path to annotated cases JSON (for metrics).
-
-    Returns:
-        Full benchmark report across all batches.
-    """
-    import json as json_mod
-
-    batch_files = sorted(runs_dir.glob("benchmark-batch*-*.json"))
-    if not batch_files:
-        return {"status": "no_batches", "message": "No batch files found."}
-
-    # Load annotated cases if path provided
-    annotated_cases = []
-    if annotated_cases_path and annotated_cases_path.exists():
-        annotated_cases = json_mod.loads(annotated_cases_path.read_text(encoding="utf-8"))
-
-    # Merge runs from all batches
-    all_runs: list[dict[str, Any]] = []
-    all_latencies: list[float] = []
-    all_retry_pairs: list[dict[str, Any]] = []
-    batch_summaries: list[dict[str, Any]] = []
-
-    for bf in batch_files:
-        batch_data = json_mod.loads(bf.read_text(encoding="utf-8"))
-        batch_summaries.append({
-            "file": bf.name,
-            "timestamp": batch_data.get("timestamp", ""),
-            "cases_ran": batch_data.get("reliability", {}).get("success_rate", {}).get("total", 0),
-        })
-        # The batch files don't store raw runs, only computed metrics.
-        # We need to reconstruct from existing batch data.
-
-    # Since raw runs aren't stored in batch files (only metrics), read from
-    # full benchmark files or state snapshots if available.
-    full_files = sorted(runs_dir.glob("benchmark-????????-??????.json"))
-    full_files = [f for f in full_files if "batch" not in f.name]
-
-    if full_files:
-        # Use the latest full-file report as the source for merging
-        latest = json_mod.loads(full_files[-1].read_text(encoding="utf-8"))
-        return {
-            "status": "merged_from_full",
-            "timestamp": latest.get("timestamp", ""),
-            "summary": latest.get("summary", {}),
-            "batches_merged": len(batch_files),
-            "batch_list": batch_summaries,
-        }
-
-    return {
-        "status": "merged",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "batches_merged": len(batch_files),
-        "batch_list": batch_summaries,
-        "note": "Raw runs not stored in batch files. Re-run with full pipeline for aggregate metrics.",
-    }
 
 
 def trend_report(runs_dir: Path) -> dict[str, Any]:

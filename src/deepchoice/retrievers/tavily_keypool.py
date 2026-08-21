@@ -77,7 +77,7 @@ async def _probe_one(post, key: str) -> bool:
 
 async def probe(post) -> None:
     """Probe usable and unknown keys; fresh exhausted keys are skipped."""
-    global _pool, _exhausted, _probed
+    global _exhausted, _probed
     async with _lock:
         if _probed:
             return

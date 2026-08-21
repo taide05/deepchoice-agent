@@ -172,7 +172,6 @@ class OfficialSearch(BaseRetriever):
         # overrode docs.python.org with python.langchain.com).
         lookup = {**learned, **TECH_DOCS}
         results = []
-        matched_terms = set()
 
         # Pass 1: curated seed + learned cache via normalized n-gram matching.
         # Space-separated multi-word terms ('AWS Lambda') match hyphenated or

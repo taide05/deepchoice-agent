@@ -13,7 +13,6 @@ class SessionState(BaseModel):
 
     constraints: list[str] = []
     unknown_techs: bool = False
-    tech_recommendations: list[dict] = []
 
     clarify_rounds: int = 0
     filled_required: list[str] = []

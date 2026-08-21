@@ -1,6 +1,5 @@
 """LLM-as-Judge evaluation runner for DeepChoice."""
 import json
-import os
 import sys
 from pathlib import Path
 

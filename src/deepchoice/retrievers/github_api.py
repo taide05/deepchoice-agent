@@ -1,4 +1,3 @@
-import asyncio
 import os
 import httpx
 from .base import BaseRetriever

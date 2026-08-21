@@ -4,8 +4,6 @@ Regression: open-scenario cases exposed two winner-quality failures —
 (a) a GitHub sample repo path returned as winner (OS-0016),
 (b) a junk PyPI package name returned as winner (OS-0050).
 """
-import pytest
-
 from deepchoice.agents import conclusion_synthesizer as cs_mod
 
 STATE = {

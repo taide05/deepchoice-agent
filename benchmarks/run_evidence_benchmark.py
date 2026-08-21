@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -22,8 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from deepchoice.utils.llm import call_model
-from deepchoice.agents.conflict_detector import (_execute_search, _gather_evidence,
-                                                  SEARCH_TOOLS, ARBITRATION_PROMPT)
+from deepchoice.agents.conflict_detector import _gather_evidence, ARBITRATION_PROMPT
 
 # ---------------------------------------------------------------------------
 # Test cases: deliberately ambiguous conflict pairs
@@ -94,22 +92,6 @@ def _make_prompt(tc: dict, extra_evidence: str = "") -> list[dict]:
             evidence_b=tc["evidence_b"], claim_b=claim_b,
         ),
     }]
-
-
-def _score_result(result: dict) -> dict:
-    """Score a single arbitration result on 4 quality dimensions."""
-    scores = {"resolution": result.get("resolution", "insufficient_data")}
-
-    confidence_map = {"high": 3, "medium": 2, "low": 1}
-    scores["confidence_score"] = confidence_map.get(result.get("confidence", "low"), 0)
-
-    reasoning = result.get("reasoning", "")
-    scores["reasoning_length"] = len(reasoning)
-    scores["has_evidence_citation"] = any(
-        w in reasoning.lower() for w in ["evidence", "benchmark", "source", "found", "search"]
-    )
-
-    return scores
 
 
 async def run_baseline(tc: dict) -> dict:
@@ -211,10 +193,6 @@ async def main():
         order = {"low": 0, "medium": 1, "high": 2}
         return order.get(r2["confidence"], 0) > order.get(r1["confidence"], 0)
 
-    def conf_same_or_better(r1, r2):
-        order = {"low": 0, "medium": 1, "high": 2}
-        return order.get(r2["confidence"], 0) >= order.get(r1["confidence"], 0)
-
     improved = sum(1 for b, e in zip(baseline_results, evidence_results) if conf_up(b, e))
     same = sum(1 for b, e in zip(baseline_results, evidence_results)
                if b["confidence"] == e["confidence"] and not conf_up(b, e))
@@ -224,11 +202,11 @@ async def main():
     total_evidence = sum(r["elapsed_s"] for r in evidence_results)
     avg_evidence_time = sum(r.get("evidence_elapsed_s", 0) for r in evidence_results) / len(evidence_results)
 
-    print(f"\nConfidence changes:")
+    print("\nConfidence changes:")
     print(f"  Improved:   {improved}/{len(TEST_CASES)}")
     print(f"  Same:       {same}/{len(TEST_CASES)}")
     print(f"  Degraded:   {degraded}/{len(TEST_CASES)}")
-    print(f"\nTotal latency:")
+    print("\nTotal latency:")
     print(f"  Baseline:   {total_baseline:.1f}s")
     print(f"  Evidence:   {total_evidence:.1f}s (avg evidence gathering: {avg_evidence_time:.1f}s)")
 

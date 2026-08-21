@@ -22,6 +22,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 # Ensure src/ is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -39,7 +40,7 @@ from benchmarks.metrics import (
     save_benchmark,
     trend_report,
 )
-from benchmarks.report_quality import evaluate_batch, grade as quality_grade
+from benchmarks.report_quality import evaluate_batch
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -51,51 +52,6 @@ ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
 FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
 TIMEOUT_PER_CASE_S = 480  # 8 minutes per case (evidence gathering adds latency)
 DEFAULT_CONCURRENCY = 8
-
-
-# ---------------------------------------------------------------------------
-# LLM-as-Judge (reused from test_eval.py, made standalone)
-# ---------------------------------------------------------------------------
-
-EVAL_PROMPT = """You are an impartial evaluator. Score this research report on 5 dimensions (1-5 each).
-
-## Report
-{report}
-
-## Original Query
-{query}
-
-## Scoring Rubric
-1. Factual Consistency (1-5): Are claims consistent with the cited sources? Deduct for hallucinated facts.
-2. Evidence Sufficiency (1-5): Does each major claim have at least one source? Deduct for unsourced claims.
-3. Reasoning Logic (1-5): Is the reasoning chain coherent? Deduct for logical gaps.
-4. Honesty (1-5): Are gaps and uncertainties clearly stated? Deduct for overconfidence.
-5. Completeness (1-5): Are all sub-questions answered? Deduct for missing dimensions.
-
-Return ONLY a JSON object:
-{{
-  "factual_consistency": N,
-  "evidence_sufficiency": N,
-  "reasoning_logic": N,
-  "honesty": N,
-  "completeness": N,
-  "total": N.N,
-  "notes": "Brief justification"
-}}"""
-
-
-async def judge_report(query: str, report: str) -> dict:
-    """Run LLM-as-Judge evaluation on a single report."""
-    prompt = EVAL_PROMPT.format(query=query, report=report[:8000])
-    try:
-        result = await call_model(
-            [{"role": "user", "content": prompt}],
-            model="deepseek-v4-flash",
-            response_format="json",
-        )
-        return result
-    except Exception as exc:
-        return {"error": str(exc), "total": 0.0}
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +263,6 @@ async def run_baseline(
         end_idx = start_idx + batch_size
         cases = cases[start_idx:end_idx]
         batch_label = f"-batch{batch:02d}"
-        total_in_file = len(cases)
         print(f"Batch {batch}: cases running (batch_size={batch_size}, cases in this batch={len(cases)})")
     elif n_cases and n_cases > 0:
         cases = cases[:n_cases]
@@ -392,7 +347,7 @@ async def run_baseline(
           f"C={qs['grade_distribution']['C']} "
           f"D={qs['grade_distribution']['D']}")
     print(f"  Mean pass count: {qs['mean_pass_count']}/5")
-    print(f"  Check pass rates:")
+    print("  Check pass rates:")
     for cid, rate in qs['check_pass_rates'].items():
         print(f"    {cid}: {rate:.0f}%")
 
@@ -438,7 +393,7 @@ async def run_baseline(
     from benchmarks.metrics import compute_source_recall_by_source
     src_split = compute_source_recall_by_source(runs, cases)
     report["quality"]["source_recall_by_source"] = src_split
-    print(f"\n  Source recall by type:")
+    print("\n  Source recall by type:")
     for src_type, data in sorted(src_split.items()):
         if src_type == "metric":
             continue
@@ -545,7 +500,7 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     # Run quality checklist on all reports
     quality_stats = evaluate_batch(all_runs)
     qs = quality_stats
-    print(f"\nReport Quality (aggregate):")
+    print("\nReport Quality (aggregate):")
     print(f"  A={qs['grade_distribution']['A']} B={qs['grade_distribution']['B']} "
           f"C={qs['grade_distribution']['C']} D={qs['grade_distribution']['D']}")
     print(f"  Mean pass count: {qs['mean_pass_count']}/5")

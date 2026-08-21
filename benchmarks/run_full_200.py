@@ -1,4 +1,4 @@
-"""Run all 40 batches (200 cases, 5/batch) and merge at the end.
+r"""Run all 40 batches (200 cases, 5/batch) and merge at the end.
 Logs to benchmarks/runs/full_run.log for progress tracking.
 
 Usage:

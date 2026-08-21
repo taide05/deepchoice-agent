@@ -100,7 +100,7 @@ def render(state: dict) -> str:
         L["title"][lang],
         "",
         f"| {L['col_dim'][lang]} | {L['col_criterion'][lang]} | {L['col_strength'][lang]} |",
-        f"|------|------|---------|",
+        "|------|------|---------|",
     ]
 
     for dim_key, dim_info in dims.items():
@@ -122,7 +122,6 @@ def render(state: dict) -> str:
         for dim_key in ["functionality", "performance", "ecosystem", "dx", "scenario"]:
             dim_info = dims[dim_key]
             label = dim_info[f"label_{lang}"]
-            rows_text = " ".join(dim_results[dim_key]) if dim_results[dim_key] else L["no_evidence"][lang]
             lines.append(f"| **{label}** | See evidence chains | See evidence chains | — |")
 
     lines.extend(["", L["disputes_title"][lang], ""])

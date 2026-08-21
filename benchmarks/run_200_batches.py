@@ -46,7 +46,6 @@ async def main():
         print("\nMerging all batches...")
         try:
             # Patch merge to use our cases file
-            from run_baseline import ANNOTATED_CASES_PATH as orig_path
             import run_baseline as rb
             rb.ANNOTATED_CASES_PATH = CASES_FILE
             await merge_all_batches(verbose=True)

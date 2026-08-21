@@ -1,5 +1,5 @@
 """Run 1 case and report flash token usage per call site."""
-import asyncio, json, time, sys, os
+import asyncio, json, time, sys
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
@@ -76,7 +76,7 @@ async def main():
     print(f"Running: {case['query']}")
     t0 = time.monotonic()
     orchestrator = ChiefEditorAgent(task)
-    state = await asyncio.wait_for(orchestrator.run_research_task(), timeout=480)
+    await asyncio.wait_for(orchestrator.run_research_task(), timeout=480)
     total_s = time.monotonic() - t0
 
     print(f"\nTotal: {total_s:.1f}s\n")
