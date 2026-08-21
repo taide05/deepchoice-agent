@@ -21,6 +21,7 @@ Thumbs.db
 
 # Project
 chroma_kb/chroma_db/
+chroma_db/
 outputs/
 .env
 
@@ -30,6 +31,7 @@ notes/
 wheels/
 benchmarks/runs/
 benchmarks/missing_cases.json
+benchmarks/cases_remaining.json
 tests/test_cases/generated_cases.json
 
 # SDD workspace (superpowers plan ledger/briefs)
