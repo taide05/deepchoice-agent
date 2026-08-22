@@ -96,33 +96,33 @@ streamlit run frontend/app.py
 
 **信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
 
-**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。100 case 实测，冲突检测率 49.1%——按环节拆分：检测 31.6% / 裁决 24.6%（检测后裁决成功率 77.8%），损失在检测环节不在仲裁，下一步优化方向是预筛而非重裁。
+**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。200 case 实测，冲突检测率 56.4%——其中 keyword 预筛命中 44 对（确定性），LLM judge 复核 31 对（judge 有随机性，两次跑 56.4-58.6% 区间）。下一步优化方向是预筛召回而非仲裁质量。
 
-## 量化指标（100 case 混合基准，2026-08-20 采集，2026-08-20 V 门禁复核）
+## 量化指标（200 case 混合基准，2026-08-22 采集，2026-08-22 V 归档）
 
-50 对比场景（TC）+ 50 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。
+100 对比场景（TC）+ 100 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。
 
 | 指标 | 值 | 说明 |
 |------|-----|------|
-| Top-1 准确率 | **86.2%**（TC 86.4% / OS 86.0%） | 推荐排名第一的技术匹配人工标注正确答案 |
-| 任务成功率 | **100%**（100/100） | 零失败——str.get bug 已根除（`llm.py` 兜底），0 超时 |
-| 声明溯源率 | **88.3%** | 声明可追溯到具体来源的比例 |
-| 信源召回率 | **57.9%**（TC 77.5% / OS 31.4%）⚠️ | ⚠️ 跑批后半程 Tavily 配额耗尽断供，此值为下界，最终口径待配额恢复后重跑 |
-| official_doc 召回率 | **58.0%**（109/188）⚠️ | 自更新映射生效（历史 20.7%）；同样受断供影响待复核 |
-| 端到端延迟 P50 | **283.6s** | 中位数——约 4.7 分钟完成一次技术选型研究 |
-| 端到端延迟 P95 | **366.9s** | 95 分位——扫描限制 15 对 + 证据收集优化 + prompt 缓存 |
-| 报告质量 A 级 | **99%** | 5 项确定性质检（不调 LLM），99/100 满分 |
+| Top-1 准确率 | **90.9%**（TC 85.1% n=87 / OS 96.0% n=100） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC winner 不可提取未计入） |
+| 任务成功率 | **100%**（200/200） | 零失败——str.get bug 已根除（`llm.py` 兜底），0 超时 |
+| 声明溯源率 | **85.1%** | 声明可追溯到具体来源的比例 |
+| 信源召回率 | **66.2%** | github_repo 73.0% / official_doc 65.6% / academic 100% / community 100% / package_registry 50% |
+| official_doc 召回率 | **65.6%**（279/425） | 自更新映射生效（历史 20.7%→58.0%→65.6%） |
+| 端到端延迟 P50 | **255.6s** | 中位数——约 4.3 分钟完成一次技术选型研究 |
+| 端到端延迟 P95 | **312.2s** | 95 分位——扫描限制 15 对 + 证据收集优化 + prompt 缓存 |
+| 报告质量 A 级 | **100%** | 5 项确定性质检（不调 LLM），200/200 满分 |
 
-> **数据来源**：以上数字来自 100 case 混合基准（`benchmarks/cases_eval_100.json` = 50 TC + 50 OS），通过 `benchmarks/run_baseline.py --cases-file cases_eval_100.json --concurrency 4` 采集，每 50 case checkpoint 保存。`report_quality.py` 做确定性质检（非 LLM-as-Judge）。2026-08-20 经 V 门禁复核；2026-08-21 全量测试 186 passed + 1 skipped 确认。
+> **数据来源**：以上数字来自 200 case 混合基准（`benchmarks/cases_eval_200.json` = 100 TC + 100 OS），采集过程因 API 余额中断分三段完成，由 `benchmarks/merge_checkpoints.py` 合并（200/200 覆盖校验 + 0 错误）。`report_quality.py` 做确定性质检（非 LLM-as-Judge）。2026-08-22 V 归档复核；全量测试 186 passed + 1 skipped 确认。
 
 ```bash
-# 重现 100 case 混合基准
+# 重现 200 case 混合基准（或分案例文件分批跑后合并）
 cd D:\deepchoice-agent
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_100.json --concurrency 4
-python benchmarks/run_full_200.py          # 200 case 对比场景全量
+python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_200.json --concurrency 4
+python -m benchmarks.merge_checkpoints   # 已有 checkpoint 时合并出最终指标
 ```
 
-**已知局限**：端到端延迟较高（P50 283.6s/P95 366.9s），主要来自矛盾检测、仲裁和证据收集——这是深度研究的代价，480s 预算内。冲突检测环节是当前指标瓶颈（检测 31.6% vs 裁决成功率 77.8%），BGE 阈值与扫描对数是最直接的优化杠杆。开放场景的信源召回受 Tavily 月配额波动影响明显，密钥池已缓解单 key 耗尽问题，配额总量仍是外部约束。
+**已知局限**：端到端延迟较高（P50 255.6s/P95 312.2s），主要来自矛盾检测、仲裁和证据收集——这是深度研究的代价，480s 预算内。冲突检测率 56.4% 中 keyword 预筛部分（44/133）是确定性的，LLM 复核部分有随机性——预筛召回是最直接的优化杠杆。Tavily 月配额仍是外部约束，但密钥池（多 key 轮换 + 耗尽池持久化 + 28 天自动重探）已把单 key 耗尽从故障降级为吞吐波动。
 
 ## 技术栈
 
@@ -141,13 +141,15 @@ src/deepchoice/
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 
 benchmarks/
-├── metrics.py           # 7 指标计算（GSM 框架）
-├── run_baseline.py      # 分批 + 合并 + 趋势对比
-├── report_quality.py    # 5 项确定性质检（A/B/C/D 评级）
-├── cases_200.json       # 200 case benchmark（50 标注 + 150 变体）
-├── run_all_batches.ps1  # 分批运行脚本
-├── locustfile.py        # 基础并发负载测试
-└── annotated_cases.json # 50 手标注 case
+├── metrics.py             # 7 指标计算（GSM 框架）
+├── run_baseline.py        # 分批 + checkpoint + 趋势对比
+├── merge_checkpoints.py   # 中断跑批的 checkpoint 合并工具
+├── report_quality.py      # 5 项确定性质检（A/B/C/D 评级）
+├── cases_200.json         # 200 对比场景 case（50 标注 + 150 变体）
+├── cases_eval_200.json    # 200 混合基准（100 TC + 100 OS）
+├── run_all_batches.ps1    # 分批运行脚本
+├── locustfile.py          # 基础并发负载测试
+└── annotated_cases.json   # 50 手标注 case
 ```
 
 ## License
