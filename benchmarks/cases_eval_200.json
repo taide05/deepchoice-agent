@@ -3886,7 +3886,8 @@
    "next.js",
    "nuxt",
    "remix",
-   "shopify"
+   "shopify",
+   "shopware"
   ],
   "ground_truth_notes": "SEO-friendly SSR frameworks are interchangeable at this scale; commerce platforms are out of scope for the storefront layer.",
   "must_find_sources": [
@@ -3979,7 +3980,8 @@
    "next.js",
    "gatsby",
    "webflow",
-   "framer"
+   "framer",
+   "unbounce"
   ],
   "ground_truth_notes": "Any headless-friendly site framework works; the A/B layer is typically a third-party service on top.",
   "must_find_sources": [
@@ -4217,7 +4219,8 @@
   "acceptable_winners": [
    "minio",
    "s3",
-   "cloudflare"
+   "cloudflare",
+   "seaweedfs"
   ],
   "ground_truth_notes": "Self-hosted S3-compatible or managed object storage both meet the requirement.",
   "must_find_sources": [
@@ -4445,7 +4448,8 @@
    "wrenai",
    "canner",
    "apache atlas",
-   "atlas"
+   "atlas",
+   "alation"
   ],
   "ground_truth_notes": "The three open-source catalogs overlap heavily in capability.",
   "must_find_sources": [
@@ -4831,7 +4835,8 @@
    "gitlab-ci",
    "jenkins",
    "harness",
-   "circleci"
+   "circleci",
+   "vercel"
   ],
   "ground_truth_notes": "Any mainstream CI platform supports preview environments with plugins.",
   "must_find_sources": [
@@ -5505,7 +5510,8 @@
    "auth0",
    "keycloak",
    "supabase",
-   "workos"
+   "workos",
+   "amazon cognito"
   ],
   "ground_truth_notes": "Hosted or self-hosted identity providers with social login/SSO/MFA all qualify.",
   "must_find_sources": [
@@ -5625,7 +5631,8 @@
    "resend",
    "postmark",
    "sendgrid",
-   "mailgun"
+   "mailgun",
+   "amazon ses"
   ],
   "ground_truth_notes": "Transactional email providers with webhooks and delivery tracking all qualify.",
   "must_find_sources": [
@@ -5862,7 +5869,8 @@
    "budibase",
    "tooljet",
    "appsmith",
-   "retool"
+   "retool",
+   "adminjs"
   ],
   "ground_truth_notes": "Low-code internal tool platforms all satisfy CRUD admin needs.",
   "must_find_sources": [
@@ -6688,7 +6696,8 @@
    "langfuse",
    "promptfoo",
    "agenta",
-   "portkey"
+   "portkey",
+   "langsmith"
   ],
   "ground_truth_notes": "Prompt management platforms with versioning and evals all qualify.",
   "must_find_sources": [
@@ -6969,7 +6978,8 @@
   "acceptable_winners": [
    "beehiiv",
    "convertkit",
-   "mailchimp"
+   "mailchimp",
+   "ghost"
   ],
   "ground_truth_notes": "Newsletter platforms with subscriber management all qualify.",
   "must_find_sources": [
@@ -7207,7 +7217,8 @@
   "acceptable_winners": [
    "readme",
    "mintlify",
-   "postman"
+   "postman",
+   "redoc"
   ],
   "ground_truth_notes": "API documentation platforms consuming OpenAPI all qualify.",
   "must_find_sources": [
