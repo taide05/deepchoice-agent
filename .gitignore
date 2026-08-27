@@ -25,7 +25,6 @@ chroma_db/
 outputs/
 .env
 
-docs/
 notes/
 .build-hf-cache/
 wheels/
