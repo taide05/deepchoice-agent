@@ -3,7 +3,7 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir streamlit httpx
+RUN pip install --no-cache-dir "streamlit>=1.38.0,<2" "httpx>=0.27.0,<1"
 
 COPY frontend/ /app/
 

@@ -35,11 +35,29 @@ pip install -e ".[dev]"
 #   GITHUB_TOKEN=ghp_xxx（可选，提升 API 限额）
 
 # 3. 启动后端
-uvicorn src.deepchoice.server.app:app --reload
+uvicorn deepchoice.server.app:app --reload
 
 # 4. 开新终端，启动前端
 streamlit run frontend/app.py
 # 浏览器打开 http://localhost:8501
+```
+
+### Docker 部署
+
+```bash
+docker build -t deepchoice .
+docker run -p 8000:8000 --env-file .env deepchoice
+```
+
+镜像构建为纯在线安装（清华镜像源），不依赖本地 wheels 目录。BGE-M3
+嵌入模型在容器首次运行时自动下载（约 2GB，下载到 `/root/.cache/huggingface`），
+建议挂载 volume 持久化模型缓存：
+
+```bash
+docker run -p 8000:8000 --env-file .env \
+  -v deepchoice-hf-cache:/root/.cache/huggingface \
+  -v deepchoice-outputs:/app/outputs \
+  deepchoice
 ```
 
 ## 架构概览

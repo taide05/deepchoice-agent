@@ -7,15 +7,13 @@ RUN apt-get update \
 
 WORKDIR /build
 
-COPY wheels/ /wheels/
 COPY pyproject.toml README.md ./
 COPY src/ src/
 
-# 本地 wheels 优先（纯 Python 包跳过下载），平台不匹配的走清华镜像
-RUN pip install --no-cache-dir --find-links=/wheels \
+# Online install via the Tsinghua mirror — no local wheels directory is
+# required, so `git clone && docker build` works out of the box.
+RUN pip install --no-cache-dir \
     -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn .
-
-COPY .build-hf-cache/hub/models--BAAI--bge-m3 /root/.cache/huggingface/hub/models--BAAI--bge-m3
 
 
 # ===== Stage 2: Runtime =====
@@ -29,14 +27,15 @@ RUN apt-get update \
 
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /root/.cache/huggingface /root/.cache/huggingface
 
 COPY chroma_kb/ /app/chroma_kb/
 
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
-ENV HF_HUB_OFFLINE=1
+
+# BGE-M3 downloads on first use (~2GB) into the HF cache; mount a volume at
+# /root/.cache/huggingface to persist it across container restarts.
 
 EXPOSE 8000
 

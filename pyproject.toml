@@ -8,32 +8,32 @@ version = "0.1.0"
 description = "Tech Selection Deep Research Agent"
 requires-python = ">=3.11"
 dependencies = [
-    "langgraph>=0.2.0",
-    "langgraph-checkpoint-sqlite>=2.0.0",
-    "langchain-core>=0.3.0",
-    "openai>=1.50.0",
-    "httpx>=0.27.0",
-    "pydantic>=2.7",
-    "numpy>=2.0",
-    "aiosqlite>=0.22",
-    "chromadb>=0.5.0",
-    "sentence-transformers>=3.0.0",
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
-    "streamlit>=1.38.0",
-    "json-repair>=0.30.0",
-    "python-dotenv>=1.0.0",
-    "markdown>=3.5",
-    "xhtml2pdf>=0.2.16",
-    "reportlab>=4.0",
+    "langgraph>=0.2.0,<2",
+    "langgraph-checkpoint-sqlite>=2.0.0,<4",
+    "langchain-core>=0.3.0,<2",
+    "openai>=1.50.0,<3",
+    "httpx>=0.27.0,<1",
+    "pydantic>=2.7,<3",
+    "numpy>=2.0,<3",
+    "aiosqlite>=0.22,<1",
+    "chromadb>=0.5.0,<2",
+    "sentence-transformers>=3.0.0,<6",
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.0,<1",
+    "streamlit>=1.38.0,<2",
+    "json-repair>=0.30.0,<1",
+    "python-dotenv>=1.0.0,<2",
+    "markdown>=3.5,<4",
+    "xhtml2pdf>=0.2.16,<1",
+    "reportlab>=4.0,<5",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-mock>=3.14.0",
-    "locust>=2.46",
+    "pytest>=8.0,<9",
+    "pytest-asyncio>=0.24.0,<1",
+    "pytest-mock>=3.14.0,<4",
+    "locust>=2.46,<3",
 ]
 
 [project.urls]
