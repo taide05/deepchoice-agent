@@ -11,14 +11,20 @@ def _valid_task_id(task_id: str) -> bool:
     return bool(_TASK_ID_RE.match(task_id))
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
 def save_snapshot(task_id: str, state: dict) -> Path:
     task_dir = OUTPUT_DIR / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = task_dir / "research_snapshot.json"
     serializable = {k: v for k, v in state.items() if k != "current_phase"}
-    snapshot_path.write_text(
+    _atomic_write_text(
+        snapshot_path,
         json.dumps(serializable, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
     )
     return snapshot_path
 
@@ -38,9 +44,9 @@ def save_failed_snapshot(task_id: str, state: dict, error: str) -> Path:
     snapshot_path = task_dir / "research_snapshot_failed.json"
     serializable = {k: v for k, v in state.items() if k != "current_phase"}
     serializable["_error"] = error
-    snapshot_path.write_text(
+    _atomic_write_text(
+        snapshot_path,
         json.dumps(serializable, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
     )
     return snapshot_path
 
@@ -48,7 +54,7 @@ def save_failed_snapshot(task_id: str, state: dict, error: str) -> Path:
 def save_report(task_id: str, report_md: str) -> Path:
     report_path = OUTPUT_DIR / task_id / "report.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(report_md, encoding="utf-8")
+    _atomic_write_text(report_path, report_md)
     return report_path
 
 

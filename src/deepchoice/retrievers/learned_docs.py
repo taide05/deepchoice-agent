@@ -9,10 +9,23 @@ system grow it automatically:
     to an LLM proposal (validated: term must be a host label + URL reachable).
 """
 import json
+import os
+import threading
 from pathlib import Path
 from urllib.parse import urlparse
 
-LEARNED_DOCS_PATH = Path("./learned_docs.json")
+LEARNED_DOCS_PATH = Path(os.environ.get("LEARNED_DOCS_PATH", "./learned_docs.json"))
+
+# learn()/harvest() run short read-modify-write cycles on a small JSON file
+# from async callers; the critical section is a memory loop plus one tiny
+# file write, acceptable to serialize with a sync lock (B1-D1).
+_write_lock = threading.Lock()
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
 
 _DOCS_SIGNALS = ("docs.", "/docs", "readthedocs", "documentation", "learn.")
 
@@ -53,16 +66,21 @@ def load_learned() -> dict[str, dict]:
 
 
 def save_learned(docs: dict[str, dict]) -> None:
-    LEARNED_DOCS_PATH.write_text(
-        json.dumps(docs, ensure_ascii=False, indent=2), encoding="utf-8"
+    _atomic_write_text(
+        LEARNED_DOCS_PATH,
+        json.dumps(docs, ensure_ascii=False, indent=2),
     )
 
 
 def learn(term: str, url: str, title: str, via: str) -> dict[str, dict]:
-    docs = load_learned()
-    docs[term] = {"url": url, "title": title or term, "via": via}
-    save_learned(docs)
-    return docs
+    with _write_lock:
+        docs = load_learned()
+        docs[term] = {"url": url, "title": title or term, "via": via}
+        _atomic_write_text(
+            LEARNED_DOCS_PATH,
+            json.dumps(docs, ensure_ascii=False, indent=2),
+        )
+        return docs
 
 
 def extract_terms(text: str) -> list[str]:
@@ -90,28 +108,32 @@ def _looks_official(url: str) -> bool:
 def harvest(terms: list[str], search_results: list[dict],
             existing: set[str] | None = None) -> list[dict]:
     """Learn term -> url pairs from search evidence; returns newly learned entries."""
-    docs = load_learned()
-    known = set(existing or []) | set(docs.keys())
-    learned = []
-    for term in terms:
-        if term in known or not is_plausible_term(term):
-            continue
-        for sr in search_results:
-            for item in sr.get("results", []) or []:
-                url = item.get("url", "")
-                if domain_label_match(term, url) and _looks_official(url):
-                    entry = {
-                        "url": url,
-                        "title": item.get("title", term),
-                        "via": f"harvest:{sr.get('source', 'unknown')}",
-                    }
-                    docs[term] = entry
-                    learned.append({"term": term, **entry})
-                    known.add(term)
-                    break
-            else:
+    with _write_lock:
+        docs = load_learned()
+        known = set(existing or []) | set(docs.keys())
+        learned = []
+        for term in terms:
+            if term in known or not is_plausible_term(term):
                 continue
-            break
-    if learned:
-        save_learned(docs)
-    return learned
+            for sr in search_results:
+                for item in sr.get("results", []) or []:
+                    url = item.get("url", "")
+                    if domain_label_match(term, url) and _looks_official(url):
+                        entry = {
+                            "url": url,
+                            "title": item.get("title", term),
+                            "via": f"harvest:{sr.get('source', 'unknown')}",
+                        }
+                        docs[term] = entry
+                        learned.append({"term": term, **entry})
+                        known.add(term)
+                        break
+                else:
+                    continue
+                break
+        if learned:
+            _atomic_write_text(
+                LEARNED_DOCS_PATH,
+                json.dumps(docs, ensure_ascii=False, indent=2),
+            )
+        return learned

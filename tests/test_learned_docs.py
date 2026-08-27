@@ -7,6 +7,7 @@ from deepchoice.retrievers.learned_docs import (
     domain_label_match,
     harvest,
     is_plausible_term,
+    learn,
     load_learned,
 )
 
@@ -107,3 +108,31 @@ class TestHarvest:
         ]
         assert harvest(["docs"], results) == []
         assert load_learned() == {}
+
+
+class TestConcurrentLearn:
+    def test_concurrent_learns_lose_no_updates(self, monkeypatch, tmp_path):
+        import threading
+
+        monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
+
+        def worker(i):
+            learn(f"tool{i}", f"https://tool{i}.dev/docs", f"Tool {i}", via="llm")
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(30)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        docs = load_learned()
+        assert len(docs) == 30
+        assert all(f"tool{i}" in docs for i in range(30))
+
+    def test_atomic_write_leaves_no_tmp_file(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
+
+        learn("zed", "https://zed.dev/docs", "Zed", via="llm")
+
+        leftovers = [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
+        assert leftovers == []

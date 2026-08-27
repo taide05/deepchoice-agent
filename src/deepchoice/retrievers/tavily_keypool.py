@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import random
+import threading
 import time
 
 # Permanent dead codes: invalid key (401) or monthly usage exhausted (432).
@@ -51,9 +52,14 @@ def _load_state() -> dict[str, float]:
         return {}
 
 
+_state_write_lock = threading.RLock()
+
+
 def _save_state(exhausted: dict[str, float]) -> None:
-    with open(_state_path(), "w", encoding="utf-8") as f:
+    tmp = _state_path() + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump({"exhausted": exhausted}, f)
+    os.replace(tmp, _state_path())
 
 
 def _is_fresh(ts: float) -> bool:
@@ -110,10 +116,11 @@ async def ensure_probed(post) -> None:
 
 
 def mark_dead(key: str) -> None:
-    if key in _pool:
-        _pool.remove(key)
-    _exhausted[_hash(key)] = time.time()
-    _save_state(_exhausted)
+    with _state_write_lock:
+        if key in _pool:
+            _pool.remove(key)
+        _exhausted[_hash(key)] = time.time()
+        _save_state(_exhausted)
 
 
 async def current() -> str | None:

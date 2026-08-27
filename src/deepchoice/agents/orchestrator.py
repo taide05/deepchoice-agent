@@ -64,7 +64,7 @@ class ChiefEditorAgent:
             t0 = time.monotonic()
             result = await fn(state)
             elapsed = round(time.monotonic() - t0, 2)
-            timing = state.setdefault("agent_timing", {})
+            timing = dict(state.get("agent_timing", {}))
             timing[name] = elapsed
             result["agent_timing"] = timing
             result["current_phase"] = name
