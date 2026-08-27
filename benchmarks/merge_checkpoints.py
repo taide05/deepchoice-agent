@@ -27,6 +27,8 @@ from benchmarks.metrics import (
     save_benchmark,
 )
 from benchmarks.report_quality import evaluate_batch
+# Same-repo script coupling to run_baseline's judge helper — kept private to
+# avoid a shared module for one function; revisit if a third consumer appears.
 from benchmarks.run_baseline import _judge_conflict_match
 
 AGENT_NAMES = ["query_analyzer", "query_adapter", "multi_retriever",
@@ -72,16 +74,10 @@ async def main() -> None:
 
     quality_stats = evaluate_batch(runs)
     latencies = [r["elapsed_s"] for r in runs]
+    # Retry Score Delta requires pre-retry snapshots, which this eval pipeline
+    # does not collect — pass no pairs so the metric is honest not_measured
+    # instead of fabricated 0/0 deltas (S 终审 B1-O1).
     before_after_pairs = []
-    for run in runs:
-        if run.get("retry_count", 0) > 0:
-            before_after_pairs.append({
-                "case_id": run["case_id"],
-                "score_before": 0,
-                "score_after": 0,
-                "retry_triggered": True,
-                "retry_type": "full" if len(run.get("knowledge_gaps", [])) > 2 else "small",
-            })
 
     report = compute_all_metrics(
         runs=runs,

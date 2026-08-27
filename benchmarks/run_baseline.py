@@ -351,17 +351,10 @@ async def run_baseline(
     for cid, rate in qs['check_pass_rates'].items():
         print(f"    {cid}: {rate:.0f}%")
 
-    # Build retry pairs (Retry Score Delta — still computed but always 0 without pre-retry snapshots)
+    # Retry Score Delta requires pre-retry snapshots, which this eval pipeline
+    # does not collect — pass no pairs so the metric is honest not_measured
+    # instead of fabricated 0/0 deltas (S 终审 B1-O1).
     before_after_pairs = []
-    for run in runs:
-        if run.get("retry_count", 0) > 0:
-            before_after_pairs.append({
-                "case_id": run["case_id"],
-                "score_before": 0,
-                "score_after": 0,
-                "retry_triggered": True,
-                "retry_type": "full" if len(run.get("knowledge_gaps", [])) > 2 else "small",
-            })
 
     # Phase 3: Compute metrics
     print(f"\n{'=' * 60}")

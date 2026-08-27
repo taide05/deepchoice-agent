@@ -717,7 +717,9 @@ def compute_retry_effectiveness(
 ) -> dict[str, Any]:
     """Compute the quality improvement from retry.
 
-    Compares LLM-as-Judge scores before and after retry for the same query.
+    Compares deterministic report-quality scores before and after retry for
+    the same query. Requires pre-retry snapshots; when the eval pipeline does
+    not collect them the result is flagged not_measured (never fabricated).
 
     Args:
         before_after_pairs: List of {case_id, score_before, score_after,
@@ -727,7 +729,8 @@ def compute_retry_effectiveness(
         Dict with mean_delta, improved_count, degraded_count, per_pair.
     """
     if not before_after_pairs:
-        return {"metric": "retry_score_delta", "mean_delta": 0.0,
+        return {"metric": "retry_score_delta", "not_measured": True,
+                "mean_delta": None,
                 "improved": 0, "degraded": 0, "unchanged": 0, "pairs": []}
 
     deltas = []
