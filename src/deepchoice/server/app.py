@@ -10,7 +10,13 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
-from .snapshot_store import save_snapshot, load_snapshot, save_report, list_history
+from .snapshot_store import (
+    save_snapshot,
+    save_failed_snapshot,
+    load_snapshot,
+    save_report,
+    list_history,
+)
 from ..formats.what_why_how import render as render_what_why_how
 from ..formats.evidence_first import render as render_evidence_first
 from ..formats.comparison_matrix import render as render_comparison_matrix
@@ -49,6 +55,14 @@ async def health():
     return {"status": "ok"}
 
 
+# Stream wake-up sentinels pushed by _run_research into entry["queue"].
+# Data events live only in entry["events"] (single source, replayable) — the
+# queue carries control signals so subscribers wake up without double-yielding.
+_STREAM_TICK = object()
+_STREAM_DONE = object()
+_STREAM_ERROR = object()
+
+
 @app.post("/research")
 async def start_research(task: dict):
     checkpointer = await _get_sqlite_saver()
@@ -63,6 +77,9 @@ async def start_research(task: dict):
     _active_tasks[task_id] = {
         "thread_id": thread_id,
         "orchestrator": orchestrator,
+        "queue": asyncio.Queue(),
+        "events": [],
+        "status": "running",
     }
 
     asyncio.create_task(_run_research(task_id, orchestrator))
@@ -70,27 +87,58 @@ async def start_research(task: dict):
     return {"task_id": task_id, "status": "started"}
 
 
+def _format_event(event: dict) -> str:
+    node_name = list(event.keys())[0]
+    node_data = event[node_name]
+    payload = {
+        "node": node_name,
+        "update": node_data,
+        "phase": NODE_TO_PHASE.get(node_name),
+        "ts": time.time(),
+    }
+    if node_name == "__error__":
+        payload["detail"] = node_data.get("detail", "")
+    return f"event: {node_name}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+
 async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
+    entry = _active_tasks[task_id]
     try:
-        result = await orchestrator.run_research_task()
+        async for event in orchestrator.astream_research_task():
+            entry["events"].append(event)
+            entry["queue"].put_nowait(_STREAM_TICK)
 
+        state = await orchestrator.get_state()
+        result = state.values if state else {}
         save_snapshot(task_id, result)
-        save_report(task_id, result.get("report", ""))
+        if result.get("report"):
+            save_report(task_id, result["report"])
 
-        _active_tasks.pop(task_id, None)
-        _active_tasks[task_id] = {
-            "thread_id": orchestrator.thread_id,
-            "orchestrator": orchestrator,
-            "status": "complete",
-            "result": result,
-        }
+        entry["status"] = "complete"
+        entry["result"] = result
+        entry["queue"].put_nowait(_STREAM_DONE)
     except Exception as e:
-        _active_tasks[task_id] = {
-            "thread_id": orchestrator.thread_id,
-            "orchestrator": orchestrator,
-            "status": "failed",
-            "error": str(e),
-        }
+        # I1 fix: persist whatever the checkpoint holds so a failed run is
+        # inspectable after restart instead of vanishing with process memory.
+        try:
+            state = await orchestrator.get_state()
+            partial = state.values if state else {}
+            save_failed_snapshot(task_id, partial, str(e))
+        except Exception:
+            pass
+        entry["status"] = "failed"
+        entry["error"] = str(e)
+        entry["events"].append({"__error__": {"detail": str(e)}})
+        entry["queue"].put_nowait(_STREAM_ERROR)
+    finally:
+        # I6 fix: the per-request sqlite connection must not outlive the task.
+        checkpointer = getattr(orchestrator, "checkpointer", None)
+        conn = getattr(checkpointer, "conn", None)
+        if conn is not None:
+            try:
+                await conn.close()
+            except Exception:
+                pass
 
 
 @app.get("/research/{task_id}/stream")
@@ -99,21 +147,20 @@ async def stream_research(task_id: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    orchestrator = entry.get("orchestrator")
-    if not orchestrator:
-        raise HTTPException(status_code=404, detail="Orchestrator not found")
-
     async def event_generator():
-        try:
-            async for event in orchestrator.astream_research_task():
-                node_name = list(event.keys())[0]
-                node_data = event[node_name]
-                yield f"data: {json.dumps({'node': node_name, 'update': node_data, 'phase': NODE_TO_PHASE.get(node_name), 'ts': time.time()}, ensure_ascii=False, default=str)}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'node': '__error__', 'update': {}, 'detail': str(e), 'ts': time.time()}, ensure_ascii=False, default=str)}\n\n"
-            return
+        idx = 0
+        while True:
+            events = entry["events"]
+            if idx < len(events):
+                yield _format_event(events[idx])
+                idx += 1
+                continue
+            if entry.get("status") != "running":
+                break
+            await entry["queue"].get()
 
-        yield f"data: {json.dumps({'node': '__done__', 'update': {}})}\n\n"
+        if entry.get("status") == "complete":
+            yield f"event: __done__\ndata: {json.dumps({'node': '__done__', 'update': {}})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
