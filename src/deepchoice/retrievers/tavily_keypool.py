@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import os
+import random
 import time
 
 # Permanent dead codes: invalid key (401) or monthly usage exhausted (432).
@@ -139,6 +140,6 @@ async def post_with_failover(post, payload: dict):
         if key:
             resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
     elif resp.status_code == 429:
-        await asyncio.sleep(_RATE_LIMIT_BACKOFF_S)
+        await asyncio.sleep(_RATE_LIMIT_BACKOFF_S * (0.5 + random.random()))
         resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
     return resp, key

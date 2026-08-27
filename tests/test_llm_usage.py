@@ -56,6 +56,47 @@ def _gather_fake_response(content="evidence found", model="deepseek-v4-flash",
     )
 
 
+class _APIError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"API error {status_code}")
+        self.status_code = status_code
+
+
+class TestCallModelRetry:
+    @pytest.mark.asyncio
+    async def test_retries_on_429_then_succeeds(self):
+        create = AsyncMock(side_effect=[_APIError(429), _APIError(429), _fake_response("ok")])
+        client = _fake_client(_fake_response("ok"))
+        client.chat.completions.create = create
+        with patch("deepchoice.utils.llm._get_client", return_value=client), \
+             patch("deepchoice.utils.llm._retry_sleep", new=AsyncMock()):
+            result = await call_model([{"role": "user", "content": "hi"}])
+        assert result == "ok"
+        assert create.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_raises_after_max_retries(self):
+        create = AsyncMock(side_effect=[_APIError(429), _APIError(429), _APIError(429)])
+        client = _fake_client(_fake_response("ok"))
+        client.chat.completions.create = create
+        with patch("deepchoice.utils.llm._get_client", return_value=client), \
+             patch("deepchoice.utils.llm._retry_sleep", new=AsyncMock()):
+            with pytest.raises(Exception):
+                await call_model([{"role": "user", "content": "hi"}])
+        assert create.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_non_retryable_status(self):
+        create = AsyncMock(side_effect=_APIError(400))
+        client = _fake_client(_fake_response("ok"))
+        client.chat.completions.create = create
+        with patch("deepchoice.utils.llm._get_client", return_value=client), \
+             patch("deepchoice.utils.llm._retry_sleep", new=AsyncMock()):
+            with pytest.raises(Exception):
+                await call_model([{"role": "user", "content": "hi"}])
+        assert create.await_count == 1
+
+
 class TestCallModelUsageCapture:
     @pytest.mark.asyncio
     async def test_appends_usage_record_after_successful_call(self):

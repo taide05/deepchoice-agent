@@ -177,7 +177,7 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                 return json.dumps({"error": str(e)})
 
     elif tool_name == "search_kb":
-        chroma_path = os.environ.get("CHROMA_PATH", "./chroma_db")
+        chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
         try:
             import chromadb
             client = chromadb.PersistentClient(
@@ -417,7 +417,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
         return []
 
     titles = [s.get("title", "") for s in high_score_sources]
-    embeddings = model.encode(titles)
+    embeddings = await asyncio.to_thread(model.encode, titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
     # Build candidate pairs (BGE similarity — LLM handles semantic filtering)
@@ -434,7 +434,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     if not candidates:
         return []
 
-    # Cap at top-20 by similarity to prevent O(n²) explosion with many sources
+    # Cap at top-15 by similarity to prevent O(n²) explosion with many sources
     candidates.sort(key=lambda x: x[2], reverse=True)
     candidates = candidates[:15]
 

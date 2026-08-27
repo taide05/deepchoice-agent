@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 from .base import BaseRetriever
 from .learned_docs import load_learned, learn, domain_label_match, is_plausible_term
@@ -204,12 +206,20 @@ class OfficialSearch(BaseRetriever):
                     and is_plausible_term(kw_clean)
                     and _normalize(kw_clean) not in matched_ngram_components):
                 unmapped.append(kw_clean)
-        for kw in unmapped[:_LLM_FALLBACK_MAX]:
+        async def _resolve_fallback(kw):
             url = await self._propose_official_url(kw)
             if not url or not domain_label_match(kw, url):
-                continue
+                return None
             if not await self._verify_reachable(url):
+                return None
+            return kw, url
+
+        pending = unmapped[:_LLM_FALLBACK_MAX]
+        resolved = await asyncio.gather(*[_resolve_fallback(kw) for kw in pending])
+        for item in resolved:
+            if item is None:
                 continue
+            kw, url = item
             learn(kw, url, f"{kw} — Official Documentation", via="llm")
             lookup[kw] = {"url": url, "title": f"{kw} — Official Documentation"}
             results.append({

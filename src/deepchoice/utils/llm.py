@@ -1,4 +1,7 @@
+import asyncio
 import os
+import random
+
 import json_repair
 from openai import AsyncOpenAI
 from langchain_core.utils.json import parse_json_markdown
@@ -7,6 +10,13 @@ from langchain_core.utils.json import parse_json_markdown
 DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
 DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
 DEFAULT_PRO_MODEL = "deepseek-v4-pro"
+
+_MAX_RETRIES = 2
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+
+async def _retry_sleep(delay: float) -> None:
+    await asyncio.sleep(delay)
 
 
 def _get_client(timeout: float = 120.0) -> AsyncOpenAI:
@@ -62,7 +72,17 @@ async def call_model(
     if response_format == "json":
         kwargs["response_format"] = {"type": "json_object"}
 
-    response = await client.chat.completions.create(**kwargs)
+    response = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            response = await client.chat.completions.create(**kwargs)
+            break
+        except Exception as e:
+            status = getattr(e, "status_code", None)
+            if status not in _RETRYABLE_STATUSES or attempt >= _MAX_RETRIES:
+                raise
+            delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
+            await _retry_sleep(delay)
 
     # Capture token usage before content parsing so calls whose JSON parsing
     # fails are still counted.

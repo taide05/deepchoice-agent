@@ -230,6 +230,31 @@ class TestRetrieverRegistry:
         assert "official" in RETRIEVER_REGISTRY
 
 
+class TestSearchKBChromaPath:
+    def test_default_path_matches_retriever(self, monkeypatch):
+        import asyncio
+        import chromadb
+        from deepchoice.agents.conflict_detector import _execute_search
+
+        captured = {}
+
+        class FakeClient:
+            def get_collection(self, name):
+                raise Exception("missing")
+
+        def fake_persistent(path, settings):
+            captured["path"] = path
+            return FakeClient()
+
+        monkeypatch.setattr(chromadb, "PersistentClient", fake_persistent)
+        monkeypatch.delenv("CHROMA_PATH", raising=False)
+
+        out = asyncio.run(_execute_search("search_kb", {"query": "x"}))
+
+        assert captured["path"] == "./chroma_kb/chroma_db"
+        assert "KB collection not found" in out
+
+
 class TestMultiRetriever:
     @pytest.mark.asyncio
     async def test_aggregates_all_sources(self):

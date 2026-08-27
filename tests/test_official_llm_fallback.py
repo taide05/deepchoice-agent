@@ -1,5 +1,7 @@
 """OfficialSearch LLM fallback: unmapped tech terms get an LLM-proposed URL,
 validated (term is a host label + URL reachable) and persisted to the cache."""
+import asyncio
+
 import pytest
 
 from deepchoice.retrievers import official as official_mod
@@ -55,6 +57,52 @@ async def _run_search(monkeypatch, llm_result, fail_urls=()):
     monkeypatch.setattr(official_mod, "call_model", fake_call_model)
     retriever = official_mod.OfficialSearch()
     return await retriever._do_search("supabase vs firebase", [], 10, ["supabase"])
+
+
+class TestFallbackConcurrency:
+    def test_unmapped_terms_resolve_concurrently(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
+        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
+            "AsyncClient": lambda *a, **kw: _FakeClient(),
+        })())
+
+        entered = 0
+        release = asyncio.Event()
+        lock = asyncio.Lock()
+
+        async def fake_propose(self, term):
+            nonlocal entered
+            async with lock:
+                entered += 1
+            if entered == 1:
+                await asyncio.wait_for(release.wait(), timeout=3)
+            return f"https://{term}.dev/docs"
+
+        async def fake_verify(self, url):
+            return True
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_verify_reachable", fake_verify)
+
+        async def drive():
+            retriever = official_mod.OfficialSearch()
+            task = asyncio.create_task(
+                retriever._do_search("zed vs helix", [], 10, ["zed", "helix"])
+            )
+            try:
+                for _ in range(100):
+                    if entered >= 2:
+                        break
+                    await asyncio.sleep(0.02)
+                assert entered == 2, "fallback terms must be proposed concurrently"
+            finally:
+                release.set()
+            return await task
+
+        out = asyncio.run(drive())
+        urls = [r["url"] for r in out]
+        assert "https://zed.dev/docs" in urls
+        assert "https://helix.dev/docs" in urls
 
 
 class TestLLMFallback:
