@@ -118,11 +118,11 @@ docker run -p 8000:8000 --env-file .env \
 
 ## 量化指标（200 case 混合基准，2026-08-22 采集，2026-08-22 V 归档）
 
-100 对比场景（TC）+ 100 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。
+100 对比场景（TC，50 基座 + 50 场景变体，共享人工标注）+ 100 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。
 
 | 指标 | 值 | 说明 |
 |------|-----|------|
-| Top-1 准确率 | **90.9%**（TC 85.1% n=87 / OS 96.0% n=100） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC winner 不可提取未计入） |
+| Top-1 准确率 | **90.9%**（TC 85.1% n=87 / OS 96.0% n=100） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC 为 context_dependent 标注——无单一正确答案，按设计不计入 Top-1） |
 | 任务成功率 | **100%**（200/200） | 零失败——str.get bug 已根除（`llm.py` 兜底），0 超时 |
 | 声明溯源率 | **85.1%** | 声明可追溯到具体来源的比例 |
 | 信源召回率 | **66.2%** | github_repo 73.0% / official_doc 65.6% / academic 100% / community 100% / package_registry 50% |
@@ -131,7 +131,7 @@ docker run -p 8000:8000 --env-file .env \
 | 端到端延迟 P95 | **312.2s** | 95 分位——扫描限制 15 对 + 证据收集优化 + prompt 缓存 |
 | 报告质量 A 级 | **100%** | 5 项确定性质检（不调 LLM），200/200 满分 |
 
-> **数据来源**：以上数字来自 200 case 混合基准（`benchmarks/cases_eval_200.json` = 100 TC + 100 OS），采集过程因 API 余额中断分三段完成，由 `benchmarks/merge_checkpoints.py` 合并（200/200 覆盖校验 + 0 错误）。`report_quality.py` 做确定性质检（非 LLM-as-Judge）。2026-08-22 V 归档复核；全量测试 186 passed + 1 skipped 确认。
+> **数据来源**：以上数字来自 200 case 混合基准（`benchmarks/cases_eval_200.json` = 100 TC + 100 OS），采集过程因 API 余额中断分三段完成，由 `benchmarks/merge_checkpoints.py` 合并（200/200 覆盖校验 + 0 错误）。`report_quality.py` 做确定性质检（非 LLM-as-Judge）。2026-08-22 V 归档复核；2026-08-27 S 终审复核（全量测试 197 passed + 1 skipped；retry 指标为 not_measured，管线不采集 pre-retry 快照）。
 
 ```bash
 # 重现 200 case 混合基准（或分案例文件分批跑后合并）
@@ -154,7 +154,7 @@ src/deepchoice/
 ├── retrievers/      # 6 路检索器（统一 BaseRetriever 接口）
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
-├── server/          # FastAPI（12 端点 + SSE）
+├── server/          # FastAPI（16 端点：app.py 12 + clarify_routes 4，含 SSE）
 ├── state.py         # ResearchState TypedDict
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 
