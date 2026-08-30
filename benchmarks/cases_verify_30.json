@@ -1,0 +1,1112 @@
+[
+  {
+    "id": "TC-0044",
+    "query": "Docker Compose vs Minikube for local Kubernetes development",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Docker Compose",
+    "tech_b": "Minikube",
+    "expected_winner": "Docker Compose",
+    "ground_truth_notes": "Docker Compose is simpler, lighter, and doesn't require running a full Kubernetes cluster locally. Minikube is valuable when you need to test K8s-specific features (Ingress, RBAC, CRDs) but is overkill for general local development.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.docker.com/compose",
+        "type": "official_doc",
+        "reason": "Docker Compose docs"
+      },
+      {
+        "pattern": "minikube.sigs.k8s.io",
+        "type": "official_doc",
+        "reason": "Minikube docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Dev-prod parity",
+        "position_a": "Minikube gives you a real K8s environment, reducing dev-prod drift",
+        "position_b": "Docker Compose to K8s via Kompose or Tilt bridges the gap; running Minikube for every developer laptop is wasteful",
+        "key_source": "reddit.com/r/kubernetes"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 43
+  },
+  {
+    "id": "TC-0047",
+    "query": "Bun vs Node.js for building a new backend API in 2026",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Bun",
+    "tech_b": "Node.js",
+    "expected_winner": "Node.js",
+    "ground_truth_notes": "Node.js has a mature ecosystem, battle-tested stability, and universal cloud support. Bun is faster and has better DX (built-in TypeScript, bundler, test runner) but is newer and less proven. For production backends in 2026, Node.js' stability still wins for risk-averse teams. Bun wins for side projects and internal tools.",
+    "must_find_sources": [
+      {
+        "pattern": "bun.sh",
+        "type": "official_doc",
+        "reason": "Bun official site"
+      },
+      {
+        "pattern": "nodejs.org",
+        "type": "official_doc",
+        "reason": "Node.js official docs"
+      },
+      {
+        "pattern": "github.com/oven-sh/bun",
+        "type": "github_repo",
+        "reason": "Bun source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance",
+        "position_a": "Bun is 3-5x faster than Node.js in benchmarks",
+        "position_b": "Node.js 22+ with built-in WebSocket and fetch has closed much of the performance gap; raw speed matters less than ecosystem maturity for production",
+        "key_source": "reddit.com/r/node"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 46
+  },
+  {
+    "id": "TC-0029-v29",
+    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a team developer team (existing React frontend, needs REST and WebSocket API)",
+    "category": "Infrastructure",
+    "subdomain": "message_queues",
+    "scene": "team",
+    "difficulty": "hard",
+    "tech_a": "Kafka",
+    "tech_b": "RabbitMQ",
+    "expected_winner": "Kafka",
+    "ground_truth_notes": "Kafka is designed for high-throughput event streaming with replay, retention, and partitioning. RabbitMQ is a traditional message broker better for task distribution. For event-driven microservices at enterprise scale, Kafka's log-based architecture wins.",
+    "must_find_sources": [
+      {
+        "pattern": "kafka.apache.org",
+        "type": "official_doc",
+        "reason": "Kafka official docs"
+      },
+      {
+        "pattern": "rabbitmq.com",
+        "type": "official_doc",
+        "reason": "RabbitMQ official docs"
+      },
+      {
+        "pattern": "confluent.io",
+        "type": "reference",
+        "reason": "Confluent Kafka resources"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Complexity vs need",
+        "position_a": "Kafka requires ZooKeeper/KRaft and significant ops; RabbitMQ is simpler to operate",
+        "position_b": "Managed Kafka (Confluent Cloud) removes ops burden; the replay and retention features prevent data loss that RabbitMQ can't guarantee",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 65
+  },
+  {
+    "id": "TC-0019-v69",
+    "query": "Ollama vs vLLM for local LLM inference on a single GPU for a enterprise developer team (existing React frontend, needs REST and WebSocket API)",
+    "category": "Models & Data",
+    "subdomain": "llm_selection",
+    "scene": "enterprise",
+    "difficulty": "simple",
+    "tech_a": "Ollama",
+    "tech_b": "vLLM",
+    "expected_winner": "Ollama",
+    "ground_truth_notes": "For single-GPU local use, Ollama is dramatically simpler (one-command install, built-in model management). vLLM is designed for high-throughput serving with tensor parallelism across multiple GPUs — overkill for single-GPU personal use.",
+    "must_find_sources": [
+      {
+        "pattern": "ollama.com",
+        "type": "official_doc",
+        "reason": "Ollama official site"
+      },
+      {
+        "pattern": "github.com/ollama/ollama",
+        "type": "github_repo",
+        "reason": "Ollama source repo"
+      },
+      {
+        "pattern": "docs.vllm.ai",
+        "type": "official_doc",
+        "reason": "vLLM official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance",
+        "position_a": "vLLM has significantly higher throughput for concurrent requests",
+        "position_b": "For single-user single-GPU, Ollama's simplicity and quantization support matter more than raw throughput",
+        "key_source": "reddit.com/r/LocalLLaMA"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 95
+  },
+  {
+    "id": "TC-0001",
+    "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "LangGraph",
+    "tech_b": "CrewAI",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph gives lower-level control, better for solo dev who needs flexibility. CrewAI has higher-level abstractions but less customizability and breaks down at scale.",
+    "must_find_sources": [
+      {
+        "pattern": "langchain.com",
+        "type": "official_doc",
+        "reason": "LangGraph official documentation"
+      },
+      {
+        "pattern": "github.com/langchain-ai/langgraph",
+        "type": "github_repo",
+        "reason": "LangGraph source repo - stars, activity, issues"
+      },
+      {
+        "pattern": "github.com/crewAIInc/crewAI",
+        "type": "github_repo",
+        "reason": "CrewAI source repo for comparison"
+      },
+      {
+        "pattern": "arxiv.org",
+        "type": "academic",
+        "reason": "Multi-agent framework survey or comparison paper"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ease of use",
+        "position_a": "CrewAI is simpler to start with, higher-level API",
+        "position_b": "CrewAI abstractions become a liability when you need custom behavior",
+        "key_source": "reddit.com/r/LangChain"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 0
+  },
+  {
+    "id": "TC-0031",
+    "query": "Elasticsearch vs Meilisearch for full-text search in a mid-size SaaS",
+    "category": "Infrastructure",
+    "subdomain": "search_engines",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Meilisearch",
+    "tech_b": "Elasticsearch",
+    "expected_winner": "Meilisearch",
+    "ground_truth_notes": "Meilisearch is dramatically simpler to deploy and maintain, with excellent relevance out of the box. Elasticsearch is more powerful for complex aggregations and petabyte-scale but is operational overkill for mid-size SaaS search.",
+    "must_find_sources": [
+      {
+        "pattern": "meilisearch.com",
+        "type": "official_doc",
+        "reason": "Meilisearch official docs"
+      },
+      {
+        "pattern": "elastic.co",
+        "type": "official_doc",
+        "reason": "Elasticsearch official docs"
+      },
+      {
+        "pattern": "github.com/meilisearch/meilisearch",
+        "type": "github_repo",
+        "reason": "Meilisearch source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Scalability",
+        "position_a": "Elasticsearch scales horizontally to handle billions of documents",
+        "position_b": "When you reach the scale where Meilisearch isn't enough, you'll have the resources to migrate — premature Elasticsearch adoption costs more in engineering time than it saves",
+        "key_source": "reddit.com/r/elasticsearch"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 30
+  },
+  {
+    "id": "TC-0041",
+    "query": "Airflow vs Prefect for data pipeline orchestration in a data engineering team",
+    "category": "Infrastructure",
+    "subdomain": "task_queues",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Prefect",
+    "tech_b": "Airflow",
+    "expected_winner": "Prefect",
+    "ground_truth_notes": "Prefect has modern Python-native API (no DAG definition DSL), better dynamic workflow support, and simpler local development. Airflow has larger community and more managed service options. For a new team in 2026, Prefect's DX wins.",
+    "must_find_sources": [
+      {
+        "pattern": "prefect.io",
+        "type": "official_doc",
+        "reason": "Prefect official docs"
+      },
+      {
+        "pattern": "airflow.apache.org",
+        "type": "official_doc",
+        "reason": "Airflow official docs"
+      },
+      {
+        "pattern": "github.com/PrefectHQ/prefect",
+        "type": "github_repo",
+        "reason": "Prefect source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem maturity",
+        "position_a": "Airflow has thousands of providers and a decade of production testing",
+        "position_b": "Prefect can run Airflow-style DAGs via migration tools; the production battle-testing gap has narrowed significantly since 2023",
+        "key_source": "reddit.com/r/dataengineering"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 40
+  },
+  {
+    "id": "TC-0045",
+    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline",
+    "category": "Models & Data",
+    "subdomain": "llm_selection",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Tiktoken",
+    "tech_b": "SentencePiece",
+    "expected_winner": "Tiktoken",
+    "ground_truth_notes": "Tiktoken is faster (Rust implementation), is used by OpenAI models (GPT-4, GPT-4o), and has a simpler API for counting tokens. SentencePiece is more flexible (supports BPE and unigram) and is used by many open-source models. For production OpenAI-compatible pipelines, Tiktoken is the better choice.",
+    "must_find_sources": [
+      {
+        "pattern": "github.com/openai/tiktoken",
+        "type": "github_repo",
+        "reason": "Tiktoken source repo"
+      },
+      {
+        "pattern": "github.com/google/sentencepiece",
+        "type": "github_repo",
+        "reason": "SentencePiece source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Model compatibility",
+        "position_a": "SentencePiece supports more tokenization algorithms and is model-agnostic",
+        "position_b": "For OpenAI-compatible APIs, Tiktoken's token counts match the API billing exactly — SentencePiece estimates will drift",
+        "key_source": "github.com/openai/tiktoken"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 44
+  },
+  {
+    "id": "TC-0002",
+    "query": "FastAPI vs Flask for REST API in a mid-size team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "FastAPI",
+    "tech_b": "Flask",
+    "expected_winner": "FastAPI",
+    "ground_truth_notes": "FastAPI has built-in async, auto-generated OpenAPI docs, Pydantic validation. Flask needs extensions for all of these. For team REST API, FastAPI is the modern default.",
+    "must_find_sources": [
+      {
+        "pattern": "fastapi.tiangolo.com",
+        "type": "official_doc",
+        "reason": "FastAPI official docs - the authoritative source"
+      },
+      {
+        "pattern": "flask.palletsprojects.com",
+        "type": "official_doc",
+        "reason": "Flask official docs"
+      },
+      {
+        "pattern": "pypi.org/project/fastapi",
+        "type": "package_registry",
+        "reason": "Package stats, version history, dependencies"
+      },
+      {
+        "pattern": "github.com/tiangolo/fastapi",
+        "type": "github_repo",
+        "reason": "FastAPI repo - community size, issue velocity"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Async performance",
+        "position_a": "FastAPI async is a must-have for modern APIs",
+        "position_b": "Most apps don't need async; Flask + gunicorn is sufficient for 90% of use cases",
+        "key_source": "reddit.com/r/Python"
+      }
+    ],
+    "min_expected_sources": 6,
+    "_idx": 1
+  },
+  {
+    "id": "TC-0005",
+    "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Kubernetes",
+    "tech_b": "Docker Swarm",
+    "expected_winner": "Kubernetes",
+    "ground_truth_notes": "Kubernetes is industry standard with massive ecosystem. Docker Swarm simpler but effectively in maintenance mode. For team setting, K8s is the long-term choice despite steeper learning curve.",
+    "must_find_sources": [
+      {
+        "pattern": "kubernetes.io",
+        "type": "official_doc",
+        "reason": "K8s official documentation"
+      },
+      {
+        "pattern": "github.com/kubernetes/kubernetes",
+        "type": "github_repo",
+        "reason": "K8s source repo - community scale"
+      },
+      {
+        "pattern": "docker.com",
+        "type": "official_doc",
+        "reason": "Docker Swarm official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Complexity vs need",
+        "position_a": "K8s is overkill for teams under 50 people; adds operational burden",
+        "position_b": "Managed K8s (EKS/GKE/AKS) removes most operational burden; better to start right than migrate later",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 4
+  },
+  {
+    "id": "TC-0003",
+    "query": "PostgreSQL vs MySQL for enterprise financial data",
+    "category": "Infrastructure",
+    "subdomain": "relational_db",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "PostgreSQL",
+    "tech_b": "MySQL",
+    "expected_winner": "PostgreSQL",
+    "ground_truth_notes": "PostgreSQL has stronger ACID compliance, better analytical queries, richer extension ecosystem. MySQL better for simple read-heavy workloads. For financial data, PG's stricter type system and transactional DDL are meaningful advantages.",
+    "must_find_sources": [
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL official documentation"
+      },
+      {
+        "pattern": "dev.mysql.com",
+        "type": "official_doc",
+        "reason": "MySQL official documentation"
+      },
+      {
+        "pattern": "github.com",
+        "type": "community",
+        "reason": "Real-world adoption comparison, ecosystem activity"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Replication maturity",
+        "position_a": "PostgreSQL streaming replication is production-tested and more flexible",
+        "position_b": "MySQL Group Replication is simpler to set up and has longer production history",
+        "key_source": "dba.stackexchange.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 2
+  },
+  {
+    "id": "TC-0007",
+    "query": "Redis vs Memcached for caching in a mid-size team backend",
+    "category": "Infrastructure",
+    "subdomain": "caching",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Redis",
+    "tech_b": "Memcached",
+    "expected_winner": "Redis",
+    "ground_truth_notes": "Redis has richer data structures (lists, hashes, sets, sorted sets), persistence options, and built-in replication. Memcached is purely a key-value cache. For modern backend caching, Redis wins unless you have extreme memory efficiency requirements and only need simple get/set.",
+    "must_find_sources": [
+      {
+        "pattern": "redis.io",
+        "type": "official_doc",
+        "reason": "Redis official documentation"
+      },
+      {
+        "pattern": "memcached.org",
+        "type": "official_doc",
+        "reason": "Memcached official documentation"
+      },
+      {
+        "pattern": "github.com/redis/redis",
+        "type": "github_repo",
+        "reason": "Redis source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Memory efficiency",
+        "position_a": "Memcached is more memory-efficient for simple key-value workloads",
+        "position_b": "Redis' memory overhead is negligible in practice and worth it for the data structure flexibility",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 6
+  },
+  {
+    "id": "TC-0014",
+    "query": "GitHub Actions vs Jenkins for CI/CD in a mid-size development team",
+    "category": "Deployment & Operations",
+    "subdomain": "cicd",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "GitHub Actions",
+    "tech_b": "Jenkins",
+    "expected_winner": "GitHub Actions",
+    "ground_truth_notes": "For teams already on GitHub, GitHub Actions wins on integration, maintenance burden (no self-hosted server), and marketplace ecosystem. Jenkins still wins for complex pipelines with custom plugin requirements, air-gapped environments, or multi-repo orchestration that goes beyond GitHub's scope.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.github.com/en/actions",
+        "type": "official_doc",
+        "reason": "GitHub Actions official documentation"
+      },
+      {
+        "pattern": "jenkins.io",
+        "type": "official_doc",
+        "reason": "Jenkins official documentation"
+      },
+      {
+        "pattern": "github.com/features/actions",
+        "type": "product_page",
+        "reason": "GitHub Actions product page with limits and pricing"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Vendor lock-in",
+        "position_a": "GitHub Actions YAML syntax is proprietary; migrating away from GitHub means rewriting all CI",
+        "position_b": "Jenkins' Groovy-based Jenkinsfile is also proprietary in practice; CI migration is always painful regardless of tool",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 13
+  },
+  {
+    "id": "TC-0048",
+    "query": "LangGraph vs manual asyncio for building an AI agent orchestration layer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "hard",
+    "tech_a": "LangGraph",
+    "tech_b": "Manual asyncio",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph provides state management, checkpointing, streaming, and conditional routing out of the box — all of which you'd have to build manually with asyncio. For any non-trivial agent pipeline, the framework saves weeks of development. Manual asyncio is only justified for the simplest linear chains.",
+    "must_find_sources": [
+      {
+        "pattern": "langchain-ai.github.io/langgraph",
+        "type": "official_doc",
+        "reason": "LangGraph official docs"
+      },
+      {
+        "pattern": "docs.python.org/library/asyncio",
+        "type": "official_doc",
+        "reason": "Python asyncio docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Framework lock-in",
+        "position_a": "Building with asyncio means zero framework dependency and full control",
+        "position_b": "LangGraph is 15K lines of Python; the lock-in risk is minimal compared to the development speed gained from built-in checkpointing and streaming",
+        "key_source": "github.com/langchain-ai/langgraph"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 47
+  },
+  {
+    "id": "TC-0050",
+    "query": "MCP vs REST API for AI agent tool integration",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "mcp_ecosystem",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "MCP",
+    "tech_b": "REST API",
+    "expected_winner": "MCP",
+    "ground_truth_notes": "MCP (Model Context Protocol) provides standardized tool discovery (list_tools), schema exposure, and lifecycle management that REST APIs don't natively support. For AI agent tool integration specifically, MCP's structured protocol reduces integration boilerplate. REST APIs still work but require manual schema documentation and discovery logic.",
+    "must_find_sources": [
+      {
+        "pattern": "modelcontextprotocol.io",
+        "type": "official_doc",
+        "reason": "MCP official spec"
+      },
+      {
+        "pattern": "github.com/modelcontextprotocol",
+        "type": "github_repo",
+        "reason": "MCP GitHub org"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Adoption and maturity",
+        "position_a": "REST APIs are universally supported; MCP is a newer standard with limited ecosystem",
+        "position_b": "MCP's rapid adoption (Anthropic, OpenAI, Google, Microsoft) and standardized discovery model make it the clear direction for agent-tool integration going forward",
+        "key_source": "modelcontextprotocol.io"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 49
+  },
+  {
+    "id": "OS-0044",
+    "case_type": "open_scenario",
+    "query": "I am building an offline-first notes app that syncs across devices",
+    "category": "Open Scenario",
+    "subdomain": "mobile",
+    "scene": "solo",
+    "difficulty": "hard",
+    "acceptable_winners": [
+      "powersync",
+      "watermelondb",
+      "realm",
+      "pouchdb",
+      "cloud firestore",
+      "firestore"
+    ],
+    "ground_truth_notes": "Offline-first sync engines are the hard requirement; each has a different data model.",
+    "must_find_sources": [
+      {
+        "pattern": "powersync.com",
+        "type": "official_doc",
+        "reason": "PowerSync docs"
+      },
+      {
+        "pattern": "watermelondb.dev",
+        "type": "official_doc",
+        "reason": "WatermelonDB docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 243
+  },
+  {
+    "id": "OS-0047",
+    "case_type": "open_scenario",
+    "query": "Our team needs a rules engine for fraud detection with human-review workflows",
+    "category": "Open Scenario",
+    "subdomain": "internal_tools",
+    "scene": "team",
+    "difficulty": "hard",
+    "acceptable_winners": [
+      "temporal",
+      "postgresql",
+      "oso",
+      "drools"
+    ],
+    "ground_truth_notes": "Durable execution, plain SQL rules, or an authorization engine are all defensible starting points.",
+    "must_find_sources": [
+      {
+        "pattern": "temporal.io",
+        "type": "official_doc",
+        "reason": "Temporal docs"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 246
+  },
+  {
+    "id": "OS-0086",
+    "case_type": "open_scenario",
+    "query": "Our team needs lightweight pub/sub messaging between edge devices and the cloud with tiny payloads",
+    "category": "Open Scenario",
+    "subdomain": "infra_messaging",
+    "scene": "team",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "emqx",
+      "nats",
+      "zeromq"
+    ],
+    "ground_truth_notes": "Lightweight messaging systems for device-to-cloud all qualify.",
+    "must_find_sources": [
+      {
+        "pattern": "emqx.io",
+        "type": "official_doc",
+        "reason": "EMQX official docs"
+      },
+      {
+        "pattern": "docs.nats.io",
+        "type": "official_doc",
+        "reason": "NATS official docs"
+      },
+      {
+        "pattern": "zeromq.org",
+        "type": "official_doc",
+        "reason": "ZeroMQ official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "brokered vs brokerless messaging",
+        "position_a": "Brokered systems (NATS/EMQX) give delivery guarantees and routing",
+        "position_b": "Brokerless ZeroMQ minimizes latency and moving parts",
+        "key_source": "docs.nats.io"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 285
+  },
+  {
+    "id": "OS-0100",
+    "case_type": "open_scenario",
+    "query": "Our team wants persistent memory for AI agents across conversations with retrieval and personalization",
+    "category": "Open Scenario",
+    "subdomain": "ai_application",
+    "scene": "team",
+    "difficulty": "hard",
+    "acceptable_winners": [
+      "mem0",
+      "letta",
+      "zep"
+    ],
+    "ground_truth_notes": "Agent memory layers with retrieval and profile persistence all qualify.",
+    "must_find_sources": [
+      {
+        "pattern": "mem0.ai",
+        "type": "official_doc",
+        "reason": "Mem0 official docs"
+      },
+      {
+        "pattern": "letta.com",
+        "type": "official_doc",
+        "reason": "Letta official docs"
+      },
+      {
+        "pattern": "getzep.com",
+        "type": "official_doc",
+        "reason": "Zep official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "memory as a service vs embedded library",
+        "position_a": "Memory services centralize profiles across sessions and users",
+        "position_b": "Embedded libraries keep memory local and simple",
+        "key_source": "letta.com"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 299
+  },
+  {
+    "id": "OS-0009",
+    "case_type": "open_scenario",
+    "query": "I need a Python REST API for a small internal service, written today, maintainable for years",
+    "category": "Open Scenario",
+    "subdomain": "api_backend",
+    "scene": "solo",
+    "difficulty": "easy",
+    "acceptable_winners": [
+      "fastapi",
+      "litestar",
+      "flask",
+      "django"
+    ],
+    "ground_truth_notes": "Any mainstream Python web framework satisfies the constraint; preferences differ on async and batteries-included.",
+    "must_find_sources": [
+      {
+        "pattern": "fastapi.tiangolo.com",
+        "type": "official_doc",
+        "reason": "FastAPI docs"
+      },
+      {
+        "pattern": "litestar.dev",
+        "type": "official_doc",
+        "reason": "Litestar docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3,
+    "_idx": 208
+  },
+  {
+    "id": "OS-0013",
+    "case_type": "open_scenario",
+    "query": "Our platform needs reliable asynchronous events between services with at-least-once delivery",
+    "category": "Open Scenario",
+    "subdomain": "infra_messaging",
+    "scene": "team",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "rabbitmq",
+      "kafka",
+      "redis"
+    ],
+    "ground_truth_notes": "Classic broker vs log vs lightweight streams tradeoff; all three can satisfy the requirement.",
+    "must_find_sources": [
+      {
+        "pattern": "rabbitmq.com",
+        "type": "official_doc",
+        "reason": "RabbitMQ docs"
+      },
+      {
+        "pattern": "kafka.apache.org",
+        "type": "official_doc",
+        "reason": "Kafka docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Broker vs log",
+        "position_a": "Brokers give per-message routing and acknowledgements",
+        "position_b": "Logs give replayability and ordering at scale",
+        "key_source": "kafka.apache.org"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 212
+  },
+  {
+    "id": "OS-0020",
+    "case_type": "open_scenario",
+    "query": "I want semantic search over my personal notes and documents, self-hosted",
+    "category": "Open Scenario",
+    "subdomain": "ai_application",
+    "scene": "solo",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "qdrant",
+      "milvus",
+      "pgvector",
+      "chroma",
+      "chromadb",
+      "weaviate"
+    ],
+    "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
+    "must_find_sources": [
+      {
+        "pattern": "qdrant.tech",
+        "type": "official_doc",
+        "reason": "Qdrant docs"
+      },
+      {
+        "pattern": "github.com/pgvector/pgvector",
+        "type": "github_repo",
+        "reason": "pgvector repo"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 219
+  },
+  {
+    "id": "OS-0026",
+    "case_type": "open_scenario",
+    "query": "Our team ships an LLM product and needs tracing, evals, and prompt management",
+    "category": "Open Scenario",
+    "subdomain": "ai_application",
+    "scene": "team",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "langfuse",
+      "langsmith",
+      "helicone",
+      "promptfoo"
+    ],
+    "ground_truth_notes": "LLM observability platforms are interchangeable at this scale.",
+    "must_find_sources": [
+      {
+        "pattern": "langfuse.com",
+        "type": "official_doc",
+        "reason": "Langfuse docs"
+      },
+      {
+        "pattern": "docs.smith.langchain.com",
+        "type": "official_doc",
+        "reason": "LangSmith docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 225
+  },
+  {
+    "id": "OS-0033",
+    "case_type": "open_scenario",
+    "query": "I deploy small side projects and want near-zero DevOps overhead",
+    "category": "Open Scenario",
+    "subdomain": "infra_deploy",
+    "scene": "solo",
+    "difficulty": "easy",
+    "acceptable_winners": [
+      "fly",
+      "render",
+      "vercel",
+      "heroku",
+      "railway"
+    ],
+    "ground_truth_notes": "PaaS platforms are interchangeable for side projects.",
+    "must_find_sources": [
+      {
+        "pattern": "fly.io",
+        "type": "official_doc",
+        "reason": "Fly.io docs"
+      },
+      {
+        "pattern": "render.com",
+        "type": "official_doc",
+        "reason": "Render docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 232
+  },
+  {
+    "id": "OS-0037",
+    "case_type": "open_scenario",
+    "query": "Our team needs secrets management with audit logs and rotation",
+    "category": "Open Scenario",
+    "subdomain": "security",
+    "scene": "team",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "vault",
+      "doppler",
+      "infisical"
+    ],
+    "ground_truth_notes": "Any secrets manager with audit + rotation satisfies the requirement.",
+    "must_find_sources": [
+      {
+        "pattern": "vaultproject.io",
+        "type": "official_doc",
+        "reason": "HashiCorp Vault docs"
+      },
+      {
+        "pattern": "infisical.com",
+        "type": "official_doc",
+        "reason": "Infisical docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 236
+  },
+  {
+    "id": "OS-0041",
+    "case_type": "open_scenario",
+    "query": "I want one codebase for an iOS and Android app as a solo developer",
+    "category": "Open Scenario",
+    "subdomain": "mobile",
+    "scene": "solo",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "flutter",
+      "react-native",
+      "expo"
+    ],
+    "ground_truth_notes": "Cross-platform frameworks all deliver one codebase for both platforms.",
+    "must_find_sources": [
+      {
+        "pattern": "flutter.dev",
+        "type": "official_doc",
+        "reason": "Flutter docs"
+      },
+      {
+        "pattern": "reactnative.dev",
+        "type": "official_doc",
+        "reason": "React Native docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 2,
+    "_idx": 240
+  },
+  {
+    "id": "OS-0059",
+    "case_type": "open_scenario",
+    "query": "Our team ships LLM features and needs to trace, evaluate and debug prompt quality in production",
+    "category": "Open Scenario",
+    "subdomain": "ai_infra",
+    "scene": "team",
+    "difficulty": "hard",
+    "acceptable_winners": [
+      "langfuse",
+      "langsmith",
+      "promptfoo",
+      "helicone"
+    ],
+    "ground_truth_notes": "LLM observability and evaluation platforms all satisfy tracing and eval needs.",
+    "must_find_sources": [
+      {
+        "pattern": "langfuse.com",
+        "type": "official_doc",
+        "reason": "Langfuse official docs"
+      },
+      {
+        "pattern": "docs.smith.langchain.com",
+        "type": "official_doc",
+        "reason": "LangSmith official docs"
+      },
+      {
+        "pattern": "promptfoo.dev",
+        "type": "official_doc",
+        "reason": "Promptfoo official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "open source vs managed LLM observability",
+        "position_a": "Self-hosted Langfuse keeps traces in-house",
+        "position_b": "Managed LangSmith reduces ops burden for LangChain users",
+        "key_source": "langfuse.com"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 258
+  },
+  {
+    "id": "OS-0077",
+    "case_type": "open_scenario",
+    "query": "An enterprise wants S3-compatible object storage on its own hardware with erasure coding",
+    "category": "Open Scenario",
+    "subdomain": "infra_storage",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "acceptable_winners": [
+      "minio",
+      "ceph",
+      "seaweedfs"
+    ],
+    "ground_truth_notes": "Self-hosted S3-compatible object stores with redundancy all qualify.",
+    "must_find_sources": [
+      {
+        "pattern": "min.io",
+        "type": "official_doc",
+        "reason": "MinIO official docs"
+      },
+      {
+        "pattern": "ceph.io",
+        "type": "official_doc",
+        "reason": "Ceph official docs"
+      },
+      {
+        "pattern": "github.com/seaweedfs/seaweedfs",
+        "type": "github_repo",
+        "reason": "SeaweedFS repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "distributed consensus vs simplicity",
+        "position_a": "Ceph's RADOS gives full distributed consistency at scale",
+        "position_b": "MinIO's simpler architecture is easier to operate for moderate scale",
+        "key_source": "ceph.io"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 276
+  },
+  {
+    "id": "OS-0089",
+    "case_type": "open_scenario",
+    "query": "Our team wants to scaffold a CRUD REST API with auth, validation and OpenAPI docs in days",
+    "category": "Open Scenario",
+    "subdomain": "api_backend",
+    "scene": "team",
+    "difficulty": "easy",
+    "acceptable_winners": [
+      "fastapi",
+      "nestjs",
+      "rails",
+      "laravel"
+    ],
+    "ground_truth_notes": "Batteries-included backend frameworks with generators all qualify.",
+    "must_find_sources": [
+      {
+        "pattern": "fastapi.tiangolo.com",
+        "type": "official_doc",
+        "reason": "FastAPI official docs"
+      },
+      {
+        "pattern": "docs.nestjs.com",
+        "type": "official_doc",
+        "reason": "NestJS official docs"
+      },
+      {
+        "pattern": "rubyonrails.org",
+        "type": "official_doc",
+        "reason": "Rails official docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3,
+    "_idx": 288
+  },
+  {
+    "id": "OS-0092",
+    "case_type": "open_scenario",
+    "query": "Our data team wants interactive Python dashboards embedded in an internal web app",
+    "category": "Open Scenario",
+    "subdomain": "data_visualization",
+    "scene": "team",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "streamlit",
+      "dash",
+      "shiny"
+    ],
+    "ground_truth_notes": "Python data app frameworks with embeddable dashboards all qualify.",
+    "must_find_sources": [
+      {
+        "pattern": "streamlit.io",
+        "type": "official_doc",
+        "reason": "Streamlit official docs"
+      },
+      {
+        "pattern": "dash.plotly.com",
+        "type": "official_doc",
+        "reason": "Dash official docs"
+      },
+      {
+        "pattern": "shiny.posit.co",
+        "type": "official_doc",
+        "reason": "Shiny for Python docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "script-first vs component-first dashboards",
+        "position_a": "Streamlit's script model is fastest to prototype",
+        "position_b": "Dash's component model gives finer layout control",
+        "key_source": "dash.plotly.com"
+      }
+    ],
+    "min_expected_sources": 3,
+    "_idx": 291
+  }
+]
