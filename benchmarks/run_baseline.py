@@ -121,6 +121,26 @@ def _build_report_from_state(state: dict) -> str:
     return ""
 
 
+def _strip_run(run: dict) -> dict:
+    """Strip the heavy state object from a run for checkpoint/persistence,
+    keeping the fields metrics recomputation needs (incl. final_recommendation)."""
+    return {
+        "case_id": run.get("case_id", ""),
+        "query": run.get("query", ""),
+        "report": run.get("report", ""),
+        "error": run.get("error"),
+        "elapsed_s": run.get("elapsed_s", 0),
+        "search_results": run.get("search_results", []),
+        "conflicts": run.get("conflicts", []),
+        "retry_count": run.get("retry_count", 0),
+        "confidence": run.get("confidence", ""),
+        "knowledge_gaps": run.get("knowledge_gaps", []),
+        "agent_timing": run.get("agent_timing", {}),
+        "final_recommendation": run.get("final_recommendation", {}),
+        "judge_scores": run.get("judge_scores"),
+    }
+
+
 async def run_single_case(case: dict, verbose: bool = False,
                            gather_evidence: bool = True,
                            with_clarify: bool = False) -> dict:
@@ -193,6 +213,7 @@ async def run_single_case(case: dict, verbose: bool = False,
             "conflicts": state.get("conflicts", []),
             "knowledge_gaps": state.get("knowledge_gaps", []),
             "agent_timing": state.get("agent_timing", {}),
+            "final_recommendation": state.get("final_recommendation", {}),
             "clarify_used": clarify_used,
         }
 
@@ -313,17 +334,7 @@ async def run_baseline(
             ckpt_data = {
                 "checkpoint_chunk": chunk_idx,
                 "cases_so_far": len(all_runs),
-                "runs": [{
-                    "case_id": r["case_id"], "query": r["query"],
-                    "report": r.get("report", ""), "error": r.get("error"),
-                    "elapsed_s": r.get("elapsed_s", 0),
-                    "search_results": r.get("search_results", []),
-                    "conflicts": r.get("conflicts", []),
-                    "retry_count": r.get("retry_count", 0),
-                    "confidence": r.get("confidence", ""),
-                    "knowledge_gaps": r.get("knowledge_gaps", []),
-                    "agent_timing": r.get("agent_timing", {}),
-                } for r in chunk_runs],
+                "runs": [_strip_run(r) for r in chunk_runs],
             }
             ckpt_path.write_text(json.dumps(ckpt_data, indent=2, ensure_ascii=False), encoding="utf-8")
             print(f"  Checkpoint saved: {ckpt_path.name}")
@@ -432,27 +443,14 @@ async def run_baseline(
     path = save_benchmark(report, RUNS_DIR, label=batch_label)
     print(f"\nBenchmark saved to: {path}")
 
-    # Save raw runs for later merging (only for batch mode)
-    if batch_label:
-        runs_path = RUNS_DIR / f"runs{batch_label}.json"
-        runs_to_save = []
-        for run in runs:
-            # Strip heavy state objects to keep files small
-            runs_to_save.append({
-                "case_id": run["case_id"],
-                "query": run["query"],
-                "report": run.get("report", ""),
-                "error": run.get("error"),
-                "elapsed_s": run.get("elapsed_s", 0),
-                "search_results": run.get("search_results", []),
-                "conflicts": run.get("conflicts", []),
-                "retry_count": run.get("retry_count", 0),
-                "confidence": run.get("confidence", ""),
-                "knowledge_gaps": run.get("knowledge_gaps", []),
-                "judge_scores": run.get("judge_scores"),
-            })
-        runs_path.write_text(json.dumps(runs_to_save, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Raw runs saved to: {runs_path}")
+    # Save raw runs (stripped) for metrics recomputation — always, not just
+    # batch mode: U3 needs final_recommendation on the 30/300 runs, and CI's
+    # lower-bound assertion reads the archived raw runs.
+    label_suffix = batch_label if batch_label else "-full"
+    runs_path = RUNS_DIR / f"runs{label_suffix}.json"
+    runs_to_save = [_strip_run(r) for r in runs]
+    runs_path.write_text(json.dumps(runs_to_save, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Raw runs saved to: {runs_path}")
 
     # Check trend if previous benchmarks exist
     if not batch_label:
