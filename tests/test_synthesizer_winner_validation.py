@@ -153,3 +153,41 @@ class TestConstraintFitValidation:
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
         assert out["final_recommendation"]["winner"] == "Meilisearch"
+
+
+class TestCitationSanitization:
+    def _chains(self, titles):
+        return [{"sources": [{"title": t} for t in titles]}]
+
+    def test_removes_fabricated_citation(self):
+        result = {"recommendation": "Use X [Source: Fake Docs]."}
+        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
+        assert "Fake Docs" not in result["recommendation"]
+
+    def test_keeps_real_citation(self):
+        result = {"recommendation": "Use X [Source: Real Docs]."}
+        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
+        assert "[Source: Real Docs]" in result["recommendation"]
+
+    def test_mixed_keeps_real_removes_fake(self):
+        result = {"recommendation": "Use X [Source: Real Docs, Source: Fake Docs]."}
+        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
+        assert "Real Docs" in result["recommendation"]
+        assert "Fake Docs" not in result["recommendation"]
+
+    def test_all_fabricated_removes_bracket(self):
+        result = {"recommendation": "Use X [Source: Fake Docs]."}
+        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
+        assert "[Source:" not in result["recommendation"]
+
+    def test_run_sanitizes_citations(self, monkeypatch):
+        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
+            "winner": "Unleash",
+            "winner_rationale": "x",
+            "recommendation": "Use Unleash [Source: Made Up Docs].",
+            "ranked_options": [{"rank": 1, "name": "Unleash", "rationale": "x",
+                                "key_strength": "x", "key_weakness": "x"}],
+        }))
+        import asyncio
+        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
+        assert "Made Up Docs" not in out["final_recommendation"]["recommendation"]

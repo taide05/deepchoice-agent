@@ -1,3 +1,5 @@
+import re
+
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -138,6 +140,62 @@ def _validate_constraint_fit(result: dict) -> dict:
     return result
 
 
+def _norm_title(s: str) -> str:
+    """Lowercase + alphanumerics only — matches metrics._normalize_title."""
+    return "".join(c for c in s.lower() if c.isalnum())
+
+
+def _sanitize_text(text: str, real: set[str]) -> str:
+    """Remove fabricated [Source: title] citations from a text block, keeping
+    only titles whose normalized form is in `real`."""
+    if not text:
+        return text
+    out: list[str] = []
+    last = 0
+    for m in re.finditer(r'\[Source:[^\]]*\]', text, re.IGNORECASE):
+        out.append(text[last:m.start()])
+        titles = re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]
+        kept = []
+        for t in titles:
+            title = re.split(r'[,;\[\]]', t)[0].strip()
+            if title and _norm_title(title) in real:
+                kept.append(title)
+        if kept:
+            out.append('[Source: ' + ', Source: '.join(kept) + ']')
+        last = m.end()
+    out.append(text[last:])
+    return ''.join(out)
+
+
+_CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
+                         "evidence_summary", "scene_fit_note")
+_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness")
+_CITATION_TRADEOFF_FIELDS = ("finding", "impact")
+
+
+def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
+    """Strip hallucinated [Source: title] citations (title not among the real
+    source titles fed to the synthesizer) from every factual claim field."""
+    real: set[str] = set()
+    for c in evidence_chains:
+        for src in c.get("sources", [])[:2]:
+            t = src.get("title", "")
+            if t:
+                real.add(_norm_title(t))
+    for field in _CITATION_TEXT_FIELDS:
+        if result.get(field):
+            result[field] = _sanitize_text(result[field], real)
+    for opt in result.get("ranked_options", []):
+        for field in _CITATION_OPT_FIELDS:
+            if opt.get(field):
+                opt[field] = _sanitize_text(opt[field], real)
+    for to in result.get("trade_offs", []):
+        for field in _CITATION_TRADEOFF_FIELDS:
+            if to.get(field):
+                to[field] = _sanitize_text(to[field], real)
+    return result
+
+
 class ConclusionSynthesizerAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None):
         self.websocket = websocket
@@ -198,6 +256,7 @@ class ConclusionSynthesizerAgent:
 
         _validate_winner(result)
         _validate_constraint_fit(result)
+        _sanitize_citations(result, evidence_chains)
 
         return {
             "final_recommendation": result,
