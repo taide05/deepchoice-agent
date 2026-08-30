@@ -505,6 +505,13 @@ def _collect_true_titles(run: dict) -> set[str]:
     return titles
 
 
+def _is_real_title(norm: str, real_titles: set[str]) -> bool:
+    """True if a normalized citation title is an exact or shortened (substring)
+    form of a real source title — LLMs often cite a prefix of the true title
+    (e.g. "What is LangGraph?" for "... 2026 Stateful Graph Guide")."""
+    return any(norm in rt for rt in real_titles)
+
+
 def compute_claim_citation_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
     """Precise claim citation rate: fraction of factual claims carrying a
     [Source: title] whose title actually exists in the retrieved sources.
@@ -522,7 +529,7 @@ def compute_claim_citation_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
         for claim in _extract_claims(fr):
             total_claims += 1
             titles = _extract_source_titles(claim)
-            real = [t for t in titles if _normalize_title(t) in true_titles]
+            real = [t for t in titles if _is_real_title(_normalize_title(t), true_titles)]
             fabricated_citations += len(titles) - len(real)
             if real:
                 cited_claims += 1

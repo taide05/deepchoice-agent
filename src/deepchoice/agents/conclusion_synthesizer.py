@@ -145,6 +145,11 @@ def _norm_title(s: str) -> str:
     return "".join(c for c in s.lower() if c.isalnum())
 
 
+def _is_real_title(norm: str, real: set[str]) -> bool:
+    """Exact or shortened (substring) form of a real source title."""
+    return any(norm in rt for rt in real)
+
+
 def _sanitize_text(text: str, real: set[str]) -> str:
     """Remove fabricated [Source: title] citations from a text block, keeping
     only titles whose normalized form is in `real`."""
@@ -158,7 +163,7 @@ def _sanitize_text(text: str, real: set[str]) -> str:
         kept = []
         for t in titles:
             title = re.split(r'[,;\[\]]', t)[0].strip()
-            if title and _norm_title(title) in real:
+            if title and _is_real_title(_norm_title(title), real):
                 kept.append(title)
         if kept:
             out.append('[Source: ' + ', Source: '.join(kept) + ']')

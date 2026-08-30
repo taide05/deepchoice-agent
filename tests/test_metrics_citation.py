@@ -57,6 +57,28 @@ def test_empty_runs():
     assert out["total_claims"] == 0
 
 
+def test_shortened_title_does_not_count_as_fabricated():
+    # LLM often cites a shortened prefix of a real title (e.g. "What is
+    # LangGraph?" for "What is LangGraph? 2026 Stateful Graph Guide").
+    run = {
+        "final_recommendation": {"recommendation": "Use X [Source: What is LangGraph?]."},
+        "evidence_titles": ["What is LangGraph? 2026 Stateful Graph Guide"],
+        "search_results": [],
+    }
+    out = compute_claim_citation_rate([run])
+    assert out["fabricated_citations"] == 0
+
+
+def test_truly_invented_title_still_counts_as_fabricated():
+    run = {
+        "final_recommendation": {"recommendation": "Use X [Source: Made Up Docs]."},
+        "evidence_titles": ["What is LangGraph? 2026 Stateful Graph Guide"],
+        "search_results": [],
+    }
+    out = compute_claim_citation_rate([run])
+    assert out["fabricated_citations"] == 1
+
+
 def test_evidence_titles_used_for_anti_fabrication():
     # Fabrication check must use the evidence-chain titles (same set the
     # synthesizer was shown), not the raw search_result titles (which the
