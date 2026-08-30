@@ -234,6 +234,40 @@
     "_idx": 30
   },
   {
+    "id": "TC-0039",
+    "query": "OpenAI API vs Anthropic Claude API for building a customer-facing chatbot",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_invocation",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Anthropic Claude API",
+    "tech_b": "OpenAI API",
+    "expected_winner": "Anthropic Claude API",
+    "ground_truth_notes": "Claude has stronger safety guardrails, better instruction following, and lower hallucination rates for customer-facing use cases where brand safety matters. OpenAI has broader model selection and multimodal capabilities.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.anthropic.com",
+        "type": "official_doc",
+        "reason": "Claude API docs"
+      },
+      {
+        "pattern": "platform.openai.com",
+        "type": "official_doc",
+        "reason": "OpenAI API docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Multimodal",
+        "position_a": "OpenAI GPT-4o has native vision and audio, which Claude lacks",
+        "position_b": "Most customer-facing chatbots are text-only; vision features add cost without proportional value for standard chatbot use cases",
+        "key_source": "reddit.com/r/ClaudeAI"
+      }
+    ],
+    "min_expected_sources": 4,
+    "_idx": 38
+  },
+  {
     "id": "TC-0041",
     "query": "Airflow vs Prefect for data pipeline orchestration in a data engineering team",
     "category": "Infrastructure",
@@ -351,45 +385,6 @@
     "_idx": 1
   },
   {
-    "id": "TC-0005",
-    "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment",
-    "category": "Deployment & Operations",
-    "subdomain": "container_orchestration",
-    "scene": "team",
-    "difficulty": "medium",
-    "tech_a": "Kubernetes",
-    "tech_b": "Docker Swarm",
-    "expected_winner": "Kubernetes",
-    "ground_truth_notes": "Kubernetes is industry standard with massive ecosystem. Docker Swarm simpler but effectively in maintenance mode. For team setting, K8s is the long-term choice despite steeper learning curve.",
-    "must_find_sources": [
-      {
-        "pattern": "kubernetes.io",
-        "type": "official_doc",
-        "reason": "K8s official documentation"
-      },
-      {
-        "pattern": "github.com/kubernetes/kubernetes",
-        "type": "github_repo",
-        "reason": "K8s source repo - community scale"
-      },
-      {
-        "pattern": "docker.com",
-        "type": "official_doc",
-        "reason": "Docker Swarm official docs"
-      }
-    ],
-    "known_contradictions": [
-      {
-        "topic": "Complexity vs need",
-        "position_a": "K8s is overkill for teams under 50 people; adds operational burden",
-        "position_b": "Managed K8s (EKS/GKE/AKS) removes most operational burden; better to start right than migrate later",
-        "key_source": "reddit.com/r/devops"
-      }
-    ],
-    "min_expected_sources": 5,
-    "_idx": 4
-  },
-  {
     "id": "TC-0003",
     "query": "PostgreSQL vs MySQL for enterprise financial data",
     "category": "Infrastructure",
@@ -427,6 +422,45 @@
     ],
     "min_expected_sources": 5,
     "_idx": 2
+  },
+  {
+    "id": "TC-0005",
+    "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment",
+    "category": "Deployment & Operations",
+    "subdomain": "container_orchestration",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Kubernetes",
+    "tech_b": "Docker Swarm",
+    "expected_winner": "Kubernetes",
+    "ground_truth_notes": "Kubernetes is industry standard with massive ecosystem. Docker Swarm simpler but effectively in maintenance mode. For team setting, K8s is the long-term choice despite steeper learning curve.",
+    "must_find_sources": [
+      {
+        "pattern": "kubernetes.io",
+        "type": "official_doc",
+        "reason": "K8s official documentation"
+      },
+      {
+        "pattern": "github.com/kubernetes/kubernetes",
+        "type": "github_repo",
+        "reason": "K8s source repo - community scale"
+      },
+      {
+        "pattern": "docker.com",
+        "type": "official_doc",
+        "reason": "Docker Swarm official docs"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Complexity vs need",
+        "position_a": "K8s is overkill for teams under 50 people; adds operational burden",
+        "position_b": "Managed K8s (EKS/GKE/AKS) removes most operational burden; better to start right than migrate later",
+        "key_source": "reddit.com/r/devops"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 4
   },
   {
     "id": "TC-0007",
@@ -539,40 +573,6 @@
     ],
     "min_expected_sources": 4,
     "_idx": 47
-  },
-  {
-    "id": "TC-0050",
-    "query": "MCP vs REST API for AI agent tool integration",
-    "category": "AI/Agent Frameworks",
-    "subdomain": "mcp_ecosystem",
-    "scene": "team",
-    "difficulty": "medium",
-    "tech_a": "MCP",
-    "tech_b": "REST API",
-    "expected_winner": "MCP",
-    "ground_truth_notes": "MCP (Model Context Protocol) provides standardized tool discovery (list_tools), schema exposure, and lifecycle management that REST APIs don't natively support. For AI agent tool integration specifically, MCP's structured protocol reduces integration boilerplate. REST APIs still work but require manual schema documentation and discovery logic.",
-    "must_find_sources": [
-      {
-        "pattern": "modelcontextprotocol.io",
-        "type": "official_doc",
-        "reason": "MCP official spec"
-      },
-      {
-        "pattern": "github.com/modelcontextprotocol",
-        "type": "github_repo",
-        "reason": "MCP GitHub org"
-      }
-    ],
-    "known_contradictions": [
-      {
-        "topic": "Adoption and maturity",
-        "position_a": "REST APIs are universally supported; MCP is a newer standard with limited ecosystem",
-        "position_b": "MCP's rapid adoption (Anthropic, OpenAI, Google, Microsoft) and standardized discovery model make it the clear direction for agent-tool integration going forward",
-        "key_source": "modelcontextprotocol.io"
-      }
-    ],
-    "min_expected_sources": 3,
-    "_idx": 49
   },
   {
     "id": "OS-0044",
