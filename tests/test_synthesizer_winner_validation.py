@@ -43,6 +43,16 @@ class TestPromptGuards:
     def test_synthesis_prompt_requires_verbatim_titles(self):
         assert "VERBATIM" in cs_mod.SYNTHESIS_PROMPT
 
+    def test_synthesis_prompt_requires_every_sentence_cited(self):
+        assert "EVERY sentence" in cs_mod.SYNTHESIS_PROMPT
+        assert "no sentence or field may be left uncited" in cs_mod.SYNTHESIS_PROMPT
+
+    def test_summarize_chains_includes_up_to_four_titles(self):
+        chains = [{"evidence_strength": "strong", "conclusion": "c",
+                   "sources": [{"title": f"T{i}"} for i in range(5)]}]
+        out = cs_mod._summarize_chains(chains)
+        assert "T0" in out and "T3" in out  # up to the 4th source title
+
     def test_synthesis_prompt_covers_all_claim_fields(self):
         assert "winner_rationale" in cs_mod.SYNTHESIS_PROMPT
         assert "key_strength" in cs_mod.SYNTHESIS_PROMPT
