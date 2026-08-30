@@ -6774,7 +6774,9 @@
     "acceptable_winners": [
       "emqx",
       "nats",
-      "zeromq"
+      "zeromq",
+      "mqtt",
+      "mosquitto"
     ],
     "ground_truth_notes": "Lightweight messaging systems for device-to-cloud all qualify.",
     "must_find_sources": [
