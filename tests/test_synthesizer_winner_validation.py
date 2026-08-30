@@ -40,6 +40,14 @@ class TestPromptGuards:
         assert "established, adoptable" in cs_mod.SYNTHESIS_PROMPT
         assert "mainstream" in cs_mod.SYNTHESIS_PROMPT
 
+    def test_synthesis_prompt_requires_verbatim_titles(self):
+        assert "VERBATIM" in cs_mod.SYNTHESIS_PROMPT
+
+    def test_synthesis_prompt_covers_all_claim_fields(self):
+        assert "winner_rationale" in cs_mod.SYNTHESIS_PROMPT
+        assert "key_strength" in cs_mod.SYNTHESIS_PROMPT
+        assert "scene_fit_note" in cs_mod.SYNTHESIS_PROMPT
+
 
 class TestWinnerValidation:
     def test_repo_path_winner_falls_back_to_ranked_option(self, monkeypatch):
