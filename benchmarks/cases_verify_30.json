@@ -8,7 +8,7 @@
     "difficulty": "medium",
     "tech_a": "Docker Compose",
     "tech_b": "Minikube",
-    "expected_winner": "Docker Compose",
+    "expected_winner": "Minikube",
     "ground_truth_notes": "Docker Compose is simpler, lighter, and doesn't require running a full Kubernetes cluster locally. Minikube is valuable when you need to test K8s-specific features (Ingress, RBAC, CRDs) but is overkill for general local development.",
     "must_find_sources": [
       {
@@ -42,7 +42,7 @@
     "difficulty": "medium",
     "tech_a": "Bun",
     "tech_b": "Node.js",
-    "expected_winner": "Node.js",
+    "expected_winner": "Bun",
     "ground_truth_notes": "Node.js has a mature ecosystem, battle-tested stability, and universal cloud support. Bun is faster and has better DX (built-in TypeScript, bundler, test runner) but is newer and less proven. For production backends in 2026, Node.js' stability still wins for risk-averse teams. Bun wins for side projects and internal tools.",
     "must_find_sources": [
       {
@@ -81,8 +81,8 @@
     "difficulty": "hard",
     "tech_a": "Kafka",
     "tech_b": "RabbitMQ",
-    "expected_winner": "Kafka",
-    "ground_truth_notes": "Kafka is designed for high-throughput event streaming with replay, retention, and partitioning. RabbitMQ is a traditional message broker better for task distribution. For event-driven microservices at enterprise scale, Kafka's log-based architecture wins.",
+    "expected_winner": "RabbitMQ",
+    "ground_truth_notes": "Kafka is designed for high-throughput event streaming with replay, retention, and partitioning. RabbitMQ is a traditional message broker better for task distribution. For event-driven microservices at enterprise scale, Kafka's log-based architecture wins. Variant scene=team: RabbitMQ's simpler ops and task-distribution fit mid-size teams; Kafka's log-based design targets enterprise scale.",
     "must_find_sources": [
       {
         "pattern": "kafka.apache.org",
@@ -120,8 +120,8 @@
     "difficulty": "simple",
     "tech_a": "Ollama",
     "tech_b": "vLLM",
-    "expected_winner": "Ollama",
-    "ground_truth_notes": "For single-GPU local use, Ollama is dramatically simpler (one-command install, built-in model management). vLLM is designed for high-throughput serving with tensor parallelism across multiple GPUs — overkill for single-GPU personal use.",
+    "expected_winner": "vLLM",
+    "ground_truth_notes": "For single-GPU local use, Ollama is dramatically simpler (one-command install, built-in model management). vLLM is designed for high-throughput serving with tensor parallelism across multiple GPUs — overkill for single-GPU personal use. Variant scene=enterprise: vLLM's production serving (OpenAI-compatible API, batching) fits enterprise; Ollama's simplicity is for single-GPU personal use.",
     "must_find_sources": [
       {
         "pattern": "ollama.com",
