@@ -29,12 +29,12 @@ Disputed findings: {disputed_count}
 1. Weight strong evidence chains more heavily than moderate or weak ones
 2. Acknowledge disputed findings — don't pretend they don't exist
 3. Consider scene context: solo devs prioritize simplicity, enterprises prioritize reliability
-4. ANTI-BIAS: Prefer the technology that best fits the stated constraints and scene context over the more popular or newer option. If a less popular tool better matches the specific requirements (budget, team size, compliance, scalability needs), recommend it even if the competitor has more GitHub stars or search results.
+4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale.
 5. If evidence is insufficient for a definitive answer, say so honestly
 6. INLINE CITATIONS REQUIRED: Every claim in the recommendation, ranked_options rationale, and trade_offs finding MUST include inline source citations using [Source: title] notation. Example: "FastAPI's async support gives it a performance edge [Source: FastAPI Benchmarks 2025]". The "How" section must contain at least 5 inline source citations total.
 7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
-9. CRITICAL: The winner MUST be a widely-used, established product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/...") — if the strongest evidence only supports such an item, pick the closest mainstream alternative instead and note it in winner_rationale.
+9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
 
 ## Output Length Limits (CRITICAL — exceed and output will be rejected)
 - recommendation: max 200 words
@@ -50,7 +50,7 @@ Return ONLY a JSON object:
   "winner_rationale": "One sentence citing strongest evidence (max 40 words)",
   "recommendation": "Actionable recommendation paragraph (max 200 words)",
   "ranked_options": [
-    {{"name": "Option A", "rank": 1, "rationale": "Why this rank (max 80 words)", "key_strength": "strongest evidence point (max 30 words)", "key_weakness": "notable limitation (max 30 words)"}}
+    {{"name": "Option A", "rank": 1, "constraint_fit": "high|medium|low", "constraint_fit_reason": "why this fit (max 30 words)", "rationale": "Why this rank (max 80 words)", "key_strength": "strongest evidence point (max 30 words)", "key_weakness": "notable limitation (max 30 words)"}}
   ],
   "trade_offs": [
     {{"dimension": "Performance vs DX etc.", "finding": "what evidence shows (max 60 words)", "impact": "who this matters for (max 40 words)"}}
@@ -105,6 +105,36 @@ def _validate_winner(result: dict) -> dict:
             if name and "/" not in name and name.lower() not in _GENERIC_WINNER_WORDS:
                 result["winner"] = name
                 break
+    return result
+
+
+_FIT_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+def _validate_constraint_fit(result: dict) -> dict:
+    """Enforce ANTI-BIAS rule 4: if the winner is not among the highest
+    constraint-fit ranked options, fall back to the highest-fit option.
+
+    No-op when constraint_fit is absent (older/malformed outputs) — the
+    validator must not corrupt a report that predates the field.
+    """
+    ranked = result.get("ranked_options", [])
+    if not ranked:
+        return result
+    scored = []
+    for opt in ranked:
+        name = (opt.get("name") or "").strip()
+        fit = (opt.get("constraint_fit") or "").strip().lower()
+        if name and fit in _FIT_ORDER:
+            scored.append((name, fit))
+    if not scored:
+        return result
+    best_level = min(_FIT_ORDER[fit] for _, fit in scored)
+    best_names = [name for name, fit in scored if _FIT_ORDER[fit] == best_level]
+    winner = (result.get("winner") or "").strip()
+    if winner.lower() in {n.lower() for n in best_names}:
+        return result
+    result["winner"] = best_names[0]
     return result
 
 
@@ -167,6 +197,7 @@ class ConclusionSynthesizerAgent:
         }]
 
         _validate_winner(result)
+        _validate_constraint_fit(result)
 
         return {
             "final_recommendation": result,

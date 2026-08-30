@@ -32,6 +32,14 @@ class TestPromptGuards:
         and prototypes as winners — the code-side validator cannot detect them."""
         assert "NEVER recommend a research paper" in cs_mod.SYNTHESIS_PROMPT
 
+    def test_synthesis_prompt_has_three_step_anti_bias(self):
+        assert "three-step" in cs_mod.SYNTHESIS_PROMPT
+        assert "constraint-fit" in cs_mod.SYNTHESIS_PROMPT
+
+    def test_synthesis_prompt_clarifies_established_not_mainstream(self):
+        assert "established, adoptable" in cs_mod.SYNTHESIS_PROMPT
+        assert "mainstream" in cs_mod.SYNTHESIS_PROMPT
+
 
 class TestWinnerValidation:
     def test_repo_path_winner_falls_back_to_ranked_option(self, monkeypatch):
@@ -78,3 +86,62 @@ class TestWinnerValidation:
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
         assert out["final_recommendation"]["winner"] == "org/repo"
+
+
+class TestConstraintFitValidation:
+    def test_lower_fit_winner_falls_back_to_highest_fit(self):
+        result = {
+            "winner": "Elasticsearch",
+            "ranked_options": [
+                {"name": "Meilisearch", "rank": 1, "constraint_fit": "high", "rationale": "x"},
+                {"name": "Elasticsearch", "rank": 2, "constraint_fit": "low", "rationale": "x"},
+            ],
+        }
+        cs_mod._validate_constraint_fit(result)
+        assert result["winner"] == "Meilisearch"
+
+    def test_best_fit_winner_kept(self):
+        result = {
+            "winner": "Meilisearch",
+            "ranked_options": [
+                {"name": "Meilisearch", "rank": 1, "constraint_fit": "high", "rationale": "x"},
+                {"name": "Elasticsearch", "rank": 2, "constraint_fit": "low", "rationale": "x"},
+            ],
+        }
+        cs_mod._validate_constraint_fit(result)
+        assert result["winner"] == "Meilisearch"
+
+    def test_missing_constraint_fit_skips(self):
+        result = {
+            "winner": "Elasticsearch",
+            "ranked_options": [
+                {"name": "Meilisearch", "rank": 1, "rationale": "x"},
+                {"name": "Elasticsearch", "rank": 2, "rationale": "x"},
+            ],
+        }
+        cs_mod._validate_constraint_fit(result)
+        assert result["winner"] == "Elasticsearch"
+
+    def test_tied_highest_fit_keeps_winner_if_among_tied(self):
+        result = {
+            "winner": "Meilisearch",
+            "ranked_options": [
+                {"name": "Meilisearch", "rank": 1, "constraint_fit": "high", "rationale": "x"},
+                {"name": "Typesense", "rank": 2, "constraint_fit": "high", "rationale": "x"},
+            ],
+        }
+        cs_mod._validate_constraint_fit(result)
+        assert result["winner"] == "Meilisearch"
+
+    def test_run_falls_back_to_highest_fit(self, monkeypatch):
+        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
+            "winner": "Elasticsearch",
+            "winner_rationale": "x",
+            "ranked_options": [
+                {"rank": 1, "name": "Meilisearch", "constraint_fit": "high", "rationale": "x"},
+                {"rank": 2, "name": "Elasticsearch", "constraint_fit": "low", "rationale": "x"},
+            ],
+        }))
+        import asyncio
+        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
+        assert out["final_recommendation"]["winner"] == "Meilisearch"
