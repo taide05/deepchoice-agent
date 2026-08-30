@@ -429,6 +429,91 @@ def compute_claim_grounding_rate(report: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Quality Metric 3b: Claim Citation Rate (precise [Source: title] coverage)
+# ---------------------------------------------------------------------------
+
+_SOURCE_CITE_RE = re.compile(r'\[Source:\s*([^\]]+)\]', re.IGNORECASE)
+
+
+def _normalize_title(s: str) -> str:
+    """Lowercase + alphanumerics only — 'FastAPI Docs' and 'FastAPI - Docs'
+    both normalize to 'fastapidocs'."""
+    return "".join(c for c in s.lower() if c.isalnum())
+
+
+def _split_sentences(text: str) -> list[str]:
+    if not text:
+        return []
+    return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+
+
+def _extract_claims(fr: dict) -> list[str]:
+    """Flatten the factual-claim fields of a final_recommendation into a
+    claim list, matching the fields the synthesizer is told to cite."""
+    claims = []
+    claims.extend(_split_sentences(fr.get("recommendation", "")))
+    if fr.get("winner_rationale"):
+        claims.append(fr["winner_rationale"])
+    for opt in fr.get("ranked_options", []):
+        for field in ("rationale", "key_strength", "key_weakness"):
+            if opt.get(field):
+                claims.append(opt[field])
+    for to in fr.get("trade_offs", []):
+        for field in ("finding", "impact"):
+            if to.get(field):
+                claims.append(to[field])
+    claims.extend(_split_sentences(fr.get("evidence_summary", "")))
+    if fr.get("scene_fit_note"):
+        claims.append(fr["scene_fit_note"])
+    return claims
+
+
+def _collect_true_titles(run: dict) -> set[str]:
+    """All normalized source titles the pipeline actually retrieved."""
+    titles = set()
+    for sr in run.get("search_results", []):
+        for result in sr.get("results", []):
+            t = result.get("title", "")
+            if t:
+                titles.add(_normalize_title(t))
+    return titles
+
+
+def compute_claim_citation_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Precise claim citation rate: fraction of factual claims carrying a
+    [Source: title] whose title actually exists in the retrieved sources.
+
+    Fabricated citations (title not in any retrieved source) are counted
+    separately — they must be 0 for the rate to be credible.
+    """
+    total_claims = 0
+    cited_claims = 0
+    fabricated_citations = 0
+
+    for run in runs:
+        fr = run.get("final_recommendation") or {}
+        true_titles = _collect_true_titles(run)
+        for claim in _extract_claims(fr):
+            total_claims += 1
+            m = _SOURCE_CITE_RE.search(claim)
+            if not m:
+                continue
+            if _normalize_title(m.group(1)) in true_titles:
+                cited_claims += 1
+            else:
+                fabricated_citations += 1
+
+    rate = cited_claims / total_claims if total_claims > 0 else 0.0
+    return {
+        "metric": "claim_citation_rate",
+        "value": round(rate, 3),
+        "total_claims": total_claims,
+        "cited_claims": cited_claims,
+        "fabricated_citations": fabricated_citations,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Quality Metric 4: Conflict Detection Rate
 # ---------------------------------------------------------------------------
 
