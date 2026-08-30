@@ -619,7 +619,8 @@
       "temporal",
       "postgresql",
       "oso",
-      "drools"
+      "drools",
+      "camunda"
     ],
     "ground_truth_notes": "Durable execution, plain SQL rules, or an authorization engine are all defensible starting points.",
     "must_find_sources": [
@@ -651,7 +652,8 @@
       "nats",
       "zeromq",
       "mqtt",
-      "mosquitto"
+      "mosquitto",
+      "aws iot core"
     ],
     "ground_truth_notes": "Lightweight messaging systems for device-to-cloud all qualify.",
     "must_find_sources": [
@@ -766,7 +768,8 @@
     "acceptable_winners": [
       "rabbitmq",
       "kafka",
-      "redis"
+      "redis",
+      "amazon sqs"
     ],
     "ground_truth_notes": "Classic broker vs log vs lightweight streams tradeoff; all three can satisfy the requirement.",
     "must_find_sources": [
@@ -899,7 +902,8 @@
     "acceptable_winners": [
       "vault",
       "doppler",
-      "infisical"
+      "infisical",
+      "aws secrets manager"
     ],
     "ground_truth_notes": "Any secrets manager with audit + rotation satisfies the requirement.",
     "must_find_sources": [
@@ -960,7 +964,8 @@
       "langfuse",
       "langsmith",
       "promptfoo",
-      "helicone"
+      "helicone",
+      "braintrust"
     ],
     "ground_truth_notes": "LLM observability and evaluation platforms all satisfy tracing and eval needs.",
     "must_find_sources": [
