@@ -454,7 +454,16 @@ def _normalize_title(s: str) -> str:
 def _split_sentences(text: str) -> list[str]:
     if not text:
         return []
-    return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    parts = re.split(r'(?<=[.!?])\s+', text)
+    merged: list[str] = []
+    for p in parts:
+        # Do not split inside abbreviations ("vs.", "etc.", "e.g.", "i.e.")
+        # — they appear inside [Source: X vs. Y] titles and must stay whole.
+        if merged and re.search(r'\b(vs|etc|e\.g|i\.e)\.$', merged[-1], re.IGNORECASE):
+            merged[-1] += ' ' + p
+        else:
+            merged.append(p)
+    return [s.strip() for s in merged if s.strip()]
 
 
 def _extract_claims(fr: dict) -> list[str]:

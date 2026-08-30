@@ -1,5 +1,5 @@
 """Claim citation rate: precise [Source: title] coverage + anti-fabrication."""
-from benchmarks.metrics import compute_claim_citation_rate
+from benchmarks.metrics import compute_claim_citation_rate, _split_sentences
 
 
 def _run(recommendation, search_titles, **extra):
@@ -55,6 +55,15 @@ def test_empty_runs():
     out = compute_claim_citation_rate([])
     assert out["value"] == 0.0
     assert out["total_claims"] == 0
+
+
+def test_split_sentences_does_not_split_after_vs():
+    # Regression: "vs." inside a [Source: ...] title must not split the claim,
+    # otherwise the title is truncated ("MQTT vs.") and misjudged fabricated.
+    text = "Adopt MQTT [Source: MQTT vs. CoAP: IoT Showdown]. For a team, use a broker."
+    parts = _split_sentences(text)
+    assert len(parts) == 2
+    assert "MQTT vs. CoAP: IoT Showdown" in parts[0]
 
 
 def test_multiple_sources_in_one_bracket():
