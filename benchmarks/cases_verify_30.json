@@ -9,7 +9,7 @@
     "tech_a": "Docker Compose",
     "tech_b": "Minikube",
     "expected_winner": "Minikube",
-    "ground_truth_notes": "Docker Compose is simpler, lighter, and doesn't require running a full Kubernetes cluster locally. Minikube is valuable when you need to test K8s-specific features (Ingress, RBAC, CRDs) but is overkill for general local development.",
+    "ground_truth_notes": "Local Kubernetes development requires a Kubernetes runtime — Minikube provides a single-node Kubernetes cluster with kubeadm, dashboards, and addons (Ingress, RBAC, CRDs). Docker Compose is not a Kubernetes runtime and cannot run K8s workloads; it suits generic local container development instead.",
     "must_find_sources": [
       {
         "pattern": "docs.docker.com/compose",
@@ -43,7 +43,7 @@
     "tech_a": "Bun",
     "tech_b": "Node.js",
     "expected_winner": "Bun",
-    "ground_truth_notes": "Node.js has a mature ecosystem, battle-tested stability, and universal cloud support. Bun is faster and has better DX (built-in TypeScript, bundler, test runner) but is newer and less proven. For production backends in 2026, Node.js' stability still wins for risk-averse teams. Bun wins for side projects and internal tools.",
+    "ground_truth_notes": "Bun has faster startup, built-in TypeScript, bundler, and test runner — strong DX for a solo developer building a new API in 2026. Node.js has a mature ecosystem and universal cloud support, but its stability edge matters for risk-averse teams, not a solo developer's greenfield project.",
     "must_find_sources": [
       {
         "pattern": "bun.sh",
@@ -74,7 +74,7 @@
   },
   {
     "id": "TC-0029-v29",
-    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a team developer team (existing React frontend, needs REST and WebSocket API)",
+    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a team (existing React frontend, needs REST and WebSocket API)",
     "category": "Infrastructure",
     "subdomain": "message_queues",
     "scene": "team",
@@ -113,7 +113,7 @@
   },
   {
     "id": "TC-0019-v69",
-    "query": "Ollama vs vLLM for local LLM inference on a single GPU for a enterprise developer team (existing React frontend, needs REST and WebSocket API)",
+    "query": "Ollama vs vLLM for local LLM inference on a single GPU for an enterprise team (existing React frontend, needs REST and WebSocket API)",
     "category": "Models & Data",
     "subdomain": "llm_selection",
     "scene": "enterprise",
@@ -605,7 +605,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 243
+    "_idx": 143
   },
   {
     "id": "OS-0047",
@@ -618,7 +618,6 @@
     "acceptable_winners": [
       "temporal",
       "postgresql",
-      "oso",
       "drools",
       "camunda"
     ],
@@ -637,7 +636,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 246
+    "_idx": 146
   },
   {
     "id": "OS-0086",
@@ -682,7 +681,7 @@
       }
     ],
     "min_expected_sources": 3,
-    "_idx": 285
+    "_idx": 185
   },
   {
     "id": "OS-0100",
@@ -724,7 +723,7 @@
       }
     ],
     "min_expected_sources": 3,
-    "_idx": 299
+    "_idx": 199
   },
   {
     "id": "OS-0009",
@@ -733,7 +732,7 @@
     "category": "Open Scenario",
     "subdomain": "api_backend",
     "scene": "solo",
-    "difficulty": "easy",
+    "difficulty": "simple",
     "acceptable_winners": [
       "fastapi",
       "litestar",
@@ -755,7 +754,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 3,
-    "_idx": 208
+    "_idx": 108
   },
   {
     "id": "OS-0013",
@@ -793,7 +792,7 @@
       }
     ],
     "min_expected_sources": 3,
-    "_idx": 212
+    "_idx": 112
   },
   {
     "id": "OS-0020",
@@ -808,8 +807,9 @@
       "milvus",
       "pgvector",
       "chroma",
-      "chromadb",
-      "weaviate"
+      "weaviate",
+      "pinecone",
+      "zilliz cloud"
     ],
     "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
     "must_find_sources": [
@@ -826,7 +826,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 219
+    "_idx": 119
   },
   {
     "id": "OS-0026",
@@ -857,7 +857,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 225
+    "_idx": 125
   },
   {
     "id": "OS-0033",
@@ -866,7 +866,7 @@
     "category": "Open Scenario",
     "subdomain": "infra_deploy",
     "scene": "solo",
-    "difficulty": "easy",
+    "difficulty": "simple",
     "acceptable_winners": [
       "fly",
       "render",
@@ -889,7 +889,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 232
+    "_idx": 132
   },
   {
     "id": "OS-0037",
@@ -920,7 +920,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 236
+    "_idx": 136
   },
   {
     "id": "OS-0041",
@@ -950,7 +950,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 2,
-    "_idx": 240
+    "_idx": 140
   },
   {
     "id": "OS-0059",
@@ -994,7 +994,7 @@
       }
     ],
     "min_expected_sources": 3,
-    "_idx": 258
+    "_idx": 158
   },
   {
     "id": "OS-0077",
@@ -1036,7 +1036,7 @@
       }
     ],
     "min_expected_sources": 3,
-    "_idx": 276
+    "_idx": 176
   },
   {
     "id": "OS-0089",
@@ -1045,7 +1045,7 @@
     "category": "Open Scenario",
     "subdomain": "api_backend",
     "scene": "team",
-    "difficulty": "easy",
+    "difficulty": "simple",
     "acceptable_winners": [
       "fastapi",
       "nestjs",
@@ -1072,7 +1072,7 @@
     ],
     "known_contradictions": [],
     "min_expected_sources": 3,
-    "_idx": 288
+    "_idx": 188
   },
   {
     "id": "OS-0092",
@@ -1085,7 +1085,9 @@
     "acceptable_winners": [
       "streamlit",
       "dash",
-      "shiny"
+      "shiny",
+      "streamlit cloud",
+      "plotly dash enterprise"
     ],
     "ground_truth_notes": "Python data app frameworks with embeddable dashboards all qualify.",
     "must_find_sources": [
@@ -1114,6 +1116,6 @@
       }
     ],
     "min_expected_sources": 3,
-    "_idx": 291
+    "_idx": 191
   }
 ]

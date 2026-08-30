@@ -7410,5 +7410,3158 @@
     ],
     "min_expected_sources": 3,
     "_idx": 199
+  },
+  {
+    "id": "TC-0101",
+    "query": "DSPy vs LangChain for optimizing LLM prompt pipelines as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "prompt_engineering",
+    "scene": "solo",
+    "difficulty": "hard",
+    "tech_a": "DSPy",
+    "tech_b": "LangChain",
+    "expected_winner": "DSPy",
+    "ground_truth_notes": "DSPy treats prompts as declarative programs with typed signatures and compiles them using optimizers (MIPRO, BootstrapFewShot), so a solo developer improves quality systematically instead of hand-editing prompt strings. LangChain is a general-purpose integration framework whose prompts stay as opaque templates. For the specific goal of optimizing LLM pipelines, DSPy's programmatic optimization loop is the clear answer; LangChain wins only when you need broad third-party integrations.",
+    "must_find_sources": [
+      {
+        "pattern": "dspy.ai",
+        "type": "official_doc",
+        "reason": "DSPy official documentation"
+      },
+      {
+        "pattern": "github.com/stanfordnlp/dspy",
+        "type": "github_repo",
+        "reason": "DSPy source repo and optimizer API"
+      },
+      {
+        "pattern": "python.langchain.com",
+        "type": "official_doc",
+        "reason": "LangChain official documentation"
+      },
+      {
+        "pattern": "arxiv.org",
+        "type": "academic",
+        "reason": "DSPy paper - DSPy: Compiling Declarative Language Model Calls into Self-Improving Pipelines"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Learning curve",
+        "position_a": "LangChain is easier to start with because of its huge ecosystem of integrations",
+        "position_b": "DSPy's optimizer loop replaces the manual prompt-tuning grind that LangChain leaves you with",
+        "key_source": "reddit.com/r/LocalLLaMA"
+      },
+      {
+        "topic": "Maturity",
+        "position_a": "LangChain is more production-battled and has more contributors",
+        "position_b": "DSPy's smaller surface area and Stanford backing make it a safer long-term bet for prompt optimization specifically",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 200
+  },
+  {
+    "id": "TC-0102",
+    "query": "LiteLLM vs OpenAI SDK for a multi-provider LLM gateway in a team",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_invocation",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "LiteLLM",
+    "tech_b": "OpenAI SDK",
+    "expected_winner": "LiteLLM",
+    "ground_truth_notes": "LiteLLM gives a team one OpenAI-compatible interface across 100+ providers with built-in fallbacks, retries, load balancing, budget tracking, and a central proxy. The raw OpenAI SDK only talks to OpenAI and forces the team to vendor-lock and hand-roll failover logic. For a team that needs provider flexibility and shared routing rules, LiteLLM is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.litellm.ai",
+        "type": "official_doc",
+        "reason": "LiteLLM official documentation"
+      },
+      {
+        "pattern": "github.com/BerriAI/litellm",
+        "type": "github_repo",
+        "reason": "LiteLLM source repo"
+      },
+      {
+        "pattern": "platform.openai.com/docs",
+        "type": "official_doc",
+        "reason": "OpenAI SDK documentation for comparison"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Abstraction cost",
+        "position_a": "The OpenAI SDK is simpler and has no extra abstraction layer",
+        "position_b": "LiteLLM's proxy adds a thin layer that pays for itself the first time you add a second provider or need budget controls",
+        "key_source": "reddit.com/r/LangChain"
+      },
+      {
+        "topic": "Vendor lock-in",
+        "position_a": "Staying on the OpenAI SDK is fine if you never switch models",
+        "position_b": "Teams routinely switch models on cost or quality; LiteLLM makes that a config change instead of a rewrite",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 201
+  },
+  {
+    "id": "TC-0103",
+    "query": "OpenAI API vs DeepSeek API for a cost-sensitive chatbot as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_selection",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "OpenAI API",
+    "tech_b": "DeepSeek API",
+    "expected_winner": "DeepSeek API",
+    "ground_truth_notes": "DeepSeek's API pricing is an order of magnitude cheaper per token than OpenAI's frontier models while delivering competitive reasoning quality for most chatbot tasks. For a solo developer where budget is the binding constraint, DeepSeek API is the clear winner. OpenAI only wins when you specifically need its multimodal or ecosystem advantages, which are not required for a text chatbot on a budget.",
+    "must_find_sources": [
+      {
+        "pattern": "api-docs.deepseek.com",
+        "type": "official_doc",
+        "reason": "DeepSeek API official documentation and pricing"
+      },
+      {
+        "pattern": "platform.openai.com/docs",
+        "type": "official_doc",
+        "reason": "OpenAI API documentation and pricing"
+      },
+      {
+        "pattern": "github.com/deepseek-ai",
+        "type": "github_repo",
+        "reason": "DeepSeek open-source model repos"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Quality ceiling",
+        "position_a": "OpenAI frontier models still lead on the hardest reasoning and agentic benchmarks",
+        "position_b": "For routine chatbot Q&A the quality gap is small and the price gap is 10x, which decides it for budget-constrained solo work",
+        "key_source": "reddit.com/r/LocalLLaMA"
+      },
+      {
+        "topic": "Ecosystem",
+        "position_a": "OpenAI's SDK, function calling, and integrations are more mature",
+        "position_b": "DeepSeek exposes an OpenAI-compatible API, so most tooling works with a base-URL change",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 202
+  },
+  {
+    "id": "TC-0104",
+    "query": "Rasa vs Dialogflow for a self-hosted enterprise chatbot",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "conversational_ai",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "Rasa",
+    "tech_b": "Dialogflow",
+    "expected_winner": "Rasa",
+    "ground_truth_notes": "Rasa is open-source and fully self-hostable, so an enterprise keeps conversation data on its own infrastructure and controls the NLU pipeline, custom actions, and model training. Dialogflow is a Google cloud service that offloads ops but forces data residency and pricing into Google Cloud. For an enterprise with self-hosting and data-control requirements, Rasa is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "rasa.com",
+        "type": "official_doc",
+        "reason": "Rasa official documentation"
+      },
+      {
+        "pattern": "github.com/RasaHQ/rasa",
+        "type": "github_repo",
+        "reason": "Rasa source repo"
+      },
+      {
+        "pattern": "cloud.google.com/dialogflow",
+        "type": "official_doc",
+        "reason": "Dialogflow official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ops burden",
+        "position_a": "Dialogflow removes all infrastructure work, which matters for teams without ML ops",
+        "position_b": "Self-hosting Rasa is the entire point when data cannot leave your VPC; the ops cost is the price of compliance",
+        "key_source": "reddit.com/r/MachineLearning"
+      },
+      {
+        "topic": "NLU quality",
+        "position_a": "Dialogflow's managed NLU is easier to get to acceptable accuracy fast",
+        "position_b": "Rasa's trainable pipeline lets an enterprise tune models on its own domain data beyond what Dialogflow exposes",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 203
+  },
+  {
+    "id": "TC-0105",
+    "query": "Langfuse vs LangSmith for self-hosted LLM observability in a team",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_observability",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Langfuse",
+    "tech_b": "LangSmith",
+    "expected_winner": "Langfuse",
+    "ground_truth_notes": "Langfuse is open-source and can be self-hosted for free, with tracing, evals, prompt management, and cost analytics in one place. LangSmith is a SaaS product from the LangChain company whose self-hosting option is limited and whose data lives on their cloud. For a team that wants full control of its trace data, Langfuse is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "langfuse.com",
+        "type": "official_doc",
+        "reason": "Langfuse official documentation"
+      },
+      {
+        "pattern": "github.com/langfuse/langfuse",
+        "type": "github_repo",
+        "reason": "Langfuse source repo"
+      },
+      {
+        "pattern": "docs.smith.langchain.com",
+        "type": "official_doc",
+        "reason": "LangSmith official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Integration depth",
+        "position_a": "LangSmith integrates most deeply with LangChain/LangGraph pipelines",
+        "position_b": "Langfuse is framework-agnostic and its self-hosting removes the data-control objection for teams",
+        "key_source": "reddit.com/r/LangChain"
+      },
+      {
+        "topic": "Managed vs self-hosted",
+        "position_a": "SaaS observability means zero maintenance for a small team",
+        "position_b": "Self-hosting Langfuse is a one-container deploy and keeps traces on your own infra",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 204
+  },
+  {
+    "id": "TC-0106",
+    "query": "Pydantic AI vs LangChain for type-safe agent development as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Pydantic AI",
+    "tech_b": "LangChain",
+    "expected_winner": "Pydantic AI",
+    "ground_truth_notes": "Pydantic AI bakes static type-checking, Pydantic-validated structured outputs, and dependency injection into the agent loop, so a solo developer gets compile-time safety and IDE support for free. LangChain is dynamically typed and hides much of the control flow behind chains, which costs a solo dev debugging time. For type-safe, maintainable agent code, Pydantic AI is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "ai.pydantic.dev",
+        "type": "official_doc",
+        "reason": "Pydantic AI official documentation"
+      },
+      {
+        "pattern": "github.com/pydantic/pydantic-ai",
+        "type": "github_repo",
+        "reason": "Pydantic AI source repo"
+      },
+      {
+        "pattern": "python.langchain.com",
+        "type": "official_doc",
+        "reason": "LangChain official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Maturity",
+        "position_a": "LangChain has a larger ecosystem and more production history",
+        "position_b": "Pydantic AI's smaller, type-driven surface area is easier for one developer to fully understand and reason about",
+        "key_source": "reddit.com/r/Python"
+      },
+      {
+        "topic": "Ecosystem breadth",
+        "position_a": "LangChain ships integrations for hundreds of tools and models",
+        "position_b": "Pydantic AI covers the common providers and leans on plain Python where LangChain uses abstraction",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 205
+  },
+  {
+    "id": "TC-0107",
+    "query": "Unstructured vs Apache Tika for document parsing in a RAG pipeline",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "document_parsing",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Unstructured",
+    "tech_b": "Apache Tika",
+    "expected_winner": "Unstructured",
+    "ground_truth_notes": "Unstructured is a Python-native library purpose-built for LLM ingestion, producing chunked, metadata-rich elements with document-layout awareness and clean API hooks into RAG frameworks. Apache Tika is a Java service that extracts raw text but leaves chunking and LLM-oriented structuring to the team. For a Python RAG team, Unstructured's LLM-ready output and pip-installable simplicity make it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.unstructured.io",
+        "type": "official_doc",
+        "reason": "Unstructured official documentation"
+      },
+      {
+        "pattern": "github.com/Unstructured-IO/unstructured",
+        "type": "github_repo",
+        "reason": "Unstructured source repo"
+      },
+      {
+        "pattern": "tika.apache.org",
+        "type": "official_doc",
+        "reason": "Apache Tika official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Format coverage",
+        "position_a": "Tika supports a broader range of legacy file formats out of the box",
+        "position_b": "Unstructured covers the formats that actually matter for RAG (PDF, DOCX, HTML, markdown) and returns chunked elements instead of raw text",
+        "key_source": "github.com/Unstructured-IO/unstructured/issues"
+      },
+      {
+        "topic": "Deployment",
+        "position_a": "Tika runs as a standalone Java server that any language can call",
+        "position_b": "A Python team prefers a native dependency over maintaining a JVM service in the pipeline",
+        "key_source": "reddit.com/r/LangChain"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 206
+  },
+  {
+    "id": "TC-0108",
+    "query": "RAGAS vs TruLens for RAG pipeline evaluation in a team",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "rag_evaluation",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "RAGAS",
+    "tech_b": "TruLens",
+    "expected_winner": "RAGAS",
+    "ground_truth_notes": "RAGAS is the de facto standard for RAG evaluation, offering purpose-built metrics (faithfulness, answer relevancy, context precision/recall) with a simple pipeline API and wide community adoption. TruLens is a more general LLM-app instrumentation tool whose RAG metrics are a secondary concern. For a team evaluating RAG quality specifically, RAGAS's dedicated metric suite makes it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.ragas.io",
+        "type": "official_doc",
+        "reason": "RAGAS official documentation"
+      },
+      {
+        "pattern": "github.com/explodinggradients/ragas",
+        "type": "github_repo",
+        "reason": "RAGAS source repo"
+      },
+      {
+        "pattern": "trulens.org",
+        "type": "official_doc",
+        "reason": "TruLens official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Scope",
+        "position_a": "TruLens also covers tracing and feedback across the whole app, not just RAG metrics",
+        "position_b": "A team that already has tracing (e.g. Langfuse) only needs RAGAS's dedicated evaluation metrics",
+        "key_source": "github.com/explodinggradients/ragas"
+      },
+      {
+        "topic": "Metric rigor",
+        "position_a": "RAGAS metrics depend on LLM-as-judge and can drift",
+        "position_b": "LLM-as-judge RAG metrics are the accepted practice and RAGAS is where the community standardized them",
+        "key_source": "arxiv.org"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 207
+  },
+  {
+    "id": "TC-0109",
+    "query": "LangGraph vs OpenAI Assistants API for a production agent in an enterprise",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "LangGraph",
+    "tech_b": "OpenAI Assistants API",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph gives an enterprise explicit control over the agent graph, checkpoints, human-in-the-loop interrupts, and model portability across providers. The OpenAI Assistants API is faster to prototype but hides the control flow and locks the enterprise into OpenAI's platform and pricing. For a production agent that an enterprise must own, audit, and port, LangGraph is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "langchain-ai.github.io/langgraph",
+        "type": "official_doc",
+        "reason": "LangGraph official documentation"
+      },
+      {
+        "pattern": "github.com/langchain-ai/langgraph",
+        "type": "github_repo",
+        "reason": "LangGraph source repo"
+      },
+      {
+        "pattern": "platform.openai.com/docs/assistants",
+        "type": "official_doc",
+        "reason": "OpenAI Assistants API documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Speed to prototype",
+        "position_a": "The Assistants API gets a working agent in an afternoon with no graph design",
+        "position_b": "That speed evaporates the first time you need custom routing, a different model, or an audit trail the platform doesn't expose",
+        "key_source": "reddit.com/r/LangChain"
+      },
+      {
+        "topic": "Vendor lock-in",
+        "position_a": "Enterprises already standardized on OpenAI can accept the lock-in",
+        "position_b": "Model-portable LangGraph keeps the enterprise able to re-route to cheaper or self-hosted models as policy changes",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 208
+  },
+  {
+    "id": "TC-0110",
+    "query": "Vercel AI SDK vs LangChain.js for building AI features in TypeScript",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "llm_invocation",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Vercel AI SDK",
+    "tech_b": "LangChain.js",
+    "expected_winner": "Vercel AI SDK",
+    "ground_truth_notes": "The Vercel AI SDK is purpose-built for TypeScript and React/Next.js, with first-class streaming hooks, typed tool calling, and provider-agnostic clients. LangChain.js is a port of a Python-first abstraction that fights the JavaScript idiom and adds overhead for UI-streaming use cases. For a team building AI features into a TypeScript frontend, the Vercel AI SDK is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "ai-sdk.dev",
+        "type": "official_doc",
+        "reason": "Vercel AI SDK official documentation"
+      },
+      {
+        "pattern": "github.com/vercel/ai",
+        "type": "github_repo",
+        "reason": "Vercel AI SDK source repo"
+      },
+      {
+        "pattern": "js.langchain.com",
+        "type": "official_doc",
+        "reason": "LangChain.js official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Abstraction depth",
+        "position_a": "LangChain.js offers richer agent and memory abstractions out of the box",
+        "position_b": "For streaming chat and typed tools in a React app, the AI SDK's lighter layer is exactly what's needed and less to debug",
+        "key_source": "reddit.com/r/nextjs"
+      },
+      {
+        "topic": "Provider lock",
+        "position_a": "LangChain.js is more provider-agnostic across the long tail",
+        "position_b": "The AI SDK covers every major provider with the same typed interface, which is enough for most teams",
+        "key_source": "github.com/vercel/ai"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 209
+  },
+  {
+    "id": "TC-0111",
+    "query": "Express vs Fastify for a Node.js REST API in a team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Express",
+    "tech_b": "Fastify",
+    "expected_winner": "Fastify",
+    "ground_truth_notes": "Fastify delivers significantly higher throughput, built-in JSON schema validation, automatic request/response serialization, and first-class TypeScript support that a team needs to keep an API maintainable. Express is the older default but requires manual validation and slower middleware. For a new Node.js REST API, Fastify is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "fastify.dev",
+        "type": "official_doc",
+        "reason": "Fastify official documentation"
+      },
+      {
+        "pattern": "github.com/fastify/fastify",
+        "type": "github_repo",
+        "reason": "Fastify source repo"
+      },
+      {
+        "pattern": "expressjs.com",
+        "type": "official_doc",
+        "reason": "Express official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem",
+        "position_a": "Express has the largest middleware ecosystem and most tutorials",
+        "position_b": "Fastify is Express-compatible via plugins and its validation hooks remove the most common Express footguns",
+        "key_source": "reddit.com/r/node"
+      },
+      {
+        "topic": "Benchmarks",
+        "position_a": "Raw throughput rarely matters at realistic team scale",
+        "position_b": "Fastify's schema validation and typed DX matter at any scale, not just in benchmarks",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 210
+  },
+  {
+    "id": "TC-0112",
+    "query": "Hono vs Express for edge and serverless JavaScript APIs as a solo developer",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Hono",
+    "tech_b": "Express",
+    "expected_winner": "Hono",
+    "ground_truth_notes": "Hono is a tiny, zero-dependency router built for the edge that runs on Cloudflare Workers, Deno, Bun, and Node with ultra-fast cold starts and native TypeScript. Express is a Node-centric framework with a larger footprint that does not fit edge runtimes. For a solo developer deploying serverless/edge APIs, Hono's portability and minimal size make it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "hono.dev",
+        "type": "official_doc",
+        "reason": "Hono official documentation"
+      },
+      {
+        "pattern": "github.com/honojs/hono",
+        "type": "github_repo",
+        "reason": "Hono source repo"
+      },
+      {
+        "pattern": "expressjs.com",
+        "type": "official_doc",
+        "reason": "Express official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem",
+        "position_a": "Express's middleware ecosystem is far larger",
+        "position_b": "Hono ships enough built-in middleware (auth, CORS, caching) that a solo dev rarely needs the long tail",
+        "key_source": "reddit.com/r/node"
+      },
+      {
+        "topic": "Familiarity",
+        "position_a": "Express is the pattern most JS developers already know",
+        "position_b": "Hono's API is close enough to Express that the switch costs minutes while unlocking edge deployment",
+        "key_source": "github.com/honojs/hono"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 211
+  },
+  {
+    "id": "TC-0113",
+    "query": "Django vs Flask for a full-featured admin and ORM web application",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Django",
+    "tech_b": "Flask",
+    "expected_winner": "Django",
+    "ground_truth_notes": "Django ships an ORM, admin interface, authentication, migrations, and forms as batteries-included, so a team gets a complete web app with far less glue code. Flask is a microframework that leaves the team to assemble and maintain the same pieces from extensions. For a full-featured application with an admin and ORM, Django is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.djangoproject.com",
+        "type": "official_doc",
+        "reason": "Django official documentation"
+      },
+      {
+        "pattern": "github.com/django/django",
+        "type": "github_repo",
+        "reason": "Django source repo"
+      },
+      {
+        "pattern": "flask.palletsprojects.com",
+        "type": "official_doc",
+        "reason": "Flask official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Flexibility",
+        "position_a": "Flask gives you freedom to pick each component yourself",
+        "position_b": "That freedom means re-deciding and re-integrating ORM, auth, and admin on every project, which a team pays for in maintenance",
+        "key_source": "reddit.com/r/Python"
+      },
+      {
+        "topic": "Monolith opinionation",
+        "position_a": "Django's conventions feel constraining for unusual architectures",
+        "position_b": "For a standard admin-plus-ORM app the conventions are exactly the productivity win",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 212
+  },
+  {
+    "id": "TC-0114",
+    "query": "NestJS vs Express for an enterprise Node.js backend",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "NestJS",
+    "tech_b": "Express",
+    "expected_winner": "NestJS",
+    "ground_truth_notes": "NestJS imposes a modular, dependency-injected, TypeScript-first architecture with built-in guards, interceptors, and pipes that keep a large enterprise codebase consistent across many developers. Express gives no structural guidance, so code organization drifts as teams grow. For an enterprise backend where consistency and testability matter, NestJS is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.nestjs.com",
+        "type": "official_doc",
+        "reason": "NestJS official documentation"
+      },
+      {
+        "pattern": "github.com/nestjs/nest",
+        "type": "github_repo",
+        "reason": "NestJS source repo"
+      },
+      {
+        "pattern": "expressjs.com",
+        "type": "official_doc",
+        "reason": "Express official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Boilerplate",
+        "position_a": "NestJS adds a lot of boilerplate for small services",
+        "position_b": "In an enterprise the boilerplate is the point - it encodes conventions that dozens of engineers follow",
+        "key_source": "reddit.com/r/node"
+      },
+      {
+        "topic": "Performance",
+        "position_a": "Express has less overhead than NestJS's decorator layer",
+        "position_b": "NestJS still runs on Express/Fastify under the hood, so the overhead is negligible versus the maintainability gain",
+        "key_source": "github.com/nestjs/nest"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 213
+  },
+  {
+    "id": "TC-0115",
+    "query": "GraphQL vs REST for a client-driven API with many mobile clients",
+    "category": "Backend Frameworks & API",
+    "subdomain": "api_paradigms",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "GraphQL",
+    "tech_b": "REST",
+    "expected_winner": "GraphQL",
+    "ground_truth_notes": "GraphQL lets each client request exactly the fields it needs in one round trip, avoiding the over-fetching and endpoint sprawl that REST produces across many heterogeneous mobile clients. REST requires versioned endpoints per screen shape and causes N+1 client round trips. For a client-driven API serving multiple mobile apps, GraphQL is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "graphql.org",
+        "type": "official_doc",
+        "reason": "GraphQL official specification"
+      },
+      {
+        "pattern": "github.com/graphql",
+        "type": "github_repo",
+        "reason": "GraphQL foundation repos"
+      },
+      {
+        "pattern": "apollographql.com",
+        "type": "official_doc",
+        "reason": "Apollo GraphQL server/client documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Caching",
+        "position_a": "GraphQL breaks HTTP caching that REST gets for free",
+        "position_b": "Client-side normalized caches (Apollo/Relay) solve this and the round-trip reduction outweighs it for mobile",
+        "key_source": "reddit.com/r/graphql"
+      },
+      {
+        "topic": "Complexity",
+        "position_a": "GraphQL adds resolver and N+1 complexity on the server",
+        "position_b": "DataLoader batching handles N+1 and the server complexity buys back far more client-side flexibility",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 214
+  },
+  {
+    "id": "TC-0116",
+    "query": "tRPC vs REST for a TypeScript full-stack application",
+    "category": "Backend Frameworks & API",
+    "subdomain": "api_paradigms",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "tRPC",
+    "tech_b": "REST",
+    "expected_winner": "tRPC",
+    "ground_truth_notes": "tRPC shares TypeScript types end-to-end between client and server, so a team gets compile-time safety on every procedure call with no codegen and no hand-written API client. REST requires the team to maintain separate OpenAPI schemas and client types that drift out of sync. For a TypeScript-only full-stack app, tRPC is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "trpc.io",
+        "type": "official_doc",
+        "reason": "tRPC official documentation"
+      },
+      {
+        "pattern": "github.com/trpc/trpc",
+        "type": "github_repo",
+        "reason": "tRPC source repo"
+      },
+      {
+        "pattern": "openapis.org",
+        "type": "official_doc",
+        "reason": "OpenAPI/REST specification for comparison"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Cross-language",
+        "position_a": "REST is callable from any language, tRPC is TypeScript-only",
+        "position_b": "For a TypeScript monorepo there is no cross-language need, and the type safety is the payoff",
+        "key_source": "reddit.com/r/typescript"
+      },
+      {
+        "topic": "HTTP semantics",
+        "position_a": "REST's resource semantics are more standard and cacheable",
+        "position_b": "tRPC trades resource semantics for type safety, which matters more for an internal full-stack app than public REST conventions",
+        "key_source": "github.com/trpc/trpc"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 215
+  },
+  {
+    "id": "TC-0117",
+    "query": "Pydantic vs Marshmallow for data validation in Python as a solo developer",
+    "category": "Backend Frameworks & API",
+    "subdomain": "serialization",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Pydantic",
+    "tech_b": "Marshmallow",
+    "expected_winner": "Pydantic",
+    "ground_truth_notes": "Pydantic validates via native Python type hints, runs on a Rust core for high performance, and emits JSON Schema automatically - all with far less boilerplate than Marshmallow's explicit Schema classes. Marshmallow requires defining a separate schema object and is slower for large payloads. For a solo developer doing modern Python validation, Pydantic is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.pydantic.dev",
+        "type": "official_doc",
+        "reason": "Pydantic official documentation"
+      },
+      {
+        "pattern": "github.com/pydantic/pydantic",
+        "type": "github_repo",
+        "reason": "Pydantic source repo"
+      },
+      {
+        "pattern": "marshmallow.readthedocs.io",
+        "type": "official_doc",
+        "reason": "Marshmallow official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "SQLAlchemy integration",
+        "position_a": "Marshmallow has mature marshmallow-sqlalchemy integration for ORM serialization",
+        "position_b": "Pydantic's from_attributes mode covers ORM serialization with type-hint-only declarations",
+        "key_source": "stackoverflow.com"
+      },
+      {
+        "topic": "Explicitness",
+        "position_a": "Marshmallow's explicit schemas are clearer for complex deserialization rules",
+        "position_b": "Pydantic's validators and field customizations cover those rules with less code",
+        "key_source": "reddit.com/r/Python"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 216
+  },
+  {
+    "id": "TC-0118",
+    "query": "OAuth2 vs API keys for third-party API access in an enterprise",
+    "category": "Backend Frameworks & API",
+    "subdomain": "auth_authorization",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "OAuth2",
+    "tech_b": "API keys",
+    "expected_winner": "OAuth2",
+    "ground_truth_notes": "OAuth2 grants scoped, revocable, per-user delegated access with short-lived tokens and refresh rotation, which an enterprise needs for auditing and least-privilege third-party access. API keys are long-lived bearer secrets that grant broad access and are painful to scope or rotate per user. For enterprise third-party API authorization, OAuth2 is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "oauth.net",
+        "type": "official_doc",
+        "reason": "OAuth2 reference and specification index"
+      },
+      {
+        "pattern": "datatracker.ietf.org/doc/html/rfc6749",
+        "type": "official_doc",
+        "reason": "OAuth2 RFC 6749 specification"
+      },
+      {
+        "pattern": "auth0.com",
+        "type": "official_doc",
+        "reason": "Auth0 OAuth2 implementation guides"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Simplicity",
+        "position_a": "API keys are far simpler to implement and call",
+        "position_b": "The simplicity ends at the security review - scoped, expiring OAuth2 tokens are the only thing that passes enterprise audit",
+        "key_source": "stackoverflow.com"
+      },
+      {
+        "topic": "Machine-to-machine",
+        "position_a": "For pure service-to-service calls, a static client secret is often enough",
+        "position_b": "OAuth2 client-credentials flow gives service accounts the same rotation and scoping discipline",
+        "key_source": "reddit.com/r/cybersecurity"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 217
+  },
+  {
+    "id": "TC-0119",
+    "query": "Gin vs Echo for a Go REST API in a team",
+    "category": "Backend Frameworks & API",
+    "subdomain": "web_frameworks",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Gin",
+    "tech_b": "Echo",
+    "expected_winner": "Gin",
+    "ground_truth_notes": "Gin is the most widely adopted Go web framework, with the largest middleware ecosystem, the most third-party tutorials, and strong performance from its httprouter-based radix tree. Echo is feature-comparable but has a much smaller community and fewer integrations. For a team choosing a Go API framework with the best long-term support, Gin is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "gin-gonic.com",
+        "type": "official_doc",
+        "reason": "Gin official documentation"
+      },
+      {
+        "pattern": "github.com/gin-gonic/gin",
+        "type": "github_repo",
+        "reason": "Gin source repo"
+      },
+      {
+        "pattern": "echo.labstack.com",
+        "type": "official_doc",
+        "reason": "Echo official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "API ergonomics",
+        "position_a": "Echo's context API and binding are cleaner for some developers",
+        "position_b": "The marginal ergonomics don't outweigh Gin's ecosystem and hiring familiarity",
+        "key_source": "reddit.com/r/golang"
+      },
+      {
+        "topic": "Performance",
+        "position_a": "Echo benchmarks competitively or better in some routes",
+        "position_b": "Both are fast enough; the deciding factor is ecosystem size, where Gin dominates",
+        "key_source": "github.com/gin-gonic/gin"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 218
+  },
+  {
+    "id": "TC-0120",
+    "query": "httpx vs requests for an async HTTP client in Python as a solo developer",
+    "category": "Backend Frameworks & API",
+    "subdomain": "http_client",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "httpx",
+    "tech_b": "requests",
+    "expected_winner": "httpx",
+    "ground_truth_notes": "httpx offers a requests-compatible API plus native async/await and HTTP/2 support, so a solo developer can use one client for both sync and async code. requests is sync-only, so any async work requires a separate client or thread pool. For a solo developer writing modern async Python, httpx is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "python-httpx.org",
+        "type": "official_doc",
+        "reason": "httpx official documentation"
+      },
+      {
+        "pattern": "github.com/encode/httpx",
+        "type": "github_repo",
+        "reason": "httpx source repo"
+      },
+      {
+        "pattern": "requests.readthedocs.io",
+        "type": "official_doc",
+        "reason": "requests official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Maturity",
+        "position_a": "requests is the most battle-tested HTTP client in Python",
+        "position_b": "httpx mirrors the requests API so the migration is trivial, and it adds async that requests will never have",
+        "key_source": "reddit.com/r/Python"
+      },
+      {
+        "topic": "Sync use only",
+        "position_a": "If you never need async, requests is still perfectly fine",
+        "position_b": "httpx works identically in sync mode, so standardizing on it costs nothing and future-proofs the code",
+        "key_source": "github.com/encode/httpx"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 219
+  },
+  {
+    "id": "TC-0121",
+    "query": "Pandas vs Polars for large-scale data processing as a solo developer",
+    "category": "Models & Data",
+    "subdomain": "data_pipelines",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "Pandas",
+    "tech_b": "Polars",
+    "expected_winner": "Polars",
+    "ground_truth_notes": "Polars is written in Rust with a multi-threaded, lazy query engine that is many times faster and far more memory-efficient than Pandas on large DataFrames. Pandas is single-threaded and struggles with datasets that exceed memory or need heavy transformations. For a solo developer processing large data, Polars' speed and lazy execution make it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.pola.rs",
+        "type": "official_doc",
+        "reason": "Polars official documentation"
+      },
+      {
+        "pattern": "github.com/pola-rs/polars",
+        "type": "github_repo",
+        "reason": "Polars source repo"
+      },
+      {
+        "pattern": "pandas.pydata.org",
+        "type": "official_doc",
+        "reason": "Pandas official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem",
+        "position_a": "Pandas has a vastly larger ecosystem and every library integrates with it",
+        "position_b": "Polars exposes a pandas-compatible layer and its performance is worth the smaller ecosystem for heavy workloads",
+        "key_source": "reddit.com/r/dataengineering"
+      },
+      {
+        "topic": "API familiarity",
+        "position_a": "Pandas' API is what most data people already know",
+        "position_b": "Polars' expression API is close enough to learn quickly and composes more cleanly than chained pandas",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 220
+  },
+  {
+    "id": "TC-0122",
+    "query": "DuckDB vs SQLite for analytical queries on local data as a solo developer",
+    "category": "Models & Data",
+    "subdomain": "data_analytics",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "DuckDB",
+    "tech_b": "SQLite",
+    "expected_winner": "DuckDB",
+    "ground_truth_notes": "DuckDB is a columnar, vectorized analytical engine designed for OLAP-style aggregation and scans, making it orders of magnitude faster than SQLite on analytical queries over local files. SQLite is a row-oriented transactional engine optimized for point lookups, not large aggregations. For analytical queries on local data, DuckDB is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "duckdb.org",
+        "type": "official_doc",
+        "reason": "DuckDB official documentation"
+      },
+      {
+        "pattern": "github.com/duckdb/duckdb",
+        "type": "github_repo",
+        "reason": "DuckDB source repo"
+      },
+      {
+        "pattern": "sqlite.org",
+        "type": "official_doc",
+        "reason": "SQLite official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Transactions",
+        "position_a": "SQLite is far better for OLTP-style concurrent writes",
+        "position_b": "Analytical queries are read-heavy scans and aggregations, which is exactly DuckDB's columnar sweet spot",
+        "key_source": "duckdb.org/docs"
+      },
+      {
+        "topic": "Embedding",
+        "position_a": "Both are embedded and file-based, so either works locally",
+        "position_b": "The query workload decides it: columnar DuckDB crushes row-oriented SQLite on analytics",
+        "key_source": "reddit.com/r/dataengineering"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 221
+  },
+  {
+    "id": "TC-0123",
+    "query": "PyTorch vs JAX for deep learning research as a solo developer",
+    "category": "Models & Data",
+    "subdomain": "deep_learning_frameworks",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "PyTorch",
+    "tech_b": "JAX",
+    "expected_winner": "PyTorch",
+    "ground_truth_notes": "PyTorch is the de facto standard for deep learning research, with eager execution, the largest model/paper ecosystem, and near-universal third-party support. JAX offers elegant functional transforms but a far smaller community and steeper learning curve. For a solo researcher who wants to reproduce and build on prior work, PyTorch's ecosystem makes it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "pytorch.org",
+        "type": "official_doc",
+        "reason": "PyTorch official documentation"
+      },
+      {
+        "pattern": "github.com/pytorch/pytorch",
+        "type": "github_repo",
+        "reason": "PyTorch source repo"
+      },
+      {
+        "pattern": "jax.readthedocs.io",
+        "type": "official_doc",
+        "reason": "JAX official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance",
+        "position_a": "JAX's XLA compilation can beat PyTorch on TPU and some large-scale training",
+        "position_b": "For a solo researcher the productivity and ecosystem of PyTorch outweigh JAX's specialized performance edge",
+        "key_source": "reddit.com/r/MachineLearning"
+      },
+      {
+        "topic": "Functional purity",
+        "position_a": "JAX's pure-functional design enables clean transforms like vmap and jit",
+        "position_b": "PyTorch's torch.compile now delivers much of that performance while keeping the eager workflow everyone knows",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 222
+  },
+  {
+    "id": "TC-0124",
+    "query": "pgvector vs Pinecone for vector search on existing PostgreSQL in a team",
+    "category": "Models & Data",
+    "subdomain": "vector_databases",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "pgvector",
+    "tech_b": "Pinecone",
+    "expected_winner": "pgvector",
+    "ground_truth_notes": "pgvector adds vector similarity search as a native PostgreSQL extension, so a team already on Postgres gets embeddings search with no new service, no data duplication, and full SQL joins against relational data. Pinecone is a managed vector DB that requires a separate system and data sync. For a team whose data already lives in PostgreSQL, pgvector is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "github.com/pgvector/pgvector",
+        "type": "github_repo",
+        "reason": "pgvector source repo"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL documentation hosting the extension"
+      },
+      {
+        "pattern": "pinecone.io",
+        "type": "official_doc",
+        "reason": "Pinecone official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Scale ceiling",
+        "position_a": "Pinecone's managed ANN indexes scale further than pgvector's HNSW at extreme vector counts",
+        "position_b": "pgvector with HNSW handles tens of millions of vectors, which covers most teams, and avoids a whole extra system",
+        "key_source": "github.com/pgvector/pgvector"
+      },
+      {
+        "topic": "Ops",
+        "position_a": "Pinecone removes index management entirely",
+        "position_b": "pgvector adds zero new infra because it runs inside the Postgres the team already operates",
+        "key_source": "reddit.com/r/vectordatabase"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 223
+  },
+  {
+    "id": "TC-0125",
+    "query": "Triton Inference Server vs TorchServe for multi-model serving in an enterprise",
+    "category": "Models & Data",
+    "subdomain": "model_serving",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Triton Inference Server",
+    "tech_b": "TorchServe",
+    "expected_winner": "Triton Inference Server",
+    "ground_truth_notes": "NVIDIA Triton Inference Server serves models from PyTorch, TensorFlow, ONNX, and TensorRT behind one API with dynamic batching, concurrent model execution, and GPU-optimized scheduling. TorchServe is PyTorch-only and lacks Triton's cross-framework and batching depth. For an enterprise serving a heterogeneous fleet of models, Triton is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "github.com/triton-inference-server/server",
+        "type": "github_repo",
+        "reason": "Triton Inference Server source repo"
+      },
+      {
+        "pattern": "docs.nvidia.com",
+        "type": "official_doc",
+        "reason": "NVIDIA Triton official documentation"
+      },
+      {
+        "pattern": "pytorch.org/serve",
+        "type": "official_doc",
+        "reason": "TorchServe official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "PyTorch native",
+        "position_a": "TorchServe is maintained by PyTorch and integrates most tightly with its ecosystem",
+        "position_b": "Enterprises rarely serve PyTorch alone; Triton's multi-framework support and GPU scheduling are the deciding factors",
+        "key_source": "reddit.com/r/MachineLearning"
+      },
+      {
+        "topic": "Complexity",
+        "position_a": "Triton's model repository and config add operational complexity",
+        "position_b": "The config complexity buys dynamic batching and concurrency control that an enterprise needs at production load",
+        "key_source": "github.com/triton-inference-server/server"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 224
+  },
+  {
+    "id": "TC-0126",
+    "query": "Scikit-learn vs XGBoost for tabular prediction as a solo developer",
+    "category": "Models & Data",
+    "subdomain": "ml_frameworks",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "Scikit-learn",
+    "tech_b": "XGBoost",
+    "expected_winner": "XGBoost",
+    "ground_truth_notes": "XGBoost's gradient-boosted trees dominate tabular prediction, routinely winning benchmarks against linear models and random forests on structured data. Scikit-learn is a general ML toolkit whose tree models are simpler and usually less accurate on tabular tasks. For a solo developer maximizing predictive accuracy on tabular data, XGBoost is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "xgboost.readthedocs.io",
+        "type": "official_doc",
+        "reason": "XGBoost official documentation"
+      },
+      {
+        "pattern": "github.com/dmlc/xgboost",
+        "type": "github_repo",
+        "reason": "XGBoost source repo"
+      },
+      {
+        "pattern": "scikit-learn.org",
+        "type": "official_doc",
+        "reason": "Scikit-learn official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Interpretability",
+        "position_a": "Scikit-learn's linear and simple tree models are easier to interpret",
+        "position_b": "When the goal is raw tabular accuracy, XGBoost's SHAP-based explanations cover interpretability needs",
+        "key_source": "reddit.com/r/MachineLearning"
+      },
+      {
+        "topic": "Scope",
+        "position_a": "Scikit-learn covers the whole ML pipeline, not just boosting",
+        "position_b": "For the tabular prediction task itself, XGBoost is the specialized tool that wins the accuracy contest",
+        "key_source": "kaggle.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 225
+  },
+  {
+    "id": "TC-0127",
+    "query": "HuggingFace tokenizers vs Tiktoken for multi-model tokenization in a team",
+    "category": "Models & Data",
+    "subdomain": "tokenization",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "HuggingFace tokenizers",
+    "tech_b": "Tiktoken",
+    "expected_winner": "HuggingFace tokenizers",
+    "ground_truth_notes": "HuggingFace tokenizers is a Rust-backed library that loads any model's tokenizer from the HuggingFace Hub, supporting BPE, WordPiece, and SentencePiece across thousands of open models. Tiktoken only covers OpenAI's BPE tokenizers, so a team serving multiple model families would need several libraries. For multi-model tokenization, HuggingFace tokenizers is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "github.com/huggingface/tokenizers",
+        "type": "github_repo",
+        "reason": "tokenizers source repo"
+      },
+      {
+        "pattern": "huggingface.co/docs/tokenizers",
+        "type": "official_doc",
+        "reason": "tokenizers official documentation"
+      },
+      {
+        "pattern": "github.com/openai/tiktoken",
+        "type": "github_repo",
+        "reason": "Tiktoken source repo"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "OpenAI billing",
+        "position_a": "Tiktoken's counts match OpenAI API billing exactly",
+        "position_b": "tokenizers reproduces OpenAI's tokenizer when loaded from the Hub, and covers every other model Tiktoken cannot",
+        "key_source": "github.com/openai/tiktoken"
+      },
+      {
+        "topic": "Speed",
+        "position_a": "Both are Rust-backed and comparably fast",
+        "position_b": "Speed is a tie; the deciding factor is model coverage, where tokenizers wins outright",
+        "key_source": "huggingface.co/docs/tokenizers"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 226
+  },
+  {
+    "id": "TC-0128",
+    "query": "Elasticsearch vs OpenSearch for search on AWS in an enterprise",
+    "category": "Models & Data",
+    "subdomain": "search_engines",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Elasticsearch",
+    "tech_b": "OpenSearch",
+    "expected_winner": "OpenSearch",
+    "ground_truth_notes": "OpenSearch is the Apache-2.0 fork of Elasticsearch that AWS ships as a first-class managed service (Amazon OpenSearch Service), avoiding Elastic's restrictive SSPL/Elastic License. For an enterprise running search on AWS, OpenSearch's open license and native AWS integration make it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "opensearch.org",
+        "type": "official_doc",
+        "reason": "OpenSearch official documentation"
+      },
+      {
+        "pattern": "github.com/opensearch-project/OpenSearch",
+        "type": "github_repo",
+        "reason": "OpenSearch source repo"
+      },
+      {
+        "pattern": "aws.amazon.com/opensearch-service",
+        "type": "official_doc",
+        "reason": "Amazon OpenSearch Service documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Feature parity",
+        "position_a": "Elasticsearch historically leads on some newer features and first-party plugins",
+        "position_b": "OpenSearch has closed most of the gap and its open license removes the legal risk enterprises worry about",
+        "key_source": "reddit.com/r/aws"
+      },
+      {
+        "topic": "Ecosystem",
+        "position_a": "The Elastic ecosystem (Beats, Kibana) is tighter with Elasticsearch",
+        "position_b": "OpenSearch has its own dashboards and the AWS managed service integrates with the rest of the AWS stack",
+        "key_source": "opensearch.org"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 227
+  },
+  {
+    "id": "TC-0129",
+    "query": "ClickHouse vs PostgreSQL for analytical queries in an enterprise",
+    "category": "Models & Data",
+    "subdomain": "analytics_db",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "ClickHouse",
+    "tech_b": "PostgreSQL",
+    "expected_winner": "ClickHouse",
+    "ground_truth_notes": "ClickHouse is a columnar OLAP database that performs aggregations and scans over billions of rows orders of magnitude faster than row-oriented PostgreSQL. PostgreSQL is excellent for transactional workloads but its row storage and MVCC overhead make large analytical queries slow. For an enterprise analytics workload, ClickHouse is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "clickhouse.com",
+        "type": "official_doc",
+        "reason": "ClickHouse official documentation"
+      },
+      {
+        "pattern": "github.com/ClickHouse/ClickHouse",
+        "type": "github_repo",
+        "reason": "ClickHouse source repo"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Single database",
+        "position_a": "PostgreSQL can serve both OLTP and light analytics, avoiding a second system",
+        "position_b": "At enterprise analytical scale the performance gap forces a columnar engine; keeping analytics on Postgres becomes a bottleneck",
+        "key_source": "reddit.com/r/dataengineering"
+      },
+      {
+        "topic": "SQL dialect",
+        "position_a": "PostgreSQL's SQL is more standard and familiar",
+        "position_b": "ClickHouse's SQL is close enough and its aggregation performance is the whole point of the trade",
+        "key_source": "clickhouse.com/docs"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 228
+  },
+  {
+    "id": "TC-0130",
+    "query": "OpenAI text-embedding-3 vs BGE-M3 for self-hosted multilingual embeddings in a team",
+    "category": "Models & Data",
+    "subdomain": "embedding_models",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "OpenAI text-embedding-3",
+    "tech_b": "BGE-M3",
+    "expected_winner": "BGE-M3",
+    "ground_truth_notes": "BGE-M3 is an open-source embedding model that supports dense, sparse, and multi-vector retrieval with strong multilingual coverage and can be self-hosted at zero per-token cost. OpenAI text-embedding-3 is a hosted API that charges per token and sends data off-premises. For a team that wants self-hosted multilingual embeddings, BGE-M3 is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "huggingface.co/BAAI/bge-m3",
+        "type": "official_doc",
+        "reason": "BGE-M3 model card"
+      },
+      {
+        "pattern": "github.com/FlagOpen/FlagEmbedding",
+        "type": "github_repo",
+        "reason": "FlagEmbedding source repo for BGE models"
+      },
+      {
+        "pattern": "platform.openai.com/docs/guides/embeddings",
+        "type": "official_doc",
+        "reason": "OpenAI embeddings API documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Quality ceiling",
+        "position_a": "OpenAI's embeddings score at the top of some English MTEB benchmarks",
+        "position_b": "BGE-M3 is competitive on English and stronger on multilingual, and self-hosting removes both cost and data-residency concerns",
+        "key_source": "huggingface.co/BAAI/bge-m3"
+      },
+      {
+        "topic": "Infrastructure",
+        "position_a": "A hosted embeddings API needs no GPU or serving infra",
+        "position_b": "For a team already running self-hosted models, BGE-M3 drops into the same serving stack and eliminates per-token billing",
+        "key_source": "reddit.com/r/LocalLLaMA"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 229
+  },
+  {
+    "id": "TC-0131",
+    "query": "Cassandra vs MongoDB for write-heavy distributed workloads in an enterprise",
+    "category": "Infrastructure",
+    "subdomain": "nosql",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Cassandra",
+    "tech_b": "MongoDB",
+    "expected_winner": "Cassandra",
+    "ground_truth_notes": "Cassandra's masterless, peer-to-peer ring with tunable consistency delivers linear write scaling and high availability across many nodes, which is exactly what write-heavy distributed workloads need. MongoDB's single-primary replica set becomes a write bottleneck that requires sharding to scale writes. For sustained high write throughput across a cluster, Cassandra is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "cassandra.apache.org",
+        "type": "official_doc",
+        "reason": "Apache Cassandra official documentation"
+      },
+      {
+        "pattern": "github.com/apache/cassandra",
+        "type": "github_repo",
+        "reason": "Cassandra source repo"
+      },
+      {
+        "pattern": "mongodb.com",
+        "type": "official_doc",
+        "reason": "MongoDB official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Query flexibility",
+        "position_a": "MongoDB's document model and secondary indexes allow ad-hoc queries Cassandra cannot",
+        "position_b": "Write-heavy workloads are modeled around known access patterns, where Cassandra's partition-key design wins on throughput",
+        "key_source": "dba.stackexchange.com"
+      },
+      {
+        "topic": "Operational complexity",
+        "position_a": "Cassandra requires careful data modeling and compaction tuning",
+        "position_b": "That modeling is the price of linear write scaling, which MongoDB cannot match without sharding",
+        "key_source": "reddit.com/r/nosql"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 230
+  },
+  {
+    "id": "TC-0132",
+    "query": "TimescaleDB vs InfluxDB for SQL time-series data in a team",
+    "category": "Infrastructure",
+    "subdomain": "time_series_db",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "TimescaleDB",
+    "tech_b": "InfluxDB",
+    "expected_winner": "TimescaleDB",
+    "ground_truth_notes": "TimescaleDB is a PostgreSQL extension, so a team gets full SQL, joins with relational data, and mature tooling while adding automatic time-series partitioning (hypertables) and continuous aggregates. InfluxDB uses its own Flux/InfluxQL query language and sits outside the Postgres ecosystem. For a team that wants SQL time-series data inside PostgreSQL, TimescaleDB is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.timescale.com",
+        "type": "official_doc",
+        "reason": "TimescaleDB official documentation"
+      },
+      {
+        "pattern": "github.com/timescale/timescaledb",
+        "type": "github_repo",
+        "reason": "TimescaleDB source repo"
+      },
+      {
+        "pattern": "docs.influxdata.com",
+        "type": "official_doc",
+        "reason": "InfluxDB official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Write throughput",
+        "position_a": "InfluxDB's purpose-built engine can ingest metrics faster than Postgres",
+        "position_b": "TimescaleDB's hypertables handle high ingest while keeping SQL joins that time-series apps usually need",
+        "key_source": "reddit.com/r/devops"
+      },
+      {
+        "topic": "Query language",
+        "position_a": "InfluxDB's Flux is powerful for downsampling and transformations",
+        "position_b": "Standard SQL plus TimescaleDB's continuous aggregates covers those needs without a second query language to learn",
+        "key_source": "docs.timescale.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 231
+  },
+  {
+    "id": "TC-0133",
+    "query": "MinIO vs Ceph for self-hosted S3-compatible object storage as a solo developer",
+    "category": "Infrastructure",
+    "subdomain": "object_storage",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "MinIO",
+    "tech_b": "Ceph",
+    "expected_winner": "MinIO",
+    "ground_truth_notes": "MinIO is a single-binary, Kubernetes-native object server that provides the S3 API with a fraction of Ceph's operational footprint and setup time. Ceph is a full distributed storage platform (RADOS, RBD, CephFS) that is far more complex to deploy and tune. For a solo developer who just needs S3-compatible storage, MinIO's simplicity makes it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "min.io",
+        "type": "official_doc",
+        "reason": "MinIO official documentation"
+      },
+      {
+        "pattern": "github.com/minio/minio",
+        "type": "github_repo",
+        "reason": "MinIO source repo"
+      },
+      {
+        "pattern": "docs.ceph.com",
+        "type": "official_doc",
+        "reason": "Ceph official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Scale",
+        "position_a": "Ceph scales to exabyte clusters and supports block and file storage too",
+        "position_b": "A solo developer does not need exabyte scale; MinIO covers S3 object storage with far less ops",
+        "key_source": "reddit.com/r/selfhosted"
+      },
+      {
+        "topic": "Durability",
+        "position_a": "Ceph's CRUSH-based replication is battle-tested for large clusters",
+        "position_b": "MinIO's erasure coding gives strong durability for the single-node or small-cluster case a solo dev runs",
+        "key_source": "min.io"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 232
+  },
+  {
+    "id": "TC-0134",
+    "query": "NATS vs RabbitMQ for cloud-native microservice messaging in a team",
+    "category": "Infrastructure",
+    "subdomain": "message_queues",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "NATS",
+    "tech_b": "RabbitMQ",
+    "expected_winner": "NATS",
+    "ground_truth_notes": "NATS is a lightweight, high-throughput messaging system with a single small binary, built-in service discovery, and near-zero configuration that fits cloud-native microservice topologies. RabbitMQ offers richer routing and durable queues but at higher operational complexity. For a team wiring lightweight microservice messaging in a cloud-native stack, NATS is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.nats.io",
+        "type": "official_doc",
+        "reason": "NATS official documentation"
+      },
+      {
+        "pattern": "github.com/nats-io/nats-server",
+        "type": "github_repo",
+        "reason": "NATS server source repo"
+      },
+      {
+        "pattern": "rabbitmq.com",
+        "type": "official_doc",
+        "reason": "RabbitMQ official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Delivery guarantees",
+        "position_a": "RabbitMQ's acknowledgements and dead-letter exchanges give stronger delivery semantics",
+        "position_b": "NATS JetStream adds persistence and at-least-once delivery, covering the durable cases most microservices need",
+        "key_source": "docs.nats.io"
+      },
+      {
+        "topic": "Routing",
+        "position_a": "RabbitMQ's exchanges support complex routing topologies",
+        "position_b": "NATS subject-based pub/sub handles the fan-out and request-reply patterns that dominate microservices",
+        "key_source": "reddit.com/r/golang"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 233
+  },
+  {
+    "id": "TC-0135",
+    "query": "ScyllaDB vs Cassandra for high-throughput NoSQL in an enterprise",
+    "category": "Infrastructure",
+    "subdomain": "nosql",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "ScyllaDB",
+    "tech_b": "Cassandra",
+    "expected_winner": "ScyllaDB",
+    "ground_truth_notes": "ScyllaDB is a drop-in Cassandra-compatible database rewritten in C++ with a shard-per-core, shared-nothing design that delivers significantly higher throughput and lower tail latency than JVM-based Cassandra. It uses the same CQL and drivers, so migration is low-risk. For an enterprise maximizing NoSQL throughput, ScyllaDB is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "scylladb.com",
+        "type": "official_doc",
+        "reason": "ScyllaDB official documentation"
+      },
+      {
+        "pattern": "github.com/scylladb/scylladb",
+        "type": "github_repo",
+        "reason": "ScyllaDB source repo"
+      },
+      {
+        "pattern": "cassandra.apache.org",
+        "type": "official_doc",
+        "reason": "Cassandra official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "GC pauses",
+        "position_a": "Cassandra's JVM garbage collection causes latency spikes at scale",
+        "position_b": "ScyllaDB's C++ shard-per-core design eliminates those pauses, which is its core selling point",
+        "key_source": "scylladb.com"
+      },
+      {
+        "topic": "Compatibility risk",
+        "position_a": "Cassandra is the reference implementation with the largest deployment base",
+        "position_b": "ScyllaDB's wire and CQL compatibility makes it a low-risk swap for teams already on Cassandra",
+        "key_source": "reddit.com/r/nosql"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 234
+  },
+  {
+    "id": "TC-0136",
+    "query": "CockroachDB vs PostgreSQL for globally distributed SQL in an enterprise",
+    "category": "Infrastructure",
+    "subdomain": "relational_db",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "CockroachDB",
+    "tech_b": "PostgreSQL",
+    "expected_winner": "CockroachDB",
+    "ground_truth_notes": "CockroachDB is a distributed SQL database that shards data across regions with automatic replication, horizontal scaling, and multi-region survivability while speaking the PostgreSQL wire protocol. PostgreSQL is a single-node database whose multi-region story requires third-party replication with failover trade-offs. For an enterprise needing a globally distributed SQL database, CockroachDB is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "cockroachlabs.com",
+        "type": "official_doc",
+        "reason": "CockroachDB official documentation"
+      },
+      {
+        "pattern": "github.com/cockroachdb/cockroach",
+        "type": "github_repo",
+        "reason": "CockroachDB source repo"
+      },
+      {
+        "pattern": "postgresql.org",
+        "type": "official_doc",
+        "reason": "PostgreSQL official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Feature completeness",
+        "position_a": "PostgreSQL has a richer extension and feature set than CockroachDB",
+        "position_b": "CockroachDB trades some extensions for native geo-distribution that PostgreSQL cannot provide without external tooling",
+        "key_source": "reddit.com/r/databases"
+      },
+      {
+        "topic": "Compatibility",
+        "position_a": "PostgreSQL is the standard most developers and tools target",
+        "position_b": "CockroachDB's Postgres wire compatibility means existing drivers and SQL mostly work unchanged",
+        "key_source": "cockroachlabs.com/docs"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 235
+  },
+  {
+    "id": "TC-0137",
+    "query": "Etcd vs Redis for distributed coordination and service discovery in an enterprise",
+    "category": "Infrastructure",
+    "subdomain": "coordination",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "Etcd",
+    "tech_b": "Redis",
+    "expected_winner": "Etcd",
+    "ground_truth_notes": "Etcd is a strongly-consistent, Raft-based key-value store with watch and lease primitives purpose-built for distributed coordination, leader election, and service discovery. Redis is an in-memory cache whose async replication can lose acknowledged writes, making it unsafe for coordination decisions. For enterprise distributed coordination, Etcd is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "etcd.io",
+        "type": "official_doc",
+        "reason": "Etcd official documentation"
+      },
+      {
+        "pattern": "github.com/etcd-io/etcd",
+        "type": "github_repo",
+        "reason": "Etcd source repo"
+      },
+      {
+        "pattern": "redis.io",
+        "type": "official_doc",
+        "reason": "Redis official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance",
+        "position_a": "Redis is much faster for high-frequency read/write than Etcd",
+        "position_b": "Coordination needs consistency, not raw throughput - Redis's async replication cannot guarantee the linearizability Etcd provides",
+        "key_source": "etcd.io/docs"
+      },
+      {
+        "topic": "Kubernetes precedent",
+        "position_a": "Redis is already deployed in many stacks, so reusing it avoids a new service",
+        "position_b": "Kubernetes itself runs on Etcd precisely because Redis cannot safely back the control plane",
+        "key_source": "kubernetes.io"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 236
+  },
+  {
+    "id": "TC-0138",
+    "query": "Traefik vs Nginx for Kubernetes ingress in a team",
+    "category": "Infrastructure",
+    "subdomain": "ingress",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "Traefik",
+    "tech_b": "Nginx",
+    "expected_winner": "Traefik",
+    "ground_truth_notes": "Traefik is Kubernetes-native, automatically discovering services and updating routing from the API server, with automatic TLS via Let's Encrypt and built-in metrics/dashboard. Nginx Ingress requires more manual annotation and config management. For a team running Kubernetes ingress, Traefik's auto-discovery and zero-config TLS make it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "doc.traefik.io",
+        "type": "official_doc",
+        "reason": "Traefik official documentation"
+      },
+      {
+        "pattern": "github.com/traefik/traefik",
+        "type": "github_repo",
+        "reason": "Traefik source repo"
+      },
+      {
+        "pattern": "nginx.org",
+        "type": "official_doc",
+        "reason": "Nginx official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Performance ceiling",
+        "position_a": "Nginx is faster at extreme connection counts",
+        "position_b": "In Kubernetes the routing is dynamic, and Traefik's auto-discovery plus TLS automation saves more team time than Nginx's raw throughput edge",
+        "key_source": "reddit.com/r/kubernetes"
+      },
+      {
+        "topic": "Familiarity",
+        "position_a": "Nginx config is what most ops teams already know",
+        "position_b": "Traefik's labels and CRDs map directly to Kubernetes concepts and need far less hand-written config",
+        "key_source": "doc.traefik.io"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 237
+  },
+  {
+    "id": "TC-0139",
+    "query": "Redpanda vs Kafka for Kafka-compatible streaming in an enterprise",
+    "category": "Infrastructure",
+    "subdomain": "message_queues",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "Redpanda",
+    "tech_b": "Kafka",
+    "expected_winner": "Redpanda",
+    "ground_truth_notes": "Redpanda is a Kafka-API-compatible streaming platform written in C++ that removes the ZooKeeper/KRaft dependency and delivers lower latency and simpler operations while remaining wire-compatible with Kafka clients. Apache Kafka's Java stack and controller complexity add operational burden. For an enterprise that wants Kafka-compatible streaming with lower ops, Redpanda is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.redpanda.com",
+        "type": "official_doc",
+        "reason": "Redpanda official documentation"
+      },
+      {
+        "pattern": "github.com/redpanda-data/redpanda",
+        "type": "github_repo",
+        "reason": "Redpanda source repo"
+      },
+      {
+        "pattern": "kafka.apache.org",
+        "type": "official_doc",
+        "reason": "Apache Kafka official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem",
+        "position_a": "Kafka has the largest connector and client ecosystem",
+        "position_b": "Redpanda is wire-compatible, so existing Kafka clients and most connectors work unchanged",
+        "key_source": "docs.redpanda.com"
+      },
+      {
+        "topic": "Maturity",
+        "position_a": "Kafka has a decade of production history at massive scale",
+        "position_b": "Redpanda's C++ core and simpler architecture are specifically why enterprises adopt it to cut the Kafka ops tax",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 238
+  },
+  {
+    "id": "TC-0140",
+    "query": "Cloudflare R2 vs Amazon S3 for egress-heavy object storage in a team",
+    "category": "Infrastructure",
+    "subdomain": "object_storage",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Cloudflare R2",
+    "tech_b": "Amazon S3",
+    "expected_winner": "Cloudflare R2",
+    "ground_truth_notes": "Cloudflare R2 provides the S3 API with zero egress fees, which makes it dramatically cheaper than Amazon S3 for workloads that serve a lot of data out. S3 charges per-gigabyte egress that scales with traffic and can dominate the bill. For a team with egress-heavy object storage, R2's zero-egress pricing is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "developers.cloudflare.com/r2",
+        "type": "official_doc",
+        "reason": "Cloudflare R2 official documentation"
+      },
+      {
+        "pattern": "aws.amazon.com/s3",
+        "type": "official_doc",
+        "reason": "Amazon S3 official documentation"
+      },
+      {
+        "pattern": "developers.cloudflare.com/r2/pricing",
+        "type": "official_doc",
+        "reason": "Cloudflare R2 pricing page"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem",
+        "position_a": "S3 has the deepest integration with the AWS service ecosystem",
+        "position_b": "R2's S3-compatible API works with most S3 tooling, and the egress savings outweigh AWS integration for egress-heavy workloads",
+        "key_source": "reddit.com/r/cloudcomputing"
+      },
+      {
+        "topic": "Performance",
+        "position_a": "S3 is proven at extreme scale and request rates",
+        "position_b": "R2 is built on Cloudflare's network and meets the latency/throughput needs of egress-heavy teams at a fraction of cost",
+        "key_source": "developers.cloudflare.com/r2"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 239
+  },
+  {
+    "id": "TC-0141",
+    "query": "Podman vs Docker for rootless container workloads in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "container_runtime",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Podman",
+    "tech_b": "Docker",
+    "expected_winner": "Podman",
+    "ground_truth_notes": "Podman runs daemonless and rootless, so containers run without a privileged daemon and each user's containers are isolated, which reduces attack surface in CI and shared hosts. Docker's daemon requires root privileges and centralizes the runtime. For a team prioritizing rootless, daemonless containers, Podman is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "podman.io",
+        "type": "official_doc",
+        "reason": "Podman official documentation"
+      },
+      {
+        "pattern": "github.com/containers/podman",
+        "type": "github_repo",
+        "reason": "Podman source repo"
+      },
+      {
+        "pattern": "docs.docker.com",
+        "type": "official_doc",
+        "reason": "Docker official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Compose compatibility",
+        "position_a": "Docker Compose is the most widely used local orchestration format",
+        "position_b": "Podman supports Compose via podman-compose or the docker-compose provider, covering the common cases",
+        "key_source": "reddit.com/r/devops"
+      },
+      {
+        "topic": "Desktop experience",
+        "position_a": "Docker Desktop is more polished for local development",
+        "position_b": "Podman Desktop has matured and the rootless security model is worth the switch for shared hosts and CI",
+        "key_source": "podman.io"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 240
+  },
+  {
+    "id": "TC-0142",
+    "query": "Argo CD vs Flux for GitOps continuous delivery in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "gitops",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Argo CD",
+    "tech_b": "Flux",
+    "expected_winner": "Argo CD",
+    "ground_truth_notes": "Argo CD has the larger adoption, a mature web UI with live drift visualization, and richer application management for teams adopting GitOps. Flux is a capable CNCF alternative but with a steeper CLI-first workflow and smaller community. For a team starting GitOps continuous delivery, Argo CD is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "argo-cd.readthedocs.io",
+        "type": "official_doc",
+        "reason": "Argo CD official documentation"
+      },
+      {
+        "pattern": "github.com/argoproj/argo-cd",
+        "type": "github_repo",
+        "reason": "Argo CD source repo"
+      },
+      {
+        "pattern": "fluxcd.io",
+        "type": "official_doc",
+        "reason": "Flux official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "UI vs CLI",
+        "position_a": "Flux's CLI-first model is more scriptable for automation",
+        "position_b": "Argo CD's UI makes drift and sync state visible to the whole team, which is why it's the more common choice",
+        "key_source": "reddit.com/r/kubernetes"
+      },
+      {
+        "topic": "CNCF status",
+        "position_a": "Both are CNCF projects with production users",
+        "position_b": "Argo CD's ecosystem and mindshare are larger, making hiring and troubleshooting easier",
+        "key_source": "argo-cd.readthedocs.io"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 241
+  },
+  {
+    "id": "TC-0143",
+    "query": "Grafana vs Kibana for multi-source dashboards in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "monitoring",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Grafana",
+    "tech_b": "Kibana",
+    "expected_winner": "Grafana",
+    "ground_truth_notes": "Grafana connects to dozens of data sources (Prometheus, PostgreSQL, CloudWatch, Loki, and more) and is the de facto standard for unified dashboards and alerting. Kibana is tightly coupled to the Elastic stack and primarily visualizes Elasticsearch data. For a team building multi-source dashboards, Grafana is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "grafana.com",
+        "type": "official_doc",
+        "reason": "Grafana official documentation"
+      },
+      {
+        "pattern": "github.com/grafana/grafana",
+        "type": "github_repo",
+        "reason": "Grafana source repo"
+      },
+      {
+        "pattern": "elastic.co/kibana",
+        "type": "official_doc",
+        "reason": "Kibana official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Elasticsearch native",
+        "position_a": "Kibana is the natural dashboard if you already run Elasticsearch",
+        "position_b": "Grafana also queries Elasticsearch and unifies it with every other data source in one place",
+        "key_source": "reddit.com/r/devops"
+      },
+      {
+        "topic": "Alerting",
+        "position_a": "Kibana has alerting built into the Elastic stack",
+        "position_b": "Grafana's alerting is source-agnostic and more mature for multi-source environments",
+        "key_source": "grafana.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 242
+  },
+  {
+    "id": "TC-0144",
+    "query": "Grafana Loki vs ELK Stack for log aggregation in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "logging",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Grafana Loki",
+    "tech_b": "ELK Stack",
+    "expected_winner": "Grafana Loki",
+    "ground_truth_notes": "Grafana Loki indexes only labels and stores raw logs as compressed chunks, making it far cheaper and lighter to run than the ELK stack, which indexes full log text. Loki also integrates natively with Prometheus-style labels and Grafana dashboards. For a team that wants low-cost, scalable log aggregation, Loki is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "grafana.com/docs/loki",
+        "type": "official_doc",
+        "reason": "Grafana Loki official documentation"
+      },
+      {
+        "pattern": "github.com/grafana/loki",
+        "type": "github_repo",
+        "reason": "Loki source repo"
+      },
+      {
+        "pattern": "elastic.co",
+        "type": "official_doc",
+        "reason": "Elastic Stack official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Full-text search",
+        "position_a": "ELK's full-text indexing enables richer log search than Loki's label-based model",
+        "position_b": "Loki's LogQL plus label filtering covers the operational queries teams actually run, at a fraction of the storage cost",
+        "key_source": "reddit.com/r/devops"
+      },
+      {
+        "topic": "Storage cost",
+        "position_a": "ELK gives fast search over indexed fields",
+        "position_b": "Loki's chunk storage scales to huge volumes cheaply, which is why teams switch off ELK for cost",
+        "key_source": "grafana.com/docs/loki"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 243
+  },
+  {
+    "id": "TC-0145",
+    "query": "OpenTofu vs Terraform for open-source infrastructure as code in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "iac",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "OpenTofu",
+    "tech_b": "Terraform",
+    "expected_winner": "OpenTofu",
+    "ground_truth_notes": "OpenTofu is the Linux Foundation fork of Terraform that stays fully open-source under MPL, with a drop-in CLI and HCL compatibility plus community features like state encryption. Terraform moved to the Business Source License, which restricts some commercial use. For a team that requires a truly open-source IaC tool, OpenTofu is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "opentofu.org",
+        "type": "official_doc",
+        "reason": "OpenTofu official documentation"
+      },
+      {
+        "pattern": "github.com/opentofu/opentofu",
+        "type": "github_repo",
+        "reason": "OpenTofu source repo"
+      },
+      {
+        "pattern": "terraform.io",
+        "type": "official_doc",
+        "reason": "Terraform official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Provider ecosystem",
+        "position_a": "Terraform's registry has the largest provider and module catalog",
+        "position_b": "OpenTofu is registry-compatible and works with existing Terraform providers unchanged",
+        "key_source": "opentofu.org"
+      },
+      {
+        "topic": "License",
+        "position_a": "Terraform's BSL only restricts a narrow set of commercial competitors",
+        "position_b": "For teams with legal review or open-source requirements, any non-open license is disqualifying and OpenTofu removes the question",
+        "key_source": "news.ycombinator.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 244
+  },
+  {
+    "id": "TC-0146",
+    "query": "VictoriaMetrics vs Prometheus for large-scale metrics in an enterprise",
+    "category": "Deployment & Operations",
+    "subdomain": "monitoring",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "VictoriaMetrics",
+    "tech_b": "Prometheus",
+    "expected_winner": "VictoriaMetrics",
+    "ground_truth_notes": "VictoriaMetrics is a Prometheus-compatible time-series database that stores metrics far more efficiently and scales to billions of active series with lower RAM and disk than Prometheus itself. It accepts PromQL and can serve as a drop-in remote storage. For an enterprise running large-scale metrics, VictoriaMetrics is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.victoriametrics.com",
+        "type": "official_doc",
+        "reason": "VictoriaMetrics official documentation"
+      },
+      {
+        "pattern": "github.com/VictoriaMetrics/VictoriaMetrics",
+        "type": "github_repo",
+        "reason": "VictoriaMetrics source repo"
+      },
+      {
+        "pattern": "prometheus.io",
+        "type": "official_doc",
+        "reason": "Prometheus official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Single-node simplicity",
+        "position_a": "Prometheus is simpler to run as a single binary for small setups",
+        "position_b": "At enterprise scale Prometheus's storage and RAM explode, which is exactly where VictoriaMetrics's efficiency wins",
+        "key_source": "reddit.com/r/devops"
+      },
+      {
+        "topic": "Compatibility",
+        "position_a": "Prometheus is the ecosystem standard for scraping and querying",
+        "position_b": "VictoriaMetrics speaks PromQL and the Prometheus remote-write protocol, so it slots in without changing exporters or dashboards",
+        "key_source": "docs.victoriametrics.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 245
+  },
+  {
+    "id": "TC-0147",
+    "query": "Google Cloud Run vs AWS Lambda for containerized serverless in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "serverless",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Google Cloud Run",
+    "tech_b": "AWS Lambda",
+    "expected_winner": "Google Cloud Run",
+    "ground_truth_notes": "Google Cloud Run deploys any standard container with full runtime control, no cold-start tax from a fixed runtime, and easy portability to any cloud or on-prem. AWS Lambda historically required function-specific packaging and runtime constraints. For a team deploying containerized serverless workloads, Cloud Run is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "cloud.google.com/run",
+        "type": "official_doc",
+        "reason": "Google Cloud Run official documentation"
+      },
+      {
+        "pattern": "aws.amazon.com/lambda",
+        "type": "official_doc",
+        "reason": "AWS Lambda official documentation"
+      },
+      {
+        "pattern": "knative.dev",
+        "type": "official_doc",
+        "reason": "Knative - the open serving platform Cloud Run is built on"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ecosystem",
+        "position_a": "Lambda has deeper integration with the broader AWS service catalog",
+        "position_b": "Cloud Run's standard-container model avoids Lambda's packaging and runtime lock-in, which matters more for portability",
+        "key_source": "reddit.com/r/aws"
+      },
+      {
+        "topic": "Concurrency",
+        "position_a": "Lambda scales each invocation independently with per-function concurrency controls",
+        "position_b": "Cloud Run scales container instances that each handle concurrent requests, which suits long-running or connection-heavy workloads better",
+        "key_source": "cloud.google.com/run"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 246
+  },
+  {
+    "id": "TC-0148",
+    "query": "Terraform vs AWS CloudFormation for multi-cloud infrastructure as code in an enterprise",
+    "category": "Deployment & Operations",
+    "subdomain": "iac",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "tech_a": "Terraform",
+    "tech_b": "AWS CloudFormation",
+    "expected_winner": "Terraform",
+    "ground_truth_notes": "Terraform is cloud-agnostic, so an enterprise manages AWS, Azure, GCP, and on-prem with one HCL language and one state workflow. AWS CloudFormation only provisions AWS resources, locking the enterprise into a single vendor. For an enterprise managing multi-cloud infrastructure, Terraform is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "terraform.io",
+        "type": "official_doc",
+        "reason": "Terraform official documentation"
+      },
+      {
+        "pattern": "github.com/hashicorp/terraform",
+        "type": "github_repo",
+        "reason": "Terraform source repo"
+      },
+      {
+        "pattern": "aws.amazon.com/cloudformation",
+        "type": "official_doc",
+        "reason": "AWS CloudFormation official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "AWS native",
+        "position_a": "CloudFormation has first-class support for every AWS service as soon as it launches",
+        "position_b": "Terraform's AWS provider tracks new services quickly enough, and its multi-cloud reach is the deciding factor",
+        "key_source": "reddit.com/r/aws"
+      },
+      {
+        "topic": "State management",
+        "position_a": "CloudFormation manages state server-side with no local state file",
+        "position_b": "Terraform's state is a small price for vendor-neutral infrastructure that an enterprise can run anywhere",
+        "key_source": "terraform.io"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 247
+  },
+  {
+    "id": "TC-0149",
+    "query": "Ansible vs Puppet for configuration management in a team",
+    "category": "Deployment & Operations",
+    "subdomain": "config_management",
+    "scene": "team",
+    "difficulty": "medium",
+    "tech_a": "Ansible",
+    "tech_b": "Puppet",
+    "expected_winner": "Ansible",
+    "ground_truth_notes": "Ansible is agentless and uses human-readable YAML playbooks over SSH, so a team can automate configuration with no agent install and a very shallow learning curve. Puppet requires agents on every node and a Ruby-based DSL plus a master server. For a team adopting configuration management, Ansible's simplicity makes it the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.ansible.com",
+        "type": "official_doc",
+        "reason": "Ansible official documentation"
+      },
+      {
+        "pattern": "github.com/ansible/ansible",
+        "type": "github_repo",
+        "reason": "Ansible source repo"
+      },
+      {
+        "pattern": "puppet.com",
+        "type": "official_doc",
+        "reason": "Puppet official documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Idempotency model",
+        "position_a": "Puppet's declarative, converge-based model enforces state continuously",
+        "position_b": "Ansible's idempotent modules achieve the same convergence on-demand without an agent to maintain",
+        "key_source": "reddit.com/r/devops"
+      },
+      {
+        "topic": "Scale",
+        "position_a": "Puppet's agent pull model scales to thousands of nodes efficiently",
+        "position_b": "Most teams' node counts fit Ansible's push model, and its simplicity wins over Puppet's scale headroom",
+        "key_source": "docs.ansible.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 248
+  },
+  {
+    "id": "TC-0150",
+    "query": "GitHub Container Registry vs Docker Hub for private container images as a solo developer",
+    "category": "Deployment & Operations",
+    "subdomain": "container_registry",
+    "scene": "solo",
+    "difficulty": "simple",
+    "tech_a": "GitHub Container Registry",
+    "tech_b": "Docker Hub",
+    "expected_winner": "GitHub Container Registry",
+    "ground_truth_notes": "GitHub Container Registry offers free unlimited private container images for personal accounts and integrates directly with GitHub Actions and repository permissions. Docker Hub's free tier limits private repositories and has imposed pull-rate limits. For a solo developer hosting private images, GHCR is the clear winner.",
+    "must_find_sources": [
+      {
+        "pattern": "docs.github.com/en/packages",
+        "type": "official_doc",
+        "reason": "GitHub Container Registry official documentation"
+      },
+      {
+        "pattern": "hub.docker.com",
+        "type": "official_doc",
+        "reason": "Docker Hub official documentation"
+      },
+      {
+        "pattern": "docs.github.com/en/packages/working-with-a-github-packages-registry",
+        "type": "official_doc",
+        "reason": "GHCR usage documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Public reach",
+        "position_a": "Docker Hub is the default registry most docker pull commands target",
+        "position_b": "For private images the registry's public reach is irrelevant, and GHCR's free private tier decides it",
+        "key_source": "reddit.com/r/docker"
+      },
+      {
+        "topic": "CI integration",
+        "position_a": "Docker Hub works with any CI system",
+        "position_b": "GHCR's native GitHub Actions integration means authenticated pushes need zero extra secrets management",
+        "key_source": "docs.github.com/en/actions"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 249
+  },
+  {
+    "id": "OS-0101",
+    "query": "Our team needs to monitor model drift and prediction quality across several production ML models",
+    "category": "Open Scenario",
+    "subdomain": "ml_monitoring",
+    "scene": "team",
+    "acceptable_winners": [
+      "evidently",
+      "whylabs",
+      "arize",
+      "fiddler",
+      "nannyml",
+      "mlflow",
+      "datadog"
+    ],
+    "ground_truth_notes": "A valid solution must detect data and concept drift and alert the team before accuracy silently degrades. Open-source libraries (Evidently, NannyML, MLflow evals) and managed platforms (WhyLabs, Arize, Fiddler, Datadog) all cover this. No specific stack is required as long as drift monitoring and alerting are provided.",
+    "_idx": 250
+  },
+  {
+    "id": "OS-0102",
+    "query": "Our enterprise needs governance and monitoring for hundreds of models with audit trails and drift alerts",
+    "category": "Open Scenario",
+    "subdomain": "ml_monitoring",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "arize",
+      "fiddler",
+      "whylabs",
+      "evidently",
+      "mlflow",
+      "datadog",
+      "sagemaker model monitor"
+    ],
+    "ground_truth_notes": "At enterprise scale the solution must provide multi-model dashboards, role-based access, audit trails and automated drift detection. Managed platforms (Arize, Fiddler, WhyLabs, SageMaker Model Monitor) and self-hosted stacks (Evidently + Grafana, MLflow) are all acceptable. The key requirement is governance plus monitoring, not just raw metrics.",
+    "_idx": 251
+  },
+  {
+    "id": "OS-0103",
+    "query": "I need to detect training-serving skew in a single fraud model I run and maintain myself",
+    "category": "Open Scenario",
+    "subdomain": "ml_monitoring",
+    "scene": "solo",
+    "acceptable_winners": [
+      "evidently",
+      "nannyml",
+      "deepchecks",
+      "tensorflow data validation",
+      "whylabs",
+      "fiddler"
+    ],
+    "ground_truth_notes": "A solo owner needs lightweight, low-operational-overhead drift detection over the model's input distributions. Open-source Python libraries (Evidently, NannyML, Deepchecks, TFDV) fit best, and a free-tier managed tool (WhyLabs, Fiddler) is also acceptable. The solution must flag training-serving skew without requiring a dedicated platform team.",
+    "_idx": 252
+  },
+  {
+    "id": "OS-0104",
+    "query": "Our team needs root-cause analysis when a deployed model's accuracy drops after a data pipeline change",
+    "category": "Open Scenario",
+    "subdomain": "ml_monitoring",
+    "scene": "team",
+    "acceptable_winners": [
+      "arize",
+      "fiddler",
+      "whylabs",
+      "evidently",
+      "datadog",
+      "honeycomb",
+      "mlflow"
+    ],
+    "ground_truth_notes": "The solution must correlate a drop in accuracy with a specific feature-distribution change and surface the responsible data slice. Managed observability (Arize, Fiddler, WhyLabs, Datadog, Honeycomb) and open-source Evidently all support this, and an eval store with lineage (MLflow) is acceptable. Root-cause tracing of performance regressions is the core requirement.",
+    "_idx": 253
+  },
+  {
+    "id": "OS-0105",
+    "query": "Our team needs hybrid search combining keyword and vector relevance over a product catalog",
+    "category": "Open Scenario",
+    "subdomain": "vector_search",
+    "scene": "team",
+    "acceptable_winners": [
+      "elasticsearch",
+      "opensearch",
+      "weaviate",
+      "qdrant",
+      "meilisearch",
+      "pinecone",
+      "algolia"
+    ],
+    "ground_truth_notes": "Hybrid search requires scoring both BM25/keyword and dense-vector relevance and fusing them into one ranking. Elasticsearch/OpenSearch (with vector plugins), Weaviate, Qdrant, Meilisearch, Pinecone and Algolia all provide this capability. A managed option is available but not mandatory for the requirement to be met.",
+    "_idx": 254
+  },
+  {
+    "id": "OS-0106",
+    "query": "Our enterprise needs a fully-managed vector database with serverless scaling for a RAG application",
+    "category": "Open Scenario",
+    "subdomain": "vector_search",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "pinecone",
+      "zilliz cloud",
+      "weaviate cloud",
+      "qdrant cloud",
+      "elasticsearch cloud",
+      "amazon opensearch serverless",
+      "astra db"
+    ],
+    "ground_truth_notes": "The team explicitly wants zero-ops, serverless scaling and does not want to manage infrastructure. All major managed vector databases (Pinecone, Zilliz/Milvus Cloud, Weaviate Cloud, Qdrant Cloud, Elastic Cloud, Amazon OpenSearch Serverless, DataStax Astra) satisfy this. Self-hosted options are not appropriate for this requirement.",
+    "_idx": 255
+  },
+  {
+    "id": "OS-0107",
+    "query": "Our enterprise needs to store and search 100M+ embeddings with metadata filtering under 100ms",
+    "category": "Open Scenario",
+    "subdomain": "vector_search",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "milvus",
+      "qdrant",
+      "weaviate",
+      "pinecone",
+      "vespa",
+      "elasticsearch",
+      "pgvector"
+    ],
+    "ground_truth_notes": "At 100M+ vectors the solution needs efficient ANN indexes (HNSW/IVF), pre/post metadata filtering and horizontal scaling. Milvus, Qdrant, Weaviate, Pinecone, Vespa, Elasticsearch and pgvector all handle this scale, and each has a managed offering. Latency, filtering and scale are the deciding factors, not any single vendor.",
+    "_idx": 256
+  },
+  {
+    "id": "OS-0108",
+    "query": "Our team needs low-latency online feature serving for a real-time recommendation model",
+    "category": "Open Scenario",
+    "subdomain": "feature_store",
+    "scene": "team",
+    "acceptable_winners": [
+      "redis",
+      "feast",
+      "tecton",
+      "hopsworks",
+      "dynamodb",
+      "vertex ai feature store",
+      "dragonfly"
+    ],
+    "ground_truth_notes": "Online serving needs sub-10ms point lookups of fresh features for each recommendation request. Redis and Dragonfly as online stores, Feast's online store, Tecton, Hopsworks, DynamoDB and Vertex AI Feature Store all provide low-latency feature retrieval. Managed platforms (Tecton, Hopsworks, Vertex) add governance on top of the serving layer.",
+    "_idx": 257
+  },
+  {
+    "id": "OS-0109",
+    "query": "Our enterprise needs streaming feature computation with point-in-time correctness for training and serving",
+    "category": "Open Scenario",
+    "subdomain": "feature_store",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "feast",
+      "tecton",
+      "hopsworks",
+      "flink",
+      "kafka streams",
+      "materialize",
+      "risingwave"
+    ],
+    "ground_truth_notes": "The solution must backfill training sets with point-in-time joins and compute streaming features consistently online and offline. Purpose-built feature stores (Feast, Tecton, Hopsworks) and stream engines you build on (Flink, Kafka Streams, Materialize, RisingWave) both satisfy this. Point-in-time correctness is the non-negotiable requirement.",
+    "_idx": 258
+  },
+  {
+    "id": "OS-0110",
+    "query": "Our team needs contract testing so microservices stop breaking each other on every deploy",
+    "category": "Open Scenario",
+    "subdomain": "api_testing",
+    "scene": "team",
+    "acceptable_winners": [
+      "pact",
+      "schemathesis",
+      "postman",
+      "karate",
+      "dredd",
+      "stoplight",
+      "specmatic"
+    ],
+    "ground_truth_notes": "Contract testing verifies each provider still satisfies its consumers' expectations before deployment. Pact and Specmatic are the standard frameworks; Schemathesis, Karate, Dredd and Postman/Stoplight also support contract or OpenAPI-based testing. Any tool that catches provider-consumer contract breaks qualifies.",
+    "_idx": 259
+  },
+  {
+    "id": "OS-0111",
+    "query": "Our team needs to load-test a new API to find its breaking point before launch",
+    "category": "Open Scenario",
+    "subdomain": "api_testing",
+    "scene": "team",
+    "acceptable_winners": [
+      "k6",
+      "locust",
+      "jmeter",
+      "gatling",
+      "artillery",
+      "loader.io",
+      "grafana cloud k6"
+    ],
+    "ground_truth_notes": "The tool must generate realistic concurrent load and report latency/error thresholds at the breaking point. k6, Locust, JMeter, Gatling and Artillery are open-source load testers, while Loader.io and Grafana Cloud k6 provide managed cloud load generation. Both self-hosted and SaaS options are acceptable.",
+    "_idx": 260
+  },
+  {
+    "id": "OS-0112",
+    "query": "Our team needs a mock server and API design workflow so frontend and backend build in parallel",
+    "category": "Open Scenario",
+    "subdomain": "api_testing",
+    "scene": "team",
+    "acceptable_winners": [
+      "postman",
+      "stoplight",
+      "wiremock",
+      "prism",
+      "mockoon",
+      "apimatic",
+      "microcks"
+    ],
+    "ground_truth_notes": "The team needs a contract-first mock that both frontend and backend develop against simultaneously. Postman, Stoplight, WireMock, Prism, Mockoon, APIMatic and Microcks all generate mocks from OpenAPI specs and support parallel development. The mock server plus shared API contract is the core requirement.",
+    "_idx": 261
+  },
+  {
+    "id": "OS-0113",
+    "query": "I need to run ML inference on a Raspberry Pi edge device with intermittent connectivity",
+    "category": "Open Scenario",
+    "subdomain": "edge_computing",
+    "scene": "solo",
+    "acceptable_winners": [
+      "onnx runtime",
+      "tensorflow lite",
+      "core ml",
+      "aws iot greengrass",
+      "azure iot edge",
+      "nvidia jetson",
+      "torchserve"
+    ],
+    "ground_truth_notes": "Edge inference needs a small optimized runtime that works offline and can sync results when connectivity returns. ONNX Runtime, TensorFlow Lite, Core ML and PyTorch/TorchServe are the open runtimes, while AWS IoT Greengrass, Azure IoT Edge and NVIDIA Jetson provide managed device orchestration. All satisfy on-device inference under constrained compute.",
+    "_idx": 262
+  },
+  {
+    "id": "OS-0114",
+    "query": "Our enterprise needs to deploy and update containerized apps across thousands of remote edge locations",
+    "category": "Open Scenario",
+    "subdomain": "edge_computing",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "k3s",
+      "balena",
+      "aws iot greengrass",
+      "azure iot edge",
+      "docker",
+      "red hat device edge",
+      "zededa"
+    ],
+    "ground_truth_notes": "Edge fleet management requires OTA updates, rollback and remote management at scale across many sites. K3s (lightweight Kubernetes), Balena, AWS IoT Greengrass, Azure IoT Edge, Red Hat Device Edge and ZEDEDA all provide edge container orchestration, most as managed SaaS. The fleet-update capability is the non-negotiable requirement.",
+    "_idx": 263
+  },
+  {
+    "id": "OS-0115",
+    "query": "I need a low-latency local database for an offline-capable app that syncs to the cloud",
+    "category": "Open Scenario",
+    "subdomain": "edge_computing",
+    "scene": "solo",
+    "acceptable_winners": [
+      "sqlite",
+      "turso",
+      "cloudflare d1",
+      "realm",
+      "pouchdb",
+      "watermelondb",
+      "supabase"
+    ],
+    "ground_truth_notes": "The app needs a local store that works offline and later syncs with a cloud backend. SQLite (with Litestream), Turso, Cloudflare D1, Realm, PouchDB/WatermelonDB and Supabase's local sync all satisfy this, with Turso, D1 and Supabase providing managed backends. Local-first persistence with eventual sync is the requirement.",
+    "_idx": 264
+  },
+  {
+    "id": "OS-0116",
+    "query": "Our enterprise needs to track and reduce AWS spending across many accounts and teams",
+    "category": "Open Scenario",
+    "subdomain": "cost_optimization",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "aws cost explorer",
+      "cloudhealth",
+      "vantage",
+      "finout",
+      "kubecost",
+      "opencost"
+    ],
+    "ground_truth_notes": "The team needs multi-account cost visibility, budgets, allocation and anomaly detection. AWS Cost Explorer (native), CloudHealth, Vantage and Finout are managed FinOps platforms, while Kubecost and OpenCost add Kubernetes cost allocation. Any tool providing cross-account spend visibility and budget alerting qualifies.",
+    "_idx": 265
+  },
+  {
+    "id": "OS-0117",
+    "query": "Our team needs right-sizing recommendations to cut Kubernetes infrastructure costs",
+    "category": "Open Scenario",
+    "subdomain": "cost_optimization",
+    "scene": "team",
+    "acceptable_winners": [
+      "kubecost",
+      "opencost",
+      "cast ai",
+      "spot by netapp",
+      "karpenter",
+      "goldilocks",
+      "stormforge"
+    ],
+    "ground_truth_notes": "The solution must recommend resource limits and spot/autoscaling to reduce waste in the cluster. Kubecost/OpenCost, CAST AI, Spot by NetApp, Karpenter, Goldilocks and StormForge all provide right-sizing or spot optimization, several as managed SaaS. Reducing idle/over-provisioned compute is the core goal.",
+    "_idx": 266
+  },
+  {
+    "id": "OS-0118",
+    "query": "Our team needs to monitor and control LLM API token spending across our products",
+    "category": "Open Scenario",
+    "subdomain": "cost_optimization",
+    "scene": "team",
+    "acceptable_winners": [
+      "langfuse",
+      "langsmith",
+      "helicone",
+      "portkey",
+      "openllmetry",
+      "datadog",
+      "lunary"
+    ],
+    "ground_truth_notes": "The team needs per-feature token and cost tracking with budgets and alerts. Langfuse, LangSmith, Helicone, Portkey, OpenLLMetry, Datadog LLM Observability and Lunary all provide LLM cost observability, most as managed SaaS. Token/cost accounting with alerting is the core requirement.",
+    "_idx": 267
+  },
+  {
+    "id": "OS-0119",
+    "query": "Our team needs automated data validation and quality checks inside our pipeline",
+    "category": "Open Scenario",
+    "subdomain": "data_quality",
+    "scene": "team",
+    "acceptable_winners": [
+      "great expectations",
+      "dbt tests",
+      "soda",
+      "montecarlo",
+      "dbt cloud",
+      "elementary",
+      "deequ"
+    ],
+    "ground_truth_notes": "The solution must assert schema, nulls, ranges and freshness and fail the pipeline on violation. Great Expectations, dbt tests, Soda, Monte Carlo, Elementary and Deequ all provide data quality checks, with Soda Cloud, Monte Carlo and dbt Cloud offering managed tiers. Automated in-pipeline validation is the requirement.",
+    "_idx": 268
+  },
+  {
+    "id": "OS-0120",
+    "query": "Our enterprise needs data lineage and freshness monitoring for critical dashboards",
+    "category": "Open Scenario",
+    "subdomain": "data_quality",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "montecarlo",
+      "datafold",
+      "elementary",
+      "dbt",
+      "openmetadata",
+      "collibra",
+      "atlan"
+    ],
+    "ground_truth_notes": "The team needs column-level lineage and alerts when a table feeding a dashboard goes stale. Monte Carlo, Datafold, Elementary, OpenMetadata, Collibra and Atlan all provide lineage and freshness observability, most as managed platforms. Lineage plus freshness alerting is the non-negotiable requirement.",
+    "_idx": 269
+  },
+  {
+    "id": "OS-0121",
+    "query": "Our team needs to detect anomalous rows and schema drift in incoming data feeds",
+    "category": "Open Scenario",
+    "subdomain": "data_quality",
+    "scene": "team",
+    "acceptable_winners": [
+      "great expectations",
+      "soda",
+      "montecarlo",
+      "evidently",
+      "deequ",
+      "dbt tests",
+      "whylogs"
+    ],
+    "ground_truth_notes": "The solution must catch distribution shift and malformed rows on ingest before they corrupt downstream models. Great Expectations, Soda, Monte Carlo, Evidently, Deequ, dbt tests and whylogs all provide drift and anomaly detection. Catching silent data degradation at ingest is the core requirement.",
+    "_idx": 270
+  },
+  {
+    "id": "OS-0122",
+    "query": "I need a golden dataset and scoring harness to compare my LLM app's outputs against human judgments",
+    "category": "Open Scenario",
+    "subdomain": "evals",
+    "scene": "solo",
+    "acceptable_winners": [
+      "braintrust",
+      "langsmith",
+      "promptfoo",
+      "ragas",
+      "deepeval",
+      "w&b weave",
+      "openai evals"
+    ],
+    "ground_truth_notes": "The developer needs to version test cases, run scoring and compare models over time. Braintrust, LangSmith, Promptfoo, Ragas, DeepEval, Weights & Biases Weave and OpenAI Evals all provide eval harnesses, with Braintrust and LangSmith as managed platforms. Golden-dataset scoring against human judgments is the requirement.",
+    "_idx": 271
+  },
+  {
+    "id": "OS-0123",
+    "query": "Our team needs red-teaming and safety evaluation for an LLM product before launch",
+    "category": "Open Scenario",
+    "subdomain": "evals",
+    "scene": "team",
+    "acceptable_winners": [
+      "giskard",
+      "garak",
+      "promptfoo",
+      "guardrails ai",
+      "langkit",
+      "arthur",
+      "llm guard"
+    ],
+    "ground_truth_notes": "The team must probe for jailbreaks, bias and harmful output and produce a compliance report. Giskard, Garak, Promptfoo, Guardrails AI, LangKit, Arthur and LLM Guard all provide red-team and safety evaluation, with Arthur and Giskard offering managed tiers. Safety probing and reporting are the core requirements.",
+    "_idx": 272
+  },
+  {
+    "id": "OS-0124",
+    "query": "Our enterprise needs continuous regression evals in CI for every prompt or model change",
+    "category": "Open Scenario",
+    "subdomain": "evals",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "promptfoo",
+      "deepeval",
+      "ragas",
+      "braintrust",
+      "langsmith",
+      "w&b weave",
+      "agentops"
+    ],
+    "ground_truth_notes": "Evals must run automatically on every change and block regressions before they ship. Promptfoo, DeepEval, Ragas, Braintrust, LangSmith, W&B Weave and AgentOps all integrate into CI, with Braintrust, LangSmith and AgentOps adding managed dashboards. CI-native regression evals are the non-negotiable requirement.",
+    "_idx": 273
+  },
+  {
+    "id": "OS-0125",
+    "query": "Our team needs end-to-end browser testing with visual regression across a Next.js app",
+    "category": "Open Scenario",
+    "subdomain": "testing",
+    "scene": "team",
+    "acceptable_winners": [
+      "playwright",
+      "cypress",
+      "selenium",
+      "puppeteer",
+      "browserstack",
+      "percy",
+      "checkly"
+    ],
+    "ground_truth_notes": "The team needs cross-browser E2E runs plus screenshot diffs on UI changes. Playwright, Cypress, Selenium and Puppeteer are the test runners, while BrowserStack, Percy and Checkly provide managed cross-browser and visual regression services. E2E coverage with visual diffing is the core requirement.",
+    "_idx": 274
+  },
+  {
+    "id": "OS-0126",
+    "query": "Our team needs automated mobile app testing on real devices without maintaining a device lab",
+    "category": "Open Scenario",
+    "subdomain": "testing",
+    "scene": "team",
+    "acceptable_winners": [
+      "browserstack",
+      "lambdatest",
+      "saucelabs",
+      "firebase test lab",
+      "maestro",
+      "appium",
+      "kobiton"
+    ],
+    "ground_truth_notes": "The team needs real-device test runs across iOS and Android without owning hardware. BrowserStack, LambdaTest, Sauce Labs, Firebase Test Lab and Kobiton are managed device clouds, while Maestro and Appium are the open-source frameworks that run on them. Managed real-device execution is the requirement.",
+    "_idx": 275
+  },
+  {
+    "id": "OS-0127",
+    "query": "Our team needs flaky-test detection and CI test analytics to speed up our pipelines",
+    "category": "Open Scenario",
+    "subdomain": "testing",
+    "scene": "team",
+    "acceptable_winners": [
+      "playwright",
+      "cypress cloud",
+      "buildkite test analytics",
+      "datadog ci visibility",
+      "trunk",
+      "testmo",
+      "launchable"
+    ],
+    "ground_truth_notes": "The solution must identify flaky tests, track durations and surface trends so the team can fix the worst offenders. Cypress Cloud, Buildkite Test Analytics, Datadog CI Visibility, Trunk, Testmo and Launchable provide test analytics, while Playwright has built-in retries and traces. Flaky-test detection and CI analytics are the core requirements.",
+    "_idx": 276
+  },
+  {
+    "id": "OS-0128",
+    "query": "I need to add group video calling with screen sharing to my web app as a solo developer",
+    "category": "Open Scenario",
+    "subdomain": "realtime_comm",
+    "scene": "solo",
+    "acceptable_winners": [
+      "livekit",
+      "agora",
+      "twilio",
+      "daily",
+      "jitsi",
+      "mediasoup",
+      "cloudflare calls"
+    ],
+    "ground_truth_notes": "The developer needs WebRTC SFU infrastructure with room management and screen sharing without building the media backend from scratch. LiveKit, Agora, Twilio, Daily, Jitsi, mediasoup and Cloudflare Calls all provide video calling, with Agora, Twilio, Daily and Cloudflare as managed services. SFU-based group video with screen share is the requirement.",
+    "_idx": 277
+  },
+  {
+    "id": "OS-0129",
+    "query": "Our team needs a low-latency live streaming platform for video with recording and chat",
+    "category": "Open Scenario",
+    "subdomain": "realtime_comm",
+    "scene": "team",
+    "acceptable_winners": [
+      "mux",
+      "cloudflare stream",
+      "aws ivs",
+      "ant media server",
+      "livekit",
+      "wowza",
+      "agora"
+    ],
+    "ground_truth_notes": "The platform needs ingest, adaptive bitrate, recording and low-latency playback plus chat. Mux, Cloudflare Stream, AWS IVS, Wowza and Agora are managed, while Ant Media Server and LiveKit can be self-hosted. Ingest-to-playback streaming with recording is the core requirement.",
+    "_idx": 278
+  },
+  {
+    "id": "OS-0130",
+    "query": "Our team needs an AI knowledge base with semantic search for customer support agents",
+    "category": "Open Scenario",
+    "subdomain": "knowledge_base",
+    "scene": "team",
+    "acceptable_winners": [
+      "intercom fin",
+      "zendesk",
+      "glean",
+      "notion",
+      "freshworks",
+      "openai",
+      "langchain"
+    ],
+    "ground_truth_notes": "Support agents need to find answers across past tickets and docs with citations. Intercom Fin, Zendesk, Glean, Freshworks and Notion AI are managed, while OpenAI and LangChain let you build a custom RAG knowledge base. Semantic retrieval over company knowledge with citations is the requirement.",
+    "_idx": 279
+  },
+  {
+    "id": "OS-0131",
+    "query": "I want a self-hosted wiki with full-text search and granular permissions for my projects and notes",
+    "category": "Open Scenario",
+    "subdomain": "knowledge_base",
+    "scene": "solo",
+    "acceptable_winners": [
+      "outline",
+      "wikijs",
+      "bookstack",
+      "confluence",
+      "notion",
+      "gitbook",
+      "docusaurus"
+    ],
+    "ground_truth_notes": "The user needs a permissioned internal wiki with good full-text search that they can run themselves. Outline, Wiki.js and BookStack are self-hosted open-source; Confluence, Notion and GitBook are managed alternatives, and Docusaurus is a lighter docs option. A searchable, permissioned knowledge store is the core requirement.",
+    "_idx": 280
+  },
+  {
+    "id": "OS-0132",
+    "query": "Our enterprise needs an internal Q&A assistant grounded in company documents with citations",
+    "category": "Open Scenario",
+    "subdomain": "knowledge_base",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "glean",
+      "intercom fin",
+      "openai",
+      "langchain",
+      "llamaindex",
+      "haystack",
+      "elastic"
+    ],
+    "ground_truth_notes": "The assistant must answer with sources and respect document ACLs. Glean and Intercom Fin are managed solutions, while OpenAI, LangChain, LlamaIndex, Haystack and Elastic let you build grounded RAG with citations. Citation-grounded Q&A over internal documents is the non-negotiable requirement.",
+    "_idx": 281
+  },
+  {
+    "id": "OS-0133",
+    "query": "Our enterprise needs search across emails, docs and tickets with connectors and security filtering",
+    "category": "Open Scenario",
+    "subdomain": "search",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "glean",
+      "elasticsearch",
+      "algolia",
+      "opensearch",
+      "vespa",
+      "mongo atlas search",
+      "typesense"
+    ],
+    "ground_truth_notes": "Enterprise search needs prebuilt connectors, relevance tuning and ACL-aware results so users only see what they may access. Glean, Elasticsearch, Algolia, OpenSearch, Vespa and MongoDB Atlas Search all provide this, with Glean, Algolia and Elastic Cloud as managed options. Connectors plus security filtering are the requirements.",
+    "_idx": 282
+  },
+  {
+    "id": "OS-0134",
+    "query": "Our team needs relevance tuning and click analytics to improve a search experience",
+    "category": "Open Scenario",
+    "subdomain": "search",
+    "scene": "team",
+    "acceptable_winners": [
+      "algolia",
+      "elasticsearch",
+      "typesense",
+      "meilisearch",
+      "search.io",
+      "vespa",
+      "swiftype"
+    ],
+    "ground_truth_notes": "The team needs to measure click-through, tune ranking and manage synonyms. Algolia, Elasticsearch, Typesense, Meilisearch, Search.io, Vespa and Swiftype all support relevance tuning and search analytics, several as managed SaaS. Relevance controls plus click analytics are the core requirements.",
+    "_idx": 283
+  },
+  {
+    "id": "OS-0135",
+    "query": "Our team needs to process real-time events with SQL for fraud and anomaly detection",
+    "category": "Open Scenario",
+    "subdomain": "stream_processing",
+    "scene": "team",
+    "acceptable_winners": [
+      "flink",
+      "kafka streams",
+      "ksqldb",
+      "materialize",
+      "risingwave",
+      "spark structured streaming",
+      "aws kinesis data analytics"
+    ],
+    "ground_truth_notes": "The team needs streaming SQL over events with low latency for fraud and anomaly rules. Flink, Kafka Streams, ksqlDB, Materialize, RisingWave, Spark Structured Streaming and AWS Kinesis Data Analytics all support this, with Materialize, RisingWave and Kinesis as managed services. Streaming SQL with low latency is the requirement.",
+    "_idx": 284
+  },
+  {
+    "id": "OS-0136",
+    "query": "Our enterprise needs to stream database changes (CDC) into downstream systems in real time",
+    "category": "Open Scenario",
+    "subdomain": "stream_processing",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "debezium",
+      "kafka connect",
+      "fivetran",
+      "airbyte",
+      "estuary",
+      "aws dms",
+      "google datastream"
+    ],
+    "ground_truth_notes": "CDC must capture inserts, updates and deletes with ordering and low latency into downstream systems. Debezium and Kafka Connect are open-source, while Fivetran, Airbyte, Estuary, AWS DMS and Google Datastream provide managed CDC pipelines. Real-time change capture with correct ordering is the requirement.",
+    "_idx": 285
+  },
+  {
+    "id": "OS-0137",
+    "query": "Our team needs streaming ETL into a warehouse with sub-minute freshness",
+    "category": "Open Scenario",
+    "subdomain": "stream_processing",
+    "scene": "team",
+    "acceptable_winners": [
+      "kafka",
+      "flink",
+      "kinesis",
+      "google dataflow",
+      "azure stream analytics",
+      "risingwave",
+      "materialize"
+    ],
+    "ground_truth_notes": "The pipeline must transform and load events into the warehouse within a minute of arrival. Kafka with Flink, Kinesis, Google Dataflow, Azure Stream Analytics, RisingWave and Materialize all support sub-minute streaming ETL. Streaming transform-to-load with low latency is the core requirement.",
+    "_idx": 286
+  },
+  {
+    "id": "OS-0138",
+    "query": "I need to sync data from a few SaaS tools into a warehouse for analysis",
+    "category": "Open Scenario",
+    "subdomain": "etl",
+    "scene": "solo",
+    "acceptable_winners": [
+      "fivetran",
+      "airbyte",
+      "stitch",
+      "meltano",
+      "dlt",
+      "hevo",
+      "rivery"
+    ],
+    "ground_truth_notes": "The user needs connectors for SaaS sources with incremental sync without writing integrations by hand. Fivetran, Stitch, Hevo and Rivery are managed, while Airbyte, Meltano and dlt are open-source ELT frameworks. Managed connectors with incremental sync are the core requirement.",
+    "_idx": 287
+  },
+  {
+    "id": "OS-0139",
+    "query": "Our team needs reverse ETL to sync warehouse data back into CRM and marketing tools",
+    "category": "Open Scenario",
+    "subdomain": "etl",
+    "scene": "team",
+    "acceptable_winners": [
+      "hightouch",
+      "census",
+      "rudderstack",
+      "segment",
+      "airflow",
+      "dbt cloud",
+      "polytomic"
+    ],
+    "ground_truth_notes": "Reverse ETL must push enriched warehouse segments into operational SaaS like CRM and email tools. Hightouch, Census, RudderStack, Segment and Polytomic are managed, while Airflow or dbt Cloud can be orchestrated for custom syncs. Warehouse-to-SaaS data activation is the requirement.",
+    "_idx": 288
+  },
+  {
+    "id": "OS-0140",
+    "query": "Our team needs to serve multiple ML models with autoscaling and GPU scheduling",
+    "category": "Open Scenario",
+    "subdomain": "model_serving",
+    "scene": "team",
+    "acceptable_winners": [
+      "ray serve",
+      "seldon core",
+      "bentoml",
+      "kserve",
+      "triton inference server",
+      "sagemaker",
+      "vertex ai"
+    ],
+    "ground_truth_notes": "The platform must autoscale model replicas and schedule GPUs efficiently across several models. Ray Serve, Seldon Core, BentoML, KServe and Triton are open-source serving stacks, while SageMaker and Vertex AI are managed. Multi-model serving with autoscaling and GPU scheduling is the requirement.",
+    "_idx": 289
+  },
+  {
+    "id": "OS-0141",
+    "query": "I need a unified gateway to route requests across LLM providers with caching and fallback",
+    "category": "Open Scenario",
+    "subdomain": "llm_gateway",
+    "scene": "solo",
+    "acceptable_winners": [
+      "litellm",
+      "portkey",
+      "openrouter",
+      "helicone",
+      "langfuse",
+      "one-api",
+      "kong ai gateway"
+    ],
+    "ground_truth_notes": "The developer needs a single API with provider routing, retries, caching and cost control so switching models doesn't require code changes. LiteLLM, Portkey, OpenRouter, Helicone, Langfuse, One-API and Kong AI Gateway all do this, with OpenRouter, Portkey and Helicone as managed services. A unified provider-agnostic gateway is the requirement.",
+    "_idx": 290
+  },
+  {
+    "id": "OS-0142",
+    "query": "Our enterprise needs distributed tracing across microservices to debug latency",
+    "category": "Open Scenario",
+    "subdomain": "observability",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "jaeger",
+      "grafana tempo",
+      "zipkin",
+      "datadog apm",
+      "new relic",
+      "honeycomb",
+      "signoz"
+    ],
+    "ground_truth_notes": "The team needs end-to-end traces to find which span causes slow requests. Jaeger, Grafana Tempo, Zipkin and SigNoz are open-source, while Datadog APM, New Relic and Honeycomb are managed, and all support OpenTelemetry. End-to-end distributed tracing is the core requirement.",
+    "_idx": 291
+  },
+  {
+    "id": "OS-0143",
+    "query": "Our team needs unified OpenTelemetry-based observability with traces, metrics and logs",
+    "category": "Open Scenario",
+    "subdomain": "observability",
+    "scene": "team",
+    "acceptable_winners": [
+      "grafana",
+      "datadog",
+      "honeycomb",
+      "signoz",
+      "dynatrace",
+      "new relic",
+      "elastic"
+    ],
+    "ground_truth_notes": "The team wants one platform for traces, metrics and logs collected via OpenTelemetry. Grafana (LGTM stack), SigNoz and Elastic are self-hostable, while Datadog, Honeycomb, Dynatrace and New Relic are managed SaaS. Unified telemetry on the OTel standard is the requirement.",
+    "_idx": 292
+  },
+  {
+    "id": "OS-0144",
+    "query": "I need product analytics with event tracking, funnels and cohort retention for my SaaS",
+    "category": "Open Scenario",
+    "subdomain": "product_analytics",
+    "scene": "solo",
+    "acceptable_winners": [
+      "posthog",
+      "amplitude",
+      "mixpanel",
+      "heap",
+      "segment",
+      "snowplow",
+      "google analytics"
+    ],
+    "ground_truth_notes": "The founder needs to instrument events and analyze funnels and cohorts to understand retention. PostHog, Amplitude, Mixpanel, Heap, Segment, Snowplow and Google Analytics all provide product analytics, with PostHog and Snowplow self-hostable. Event tracking with funnel and cohort analysis is the requirement.",
+    "_idx": 293
+  },
+  {
+    "id": "OS-0145",
+    "query": "Our team needs session replay and heatmaps to see where users drop off",
+    "category": "Open Scenario",
+    "subdomain": "product_analytics",
+    "scene": "team",
+    "acceptable_winners": [
+      "posthog",
+      "fullstory",
+      "hotjar",
+      "logrocket",
+      "microsoft clarity",
+      "smartlook",
+      "mouseflow"
+    ],
+    "ground_truth_notes": "The team needs to watch real sessions and see click/scroll heatmaps to find where users abandon the flow. PostHog, FullStory, Hotjar, LogRocket, Microsoft Clarity, Smartlook and Mouseflow all provide session replay and heatmaps, all as managed SaaS. Session replay plus heatmaps is the core requirement.",
+    "_idx": 294
+  },
+  {
+    "id": "OS-0146",
+    "query": "I need automated backups with point-in-time recovery for a self-hosted Postgres database",
+    "category": "Open Scenario",
+    "subdomain": "backup_recovery",
+    "scene": "solo",
+    "acceptable_winners": [
+      "pgbackrest",
+      "wal-g",
+      "barman",
+      "aws rds",
+      "neon",
+      "supabase",
+      "google cloud sql"
+    ],
+    "ground_truth_notes": "The user needs scheduled backups and point-in-time recovery so a mistake or failure doesn't lose data. pgBackRest, WAL-G and Barman are open-source, while AWS RDS, Neon, Supabase and Google Cloud SQL provide managed backup and PITR. Automated backups with PITR is the requirement.",
+    "_idx": 295
+  },
+  {
+    "id": "OS-0147",
+    "query": "I need to schedule recurring jobs with timezone-aware cron and failure alerting",
+    "category": "Open Scenario",
+    "subdomain": "scheduling",
+    "scene": "solo",
+    "acceptable_winners": [
+      "temporal",
+      "aws eventbridge scheduler",
+      "google cloud scheduler",
+      "celery beat",
+      "airflow",
+      "github actions schedule",
+      "cron"
+    ],
+    "ground_truth_notes": "The user needs reliable recurring scheduling with timezone support, retries and alerts on failure. Temporal, AWS EventBridge Scheduler, Google Cloud Scheduler, Celery Beat, Airflow, GitHub Actions scheduled workflows and plain cron all satisfy this, with the first several as managed services. Reliable scheduled execution with failure alerting is the requirement.",
+    "_idx": 296
+  },
+  {
+    "id": "OS-0148",
+    "query": "Our enterprise needs canary releases and rollback for ML model deployments",
+    "category": "Open Scenario",
+    "subdomain": "model_serving",
+    "scene": "enterprise",
+    "acceptable_winners": [
+      "seldon core",
+      "bentoml",
+      "kserve",
+      "sagemaker",
+      "vertex ai",
+      "ray serve",
+      "triton inference server"
+    ],
+    "ground_truth_notes": "The team must deploy a new model to a small traffic slice, compare it against the incumbent, and roll back cleanly if it regresses. Seldon Core, BentoML, KServe, Ray Serve and Triton support canary/traffic-split patterns on Kubernetes, while SageMaker and Vertex AI provide managed canary deployment. Canary traffic shifting with rollback is the requirement.",
+    "_idx": 297
+  },
+  {
+    "id": "OS-0149",
+    "query": "Our team needs to run large-scale batch inference over millions of records on a schedule",
+    "category": "Open Scenario",
+    "subdomain": "model_serving",
+    "scene": "team",
+    "acceptable_winners": [
+      "ray",
+      "spark",
+      "sagemaker batch transform",
+      "databricks",
+      "apache beam",
+      "bentoml",
+      "modal"
+    ],
+    "ground_truth_notes": "The team needs to score millions of records in parallel, often on GPU, within a cost budget. Ray, Spark, Apache Beam and BentoML are open-source engines, while SageMaker Batch Transform, Databricks and Modal are managed. Large-scale parallel batch scoring is the core requirement.",
+    "_idx": 298
+  },
+  {
+    "id": "OS-0150",
+    "query": "Our team needs to guard against prompt injection and data exfiltration in LLM apps",
+    "category": "Open Scenario",
+    "subdomain": "llm_security",
+    "scene": "team",
+    "acceptable_winners": [
+      "guardrails ai",
+      "lakera guard",
+      "rebuff",
+      "nemo guardrails",
+      "presidio",
+      "llm guard",
+      "aws bedrock guardrails"
+    ],
+    "ground_truth_notes": "The team needs runtime detection and blocking of prompt injection, jailbreaks and PII exfiltration in production LLM apps. Guardrails AI, Lakera Guard, Rebuff, NVIDIA NeMo Guardrails, Presidio, LLM Guard and AWS Bedrock Guardrails all provide these controls, with Lakera and Bedrock as managed services. Runtime injection and PII filtering are the requirements.",
+    "_idx": 299
   }
 ]
