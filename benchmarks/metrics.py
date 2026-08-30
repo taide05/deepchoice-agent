@@ -488,8 +488,15 @@ def _extract_claims(fr: dict) -> list[str]:
 
 
 def _collect_true_titles(run: dict) -> set[str]:
-    """All normalized source titles the pipeline actually retrieved."""
+    """All normalized source titles — preferentially the evidence-chain titles
+    the synthesizer was shown (same set the citation sanitizer uses), falling
+    back to search results when evidence_titles is absent."""
     titles = set()
+    for t in run.get("evidence_titles", []) or []:
+        if t:
+            titles.add(_normalize_title(t))
+    if titles:
+        return titles
     for sr in run.get("search_results", []):
         for result in sr.get("results", []):
             t = result.get("title", "")

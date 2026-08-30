@@ -121,6 +121,18 @@ def _build_report_from_state(state: dict) -> str:
     return ""
 
 
+def _collect_evidence_titles(state: dict) -> list[str]:
+    """Source titles shown to the synthesizer (first 4 per chain) — the same
+    set the citation sanitizer treats as real."""
+    titles: list[str] = []
+    for chain in state.get("evidence_chains", []):
+        for src in chain.get("sources", [])[:4]:
+            t = src.get("title", "")
+            if t:
+                titles.append(t)
+    return titles
+
+
 def _strip_run(run: dict) -> dict:
     """Strip the heavy state object from a run for checkpoint/persistence,
     keeping the fields metrics recomputation needs (incl. final_recommendation)."""
@@ -137,6 +149,7 @@ def _strip_run(run: dict) -> dict:
         "knowledge_gaps": run.get("knowledge_gaps", []),
         "agent_timing": run.get("agent_timing", {}),
         "final_recommendation": run.get("final_recommendation", {}),
+        "evidence_titles": run.get("evidence_titles", []),
         "judge_scores": run.get("judge_scores"),
     }
 
@@ -214,6 +227,7 @@ async def run_single_case(case: dict, verbose: bool = False,
             "knowledge_gaps": state.get("knowledge_gaps", []),
             "agent_timing": state.get("agent_timing", {}),
             "final_recommendation": state.get("final_recommendation", {}),
+            "evidence_titles": _collect_evidence_titles(state),
             "clarify_used": clarify_used,
         }
 

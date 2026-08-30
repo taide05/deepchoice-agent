@@ -57,6 +57,19 @@ def test_empty_runs():
     assert out["total_claims"] == 0
 
 
+def test_evidence_titles_used_for_anti_fabrication():
+    # Fabrication check must use the evidence-chain titles (same set the
+    # synthesizer was shown), not the raw search_result titles (which the
+    # source evaluator may have rewritten).
+    run = {
+        "final_recommendation": {"recommendation": "Use X [Source: Evidence Doc]."},
+        "evidence_titles": ["Evidence Doc"],
+        "search_results": [{"results": [{"title": "Different Search Title"}]}],
+    }
+    out = compute_claim_citation_rate([run])
+    assert out["fabricated_citations"] == 0
+
+
 def test_split_sentences_does_not_split_after_vs():
     # Regression: "vs." inside a [Source: ...] title must not split the claim,
     # otherwise the title is truncated ("MQTT vs.") and misjudged fabricated.
