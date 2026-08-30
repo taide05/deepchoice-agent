@@ -55,3 +55,36 @@ def test_empty_runs():
     out = compute_claim_citation_rate([])
     assert out["value"] == 0.0
     assert out["total_claims"] == 0
+
+
+def test_multiple_sources_in_one_bracket():
+    # LLM often emits [Source: A, Source: B] inside a single bracket
+    run = _run("Use X [Source: FastAPI Docs, Source: Flask Docs].",
+               ["FastAPI Docs", "Flask Docs"])
+    out = compute_claim_citation_rate([run])
+    assert out["cited_claims"] == 1
+    assert out["fabricated_citations"] == 0
+
+
+def test_semicolon_separated_sources():
+    run = _run("Use X [Source: LangGraph Docs; Source: langgraph (PyPI)].",
+               ["LangGraph Docs"])
+    out = compute_claim_citation_rate([run])
+    assert out["cited_claims"] == 1
+    assert out["fabricated_citations"] == 1  # langgraph (PyPI) not in retrieved
+
+
+def test_mixed_real_and_fake_titles():
+    run = _run("Use X [Source: Real Docs, Source: Fake Docs].", ["Real Docs"])
+    out = compute_claim_citation_rate([run])
+    # claim has >=1 real title -> cited; 1 fake title -> fabricated
+    assert out["cited_claims"] == 1
+    assert out["fabricated_citations"] == 1
+
+
+def test_nested_bracket_in_title():
+    run = _run("Use X [Source: Bun vs Node.js: 3x Faster, Is It Ready? [2026]].",
+               ["Bun vs Node.js: 3x Faster"])
+    out = compute_claim_citation_rate([run])
+    assert out["cited_claims"] == 1
+    assert out["fabricated_citations"] == 0

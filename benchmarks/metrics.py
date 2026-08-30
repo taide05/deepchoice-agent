@@ -432,7 +432,17 @@ def compute_claim_grounding_rate(report: str) -> dict[str, Any]:
 # Quality Metric 3b: Claim Citation Rate (precise [Source: title] coverage)
 # ---------------------------------------------------------------------------
 
-_SOURCE_CITE_RE = re.compile(r'\[Source:\s*([^\]]+)\]', re.IGNORECASE)
+def _extract_source_titles(claim: str) -> list[str]:
+    """Extract all [Source: title] citation titles from a claim, handling
+    multiple sources per bracket (comma/semicolon-separated) and nested
+    brackets in titles (e.g. [Source: ... [2026] ...])."""
+    parts = re.split(r'Source:\s*', claim, flags=re.IGNORECASE)[1:]
+    titles = []
+    for part in parts:
+        t = re.split(r'[,;\[\]]', part)[0].strip()
+        if t:
+            titles.append(t)
+    return titles
 
 
 def _normalize_title(s: str) -> str:
@@ -495,13 +505,11 @@ def compute_claim_citation_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
         true_titles = _collect_true_titles(run)
         for claim in _extract_claims(fr):
             total_claims += 1
-            m = _SOURCE_CITE_RE.search(claim)
-            if not m:
-                continue
-            if _normalize_title(m.group(1)) in true_titles:
+            titles = _extract_source_titles(claim)
+            real = [t for t in titles if _normalize_title(t) in true_titles]
+            fabricated_citations += len(titles) - len(real)
+            if real:
                 cited_claims += 1
-            else:
-                fabricated_citations += 1
 
     rate = cited_claims / total_claims if total_claims > 0 else 0.0
     return {
