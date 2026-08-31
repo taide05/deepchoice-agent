@@ -702,7 +702,8 @@
     "acceptable_winners": [
       "apollo",
       "hasura",
-      "graphql-yoga"
+      "graphql-yoga",
+      "graphql mesh"
     ],
     "ground_truth_notes": "Federation gateways or an instant-GraphQL layer are the two mainstream routes; both valid.",
     "must_find_sources": [
@@ -860,7 +861,8 @@
       "rq",
       "dramatiq",
       "google cloud tasks",
-      "aws step functions"
+      "aws step functions",
+      "apscheduler"
     ],
     "ground_truth_notes": "Any lightweight Python task queue fits; broker requirements differ slightly.",
     "must_find_sources": [
@@ -2189,7 +2191,8 @@
       "docling",
       "markitdown",
       "llamaindex",
-      "llamaparse"
+      "llamaparse",
+      "pymupdf"
     ],
     "ground_truth_notes": "Document parsing libraries with different strengths; any is acceptable for an indexing pipeline.",
     "must_find_sources": [
@@ -2398,7 +2401,8 @@
       "jenkins",
       "harness",
       "circleci",
-      "vercel"
+      "vercel",
+      "github actions"
     ],
     "ground_truth_notes": "Any mainstream CI platform supports preview environments with plugins.",
     "must_find_sources": [
@@ -6031,7 +6035,8 @@
       "argo cd",
       "helm",
       "kustomize",
-      "flux"
+      "flux",
+      "argocd"
     ],
     "ground_truth_notes": "GitOps and declarative delivery tools for Kubernetes all qualify.",
     "must_find_sources": [
