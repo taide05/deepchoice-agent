@@ -4972,7 +4972,8 @@
       "strapi",
       "sanity",
       "payload",
-      "contentful"
+      "contentful",
+      "kontent.ai"
     ],
     "ground_truth_notes": "Open-source headless CMS platforms with content modeling all qualify.",
     "must_find_sources": [
