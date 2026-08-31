@@ -3520,7 +3520,7 @@
   },
   {
     "id": "TC-0006-v6",
-    "query": "LlamaIndex vs LangChain for building a RAG application as a solo developer for an enterprise team (real-time processing required, p99 latency under 50ms)",
+    "query": "LlamaIndex vs LangChain for building a RAG application for an enterprise team (real-time processing required, p99 latency under 50ms)",
     "category": "AI/Agent Frameworks",
     "subdomain": "rag_frameworks",
     "scene": "enterprise",
@@ -3596,7 +3596,7 @@
   },
   {
     "id": "TC-0007-v7",
-    "query": "Redis vs Memcached for caching in a mid-size team backend for a solo developer (must scale to 10k concurrent users within 6 months)",
+    "query": "Redis vs Memcached for caching backend for a solo developer (must scale to 10k concurrent users within 6 months)",
     "category": "Infrastructure",
     "subdomain": "caching",
     "scene": "solo",
@@ -3678,7 +3678,7 @@
   },
   {
     "id": "TC-0008-v8",
-    "query": "gRPC vs REST for internal microservice communication in an enterprise for a team (offline-first capability, intermittent connectivity expected)",
+    "query": "gRPC vs REST for internal microservice communication for a team (offline-first capability, intermittent connectivity expected)",
     "category": "Backend Frameworks & API",
     "subdomain": "api_paradigms",
     "scene": "team",
@@ -3842,7 +3842,7 @@
   },
   {
     "id": "TC-0013-v13",
-    "query": "Celery vs RabbitMQ for async task processing in a Python backend team for a solo developer (team of 3 junior developers, ease of use critical)",
+    "query": "Celery vs RabbitMQ for async task processing for a solo developer (team of 3 junior developers, ease of use critical)",
     "category": "Backend Frameworks & API",
     "subdomain": "task_queues",
     "scene": "solo",
@@ -3918,7 +3918,7 @@
   },
   {
     "id": "TC-0015-v15",
-    "query": "Streamlit vs Gradio for building an ML model demo as a solo developer for an enterprise team (enterprise with SOC2 compliance, stability over features)",
+    "query": "Streamlit vs Gradio for building an ML model demo for an enterprise team (enterprise with SOC2 compliance, stability over features)",
     "category": "AI/Agent Frameworks",
     "subdomain": "rag_frameworks",
     "scene": "enterprise",
@@ -4007,7 +4007,7 @@
   },
   {
     "id": "TC-0016-v16",
-    "query": "LangChain vs Semantic Kernel for enterprise AI application with compliance requirements for a solo developer (real-time processing required, p99 latency under 50ms)",
+    "query": "LangChain vs Semantic Kernel for AI application with compliance requirements for a solo developer (real-time processing required, p99 latency under 50ms)",
     "category": "AI/Agent Frameworks",
     "subdomain": "llm_invocation",
     "scene": "solo",
@@ -4845,7 +4845,7 @@
   },
   {
     "id": "TC-0031-v31",
-    "query": "Elasticsearch vs Meilisearch for full-text search in a mid-size SaaS for a solo developer (budget under $500/month, open-source preferred)",
+    "query": "Elasticsearch vs Meilisearch for full-text search for a solo developer (budget under $500/month, open-source preferred)",
     "category": "Infrastructure",
     "subdomain": "search_engines",
     "scene": "solo",
@@ -4919,7 +4919,7 @@
   },
   {
     "id": "TC-0033-v33",
-    "query": "Terraform vs Pulumi for infrastructure as code in a DevOps team for an enterprise team (team of 3 junior developers, ease of use critical)",
+    "query": "Terraform vs Pulumi for infrastructure as code for an enterprise team (team of 3 junior developers, ease of use critical)",
     "category": "Deployment & Operations",
     "subdomain": "iac",
     "scene": "enterprise",
@@ -5891,7 +5891,7 @@
   },
   {
     "id": "TC-0001-v51",
-    "query": "LangGraph vs CrewAI for building AI agents as a solo developer for an enterprise team (budget under $500/month, open-source preferred)",
+    "query": "LangGraph vs CrewAI for building AI agents for an enterprise team (budget under $500/month, open-source preferred)",
     "category": "AI/Agent Frameworks",
     "subdomain": "agent_orchestration",
     "scene": "enterprise",
@@ -5977,7 +5977,7 @@
   },
   {
     "id": "TC-0002-v52",
-    "query": "FastAPI vs Flask for REST API in a mid-size team for a solo developer (must integrate with existing Python microservices stack)",
+    "query": "FastAPI vs Flask for REST API for a solo developer (must integrate with existing Python microservices stack)",
     "category": "Backend Frameworks & API",
     "subdomain": "web_frameworks",
     "scene": "solo",
@@ -6064,7 +6064,7 @@
   },
   {
     "id": "TC-0003-v53",
-    "query": "PostgreSQL vs MySQL for enterprise financial data for a team (team of 3 junior developers, ease of use critical)",
+    "query": "PostgreSQL vs MySQL for financial data for a team (team of 3 junior developers, ease of use critical)",
     "category": "Infrastructure",
     "subdomain": "relational_db",
     "scene": "team",
@@ -6221,7 +6221,7 @@
   },
   {
     "id": "TC-0005-v55",
-    "query": "Kubernetes vs Docker Swarm for container orchestration in a team environment for a solo developer (enterprise with SOC2 compliance, stability over features)",
+    "query": "Kubernetes vs Docker Swarm for container orchestration for a solo developer (enterprise with SOC2 compliance, stability over features)",
     "category": "Deployment & Operations",
     "subdomain": "container_orchestration",
     "scene": "solo",
@@ -6305,7 +6305,7 @@
   },
   {
     "id": "TC-0006-v56",
-    "query": "LlamaIndex vs LangChain for building a RAG application as a solo developer for a team (real-time processing required, p99 latency under 50ms)",
+    "query": "LlamaIndex vs LangChain for building a RAG application for a team (real-time processing required, p99 latency under 50ms)",
     "category": "AI/Agent Frameworks",
     "subdomain": "rag_frameworks",
     "scene": "team",
@@ -6386,7 +6386,7 @@
   },
   {
     "id": "TC-0007-v57",
-    "query": "Redis vs Memcached for caching in a mid-size team backend for an enterprise team (must scale to 10k concurrent users within 6 months)",
+    "query": "Redis vs Memcached for caching backend for an enterprise team (must scale to 10k concurrent users within 6 months)",
     "category": "Infrastructure",
     "subdomain": "caching",
     "scene": "enterprise",
@@ -6469,7 +6469,7 @@
   },
   {
     "id": "TC-0008-v58",
-    "query": "gRPC vs REST for internal microservice communication in an enterprise for a solo developer (offline-first capability, intermittent connectivity expected)",
+    "query": "gRPC vs REST for internal microservice communication for a solo developer (offline-first capability, intermittent connectivity expected)",
     "category": "Backend Frameworks & API",
     "subdomain": "api_paradigms",
     "scene": "solo",
@@ -6695,7 +6695,7 @@
   },
   {
     "id": "TC-0012-v62",
-    "query": "Weaviate vs Pinecone for vector search in an enterprise RAG system for a team (must integrate with existing Python microservices stack)",
+    "query": "Weaviate vs Pinecone for vector search for a RAG system for a team (must integrate with existing Python microservices stack)",
     "category": "Models & Data",
     "subdomain": "vector_databases",
     "scene": "team",
@@ -6778,7 +6778,7 @@
   },
   {
     "id": "TC-0013-v63",
-    "query": "Celery vs RabbitMQ for async task processing in a Python backend team for an enterprise team (team of 3 junior developers, ease of use critical)",
+    "query": "Celery vs RabbitMQ for async task processing for an enterprise team (team of 3 junior developers, ease of use critical)",
     "category": "Backend Frameworks & API",
     "subdomain": "task_queues",
     "scene": "enterprise",
@@ -6859,7 +6859,7 @@
   },
   {
     "id": "TC-0014-v64",
-    "query": "GitHub Actions vs Jenkins for CI/CD in a mid-size development team for a solo developer (startup moving fast, quick setup and prototyping speed matter)",
+    "query": "GitHub Actions vs Jenkins for CI/CD for a solo developer (startup moving fast, quick setup and prototyping speed matter)",
     "category": "Deployment & Operations",
     "subdomain": "cicd",
     "scene": "solo",
@@ -6933,7 +6933,7 @@
   },
   {
     "id": "TC-0015-v65",
-    "query": "Streamlit vs Gradio for building an ML model demo as a solo developer for a team (enterprise with SOC2 compliance, stability over features)",
+    "query": "Streamlit vs Gradio for building an ML model demo for a team (enterprise with SOC2 compliance, stability over features)",
     "category": "AI/Agent Frameworks",
     "subdomain": "rag_frameworks",
     "scene": "team",
