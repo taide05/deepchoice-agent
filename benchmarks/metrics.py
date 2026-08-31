@@ -102,9 +102,11 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
                     return result
 
     # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer).
-    # Parenthesized suffixes like "Firebase Cloud Messaging (FCM)" are allowed.
+    # Parenthesized suffixes like "Firebase Cloud Messaging (FCM)" are allowed;
+    # the tech-name char class includes "/" so "Swagger/OpenAPI" matches
+    # (repo-path winners were already sanitized by _validate_winner).
     m = re.search(
-        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.]+(?:\s[A-Za-z0-9+\-_.]+){0,2})(?:\s*\([^)]*\))?\*\*',
+        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.\/]+(?:\s[A-Za-z0-9+\-_.\/]+){0,2})(?:\s*\([^)]*\))?\*\*',
         report,
     )
     if m:

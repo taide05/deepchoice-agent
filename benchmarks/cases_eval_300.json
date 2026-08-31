@@ -7537,7 +7537,8 @@
       "evidently",
       "mlflow",
       "datadog",
-      "sagemaker model monitor"
+      "sagemaker model monitor",
+      "amazon sagemaker"
     ],
     "ground_truth_notes": "At enterprise scale the solution must provide multi-model dashboards, role-based access, audit trails and automated drift detection. Managed platforms (Arize, Fiddler, WhyLabs, SageMaker Model Monitor) and self-hosted stacks (Evidently + Grafana, MLflow) are all acceptable. The key requirement is governance plus monitoring, not just raw metrics.",
     "_idx": 203
@@ -7788,7 +7789,8 @@
       "qdrant cloud",
       "elasticsearch cloud",
       "amazon opensearch serverless",
-      "astra db"
+      "astra db",
+      "mongodb atlas"
     ],
     "ground_truth_notes": "The team explicitly wants zero-ops, serverless scaling and does not want to manage infrastructure. All major managed vector databases (Pinecone, Zilliz/Milvus Cloud, Weaviate Cloud, Qdrant Cloud, Elastic Cloud, Amazon OpenSearch Serverless, DataStax Astra) satisfy this. Self-hosted options are not appropriate for this requirement.",
     "_idx": 211
@@ -8166,7 +8168,8 @@
       "prism",
       "mockoon",
       "apimatic",
-      "microcks"
+      "microcks",
+      "swagger/openapi"
     ],
     "ground_truth_notes": "The team needs a contract-first mock that both frontend and backend develop against simultaneously. Postman, Stoplight, WireMock, Prism, Mockoon, APIMatic and Microcks all generate mocks from OpenAPI specs and support parallel development. The mock server plus shared API contract is the core requirement.",
     "_idx": 223
@@ -8292,7 +8295,8 @@
       "azure iot edge",
       "docker",
       "red hat device edge",
-      "zededa"
+      "zededa",
+      "kubeedge"
     ],
     "ground_truth_notes": "Edge fleet management requires OTA updates, rollback and remote management at scale across many sites. K3s (lightweight Kubernetes), Balena, AWS IoT Greengrass, Azure IoT Edge, Red Hat Device Edge and ZEDEDA all provide edge container orchestration, most as managed SaaS. The fleet-update capability is the non-negotiable requirement.",
     "_idx": 227
@@ -8543,7 +8547,8 @@
       "portkey",
       "openllmetry",
       "datadog",
-      "lunary"
+      "lunary",
+      "traceloop"
     ],
     "ground_truth_notes": "The team needs per-feature token and cost tracking with budgets and alerts. Langfuse, LangSmith, Helicone, Portkey, OpenLLMetry, Datadog LLM Observability and Lunary all provide LLM cost observability, most as managed SaaS. Token/cost accounting with alerting is the core requirement.",
     "_idx": 235
@@ -8669,7 +8674,8 @@
       "dbt",
       "openmetadata",
       "collibra",
-      "atlan"
+      "atlan",
+      "datahub"
     ],
     "ground_truth_notes": "The team needs column-level lineage and alerts when a table feeding a dashboard goes stale. Monte Carlo, Datafold, Elementary, OpenMetadata, Collibra and Atlan all provide lineage and freshness observability, most as managed platforms. Lineage plus freshness alerting is the non-negotiable requirement.",
     "_idx": 239
@@ -9047,7 +9053,8 @@
       "firebase test lab",
       "maestro",
       "appium",
-      "kobiton"
+      "kobiton",
+      "aws device farm"
     ],
     "ground_truth_notes": "The team needs real-device test runs across iOS and Android without owning hardware. BrowserStack, LambdaTest, Sauce Labs, Firebase Test Lab and Kobiton are managed device clouds, while Maestro and Appium are the open-source frameworks that run on them. Managed real-device execution is the requirement.",
     "_idx": 251
@@ -9362,7 +9369,8 @@
       "confluence",
       "notion",
       "gitbook",
-      "docusaurus"
+      "docusaurus",
+      "wiki.js"
     ],
     "ground_truth_notes": "The user needs a permissioned internal wiki with good full-text search that they can run themselves. Outline, Wiki.js and BookStack are self-hosted open-source; Confluence, Notion and GitBook are managed alternatives, and Docusaurus is a lighter docs option. A searchable, permissioned knowledge store is the core requirement.",
     "_idx": 261
@@ -9614,7 +9622,8 @@
       "materialize",
       "risingwave",
       "spark structured streaming",
-      "aws kinesis data analytics"
+      "aws kinesis data analytics",
+      "confluent"
     ],
     "ground_truth_notes": "The team needs streaming SQL over events with low latency for fraud and anomaly rules. Flink, Kafka Streams, ksqlDB, Materialize, RisingWave, Spark Structured Streaming and AWS Kinesis Data Analytics all support this, with Materialize, RisingWave and Kinesis as managed services. Streaming SQL with low latency is the requirement.",
     "_idx": 269
@@ -10055,7 +10064,8 @@
       "datadog apm",
       "new relic",
       "honeycomb",
-      "signoz"
+      "signoz",
+      "opentelemetry"
     ],
     "ground_truth_notes": "The team needs end-to-end traces to find which span causes slow requests. Jaeger, Grafana Tempo, Zipkin and SigNoz are open-source, while Datadog APM, New Relic and Honeycomb are managed, and all support OpenTelemetry. End-to-end distributed tracing is the core requirement.",
     "_idx": 283
@@ -10370,7 +10380,8 @@
       "celery beat",
       "airflow",
       "github actions schedule",
-      "cron"
+      "cron",
+      "apscheduler"
     ],
     "ground_truth_notes": "The user needs reliable recurring scheduling with timezone support, retries and alerts on failure. Temporal, AWS EventBridge Scheduler, Google Cloud Scheduler, Celery Beat, Airflow, GitHub Actions scheduled workflows and plain cron all satisfy this, with the first several as managed services. Reliable scheduled execution with failure alerting is the requirement.",
     "_idx": 293

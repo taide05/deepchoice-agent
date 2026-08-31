@@ -92,6 +92,12 @@ def test_evidence_titles_used_for_anti_fabrication():
     assert out["fabricated_citations"] == 0
 
 
+def test_extract_winner_with_slash():
+    from benchmarks.metrics import extract_top_recommendation
+    report = "**Winner: Swagger/OpenAPI**\nSome text."
+    assert extract_top_recommendation(report) == "swagger/openapi"
+
+
 def test_split_sentences_does_not_split_after_vs():
     # Regression: "vs." inside a [Source: ...] title must not split the claim,
     # otherwise the title is truncated ("MQTT vs.") and misjudged fabricated.
