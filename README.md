@@ -10,7 +10,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 
 ## 核心特性
 
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（91 条种子映射 + 运行时自更新），`asyncio.gather` 并发跑，单路挂了不炸全局
+- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（222 条：91 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑，单路挂了不炸全局
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先让 flash 模型仲裁所有矛盾对（快），再挑出最模糊的一对交给 pro 模型深度重裁（准）。只给一对走 pro，费用可控
@@ -114,33 +114,35 @@ docker run -p 8000:8000 --env-file .env \
 
 **信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
 
-**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。200 case 实测，冲突检测率 56.4%——其中 keyword 预筛命中 44 对（确定性），LLM judge 复核 31 对（judge 有随机性，两次跑 56.4-58.6% 区间）。下一步优化方向是预筛召回而非仲裁质量。
+**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。300 case 终测冲突检测率 28.8%——其中 keyword 预筛部分（确定性）低于 200 case 的 56.4%，主因是新增 case 的 known_contradictions 标注不足（检测靶子少），下一步优化方向是预筛召回而非仲裁质量。
 
-## 量化指标（200 case 混合基准，2026-08-22 采集，2026-08-22 V 归档）
+## 量化指标（300 case 混合基准，2026-08-31 终测）
 
-100 对比场景（TC，50 基座 + 50 场景变体，共享人工标注）+ 100 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。
+150 对比场景（TC）+ 150 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。300 case 按 TC/OS 交错重排、拆 3 批跑（每批 50 TC + 50 OS），超时/变体补跑后合并。
 
 | 指标 | 值 | 说明 |
 |------|-----|------|
-| Top-1 准确率 | **90.9%**（TC 85.1% n=87 / OS 96.0% n=100） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC 为 context_dependent 标注——无单一正确答案，按设计不计入 Top-1） |
-| 任务成功率 | **100%**（200/200） | 零失败——str.get bug 已根除（`llm.py` 兜底），0 超时 |
-| 声明溯源率 | **85.1%** | 声明可追溯到具体来源的比例 |
-| 信源召回率 | **66.2%** | github_repo 73.0% / official_doc 65.6% / academic 100% / community 100% / package_registry 50% |
-| official_doc 召回率 | **65.6%**（279/425） | 自更新映射生效（历史 20.7%→58.0%→65.6%） |
-| 端到端延迟 P50 | **255.6s** | 中位数——约 4.3 分钟完成一次技术选型研究 |
-| 端到端延迟 P95 | **312.2s** | 95 分位——扫描限制 15 对 + 证据收集优化 + prompt 缓存 |
-| 报告质量 A 级 | **100%** | 5 项确定性质检（不调 LLM），200/200 满分 |
+| Top-1 准确率 | **92.0%**（287 可判定） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC 为 context_dependent 标注——无单一正确答案，按设计不计入 Top-1） |
+| 任务成功率 | **100%**（300/300） | 零失败——str.get bug 已根除（`llm.py` 兜底）+ 超时补跑 |
+| 声明溯源率 | **93.0%** | 精确口径（claim_citation_rate）：每条事实声明带 `[Source: title]` 且 title 真实存在于证据链；**伪造引用 0**（后置校验剔除幻觉引用） |
+| 信源召回率 | **49.6%** | official_doc 61.0% / package_registry 62.5% / github_repo 8.8% / academic 0%（新增长尾 case 的 GitHub/学术信源检索偏弱，见已知局限） |
+| official_doc 召回率 | **61.0%**（322/528） | 官方文档直连 222 条（91 种子 + 131 运行时自学习入库，2026-08-31 种子化） |
+| 端到端延迟 P50 | **342.1s** | 中位数——约 5.7 分钟完成一次技术选型研究 |
+| 端到端延迟 P95 | **445.3s** | 95 分位——480s 预算内 |
+| 报告质量 A 级 | **99%**（297/300） | 5 项确定性质检（不调 LLM） |
 
-> **数据来源**：以上数字来自 200 case 混合基准（`benchmarks/cases_eval_200.json` = 100 TC + 100 OS），采集过程因 API 余额中断分三段完成，由 `benchmarks/merge_checkpoints.py` 合并（200/200 覆盖校验 + 0 错误）。`report_quality.py` 做确定性质检（非 LLM-as-Judge）。2026-08-22 V 归档复核；2026-08-27 S 终审复核（全量测试 197 passed + 1 skipped；retry 指标为 not_measured，管线不采集 pre-retry 快照）。
+> **数据来源**：以上数字来自 300 case 混合基准（`benchmarks/cases_eval_300.json` = 150 TC + 150 OS）。采集分 3 批（`--batch 1/2/3 --batch-size 100`），超时/变体集中补跑（`cases_retry_all.json`）后按 case_id 替换合并。评测覆盖经 3 轮审计修正（case 标注缺陷 T1/T2/T3 修正、OS acceptable 补齐托管维度、变体 query 双场景矛盾清除）。**诚实口径**：Top-1 92.0% 是修正评测覆盖后的真实值——剩余 miss 为真·两难（标注无共识，按设计保留）、模型主流偏差、以及模型真错（详见 case 审计记录）。2026-08-31 终测归档；全量测试 **227 passed + 1 skipped**。
 
 ```bash
-# 重现 200 case 混合基准（或分案例文件分批跑后合并）
+# 重现 300 case 混合基准（3 批 + 合并）
 cd D:\deepchoice-agent
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_200.json --concurrency 4
-python -m benchmarks.merge_checkpoints   # 已有 checkpoint 时合并出最终指标
+python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 1 --batch-size 100 --concurrency 12
+python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 2 --batch-size 100 --concurrency 12
+python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 3 --batch-size 100 --concurrency 12
+# 合并（自写脚本：runs-batch01/02/03 + 补跑 runs-full 按 case_id 替换，不用内置 merge）
 ```
 
-**已知局限**：端到端延迟较高（P50 255.6s/P95 312.2s），主要来自矛盾检测、仲裁和证据收集——这是深度研究的代价，480s 预算内。冲突检测率 56.4% 中 keyword 预筛部分（44/133）是确定性的，LLM 复核部分有随机性——预筛召回是最直接的优化杠杆。Tavily 月配额仍是外部约束，但密钥池（多 key 轮换 + 耗尽池持久化 + 28 天自动重探）已把单 key 耗尽从故障降级为吞吐波动。
+**已知局限**：端到端延迟较高（P50 342.1s/P95 445.3s），主要来自矛盾检测、仲裁和证据收集——这是深度研究的代价，480s 预算内。300 case 终测暴露两个信号：①**github_repo 召回 8.8%**（12/136）——新增长尾 case 的 GitHub 信源检索偏弱（对比 200 case 的 73.0%）；②**冲突检测率 28.8%**——新增 case 的 known_contradictions 标注不足，预筛召回是杠杆。Tavily 月配额仍是外部约束，但密钥池（多 key 轮换 + 耗尽池持久化 + 28 天自动重探）已把单 key 耗尽从故障降级为吞吐波动。
 
 ## 技术栈
 
