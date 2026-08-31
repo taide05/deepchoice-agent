@@ -36,8 +36,7 @@ tests/test_cases/generated_cases.json
 # SDD workspace (superpowers plan ledger/briefs)
 .superpowers/
 
-# Self-updating official docs cache (runtime-learned)
-learned_docs.json
+# Official-docs mapping is now seeded in-repo (learned_docs.json committed)
 
 # Tavily exhausted-key state (SHA256 hashes only, still never committed)
 tavily_key_state.json

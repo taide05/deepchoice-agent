@@ -1,0 +1,657 @@
+{
+  "yjs": {
+    "url": "https://docs.yjs.dev",
+    "title": "yjs — Official Documentation",
+    "via": "llm"
+  },
+  "adminjs": {
+    "url": "https://docs.adminjs.co",
+    "title": "adminjs — Official Documentation",
+    "via": "llm"
+  },
+  "automerge": {
+    "url": "https://automerge.org/docs/",
+    "title": "automerge — Official Documentation",
+    "via": "llm"
+  },
+  "astro": {
+    "url": "https://docs.astro.build",
+    "title": "astro — Official Documentation",
+    "via": "llm"
+  },
+  "shopify": {
+    "url": "https://shopify.dev/docs",
+    "title": "shopify — Official Documentation",
+    "via": "llm"
+  },
+  "appsmith": {
+    "url": "https://docs.appsmith.com/",
+    "title": "appsmith — Official Documentation",
+    "via": "llm"
+  },
+  "storybook": {
+    "url": "https://storybook.js.org/docs",
+    "title": "storybook — Official Documentation",
+    "via": "llm"
+  },
+  "firebase": {
+    "url": "https://firebase.google.com/docs/firestore/solutions/presence",
+    "title": "Build presence in Cloud Firestore  |  Firebase",
+    "via": "harvest:tavily"
+  },
+  "dagster": {
+    "url": "https://docs.dagster.io",
+    "title": "dagster — Official Documentation",
+    "via": "llm"
+  },
+  "iceberg": {
+    "url": "https://iceberg.apache.org/",
+    "title": "iceberg — Official Documentation",
+    "via": "llm"
+  },
+  "feast": {
+    "url": "https://docs.feast.dev/",
+    "title": "feast — Official Documentation",
+    "via": "llm"
+  },
+  "hive": {
+    "url": "https://hive.apache.org/",
+    "title": "hive — Official Documentation",
+    "via": "llm"
+  },
+  "vercel": {
+    "url": "https://vercel.com/docs",
+    "title": "vercel — Official Documentation",
+    "via": "llm"
+  },
+  "flutter": {
+    "url": "https://docs.flutter.dev/",
+    "title": "flutter — Official Documentation",
+    "via": "llm"
+  },
+  "keycloak": {
+    "url": "https://www.keycloak.org/documentation",
+    "title": "keycloak — Official Documentation",
+    "via": "llm"
+  },
+  "stripe": {
+    "url": "https://docs.stripe.com",
+    "title": "stripe — Official Documentation",
+    "via": "llm"
+  },
+  "lua": {
+    "url": "https://www.lua.org/manual/5.4/",
+    "title": "lua — Official Documentation",
+    "via": "llm"
+  },
+  "github": {
+    "url": "https://docs.github.com/en/actions",
+    "title": "GitHub Actions — Official Documentation",
+    "via": "harvest:official"
+  },
+  "asgi": {
+    "url": "https://asgi.readthedocs.io/en/latest/",
+    "title": "asgi — Official Documentation",
+    "via": "llm"
+  },
+  "pip": {
+    "url": "https://pip.pypa.io/en/stable/",
+    "title": "pip — Official Documentation",
+    "via": "llm"
+  },
+  "aws": {
+    "url": "https://docs.aws.amazon.com/",
+    "title": "aws — Official Documentation",
+    "via": "llm"
+  },
+  "vector": {
+    "url": "https://vector.dev/docs/",
+    "title": "vector — Official Documentation",
+    "via": "llm"
+  },
+  "frontmatter": {
+    "url": "https://frontmatter.codes/docs/content-creation/fields",
+    "title": "Fields | Front Matter",
+    "via": "harvest:tavily"
+  },
+  "n8n": {
+    "url": "https://docs.n8n.io",
+    "title": "n8n — Official Documentation",
+    "via": "llm"
+  },
+  "pandas": {
+    "url": "https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html",
+    "title": "pandas.read_csv — pandas 3.0.5 documentation - PyData |",
+    "via": "harvest:tavily"
+  },
+  "clickhouse": {
+    "url": "https://clickhouse.com/docs",
+    "title": "clickhouse — Official Documentation",
+    "via": "llm"
+  },
+  "sqlmesh": {
+    "url": "https://sqlmesh.readthedocs.io/en/stable/comparisons",
+    "title": "Comparisons - SQLMesh",
+    "via": "harvest:tavily"
+  },
+  "langfuse": {
+    "url": "https://langfuse.com/docs",
+    "title": "langfuse — Official Documentation",
+    "via": "llm"
+  },
+  "mlflow": {
+    "url": "https://mlflow.org/docs/latest/index.html",
+    "title": "mlflow — Official Documentation",
+    "via": "llm"
+  },
+  "railway": {
+    "url": "https://docs.railway.com/guides/supabase",
+    "title": "Self-host Supabase with Postgres, Auth, and Storage | Railway Guides",
+    "via": "harvest:tavily"
+  },
+  "backstage": {
+    "url": "https://backstage.io/docs/features/software-catalog",
+    "title": "Backstage Software Catalog | Backstage Software Catalog and Developer Platform",
+    "via": "harvest:tavily"
+  },
+  "tauri": {
+    "url": "https://v2.tauri.app/",
+    "title": "tauri — Official Documentation",
+    "via": "llm"
+  },
+  "flagsmith": {
+    "url": "https://docs.flagsmith.com/deployment-self-hosting/scaling-and-performance/sizing-and-scaling",
+    "title": "Sizing and Scaling | Flagsmith Docs",
+    "via": "harvest:tavily"
+  },
+  "launchdarkly": {
+    "url": "https://launchdarkly.com/docs/home/account/teams",
+    "title": "Teams | LaunchDarkly | Documentation",
+    "via": "harvest:tavily"
+  },
+  "turborepo": {
+    "url": "https://turborepo.dev/docs/guides/ci-vendors/github-actions",
+    "title": "GitHub Actions",
+    "via": "harvest:tavily"
+  },
+  "gateway": {
+    "url": "https://gateway.envoyproxy.io/docs/tasks/traffic/global-rate-limit",
+    "title": "Global Rate Limit | Envoy Gateway",
+    "via": "harvest:tavily"
+  },
+  "auth0": {
+    "url": "https://auth0.com/docs/authenticate/enterprise-connections",
+    "title": "Auth0 Enterprise Connections - Auth0 Docs",
+    "via": "harvest:tavily"
+  },
+  "metabase": {
+    "url": "https://www.metabase.com/docs/latest/data-modeling/semantic-types",
+    "title": "Data types and semantic types | Metabase Documentation",
+    "via": "harvest:tavily"
+  },
+  "amazon": {
+    "url": "https://docs.aws.amazon.com/ses/latest/dg/configure-sns-notifications.html",
+    "title": "Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service",
+    "via": "harvest:tavily"
+  },
+  "chargebee": {
+    "url": "https://www.chargebee.com/docs/billing/2.0/site-configuration/webhook_settings",
+    "title": "Webhook Settings - Chargebee Docs",
+    "via": "harvest:tavily"
+  },
+  "temporal": {
+    "url": "https://docs.temporal.io/develop/go/workflows/schedules",
+    "title": "Schedules - Go SDK | Temporal Platform Documentation",
+    "via": "harvest:tavily"
+  },
+  "sentry": {
+    "url": "https://docs.sentry.io",
+    "title": "sentry — Official Documentation",
+    "via": "llm"
+  },
+  "channels": {
+    "url": "https://channels.readthedocs.io/en/latest/",
+    "title": "channels — Official Documentation",
+    "via": "llm"
+  },
+  "graphql": {
+    "url": "https://graphql.org/learn/",
+    "title": "graphql — Official Documentation",
+    "via": "llm"
+  },
+  "statsig": {
+    "url": "https://docs.statsig.com/statsig-warehouse-native/configuration/metric-examples",
+    "title": "Metric Examples | Statsig Docs",
+    "via": "harvest:tavily"
+  },
+  "onesignal": {
+    "url": "https://documentation.onesignal.com/docs/en/deep-linking",
+    "title": "Deep linking - OneSignal",
+    "via": "harvest:tavily"
+  },
+  "cursor": {
+    "url": "https://cursor.com/docs",
+    "title": "cursor — Official Documentation",
+    "via": "llm"
+  },
+  "trpc": {
+    "url": "https://trpc.io/docs",
+    "title": "trpc — Official Documentation",
+    "via": "llm"
+  },
+  "docusaurus": {
+    "url": "https://docusaurus.io/docs",
+    "title": "docusaurus — Official Documentation",
+    "via": "llm"
+  },
+  "requests": {
+    "url": "https://requests.readthedocs.io/en/latest/",
+    "title": "requests — Official Documentation",
+    "via": "llm"
+  },
+  "watermelondb": {
+    "url": "https://watermelondb.dev/docs/Implementation/SyncImpl",
+    "title": "Sync implementation | WatermelonDB",
+    "via": "harvest:tavily"
+  },
+  "promptfoo": {
+    "url": "https://www.promptfoo.dev/docs/configuration/expected-outputs/model-graded",
+    "title": "Model-graded metrics | Promptfoo",
+    "via": "harvest:tavily"
+  },
+  "nestjs": {
+    "url": "https://docs.nestjs.com",
+    "title": "nestjs — Official Documentation",
+    "via": "llm"
+  },
+  "snyk": {
+    "url": "https://docs.snyk.io/",
+    "title": "snyk — Official Documentation",
+    "via": "llm"
+  },
+  "owasp": {
+    "url": "https://owasp.org/",
+    "title": "owasp — Official Documentation",
+    "via": "llm"
+  },
+  "ghost": {
+    "url": "https://docs.ghost.org/",
+    "title": "ghost — Official Documentation",
+    "via": "llm"
+  },
+  "dash": {
+    "url": "https://dash.plotly.com/",
+    "title": "dash — Official Documentation",
+    "via": "llm"
+  },
+  "google": {
+    "url": "https://firebase.google.com/docs/firestore/solutions/presence",
+    "title": "Build presence in Cloud Firestore  |  Firebase",
+    "via": "harvest:official"
+  },
+  "supabase": {
+    "url": "https://supabase.com/docs/guides/auth/auth-email-templates",
+    "title": "Email Templates | Supabase Docs",
+    "via": "harvest:tavily"
+  },
+  "camunda": {
+    "url": "https://docs.camunda.io/docs/reference/announcements-release-notes/880/880-release-notes",
+    "title": "8.8 Release notes | Camunda 8 Docs",
+    "via": "harvest:tavily"
+  },
+  "istio": {
+    "url": "https://istio.io/latest/docs/",
+    "title": "istio — Official Documentation",
+    "via": "llm"
+  },
+  "claude": {
+    "url": "https://platform.claude.com/docs/en/build-with-claude/context-windows",
+    "title": "Context windows - Claude Platform Docs",
+    "via": "harvest:tavily"
+  },
+  "pouchdb": {
+    "url": "https://pouchdb.com/api.html",
+    "title": "pouchdb — Official Documentation",
+    "via": "llm"
+  },
+  "drools": {
+    "url": "https://docs.drools.org/8.38.0.Final/drools-docs/docs-website/drools/rule-engine/index.html",
+    "title": "Drools rule engine :: Drools Documentation",
+    "via": "harvest:tavily"
+  },
+  "crossfilter": {
+    "url": "https://crossfilter.github.io/crossfilter/",
+    "title": "crossfilter — Official Documentation",
+    "via": "llm"
+  },
+  "panel": {
+    "url": "https://panel.holoviz.org/",
+    "title": "panel — Official Documentation",
+    "via": "llm"
+  },
+  "mqtt": {
+    "url": "https://mqtt.org/mqtt-specification/",
+    "title": "mqtt — Official Documentation",
+    "via": "llm"
+  },
+  "nats": {
+    "url": "https://docs.nats.io/concepts/jetstream",
+    "title": "JetStream - NATS Documentation",
+    "via": "harvest:tavily"
+  },
+  "heroku": {
+    "url": "https://devcenter.heroku.com/",
+    "title": "heroku — Official Documentation",
+    "via": "llm"
+  },
+  "unigram": {
+    "url": "https://unigram.org/",
+    "title": "unigram — Official Documentation",
+    "via": "llm"
+  },
+  "render": {
+    "url": "https://render.com/docs",
+    "title": "render — Official Documentation",
+    "via": "llm"
+  },
+  "notifications": {
+    "url": "https://notifications.spec.whatwg.org/",
+    "title": "notifications — Official Documentation",
+    "via": "llm"
+  },
+  "dexie": {
+    "url": "https://dexie.org/docs/Dexie.js.html",
+    "title": "Dexie.js | Dexie.js Documentation - Offline-First Database | Dexie.js - Offline-First Database for JavaScript",
+    "via": "harvest:tavily"
+  },
+  "swagger": {
+    "url": "https://swagger.io/blog/api-documentation-made-easy-with-openapi-and-swagger",
+    "title": "API Documentation Made Easy with OpenAPI & Swagger",
+    "via": "harvest:tavily"
+  },
+  "retool": {
+    "url": "https://docs.retool.com/",
+    "title": "retool — Official Documentation",
+    "via": "llm"
+  },
+  "liveblocks": {
+    "url": "https://liveblocks.io/docs/guides/how-to-synchronize-your-liveblocks-yjs-document-data-to-a-vercel-postgres-database",
+    "title": "How to synchronize your Liveblocks Yjs document data to a Vercel Postgres database | Liveblocks guide",
+    "via": "harvest:tavily"
+  },
+  "protobuf": {
+    "url": "https://protobuf.dev/",
+    "title": "protobuf — Official Documentation",
+    "via": "llm"
+  },
+  "keras": {
+    "url": "https://keras.io",
+    "title": "keras — Official Documentation",
+    "via": "llm"
+  },
+  "tecton": {
+    "url": "https://docs.tecton.ai/docs/1.0/concepts/tecton-concepts",
+    "title": "Tecton Concepts | Tecton",
+    "via": "harvest:tavily"
+  },
+  "grafana": {
+    "url": "https://grafana.com/docs/grafana/latest/alerting/set-up/configure-alertmanager",
+    "title": "Configure Alertmanagers | Grafana documentation",
+    "via": "harvest:tavily"
+  },
+  "python-docx": {
+    "url": "https://python-docx.readthedocs.io/en/latest/dev/analysis/features/header.html",
+    "title": "Header and Footer — python-docx 1.2.0 documentation",
+    "via": "harvest:tavily"
+  },
+  "systemd": {
+    "url": "https://systemd.io/",
+    "title": "systemd — Official Documentation",
+    "via": "llm"
+  },
+  "clerk": {
+    "url": "https://clerk.com/docs/guides/development/custom-flows/authentication/multi-factor-authentication",
+    "title": "Build a custom sign-in flow with multi-factor authentication (MFA) - Authentication | Clerk Docs",
+    "via": "harvest:tavily"
+  },
+  "refine": {
+    "url": "https://refine.dev/core/docs/data/packages/rest-data-provider",
+    "title": "Rest Data Provider Integration Guide | Best Practices in Refine v5 | Refine",
+    "via": "harvest:tavily"
+  },
+  "linear": {
+    "url": "https://linear.app/docs",
+    "title": "linear — Official Documentation",
+    "via": "llm"
+  },
+  "stomp": {
+    "url": "https://stomp.github.io/",
+    "title": "stomp — Official Documentation",
+    "via": "llm"
+  },
+  "zendesk": {
+    "url": "https://developer.zendesk.com/documentation/",
+    "title": "zendesk — Official Documentation",
+    "via": "llm"
+  },
+  "ceph": {
+    "url": "https://docs.ceph.com/en/reef/rados/operations/erasure-code",
+    "title": "Erasure code — Ceph Documentation",
+    "via": "harvest:tavily"
+  },
+  "couchbase": {
+    "url": "https://docs.couchbase.com/sync-gateway/current/sync/sync-inter-syncgateway-conflict-resolution.html",
+    "title": "Enhanced Conflict Resolution | Couchbase Docs",
+    "via": "harvest:tavily"
+  },
+  "springdoc": {
+    "url": "https://springdoc.org/",
+    "title": "springdoc — Official Documentation",
+    "via": "llm"
+  },
+  "codeql": {
+    "url": "https://codeql.github.com/docs/",
+    "title": "codeql — Official Documentation",
+    "via": "llm"
+  },
+  "redocly": {
+    "url": "https://redocly.com/docs",
+    "title": "redocly — Official Documentation",
+    "via": "llm"
+  },
+  "deepseek": {
+    "url": "https://api-docs.deepseek.com/",
+    "title": "deepseek — Official Documentation",
+    "via": "llm"
+  },
+  "litellm": {
+    "url": "https://docs.litellm.ai/",
+    "title": "litellm — Official Documentation",
+    "via": "llm"
+  },
+  "dspy": {
+    "url": "https://dspy.ai/",
+    "title": "dspy — Official Documentation",
+    "via": "llm"
+  },
+  "tika": {
+    "url": "https://tika.apache.org/",
+    "title": "tika — Official Documentation",
+    "via": "llm"
+  },
+  "pact": {
+    "url": "https://docs.pact.io",
+    "title": "pact — Official Documentation",
+    "via": "llm"
+  },
+  "fastify": {
+    "url": "https://fastify.dev/docs/latest/",
+    "title": "fastify — Official Documentation",
+    "via": "llm"
+  },
+  "kubeedge": {
+    "url": "https://kubeedge.io/docs/",
+    "title": "kubeedge — Official Documentation",
+    "via": "llm"
+  },
+  "openyurt": {
+    "url": "https://openyurt.io/docs",
+    "title": "Introduction | OpenYurt",
+    "via": "harvest:tavily"
+  },
+  "k3s": {
+    "url": "https://docs.k3s.io/installation/requirements",
+    "title": "Requirements | K3s",
+    "via": "harvest:tavily"
+  },
+  "soda": {
+    "url": "https://docs.soda.io/soda-documentation/soda-v3/sodacl-reference/validity-metrics",
+    "title": "Validity metrics | Soda v3 | Documentation",
+    "via": "harvest:tavily"
+  },
+  "datahub": {
+    "url": "https://docs.datahub.com/docs/advanced/monitoring",
+    "title": "Monitoring DataHub",
+    "via": "harvest:tavily"
+  },
+  "duckdb": {
+    "url": "https://duckdb.org/docs/",
+    "title": "duckdb — Official Documentation",
+    "via": "llm"
+  },
+  "autograd": {
+    "url": "https://autograd.readthedocs.io/en/latest/",
+    "title": "autograd — Official Documentation",
+    "via": "llm"
+  },
+  "scikit-learn": {
+    "url": "https://scikit-learn.org/stable/",
+    "title": "scikit-learn — Official Documentation",
+    "via": "llm"
+  },
+  "cassandra": {
+    "url": "https://cassandra.apache.org/doc/latest/",
+    "title": "cassandra — Official Documentation",
+    "via": "llm"
+  },
+  "livekit": {
+    "url": "https://docs.livekit.io/intro/about",
+    "title": "About LiveKit | LiveKit Documentation",
+    "via": "harvest:tavily"
+  },
+  "jetstream": {
+    "url": "https://jetstream.laravel.com",
+    "title": "jetstream — Official Documentation",
+    "via": "llm"
+  },
+  "scylladb": {
+    "url": "https://docs.scylladb.com/",
+    "title": "scylladb — Official Documentation",
+    "via": "llm"
+  },
+  "processing": {
+    "url": "https://processing.org/reference/",
+    "title": "processing — Official Documentation",
+    "via": "llm"
+  },
+  "debezium": {
+    "url": "https://debezium.io/documentation/",
+    "title": "debezium — Official Documentation",
+    "via": "llm"
+  },
+  "etcd": {
+    "url": "https://etcd.io/docs/",
+    "title": "etcd — Official Documentation",
+    "via": "llm"
+  },
+  "traefik": {
+    "url": "https://doc.traefik.io/traefik/",
+    "title": "traefik — Official Documentation",
+    "via": "llm"
+  },
+  "airbyte": {
+    "url": "https://docs.airbyte.com",
+    "title": "airbyte — Official Documentation",
+    "via": "llm"
+  },
+  "salesforce": {
+    "url": "https://developer.salesforce.com/docs",
+    "title": "salesforce — Official Documentation",
+    "via": "llm"
+  },
+  "meltano": {
+    "url": "https://docs.meltano.com/reference/command-line-interface",
+    "title": "Command Line | Meltano Documentation",
+    "via": "harvest:tavily"
+  },
+  "redpanda": {
+    "url": "https://docs.redpanda.com/streaming/current/develop/transactions",
+    "title": "Transactions | Redpanda Streaming",
+    "via": "harvest:tavily"
+  },
+  "cloudflare": {
+    "url": "https://developers.cloudflare.com",
+    "title": "cloudflare — Official Documentation",
+    "via": "llm"
+  },
+  "kserve": {
+    "url": "https://kserve.github.io/website/",
+    "title": "kserve — Official Documentation",
+    "via": "llm"
+  },
+  "yaml": {
+    "url": "https://yaml.org/",
+    "title": "yaml — Official Documentation",
+    "via": "llm"
+  },
+  "opentelemetry": {
+    "url": "https://opentelemetry.io/docs/",
+    "title": "opentelemetry — Official Documentation",
+    "via": "llm"
+  },
+  "opentofu": {
+    "url": "https://opentofu.org/docs/",
+    "title": "opentofu — Official Documentation",
+    "via": "llm"
+  },
+  "pgbackrest": {
+    "url": "https://pgbackrest.org/",
+    "title": "pgbackrest — Official Documentation",
+    "via": "llm"
+  },
+  "posthog": {
+    "url": "https://posthog.com/docs",
+    "title": "posthog — Official Documentation",
+    "via": "llm"
+  },
+  "victoriametrics": {
+    "url": "https://docs.victoriametrics.com/victoriametrics/metricsql",
+    "title": "VictoriaMetrics: MetricsQL",
+    "via": "harvest:tavily"
+  },
+  "amplitude": {
+    "url": "https://amplitude.com/docs/apis/analytics/dashboard-rest",
+    "title": "Dashboard REST API | Amplitude Docs",
+    "via": "harvest:tavily"
+  },
+  "apscheduler": {
+    "url": "https://apscheduler.readthedocs.io/en/stable/modules/triggers/cron.html",
+    "title": "apscheduler.triggers.cron — APScheduler 0.0.post50 documentation",
+    "via": "harvest:tavily"
+  },
+  "spark": {
+    "url": "https://spark.apache.org/docs/latest/",
+    "title": "spark — Official Documentation",
+    "via": "llm"
+  },
+  "hub": {
+    "url": "https://hub.github.com/",
+    "title": "hub — Official Documentation",
+    "via": "llm"
+  },
+  "kompose": {
+    "url": "https://kompose.io/",
+    "title": "kompose — Official Documentation",
+    "via": "llm"
+  }
+}
