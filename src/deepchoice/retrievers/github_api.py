@@ -1,6 +1,7 @@
 import os
 import httpx
 from .base import BaseRetriever
+from .. import outbound as _outbound
 
 
 def _extract_tech_names(query: str, sub_questions: list[str]) -> list[str]:
@@ -78,7 +79,7 @@ class GitHubSearch(BaseRetriever):
         seen_full_names: set[str] = set()
         errors: list[str] = []
 
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with await _outbound.make_client("github") as client:
             for term in all_terms[:4]:  # max 4 searches to stay within rate limits
                 try:
                     resp = await client.get(

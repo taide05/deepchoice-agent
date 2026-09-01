@@ -11,6 +11,26 @@ from deepchoice.retrievers import RETRIEVER_REGISTRY
 from deepchoice.agents.multi_retriever import MultiRetrieverAgent
 
 
+class _FakeClient:
+    """Async context-manager client standing in for outbound.make_client."""
+
+    def __init__(self, get_return=None, post_return=None,
+                 get_side=None, post_side=None):
+        self.get = AsyncMock(return_value=get_return, side_effect=get_side)
+        self.post = AsyncMock(return_value=post_return, side_effect=post_side)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _patch_outbound(fake: _FakeClient):
+    return patch("deepchoice.outbound.make_client", new_callable=AsyncMock,
+                 return_value=fake)
+
+
 class TestTavilySearch:
     @pytest.fixture(autouse=True)
     def _tavily_env(self, monkeypatch, tmp_path):
@@ -33,8 +53,7 @@ class TestTavilySearch:
             }]
         }
         retriever = TavilySearch()
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_resp
+        with _patch_outbound(_FakeClient(post_return=mock_resp)):
             result = await retriever.search("test query", [])
         assert result["source"] == "tavily"
         assert result["status"] == "success"
@@ -46,8 +65,7 @@ class TestTavilySearch:
     @pytest.mark.asyncio
     async def test_handles_api_error(self):
         retriever = TavilySearch()
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = Exception("API timeout")
+        with _patch_outbound(_FakeClient(post_side=[Exception("API timeout")])):
             result = await retriever.search("test query", [])
         assert result["status"] == "failed"
         assert result["error"] is not None
@@ -59,11 +77,11 @@ class TestTavilySearch:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"results": []}
 
+        fake = _FakeClient(post_return=mock_resp)
         retriever = TavilySearch()
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_resp
+        with _patch_outbound(fake):
             await retriever.search("main query", ["sq1", "sq2", "sq3"])
-        assert mock_post.call_count >= 2  # main + at least 1 sub-question
+        assert fake.post.call_count >= 2  # main + at least 1 sub-question
 
 
 class TestGitHubSearch:
@@ -81,8 +99,7 @@ class TestGitHubSearch:
             }]
         }
         retriever = GitHubSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = mock_resp
+        with _patch_outbound(_FakeClient(get_return=mock_resp)):
             result = await retriever.search("test framework", [])
         assert result["source"] == "github"
         assert result["status"] == "success"
@@ -91,8 +108,7 @@ class TestGitHubSearch:
     @pytest.mark.asyncio
     async def test_handles_api_error(self):
         retriever = GitHubSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.side_effect = Exception("rate limited")
+        with _patch_outbound(_FakeClient(get_side=[Exception("rate limited")])):
             result = await retriever.search("test", [])
         assert result["status"] == "failed"
 
@@ -101,8 +117,8 @@ class TestGitHubSearch:
         """Real failure mode (ConnectError on every attempt) must surface as
         failed — not as success with 0 results (the 300-case regression)."""
         retriever = GitHubSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.side_effect = httpx.ConnectError("all connection attempts failed")
+        with _patch_outbound(_FakeClient(
+                get_side=[httpx.ConnectError("all connection attempts failed")] * 4)):
             result = await retriever.search("test framework", [])
         assert result["status"] == "failed"
         assert result["results"] == []
@@ -114,8 +130,7 @@ class TestGitHubSearch:
         mock_resp = MagicMock()
         mock_resp.status_code = 403
         retriever = GitHubSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = mock_resp
+        with _patch_outbound(_FakeClient(get_return=mock_resp)):
             result = await retriever.search("test framework", [])
         assert result["status"] == "failed"
         assert "HTTP 403" in result["error"]
@@ -137,8 +152,7 @@ class TestGitHubSearch:
         bad = MagicMock()
         bad.status_code = 403
         retriever = GitHubSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.side_effect = [ok, bad, bad, bad]
+        with _patch_outbound(_FakeClient(get_side=[ok, bad, bad, bad])):
             result = await retriever.search("test framework", [])
         assert result["status"] == "success"
         assert len(result["results"]) == 1
@@ -161,8 +175,7 @@ class TestArxivSearch:
         mock_resp.text = xml_response
 
         retriever = ArxivSearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = mock_resp
+        with _patch_outbound(_FakeClient(get_return=mock_resp)):
             result = await retriever.search("multi agent frameworks", [])
         assert result["source"] == "arxiv"
         assert result["status"] == "success"
@@ -177,13 +190,8 @@ class TestCommunitySearch:
         mock_se.status_code = 200
         mock_se.json.return_value = {"items": []}
 
-        mock_reddit = MagicMock()
-        mock_reddit.status_code = 200
-        mock_reddit.json.return_value = {"data": {"children": []}}
-
         retriever = CommunitySearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.side_effect = [mock_se, mock_reddit]
+        with _patch_outbound(_FakeClient(get_return=mock_se)):
             result = await retriever.search("test query", [])
         assert result["source"] == "community"
         assert result["status"] == "success"
@@ -195,8 +203,7 @@ class TestCommunitySearch:
         mock_se.status_code = 429
         mock_se.text = "quota exceeded"
         retriever = CommunitySearch()
-        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = mock_se
+        with _patch_outbound(_FakeClient(get_return=mock_se)):
             result = await retriever.search("test query", [])
         assert result["status"] == "failed"
         assert "HTTP 429" in result["error"]

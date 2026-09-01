@@ -1,6 +1,6 @@
-import httpx
 import xml.etree.ElementTree as ET
 from .base import BaseRetriever
+from .. import outbound as _outbound
 
 
 class ArxivSearch(BaseRetriever):
@@ -15,7 +15,7 @@ class ArxivSearch(BaseRetriever):
             f"?search_query=all:{keywords}&max_results={max_results}&sortBy=relevance"
         )
 
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with await _outbound.make_client("arxiv") as client:
             resp = await client.get(url)
             resp.raise_for_status()
 

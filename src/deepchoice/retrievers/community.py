@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
-import httpx
 from .base import BaseRetriever
+from .. import outbound as _outbound
 
 
 class CommunitySearch(BaseRetriever):
@@ -13,7 +13,7 @@ class CommunitySearch(BaseRetriever):
         results = []
 
         se_key = os.getenv("STACKEXCHANGE_API_KEY", "")
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with await _outbound.make_client("community") as client:
             so_resp = await client.get(
                 "https://api.stackexchange.com/2.3/search",
                 params={
