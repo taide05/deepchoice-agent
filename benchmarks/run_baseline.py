@@ -113,8 +113,9 @@ def _setup_debug_dump(dump_dir: Path) -> None:
         seq[(cid, tag)] = n + 1
         d = dump_dir / cid
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"{tag}-{n:03d}.json").write_text(
-            _json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
+        data = _json.dumps(entry, ensure_ascii=False, indent=2)
+        await asyncio.to_thread((d / f"{tag}-{n:03d}.json").write_text,
+                                data, encoding="utf-8")
 
     set_record_callback(_dump)
 

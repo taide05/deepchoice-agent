@@ -942,7 +942,7 @@ def compute_citation_breakdown(runs: list[dict[str, Any]]) -> dict[str, Any]:
     Returns {"metric", "per_case": [{case_id, fields: {field: {citations, chars}}}]}
     """
     def _citations(text: str) -> int:
-        return len(re.findall(r"\[Source:", text or ""))
+        return len(re.findall(r"\[Source:", text or "", re.IGNORECASE))
 
     per_case: list[dict[str, Any]] = []
     for run in runs:

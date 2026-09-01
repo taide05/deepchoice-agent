@@ -189,8 +189,10 @@ async def call_model(
         try:
             result = parse_json_markdown(content, parser=json_repair.loads)
             parsed: Any = result if isinstance(result, dict) else {}
+            parse_ok = isinstance(result, dict)
         except Exception:
             parsed = {}
+            parse_ok = False
         await _emit_record({
             "case_id": _current_case.get(),
             "tag": tag or tier,
@@ -198,6 +200,7 @@ async def call_model(
             "model": model,
             "elapsed_ms": round((time.monotonic() - t0) * 1000),
             "error": None,
+            "parse_ok": parse_ok,
             "prompt": prompt,
             "raw_content": content,
             "parsed": parsed,
