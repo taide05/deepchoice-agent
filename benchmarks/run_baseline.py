@@ -43,6 +43,63 @@ from benchmarks.metrics import (
 from benchmarks.report_quality import evaluate_batch
 
 # ---------------------------------------------------------------------------
+# Outbound health-check helpers (batch 3)
+# ---------------------------------------------------------------------------
+
+async def probe_tavily_direct() -> tuple[bool, str]:
+    """Tavily stays direct (user decision 2026-09-01): one keypool POST probe."""
+    import httpx
+
+    from deepchoice.retrievers.base import error_text
+    from deepchoice.retrievers.tavily_keypool import post_with_failover
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+
+            async def post(url, json=None, **kw):
+                return await client.post(url, json=json, **kw)
+
+            resp, _ = await post_with_failover(post, {"query": "langgraph", "max_results": 1})
+            if resp is None:
+                return False, "no available Tavily key"
+            return resp.status_code == 200, f"HTTP {resp.status_code}"
+    except Exception as exc:
+        return False, error_text(exc)
+
+
+async def health_check_report() -> dict[str, Any]:
+    """Probe all outbound sources + tavily-direct; returns diagnostics."""
+    from deepchoice.outbound import get_resolver
+
+    out = await get_resolver().health_check()
+    tav_ok, tav_detail = await probe_tavily_direct()
+    out["tavily_direct"] = {"ok": tav_ok, "detail": tav_detail}
+    return out
+
+
+def _print_health_check(hc: dict[str, Any]) -> None:
+    print("\n" + "=" * 60)
+    print("OUTBOUND HEALTH CHECK")
+    print("=" * 60)
+    for source, info in hc.get("sources", {}).items():
+        ch = info.get("channel") or "-"
+        mark = "OK " if info.get("ok") else "XX "
+        print(f"  [{mark}] {source:<12} channel={ch}")
+    td = hc.get("tavily_direct", {})
+    mark = "OK " if td.get("ok") else "XX "
+    print(f"  [{mark}] {'tavily':<12} direct={td.get('detail', '-')}")
+    if hc.get("degraded_sources"):
+        print(f"  DEGRADED SOURCES: {hc['degraded_sources']}")
+    print("=" * 60)
+
+
+async def run_health_check() -> int:
+    hc = await health_check_report()
+    _print_health_check(hc)
+    return 0 if (hc.get("ok") and hc.get("tavily_direct", {}).get("ok")) else 1
+
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -407,6 +464,14 @@ async def run_baseline(
     report["quality"]["report_quality"] = quality_stats
     report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]
 
+    # Outbound channel audit (routes actually used by this run)
+    try:
+        from deepchoice.outbound import get_resolver
+
+        report["outbound"] = get_resolver().summary()
+    except Exception as exc:
+        report["outbound"] = {"error": str(exc)}
+
     # Phase 3.6: Source recall by retriever type
     from benchmarks.metrics import compute_source_recall_by_source
     src_split = compute_source_recall_by_source(runs, cases)
@@ -593,11 +658,34 @@ if __name__ == "__main__":
         "--profile-agents", action="store_true",
         help="Record per-agent timing in pipeline state (agent_timing dict)",
     )
+    parser.add_argument(
+        "--health-check", action="store_true",
+        help="Probe all retrieval sources/channels, print diagnostics, exit (no cases)",
+    )
+    parser.add_argument(
+        "--skip-health-check", action="store_true",
+        help="Skip the pre-run outbound health check",
+    )
+    parser.add_argument(
+        "--allow-degraded", action="store_true",
+        help="Proceed even when the health check reports degraded sources",
+    )
     args = parser.parse_args()
+
+    if args.health_check:
+        sys.exit(asyncio.run(run_health_check()))
 
     if args.merge:
         asyncio.run(merge_all_batches(verbose=args.verbose))
     else:
+        if not args.skip_health_check:
+            hc = asyncio.run(health_check_report())
+            _print_health_check(hc)
+            healthy = hc.get("ok") and hc.get("tavily_direct", {}).get("ok")
+            if not healthy and not args.allow_degraded:
+                print("Health check FAILED — refusing to run. "
+                      "Use --allow-degraded to proceed, or --skip-health-check to bypass.")
+                sys.exit(1)
         n = args.cases if args.cases > 0 else None
         cf = Path(args.cases_file) if args.cases_file else None
         if cf is None and args.full:

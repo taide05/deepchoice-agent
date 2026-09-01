@@ -151,6 +151,18 @@ class ChannelResolver:
 
     # -- health-check ---------------------------------------------------------
 
+    def summary(self) -> dict[str, Any]:
+        """Compact route table + audit export for benchmark reports."""
+        routes = {
+            source: {"channel": st["channel"], "attempts": st["attempts"],
+                     "next_probe_s": round(max(0.0, st["next_probe"] - self._now()), 1)}
+            for source, st in self._routes.items()
+        }
+        return {
+            "routes": routes,
+            "audit": [vars(e) for e in self.audit],
+        }
+
     async def health_check(self, sources: list[str] | None = None) -> dict[str, Any]:
         """Probe all configured sources; returns per-source diagnostics."""
         sources = sources or list(PROBES.keys())
