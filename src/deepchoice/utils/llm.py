@@ -1,6 +1,9 @@
 import asyncio
 import os
 import random
+import time
+from contextvars import ContextVar
+from typing import Any, Awaitable, Callable
 
 import json_repair
 from openai import AsyncOpenAI
@@ -9,6 +12,28 @@ from langchain_core.utils.json import parse_json_markdown
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# Diagnostics (task 0.2): optional observer hook + current-case context.
+# Both default to inert so the production path is unchanged when disabled.
+_record_callback: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+_current_case: ContextVar[str] = ContextVar("dc_current_case", default="")
+
+
+def set_record_callback(cb: Callable[[dict[str, Any]], Awaitable[None]] | None) -> None:
+    global _record_callback
+    _record_callback = cb
+
+
+def set_current_case(case_id: str) -> None:
+    _current_case.set(case_id)
+
+
+async def _emit_record(entry: dict[str, Any]) -> None:
+    if _record_callback is not None:
+        try:
+            await _record_callback(entry)
+        except Exception:
+            pass  # diagnostics must never break the pipeline
 
 
 def _env(*names: str, default: str = "") -> str:
@@ -92,6 +117,7 @@ async def call_model(
     response_format: str | None = None,
     timeout: float = 120.0,
     usage: list | None = None,
+    tag: str = "",
 ) -> dict | str:
     tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
@@ -115,36 +141,80 @@ async def call_model(
                 {"role": "user", "content": "Respond with valid JSON only."}
             ]
 
+    t0 = time.monotonic()
     response = None
-    for attempt in range(_MAX_RETRIES + 1):
-        try:
-            response = await client.chat.completions.create(**kwargs)
-            break
-        except Exception as e:
-            status = getattr(e, "status_code", None)
-            if status not in _RETRYABLE_STATUSES or attempt >= _MAX_RETRIES:
-                raise
-            delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
-            await _retry_sleep(delay)
+    try:
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                response = await client.chat.completions.create(**kwargs)
+                break
+            except Exception as e:
+                status = getattr(e, "status_code", None)
+                if status not in _RETRYABLE_STATUSES or attempt >= _MAX_RETRIES:
+                    raise
+                delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
+                await _retry_sleep(delay)
+    except Exception as e:
+        await _emit_record({
+            "case_id": _current_case.get(),
+            "tag": tag or tier,
+            "tier": tier,
+            "model": model,
+            "elapsed_ms": round((time.monotonic() - t0) * 1000),
+            "error": f"{type(e).__name__}: {str(e)[:300]}",
+            "prompt": prompt,
+            "raw_content": None,
+            "parsed": None,
+            "usage": None,
+        })
+        raise
 
     # Capture token usage before content parsing so calls whose JSON parsing
-    # fails are still counted.
-    if usage is not None and response.usage is not None:
-        usage.append({
+    # fails are still counted. The observer always gets it; the caller's list
+    # is only appended when one was passed.
+    usage_entry = None
+    if response.usage is not None:
+        usage_entry = {
             "model": getattr(response, "model", None) or model,
             "prompt_tokens": response.usage.prompt_tokens,
             "completion_tokens": response.usage.completion_tokens,
             "total_tokens": response.usage.total_tokens,
-        })
+        }
+        if usage is not None:
+            usage.append(usage_entry)
 
     content = response.choices[0].message.content
 
     if response_format == "json":
         try:
             result = parse_json_markdown(content, parser=json_repair.loads)
-            if isinstance(result, dict):
-                return result
-            return {}
+            parsed: Any = result if isinstance(result, dict) else {}
         except Exception:
-            return {}
+            parsed = {}
+        await _emit_record({
+            "case_id": _current_case.get(),
+            "tag": tag or tier,
+            "tier": tier,
+            "model": model,
+            "elapsed_ms": round((time.monotonic() - t0) * 1000),
+            "error": None,
+            "prompt": prompt,
+            "raw_content": content,
+            "parsed": parsed,
+            "usage": usage_entry,
+        })
+        return parsed
+
+    await _emit_record({
+        "case_id": _current_case.get(),
+        "tag": tag or tier,
+        "tier": tier,
+        "model": model,
+        "elapsed_ms": round((time.monotonic() - t0) * 1000),
+        "error": None,
+        "prompt": prompt,
+        "raw_content": content,
+        "parsed": None,
+        "usage": usage_entry,
+    })
     return content

@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from deepchoice.agents.orchestrator import ChiefEditorAgent
-from deepchoice.utils.llm import call_model
+from deepchoice.utils.llm import call_model, set_current_case, set_record_callback
 
 from benchmarks.metrics import (
     compute_all_metrics,
@@ -99,6 +99,26 @@ async def run_health_check() -> int:
     return 0 if (hc.get("ok") and hc.get("tavily_direct", {}).get("ok")) else 1
 
 
+def _setup_debug_dump(dump_dir: Path) -> None:
+    """Dump every LLM call's raw response to {dump_dir}/{case_id}/{tag}-{seq}.json."""
+    import json as _json
+
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    seq: dict[tuple[str, str], int] = {}
+
+    async def _dump(entry: dict[str, Any]) -> None:
+        cid = entry.get("case_id") or "unknown"
+        tag = entry.get("tag") or entry.get("tier") or "llm"
+        n = seq.get((cid, tag), 0)
+        seq[(cid, tag)] = n + 1
+        d = dump_dir / cid
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{tag}-{n:03d}.json").write_text(
+            _json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    set_record_callback(_dump)
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -145,7 +165,7 @@ async def _judge_conflict_match(detected_conflicts: list[dict], topic: str) -> b
         result = await call_model(
             [{"role": "user", "content": CONFLICT_JUDGE_PROMPT.format(
                 conflicts_text=conflicts_text, topic=topic)}],
-            model="deepseek-flash",
+            model="deepseek-flash", tag="conflict_judge",
             response_format="text",
         )
         return "yes" in str(result).strip().lower()
@@ -219,6 +239,7 @@ async def run_single_case(case: dict, verbose: bool = False,
     Returns a dict with everything needed for metrics calculation.
     """
     case_id = case["id"]
+    set_current_case(case_id)
     t0 = time.monotonic()
 
     task = {
@@ -659,6 +680,10 @@ if __name__ == "__main__":
         help="Record per-agent timing in pipeline state (agent_timing dict)",
     )
     parser.add_argument(
+        "--debug-dump-dir", type=str, default=None,
+        help="Dump every LLM call's raw response per case into this dir (diagnostics)",
+    )
+    parser.add_argument(
         "--health-check", action="store_true",
         help="Probe all retrieval sources/channels, print diagnostics, exit (no cases)",
     )
@@ -671,6 +696,9 @@ if __name__ == "__main__":
         help="Proceed even when the health check reports degraded sources",
     )
     args = parser.parse_args()
+
+    if args.debug_dump_dir:
+        _setup_debug_dump(Path(args.debug_dump_dir))
 
     if args.health_check:
         sys.exit(asyncio.run(run_health_check()))

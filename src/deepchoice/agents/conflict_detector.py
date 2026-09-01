@@ -393,7 +393,7 @@ Return ONLY a JSON object:
         async with FLASH_SEM:
             result = await call_model(
                 prompt,
-                model="deepseek-flash",
+                model="deepseek-flash", tag="conflict_scan",
                 response_format="json",
                 usage=usage,
             )
@@ -538,7 +538,7 @@ class ConflictDetectorAgent:
             async with FLASH_SEM:
                 result = await call_model(
                     _make_prompt(pair["source_a"], pair["source_b"]),
-                    model="deepseek-flash",
+                    model="deepseek-flash", tag="conflict_arbitration",
                     response_format="json",
                     usage=local_usage,
                 )
@@ -603,7 +603,7 @@ class ConflictDetectorAgent:
                         async with QW_SEM:
                             qw_result = await call_model(
                                 _make_prompt(enriched_a, enriched_b),
-                                model="qwen-flash",
+                                model="qwen-flash", tag="conflict_rearbitration",
                                 response_format="json",
                                 timeout=300.0,
                                 usage=local_usage,

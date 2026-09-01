@@ -165,7 +165,7 @@ class ClarificationAgent:
         prompt = [{"role": "user", "content": prompt_text}]
 
         try:
-            result = await call_model(prompt, model="deepseek-flash", response_format="json")
+            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
             return self._merge_and_build_response(state, result)
         except Exception:
             return self._fallback_response(state)
@@ -176,7 +176,7 @@ class ClarificationAgent:
         prompt = [{"role": "user", "content": prompt_text}]
 
         try:
-            result = await call_model(prompt, model="deepseek-flash", response_format="json")
+            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
             response = self._merge_and_build_response(state, result)
             response["action"] = "recommend"
             response["payload"] = {"candidates": candidates}
@@ -198,7 +198,7 @@ class ClarificationAgent:
         prompt = [{"role": "user", "content": prompt_text}]
 
         try:
-            result = await call_model(prompt, model="deepseek-flash", response_format="json")
+            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
         except Exception:
             result = {"message": "需求已整理完毕，确认后开始研究。"}
 
@@ -286,7 +286,7 @@ class ClarificationAgent:
 
         prompt = [{"role": "user", "content": prompt_text}]
         try:
-            result = await call_model(prompt, model="deepseek-flash", response_format="json")
+            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
             return result.get("sub_questions", [])
         except Exception:
             return [

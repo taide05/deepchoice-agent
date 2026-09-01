@@ -43,7 +43,7 @@ class QueryAnalyzerAgent:
         ]
 
         local_usage: list = []
-        result = await call_model(prompt, model="deepseek-flash", response_format="json",
+        result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_analyzer",
                                   usage=local_usage)
 
         sub_questions = result.get("sub_questions", [])

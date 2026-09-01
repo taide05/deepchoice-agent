@@ -69,7 +69,7 @@ class SelfReviewerAgent:
         ]
 
         local_usage: list = []
-        result = await call_model(prompt, model="deepseek-flash", response_format="json",
+        result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="self_reviewer",
                                   usage=local_usage)
 
         if not isinstance(result, dict):
