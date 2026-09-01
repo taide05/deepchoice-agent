@@ -12,7 +12,7 @@ stats = {}
 
 _original = llm_mod.call_model
 
-async def _patched(prompt, model="deepseek-v4-flash", response_format=None, timeout=120.0):
+async def _patched(prompt, model="flash", response_format=None, timeout=120.0):
     import inspect
     frame = inspect.currentframe()
     caller = "unknown"

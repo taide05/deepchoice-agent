@@ -145,7 +145,7 @@ async def _judge_conflict_match(detected_conflicts: list[dict], topic: str) -> b
         result = await call_model(
             [{"role": "user", "content": CONFLICT_JUDGE_PROMPT.format(
                 conflicts_text=conflicts_text, topic=topic)}],
-            model="deepseek-v4-flash",
+            model="flash",
             response_format="text",
         )
         return "yes" in str(result).strip().lower()
@@ -361,7 +361,7 @@ async def run_baseline(
 
     # Validate API keys
     api_status = {
-        "deepseek": bool(os.getenv("DEEPSEEK_API_KEY")),
+        "llm": bool(os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY")),
         "tavily": bool(os.getenv("TAVILY_API_KEY")),
         "github": bool(os.getenv("GITHUB_TOKEN")),
     }

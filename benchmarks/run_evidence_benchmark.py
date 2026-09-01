@@ -99,7 +99,7 @@ async def run_baseline(tc: dict) -> dict:
     t0 = time.monotonic()
     try:
         result = await call_model(
-            _make_prompt(tc), model="deepseek-v4-pro",
+            _make_prompt(tc), model="pro",
             response_format="json", timeout=300.0,
         )
     except Exception as e:
@@ -132,7 +132,7 @@ async def run_evidence(tc: dict) -> dict:
     try:
         result = await call_model(
             _make_prompt(tc, extra_evidence=evidence),
-            model="deepseek-v4-pro", response_format="json", timeout=300.0,
+            model="pro", response_format="json", timeout=300.0,
         )
     except Exception as e:
         result = {"resolution": "error", "confidence": "low", "reasoning": str(e)}

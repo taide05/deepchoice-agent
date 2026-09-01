@@ -332,13 +332,12 @@ class TestAgentTokenUsageWiring:
 class TestGatherEvidenceUsageCapture:
     @pytest.mark.asyncio
     async def test_gather_evidence_appends_usage_row(self):
-        """_gather_evidence builds AsyncOpenAI directly (not via call_model),
-        so its client is mocked by patching openai.AsyncOpenAI — the local
-        `from openai import AsyncOpenAI` inside the function picks it up."""
+        """_gather_evidence now reuses llm._get_client (provider-agnostic), so
+        mock it via deepchoice.utils.llm._get_client."""
         usage = []
         client = _fake_client(
             _gather_fake_response("Benchmarks favor async under concurrent load"))
-        with patch("openai.AsyncOpenAI", return_value=client):
+        with patch("deepchoice.utils.llm._get_client", return_value=client):
             evidence = await cd_module._gather_evidence(
                 topic="FastAPI async performance",
                 claim_a="Async endpoints are slower than sync",

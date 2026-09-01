@@ -103,11 +103,11 @@ docker run -p 8000:8000 --env-file .env \
 
 **两阶段仲裁细节**：
 ```
-所有冲突对 → deepseek-v4-flash 初裁（~3s/对）
+所有冲突对 → flash 档初裁（~3s/对）
                      │
     低置信度对 → 取分数差距最小的 1 对
                      │
-            deepseek-v4-pro 重裁（300s timeout）
+            pro 档重裁（300s timeout）
 ```
 
 ## 关键技术决策
@@ -146,7 +146,7 @@ python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --
 
 ## 技术栈
 
-LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · DeepSeek API · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
+LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
 
 ## 项目结构
 

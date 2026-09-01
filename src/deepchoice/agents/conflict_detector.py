@@ -11,10 +11,12 @@ from ..utils.embedding import get_embedding_model
 from ..retrievers.tavily_keypool import post_with_failover
 
 # ---------------------------------------------------------------------------
-# Concurrency limits (DeepSeek rate limits: flash 500/min, pro 50/min)
+# Concurrency limits. Provider-specific (was DeepSeek 500/min flash, 50/min pro);
+# now env-tunable with conservative defaults — set LLM_FLASH_CONCURRENCY /
+# LLM_PRO_CONCURRENCY to match the active provider's RPM.
 # ---------------------------------------------------------------------------
-FLASH_SEM = asyncio.Semaphore(80)
-PRO_SEM = asyncio.Semaphore(20)
+FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_FLASH_CONCURRENCY", "30")))
+PRO_SEM = asyncio.Semaphore(int(os.environ.get("LLM_PRO_CONCURRENCY", "10")))
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -268,17 +270,16 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                            max_iterations: int = 1,
                            per_call_timeout: float = 30.0,
                            usage: list | None = None) -> str:
-    """Inline multi-turn evidence gathering via DeepSeek native tool calling.
+    """Inline multi-turn evidence gathering via OpenAI-compatible tool calling.
 
     Returns a plain-text summary of collected evidence suitable for
     enriching claim descriptions in the arbitration prompt.
     """
     import asyncio as _asyncio
-    from openai import AsyncOpenAI
 
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    base_url = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=60.0)
+    from ..utils.llm import _get_client
+
+    client = _get_client(timeout=60.0)
 
     messages = [
         {"role": "system", "content": (
