@@ -83,8 +83,11 @@ async def probe_source(source: str, channel: BaseChannel,
             if host:
                 if not await channel.reachable(host):
                     return False
-        elif not await channel.reachable():
-            return False
+        elif channel.kind != "self-forward":
+            # self-forward's reachability is proven by the probe request itself
+            # (it relays through the endpoint); skipping the extra roundtrip.
+            if not await channel.reachable():
+                return False
     except Exception:
         return False
 
