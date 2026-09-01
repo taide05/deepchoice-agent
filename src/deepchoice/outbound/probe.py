@@ -49,32 +49,13 @@ def _auth_headers() -> dict:
             "Authorization": f"Bearer {token}"} if token else {}
 
 
-async def _tavily_headers() -> dict:
-    key = ""
-    try:
-        from ..retrievers.tavily_keypool import current as pool_current
-
-        key = await pool_current()
-    except Exception:
-        pass
-    if not key:
-        first = os.getenv("TAVILY_API_KEYS", "") or os.getenv("TAVILY_API_KEY", "")
-        key = first.split(",")[0].strip() if first else ""
-    return {"Authorization": f"Bearer {key}"} if key else {}
-
-
 async def ok_for(source: str, client: httpx.AsyncClient) -> bool:
     """One real request through the already-wired client."""
     spec = PROBES.get(source)
     if spec is None:
         return False
     try:
-        if source == "github":
-            headers = _auth_headers()
-        elif source == "tavily":
-            headers = await _tavily_headers()
-        else:
-            headers = {}
+        headers = _auth_headers() if source == "github" else {}
         if spec.method == "POST":
             resp = await client.post(spec.url, json={"query": "langgraph", "max_results": 1},
                                      headers=headers)
