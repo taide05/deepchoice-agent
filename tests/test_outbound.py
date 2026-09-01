@@ -105,6 +105,32 @@ class TestResolver:
         assert ch2 is not None and ch2.name == "local-proxy"
 
     @pytest.mark.asyncio
+    async def test_probe_uses_channel_wired_client(self):
+        """Probe must go through the channel's own transport, not a bare
+        direct client — the health-check 'self-forward' accuracy regression."""
+        calls = []
+
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url, params=None, headers=None):
+                calls.append((url, params))
+                return httpx.Response(200, text="<ok/>")
+
+        cfg = _cfg(channel_order=("self-forward",),
+                   fwd_base="https://fwd.example.com", fwd_key="k",
+                   fwd_allowed=("export.arxiv.org",))
+        r = ChannelResolver(cfg=cfg)  # default probe path
+        r._make_client = lambda ch: FakeClient()
+        ch = await r.resolve("arxiv")
+        assert ch is not None and ch.name == "self-forward"
+        assert calls, "probe request never went through the wired client"
+
+    @pytest.mark.asyncio
     async def test_health_check(self):
         async def probe(source, channel):
             return channel.name == "direct" and source in ("github", "arxiv")

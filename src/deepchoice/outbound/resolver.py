@@ -42,13 +42,20 @@ class ChannelResolver:
                  now_fn: Callable[[], float] = time.monotonic):
         self.cfg = cfg or OutboundConfig.from_env()
         self.channels = channels or build_channels(self.cfg)
-        self._probe_fn = probe_fn or probe_source
+        self._probe_fn = probe_fn or self._default_probe
         self._now = now_fn
         self._lock = asyncio.Lock()
         self._probe_locks: dict[str, asyncio.Lock] = {}
         # source -> {"channel": channel|None, "next_probe": float, "attempts": int}
         self._routes: dict[str, dict[str, Any]] = {}
         self.audit: list[AuditEntry] = []
+
+    async def _default_probe(self, source: str, channel: BaseChannel) -> bool:
+        """Probe through a client wired to the very channel being tested —
+        otherwise the probe silently measures direct connectivity and the
+        reported channel is a lie (github/community 'self-forward' bug)."""
+        return await probe_source(source, channel,
+                                  make_client=lambda _s: self._make_client(channel))
 
     # -- internals ---------------------------------------------------------
 
