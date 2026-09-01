@@ -147,7 +147,7 @@ class TestCallModelUsageCapture:
                    return_value=_fake_client(_fake_response("answer", model=None))):
             await call_model(
                 [{"role": "user", "content": "hi"}],
-                model="pro",
+                model="flash",
                 usage=usage,
             )
 

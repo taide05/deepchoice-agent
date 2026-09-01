@@ -13,7 +13,8 @@ from ..retrievers.tavily_keypool import post_with_failover
 # ---------------------------------------------------------------------------
 # Concurrency limits. Provider-specific (was DeepSeek 500/min flash, 50/min pro);
 # now env-tunable with conservative defaults — set LLM_FLASH_CONCURRENCY /
-# LLM_PRO_CONCURRENCY to match the active provider's RPM.
+# LLM_PRO_CONCURRENCY to match the active provider's RPM. PRO_SEM is retained
+# as the separate re-arbitration-path gate (one low-confidence pair per case).
 # ---------------------------------------------------------------------------
 FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_FLASH_CONCURRENCY", "30")))
 PRO_SEM = asyncio.Semaphore(int(os.environ.get("LLM_PRO_CONCURRENCY", "10")))
@@ -603,7 +604,7 @@ class ConflictDetectorAgent:
                         async with PRO_SEM:
                             pro_result = await call_model(
                                 _make_prompt(enriched_a, enriched_b),
-                                model="pro",
+                                model="flash",
                                 response_format="json",
                                 timeout=300.0,
                                 usage=local_usage,

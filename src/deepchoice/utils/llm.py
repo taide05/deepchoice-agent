@@ -9,11 +9,10 @@ from langchain_core.utils.json import parse_json_markdown
 
 DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_FLASH_MODEL = "qwen3.8-flash"
-DEFAULT_PRO_MODEL = "qwen3.8-flash"
 
-# Call sites pass tier aliases ("flash"/"pro"); this mapping is the SINGLE
-# place where concrete model names live (swap providers here, not at call sites).
-MODEL_ALIASES = {"flash": DEFAULT_FLASH_MODEL, "pro": DEFAULT_PRO_MODEL}
+# Single model for all tiers now (user decision: everything -> qwen3.8-flash).
+# Call sites pass the tier alias "flash"; swap providers here, not at call sites.
+MODEL_ALIASES = {"flash": DEFAULT_FLASH_MODEL}
 
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
