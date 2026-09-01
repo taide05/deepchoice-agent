@@ -319,7 +319,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
         if usage is not None and getattr(response, "usage", None) is not None:
             usage.append({
-                "model": getattr(response, "model", None) or "flash",
+                "model": getattr(response, "model", None) or TIERS["flash"]["model"],
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,

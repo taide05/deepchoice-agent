@@ -36,7 +36,7 @@ def _fake_client(response):
     )
 
 
-def _gather_fake_response(content="evidence found", model="flash",
+def _gather_fake_response(content="evidence found", model="deepseek-v4-flash",
                           prompt_tokens=150, completion_tokens=60):
     """Fake OpenAI response for _gather_evidence: assistant message with
     model_dump() and no tool_calls, plus a usage block."""
