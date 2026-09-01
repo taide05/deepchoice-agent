@@ -382,6 +382,41 @@ def compute_source_recall_by_source(
     return result
 
 
+def compute_source_health(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-source availability of retrieval stages (status success/failed).
+
+    Detects quietly-degraded benchmark runs: if a retriever source failed in
+    the majority of runs, source_recall is not comparable to a healthy run and
+    must be flagged instead of silently scored.
+    """
+    per_source: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        for sr in run.get("search_results", []):
+            src = sr.get("source", "unknown")
+            if src not in per_source:
+                per_source[src] = {"total": 0, "failed": 0, "success": 0}
+            per_source[src]["total"] += 1
+            if sr.get("status") == "failed":
+                per_source[src]["failed"] += 1
+            else:
+                per_source[src]["success"] += 1
+
+    degraded_sources: list[str] = []
+    for src, st in sorted(per_source.items()):
+        rate = st["failed"] / st["total"] if st["total"] else 0.0
+        st["failed_rate"] = round(rate, 3)
+        if rate >= 0.5 and st["total"] >= 5:
+            degraded_sources.append(src)
+        # Partial losses are still visible in the per-source rate table.
+
+    return {
+        "metric": "source_health",
+        "sources": per_source,
+        "degraded_sources": degraded_sources,
+        "degraded": bool(degraded_sources),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Quality Metric 3: Claim Grounding Rate
 # ---------------------------------------------------------------------------
@@ -922,6 +957,7 @@ def compute_all_metrics(
     # Quality metrics
     report["quality"]["top1_accuracy"] = compute_top1_accuracy(runs, annotated_cases)
     report["quality"]["source_recall"] = compute_source_recall(runs, annotated_cases)
+    report["quality"]["source_health"] = compute_source_health(runs)
     # Claim grounding: average across all reports
     cg_values = []
     for run in runs:
@@ -956,6 +992,8 @@ def compute_all_metrics(
         "latency_p95_s": report["efficiency"]["latency"]["p95"],
         "success_rate": report["reliability"]["success_rate"]["value"],
         "retry_mean_delta": report["reliability"]["retry_effectiveness"]["mean_delta"],
+        "sources_degraded": q["source_health"]["degraded"],
+        "degraded_sources": q["source_health"]["degraded_sources"],
     }
 
     return report

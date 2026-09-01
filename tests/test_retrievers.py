@@ -96,6 +96,53 @@ class TestGitHubSearch:
             result = await retriever.search("test", [])
         assert result["status"] == "failed"
 
+    @pytest.mark.asyncio
+    async def test_httpx_error_is_failed_not_silent_empty(self):
+        """Real failure mode (ConnectError on every attempt) must surface as
+        failed — not as success with 0 results (the 300-case regression)."""
+        retriever = GitHubSearch()
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = httpx.ConnectError("all connection attempts failed")
+            result = await retriever.search("test framework", [])
+        assert result["status"] == "failed"
+        assert result["results"] == []
+        assert "ConnectError" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_all_non_200_raises(self):
+        """HTTP 403 with nothing retrieved must be failed, not empty success."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        retriever = GitHubSearch()
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_resp
+            result = await retriever.search("test framework", [])
+        assert result["status"] == "failed"
+        assert "HTTP 403" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_keeps_results(self):
+        """If at least one search succeeded, keep results (no raise)."""
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = {
+            "items": [{
+                "html_url": "https://github.com/test/repo",
+                "full_name": "test/repo",
+                "stargazers_count": 100,
+                "forks_count": 10,
+                "updated_at": "2026-06-01T00:00:00Z",
+            }]
+        }
+        bad = MagicMock()
+        bad.status_code = 403
+        retriever = GitHubSearch()
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = [ok, bad, bad, bad]
+            result = await retriever.search("test framework", [])
+        assert result["status"] == "success"
+        assert len(result["results"]) == 1
+
 
 class TestArxivSearch:
     @pytest.mark.asyncio
@@ -140,6 +187,19 @@ class TestCommunitySearch:
             result = await retriever.search("test query", [])
         assert result["source"] == "community"
         assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_non_200_raises(self):
+        """Non-200 (rate limit/auth) must surface as failed, not empty success."""
+        mock_se = MagicMock()
+        mock_se.status_code = 429
+        mock_se.text = "quota exceeded"
+        retriever = CommunitySearch()
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_se
+            result = await retriever.search("test query", [])
+        assert result["status"] == "failed"
+        assert "HTTP 429" in result["error"]
 
 
 class TestOfficialSearch:

@@ -452,6 +452,8 @@ async def run_baseline(
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
     print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
+    if s.get("sources_degraded"):
+        print(f"  *** SOURCES DEGRADED: {s['degraded_sources']} — source_recall NOT comparable to healthy runs ***")
 
     # Phase 4: Save
     path = save_benchmark(report, RUNS_DIR, label=batch_label)
@@ -537,6 +539,8 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
     print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
+    if s.get("sources_degraded"):
+        print(f"  *** SOURCES DEGRADED: {s['degraded_sources']} — source_recall NOT comparable to healthy runs ***")
 
     path = save_benchmark(report, RUNS_DIR)
     print(f"\nFinal report saved to: {path}")

@@ -41,8 +41,12 @@ class CommunitySearch(BaseRetriever):
                         "date": date_str,
                     })
             elif so_resp.status_code != 200:
-                # Log non-200 (rate limit, auth error, etc.) instead of silently skipping
+                # Fail loudly instead of silently scoring a starved source:
+                # a non-200 (rate limit, auth error) with nothing retrieved
+                # must surface as a source failure, not an empty success.
                 error_body = so_resp.text[:200] if so_resp.text else ""
-                print(f"[community] StackExchange HTTP {so_resp.status_code}: {error_body}")
+                raise RuntimeError(
+                    f"StackExchange HTTP {so_resp.status_code}: {error_body}"
+                )
 
         return results[:max_results]

@@ -76,6 +76,7 @@ class GitHubSearch(BaseRetriever):
         headers = self._auth_headers()
         results: list[dict] = []
         seen_full_names: set[str] = set()
+        errors: list[str] = []
 
         async with httpx.AsyncClient(timeout=15) as client:
             for term in all_terms[:4]:  # max 4 searches to stay within rate limits
@@ -86,6 +87,7 @@ class GitHubSearch(BaseRetriever):
                         headers=headers,
                     )
                     if resp.status_code != 200:
+                        errors.append(f"{term}: HTTP {resp.status_code}")
                         continue
                     data = resp.json()
                     for item in data.get("items", []):
@@ -104,7 +106,12 @@ class GitHubSearch(BaseRetriever):
                             ),
                             "date": item.get("updated_at", ""),
                         })
-                except httpx.HTTPError:
-                    continue
+                except httpx.HTTPError as exc:
+                    errors.append(f"{term}: {exc.__class__.__name__}")
 
+        # Fail loudly instead of silently scoring a starved source: only stay
+        # quiet when we got results, or when queries legitimately matched
+        # nothing (HTTP 200 with zero items).
+        if not results and errors:
+            raise RuntimeError("GitHub search failed: " + "; ".join(errors[:3]))
         return results[:max_results]
