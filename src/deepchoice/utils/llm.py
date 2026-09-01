@@ -7,9 +7,13 @@ from openai import AsyncOpenAI
 from langchain_core.utils.json import parse_json_markdown
 
 
-DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
-DEFAULT_FLASH_MODEL = "deepseek-v4-flash"
-DEFAULT_PRO_MODEL = "deepseek-v4-pro"
+DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DEFAULT_FLASH_MODEL = "qwen3.8-flash"
+DEFAULT_PRO_MODEL = "qwen3.8-flash"
+
+# Call sites pass tier aliases ("flash"/"pro"); this mapping is the SINGLE
+# place where concrete model names live (swap providers here, not at call sites).
+MODEL_ALIASES = {"flash": DEFAULT_FLASH_MODEL, "pro": DEFAULT_PRO_MODEL}
 
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
@@ -20,8 +24,8 @@ async def _retry_sleep(delay: float) -> None:
 
 
 def _get_client(timeout: float = 120.0) -> AsyncOpenAI:
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    base_url = os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
+    api_key = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY", "")
+    base_url = os.environ.get("LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
     return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -62,15 +66,27 @@ def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
 
 async def call_model(
     prompt: list[dict],
-    model: str = DEFAULT_FLASH_MODEL,
+    model: str = "flash",
     response_format: str | None = None,
     timeout: float = 120.0,
     usage: list | None = None,
 ) -> dict | str:
+    model = MODEL_ALIASES.get(model, model)
+    if isinstance(prompt, list):
+        prompt = list(prompt)
     client = _get_client(timeout=timeout)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
     if response_format == "json":
         kwargs["response_format"] = {"type": "json_object"}
+        # DashScope/Qwen requires the prompt to mention "json" for json_object;
+        # append a guard sentence when absent (otherwise 400s across the board).
+        joined = " ".join(
+            str(m.get("content", "")) for m in prompt if isinstance(m.get("content"), str)
+        )
+        if "json" not in joined.lower():
+            kwargs["messages"] = prompt + [
+                {"role": "user", "content": "Respond with valid JSON only."}
+            ]
 
     response = None
     for attempt in range(_MAX_RETRIES + 1):

@@ -55,9 +55,9 @@ SNAP = {
     "partial_failures": ["arxiv"],
     "source_scores": [{"title": "s1", "total_score": 8, "scores": {"authority": 8, "timeliness": 7, "verifiability": 9}}],
     "token_usage": [
-        {"agent": "query_analyzer", "model": "deepseek-v4-flash", "calls": 2, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
-        {"agent": "self_reviewer", "model": "deepseek-v4-flash", "calls": 1, "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-        {"agent": "self_reviewer", "model": "deepseek-v4-flash", "calls": 2, "prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+        {"agent": "query_analyzer", "model": "flash", "calls": 2, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+        {"agent": "self_reviewer", "model": "flash", "calls": 1, "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        {"agent": "self_reviewer", "model": "flash", "calls": 2, "prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
     ],
     "report": "<h1>Fake report</h1><p>body</p>",
 }
@@ -217,7 +217,7 @@ def test_results_phase_renders_observability_panels(monkeypatch):
     cap = "\n".join(str(c.value) for c in at.caption)
     assert len(at.tabs) == 4, f"expected 4 tabs, got {len(at.tabs)}"
     for needle in ("运行轨迹时间轴", "tl-bar", "检索明细", "tavily", "冲突仲裁",
-                   "A 正确", "得分 8.2", "Token 统计", "deepseek-v4-flash", "195"):
+                   "A 正确", "得分 8.2", "Token 统计", "flash", "195"):
         assert needle in md, f"missing {needle!r} in rendered markdown"
     assert "129.49s" in cap, f"total elapsed caption missing: {cap!r}"
 

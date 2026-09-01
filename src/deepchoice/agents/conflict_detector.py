@@ -300,7 +300,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         try:
             response = await _asyncio.wait_for(
                 client.chat.completions.create(
-                    model="deepseek-v4-flash",
+                    model="flash",
                     messages=messages,
                     tools=SEARCH_TOOLS,
                     temperature=0,
@@ -318,7 +318,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
         if usage is not None and getattr(response, "usage", None) is not None:
             usage.append({
-                "model": getattr(response, "model", None) or "deepseek-v4-flash",
+                "model": getattr(response, "model", None) or "flash",
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,
@@ -392,7 +392,7 @@ Return ONLY a JSON object:
         async with FLASH_SEM:
             result = await call_model(
                 prompt,
-                model="deepseek-v4-flash",
+                model="flash",
                 response_format="json",
                 usage=usage,
             )
@@ -537,7 +537,7 @@ class ConflictDetectorAgent:
             async with FLASH_SEM:
                 result = await call_model(
                     _make_prompt(pair["source_a"], pair["source_b"]),
-                    model="deepseek-v4-flash",
+                    model="flash",
                     response_format="json",
                     usage=local_usage,
                 )
@@ -602,7 +602,7 @@ class ConflictDetectorAgent:
                         async with PRO_SEM:
                             pro_result = await call_model(
                                 _make_prompt(enriched_a, enriched_b),
-                                model="deepseek-v4-pro",
+                                model="pro",
                                 response_format="json",
                                 timeout=300.0,
                                 usage=local_usage,

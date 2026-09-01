@@ -64,7 +64,7 @@ class QueryAdapterAgent:
 
         local_usage: list = []
         try:
-            result = await call_model(prompt, model="deepseek-v4-flash", response_format="json",
+            result = await call_model(prompt, model="flash", response_format="json",
                                       usage=local_usage)
             adapted_items = result.get("adapted", [])
         except Exception as e:

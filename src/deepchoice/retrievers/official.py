@@ -149,7 +149,7 @@ class OfficialSearch(BaseRetriever):
                 },
                 {"role": "user", "content": f"Official documentation URL for: {term}"},
             ],
-            model="deepseek-v4-flash",
+            model="flash",
             response_format="json",
         )
         if isinstance(result, dict):

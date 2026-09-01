@@ -16,7 +16,7 @@ from deepchoice.agents.self_reviewer import SelfReviewerAgent
 from deepchoice.agents import conflict_detector as cd_module
 
 
-def _fake_response(content, model="deepseek-v4-flash",
+def _fake_response(content, model="flash",
                    prompt_tokens=120, completion_tokens=80):
     return types.SimpleNamespace(
         model=model,
@@ -36,7 +36,7 @@ def _fake_client(response):
     )
 
 
-def _gather_fake_response(content="evidence found", model="deepseek-v4-flash",
+def _gather_fake_response(content="evidence found", model="flash",
                           prompt_tokens=150, completion_tokens=60):
     """Fake OpenAI response for _gather_evidence: assistant message with
     model_dump() and no tool_calls, plus a usage block."""
@@ -107,7 +107,7 @@ class TestCallModelUsageCapture:
 
         assert result == "plain text answer"
         assert usage == [{
-            "model": "deepseek-v4-flash",
+            "model": "flash",
             "prompt_tokens": 120,
             "completion_tokens": 80,
             "total_tokens": 200,
@@ -119,7 +119,7 @@ class TestCallModelUsageCapture:
                    return_value=_fake_client(_fake_response('{"ok": true}'))):
             result = await call_model(
                 [{"role": "user", "content": "hi"}],
-                model="deepseek-v4-flash",
+                model="flash",
                 response_format="json",
             )
 
@@ -147,11 +147,11 @@ class TestCallModelUsageCapture:
                    return_value=_fake_client(_fake_response("answer", model=None))):
             await call_model(
                 [{"role": "user", "content": "hi"}],
-                model="deepseek-v4-pro",
+                model="pro",
                 usage=usage,
             )
 
-        assert usage[0]["model"] == "deepseek-v4-pro"
+        assert usage[0]["model"] == "qwen3.8-flash"  # alias resolved to the real model name
 
     @pytest.mark.asyncio
     async def test_skips_capture_when_response_usage_is_none(self):
@@ -169,9 +169,9 @@ class TestCallModelUsageCapture:
 class TestSummarizeUsage:
     def test_single_model_aggregates_sums(self):
         records = [
-            {"model": "deepseek-v4-flash", "prompt_tokens": 100,
+            {"model": "flash", "prompt_tokens": 100,
              "completion_tokens": 50, "total_tokens": 150},
-            {"model": "deepseek-v4-flash", "prompt_tokens": 200,
+            {"model": "flash", "prompt_tokens": 200,
              "completion_tokens": 75, "total_tokens": 275},
         ]
 
@@ -179,7 +179,7 @@ class TestSummarizeUsage:
 
         assert summary == {
             "agent": "query_analyzer",
-            "model": "deepseek-v4-flash",
+            "model": "flash",
             "calls": 2,
             "prompt_tokens": 300,
             "completion_tokens": 125,
@@ -188,17 +188,17 @@ class TestSummarizeUsage:
 
     def test_mixed_models_joins_unique_names(self):
         records = [
-            {"model": "deepseek-v4-flash", "prompt_tokens": 10,
+            {"model": "flash", "prompt_tokens": 10,
              "completion_tokens": 5, "total_tokens": 15},
-            {"model": "deepseek-v4-pro", "prompt_tokens": 30,
+            {"model": "pro", "prompt_tokens": 30,
              "completion_tokens": 20, "total_tokens": 50},
-            {"model": "deepseek-v4-flash", "prompt_tokens": 10,
+            {"model": "flash", "prompt_tokens": 10,
              "completion_tokens": 5, "total_tokens": 15},
         ]
 
         summary = summarize_usage("conflict_detector", records)
 
-        assert summary["model"] == "deepseek-v4-flash,deepseek-v4-pro"
+        assert summary["model"] == "flash,pro"
         assert summary["calls"] == 3
         assert summary["total_tokens"] == 80
 
@@ -240,7 +240,7 @@ class TestAgentTokenUsageWiring:
         assert result["token_usage"][0]["agent"] == "prior_agent"
         assert result["token_usage"][1] == {
             "agent": "query_analyzer",
-            "model": "deepseek-v4-flash",
+            "model": "flash",
             "calls": 1,
             "prompt_tokens": 120,
             "completion_tokens": 80,
@@ -348,7 +348,7 @@ class TestGatherEvidenceUsageCapture:
 
         assert evidence == "Benchmarks favor async under concurrent load"
         assert usage == [{
-            "model": "deepseek-v4-flash",
+            "model": "flash",
             "prompt_tokens": 150,
             "completion_tokens": 60,
             "total_tokens": 210,
