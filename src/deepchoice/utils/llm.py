@@ -7,12 +7,34 @@ from openai import AsyncOpenAI
 from langchain_core.utils.json import parse_json_markdown
 
 
-DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-DEFAULT_FLASH_MODEL = "qwen3.8-flash"
+DEEPSEEK_BASE = "https://api.deepseek.com/v1"
+DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-# Single model for all tiers now (user decision: everything -> qwen3.8-flash).
-# Call sites pass the tier alias "flash"; swap providers here, not at call sites.
-MODEL_ALIASES = {"flash": DEFAULT_FLASH_MODEL}
+
+def _env(*names: str, default: str = "") -> str:
+    for n in names:
+        v = os.environ.get(n, "")
+        if v:
+            return v
+    return default
+
+
+# Tier -> provider config (user decision 2026-09-01, after the 10-case run:
+# qwen3.8-flash is too slow/weak for the hot flash path -> flash goes back to
+# deepseek-v4-flash; the heavy 'pro' tier (report synthesis + conflict
+# re-arbitration) stays on qwen3.8-flash).
+TIERS = {
+    "flash": {
+        "model": _env("FLASH_MODEL", default="deepseek-v4-flash"),
+        "base": _env("FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
+        "key": _env("FLASH_API_KEY", "DEEPSEEK_API_KEY"),
+    },
+    "pro": {
+        "model": _env("PRO_MODEL", default="qwen3.8-flash"),
+        "base": _env("PRO_BASE_URL", "LLM_BASE_URL", default=DASHSCOPE_BASE),
+        "key": _env("PRO_API_KEY", "LLM_API_KEY"),
+    },
+}
 
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
@@ -22,10 +44,9 @@ async def _retry_sleep(delay: float) -> None:
     await asyncio.sleep(delay)
 
 
-def _get_client(timeout: float = 120.0) -> AsyncOpenAI:
-    api_key = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY", "")
-    base_url = os.environ.get("LLM_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
-    return AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+def _get_client(timeout: float = 120.0, tier: str = "flash") -> AsyncOpenAI:
+    cfg = TIERS.get(tier, TIERS["flash"])
+    return AsyncOpenAI(api_key=cfg["key"], base_url=cfg["base"], timeout=timeout)
 
 
 def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
@@ -70,10 +91,12 @@ async def call_model(
     timeout: float = 120.0,
     usage: list | None = None,
 ) -> dict | str:
-    model = MODEL_ALIASES.get(model, model)
+    tier = model if model in TIERS else "flash"
+    cfg = TIERS[tier]
+    model = cfg["model"]
     if isinstance(prompt, list):
         prompt = list(prompt)
-    client = _get_client(timeout=timeout)
+    client = _get_client(timeout=timeout, tier=tier)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
     if response_format == "json":
         kwargs["response_format"] = {"type": "json_object"}

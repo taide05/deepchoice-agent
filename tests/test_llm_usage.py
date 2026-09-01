@@ -151,7 +151,7 @@ class TestCallModelUsageCapture:
                 usage=usage,
             )
 
-        assert usage[0]["model"] == "qwen3.8-flash"  # alias resolved to the real model name
+        assert usage[0]["model"] == "deepseek-v4-flash"  # flash tier -> deepseek model
 
     @pytest.mark.asyncio
     async def test_skips_capture_when_response_usage_is_none(self):
@@ -347,7 +347,7 @@ class TestGatherEvidenceUsageCapture:
 
         assert evidence == "Benchmarks favor async under concurrent load"
         assert usage == [{
-            "model": "flash",
+            "model": "deepseek-v4-flash",
             "prompt_tokens": 150,
             "completion_tokens": 60,
             "total_tokens": 210,

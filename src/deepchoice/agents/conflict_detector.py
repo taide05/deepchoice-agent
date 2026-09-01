@@ -11,12 +11,11 @@ from ..utils.embedding import get_embedding_model
 from ..retrievers.tavily_keypool import post_with_failover
 
 # ---------------------------------------------------------------------------
-# Concurrency limits. Provider-specific (was DeepSeek 500/min flash, 50/min pro);
-# now env-tunable with conservative defaults — set LLM_FLASH_CONCURRENCY /
-# LLM_PRO_CONCURRENCY to match the active provider's RPM. PRO_SEM is retained
-# as the separate re-arbitration-path gate (one low-confidence pair per case).
+# Concurrency limits. Per-tier provider: flash=DeepSeek (500/min), pro=Qwen.
+# Env-tunable — set LLM_FLASH_CONCURRENCY / LLM_PRO_CONCURRENCY to the active
+# provider's RPM. PRO_SEM is the separate re-arbitration-path gate.
 # ---------------------------------------------------------------------------
-FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_FLASH_CONCURRENCY", "30")))
+FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_FLASH_CONCURRENCY", "80")))
 PRO_SEM = asyncio.Semaphore(int(os.environ.get("LLM_PRO_CONCURRENCY", "10")))
 
 # ---------------------------------------------------------------------------
@@ -278,9 +277,9 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     """
     import asyncio as _asyncio
 
-    from ..utils.llm import _get_client
+    from ..utils.llm import _get_client, TIERS
 
-    client = _get_client(timeout=60.0)
+    client = _get_client(timeout=60.0, tier="flash")
 
     messages = [
         {"role": "system", "content": (
@@ -302,7 +301,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         try:
             response = await _asyncio.wait_for(
                 client.chat.completions.create(
-                    model="flash",
+                    model=TIERS["flash"]["model"],
                     messages=messages,
                     tools=SEARCH_TOOLS,
                     temperature=0,
@@ -604,7 +603,7 @@ class ConflictDetectorAgent:
                         async with PRO_SEM:
                             pro_result = await call_model(
                                 _make_prompt(enriched_a, enriched_b),
-                                model="flash",
+                                model="pro",
                                 response_format="json",
                                 timeout=300.0,
                                 usage=local_usage,
