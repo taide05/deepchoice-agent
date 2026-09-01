@@ -929,6 +929,42 @@ def compute_retry_effectiveness(
 # Aggregate Report
 # ---------------------------------------------------------------------------
 
+_CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
+                         "evidence_summary", "scene_fit_note")
+_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness")
+_CITATION_TRADEOFF_FIELDS = ("finding", "impact")
+
+
+def compute_citation_breakdown(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-field inline [Source: title] citation counts across the final
+    recommendation (post-sanitize). Identifies which fields qwen under-cites.
+
+    Returns {"metric", "per_case": [{case_id, fields: {field: {citations, chars}}}]}
+    """
+    def _citations(text: str) -> int:
+        return len(re.findall(r"\[Source:", text or ""))
+
+    per_case: list[dict[str, Any]] = []
+    for run in runs:
+        fr = run.get("final_recommendation") or {}
+        fields: dict[str, dict[str, Any]] = {}
+        for f in _CITATION_TEXT_FIELDS:
+            v = fr.get(f) or ""
+            fields[f] = {"citations": _citations(v), "chars": len(v)}
+        for i, opt in enumerate(fr.get("ranked_options") or []):
+            for f in _CITATION_OPT_FIELDS:
+                v = opt.get(f) or ""
+                fields[f"ranked_options[{i}].{f}"] = {
+                    "citations": _citations(v), "chars": len(v)}
+        for i, to in enumerate(fr.get("trade_offs") or []):
+            for f in _CITATION_TRADEOFF_FIELDS:
+                v = to.get(f) or ""
+                fields[f"trade_offs[{i}].{f}"] = {
+                    "citations": _citations(v), "chars": len(v)}
+        per_case.append({"case_id": run.get("case_id", ""), "fields": fields})
+    return {"metric": "citation_breakdown", "per_case": per_case}
+
+
 def compute_all_metrics(
     runs: list[dict[str, Any]],
     annotated_cases: list[dict[str, Any]],
@@ -958,6 +994,7 @@ def compute_all_metrics(
     report["quality"]["top1_accuracy"] = compute_top1_accuracy(runs, annotated_cases)
     report["quality"]["source_recall"] = compute_source_recall(runs, annotated_cases)
     report["quality"]["source_health"] = compute_source_health(runs)
+    report["quality"]["citation_breakdown"] = compute_citation_breakdown(runs)
     # Claim grounding: average across all reports
     cg_values = []
     for run in runs:
