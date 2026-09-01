@@ -73,7 +73,11 @@ class ChannelResolver:
         return None
 
     async def _probe_for(self, source: str) -> BaseChannel | None:
-        for channel in self.channels:
+        by_name = {ch.name: ch for ch in self.channels}
+        for name in self.cfg.order_for(source):
+            channel = by_name.get(name)
+            if channel is None:
+                continue
             ok = await self._probe_fn(source, channel)
             self._record(source, channel.name, ok, "probe")
             if ok:

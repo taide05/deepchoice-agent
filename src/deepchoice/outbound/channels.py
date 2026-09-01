@@ -8,7 +8,7 @@ Design (2026-08-31, D:\ai-career\DC-网络层-设计-2026-08-31.md):
   reach blocked hosts.
 """
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import httpx
@@ -16,6 +16,13 @@ import httpx
 DEFAULT_CHANNEL_ORDER = "local-proxy,self-forward,direct,direct-v6"
 
 FWD_ALLOWED_DEFAULT = "export.arxiv.org,api.github.com,api.stackexchange.com"
+
+# Per-source channel order overrides (source -> comma-separated order).
+# Community: direct SO access is luck-based per the user's experience;
+# forward endpoint is the preferred channel, proxy second, direct last.
+DEFAULT_ORDER_OVERRIDES: dict[str, str] = {
+    "community": "self-forward,local-proxy,direct",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -25,11 +32,15 @@ FWD_ALLOWED_DEFAULT = "export.arxiv.org,api.github.com,api.stackexchange.com"
 @dataclass(frozen=True)
 class OutboundConfig:
     channel_order: tuple[str, ...] = ("local-proxy", "self-forward", "direct")
+    order_overrides: dict[str, tuple[str, ...]] = field(default_factory=dict)
     local_proxy: str | None = None
     fwd_base: str | None = None
     fwd_key: str | None = None
     fwd_allowed: tuple[str, ...] = ()
     v6_enabled: bool = False
+
+    def order_for(self, source: str) -> tuple[str, ...]:
+        return self.order_overrides.get(source, self.channel_order)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "OutboundConfig":
@@ -39,8 +50,13 @@ class OutboundConfig:
         fwd_allowed = tuple(
             h.strip() for h in env.get("FWD_TARGETS", FWD_ALLOWED_DEFAULT).split(",") if h.strip()
         )
+        overrides: dict[str, tuple[str, ...]] = {}
+        for source, default_order in DEFAULT_ORDER_OVERRIDES.items():
+            raw = env.get(f"OUTBOUND_CHANNELS_{source.upper()}", default_order)
+            overrides[source] = tuple(c.strip() for c in raw.split(",") if c.strip())
         return cls(
             channel_order=channels,
+            order_overrides=overrides,
             local_proxy=env.get("LOCAL_PROXY") or None,
             fwd_base=env.get("FWD_BASE") or None,
             fwd_key=env.get("FWD_KEY") or None,

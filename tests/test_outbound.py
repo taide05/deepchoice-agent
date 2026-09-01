@@ -45,6 +45,9 @@ class TestConfig:
         assert cfg.local_proxy == "http://127.0.0.1:7897"
         assert cfg.fwd_allowed == ("export.arxiv.org",)
         assert cfg.v6_enabled is False
+        # community override (endpoint -> proxy -> direct, per user decision)
+        assert cfg.order_for("community") == ("self-forward", "local-proxy", "direct")
+        assert cfg.order_for("github") == ("direct", "self-forward")
 
 
 class TestResolver:
@@ -103,6 +106,26 @@ class TestResolver:
         state["direct"] = False
         ch2 = await r.resolve("github")
         assert ch2 is not None and ch2.name == "local-proxy"
+
+    @pytest.mark.asyncio
+    async def test_probe_uses_source_order_override(self):
+        """community probes in its own order (self-forward first); github uses
+        the global order."""
+        order = []
+
+        async def probe(source, channel):
+            order.append((source, channel.name))
+            return channel.name == "self-forward"
+
+        cfg = OutboundConfig.from_env()
+        cfg = _cfg(channel_order=("local-proxy", "self-forward", "direct"),
+                   order_overrides={"community": ("self-forward", "local-proxy", "direct")})
+        r = ChannelResolver(cfg=cfg, probe_fn=probe)
+        await r.resolve("community")
+        assert order == [("community", "self-forward")]
+        order.clear()
+        await r.resolve("github")
+        assert order == [("github", "local-proxy"), ("github", "self-forward")]
 
     @pytest.mark.asyncio
     async def test_probe_uses_channel_wired_client(self):
