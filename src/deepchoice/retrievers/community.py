@@ -7,6 +7,11 @@ from .. import outbound as _outbound
 # Stack Exchange allows exactly ONE request per IP at a time (throttle_violation
 # otherwise). This semaphore serializes community searches within the process —
 # concurrency 12 would otherwise throttle all but one of them.
+# Scope note (2026-09-01): in-process only. Multi-process/multi-instance runs
+# (uvicorn --workers>1, parallel benchmark processes on the same egress IP)
+# would need a cross-process lock (file lock is the lightest option) — revisit
+# only when such a topology actually appears; SO misses are non-fatal
+# (partial_failure + 5 sourcing backstops).
 _SEARCH_SEM = asyncio.Semaphore(1)
 _SEARCH_TIMEOUT_S = 20.0
 
