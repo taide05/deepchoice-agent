@@ -33,6 +33,9 @@ TIERS = {
         "model": _env("PRO_MODEL", default="qwen3.8-flash"),
         "base": _env("PRO_BASE_URL", "LLM_BASE_URL", default=DASHSCOPE_BASE),
         "key": _env("PRO_API_KEY", "LLM_API_KEY"),
+        # Qwen3* thinks by default — this doubles latency. Turn it off for
+        # deterministic JSON synthesis/re-arbitration (the timeout root cause).
+        "extra_body": {"enable_thinking": False},
     },
 }
 
@@ -98,6 +101,9 @@ async def call_model(
         prompt = list(prompt)
     client = _get_client(timeout=timeout, tier=tier)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
+    extra = cfg.get("extra_body")
+    if extra:
+        kwargs["extra_body"] = extra
     if response_format == "json":
         kwargs["response_format"] = {"type": "json_object"}
         # DashScope/Qwen requires the prompt to mention "json" for json_object;
