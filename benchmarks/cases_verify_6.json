@@ -1,0 +1,216 @@
+[
+  {
+    "id": "TC-0022",
+    "query": "HuggingFace Transformers vs sentence-transformers for text embeddings in production",
+    "category": "Models & Data",
+    "subdomain": "embedding_models",
+    "scene": "team",
+    "difficulty": "simple",
+    "tech_a": "sentence-transformers",
+    "tech_b": "HuggingFace Transformers",
+    "expected_winner": "sentence-transformers",
+    "ground_truth_notes": "sentence-transformers is purpose-built for embeddings with higher-level API, built-in pooling, and better defaults. Transformers is the underlying engine but requires more boilerplate for embedding use cases.",
+    "must_find_sources": [
+      {
+        "pattern": "sbert.net",
+        "type": "official_doc",
+        "reason": "sentence-transformers official docs"
+      },
+      {
+        "pattern": "huggingface.co/docs/transformers",
+        "type": "official_doc",
+        "reason": "Transformers official docs"
+      },
+      {
+        "pattern": "github.com/UKPLab/sentence-transformers",
+        "type": "github_repo",
+        "reason": "sentence-transformers source repo"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3,
+    "_idx": 42
+  },
+  {
+    "id": "TC-0008",
+    "query": "gRPC vs REST for internal microservice communication in an enterprise",
+    "category": "Backend Frameworks & API",
+    "subdomain": "api_paradigms",
+    "scene": "enterprise",
+    "difficulty": "hard",
+    "tech_a": "gRPC",
+    "tech_b": "REST",
+    "expected_winner": "gRPC",
+    "ground_truth_notes": "For internal microservice-to-microservice communication, gRPC wins on performance (Protocol Buffers, HTTP/2 multiplexing), type safety (generated stubs), and streaming support. REST is better for external/public APIs where human readability and browser access matter.",
+    "must_find_sources": [
+      {
+        "pattern": "grpc.io",
+        "type": "official_doc",
+        "reason": "gRPC official documentation"
+      },
+      {
+        "pattern": "github.com/grpc",
+        "type": "github_repo",
+        "reason": "gRPC source repos and ecosystem"
+      },
+      {
+        "pattern": "protobuf.dev",
+        "type": "official_doc",
+        "reason": "Protocol Buffers documentation"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Debugging and tooling",
+        "position_a": "gRPC is harder to debug - can't just curl it like REST",
+        "position_b": "grpcurl and Postman gRPC support have closed the debugging gap; the performance gain is worth the tooling investment",
+        "key_source": "stackoverflow.com"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 14
+  },
+  {
+    "id": "TC-0001",
+    "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
+    "category": "AI/Agent Frameworks",
+    "subdomain": "agent_orchestration",
+    "scene": "solo",
+    "difficulty": "medium",
+    "tech_a": "LangGraph",
+    "tech_b": "CrewAI",
+    "expected_winner": "LangGraph",
+    "ground_truth_notes": "LangGraph gives lower-level control, better for solo dev who needs flexibility. CrewAI has higher-level abstractions but less customizability and breaks down at scale.",
+    "must_find_sources": [
+      {
+        "pattern": "langchain.com",
+        "type": "official_doc",
+        "reason": "LangGraph official documentation"
+      },
+      {
+        "pattern": "github.com/langchain-ai/langgraph",
+        "type": "github_repo",
+        "reason": "LangGraph source repo - stars, activity, issues"
+      },
+      {
+        "pattern": "github.com/crewAIInc/crewAI",
+        "type": "github_repo",
+        "reason": "CrewAI source repo for comparison"
+      },
+      {
+        "pattern": "arxiv.org",
+        "type": "academic",
+        "reason": "Multi-agent framework survey or comparison paper"
+      }
+    ],
+    "known_contradictions": [
+      {
+        "topic": "Ease of use",
+        "position_a": "CrewAI is simpler to start with, higher-level API",
+        "position_b": "CrewAI abstractions become a liability when you need custom behavior",
+        "key_source": "reddit.com/r/LangChain"
+      }
+    ],
+    "min_expected_sources": 5,
+    "_idx": 0
+  },
+  {
+    "id": "OS-0001",
+    "case_type": "open_scenario",
+    "query": "I am a solo developer building a SaaS dashboard and need a web framework that gets me to production fastest",
+    "category": "Open Scenario",
+    "subdomain": "web_fullstack",
+    "scene": "solo",
+    "difficulty": "simple",
+    "acceptable_winners": [
+      "next.js",
+      "vue",
+      "nuxt",
+      "svelte",
+      "ruby on rails",
+      "django"
+    ],
+    "ground_truth_notes": "Any mainstream fullstack framework is acceptable; the scene is speed-to-production for one developer.",
+    "must_find_sources": [
+      {
+        "pattern": "nextjs.org",
+        "type": "official_doc",
+        "reason": "Next.js official docs"
+      },
+      {
+        "pattern": "vuejs.org",
+        "type": "official_doc",
+        "reason": "Vue official docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3,
+    "_idx": 1
+  },
+  {
+    "id": "OS-0003",
+    "case_type": "open_scenario",
+    "query": "Enterprise wants internal admin panels for dozens of backend services without hiring frontend specialists",
+    "category": "Open Scenario",
+    "subdomain": "internal_tools",
+    "scene": "enterprise",
+    "difficulty": "medium",
+    "acceptable_winners": [
+      "refine",
+      "react-admin",
+      "retool",
+      "appsmith",
+      "budibase",
+      "tooljet"
+    ],
+    "ground_truth_notes": "Low-code or framework-based admin panel solutions all satisfy the constraint of few frontend specialists.",
+    "must_find_sources": [
+      {
+        "pattern": "refine.dev",
+        "type": "official_doc",
+        "reason": "Refine official docs"
+      },
+      {
+        "pattern": "retool.com",
+        "type": "official_doc",
+        "reason": "Retool official site"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3,
+    "_idx": 5
+  },
+  {
+    "id": "OS-0018",
+    "case_type": "open_scenario",
+    "query": "Our team needs sub-second dashboards over billions of events",
+    "category": "Open Scenario",
+    "subdomain": "data_platform",
+    "scene": "team",
+    "difficulty": "hard",
+    "acceptable_winners": [
+      "clickhouse",
+      "timescaledb",
+      "materialize",
+      "druid",
+      "bigquery",
+      "clickhouse cloud"
+    ],
+    "ground_truth_notes": "OLAP column stores or streaming-materialized views are the valid routes.",
+    "must_find_sources": [
+      {
+        "pattern": "clickhouse.com",
+        "type": "official_doc",
+        "reason": "ClickHouse docs"
+      },
+      {
+        "pattern": "timescale.com",
+        "type": "official_doc",
+        "reason": "TimescaleDB docs"
+      }
+    ],
+    "known_contradictions": [],
+    "min_expected_sources": 3,
+    "_idx": 35
+  }
+]
