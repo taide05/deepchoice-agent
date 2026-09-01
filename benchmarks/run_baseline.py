@@ -145,7 +145,7 @@ async def _judge_conflict_match(detected_conflicts: list[dict], topic: str) -> b
         result = await call_model(
             [{"role": "user", "content": CONFLICT_JUDGE_PROMPT.format(
                 conflicts_text=conflicts_text, topic=topic)}],
-            model="flash",
+            model="deepseek-flash",
             response_format="text",
         )
         return "yes" in str(result).strip().lower()

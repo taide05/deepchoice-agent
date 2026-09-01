@@ -55,9 +55,9 @@ SNAP = {
     "partial_failures": ["arxiv"],
     "source_scores": [{"title": "s1", "total_score": 8, "scores": {"authority": 8, "timeliness": 7, "verifiability": 9}}],
     "token_usage": [
-        {"agent": "query_analyzer", "model": "flash", "calls": 2, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
-        {"agent": "self_reviewer", "model": "flash", "calls": 1, "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-        {"agent": "self_reviewer", "model": "flash", "calls": 2, "prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+        {"agent": "query_analyzer", "model": "deepseek-flash", "calls": 2, "prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+        {"agent": "self_reviewer", "model": "deepseek-flash", "calls": 1, "prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        {"agent": "self_reviewer", "model": "deepseek-flash", "calls": 2, "prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
     ],
     "report": "<h1>Fake report</h1><p>body</p>",
 }

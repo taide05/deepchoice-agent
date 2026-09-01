@@ -11,12 +11,12 @@ from ..utils.embedding import get_embedding_model
 from ..retrievers.tavily_keypool import post_with_failover
 
 # ---------------------------------------------------------------------------
-# Concurrency limits. Per-tier provider: flash=DeepSeek (500/min), pro=Qwen.
-# Env-tunable — set LLM_FLASH_CONCURRENCY / LLM_PRO_CONCURRENCY to the active
-# provider's RPM. PRO_SEM is the separate re-arbitration-path gate.
+# Concurrency limits. Two flash tiers: deepseek-flash (500/min) + qwen-flash.
+# Env-tunable — set LLM_DS_CONCURRENCY / LLM_QW_CONCURRENCY to the provider RPM.
+# QW_SEM is the separate re-arbitration-path gate (qwen-flash tier).
 # ---------------------------------------------------------------------------
-FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_FLASH_CONCURRENCY", "80")))
-PRO_SEM = asyncio.Semaphore(int(os.environ.get("LLM_PRO_CONCURRENCY", "10")))
+FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_DS_CONCURRENCY", "80")))
+QW_SEM = asyncio.Semaphore(int(os.environ.get("LLM_QW_CONCURRENCY", "10")))
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -279,7 +279,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 
     from ..utils.llm import _get_client, TIERS
 
-    client = _get_client(timeout=60.0, tier="flash")
+    client = _get_client(timeout=60.0, tier="deepseek-flash")
 
     messages = [
         {"role": "system", "content": (
@@ -301,7 +301,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         try:
             response = await _asyncio.wait_for(
                 client.chat.completions.create(
-                    model=TIERS["flash"]["model"],
+                    model=TIERS["deepseek-flash"]["model"],
                     messages=messages,
                     tools=SEARCH_TOOLS,
                     temperature=0,
@@ -319,7 +319,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
         if usage is not None and getattr(response, "usage", None) is not None:
             usage.append({
-                "model": getattr(response, "model", None) or TIERS["flash"]["model"],
+                "model": getattr(response, "model", None) or TIERS["deepseek-flash"]["model"],
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,
@@ -393,7 +393,7 @@ Return ONLY a JSON object:
         async with FLASH_SEM:
             result = await call_model(
                 prompt,
-                model="flash",
+                model="deepseek-flash",
                 response_format="json",
                 usage=usage,
             )
@@ -538,11 +538,11 @@ class ConflictDetectorAgent:
             async with FLASH_SEM:
                 result = await call_model(
                     _make_prompt(pair["source_a"], pair["source_b"]),
-                    model="flash",
+                    model="deepseek-flash",
                     response_format="json",
                     usage=local_usage,
                 )
-            return _build_conflict(pair, result, model="flash")
+            return _build_conflict(pair, result, model="deepseek-flash")
 
         raw_conflicts = await asyncio.gather(
             *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
@@ -600,10 +600,10 @@ class ConflictDetectorAgent:
                     enriched_b = dict(b, title=enriched_claim_b)
 
                     try:
-                        async with PRO_SEM:
-                            pro_result = await call_model(
+                        async with QW_SEM:
+                            qw_result = await call_model(
                                 _make_prompt(enriched_a, enriched_b),
-                                model="pro",
+                                model="qwen-flash",
                                 response_format="json",
                                 timeout=300.0,
                                 usage=local_usage,
@@ -612,9 +612,9 @@ class ConflictDetectorAgent:
                         print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
                         return None
 
-                    pro_conflict = _build_conflict(pair, pro_result, model="pro+evidence")
-                    pro_conflict["evidence_collected"] = evidence[:500] if evidence else ""
-                    return idx, pro_conflict
+                    qw_conflict = _build_conflict(pair, qw_result, model="qwen-flash+evidence")
+                    qw_conflict["evidence_collected"] = evidence[:500] if evidence else ""
+                    return idx, qw_conflict
 
             re_results = await asyncio.gather(
                 *[_re_arbitrate(i, p) for i, p in enumerate(low_confidence_pairs)],
@@ -624,9 +624,9 @@ class ConflictDetectorAgent:
                 if isinstance(r, Exception):
                     continue
                 if r is not None:
-                    idx, pro_conflict = r
+                    idx, qw_conflict = r
                     if idx < len(conflicts):
-                        conflicts[idx] = pro_conflict
+                        conflicts[idx] = qw_conflict
         elif low_confidence_pairs:
             print_agent_output(
                 f"Skipping evidence gathering (disabled): {len(low_confidence_pairs)} pair(s)",

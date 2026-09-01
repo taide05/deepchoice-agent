@@ -19,20 +19,19 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
-# Tier -> provider config (user decision 2026-09-01, after the 10-case run:
-# qwen3.8-flash is too slow/weak for the hot flash path -> flash goes back to
-# deepseek-v4-flash; the heavy 'pro' tier (report synthesis + conflict
-# re-arbitration) stays on qwen3.8-flash).
+# Tier -> provider config (user decision 2026-09-01): two flash tiers —
+# deepseek-flash (the hot, high-frequency path) and qwen-flash (report
+# synthesis + conflict re-arbitration).
 TIERS = {
-    "flash": {
-        "model": _env("FLASH_MODEL", default="deepseek-v4-flash"),
-        "base": _env("FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
-        "key": _env("FLASH_API_KEY", "DEEPSEEK_API_KEY"),
+    "deepseek-flash": {
+        "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
+        "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
+        "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),
     },
-    "pro": {
-        "model": _env("PRO_MODEL", default="qwen3.8-flash"),
-        "base": _env("PRO_BASE_URL", "LLM_BASE_URL", default=DASHSCOPE_BASE),
-        "key": _env("PRO_API_KEY", "LLM_API_KEY"),
+    "qwen-flash": {
+        "model": _env("QW_FLASH_MODEL", "PRO_MODEL", default="qwen3.8-flash"),
+        "base": _env("QW_FLASH_BASE_URL", "PRO_BASE_URL", "LLM_BASE_URL", default=DASHSCOPE_BASE),
+        "key": _env("QW_FLASH_API_KEY", "PRO_API_KEY", "LLM_API_KEY"),
         # Qwen3* thinks by default — this doubles latency. Turn it off for
         # deterministic JSON synthesis/re-arbitration (the timeout root cause).
         "extra_body": {"enable_thinking": False},
@@ -47,8 +46,8 @@ async def _retry_sleep(delay: float) -> None:
     await asyncio.sleep(delay)
 
 
-def _get_client(timeout: float = 120.0, tier: str = "flash") -> AsyncOpenAI:
-    cfg = TIERS.get(tier, TIERS["flash"])
+def _get_client(timeout: float = 120.0, tier: str = "deepseek-flash") -> AsyncOpenAI:
+    cfg = TIERS.get(tier, TIERS["deepseek-flash"])
     return AsyncOpenAI(api_key=cfg["key"], base_url=cfg["base"], timeout=timeout)
 
 
@@ -89,12 +88,12 @@ def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
 
 async def call_model(
     prompt: list[dict],
-    model: str = "flash",
+    model: str = "deepseek-flash",
     response_format: str | None = None,
     timeout: float = 120.0,
     usage: list | None = None,
 ) -> dict | str:
-    tier = model if model in TIERS else "flash"
+    tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
     model = cfg["model"]
     if isinstance(prompt, list):

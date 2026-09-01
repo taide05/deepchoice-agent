@@ -16,7 +16,7 @@ from deepchoice.agents.self_reviewer import SelfReviewerAgent
 from deepchoice.agents import conflict_detector as cd_module
 
 
-def _fake_response(content, model="flash",
+def _fake_response(content, model="deepseek-flash",
                    prompt_tokens=120, completion_tokens=80):
     return types.SimpleNamespace(
         model=model,
@@ -107,7 +107,7 @@ class TestCallModelUsageCapture:
 
         assert result == "plain text answer"
         assert usage == [{
-            "model": "flash",
+            "model": "deepseek-flash",
             "prompt_tokens": 120,
             "completion_tokens": 80,
             "total_tokens": 200,
@@ -119,7 +119,7 @@ class TestCallModelUsageCapture:
                    return_value=_fake_client(_fake_response('{"ok": true}'))):
             result = await call_model(
                 [{"role": "user", "content": "hi"}],
-                model="flash",
+                model="deepseek-flash",
                 response_format="json",
             )
 
@@ -147,7 +147,7 @@ class TestCallModelUsageCapture:
                    return_value=_fake_client(_fake_response("answer", model=None))):
             await call_model(
                 [{"role": "user", "content": "hi"}],
-                model="flash",
+                model="deepseek-flash",
                 usage=usage,
             )
 
@@ -169,9 +169,9 @@ class TestCallModelUsageCapture:
 class TestSummarizeUsage:
     def test_single_model_aggregates_sums(self):
         records = [
-            {"model": "flash", "prompt_tokens": 100,
+            {"model": "deepseek-flash", "prompt_tokens": 100,
              "completion_tokens": 50, "total_tokens": 150},
-            {"model": "flash", "prompt_tokens": 200,
+            {"model": "deepseek-flash", "prompt_tokens": 200,
              "completion_tokens": 75, "total_tokens": 275},
         ]
 
@@ -179,7 +179,7 @@ class TestSummarizeUsage:
 
         assert summary == {
             "agent": "query_analyzer",
-            "model": "flash",
+            "model": "deepseek-flash",
             "calls": 2,
             "prompt_tokens": 300,
             "completion_tokens": 125,
@@ -188,17 +188,17 @@ class TestSummarizeUsage:
 
     def test_mixed_models_joins_unique_names(self):
         records = [
-            {"model": "flash", "prompt_tokens": 10,
+            {"model": "deepseek-flash", "prompt_tokens": 10,
              "completion_tokens": 5, "total_tokens": 15},
-            {"model": "pro", "prompt_tokens": 30,
+            {"model": "qwen-flash", "prompt_tokens": 30,
              "completion_tokens": 20, "total_tokens": 50},
-            {"model": "flash", "prompt_tokens": 10,
+            {"model": "deepseek-flash", "prompt_tokens": 10,
              "completion_tokens": 5, "total_tokens": 15},
         ]
 
         summary = summarize_usage("conflict_detector", records)
 
-        assert summary["model"] == "flash,pro"
+        assert summary["model"] == "deepseek-flash,qwen-flash"
         assert summary["calls"] == 3
         assert summary["total_tokens"] == 80
 
@@ -240,7 +240,7 @@ class TestAgentTokenUsageWiring:
         assert result["token_usage"][0]["agent"] == "prior_agent"
         assert result["token_usage"][1] == {
             "agent": "query_analyzer",
-            "model": "flash",
+            "model": "deepseek-flash",
             "calls": 1,
             "prompt_tokens": 120,
             "completion_tokens": 80,
