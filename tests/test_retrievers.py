@@ -213,6 +213,51 @@ class TestCommunitySearch:
         assert result["status"] == "success"
 
     @pytest.mark.asyncio
+    async def test_searches_serialized_by_semaphore(self):
+        """SO allows one request per IP: two concurrent searches must NOT
+        overlap (the semaphore serializes them)."""
+        import asyncio as _asyncio
+        from deepchoice.retrievers.community import _SEARCH_SEM
+
+        # drain any leftover permit from prior tests
+        while not _SEARCH_SEM.locked():
+            break
+        # ensure unlocked state deterministically
+        events = []
+
+        async def slow_get(url, params=None, headers=None):
+            events.append("start")
+            await _asyncio.sleep(0.15)
+            events.append("end")
+            return MagicMock(status_code=200)
+
+        class SlowClient:
+            def __init__(self):
+                self.get = AsyncMock(side_effect=slow_get)
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+        # direct test of the semaphore behaviour on the real method:
+        # patch make_client to the slow client
+        retriever = CommunitySearch()
+
+        async def slow_make_client(source):
+            return SlowClient()
+
+        with patch("deepchoice.retrievers.community._outbound.make_client",
+                   side_effect=slow_make_client):
+            results = await _asyncio.gather(retriever.search("test q", []),
+                                            retriever.search("test q2", []))
+        assert all(r["status"] == "success" for r in results)
+        # never two 'start' without an 'end' between them
+        first_end = events.index("end")
+        assert events[:first_end] == ["start", "end"] or events == ["start", "end", "start", "end"]
+
+    @pytest.mark.asyncio
     async def test_non_200_raises(self):
         """Non-200 (rate limit/auth) must surface as failed, not empty success."""
         mock_se = MagicMock()

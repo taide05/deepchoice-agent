@@ -61,7 +61,16 @@ async def ok_for(source: str, client: httpx.AsyncClient) -> bool:
                                      headers=headers)
         else:
             resp = await client.get(spec.url, params=spec.params, headers=headers)
-        return resp.status_code in spec.ok_codes
+        if resp.status_code in spec.ok_codes:
+            return True
+        # Stack Exchange throttle (error_id 502) means the channel and auth are
+        # fine — it is a temporary per-IP rate limit, not unreachability.
+        # Treating it as "channel OK" keeps health checks truthful.
+        if source == "community" and resp.status_code == 400:
+            body = (resp.text or "")
+            if "throttle_violation" in body:
+                return True
+        return False
     except Exception:
         return False
 
