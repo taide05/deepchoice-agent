@@ -1,4 +1,5 @@
 import time
+from .. import outbound as _outbound
 
 
 def error_text(e: Exception) -> str:
@@ -24,6 +25,14 @@ class BaseRetriever:
                 "latency_ms": round((time.monotonic() - t0) * 1000),
             }
         except Exception as e:
+            # A failed request may mean the routed channel died after probing
+            # (proxy down, forward endpoint down, network blip). Tell the
+            # channel layer so the next resolve() re-probes and re-routes;
+            # harmless no-op for sources outside the channel layer (tavily).
+            try:
+                await _outbound.get_resolver().invalidate(self.source)
+            except Exception:
+                pass
             return {
                 "source": self.source,
                 "status": "failed",

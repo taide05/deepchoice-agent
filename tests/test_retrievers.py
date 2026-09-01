@@ -159,6 +159,20 @@ class TestGitHubSearch:
         assert result["status"] == "success"
         assert len(result["results"]) == 1
 
+    @pytest.mark.asyncio
+    async def test_failure_invalidates_outbound_route(self):
+        """A failed search must notify the channel layer so the route can be
+        re-probed on the next resolve (runtime re-route path)."""
+        retriever = GitHubSearch()
+        invalidate = AsyncMock()
+        fake_resolver = MagicMock()
+        fake_resolver.invalidate = invalidate
+        with _patch_outbound(_FakeClient(get_side=[Exception("boom")])), \
+             patch("deepchoice.outbound.get_resolver", return_value=fake_resolver):
+            result = await retriever.search("test framework", [])
+        assert result["status"] == "failed"
+        invalidate.assert_awaited_once_with("github")
+
 
 class TestArxivSearch:
     @pytest.mark.asyncio
