@@ -53,7 +53,8 @@ class TestTavilySearch:
             }]
         }
         retriever = TavilySearch()
-        with _patch_outbound(_FakeClient(post_return=mock_resp)):
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_resp
             result = await retriever.search("test query", [])
         assert result["source"] == "tavily"
         assert result["status"] == "success"
@@ -65,7 +66,8 @@ class TestTavilySearch:
     @pytest.mark.asyncio
     async def test_handles_api_error(self):
         retriever = TavilySearch()
-        with _patch_outbound(_FakeClient(post_side=[Exception("API timeout")])):
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.side_effect = Exception("API timeout")
             result = await retriever.search("test query", [])
         assert result["status"] == "failed"
         assert result["error"] is not None
@@ -77,11 +79,11 @@ class TestTavilySearch:
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"results": []}
 
-        fake = _FakeClient(post_return=mock_resp)
         retriever = TavilySearch()
-        with _patch_outbound(fake):
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_resp
             await retriever.search("main query", ["sq1", "sq2", "sq3"])
-        assert fake.post.call_count >= 2  # main + at least 1 sub-question
+        assert mock_post.call_count >= 2  # main + at least 1 sub-question
 
 
 class TestGitHubSearch:

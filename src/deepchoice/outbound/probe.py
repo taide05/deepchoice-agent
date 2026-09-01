@@ -40,10 +40,6 @@ PROBES: dict[str, ProbeSpec] = {
         params={"site": "stackoverflow", "q": "langgraph", "pagesize": 1},
         ok_codes=(200,),
     ),
-    "tavily": ProbeSpec(
-        source="tavily", method="POST",
-        url="https://api.tavily.com/search", ok_codes=(200,),
-    ),
 }
 
 

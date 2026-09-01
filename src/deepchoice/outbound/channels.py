@@ -13,9 +13,9 @@ from typing import Callable
 
 import httpx
 
-DEFAULT_CHANNEL_ORDER = "direct,local-proxy,self-forward,direct-v6"
+DEFAULT_CHANNEL_ORDER = "local-proxy,self-forward,direct,direct-v6"
 
-FWD_ALLOWED_DEFAULT = "export.arxiv.org,api.github.com"
+FWD_ALLOWED_DEFAULT = "export.arxiv.org,api.github.com,api.stackexchange.com"
 
 
 # ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ FWD_ALLOWED_DEFAULT = "export.arxiv.org,api.github.com"
 
 @dataclass(frozen=True)
 class OutboundConfig:
-    channel_order: tuple[str, ...] = ("direct", "local-proxy", "self-forward")
+    channel_order: tuple[str, ...] = ("local-proxy", "self-forward", "direct")
     local_proxy: str | None = None
     fwd_base: str | None = None
     fwd_key: str | None = None

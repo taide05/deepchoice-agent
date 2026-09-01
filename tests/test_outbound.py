@@ -31,7 +31,7 @@ class TestConfig:
         for k in ("OUTBOUND_CHANNELS", "LOCAL_PROXY", "FWD_BASE", "FWD_KEY", "FWD_TARGETS"):
             monkeypatch.delenv(k, raising=False)
         cfg = OutboundConfig.from_env()
-        assert cfg.channel_order == ("direct", "local-proxy", "self-forward", "direct-v6")
+        assert cfg.channel_order == ("local-proxy", "self-forward", "direct", "direct-v6")
         assert cfg.fwd_base is None
         assert cfg.v6_enabled is True  # direct-v6 in default order
 
@@ -111,8 +111,8 @@ class TestResolver:
         r = ChannelResolver(cfg=_cfg(), probe_fn=probe)
         hc = await r.health_check()
         assert hc["sources"]["github"]["ok"] is True
-        assert hc["sources"]["tavily"]["ok"] is False
-        assert "tavily" in hc["degraded_sources"]
+        assert hc["sources"]["community"]["ok"] is False
+        assert "community" in hc["degraded_sources"]
 
     @pytest.mark.asyncio
     async def test_audit_records(self):
