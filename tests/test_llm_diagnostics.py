@@ -98,3 +98,47 @@ class TestRecordCallback:
                    return_value=_Client(_resp("plain"))):
             await call_model([{"role": "user", "content": "hi"}], model="qwen-flash")
         assert records[0]["tag"] == "qwen-flash"
+
+
+class _CaptureClient:
+    def __init__(self, resp):
+        self._resp = resp
+        self.kwargs = None
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    async def _create(self, **kwargs):
+        self.kwargs = kwargs
+        return self._resp
+
+
+class TestExtraBody:
+    @pytest.mark.asyncio
+    async def test_per_call_extra_body_overrides_tier_default(self):
+        c = _CaptureClient(_resp('{"a": 1}'))
+        with patch("deepchoice.utils.llm._get_client", return_value=c):
+            await call_model(
+                [{"role": "user", "content": "json please"}],
+                model="qwen-flash", response_format="json",
+                extra_body={"enable_thinking": True},
+            )
+        assert c.kwargs["extra_body"] == {"enable_thinking": True}
+
+    @pytest.mark.asyncio
+    async def test_no_extra_body_uses_tier_default(self):
+        c = _CaptureClient(_resp('{"a": 1}'))
+        with patch("deepchoice.utils.llm._get_client", return_value=c):
+            await call_model(
+                [{"role": "user", "content": "json please"}],
+                model="qwen-flash", response_format="json",
+            )
+        assert c.kwargs["extra_body"] == {"enable_thinking": False}
+
+    @pytest.mark.asyncio
+    async def test_deepseek_flash_has_no_extra_body(self):
+        c = _CaptureClient(_resp('{"a": 1}'))
+        with patch("deepchoice.utils.llm._get_client", return_value=c):
+            await call_model(
+                [{"role": "user", "content": "json please"}],
+                model="deepseek-flash", response_format="json",
+            )
+        assert "extra_body" not in c.kwargs
