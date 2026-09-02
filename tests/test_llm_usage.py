@@ -398,3 +398,21 @@ class TestCitationCoverage:
         from deepchoice.agents.self_reviewer import _citation_coverage
         out = _citation_coverage({})
         assert out == {"total_fields": 0, "cited_fields": 0, "uncited_fields": 0}
+
+
+class TestDetectScene:
+    def test_explicit_scene_wins(self):
+        from deepchoice.agents.query_analyzer import _detect_scene
+        assert _detect_scene("some query", "enterprise") == "enterprise"
+
+    def test_solo_keyword(self):
+        from deepchoice.agents.query_analyzer import _detect_scene
+        assert _detect_scene("I am a solo developer building X", "unspecified") == "solo"
+
+    def test_enterprise_keyword(self):
+        from deepchoice.agents.query_analyzer import _detect_scene
+        assert _detect_scene("Enterprise needs compliance and security", "missing") == "enterprise"
+
+    def test_default_team(self):
+        from deepchoice.agents.query_analyzer import _detect_scene
+        assert _detect_scene("compare framework A vs B", "") == "team"

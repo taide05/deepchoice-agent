@@ -16,15 +16,32 @@ CRITICAL: Each sub-question MUST include:
 - Minimum 15 Chinese characters or 10 English words
 - NO generic "Compare X and Y" questions — always narrow to a specific aspect
 
-Scene context detection:
-- "solo": solo developer (1-5 people) — prioritize simplicity, learning curve, cost
-- "team": mid-size team (20-100 people) — prioritize reliability, ecosystem, team productivity
-- "enterprise": large org (500+ people) — prioritize compliance, SLA, security, scalability
-
-If scene_context is "unspecified" or missing, default to "team".
+Scene context is ALREADY DETERMINED by the pipeline and given in the user message — do NOT re-detect it; decompose sub-questions for that scene.
 
 Return ONLY a JSON object (no markdown):
-{"sub_questions": ["q1", "q2", "..."], "scene_context": "solo|team|enterprise", "constraints": ["c1", "c2", "..."]}"""
+{"sub_questions": ["q1", "q2", "..."], "constraints": ["c1", "c2", "..."]}"""
+
+
+_SCENE_KEYWORDS = {
+    "solo": ("solo", "side project", "personal", "individual", "startup",
+             "myself", "my own", "single developer", "1-5 people"),
+    "enterprise": ("enterprise", "large org", "corporate", "500+", "compliance",
+                   "sla", "security", "scale", "dozens of", "billions"),
+}
+
+
+def _detect_scene(query: str, given: str) -> str:
+    """Deterministic scene classification: explicit input wins, else keyword
+    match, else team. Runs BEFORE the LLM so it only decomposes sub-questions
+    instead of also guessing the scene."""
+    given = (given or "").strip().lower()
+    if given in ("solo", "team", "enterprise"):
+        return given
+    q = query.lower()
+    for scene, keywords in _SCENE_KEYWORDS.items():
+        if any(k in q for k in keywords):
+            return scene
+    return "team"
 
 
 class QueryAnalyzerAgent:
@@ -37,9 +54,11 @@ class QueryAnalyzerAgent:
         task = research_state["task"]
         print_agent_output(f"Analyzing query: {task['query']}", agent="QUERY_ANALYZER")
 
+        scene = _detect_scene(task["query"], task.get("scene_context", "unspecified"))
+
         prompt = [
             {"role": "system", "content": DECOMPOSITION_SYSTEM},
-            {"role": "user", "content": f"User query: {task['query']}\nUser context: {task.get('scene_context', 'unspecified')}\nKnown constraints: {', '.join(task.get('constraints', [])) or 'none'}"},
+            {"role": "user", "content": f"User query: {task['query']}\nScene context (already determined): {scene}\nKnown constraints: {', '.join(task.get('constraints', [])) or 'none'}"},
         ]
 
         local_usage: list = []
@@ -49,13 +68,13 @@ class QueryAnalyzerAgent:
         sub_questions = result.get("sub_questions", [])
         return {
             "sub_questions": sub_questions,
-            "scene_context": result.get("scene_context", task.get("scene_context", "team")),
+            "scene_context": scene,
             "constraints": result.get("constraints", task.get("constraints", [])),
             "quality_signals": [{
                 "agent": "query_analyzer",
                 "sub_question_count": len(sub_questions),
                 "dimensions_covered": 5,
-                "scene_context": result.get("scene_context", "team"),
+                "scene_context": scene,
                 "has_constraints": bool(task.get("constraints")),
             }],
             "token_usage": research_state.get("token_usage", [])
