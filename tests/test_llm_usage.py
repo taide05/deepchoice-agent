@@ -377,3 +377,24 @@ class TestDeterministicArbitration:
         out = cd_module._deterministic_arbitration(
             {"total_score": 6.0}, {"total_score": 5.0})  # gap 1.0
         assert out is None
+
+
+class TestCitationCoverage:
+    def test_counts_cited_and_uncited(self):
+        from deepchoice.agents.self_reviewer import _citation_coverage
+        fr = {
+            "recommendation": "Use X [Source: A].",
+            "winner_rationale": "X wins [Source: A].",
+            "ranked_options": [{"rationale": "r [Source: A]", "key_strength": "s",
+                                "key_weakness": "w"}],
+            "trade_offs": [{"finding": "f [Source: A]", "impact": "i"}],
+        }
+        out = _citation_coverage(fr)
+        assert out["total_fields"] == 7
+        assert out["cited_fields"] == 4
+        assert out["uncited_fields"] == 3
+
+    def test_empty_recommendation_is_zeroed(self):
+        from deepchoice.agents.self_reviewer import _citation_coverage
+        out = _citation_coverage({})
+        assert out == {"total_fields": 0, "cited_fields": 0, "uncited_fields": 0}

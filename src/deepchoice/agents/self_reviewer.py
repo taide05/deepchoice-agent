@@ -4,8 +4,8 @@ from ..utils.views import print_agent_output
 REVIEW_SYSTEM = """You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
 
 Answer YES or NO for each, with a brief note:
-1. Does every conclusion have source support?
-2. Are there any unsourced claims?
+1. Source support: citation coverage is PRE-COMPUTED by the pipeline (see "Citation Coverage" in the input) — use that number, do NOT re-evaluate from the report text.
+2. Unsourced claims: the pre-computed "Uncited" count is authoritative — use it, do NOT re-count.
 3. Does the recommendation cover all 5 comparison dimensions? (Functionality, Performance, Ecosystem, Developer Experience, Scenario Fit)
 4. Are there unlabeled information conflicts?
 5. Are any user sub-questions unanswered?
@@ -20,6 +20,36 @@ If confidence is not "high", list specific information gaps as search queries.
 
 Return ONLY a JSON object:
 {"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": N, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"]}"""
+
+
+_CITATION_FIELDS = ("recommendation", "winner_rationale", "evidence_summary",
+                    "scene_fit_note")
+_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness")
+_CITATION_TRADEOFF_FIELDS = ("finding", "impact")
+
+
+def _citation_coverage(fr: dict) -> dict:
+    """Deterministic citation coverage for self-review items 1/2.
+
+    Counts factual-claim fields that carry at least one [Source: title], so the
+    reviewer trusts a pre-computed fact instead of re-reading the report.
+    """
+    fields: list[str] = []
+    for f in _CITATION_FIELDS:
+        if fr.get(f):
+            fields.append(fr[f])
+    for opt in fr.get("ranked_options", []):
+        for f in _CITATION_OPT_FIELDS:
+            if opt.get(f):
+                fields.append(opt[f])
+    for to in fr.get("trade_offs", []):
+        for f in _CITATION_TRADEOFF_FIELDS:
+            if to.get(f):
+                fields.append(to[f])
+    total = len(fields)
+    uncited = sum(1 for f in fields if "[Source:" not in f)
+    return {"total_fields": total, "cited_fields": total - uncited,
+            "uncited_fields": uncited}
 
 
 class SelfReviewerAgent:
@@ -48,8 +78,15 @@ class SelfReviewerAgent:
             )
         chains_text = "\n".join(chains_summary) if chains_summary else "No evidence chains."
 
+        cite_stats = _citation_coverage(research_state.get("final_recommendation", {}))
+
         user_content = f"""## Report
 {research_state.get("report", "")}
+
+## Citation Coverage (pre-computed — trust this, do NOT re-evaluate)
+Total claim fields: {cite_stats["total_fields"]}
+Cited: {cite_stats["cited_fields"]}
+Uncited: {cite_stats["uncited_fields"]}
 
 ## Evidence Chains
 {chains_text}
