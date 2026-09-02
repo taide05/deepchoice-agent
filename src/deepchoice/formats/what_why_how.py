@@ -30,6 +30,7 @@ def render(state: dict) -> str:
         "unknown": {"en": "## What We Don't Know Yet", "zh": "## 尚未可知"},
         "how": {"en": "## How: Action Path", "zh": "## How: 行动路径"},
         "recommendation": {"en": "Recommendation", "zh": "建议"},
+        "no_single_winner": {"en": "No single winner — the choice depends on your constraints", "zh": "无唯一胜者——选择取决于你的约束条件"},
         "ranked_options": {"en": "### Ranked Options", "zh": "### 方案排名"},
         "trade_offs": {"en": "### Trade-offs", "zh": "### 权衡"},
         "scene_fit": {"en": "Scene Fit", "zh": "场景适配"},
@@ -90,7 +91,10 @@ def render(state: dict) -> str:
         winner = rec["ranked_options"][0]["name"]
 
     if winner:
-        lines.append(f"**Winner: {winner}**")
+        if winner.lower() == "context_dependent":
+            lines.append(f"**Winner:** {T['no_single_winner'][lang]}")
+        else:
+            lines.append(f"**Winner: {winner}**")
         if rec.get("winner_rationale"):
             lines.append(f"*{rec['winner_rationale']}*")
         lines.append("")

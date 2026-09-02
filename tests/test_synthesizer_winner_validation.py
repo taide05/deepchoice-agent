@@ -108,6 +108,12 @@ class TestWinnerValidation:
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
         assert out["final_recommendation"]["winner"] == "org/repo"
 
+    def test_context_dependent_winner_not_fallback(self):
+        result = {"winner": "context_dependent",
+                  "ranked_options": [{"rank": 1, "name": "LangGraph", "rationale": "x"}]}
+        cs_mod._validate_winner(result)
+        assert result["winner"] == "context_dependent"
+
 
 class TestConstraintFitValidation:
     def test_lower_fit_winner_falls_back_to_highest_fit(self):

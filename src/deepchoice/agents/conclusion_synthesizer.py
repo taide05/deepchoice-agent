@@ -38,8 +38,8 @@ Disputed findings: {disputed_count}
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale.
 5. If evidence is insufficient for a definitive answer, say so honestly
 6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
-7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
-8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
+7. Winner selection: name a specific winner when the evidence clearly favors one option on the stated scene constraints. BUT when the evidence is genuinely balanced — a true two-way call where no single option clearly dominates — set "winner" to "context_dependent" and use winner_rationale + recommendation to objectively lay out BOTH options' evidence and a conditional recommendation ("choose X if ..., choose Y if ..."). Do NOT force a single winner on a genuine tie — an honest conditional answer beats a false winner.
+8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
 9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
 
 ## Output Length Limits (CRITICAL — exceed and output will be rejected)
@@ -117,8 +117,11 @@ _GENERIC_WINNER_WORDS = {
 
 def _validate_winner(result: dict) -> dict:
     """Reject non-technology winners (repo paths, generic words) and fall back
-    to the first valid ranked option."""
+    to the first valid ranked option. "context_dependent" is a valid winner for
+    a genuine tie (rule 7) — never fall back, since no option should be forced."""
     winner = (result.get("winner") or "").strip()
+    if winner.lower() == "context_dependent":
+        return result
     if not winner or "/" in winner or winner.lower() in _GENERIC_WINNER_WORDS:
         for opt in result.get("ranked_options", []):
             name = (opt.get("name") or "").strip()

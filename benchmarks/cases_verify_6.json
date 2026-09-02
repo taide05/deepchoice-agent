@@ -79,8 +79,8 @@
     "difficulty": "medium",
     "tech_a": "LangGraph",
     "tech_b": "CrewAI",
-    "expected_winner": "LangGraph",
-    "ground_truth_notes": "LangGraph gives lower-level control, better for solo dev who needs flexibility. CrewAI has higher-level abstractions but less customizability and breaks down at scale.",
+    "expected_winner": "context_dependent",
+    "ground_truth_notes": "Genuine two-way call for a solo developer: LangGraph gives lower-level control and durable execution; CrewAI gives a faster start and higher-level role abstractions. No single winner — the honest answer depends on whether the developer prioritizes control (LangGraph) or velocity (CrewAI).",
     "must_find_sources": [
       {
         "pattern": "langchain.com",
@@ -194,7 +194,8 @@
       "materialize",
       "druid",
       "bigquery",
-      "clickhouse cloud"
+      "clickhouse cloud",
+      "apache pinot"
     ],
     "ground_truth_notes": "OLAP column stores or streaming-materialized views are the valid routes.",
     "must_find_sources": [
