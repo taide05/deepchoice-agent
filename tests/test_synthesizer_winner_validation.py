@@ -50,8 +50,11 @@ class TestPromptGuards:
     def test_summarize_chains_includes_up_to_four_titles(self):
         chains = [{"evidence_strength": "strong", "conclusion": "c",
                    "sources": [{"title": f"T{i}"} for i in range(5)]}]
-        out = cs_mod._summarize_chains(chains)
-        assert "T0" in out and "T3" in out  # up to the 4th source title
+        text, mapping = cs_mod._summarize_chains(chains)
+        assert "T0" in text and "T3" in text  # up to the 4th source title
+        assert "T4" not in text  # 5th source excluded
+        assert mapping == {1: "T0", 2: "T1", 3: "T2", 4: "T3"}
+        assert "[[1]]" in text and "[[4]]" in text
 
     def test_synthesis_prompt_covers_all_claim_fields(self):
         assert "winner_rationale" in cs_mod.SYNTHESIS_PROMPT
@@ -201,3 +204,29 @@ class TestCitationSanitization:
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
         assert "Made Up Docs" not in out["final_recommendation"]["recommendation"]
+
+
+class TestBindCitations:
+    def test_binds_number_to_real_title(self):
+        result = {"recommendation": "Use X [[1]] and Y [[2]]."}
+        cs_mod._bind_citations(result, {1: "FastAPI Docs", 2: "Flask Docs"})
+        assert result["recommendation"] == "Use X [Source: FastAPI Docs] and Y [Source: Flask Docs]."
+
+    def test_drops_unknown_number(self):
+        result = {"recommendation": "Use X [[99]]."}
+        cs_mod._bind_citations(result, {1: "FastAPI Docs"})
+        assert result["recommendation"] == "Use X ."
+
+    def test_binds_all_fields(self):
+        result = {
+            "recommendation": "Use X [[1]].",
+            "winner_rationale": "X wins [[1]].",
+            "ranked_options": [{"rationale": "r [[2]]", "key_strength": "s [[1]]",
+                                "key_weakness": "w [[2]]"}],
+            "trade_offs": [{"finding": "f [[1]]", "impact": "i [[2]]"}],
+        }
+        cs_mod._bind_citations(result, {1: "A", 2: "B"})
+        assert result["recommendation"] == "Use X [Source: A]."
+        assert result["winner_rationale"] == "X wins [Source: A]."
+        assert result["ranked_options"][0]["key_strength"] == "s [Source: A]"
+        assert result["trade_offs"][0]["impact"] == "i [Source: B]"

@@ -37,7 +37,7 @@ Disputed findings: {disputed_count}
 3. Consider scene context: solo devs prioritize simplicity, enterprises prioritize reliability
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale.
 5. If evidence is insufficient for a definitive answer, say so honestly
-6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with at least one inline [Source: title] citation — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [Source: title] (e.g. "key_strength": "Mature role-based abstraction [Source: CrewAI — Official Documentation]" — that title is a placeholder example, always copy a real title from Evidence Chains above). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [Source: title]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the title VERBATIM from the "Evidence Chains" source titles above — NEVER invent, paraphrase, abbreviate, slugify, or append site names (YouTube/PyPI/Medium) to a title.
+6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
 7. CRITICAL: You MUST name a specific winner in the "winner" field. Even if evidence is mixed, pick the option with the strongest overall case. Do NOT output vague text like "choose the highest-scored option" — name the technology.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), not a sentence.
 9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
@@ -69,17 +69,31 @@ Return ONLY a JSON object:
 }}"""
 
 
-def _summarize_chains(evidence_chains: list[dict]) -> str:
+def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]:
+    """Format evidence chains for the prompt, assigning each source a stable
+    number ([[N]]) that the model cites instead of a verbatim title. Returns
+    the rendered text plus the number -> title mapping used to bind citations
+    back to [Source: title] after synthesis.
+    """
     if not evidence_chains:
-        return "No evidence chains available."
-    lines = []
+        return "No evidence chains available.", {}
+    lines: list[str] = [
+        "Evidence sources — cite each by its number in double brackets, e.g. [[1]]:",
+        "",
+    ]
+    mapping: dict[int, str] = {}
+    n = 0
     for i, c in enumerate(evidence_chains):
         strength = c.get("evidence_strength", "unknown")
         disputed = " [DISPUTED]" if c.get("disputed") else ""
-        lines.append(f"{i+1}. [{strength}]{disputed} {c.get('conclusion', 'Untitled')}")
+        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {c.get('conclusion', 'Untitled')}")
         for src in c.get("sources", [])[:4]:
-            lines.append(f"   - {src.get('title', 'Unknown')} (score: {src.get('score', 'N/A')})")
-    return "\n".join(lines)
+            n += 1
+            title = src.get("title", "Unknown")
+            mapping[n] = title
+            lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
+        lines.append("")
+    return "\n".join(lines), mapping
 
 
 def _summarize_conflicts(conflicts: list[dict]) -> str:
@@ -205,6 +219,35 @@ def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
     return result
 
 
+def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
+    """Replace source-number citations [[N]] with the real [Source: title]
+    they denote. Unknown numbers are dropped (never fabricated). Runs AFTER
+    _sanitize_citations so verbatim [Source: ...] is scrubbed first and the
+    bound titles are not re-processed by the title sanitizer."""
+    def _bind(text: str) -> str:
+        if not text:
+            return text
+
+        def _sub(m: re.Match[str]) -> str:
+            title = mapping.get(int(m.group(1)))
+            return f"[Source: {title}]" if title else ""
+
+        return re.sub(r"\[\[(\d+)\]\]", _sub, text)
+
+    for field in _CITATION_TEXT_FIELDS:
+        if result.get(field):
+            result[field] = _bind(result[field])
+    for opt in result.get("ranked_options", []):
+        for field in _CITATION_OPT_FIELDS:
+            if opt.get(field):
+                opt[field] = _bind(opt[field])
+    for to in result.get("trade_offs", []):
+        for field in _CITATION_TRADEOFF_FIELDS:
+            if to.get(field):
+                to[field] = _bind(to[field])
+    return result
+
+
 class ConclusionSynthesizerAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None):
         self.websocket = websocket
@@ -224,12 +267,13 @@ class ConclusionSynthesizerAgent:
         strong_count = sum(1 for c in evidence_chains if c.get("evidence_strength") == "strong")
         disputed_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
+        evidence_text, cite_map = _summarize_chains(evidence_chains)
         prompt = [{
             "role": "user",
             "content": SYNTHESIS_PROMPT.format(
                 query=task["query"],
                 scene_context=task.get("scene_context", "team"),
-                evidence_chains=_summarize_chains(evidence_chains),
+                evidence_chains=evidence_text,
                 conflicts=_summarize_conflicts(conflicts),
                 source_count=len(research_state.get("source_scores", [])),
                 strong_count=strong_count,
@@ -267,6 +311,7 @@ class ConclusionSynthesizerAgent:
         _validate_winner(result)
         _validate_constraint_fit(result)
         _sanitize_citations(result, evidence_chains)
+        _bind_citations(result, cite_map)
 
         return {
             "final_recommendation": result,
