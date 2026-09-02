@@ -491,16 +491,31 @@ def _normalize_title(s: str) -> str:
 def _split_sentences(text: str) -> list[str]:
     if not text:
         return []
-    parts = re.split(r'(?<=[.!?])\s+', text)
+    # Shield [Source: ...] brackets so punctuation inside titles (e.g. the
+    # "?" in "gRPC vs REST: Why Isn't Everyone Using gRPC? - YouTube") never
+    # splits a sentence. Shields are restored after the sentence split.
+    _shielded: list[str] = []
+
+    def _shield(m: re.Match[str]) -> str:
+        _shielded.append(m.group(0))
+        return f"\ue000{len(_shielded) - 1}\ue001"
+
+    tmp = re.sub(r"\[Source:[^\]]*\]", _shield, text, flags=re.IGNORECASE)
+    parts = re.split(r"(?<=[.!?])\s+", tmp)
     merged: list[str] = []
     for p in parts:
         # Do not split inside abbreviations ("vs.", "etc.", "e.g.", "i.e.")
-        # — they appear inside [Source: X vs. Y] titles and must stay whole.
-        if merged and re.search(r'\b(vs|etc|e\.g|i\.e)\.$', merged[-1], re.IGNORECASE):
-            merged[-1] += ' ' + p
+        # — kept for punctuation outside [Source: ...] brackets.
+        if merged and re.search(r"\b(vs|etc|e\.g|i\.e)\.$", merged[-1], re.IGNORECASE):
+            merged[-1] += " " + p
         else:
             merged.append(p)
-    return [s.strip() for s in merged if s.strip()]
+
+    def _restore(p: str) -> str:
+        return re.sub(r"\ue000(\d+)\ue001",
+                      lambda m: _shielded[int(m.group(1))], p)
+
+    return [s.strip() for s in (_restore(p) for p in merged) if s.strip()]
 
 
 def _extract_claims(fr: dict) -> list[str]:
@@ -1005,6 +1020,7 @@ def compute_all_metrics(
         "value": round(statistics.mean(cg_values), 3) if cg_values else 0.0,
         "per_report": cg_values,
     }
+    report["quality"]["claim_citation_rate"] = compute_claim_citation_rate(runs)
     report["quality"]["conflict_detection"] = compute_conflict_detection_rate(
         runs, annotated_cases
     )
@@ -1024,6 +1040,7 @@ def compute_all_metrics(
         "top1_accuracy": q["top1_accuracy"]["value"],
         "source_recall": q["source_recall"]["value"],
         "claim_grounding_rate": q["claim_grounding_rate"]["value"],
+        "citation_rate": q["claim_citation_rate"]["value"],
         "conflict_detection_rate": q["conflict_detection"]["value"],
         "latency_p50_s": report["efficiency"]["latency"]["p50"],
         "latency_p95_s": report["efficiency"]["latency"]["p95"],

@@ -138,3 +138,41 @@ def test_nested_bracket_in_title():
     out = compute_claim_citation_rate([run])
     assert out["cited_claims"] == 1
     assert out["fabricated_citations"] == 0
+
+
+def test_split_sentences_does_not_split_on_question_in_title():
+    # Regression: a "?" inside a [Source: ...] title (e.g. a YouTube-style
+    # suffix "Why Isn't Everyone Using gRPC? - YouTube") must not split the
+    # sentence, or the title residue becomes a phantom uncited claim.
+    text = ("Ensure training on gRPC tooling [Source: gRPC vs REST: Why Isn't "
+            "Everyone Using gRPC? - YouTube]. This strategy leverages gRPC.")
+    parts = _split_sentences(text)
+    assert len(parts) == 2
+    assert "gRPC vs REST: Why Isn't Everyone Using gRPC? - YouTube" in parts[0]
+    assert parts[1].startswith("This strategy leverages")
+
+
+def test_compute_all_metrics_includes_claim_citation_rate():
+    from benchmarks.metrics import compute_all_metrics
+    run = {
+        "case_id": "TC-0001",
+        "report": "**Winner: FastAPI**\nUse FastAPI [Source: Real Docs].",
+        "final_recommendation": {
+            "recommendation": "Use FastAPI [Source: Real Docs]. "
+                              "It is async [Source: Real Docs].",
+            "winner_rationale": "",
+            "ranked_options": [],
+            "trade_offs": [],
+            "evidence_summary": "",
+            "scene_fit_note": "",
+        },
+        "evidence_titles": ["Real Docs"],
+        "search_results": [],
+        "conflicts": [],
+        "error": None,
+    }
+    cases = [{"id": "TC-0001", "expected_winner": "fastapi"}]
+    report = compute_all_metrics([run], cases, [100.0])
+    assert "claim_citation_rate" in report["quality"]
+    assert report["quality"]["claim_citation_rate"]["value"] == 1.0
+    assert report["summary"]["citation_rate"] == 1.0
