@@ -136,3 +136,25 @@ class TestConcurrentLearn:
 
         leftovers = [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
         assert leftovers == []
+
+
+class TestReadOnly:
+    def _patch(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
+        monkeypatch.setattr(learned_docs, "_READONLY", True)
+
+    def test_learn_readonly_does_not_write(self, monkeypatch, tmp_path):
+        self._patch(monkeypatch, tmp_path)
+        learn("pinot", "https://pinot.apache.org/docs", "pinot docs", "llm")
+        assert not (tmp_path / "learned.json").exists()
+
+    def test_harvest_readonly_returns_empty(self, monkeypatch, tmp_path):
+        self._patch(monkeypatch, tmp_path)
+        out = harvest(
+            ["pinot"],
+            [{"source": "tavily", "status": "success",
+              "results": [{"url": "https://pinot.apache.org/docs",
+                           "title": "Apache Pinot"}]}],
+        )
+        assert out == []
+        assert not (tmp_path / "learned.json").exists()

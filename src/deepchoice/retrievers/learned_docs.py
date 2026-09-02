@@ -21,6 +21,11 @@ LEARNED_DOCS_PATH = Path(os.environ.get("LEARNED_DOCS_PATH", "./learned_docs.jso
 # file write, acceptable to serialize with a sync lock (B1-D1).
 _write_lock = threading.Lock()
 
+# Read-only mode: benchmark/diagnostic runs set LEARNED_DOCS_READONLY=1 so the
+# self-updating cache does not mutate across cases/runs. This keeps evaluation
+# reproducible — a case must not learn a term that pollutes a later case.
+_READONLY = os.environ.get("LEARNED_DOCS_READONLY", "") == "1"
+
 
 def _atomic_write_text(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
@@ -73,6 +78,8 @@ def save_learned(docs: dict[str, dict]) -> None:
 
 
 def learn(term: str, url: str, title: str, via: str) -> dict[str, dict]:
+    if _READONLY:
+        return load_learned()
     with _write_lock:
         docs = load_learned()
         docs[term] = {"url": url, "title": title or term, "via": via}
@@ -108,6 +115,8 @@ def _looks_official(url: str) -> bool:
 def harvest(terms: list[str], search_results: list[dict],
             existing: set[str] | None = None) -> list[dict]:
     """Learn term -> url pairs from search evidence; returns newly learned entries."""
+    if _READONLY:
+        return []
     with _write_lock:
         docs = load_learned()
         known = set(existing or []) | set(docs.keys())
