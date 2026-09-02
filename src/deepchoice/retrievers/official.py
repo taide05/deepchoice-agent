@@ -22,6 +22,18 @@ def _is_vs_query(query: str) -> bool:
 def _normalize(s: str) -> str:
     """Lowercase, alphanumerics only — 'AWS Lambda' and 'aws-lambda' both normalize to 'awslambda'."""
     return "".join(c for c in s.lower() if c.isalnum())
+
+
+# Bare-token aliases mapping to a curated TECH_DOCS key. Applied via normalized
+# lookup so "postgres" resolves to "postgresql" without an LLM fallback. Only
+# unambiguous shorthands are listed — ambiguous tokens are left to the LLM.
+_TECH_ALIASES = {
+    "next": "next.js",
+    "transformers": "huggingface",
+    "postgres": "postgresql",
+    "k8s": "kubernetes",
+    "golang": "go",
+}
 TECH_DOCS: dict[str, dict[str, str]] = {
     # Web frameworks
     "react": {"url": "https://react.dev", "title": "React — Official Documentation"},
@@ -179,6 +191,9 @@ class OfficialSearch(BaseRetriever):
         # Space-separated multi-word terms ('AWS Lambda') match hyphenated or
         # dotted keys ('aws-lambda', 'next.js') through alnum normalization.
         norm_lookup = {_normalize(k): k for k in lookup}
+        for alias, target in _TECH_ALIASES.items():
+            if target in lookup:
+                norm_lookup[_normalize(alias)] = target
         matched_norms: set[str] = set()
         matched_ngram_components: set[str] = set()
         for n in (1, 2, 3):

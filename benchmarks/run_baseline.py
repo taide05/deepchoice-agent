@@ -228,6 +228,7 @@ def _strip_run(run: dict) -> dict:
         "agent_timing": run.get("agent_timing", {}),
         "final_recommendation": run.get("final_recommendation", {}),
         "evidence_titles": run.get("evidence_titles", []),
+        "token_usage": run.get("token_usage", []),
         "judge_scores": run.get("judge_scores"),
     }
 
@@ -307,6 +308,7 @@ async def run_single_case(case: dict, verbose: bool = False,
             "agent_timing": state.get("agent_timing", {}),
             "final_recommendation": state.get("final_recommendation", {}),
             "evidence_titles": _collect_evidence_titles(state),
+            "token_usage": state.get("token_usage", []),
             "clarify_used": clarify_used,
         }
 

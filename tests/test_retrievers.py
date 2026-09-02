@@ -432,3 +432,9 @@ class TestMultiRetriever:
             result = await agent.run(state)
         assert result["partial_failures"] == ["fail1"]
         assert result["search_results"][0]["status"] == "failed"
+
+
+def test_tech_aliases_target_existing_keys():
+    from deepchoice.retrievers.official import _TECH_ALIASES, TECH_DOCS
+    for alias, target in _TECH_ALIASES.items():
+        assert target in TECH_DOCS, f"alias {alias!r} -> missing target {target!r}"

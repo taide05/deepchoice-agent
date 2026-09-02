@@ -73,3 +73,10 @@ class TestRunHealthCheck:
         with patch("benchmarks.run_baseline.health_check_report", new_callable=AsyncMock,
                    return_value={"ok": True, "tavily_direct": {"ok": False}}):
             assert await run_health_check() == 1
+
+
+def test_strip_run_keeps_token_usage():
+    from benchmarks.run_baseline import _strip_run
+    out = _strip_run({"case_id": "TC-1",
+                      "token_usage": [{"agent": "a", "calls": 2, "total_tokens": 50}]})
+    assert out["token_usage"] == [{"agent": "a", "calls": 2, "total_tokens": 50}]
