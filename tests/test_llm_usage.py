@@ -352,3 +352,28 @@ class TestGatherEvidenceUsageCapture:
             "completion_tokens": 60,
             "total_tokens": 210,
         }]
+
+
+class TestDeterministicArbitration:
+    def test_decisive_gap_high_confidence(self):
+        out = cd_module._deterministic_arbitration(
+            {"total_score": 9.0}, {"total_score": 3.0})
+        assert out["resolution"] == "A_correct"
+        assert out["confidence"] == "high"
+        assert out["key_factor"] == "score_difference"
+
+    def test_moderate_gap_medium_confidence(self):
+        out = cd_module._deterministic_arbitration(
+            {"total_score": 7.0}, {"total_score": 4.0})  # gap 3.0
+        assert out["resolution"] == "A_correct"
+        assert out["confidence"] == "medium"
+
+    def test_b_wins_when_b_higher(self):
+        out = cd_module._deterministic_arbitration(
+            {"total_score": 3.0}, {"total_score": 6.0})
+        assert out["resolution"] == "B_correct"
+
+    def test_close_gap_returns_none(self):
+        out = cd_module._deterministic_arbitration(
+            {"total_score": 6.0}, {"total_score": 5.0})  # gap 1.0
+        assert out is None

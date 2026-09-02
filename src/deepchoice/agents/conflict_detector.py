@@ -46,6 +46,33 @@ Consider ANY of these as a "difference worth flagging":
 A "difference" does NOT require factual contradiction. Different recommendations based on different priorities or use cases also count."""
 
 
+# Deterministic arbitration short-circuit: ARBITRATION rule 1 — a score gap
+# >= SCORE_GAP_DECIDE makes the higher-scored source correct without an LLM
+# call. Only close-score pairs need semantic arbitration (evidence-type nuance).
+SCORE_GAP_DECIDE = 2.5
+SCORE_GAP_HIGH_CONF = 5.0
+
+
+def _deterministic_arbitration(a: dict, b: dict) -> dict | None:
+    """Apply arbitration rule 1 without an LLM call. Returns the resolved
+    verdict when the score gap is decisive, or None when the gap is too small
+    to decide by score alone (semantic arbitration is then required)."""
+    score_a = float(a.get("total_score", 0))
+    score_b = float(b.get("total_score", 0))
+    diff = abs(score_a - score_b)
+    if diff < SCORE_GAP_DECIDE:
+        return None
+    winner = "A" if score_a > score_b else "B"
+    confidence = "high" if diff >= SCORE_GAP_HIGH_CONF else "medium"
+    return {
+        "resolution": f"{winner}_correct",
+        "confidence": confidence,
+        "reasoning": (f"Score gap {diff:.1f} >= {SCORE_GAP_DECIDE} favors source "
+                      f"{winner} ({max(score_a, score_b):.1f} vs {min(score_a, score_b):.1f})"),
+        "key_factor": "score_difference",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Inline multi-turn evidence gathering — 6 search tools
 # ---------------------------------------------------------------------------
@@ -535,6 +562,9 @@ class ConflictDetectorAgent:
 
         # --- Stage 1: Flash arbitration (parallel) ---
         async def _arbitrate_one(pair: dict) -> dict:
+            det = _deterministic_arbitration(pair["source_a"], pair["source_b"])
+            if det is not None:
+                return _build_conflict(pair, det, model="deepseek-flash(rule)")
             async with FLASH_SEM:
                 result = await call_model(
                     _make_prompt(pair["source_a"], pair["source_b"]),
