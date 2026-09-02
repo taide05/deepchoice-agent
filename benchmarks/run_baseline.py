@@ -159,6 +159,7 @@ async def _judge_conflict_match(detected_conflicts: list[dict], topic: str) -> b
     for c in detected_conflicts[:5]:  # Cap at 5 to keep prompt small
         parts.append(
             f"- {c.get('claim_a', '')[:80]} vs {c.get('claim_b', '')[:80]}\n"
+            f"  difference={c.get('difference_explanation', '')[:160]}\n"
             f"  resolution={c.get('resolution', '')} reasoning={c.get('reasoning', '')[:120]}"
         )
     conflicts_text = "\n".join(parts)

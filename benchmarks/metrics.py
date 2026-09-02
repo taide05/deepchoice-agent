@@ -722,12 +722,12 @@ async def compute_conflict_detection_rate_llm(
         if not known:
             continue
 
-        # Only consider resolved (A_correct/B_correct) conflicts
+        # Detection != resolution: an insufficient_data conflict (score gap too
+        # small to pick a winner) is still a detected contradiction. Judge all
+        # conflicts so a known topic is not missed merely because the detector
+        # could not resolve the pair.
         all_conflicts = run.get("conflicts", [])
-        resolved_conflicts = [
-            c for c in all_conflicts
-            if c.get("resolution") in RESOLVED_RESOLUTIONS
-        ]
+        resolved_conflicts = all_conflicts
         detected_text = " ".join(str(c) for c in resolved_conflicts).lower()
 
         detected_count = 0

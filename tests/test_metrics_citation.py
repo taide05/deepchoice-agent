@@ -1,4 +1,6 @@
 """Claim citation rate: precise [Source: title] coverage + anti-fabrication."""
+import pytest
+
 from benchmarks.metrics import compute_claim_citation_rate, _split_sentences
 
 
@@ -138,6 +140,27 @@ def test_nested_bracket_in_title():
     out = compute_claim_citation_rate([run])
     assert out["cited_claims"] == 1
     assert out["fabricated_citations"] == 0
+
+
+class TestConflictJudgeAllConflicts:
+    @pytest.mark.asyncio
+    async def test_insufficient_data_conflicts_reach_llm_judge(self):
+        from benchmarks.metrics import compute_conflict_detection_rate_llm
+
+        async def judge_fn(conflicts, topic):
+            return True
+
+        runs = [{"case_id": "TC-0008", "conflicts": [
+            {"claim_a": "a", "claim_b": "b", "resolution": "insufficient_data",
+             "reasoning": "score same", "difference_explanation": "debugging difficulty"}
+        ]}]
+        cases = [{"id": "TC-0008", "known_contradictions": [
+            {"topic": "Debugging and tooling"}
+        ]}]
+        out = await compute_conflict_detection_rate_llm(runs, cases, judge_fn)
+        # insufficient_data conflict still reaches the LLM judge (detection != resolution)
+        assert out["total_detected"] == 1
+        assert out["llm_matched"] == 1
 
 
 def test_split_sentences_does_not_split_on_question_in_title():
