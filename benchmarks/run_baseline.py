@@ -128,7 +128,7 @@ BENCHMARKS_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BENCHMARKS_DIR / "runs"
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
 FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
-TIMEOUT_PER_CASE_S = 480  # 8 minutes per case (evidence gathering adds latency)
+TIMEOUT_PER_CASE_S = 600  # 10 minutes per case (thinking synthesis adds latency)
 DEFAULT_CONCURRENCY = 8
 
 

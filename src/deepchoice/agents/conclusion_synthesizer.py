@@ -3,6 +3,10 @@ import re
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
+# Thinking adds ~10x latency to synthesis (14s -> ~144s); give it a wide
+# single-call budget so the per-case timeout (600s) is the binding constraint.
+SYNTHESIS_CALL_TIMEOUT_S = 600.0
+
 SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all evidence into a final, actionable recommendation.
 
 ## Original Query
@@ -236,7 +240,8 @@ class ConclusionSynthesizerAgent:
         local_usage: list = []
         try:
             result = await call_model(prompt, model="qwen-flash", response_format="json", tag="conclusion_synthesizer",
-                                      usage=local_usage)
+                                      usage=local_usage, extra_body={"enable_thinking": True},
+                                      timeout=SYNTHESIS_CALL_TIMEOUT_S)
         except Exception as e:
             print_agent_output(f"Synthesis failed: {e}", agent="CONCLUSION_SYNTHESIZER")
             result = {
