@@ -11,9 +11,7 @@ DUMMY = ["tvly-dev-aaaa", "tvly-dev-bbbb", "tvly-dev-cccc"]
 
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch, tmp_path):
-    kp._pool = []
-    kp._exhausted = {}
-    kp._probed = False
+    kp._reset_for_tests()
     monkeypatch.setenv("TAVILY_KEY_STATE_PATH", str(tmp_path / "state.json"))
     yield
 
@@ -222,3 +220,21 @@ class TestFailover:
             return _FakeResp(432)
         asyncio.run(kp.probe(post))
         assert asyncio.run(kp.current()) is None
+
+
+class TestRoundRobin:
+    def test_cycles_keys_in_order(self):
+        import asyncio
+        kp._pool = ["a", "b", "c"]
+        kp._rr_idx = -1
+        assert asyncio.run(kp.current()) == "a"
+        assert asyncio.run(kp.current()) == "b"
+        assert asyncio.run(kp.current()) == "c"
+        assert asyncio.run(kp.current()) == "a"
+
+    def test_single_key_repeats(self):
+        import asyncio
+        kp._pool = ["only"]
+        kp._rr_idx = -1
+        assert asyncio.run(kp.current()) == "only"
+        assert asyncio.run(kp.current()) == "only"
