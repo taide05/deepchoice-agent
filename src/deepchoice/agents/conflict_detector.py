@@ -360,26 +360,29 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 summaries.append(msg.content)
             break
 
-        for tc in msg.tool_calls:
-            if tc.type != "function":
-                continue
-            tool_name = tc.function.name
+        tool_calls = [tc for tc in msg.tool_calls if tc.type == "function"]
+
+        async def _run_tool(tc):
             try:
                 arguments = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
                 arguments = {}
             try:
                 result = await _asyncio.wait_for(
-                    _execute_search(tool_name, arguments),
+                    _execute_search(tc.function.name, arguments),
                     timeout=20.0,
                 )
             except _asyncio.TimeoutError:
-                result = json.dumps({"error": f"{tool_name} timed out"})
+                result = json.dumps({"error": f"{tc.function.name} timed out"})
             except Exception as e:
                 result = json.dumps({"error": str(e)})
+            return tc.id, result
+
+        tool_results = await _asyncio.gather(*[_run_tool(tc) for tc in tool_calls])
+        for tool_call_id, result in tool_results:
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc.id,
+                "tool_call_id": tool_call_id,
                 "content": result,
             })
 

@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 from .base import BaseRetriever
 from .tavily_keypool import post_with_failover
@@ -15,8 +17,7 @@ class TavilySearch(BaseRetriever):
             async def post(url, json=None, **kw):
                 return await client.post(url, json=json, **kw)
 
-            all_results = []
-            for q in queries:
+            async def _one(q):
                 resp, _ = await post_with_failover(post, {
                     "query": q,
                     "search_depth": "basic",
@@ -26,11 +27,18 @@ class TavilySearch(BaseRetriever):
                     raise RuntimeError("no Tavily API key available")
                 resp.raise_for_status()
                 data = resp.json()
-                for r in data.get("results", []):
-                    all_results.append({
-                        "url": r.get("url", ""),
-                        "title": r.get("title", ""),
-                        "snippet": r.get("content", ""),
-                        "date": r.get("published_date", ""),
-                    })
+                return [{
+                    "url": r.get("url", ""),
+                    "title": r.get("title", ""),
+                    "snippet": r.get("content", ""),
+                    "date": r.get("published_date", ""),
+                } for r in data.get("results", [])]
+
+            # Fan out concurrently: post_with_failover round-robins across the
+            # key pool (24 keys) and each key's token bucket spaces 5/min, so
+            # concurrent queries do not burst a single key into 429.
+            batches = await asyncio.gather(*[_one(q) for q in queries])
+            all_results = []
+            for b in batches:
+                all_results.extend(b)
             return all_results[:max_results]
