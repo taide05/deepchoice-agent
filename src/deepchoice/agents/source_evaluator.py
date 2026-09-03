@@ -142,10 +142,6 @@ class SourceEvaluatorAgent:
                 "supporting_sources": [],
             })
 
-        source_scores.sort(key=lambda x: x["total_score"], reverse=True)
-        for i, s in enumerate(source_scores):
-            s["rank"] = i + 1
-
         for s in source_scores:
             similar = [
                 x["url"] for x in source_scores

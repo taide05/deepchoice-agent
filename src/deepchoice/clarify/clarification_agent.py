@@ -59,15 +59,6 @@ CATEGORY_KEYWORDS: dict[str, str] = {
     "部署": "e15f7b9d", "上线": "e15f7b9d", "运维": "e15f7b9d", "cicd": "e15f7b9d", "容器": "e15f7b9d",
 }
 
-CATEGORY_LABELS: dict[str, str] = {
-    "fc14a2e9": "前端框架",
-    "a7b31d5f": "后端框架",
-    "b82c4e6a": "AI/Agent框架",
-    "c93d5f7b": "数据处理",
-    "d04e6a8c": "移动端框架",
-    "e15f7b9d": "部署运维",
-}
-
 CLARIFY_SYSTEM_PROMPT = """你是技术选型需求分析师。通过多轮对话，帮用户把模糊的技术选型问题逐步澄清。
 
 ## 当前已探明的信息

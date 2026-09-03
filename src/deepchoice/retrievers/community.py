@@ -77,7 +77,7 @@ class CommunitySearch(BaseRetriever):
                         "snippet": f"Score: {item.get('score', 0)}, Tags: {', '.join(item.get('tags', []))}",
                         "date": date_str,
                     })
-            elif so_resp.status_code != 200:
+            else:
                 # Fail loudly instead of silently scoring a starved source:
                 # a non-200 (rate limit, auth error) with nothing retrieved
                 # must surface as a source failure, not an empty success.

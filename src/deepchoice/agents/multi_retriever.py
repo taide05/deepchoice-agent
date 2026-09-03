@@ -6,7 +6,7 @@ from ..retrievers.official import TECH_DOCS
 from ..utils.views import print_agent_output
 
 
-def _is_too_generic(sub_questions: list[str], query: str) -> bool:
+def _is_too_generic(sub_questions: list[str]) -> bool:
     """Check if sub_questions are too generic to provide useful search dimensions."""
     if not sub_questions:
         return True
@@ -44,7 +44,7 @@ class MultiRetrieverAgent:
 
         # Fallback: if LLM-decomposed sub_questions are too generic,
         # inject the original query as a concrete search dimension.
-        if _is_too_generic(sub_questions, query):
+        if _is_too_generic(sub_questions):
             print_agent_output(
                 "Sub-questions too generic (avg_len < 20), supplementing with original query",
                 agent="MULTI_RETRIEVER",

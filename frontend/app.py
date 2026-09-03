@@ -843,8 +843,6 @@ def _handle_clarify_message(text: str):
             if k in data:
                 msg[k] = data[k]
         st.session_state.clarify_messages.append(msg)
-        if data.get("next_action") == "finalize":
-            st.session_state.clarified_data = data.get("payload", {})
 
 
 def _handle_skip():

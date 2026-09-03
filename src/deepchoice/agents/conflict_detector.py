@@ -215,8 +215,6 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     Returns a plain-text summary of collected evidence suitable for
     enriching claim descriptions in the arbitration prompt.
     """
-    import asyncio as _asyncio
-
     from ..utils.llm import _get_client, TIERS
 
     client = _get_client(timeout=60.0, tier="deepseek-flash")
@@ -239,7 +237,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 
     for _ in range(max_iterations):
         try:
-            response = await _asyncio.wait_for(
+            response = await asyncio.wait_for(
                 client.chat.completions.create(
                     model=TIERS["deepseek-flash"]["model"],
                     messages=messages,
@@ -248,7 +246,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 ),
                 timeout=per_call_timeout,
             )
-        except _asyncio.TimeoutError:
+        except asyncio.TimeoutError:
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
         except Exception as e:
@@ -281,17 +279,17 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             except json.JSONDecodeError:
                 arguments = {}
             try:
-                result = await _asyncio.wait_for(
+                result = await asyncio.wait_for(
                     _execute_search(tc.function.name, arguments),
                     timeout=20.0,
                 )
-            except _asyncio.TimeoutError:
+            except asyncio.TimeoutError:
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
             except Exception as e:
                 result = json.dumps({"error": str(e)})
             return tc.id, result
 
-        tool_results = await _asyncio.gather(*[_run_tool(tc) for tc in tool_calls])
+        tool_results = await asyncio.gather(*[_run_tool(tc) for tc in tool_calls])
         for tool_call_id, result in tool_results:
             messages.append({
                 "role": "tool",

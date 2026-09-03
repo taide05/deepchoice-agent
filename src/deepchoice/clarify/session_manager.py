@@ -88,7 +88,6 @@ class SessionManager():
         user_message = {"role":"user","content":message}
         state.messages.append(user_message)
         state.clarify_rounds += 1
-        self._update_state_from_message(state,message)
         return self._response(state)
 
     def _get_or_raise(self,session_id:str) -> SessionState:
@@ -103,9 +102,6 @@ class SessionManager():
     def get(self, session_id: str) -> SessionState:
         """Public accessor for a session state; raises KeyError if missing/expired."""
         return self._get_or_raise(session_id)
-
-    def _update_state_from_message(self, state: SessionState, message: str) -> SessionState:
-        return state
 
     def _apply_soft_gate(self,state:SessionState) -> SessionState:
         if state.scene is None:
@@ -138,9 +134,3 @@ class SessionManager():
     def get_status(self,session_id:str) -> dict:
         state = self._get_or_raise(session_id)
         return self._response(state)
-
-    def _cleanup_expired(self):
-        for sid in list(self._sessions.keys()):
-            state = self._sessions[sid]
-            if time.time() - state.last_active > self.SESSION_TIMEOUT:
-                del self._sessions[sid]

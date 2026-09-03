@@ -75,12 +75,3 @@ class TestSessionManagerTimeout:
         time.sleep(0.1)
         with pytest.raises(KeyError):
             sm.get_status(sid)
-
-    def test_cleanup_removes_expired(self):
-        sm = SessionManager()
-        sm.SESSION_TIMEOUT = 0
-        sm.create("test1")
-        sm.create("test2")
-        time.sleep(0.1)
-        sm._cleanup_expired()
-        assert len(sm._sessions) == 0

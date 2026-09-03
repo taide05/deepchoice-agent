@@ -20,7 +20,6 @@ def render(state: dict) -> str:
         "col_criterion": {"en": "Criterion", "zh": "判据"},
         "col_strength": {"en": "Evidence Strength", "zh": "证据强度"},
         "no_data": {"en": "Insufficient data", "zh": "数据不足"},
-        "detail_table": {"en": "## Detailed Comparison", "zh": "## 技术对比详表"},
         "no_evidence": {"en": "Insufficient evidence", "zh": "证据不足"},
         "disputes_title": {"en": "## Disputes & Conflicts", "zh": "## 争议与分歧"},
         "dispute": {"en": "Dispute", "zh": "争议"},
@@ -76,8 +75,6 @@ def render(state: dict) -> str:
         },
     }
 
-    tech_names = _extract_techs(query)
-
     # Classify evidence chains into dimensions
     dim_results = {}
     for dim_key, dim_info in dims.items():
@@ -110,16 +107,6 @@ def render(state: dict) -> str:
                 lines.append(f"| | {row.lstrip('- ')} | |")
         else:
             lines.append(f"| **{label}** | {L['no_data'][lang]} | — |")
-
-    lines.extend(["", L["detail_table"][lang], ""])
-
-    if tech_names and len(tech_names) >= 2:
-        lines.append(f"| {L['col_dim'][lang]} | {tech_names[0]} | {tech_names[1]} | Winner |")
-        lines.append("|------|------|------|------|")
-        for dim_key in ["functionality", "performance", "ecosystem", "dx", "scenario"]:
-            dim_info = dims[dim_key]
-            label = dim_info[f"label_{lang}"]
-            lines.append(f"| **{label}** | See evidence chains | See evidence chains | — |")
 
     lines.extend(["", L["disputes_title"][lang], ""])
     if conflicts:
@@ -184,11 +171,3 @@ def render(state: dict) -> str:
     ])
 
     return "\n".join(lines)
-
-
-def _extract_techs(query: str) -> list[str]:
-    for sep in [" vs ", " VS ", " versus ", " 对比 ", " 比较 "]:
-        if sep in query:
-            parts = query.split(sep)
-            return [p.strip() for p in parts[:2]]
-    return ["Option A", "Option B"]
