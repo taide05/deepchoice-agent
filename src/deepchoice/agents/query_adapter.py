@@ -8,11 +8,11 @@ For EACH sub-question, generate 6 query variants:
 1. tavily (web search): Natural language, 1-2 sentences. Include technology names and version years if relevant. Best for finding blog posts, comparisons, news.
 2. arxiv (academic papers): Keywords separated by spaces. Include technical terms, method names, framework names.
 3. github (code/issues): GitHub search syntax. Use repo: qualifier if known, otherwise keyword search. Include language filter if applicable.
-4. chroma_kb (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search.
+4. chroma (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search.
 5. community (StackOverflow): Include tags. Example: "site:stackoverflow.com [langgraph] agent state management"
 6. official (official docs): Keywords in documentation headings or API references.
 
-Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma_kb). For English-only sources (arxiv/github/official), use English technical terms.
+Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma). For English-only sources (arxiv/github/official), use English technical terms.
 
 Rules:
 - Each variant MUST be specific and searchable
@@ -20,9 +20,9 @@ Rules:
 - If a sub-question doesn't fit a particular retriever type, still generate the best possible query
 
 Return ONLY a JSON object:
-{"adapted": [{"sub_question_index": 0, "sub_question": "...", "tavily": "...", "arxiv": "...", "github": "...", "chroma_kb": "...", "community": "...", "official": "..."}]}"""
+{"adapted": [{"sub_question_index": 0, "sub_question": "...", "tavily": "...", "arxiv": "...", "github": "...", "chroma": "...", "community": "...", "official": "..."}]}"""
 
-RETRIEVER_KEYS = ["tavily", "arxiv", "github", "chroma_kb", "community", "official"]
+RETRIEVER_KEYS = ["tavily", "arxiv", "github", "chroma", "community", "official"]
 
 
 class QueryAdapterAgent:

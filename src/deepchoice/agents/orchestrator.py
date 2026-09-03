@@ -1,4 +1,5 @@
 import time
+import uuid
 from pathlib import Path
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -36,7 +37,7 @@ class ChiefEditorAgent:
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers or {}
-        self.task_id = str(int(time.time()))
+        self.task_id = thread_id or str(uuid.uuid4())
         self.thread_id = thread_id or self.task_id
         self.checkpointer = checkpointer if checkpointer is not None else MemorySaver()
         self.live_phase = None
@@ -113,7 +114,10 @@ class ChiefEditorAgent:
 
         if confidence in ("high", "medium"):
             return "end"
-        if retry_count >= 1:
+        # self_reviewer increments retry_count before routing, so retry_count==1
+        # means "first low-confidence pass" (retry allowed); >1 means already
+        # retried once (stop, to avoid looping forever).
+        if retry_count > 1:
             return "end"
 
         if len(gaps) <= 2:

@@ -74,7 +74,7 @@ def _deterministic_arbitration(a: dict, b: dict) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Inline multi-turn evidence gathering — 6 search tools
+# Inline multi-turn evidence gathering — 3 search tools (web / scholarly / kb)
 # ---------------------------------------------------------------------------
 
 SEARCH_TOOLS = [
@@ -180,31 +180,6 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
             except Exception as e:
                 return json.dumps({"error": str(e)})
 
-    elif tool_name == "search_code":
-        token = os.environ.get("GITHUB_TOKEN", "")
-        headers = {"Accept": "application/vnd.github+json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        import urllib.parse
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                q = urllib.parse.quote(query, safe="")
-                url = f"https://api.github.com/search/repositories?q={q}&per_page={max_results}&sort=stars"
-                resp = await client.get(url, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                results = []
-                for item in data.get("items", []):
-                    results.append({
-                        "repo": item.get("full_name", ""),
-                        "description": item.get("description", ""),
-                        "url": item.get("html_url", ""),
-                        "stars": item.get("stargazers_count", 0),
-                    })
-                return json.dumps(results[:max_results], ensure_ascii=False)
-            except Exception as e:
-                return json.dumps({"error": str(e)})
-
     elif tool_name == "search_kb":
         chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
         try:
@@ -228,73 +203,11 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    elif tool_name == "search_community":
-        import urllib.parse
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            results = []
-            try:
-                q = urllib.parse.quote(query, safe="")
-                so_url = (
-                    f"https://api.stackexchange.com/2.3/search/advanced"
-                    f"?order=desc&sort=votes&q={q}&site=stackoverflow&pagesize={max_results}"
-                )
-                resp = await client.get(so_url)
-                resp.raise_for_status()
-                data = resp.json()
-                for item in data.get("items", []):
-                    results.append({
-                        "title": item.get("title", ""),
-                        "url": item.get("link", ""),
-                        "source": "stackoverflow",
-                        "score": item.get("score", 0),
-                    })
-            except Exception:
-                pass
-            try:
-                q = urllib.parse.quote(query, safe="")
-                reddit_url = f"https://www.reddit.com/search.json?q={q}&limit={max_results}"
-                headers = {"User-Agent": "DeepChoice/0.1"}
-                resp = await client.get(reddit_url, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                for child in data.get("data", {}).get("children", []):
-                    post = child.get("data", {})
-                    results.append({
-                        "title": post.get("title", ""),
-                        "url": f"https://reddit.com{post.get('permalink', '')}",
-                        "source": "reddit",
-                        "score": post.get("score", 0),
-                    })
-            except Exception:
-                pass
-            return json.dumps(results[:max_results], ensure_ascii=False)
-
-    elif tool_name == "search_official":
-        import urllib.parse
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                q = urllib.parse.quote(query, safe="")
-                url = f"https://pypi.org/pypi/{q}/json"
-                resp = await client.get(url)
-                if resp.status_code == 404:
-                    return json.dumps({"results": [], "note": f"'{query}' not found on PyPI"}, ensure_ascii=False)
-                resp.raise_for_status()
-                data = resp.json()
-                info = data.get("info", {})
-                return json.dumps([{
-                    "name": info.get("name", query),
-                    "summary": info.get("summary", ""),
-                    "url": info.get("project_url", ""),
-                    "version": info.get("version", ""),
-                }], ensure_ascii=False)
-            except Exception as e:
-                return json.dumps({"error": str(e)})
-
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
 
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
-                           max_iterations: int = 1,
+                           max_iterations: int = 2,
                            per_call_timeout: float = 30.0,
                            usage: list | None = None) -> str:
     """Inline multi-turn evidence gathering via OpenAI-compatible tool calling.

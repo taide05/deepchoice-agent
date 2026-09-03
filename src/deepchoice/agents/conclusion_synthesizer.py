@@ -141,6 +141,8 @@ def _validate_constraint_fit(result: dict) -> dict:
     No-op when constraint_fit is absent (older/malformed outputs) — the
     validator must not corrupt a report that predates the field.
     """
+    if (result.get("winner") or "").strip().lower() == "context_dependent":
+        return result
     ranked = result.get("ranked_options", [])
     if not ranked:
         return result
