@@ -32,9 +32,31 @@ def test_basic_rate():
     )
     out = compute_claim_citation_rate([run])
     assert out["total_claims"] == 8
-    assert out["cited_claims"] == 4
+    # key_strength "x" and key_weakness "y" inherit their sibling rationale's
+    # citation (short-field inheritance), lifting cited 4 -> 6.
+    assert out["cited_claims"] == 6
     assert out["fabricated_citations"] == 0
-    assert out["value"] == 0.5
+    assert out["value"] == 0.75
+
+
+def test_short_field_inherits_sibling_citation():
+    # key_strength/key_weakness with no own [Source:] still count as cited when
+    # the same option's rationale carries a real citation.
+    run = _run("Use X [Source: FastAPI Docs].",
+               ["FastAPI Docs"],
+               ranked_options=[{"name": "X", "rationale": "r [Source: FastAPI Docs]",
+                                "key_strength": "no cite", "key_weakness": "no cite"}])
+    out = compute_claim_citation_rate([run])
+    assert out["cited_claims"] == 4  # recommendation + rationale + 2 inherited shorts
+
+
+def test_short_field_not_inherited_when_sibling_uncited():
+    run = _run("Use X [Source: FastAPI Docs].",
+               ["FastAPI Docs"],
+               ranked_options=[{"name": "X", "rationale": "r no cite",
+                                "key_strength": "no cite", "key_weakness": "no cite"}])
+    out = compute_claim_citation_rate([run])
+    assert out["cited_claims"] == 1  # only the recommendation
 
 
 def test_fabricated_citation():

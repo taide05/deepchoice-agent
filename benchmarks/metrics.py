@@ -518,24 +518,35 @@ def _split_sentences(text: str) -> list[str]:
     return [s.strip() for s in (_restore(p) for p in merged) if s.strip()]
 
 
-def _extract_claims(fr: dict) -> list[str]:
-    """Flatten the factual-claim fields of a final_recommendation into a
-    claim list, matching the fields the synthesizer is told to cite."""
-    claims = []
-    claims.extend(_split_sentences(fr.get("recommendation", "")))
+def _extract_claims(fr: dict) -> list[tuple[str, bool]]:
+    """Flatten the factual-claim fields into (claim, sibling_cited) pairs.
+
+    Short fields (key_strength/key_weakness/impact) are summaries of their
+    sibling long field (rationale/finding). When a short field carries no
+    citation of its own, `sibling_cited` lets it inherit the sibling's cited
+    status — a random missed [[N]] on a short label must not drag the rate down.
+    """
+    claims: list[tuple[str, bool]] = []
+    for s in _split_sentences(fr.get("recommendation", "")):
+        claims.append((s, False))
     if fr.get("winner_rationale"):
-        claims.append(fr["winner_rationale"])
+        claims.append((fr["winner_rationale"], False))
     for opt in fr.get("ranked_options", []):
+        sibling_cited = bool(_extract_source_titles(opt.get("rationale", "")))
         for field in ("rationale", "key_strength", "key_weakness"):
-            if opt.get(field):
-                claims.append(opt[field])
+            text = opt.get(field, "")
+            if text:
+                claims.append((text, field != "rationale" and sibling_cited))
     for to in fr.get("trade_offs", []):
+        sibling_cited = bool(_extract_source_titles(to.get("finding", "")))
         for field in ("finding", "impact"):
-            if to.get(field):
-                claims.append(to[field])
-    claims.extend(_split_sentences(fr.get("evidence_summary", "")))
+            text = to.get(field, "")
+            if text:
+                claims.append((text, field != "finding" and sibling_cited))
+    for s in _split_sentences(fr.get("evidence_summary", "")):
+        claims.append((s, False))
     if fr.get("scene_fit_note"):
-        claims.append(fr["scene_fit_note"])
+        claims.append((fr["scene_fit_note"], False))
     return claims
 
 
@@ -578,12 +589,12 @@ def compute_claim_citation_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
     for run in runs:
         fr = run.get("final_recommendation") or {}
         true_titles = _collect_true_titles(run)
-        for claim in _extract_claims(fr):
+        for claim, sibling_cited in _extract_claims(fr):
             total_claims += 1
             titles = _extract_source_titles(claim)
             real = [t for t in titles if _is_real_title(_normalize_title(t), true_titles)]
             fabricated_citations += len(titles) - len(real)
-            if real:
+            if real or sibling_cited:
                 cited_claims += 1
 
     rate = cited_claims / total_claims if total_claims > 0 else 0.0
