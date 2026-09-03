@@ -74,10 +74,11 @@ def _is_fresh(ts: float) -> bool:
 
 
 def _reset_for_tests() -> None:
-    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last
+    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last, _bucket_lock
     _pool, _exhausted, _probed = [], {}, False
     _rr_idx = -1
     _bucket_tokens, _bucket_last = {}, {}
+    _bucket_lock = asyncio.Lock()
 
 
 async def _probe_one(post, key: str) -> bool:
@@ -134,20 +135,28 @@ def mark_dead(key: str) -> None:
 
 _bucket_tokens: dict[str, float] = {}
 _bucket_last: dict[str, float] = {}
+_bucket_lock = asyncio.Lock()
 _rr_idx = -1  # first current() call returns _pool[0]
 
 
 async def _acquire_token(key: str) -> None:
-    """Wait until `key` has a free-tier token (5 req/min per key)."""
-    tokens = _bucket_tokens.get(key, _BUCKET_CAPACITY)
-    last = _bucket_last.get(key, time.monotonic())
-    now = time.monotonic()
-    tokens = min(_BUCKET_CAPACITY, tokens + (now - last) / _BUCKET_REFILL_S)
-    if tokens < 1.0:
-        await asyncio.sleep((1.0 - tokens) * _BUCKET_REFILL_S)
-        tokens = 1.0
-    _bucket_tokens[key] = tokens - 1.0
-    _bucket_last[key] = now
+    """Wait until `key` has a free-tier token (5 req/min per key).
+
+    The whole read-modify-write is guarded by _bucket_lock: without it, two
+    coroutines sleeping in the slow path would both wake and write stale counts
+    (lost update), over-issuing past the 5/min quota.
+    """
+    async with _bucket_lock:
+        tokens = _bucket_tokens.get(key, _BUCKET_CAPACITY)
+        last = _bucket_last.get(key, time.monotonic())
+        now = time.monotonic()
+        tokens = min(_BUCKET_CAPACITY, tokens + (now - last) / _BUCKET_REFILL_S)
+        if tokens < 1.0:
+            await asyncio.sleep((1.0 - tokens) * _BUCKET_REFILL_S)
+            now = time.monotonic()  # re-read AFTER sleeping, not before
+            tokens = 1.0
+        _bucket_tokens[key] = tokens - 1.0
+        _bucket_last[key] = now
 
 
 async def current() -> str | None:

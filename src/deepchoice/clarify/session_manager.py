@@ -1,4 +1,5 @@
 import time
+import re
 from uuid import uuid4
 from pydantic import BaseModel,Field
 from typing import Literal
@@ -76,9 +77,9 @@ class SessionManager():
     def _detect_tech_keywords(self,query: str) -> list[str]:
         lowered = query.lower()
         found = []        
-        for i in self.KNOWN_TECHS:
-            if i in lowered:
-                found.append(i)
+        for tech in self.KNOWN_TECHS:
+            if re.search(rf"\b{re.escape(tech)}\b", lowered):
+                found.append(tech)
         return found
 
     def process_message(self,session_id:str,message:str) -> dict:

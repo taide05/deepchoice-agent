@@ -40,6 +40,15 @@ class _FakeClient:
         return type("R", (), {"status_code": 200, "headers": {"content-type": "text/html"}})()
 
 
+def _patch_outbound(monkeypatch, fail_urls=()):
+    """official.py now routes through the outbound channel layer instead of a
+    raw httpx.AsyncClient; patch make_client to return the fake client."""
+    async def make_client(source):
+        return _FakeClient(fail_urls)
+
+    monkeypatch.setattr(official_mod._outbound, "make_client", make_client)
+
+
 @pytest.fixture(autouse=True)
 def _clean(monkeypatch, tmp_path):
     monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
@@ -47,9 +56,7 @@ def _clean(monkeypatch, tmp_path):
 
 
 async def _run_search(monkeypatch, llm_result, fail_urls=()):
-    monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
-        "AsyncClient": lambda *a, **kw: _FakeClient(fail_urls),
-    })())
+    _patch_outbound(monkeypatch, fail_urls)
 
     async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
         return llm_result
@@ -62,9 +69,7 @@ async def _run_search(monkeypatch, llm_result, fail_urls=()):
 class TestFallbackConcurrency:
     def test_unmapped_terms_resolve_concurrently(self, monkeypatch, tmp_path):
         monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
-        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
-            "AsyncClient": lambda *a, **kw: _FakeClient(),
-        })())
+        _patch_outbound(monkeypatch)
 
         entered = 0
         release = asyncio.Event()
@@ -147,9 +152,7 @@ class TestSeedPrecedence:
         async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
             return {"url": None}
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
-        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
-            "AsyncClient": lambda *a, **kw: _FakeClient(),
-        })())
+        _patch_outbound(monkeypatch)
 
         out = asyncio.run(official_mod.OfficialSearch()._do_search(
             "python vs go", [], 10, None))
@@ -169,9 +172,7 @@ class TestFallbackGenericFilter:
             calls.append(prompt[-1]["content"])
             return {"url": None}
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
-        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
-            "AsyncClient": lambda *a, **kw: _FakeClient(),
-        })())
+        _patch_outbound(monkeypatch)
 
         asyncio.run(official_mod.OfficialSearch()._do_search(
             "docs", [], 10, ["docs", "code", "url"]))
@@ -188,9 +189,7 @@ class TestNGramMatching:
             llm_calls.append(prompt[-1]["content"])
             return {"url": None}
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
-        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
-            "AsyncClient": lambda *a, **kw: _FakeClient(),
-        })())
+        _patch_outbound(monkeypatch)
         retriever = official_mod.OfficialSearch()
         return await retriever._do_search(query, [], 10, None)
 
@@ -225,9 +224,11 @@ class TestPyPIPassRestriction:
 
     def _client_with_recorder(self, monkeypatch):
         client = _FakeClient()
-        monkeypatch.setattr(official_mod, "httpx", type("httpx", (), {
-            "AsyncClient": lambda *a, **kw: client,
-        })())
+
+        async def _make_client(source):
+            return client
+
+        monkeypatch.setattr(official_mod._outbound, "make_client", _make_client)
         return client
 
     async def _search(self, query, monkeypatch, llm_result=None):

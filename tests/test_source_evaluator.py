@@ -74,9 +74,6 @@ class TestScoreConsistency:
     def test_isolated_no_others(self):
         assert score_consistency([]) == 4
 
-    def test_contradiction(self):
-        assert score_consistency([], has_contradiction=True) == 2
-
 
 class TestScoreVerifiability:
     def test_runnable_code(self):

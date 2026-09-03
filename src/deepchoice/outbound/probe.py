@@ -40,6 +40,10 @@ PROBES: dict[str, ProbeSpec] = {
         params={"site": "stackoverflow", "q": "langgraph", "pagesize": 1},
         ok_codes=(200,),
     ),
+    "official": ProbeSpec(
+        source="official", method="GET",
+        url="https://pypi.org/pypi/pytest/json", ok_codes=(200,),
+    ),
 }
 
 

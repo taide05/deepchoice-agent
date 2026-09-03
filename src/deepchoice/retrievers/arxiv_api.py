@@ -10,13 +10,15 @@ class ArxivSearch(BaseRetriever):
                          adapted_queries: list[str] | None = None) -> list[dict]:
         keywords = (adapted_queries[0] if adapted_queries else
                     query.replace(" vs ", " ").replace(" versus ", " ")[:200])
-        url = (
-            f"https://export.arxiv.org/api/query"
-            f"?search_query=all:{keywords}&max_results={max_results}&sortBy=relevance"
-        )
-
         async with await _outbound.make_client("arxiv") as client:
-            resp = await client.get(url)
+            resp = await client.get(
+                "https://export.arxiv.org/api/query",
+                params={
+                    "search_query": f"all:{keywords}",
+                    "max_results": max_results,
+                    "sortBy": "relevance",
+                },
+            )
             resp.raise_for_status()
 
         try:

@@ -1,3 +1,5 @@
+import asyncio
+
 import chromadb
 from chromadb.config import Settings
 from .base import BaseRetriever
@@ -22,7 +24,7 @@ class ChromaKB(BaseRetriever):
         seen_urls = set()
 
         for q in queries:
-            q_embedding = model.encode(q).tolist()
+            q_embedding = (await asyncio.to_thread(model.encode, q)).tolist()
             results = self.collection.query(
                 query_embeddings=[q_embedding],
                 n_results=max(3, max_results // len(queries)),

@@ -81,9 +81,7 @@ def score_timeliness(date_str: str | None) -> int:
         return 5
 
 
-def score_consistency(supporting_sources: list[str], has_contradiction: bool = False) -> int:
-    if has_contradiction:
-        return 2
+def score_consistency(supporting_sources: list[str]) -> int:
     if len(supporting_sources) >= 2:
         return 10
     if len(supporting_sources) == 1:
@@ -142,7 +140,6 @@ class SourceEvaluatorAgent:
                 "scores": scores,
                 "total_score": total,
                 "supporting_sources": [],
-                "contradicting_sources": [],
             })
 
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)

@@ -47,20 +47,20 @@ def render(state: dict) -> str:
 
     lines.extend([T["what"][lang], ""])
 
-    strong_chains = [c for c in chains if c["evidence_strength"] == "strong"]
+    strong_chains = [c for c in chains if c.get("evidence_strength") == "strong"]
     for c in strong_chains[:5]:
-        lines.append(f"- **{c['conclusion']}**")
-        for src in c["sources"]:
-            lines.append(f"  - Source: [{src['title']}]({src['url']}) (score: {src['score']})")
+        lines.append(f"- **{c.get('conclusion', '')}**")
+        for src in c.get("sources", []):
+            lines.append(f"  - Source: [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
 
     lines.extend(["", T["why"][lang], ""])
 
     for c in chains[:10]:
-        tag = " [DISPUTED]" if c["disputed"] else ""
-        lines.append(f"### {c['conclusion']}{tag}")
-        lines.append(f"**{T['evidence_strength'][lang]}:** {c['evidence_strength']}")
-        for src in c["sources"][:2]:
-            lines.append(f"- [{src['title']}]({src['url']}) — score: {src['score']}")
+        tag = " [DISPUTED]" if c.get("disputed") else ""
+        lines.append(f"### {c.get('conclusion', '')}{tag}")
+        lines.append(f"**{T['evidence_strength'][lang]}:** {c.get('evidence_strength', 'unknown')}")
+        for src in c.get("sources", [])[:2]:
+            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) — score: {src.get('score', 'N/A')}")
         lines.append("")
     if len(chains) > 10:
         lines.append(f"*(+{len(chains) - 10} more evidence chains — see full report via API)*")
@@ -88,7 +88,7 @@ def render(state: dict) -> str:
 
     winner = rec.get("winner", "")
     if not winner and rec.get("ranked_options"):
-        winner = rec["ranked_options"][0]["name"]
+        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
 
     if winner:
         if winner.lower() == "context_dependent":
@@ -121,7 +121,7 @@ def render(state: dict) -> str:
         lines.append(T["ranked_options"][lang])
         for opt in rec["ranked_options"]:
             rationale = opt.get('rationale', '')
-            lines.append(f"- **#{opt['rank']} {opt['name']}**: {rationale}")
+            lines.append(f"- **#{opt.get('rank', '?')} {opt.get('name', '')}**: {rationale}")
             # Inject matching source citations
             matched = []
             rationale_lower = rationale.lower()
@@ -162,10 +162,10 @@ def render(state: dict) -> str:
     ref_count = 0
     total_sources = sum(len(c.get("sources", [])) for c in chains)
     for c in chains:
-        for src in c["sources"]:
+        for src in c.get("sources", []):
             if ref_count >= 12:
                 break
-            lines.append(f"- [{src["title"]}]({src["url"]})")
+            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')})")
             ref_count += 1
         if ref_count >= 12:
             break

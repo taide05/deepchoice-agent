@@ -23,7 +23,7 @@ class ReportGeneratorAgent:
         # Surface partial failures so the report can note which sources were unavailable
         partial_failures = research_state.get("partial_failures", [])
         if partial_failures:
-            total = len(research_state.get("search_results", [])) + len(partial_failures)
+            total = len(research_state.get("search_results", []))
             available = total - len(partial_failures)
             query = research_state["task"].get("query", "")
             is_zh = any('一' <= c <= '鿿' for c in query)

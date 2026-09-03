@@ -84,16 +84,13 @@ def render(state: dict) -> str:
         rows = []
         keywords = dim_info["kw_en"] + dim_info["kw_zh"]
         for chain in chains:
-            conclusion = chain.get("conclusion", "").lower()
-            snippet = ""
-            for s in chain.get("sources", []):
-                snippet = s.get("snippet", "")
-                break
+            conclusion = (chain.get("conclusion") or "").lower()
+            sources = chain.get("sources") or []
+            snippet = (sources[0].get("snippet") or "") if sources else ""
             if any(kw in conclusion for kw in keywords) or any(kw in snippet.lower() for kw in keywords):
-                strength = chain["evidence_strength"]
-                strength_label = {"strong": "strong", "moderate": "moderate", "weak": "weak"}
+                strength = chain.get("evidence_strength", "unknown")
                 dispute = " [disputed]" if chain.get("disputed") else ""
-                rows.append(f"- {chain['conclusion']} ({strength_label[strength]}){dispute}")
+                rows.append(f"- {chain.get('conclusion', '')} ({strength}){dispute}")
         dim_results[dim_key] = rows
 
     lines = [
@@ -139,7 +136,7 @@ def render(state: dict) -> str:
     rec = state.get("final_recommendation", {})
     winner = rec.get("winner", "")
     if not winner and rec.get("ranked_options"):
-        winner = rec["ranked_options"][0]["name"]
+        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
 
     lines.extend(["", L["recommendation_title"][lang], ""])
     scene = task.get("scene_context", "team")
@@ -158,7 +155,7 @@ def render(state: dict) -> str:
             lines.append("")
             lines.append(L["ranking"][lang])
             for opt in rec["ranked_options"]:
-                lines.append(f"- **#{opt['rank']} {opt['name']}**: {opt.get('rationale', '')}")
+                lines.append(f"- **#{opt.get('rank', '?')} {opt.get('name', '')}**: {opt.get('rationale', '')}")
         if rec.get("trade_offs"):
             lines.append("")
             lines.append(L["tradeoffs"][lang])
@@ -167,14 +164,14 @@ def render(state: dict) -> str:
         if rec.get("scene_fit_note"):
             lines.append(f"\n*{L['scene_fit'][lang]}: {rec['scene_fit_note']}*")
     else:
-        strong = [c for c in chains if c["evidence_strength"] == "strong" and not c.get("disputed")]
+        strong = [c for c in chains if c.get("evidence_strength") == "strong" and not c.get("disputed")]
         if strong:
-            lines.append(f"{L['top_basis'][lang]}: {strong[0]['conclusion']}")
+            lines.append(f"{L['top_basis'][lang]}: {strong[0].get('conclusion', '')}")
         else:
             top_chain = chains[0] if chains else None
             if top_chain:
-                strength = top_chain['evidence_strength']
-                lines.append(f"{L['best_available'][lang]}: {top_chain['conclusion']} (strength: {strength})")
+                strength = top_chain.get('evidence_strength', 'unknown')
+                lines.append(f"{L['best_available'][lang]}: {top_chain.get('conclusion', '')} (strength: {strength})")
 
     lines.extend([
         "",

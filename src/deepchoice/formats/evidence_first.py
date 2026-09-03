@@ -35,13 +35,13 @@ def render(state: dict) -> str:
         "step3": {"en": "3. Run a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
     }
 
-    strong = [c for c in chains if c["evidence_strength"] == "strong"]
+    strong = [c for c in chains if c.get("evidence_strength") == "strong"]
     top = strong[0] if strong else (chains[0] if chains else None)
 
     rec = state.get("final_recommendation", {})
     winner = rec.get("winner", "")
     if not winner and rec.get("ranked_options"):
-        winner = rec["ranked_options"][0]["name"]
+        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
 
     lines = [
         f"# {query}{T['title_suffix'][lang]}",
@@ -59,24 +59,24 @@ def render(state: dict) -> str:
             lines.append("")
             lines.append(f"*{rec['confidence_rationale']}*")
     else:
-        lines.append(top['conclusion'] if top else T["insufficient"][lang])
+        lines.append(top.get('conclusion', '') if top else T["insufficient"][lang])
     lines.extend(["", T["trust"][lang]])
 
     if top:
         lines.append(T["strongest"][lang])
-        for src in top["sources"]:
-            lines.append(f"- [{src['title']}]({src['url']}) (score: {src['score']})")
+        for src in top.get("sources", []):
+            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
         lines.append("")
         lines.append(T["supporting"][lang])
-        moderate = [c for c in chains if c["evidence_strength"] == "moderate"][:3]
+        moderate = [c for c in chains if c.get("evidence_strength") == "moderate"][:3]
         for c in moderate:
-            lines.append(f"- {c['conclusion']}")
+            lines.append(f"- {c.get('conclusion', '')}")
 
     lines.extend(["", T["counter"][lang], ""])
-    disputed = [c for c in chains if c["disputed"]]
+    disputed = [c for c in chains if c.get("disputed")]
     if disputed:
         for c in disputed:
-            lines.append(f"- {c['conclusion']} (disputed)")
+            lines.append(f"- {c.get('conclusion', '')} (disputed)")
     else:
         lines.append(T["no_counter"][lang])
 

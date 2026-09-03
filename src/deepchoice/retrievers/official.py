@@ -1,9 +1,9 @@
 import asyncio
 
-import httpx
 from .base import BaseRetriever
 from .learned_docs import load_learned, learn, domain_label_match, is_plausible_term
 from ..utils.llm import call_model
+from .. import outbound as _outbound
 
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.
@@ -170,7 +170,7 @@ class OfficialSearch(BaseRetriever):
 
     async def _verify_reachable(self, url: str) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=8) as client:
+            async with await _outbound.make_client("official") as client:
                 resp = await client.get(url)
             return resp.status_code == 200 and "text/html" in resp.headers.get("content-type", "")
         except Exception:
@@ -249,7 +249,7 @@ class OfficialSearch(BaseRetriever):
         # words ('feature', 'team', 'wants'), and PyPI matches polluted the
         # evidence chains with junk packages (recommended "flag (PyPI)" once).
         if _is_vs_query(query):
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with await _outbound.make_client("official") as client:
                 for kw in keywords[:3]:
                     if len(kw) < 3:
                         continue
