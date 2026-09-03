@@ -435,7 +435,7 @@ Return ONLY a JSON object:
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
-                               threshold: float = 0.6,
+                               threshold: float = 0.65,
                                usage: list | None = None) -> list[dict]:
     """Find contradictory source pairs using LLM semantic scan.
 
