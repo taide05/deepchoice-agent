@@ -31,7 +31,7 @@ DEFAULT_ORDER_OVERRIDES: dict[str, str] = {
 
 @dataclass(frozen=True)
 class OutboundConfig:
-    channel_order: tuple[str, ...] = ("local-proxy", "self-forward", "direct")
+    channel_order: tuple[str, ...] = ("local-proxy", "self-forward", "direct", "direct-v6")
     order_overrides: dict[str, tuple[str, ...]] = field(default_factory=dict)
     local_proxy: str | None = None
     fwd_base: str | None = None

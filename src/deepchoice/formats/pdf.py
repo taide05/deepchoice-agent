@@ -53,13 +53,13 @@ def _register_cjk_font() -> str:
     if not _registered:
         for path in FONT_CANDIDATES:
             try:
-                TTFont(FAMILY, str(path), subfontIndex=0)
+                font = TTFont(FAMILY, str(path), subfontIndex=0)
             except Exception:
                 continue
             try:
                 pdfmetrics.getFont(FAMILY)
             except KeyError:
-                pdfmetrics.registerFont(TTFont(FAMILY, str(path), subfontIndex=0))
+                pdfmetrics.registerFont(font)
             DEFAULT_FONT[FAMILY] = {
                 "normal": str(path),
                 "bold": str(path),
@@ -83,6 +83,6 @@ def render_pdf(md: str) -> bytes:
 
     buffer = BytesIO()
     status = pisa.CreatePDF(html, dest=buffer, encoding="utf-8")
-    if status.err:
-        raise RuntimeError(f"PDF generation failed: {status.err}")
+    if status is None or status.err:
+        raise RuntimeError(f"PDF generation failed: {getattr(status, 'err', 'unknown error')}")
     return buffer.getvalue()

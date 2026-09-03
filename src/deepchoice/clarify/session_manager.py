@@ -1,7 +1,7 @@
 import time
 import re
 from uuid import uuid4
-from pydantic import BaseModel,Field
+from pydantic import BaseModel, Field
 from typing import Literal
 
 class SessionState(BaseModel):
@@ -26,7 +26,7 @@ class SessionState(BaseModel):
     sub_questions: list[str] | None = None
     last_active: float = Field(default_factory = time.time)
 
-class SessionManager():
+class SessionManager:
     SESSION_TIMEOUT = 1800
     KNOWN_TECHS = {
         "python", "javascript", "typescript", "java", "go", "rust", "c++", "c#",

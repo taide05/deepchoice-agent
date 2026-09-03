@@ -89,7 +89,7 @@ def render(state: dict) -> str:
     else:
         lines.append(T["no_disputes"][lang])
 
-    lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {state.get('confidence', 'unknown')}"])
+    lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}"])
     for g in state.get("knowledge_gaps", []):
         lines.append(f"- {g}")
 

@@ -62,7 +62,7 @@ def list_history() -> list[dict]:
     if not OUTPUT_DIR.exists():
         return []
     history = []
-    for task_dir in sorted(OUTPUT_DIR.iterdir(), reverse=True):
+    for task_dir in sorted(OUTPUT_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
         if task_dir.is_dir():
             snapshot = load_snapshot(task_dir.name)
             if snapshot:

@@ -169,8 +169,12 @@ def _norm_title(s: str) -> str:
 
 
 def _is_real_title(norm: str, real: set[str]) -> bool:
-    """Exact or shortened (substring) form of a real source title."""
-    return any(norm in rt for rt in real)
+    """Exact, or a sufficiently-long substring of a real source title.
+
+    A bare tech name (e.g. 'react') is a substring of nearly every real title
+    and must not count as a real citation — require a meaningful fragment.
+    """
+    return any(norm == rt or (len(norm) >= 8 and norm in rt) for rt in real)
 
 
 def _sanitize_text(text: str, real: set[str]) -> str:
@@ -197,7 +201,7 @@ def _sanitize_text(text: str, real: set[str]) -> str:
 
 _CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
                          "evidence_summary", "scene_fit_note")
-_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness")
+_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness", "constraint_fit_reason")
 _CITATION_TRADEOFF_FIELDS = ("finding", "impact")
 
 

@@ -910,8 +910,12 @@ def _start_research(task: dict, sub_questions: list[str]):
         if resp.status_code == 200:
             st.session_state.research_task_id = resp.json()["task_id"]
             st.session_state.research_running = True
+        else:
+            st.error(f"Failed to start research: HTTP {resp.status_code}")
+            st.session_state.research_failed = True
     except Exception as e:
         st.error(f"Failed to start research: {e}")
+        st.session_state.research_failed = True
 
 
 def _render_research_progress():

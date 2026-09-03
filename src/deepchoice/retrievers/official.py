@@ -1,7 +1,7 @@
 import asyncio
 
 from .base import BaseRetriever
-from .learned_docs import load_learned, learn, domain_label_match, is_plausible_term
+from .learned_docs import load_learned, learn, domain_label_match, is_plausible_term, _looks_official
 from ..utils.llm import call_model
 from .. import outbound as _outbound
 
@@ -224,6 +224,8 @@ class OfficialSearch(BaseRetriever):
         async def _resolve_fallback(kw):
             url = await self._propose_official_url(kw)
             if not url or not domain_label_match(kw, url):
+                return None
+            if not _looks_official(url):
                 return None
             if not await self._verify_reachable(url):
                 return None

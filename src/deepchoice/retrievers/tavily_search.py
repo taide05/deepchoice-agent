@@ -39,6 +39,11 @@ class TavilySearch(BaseRetriever):
             # concurrent queries do not burst a single key into 429.
             batches = await asyncio.gather(*[_one(q) for q in queries])
             all_results = []
+            seen_urls = set()
             for b in batches:
-                all_results.extend(b)
+                for r in b:
+                    url = r.get("url", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        all_results.append(r)
             return all_results[:max_results]

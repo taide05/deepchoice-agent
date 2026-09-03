@@ -502,7 +502,7 @@ class ConflictDetectorAgent:
             if result["confidence"] == "low":
                 low_confidence_pairs.append(pair)
 
-        # Cap evidence gathering at top-2 most ambiguous pairs (sorted by confidence gap)
+        # Cap evidence gathering at top-1 most ambiguous pair (sorted by confidence gap)
         low_confidence_pairs = low_confidence_pairs[:1]
 
         # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
