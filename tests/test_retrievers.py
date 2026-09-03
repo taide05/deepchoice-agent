@@ -87,6 +87,20 @@ class TestTavilySearch:
 
 
 class TestGitHubSearch:
+    @pytest.fixture(autouse=True)
+    def _throttle_off(self, monkeypatch):
+        """These tests assert envelope/error behavior, not throttling; the
+        limiter's pacing/backoff would otherwise add real sleeps per request."""
+        from deepchoice.retrievers import github_rate
+        github_rate._reset_for_tests()
+
+        async def _noop():
+            return None
+
+        monkeypatch.setattr(github_rate, "_pace", _noop)
+        monkeypatch.setattr(github_rate, "retry_delay", lambda headers: 0.0)
+        yield
+
     @pytest.mark.asyncio
     async def test_returns_repo_results(self):
         mock_resp = MagicMock()

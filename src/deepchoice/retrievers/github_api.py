@@ -1,6 +1,7 @@
 import os
 import httpx
 from .base import BaseRetriever
+from . import github_rate
 from .. import outbound as _outbound
 
 
@@ -80,9 +81,10 @@ class GitHubSearch(BaseRetriever):
         errors: list[str] = []
 
         async with await _outbound.make_client("github") as client:
-            for term in all_terms[:4]:  # max 4 searches to stay within rate limits
+            for term in all_terms[:4]:  # max 4 searches per case (throttling centralized in github_rate)
                 try:
-                    resp = await client.get(
+                    resp = await github_rate.get_with_throttle(
+                        client,
                         "https://api.github.com/search/repositories",
                         params={"q": term, "sort": "stars", "per_page": 5},
                         headers=headers,
