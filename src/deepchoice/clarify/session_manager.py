@@ -100,6 +100,10 @@ class SessionManager():
             raise KeyError
         return state
 
+    def get(self, session_id: str) -> SessionState:
+        """Public accessor for a session state; raises KeyError if missing/expired."""
+        return self._get_or_raise(session_id)
+
     def _update_state_from_message(self, state: SessionState, message: str) -> SessionState:
         return state
 

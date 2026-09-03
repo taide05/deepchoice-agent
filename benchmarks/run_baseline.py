@@ -37,6 +37,7 @@ from deepchoice.utils.llm import call_model, set_current_case, set_record_callba
 from benchmarks.metrics import (
     compute_all_metrics,
     compute_conflict_detection_rate_llm,
+    p95 as percentile95,
     save_benchmark,
     trend_report,
 )
@@ -527,7 +528,7 @@ async def run_baseline(
             times = agent_stats.get(agent_name, [])
             if times:
                 avg = sum(times) / len(times)
-                p95 = sorted(times)[int(len(times) * 0.95)] if len(times) >= 20 else max(times)
+                p95 = percentile95(times)
                 agent_summary[agent_name] = {"avg_s": round(avg, 1), "p95_s": round(p95, 1), "n": len(times)}
                 print(f"    {agent_name}: avg={avg:.1f}s, p95={p95:.1f}s (n={len(times)})")
         report["efficiency"]["agent_timing"] = agent_summary
@@ -606,13 +607,22 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     latencies = [r.get("elapsed_s", 0) for r in all_runs]
     before_after_pairs = []  # Not available from batch runs without state
 
-    from benchmarks.metrics import compute_all_metrics, save_benchmark
+    from benchmarks.metrics import compute_all_metrics, compute_conflict_detection_rate_llm, save_benchmark
     report = compute_all_metrics(
         runs=all_runs,
         annotated_cases=annotated_cases,
         latencies_s=latencies,
         before_after_pairs=before_after_pairs,
     )
+
+    # Align conflict detection with the single-run path (LLM judge, not the
+    # keyword fallback inside compute_all_metrics) so merged and per-run
+    # reports are comparable.
+    llm_cd = await compute_conflict_detection_rate_llm(
+        all_runs, annotated_cases, _judge_conflict_match,
+    )
+    report["quality"]["conflict_detection"] = llm_cd
+    report["summary"]["conflict_detection_rate"] = llm_cd["value"]
 
     report["quality"]["report_quality"] = quality_stats
     report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]

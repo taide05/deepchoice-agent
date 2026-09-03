@@ -648,6 +648,7 @@ DEFAULTS = {
     "research_started": False,
     "research_running": False,
     "research_complete": False,
+    "research_failed": False,
     "research_events": [],
     "lang": "zh",
 }
@@ -896,6 +897,13 @@ def render_research_phase():
     if st.session_state.research_complete:
         _render_results()
 
+    if st.session_state.research_failed:
+        st.error(t("loss_connection", lang))
+        if st.button(t("restart_btn", lang)):
+            for k in DEFAULTS:
+                st.session_state[k] = DEFAULTS[k]
+            st.rerun()
+
 
 def _start_research(task: dict, sub_questions: list[str]):
     task["sub_questions"] = sub_questions
@@ -928,7 +936,8 @@ def _render_research_progress():
         st.rerun()
 
     try:
-        with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream", timeout=300) as resp:
+        with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream",
+                          timeout=httpx.Timeout(connect=15.0, read=None)) as resp:
             got_done = False
             for line in resp.iter_lines():
                 if not line.startswith("data:"):
@@ -942,6 +951,7 @@ def _render_research_progress():
                 elif node == "__error__":
                     st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
                     st.session_state.research_running = False
+                    st.session_state.research_failed = True
                     return
                 else:
                     phase = event.get("phase") or NODE_TO_PHASE.get(node, "")
@@ -1004,9 +1014,11 @@ def _render_research_progress():
                 else:
                     st.error(t("loss_connection", lang))
                     st.session_state.research_running = False
+                    st.session_state.research_failed = True
     except Exception as e:
         st.error(f"{t('loss_connection', lang)} {e}")
         st.session_state.research_running = False
+        st.session_state.research_failed = True
 
 
 # ═══════════════════════════════════════════════════════════════════════════

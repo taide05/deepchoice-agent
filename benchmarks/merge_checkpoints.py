@@ -24,6 +24,7 @@ from benchmarks.metrics import (
     compute_all_metrics,
     compute_conflict_detection_rate_llm,
     compute_source_recall_by_source,
+    p95 as percentile95,
     save_benchmark,
 )
 from benchmarks.report_quality import evaluate_batch
@@ -112,7 +113,7 @@ async def main() -> None:
         times = agent_stats.get(name, [])
         if times:
             avg = sum(times) / len(times)
-            p95 = sorted(times)[int(len(times) * 0.95)] if len(times) >= 20 else max(times)
+            p95 = percentile95(times)
             agent_summary[name] = {"avg_s": round(avg, 1), "p95_s": round(p95, 1), "n": len(times)}
     report["efficiency"]["agent_timing"] = agent_summary
 

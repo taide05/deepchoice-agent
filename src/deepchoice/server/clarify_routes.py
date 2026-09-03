@@ -20,7 +20,7 @@ class MessageRequest(BaseModel):
 async def start_clarify(req: StartRequest):
     result = session_manager.create(req.query)
     session_id = result["session_id"]
-    state = session_manager._sessions[session_id]
+    state = session_manager.get(session_id)
 
     agent_response = await clarify_agent.decide_and_respond(state)
     state.messages.append({"role": "assistant", "content": agent_response["answer"]})
@@ -40,7 +40,7 @@ async def clarify_message(session_id: str, req: MessageRequest):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found or expired")
 
-    state = session_manager._sessions[session_id]
+    state = session_manager.get(session_id)
     agent_response = await clarify_agent.decide_and_respond(state)
 
     if agent_response.get("action") == "confirm":
@@ -71,8 +71,8 @@ async def clarify_finalize(session_id: str):
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found or expired")
 
-    state = session_manager._sessions[session_id]
-    final_response = await clarify_agent._handle_finalize(state)
+    state = session_manager.get(session_id)
+    final_response = await clarify_agent.finalize(state)
     state.messages.append({"role": "assistant", "content": final_response["answer"]})
 
     return final_response

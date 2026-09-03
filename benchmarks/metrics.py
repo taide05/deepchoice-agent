@@ -210,6 +210,10 @@ def compute_top1_accuracy(
         if expected == "context_dependent":
             # Context-dependent cases are scored separately (see notes)
             continue
+        if not expected and not acceptable:
+            # No ground-truth winner to score against — skip, never count a
+            # non-empty prediction as correct by default.
+            continue
 
         report = run.get("report", "")
         predicted = extract_top_recommendation(
@@ -218,11 +222,14 @@ def compute_top1_accuracy(
             tech_b=case.get("tech_b", ""),
         )
         if acceptable:
-            # Open-scenario case: any acceptable winner counts
-            is_correct = bool(predicted) and any(w in predicted for w in acceptable)
+            # Open-scenario case: any acceptable winner counts (word-boundary,
+            # so 'react' never matches 'react-native').
+            is_correct = bool(predicted) and any(
+                re.search(rf"\b{re.escape(w)}\b", predicted) for w in acceptable)
             expected_label = "/".join(acceptable)
         else:
-            is_correct = predicted and expected in predicted
+            is_correct = bool(predicted) and re.search(
+                rf"\b{re.escape(expected)}\b", predicted) is not None
             expected_label = expected
         if is_correct:
             correct += 1
@@ -451,9 +458,6 @@ def compute_claim_grounding_rate(report: str) -> dict[str, Any]:
         text_no_links,
     )
     ungrounded = max(0, len(factual_indicators) - grounded)
-    # Cap ungrounded at a reasonable ratio to avoid inflated numbers from
-    # non-factual uses of these words
-    ungrounded = min(ungrounded, len(factual_indicators))
 
     total_claims = grounded + ungrounded
     rate = grounded / total_claims if total_claims > 0 else 0.0
@@ -533,13 +537,13 @@ def _extract_claims(fr: dict) -> list[tuple[str, bool]]:
         claims.append((fr["winner_rationale"], False))
     for opt in fr.get("ranked_options", []):
         sibling_cited = bool(_extract_source_titles(opt.get("rationale", "")))
-        for field in ("rationale", "key_strength", "key_weakness"):
+        for field in _CITATION_OPT_FIELDS:
             text = opt.get(field, "")
             if text:
                 claims.append((text, field != "rationale" and sibling_cited))
     for to in fr.get("trade_offs", []):
         sibling_cited = bool(_extract_source_titles(to.get("finding", "")))
-        for field in ("finding", "impact"):
+        for field in _CITATION_TRADEOFF_FIELDS:
             text = to.get(field, "")
             if text:
                 claims.append((text, field != "finding" and sibling_cited))
@@ -738,8 +742,7 @@ async def compute_conflict_detection_rate_llm(
         # conflicts so a known topic is not missed merely because the detector
         # could not resolve the pair.
         all_conflicts = run.get("conflicts", [])
-        resolved_conflicts = all_conflicts
-        detected_text = " ".join(str(c) for c in resolved_conflicts).lower()
+        detected_text = " ".join(str(c) for c in all_conflicts).lower()
 
         detected_count = 0
         matched_topics = []
@@ -756,7 +759,7 @@ async def compute_conflict_detection_rate_llm(
                 detected_count += 1
                 kw_matched += 1
                 matched_topics.append({"topic": kc["topic"], "method": "keyword"})
-            elif resolved_conflicts:
+            elif all_conflicts:
                 llm_candidates.append(kc)
             else:
                 still_missed.append(kc)
@@ -764,7 +767,7 @@ async def compute_conflict_detection_rate_llm(
         # Stage 2: LLM re-evaluates keyword-missed topics
         for kc in llm_candidates:
             try:
-                ok = await judge_fn(resolved_conflicts, kc["topic"])
+                ok = await judge_fn(all_conflicts, kc["topic"])
                 if ok:
                     detected_count += 1
                     llm_matched += 1
@@ -846,7 +849,6 @@ def compute_success_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
     A run is successful if:
     - No exception/timeout
     - Report is non-empty
-    - state is not None
 
     Args:
         runs: List of {case_id, report, state, error, elapsed_s} from pipeline runs.
@@ -868,8 +870,7 @@ def compute_success_rate(runs: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             mode = "timeout" if "timeout" in str(run.get("error", "")) else \
                    "exception" if run.get("error") else \
-                   "empty_report" if not has_report else \
-                   "no_state"
+                   "empty_report"
             failures.append({
                 "case_id": run.get("case_id", "unknown"),
                 "mode": mode,
@@ -959,6 +960,19 @@ _CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
                          "evidence_summary", "scene_fit_note")
 _CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness")
 _CITATION_TRADEOFF_FIELDS = ("finding", "impact")
+
+
+def p95(values: list[float]) -> float:
+    """Linear-interpolation 95th percentile (matches compute_e2e_latency)."""
+    if not values:
+        return 0.0
+    sorted_l = sorted(values)
+    k = 0.95 * (len(sorted_l) - 1)
+    f = int(k)
+    c = k - f
+    if f + 1 < len(sorted_l):
+        return sorted_l[f] + c * (sorted_l[f + 1] - sorted_l[f])
+    return sorted_l[f]
 
 
 def compute_citation_breakdown(runs: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1121,7 +1135,10 @@ def trend_report(runs_dir: Path) -> dict[str, Any]:
     curr = reports[-1]["summary"]
     deltas = {}
     for key in curr:
-        if key in prev and isinstance(curr[key], (int, float)) and isinstance(prev[key], (int, float)):
+        if (key in prev and isinstance(curr[key], (int, float))
+                and isinstance(prev[key], (int, float))
+                and not isinstance(curr[key], bool)
+                and not isinstance(prev[key], bool)):
             deltas[key] = round(curr[key] - prev[key], 3)
 
     return {

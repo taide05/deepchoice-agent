@@ -227,6 +227,10 @@ class ClarificationAgent:
             "clarify_rounds": state.clarify_rounds,
         }
 
+    async def finalize(self, state: SessionState) -> dict:
+        """Public wrapper for the finalize handler (routes must not call _handle_*)."""
+        return await self._handle_finalize(state)
+
     async def _handle_finalize(self, state: SessionState) -> dict:
         sub_questions = await self._generate_sub_questions(state)
         state.sub_questions = sub_questions
