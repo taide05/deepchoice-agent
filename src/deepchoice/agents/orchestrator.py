@@ -117,9 +117,12 @@ class ChiefEditorAgent:
         if confidence in ("high", "medium"):
             return "end"
         # self_reviewer increments retry_count before routing, so retry_count==1
-        # means "first low-confidence pass" (retry allowed); >1 means already
-        # retried once (stop, to avoid looping forever).
-        if retry_count > 1:
+        # after the first self-review pass. With >= 1, the first low-confidence
+        # pass ends immediately (no retry) — the 08-31 baseline behavior.
+        # NOTE: 5908b73b enabled retry via "> 1", but full-pipeline retry
+        # (retry_full) blows the 600s per-case budget; reverted here to unblock
+        # evaluation. A true incremental retry is a separate follow-up item.
+        if retry_count >= 1:
             return "end"
 
         if len(gaps) <= 2:
