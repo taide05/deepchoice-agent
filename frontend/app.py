@@ -418,8 +418,6 @@ PHASE_NAME_MAP = {
     "complete": {"zh": "完成", "en": "Complete", "ja": "完了", "ko": "완료"},
 }
 
-LANG_FLAGS = {"zh": " CN", "en": " EN", "ja": " JP", "ko": " KR"}
-
 
 def t(key: str, lang: str = "en", **fmt) -> str:
     """Get translated string with optional formatting."""

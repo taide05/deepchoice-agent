@@ -70,13 +70,6 @@ def load_learned() -> dict[str, dict]:
         return {}
 
 
-def save_learned(docs: dict[str, dict]) -> None:
-    _atomic_write_text(
-        LEARNED_DOCS_PATH,
-        json.dumps(docs, ensure_ascii=False, indent=2),
-    )
-
-
 def learn(term: str, url: str, title: str, via: str) -> dict[str, dict]:
     if _READONLY:
         return load_learned()
