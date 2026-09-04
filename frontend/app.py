@@ -2,12 +2,13 @@
 DeepChoice — Tech Selection Deep Research Agent
 Streamlit frontend with artistic dark-themed UI + multilingual support (zh/en/ja/ko)
 """
-import time
+import html as _html
 import json
 import os
-import html as _html
-import streamlit as st
+import time
+
 import httpx
+import streamlit as st
 
 st.set_page_config(
     page_title="DeepChoice — Tech Selection Research",
@@ -1048,7 +1049,7 @@ def _render_timeline_panel(snapshot: dict):
 
     total = 0.0
     entries = []
-    for node in NODE_TO_PHASE.keys():
+    for node in NODE_TO_PHASE:
         if node not in timing:
             continue
         sec = float(timing.get(node) or 0)
@@ -1396,7 +1397,7 @@ def _render_results():
                         <div class="glass-card evidence-anchor" id="ev-{cit["n"]}" style="padding:16px; margin-bottom:10px;">
                             <strong style="color:#e4e4e7">{_esc(chain.get("conclusion", "Finding")[:150])}</strong><br>
                             <span class="badge {badge}">{strength.upper()}</span>
-                            {f'<span class="badge badge-disputed">DISPUTED</span>' if disputed else ''}
+                            {'<span class="badge badge-disputed">DISPUTED</span>' if disputed else ''}
                             {src_lines}
                         </div>
                         """, unsafe_allow_html=True)

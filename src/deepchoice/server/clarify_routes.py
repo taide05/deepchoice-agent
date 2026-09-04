@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from ..clarify.session_manager import SessionManager
+
 from ..clarify.clarification_agent import ClarificationAgent
+from ..clarify.session_manager import SessionManager
 
 router = APIRouter(prefix="/clarify", tags=["clarify"])
 session_manager = SessionManager()

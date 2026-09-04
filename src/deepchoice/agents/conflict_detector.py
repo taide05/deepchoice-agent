@@ -2,13 +2,13 @@ import asyncio
 import json
 import os
 
-import numpy as np
 import httpx
+import numpy as np
 
+from ..retrievers.tavily_keypool import post_with_failover
+from ..utils.embedding import get_embedding_model
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
-from ..utils.embedding import get_embedding_model
-from ..retrievers.tavily_keypool import post_with_failover
 
 # ---------------------------------------------------------------------------
 # Concurrency limits. Two flash tiers: deepseek-flash (500/min) + qwen-flash.
@@ -215,7 +215,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     Returns a plain-text summary of collected evidence suitable for
     enriching claim descriptions in the arbitration prompt.
     """
-    from ..utils.llm import _get_client, TIERS
+    from ..utils.llm import TIERS, _get_client
 
     client = _get_client(timeout=60.0, tier="deepseek-flash")
 
@@ -246,7 +246,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 ),
                 timeout=per_call_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
         except Exception as e:
@@ -283,7 +283,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     _execute_search(tc.function.name, arguments),
                     timeout=20.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
             except Exception as e:
                 result = json.dumps({"error": str(e)})

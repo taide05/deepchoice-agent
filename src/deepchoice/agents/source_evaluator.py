@@ -1,6 +1,5 @@
 from datetime import datetime
 
-
 WEIGHTS = {
     "authority": 0.35,
     "timeliness": 0.25,

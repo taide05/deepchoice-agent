@@ -3,8 +3,8 @@ import json
 
 from deepchoice.retrievers import learned_docs
 from deepchoice.retrievers.learned_docs import (
-    extract_terms,
     domain_label_match,
+    extract_terms,
     harvest,
     is_plausible_term,
     learn,

@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import patch
-from deepchoice.agents.orchestrator import ChiefEditorAgent
 
+import pytest
+
+from deepchoice.agents.orchestrator import ChiefEditorAgent
 
 MOCK_QUERY_RESULT = {
     "sub_questions": [

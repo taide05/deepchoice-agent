@@ -1,28 +1,30 @@
+import asyncio
 import json
 import time
-import asyncio
 import uuid
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response, StreamingResponse
+
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
-from .snapshot_store import (
-    save_snapshot,
-    save_failed_snapshot,
-    load_snapshot,
-    save_report,
-    list_history,
-)
-from ..formats.what_why_how import render as render_what_why_how
-from ..formats.evidence_first import render as render_evidence_first
+from ..formats.citations import build_toc, inject_citations, number_sources
 from ..formats.comparison_matrix import render as render_comparison_matrix
-from ..formats.citations import number_sources, inject_citations, build_toc
+from ..formats.evidence_first import render as render_evidence_first
 from ..formats.pdf import render_pdf
+from ..formats.what_why_how import render as render_what_why_how
 from .clarify_routes import router as clarify_router
+from .snapshot_store import (
+    list_history,
+    load_snapshot,
+    save_failed_snapshot,
+    save_report,
+    save_snapshot,
+)
 
 app = FastAPI(title="DeepChoice API", version="0.1.0")
 app.include_router(clarify_router)

@@ -1,8 +1,10 @@
 import os
+
 import httpx
-from .base import BaseRetriever
-from . import github_rate
+
 from .. import outbound as _outbound
+from . import github_rate
+from .base import BaseRetriever
 
 
 def _extract_tech_names(query: str, sub_questions: list[str]) -> list[str]:

@@ -31,17 +31,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from deepchoice.agents.orchestrator import ChiefEditorAgent
-from deepchoice.utils.llm import call_model, set_current_case, set_record_callback
-
 from benchmarks.metrics import (
     compute_all_metrics,
     compute_conflict_detection_rate_llm,
-    p95 as percentile95,
     save_benchmark,
     trend_report,
 )
+from benchmarks.metrics import (
+    p95 as percentile95,
+)
 from benchmarks.report_quality import evaluate_batch
+from deepchoice.agents.orchestrator import ChiefEditorAgent
+from deepchoice.utils.llm import call_model, set_current_case, set_record_callback
 
 # ---------------------------------------------------------------------------
 # Outbound health-check helpers (batch 3)
@@ -314,7 +315,7 @@ async def run_single_case(case: dict, verbose: bool = False,
             "clarify_used": clarify_used,
         }
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         elapsed = round(time.monotonic() - t0, 1)
         if verbose:
             print(f"  [{case_id}] TIMEOUT after {elapsed}s")
@@ -607,7 +608,11 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     latencies = [r.get("elapsed_s", 0) for r in all_runs]
     before_after_pairs = []  # Not available from batch runs without state
 
-    from benchmarks.metrics import compute_all_metrics, compute_conflict_detection_rate_llm, save_benchmark
+    from benchmarks.metrics import (
+        compute_all_metrics,
+        compute_conflict_detection_rate_llm,
+        save_benchmark,
+    )
     report = compute_all_metrics(
         runs=all_runs,
         annotated_cases=annotated_cases,

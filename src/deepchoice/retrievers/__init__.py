@@ -1,9 +1,9 @@
-from .tavily_search import TavilySearch
-from .chroma_kb import ChromaKB
-from .github_api import GitHubSearch
 from .arxiv_api import ArxivSearch
+from .chroma_kb import ChromaKB
 from .community import CommunitySearch
+from .github_api import GitHubSearch
 from .official import OfficialSearch
+from .tavily_search import TavilySearch
 
 RETRIEVER_REGISTRY = {
     "tavily": TavilySearch,
@@ -15,7 +15,11 @@ RETRIEVER_REGISTRY = {
 }
 
 __all__ = [
-    "TavilySearch", "ChromaKB", "GitHubSearch",
-    "ArxivSearch", "CommunitySearch", "OfficialSearch",
     "RETRIEVER_REGISTRY",
+    "ArxivSearch",
+    "ChromaKB",
+    "CommunitySearch",
+    "GitHubSearch",
+    "OfficialSearch",
+    "TavilySearch",
 ]

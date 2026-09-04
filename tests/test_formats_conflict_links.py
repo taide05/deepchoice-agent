@@ -5,9 +5,9 @@ claims without links dragged claim_grounding_rate to the honest ~90% level.
 Linking claims to their sources grounds them and feeds the reading view's
 citation badges.
 """
-from deepchoice.formats.what_why_how import render as render_www
-from deepchoice.formats.evidence_first import render as render_ef
 from deepchoice.formats.comparison_matrix import render as render_cm
+from deepchoice.formats.evidence_first import render as render_ef
+from deepchoice.formats.what_why_how import render as render_www
 
 STATE = {
     "task": {"query": "FastAPI vs Flask for REST API"},

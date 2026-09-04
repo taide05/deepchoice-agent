@@ -1,5 +1,5 @@
-from .session_manager import SessionState
 from ..utils.llm import call_model
+from .session_manager import SessionState
 
 TECH_RECOMMENDATION_MAP: dict[str, list[dict]] = {
     "fc14a2e9": [

@@ -1,11 +1,13 @@
-import pytest
 from unittest.mock import AsyncMock, patch
-from deepchoice.clarify.session_manager import SessionState
+
+import pytest
+
 from deepchoice.clarify.clarification_agent import (
     ClarificationAgent,
     _get_recommendations,
     _match_categories,
 )
+from deepchoice.clarify.session_manager import SessionState
 
 
 class TestMatchCategories:

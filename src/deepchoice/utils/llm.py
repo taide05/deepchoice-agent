@@ -2,13 +2,13 @@ import asyncio
 import os
 import random
 import time
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import json_repair
-from openai import AsyncOpenAI
 from langchain_core.utils.json import parse_json_markdown
-
+from openai import AsyncOpenAI
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"

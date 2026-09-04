@@ -1,5 +1,5 @@
 """Basic load test for DeepChoice server endpoints."""
-from locust import HttpUser, task, between
+from locust import HttpUser, between, task
 
 
 class DeepChoiceUser(HttpUser):

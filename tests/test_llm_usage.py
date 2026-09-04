@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, patch
 import numpy as np
 import pytest
 
-from deepchoice.utils.llm import call_model, summarize_usage
-from deepchoice.agents.query_analyzer import QueryAnalyzerAgent
-from deepchoice.agents.query_adapter import QueryAdapterAgent
-from deepchoice.agents.self_reviewer import SelfReviewerAgent
 from deepchoice.agents import conflict_detector as cd_module
+from deepchoice.agents.query_adapter import QueryAdapterAgent
+from deepchoice.agents.query_analyzer import QueryAnalyzerAgent
+from deepchoice.agents.self_reviewer import SelfReviewerAgent
+from deepchoice.utils.llm import call_model, summarize_usage
 
 
 def _fake_response(content, model="deepseek-flash",

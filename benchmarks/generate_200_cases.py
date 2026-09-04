@@ -1,6 +1,6 @@
 """Generate a 200-case benchmark file by combining existing cases + auto-generated variants."""
-import json
 import copy
+import json
 import random
 from pathlib import Path
 

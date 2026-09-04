@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from deepchoice.retrievers import official as official_mod
 from deepchoice.retrievers import learned_docs
+from deepchoice.retrievers import official as official_mod
 from deepchoice.retrievers.learned_docs import load_learned
 
 

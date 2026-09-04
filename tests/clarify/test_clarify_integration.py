@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock, patch
-from deepchoice.clarify.session_manager import SessionManager
+
+import pytest
+
 from deepchoice.clarify.clarification_agent import ClarificationAgent
+from deepchoice.clarify.session_manager import SessionManager
 
 
 class TestFullClarifyFlow:

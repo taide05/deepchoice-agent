@@ -1,7 +1,7 @@
 """Claim citation rate: precise [Source: title] coverage + anti-fabrication."""
 import pytest
 
-from benchmarks.metrics import compute_claim_citation_rate, _split_sentences
+from benchmarks.metrics import _split_sentences, compute_claim_citation_rate
 
 
 def _run(recommendation, search_titles, **extra):

@@ -2,8 +2,9 @@ import asyncio
 
 import chromadb
 from chromadb.config import Settings
-from .base import BaseRetriever
+
 from ..utils.embedding import get_embedding_model
+from .base import BaseRetriever
 
 
 class ChromaKB(BaseRetriever):

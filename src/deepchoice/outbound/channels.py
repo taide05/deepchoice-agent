@@ -8,8 +8,8 @@ Design (2026-08-31, D:\ai-career\DC-网络层-设计-2026-08-31.md):
   reach blocked hosts.
 """
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import httpx
 

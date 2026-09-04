@@ -1,6 +1,5 @@
 """Tests for report citation injection and TOC building (formats/citations.py)."""
-from deepchoice.formats.citations import number_sources, inject_citations, build_toc
-
+from deepchoice.formats.citations import build_toc, inject_citations, number_sources
 
 CHAINS = [
     {

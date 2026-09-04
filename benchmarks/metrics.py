@@ -14,10 +14,9 @@ from __future__ import annotations
 import json
 import re
 import statistics
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Quality Metric 1: Top-1 Accuracy
@@ -40,8 +39,7 @@ def _clean_tech_name(raw: str) -> str | None:
     name = raw.strip().lower()
     # Strip leading articles/stop words
     for prefix in ("the ", "a ", "an "):
-        if name.startswith(prefix):
-            name = name[len(prefix):]
+        name = name.removeprefix(prefix)
     # Strip trailing stop words
     for stop in (" for ", " with ", " as ", " in ", " to ", " that ", " which "):
         idx = name.find(stop)
@@ -1023,7 +1021,7 @@ def compute_all_metrics(
         Full benchmark report dict.
     """
     report = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "summary": {},
         "quality": {},
         "efficiency": {},
@@ -1094,7 +1092,7 @@ def save_benchmark(report: dict[str, Any], runs_dir: Path, label: str = "") -> P
         Path to the saved file.
     """
     runs_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     path = runs_dir / f"benchmark{label}-{ts}.json"
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     return path

@@ -18,16 +18,20 @@ RUNS_DIR = BENCH_DIR / "runs"
 sys.path.insert(0, str(BENCH_DIR.parent / "src"))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from benchmarks.metrics import (
     compute_all_metrics,
     compute_conflict_detection_rate_llm,
     compute_source_recall_by_source,
-    p95 as percentile95,
     save_benchmark,
 )
+from benchmarks.metrics import (
+    p95 as percentile95,
+)
 from benchmarks.report_quality import evaluate_batch
+
 # Same-repo script coupling to run_baseline's judge helper — kept private to
 # avoid a shared module for one function; revisit if a third consumer appears.
 from benchmarks.run_baseline import _judge_conflict_match

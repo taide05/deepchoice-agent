@@ -1,9 +1,10 @@
 import asyncio
 import os
 import time
-from datetime import datetime, timezone
-from .base import BaseRetriever
+from datetime import UTC, datetime
+
 from .. import outbound as _outbound
+from .base import BaseRetriever
 
 # Stack Exchange allows exactly ONE request per IP at a time (throttle_violation
 # otherwise). This semaphore serializes community searches within the process —
@@ -39,7 +40,7 @@ class CommunitySearch(BaseRetriever):
         se_key = os.getenv("STACKEXCHANGE_API_KEY", "")
         try:
             await asyncio.wait_for(_SEARCH_SEM.acquire(), timeout=_SEARCH_TIMEOUT_S)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError(
                 f"StackExchange queue timed out after {_SEARCH_TIMEOUT_S}s (throttled)"
             )
@@ -70,7 +71,7 @@ class CommunitySearch(BaseRetriever):
                     date_str = ""
                     ts = item.get("creation_date")
                     if ts:
-                        date_str = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+                        date_str = datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d")
                     results.append({
                         "url": item.get("link", ""),
                         "title": item.get("title", ""),

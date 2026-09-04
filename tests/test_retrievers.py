@@ -1,14 +1,16 @@
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
-from deepchoice.retrievers.base import BaseRetriever
-from deepchoice.retrievers.tavily_search import TavilySearch
-from deepchoice.retrievers.github_api import GitHubSearch
-from deepchoice.retrievers.arxiv_api import ArxivSearch
-from deepchoice.retrievers.community import CommunitySearch
-from deepchoice.retrievers.official import OfficialSearch
-from deepchoice.retrievers import RETRIEVER_REGISTRY
+import pytest
+
 from deepchoice.agents.multi_retriever import MultiRetrieverAgent
+from deepchoice.retrievers import RETRIEVER_REGISTRY
+from deepchoice.retrievers.arxiv_api import ArxivSearch
+from deepchoice.retrievers.base import BaseRetriever
+from deepchoice.retrievers.community import CommunitySearch
+from deepchoice.retrievers.github_api import GitHubSearch
+from deepchoice.retrievers.official import OfficialSearch
+from deepchoice.retrievers.tavily_search import TavilySearch
 
 
 class _FakeClient:
@@ -231,6 +233,7 @@ class TestCommunitySearch:
         """SO allows one request per IP: two concurrent searches must NOT
         overlap (the semaphore serializes them)."""
         import asyncio as _asyncio
+
         from deepchoice.retrievers.community import _SEARCH_SEM
 
         # drain any leftover permit from prior tests
@@ -375,7 +378,9 @@ class TestRetrieverRegistry:
 class TestSearchKBChromaPath:
     def test_default_path_matches_retriever(self, monkeypatch):
         import asyncio
+
         import chromadb
+
         from deepchoice.agents.conflict_detector import _execute_search
 
         captured = {}

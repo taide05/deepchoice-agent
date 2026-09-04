@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
-from .base import BaseRetriever
+
 from .. import outbound as _outbound
+from .base import BaseRetriever
 
 
 class ArxivSearch(BaseRetriever):
@@ -34,7 +35,7 @@ class ArxivSearch(BaseRetriever):
                       "be", "been", "being", "have", "has", "had", "do", "does", "did",
                       "will", "would", "can", "could", "may", "might", "shall", "should",
                       "vs", "versus", "compare", "comparison", "between", "which", "what",
-                      "how", "does", "than", "not", "no"}
+                      "how", "than", "not", "no"}
         query_words = [w.lower() for w in keywords.replace(",", " ").split()
                        if len(w) >= 3 and w.lower() not in stop_words]
 

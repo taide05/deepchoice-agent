@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from deepchoice.agents.query_analyzer import QueryAnalyzerAgent
 
 

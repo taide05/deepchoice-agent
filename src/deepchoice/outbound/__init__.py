@@ -19,7 +19,7 @@ from .channels import (
     SelfForwardChannel,
     build_channels,
 )
-from .resolver import AuditEntry, BACKOFF_S, ChannelResolver
+from .resolver import BACKOFF_S, AuditEntry, ChannelResolver
 
 _resolver: ChannelResolver | None = None
 
@@ -49,19 +49,19 @@ def reset_for_tests() -> None:
 
 
 __all__ = [
+    "BACKOFF_S",
     "DEFAULT_CHANNEL_ORDER",
+    "AuditEntry",
     "BaseChannel",
+    "ChannelResolver",
     "DirectChannel",
     "DirectV6Channel",
     "LocalProxyChannel",
     "OutboundConfig",
     "SelfForwardChannel",
     "build_channels",
-    "ChannelResolver",
-    "AuditEntry",
-    "BACKOFF_S",
     "get_resolver",
-    "set_resolver",
     "make_client",
     "reset_for_tests",
+    "set_resolver",
 ]

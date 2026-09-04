@@ -1,6 +1,6 @@
 """Initialize the Chroma knowledge base with documents from data/ directories."""
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Force offline mode before any HF imports

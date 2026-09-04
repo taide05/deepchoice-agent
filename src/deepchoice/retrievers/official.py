@@ -1,9 +1,15 @@
 import asyncio
 
-from .base import BaseRetriever
-from .learned_docs import load_learned, learn, domain_label_match, is_plausible_term, _looks_official
-from ..utils.llm import call_model
 from .. import outbound as _outbound
+from ..utils.llm import call_model
+from .base import BaseRetriever
+from .learned_docs import (
+    _looks_official,
+    domain_label_match,
+    is_plausible_term,
+    learn,
+    load_learned,
+)
 
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.

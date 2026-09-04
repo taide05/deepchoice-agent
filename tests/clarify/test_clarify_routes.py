@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from deepchoice.server.clarify_routes import router, session_manager, clarify_agent
+
+from deepchoice.server.clarify_routes import clarify_agent, router, session_manager
 
 app = FastAPI()
 app.include_router(router)

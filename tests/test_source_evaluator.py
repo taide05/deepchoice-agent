@@ -1,14 +1,16 @@
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
+
 from deepchoice.agents.source_evaluator import (
     SourceEvaluatorAgent,
-    score_authority,
-    score_timeliness,
-    score_consistency,
-    score_verifiability,
-    compute_total_score,
-    classify_source_type,
     classify_evidence_type,
+    classify_source_type,
+    compute_total_score,
+    score_authority,
+    score_consistency,
+    score_timeliness,
+    score_verifiability,
 )
 
 

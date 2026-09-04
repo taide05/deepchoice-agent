@@ -1,5 +1,6 @@
 """Populate ChromaKB with comparative analysis documents from benchmark cases."""
-import json, os
+import json
+import os
 from pathlib import Path
 
 KB_DIR = Path(__file__).parent
