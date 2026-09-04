@@ -380,6 +380,7 @@ class TestSearchKBChromaPath:
         import asyncio
 
         import chromadb
+        from chromadb.errors import NotFoundError
 
         from deepchoice.agents.conflict_detector import _execute_search
 
@@ -387,7 +388,7 @@ class TestSearchKBChromaPath:
 
         class FakeClient:
             def get_collection(self, name):
-                raise Exception("missing")
+                raise NotFoundError("missing")
 
         def fake_persistent(path, settings):
             captured["path"] = path

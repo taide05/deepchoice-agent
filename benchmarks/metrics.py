@@ -723,6 +723,7 @@ async def compute_conflict_detection_rate_llm(
     total_detected = 0
     kw_matched = 0
     llm_matched = 0
+    judge_errors = 0
     details = []
 
     for run in runs:
@@ -763,6 +764,8 @@ async def compute_conflict_detection_rate_llm(
                 still_missed.append(kc)
 
         # Stage 2: LLM re-evaluates keyword-missed topics
+        judge_errors_in_case = 0
+        judge_error_details = []
         for kc in llm_candidates:
             try:
                 ok = await judge_fn(all_conflicts, kc["topic"])
@@ -772,8 +775,11 @@ async def compute_conflict_detection_rate_llm(
                     matched_topics.append({"topic": kc["topic"], "method": "llm"})
                 else:
                     still_missed.append(kc)
-            except Exception:
-                still_missed.append(kc)
+            except Exception as e:
+                judge_errors += 1
+                judge_errors_in_case += 1
+                judge_error_details.append({"topic": kc["topic"], "error": str(e)})
+                print(f"[WARN] conflict judge failed for topic {kc['topic']!r}: {e}")
 
         total_known += len(known)
         total_detected += detected_count
@@ -783,6 +789,8 @@ async def compute_conflict_detection_rate_llm(
             "detected": detected_count,
             "matched": matched_topics,
             "missed": [k["topic"] for k in still_missed],
+            "judge_errors": judge_errors_in_case,
+            "judge_error_details": judge_error_details,
         })
 
     rate = total_detected / total_known if total_known > 0 else 0.0
@@ -793,6 +801,7 @@ async def compute_conflict_detection_rate_llm(
         "total_detected": total_detected,
         "keyword_matched": kw_matched,
         "llm_matched": llm_matched,
+        "judge_errors": judge_errors,
         "per_case": details,
         "method": "keyword+llm",
     }

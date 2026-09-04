@@ -173,7 +173,8 @@ async def _judge_conflict_match(detected_conflicts: list[dict], topic: str) -> b
             response_format="text",
         )
         return "yes" in str(result).strip().lower()
-    except Exception:
+    except Exception as exc:
+        print(f"[WARN] conflict judge failed for topic {topic!r}: {exc}")
         return False
 
 

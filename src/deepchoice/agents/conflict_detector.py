@@ -184,13 +184,14 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
         chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
         try:
             import chromadb
+            from chromadb.errors import NotFoundError
             client = chromadb.PersistentClient(
                 path=chroma_path,
                 settings=chromadb.Settings(anonymized_telemetry=False),
             )
             try:
                 collection = client.get_collection("knowledge_base")
-            except Exception:
+            except NotFoundError:
                 return json.dumps({"error": "KB collection not found", "results": []})
             results = collection.query(query_texts=[query], n_results=max_results)
             docs = []
@@ -341,7 +342,8 @@ Return ONLY a JSON object:
         if isinstance(result, dict) and result.get("has_difference"):
             return result
         return None
-    except Exception:
+    except Exception as e:
+        print_agent_output(f"Conflict scan failed: {e}", agent="CONFLICT_DETECTOR")
         return None
 
 
