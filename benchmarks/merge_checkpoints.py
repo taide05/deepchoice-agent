@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from benchmarks.judge import _judge_conflict_match
 from benchmarks.metrics import (
     compute_all_metrics,
     compute_conflict_detection_rate_llm,
@@ -31,10 +32,6 @@ from benchmarks.metrics import (
     p95 as percentile95,
 )
 from benchmarks.report_quality import evaluate_batch
-
-# Same-repo script coupling to run_baseline's judge helper — kept private to
-# avoid a shared module for one function; revisit if a third consumer appears.
-from benchmarks.run_baseline import _judge_conflict_match
 
 AGENT_NAMES = ["query_analyzer", "query_adapter", "multi_retriever",
                "source_evaluator", "conflict_detector", "evidence_chain",
