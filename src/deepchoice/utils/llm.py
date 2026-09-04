@@ -8,7 +8,7 @@ from typing import Any
 
 import json_repair
 from langchain_core.utils.json import parse_json_markdown
-from openai import AsyncOpenAI
+from openai import APIConnectionError, AsyncOpenAI
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -71,9 +71,13 @@ async def _retry_sleep(delay: float) -> None:
     await asyncio.sleep(delay)
 
 
-def _get_client(timeout: float = 120.0, tier: str = "deepseek-flash") -> AsyncOpenAI:
+def _get_client(timeout: float = 120.0, tier: str = "deepseek-flash",
+                max_retries: int | None = None) -> AsyncOpenAI:
     cfg = TIERS.get(tier, TIERS["deepseek-flash"])
-    return AsyncOpenAI(api_key=cfg["key"], base_url=cfg["base"], timeout=timeout)
+    kwargs = {"api_key": cfg["key"], "base_url": cfg["base"], "timeout": timeout}
+    if max_retries is not None:
+        kwargs["max_retries"] = max_retries
+    return AsyncOpenAI(**kwargs)
 
 
 def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
@@ -125,7 +129,7 @@ async def call_model(
     model = cfg["model"]
     if isinstance(prompt, list):
         prompt = list(prompt)
-    client = _get_client(timeout=timeout, tier=tier)
+    client = _get_client(timeout=timeout, tier=tier, max_retries=0)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
     # Per-call extra_body overrides the tier default; otherwise the tier's
     # default (qwen-flash disables thinking) applies. This lets a single node
@@ -154,7 +158,8 @@ async def call_model(
                 break
             except Exception as e:
                 status = getattr(e, "status_code", None)
-                if status not in _RETRYABLE_STATUSES or attempt >= _MAX_RETRIES:
+                retryable = isinstance(e, APIConnectionError) or status in _RETRYABLE_STATUSES
+                if not retryable or attempt >= _MAX_RETRIES:
                     raise
                 delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
                 await _retry_sleep(delay)
