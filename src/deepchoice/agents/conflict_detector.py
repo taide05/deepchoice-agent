@@ -5,6 +5,7 @@ import os
 import httpx
 import numpy as np
 
+from .. import outbound as _outbound
 from ..retrievers.tavily_keypool import post_with_failover
 from ..utils.embedding import get_embedding_model
 from ..utils.llm import call_model, summarize_usage
@@ -157,8 +158,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
     elif tool_name == "search_scholarly":
         import urllib.parse
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
+        try:
+            async with await _outbound.make_client("arxiv") as client:
                 q = urllib.parse.quote(f"all:{query}", safe="")
                 url = f"https://export.arxiv.org/api/query?search_query={q}&max_results={max_results}"
                 resp = await client.get(url)
@@ -177,8 +178,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                         "url": link.text.strip() if link is not None else "",
                     })
                 return json.dumps(results[:max_results], ensure_ascii=False)
-            except Exception as e:
-                return json.dumps({"error": str(e)})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
 
     elif tool_name == "search_kb":
         chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
