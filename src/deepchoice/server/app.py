@@ -17,6 +17,7 @@ from ..formats.comparison_matrix import render as render_comparison_matrix
 from ..formats.evidence_first import render as render_evidence_first
 from ..formats.pdf import render_pdf
 from ..formats.what_why_how import render as render_what_why_how
+from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
 from .snapshot_store import (
     list_history,
@@ -126,8 +127,8 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
             state = await orchestrator.get_state()
             partial = state.values if state else {}
             save_failed_snapshot(task_id, partial, str(e))
-        except Exception:
-            pass
+        except Exception as persist_err:
+            print_agent_output(f"Failed to persist failure snapshot for {task_id}: {persist_err}", agent="SERVER")
         entry["status"] = "failed"
         entry["error"] = str(e)
         entry["events"].append({"__error__": {"detail": str(e)}})
@@ -201,8 +202,8 @@ async def research_status(task_id: str):
                     "phase": current,
                     "checkpoint_step": state.metadata.get("step", -1) if state.metadata else -1,
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            print_agent_output(f"Status check failed for {task_id}: {e}", agent="SERVER")
 
     if not entry:
         snapshot = load_snapshot(task_id)

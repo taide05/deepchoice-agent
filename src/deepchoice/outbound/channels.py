@@ -7,6 +7,7 @@ Design (2026-08-31, D:\ai-career\DC-网络层-设计-2026-08-31.md):
   (Cloudflare Worker / n8n) so machines without any proxy client can still
   reach blocked hosts.
 """
+import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -202,7 +203,7 @@ class _ForwardTransport(httpx.AsyncBaseTransport):
                              headers={"X-Fwd-Key": self.channel.key or ""})
             try:
                 data = r.json()
-            except Exception:
+            except json.JSONDecodeError:
                 data = {"status": r.status_code if r.status_code else 502,
                         "body": r.text}
         return httpx.Response(

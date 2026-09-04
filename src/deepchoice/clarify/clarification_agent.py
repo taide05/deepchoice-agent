@@ -1,4 +1,5 @@
 from ..utils.llm import call_model
+from ..utils.views import print_agent_output
 from .session_manager import SessionState
 
 TECH_RECOMMENDATION_MAP: dict[str, list[dict]] = {
@@ -158,7 +159,8 @@ class ClarificationAgent:
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
             return self._merge_and_build_response(state, result)
-        except Exception:
+        except Exception as e:
+            print_agent_output(f"Clarify ask failed: {e}, using fallback", agent="CLARIFICATION")
             return self._fallback_response(state)
 
     async def _handle_recommend(self, state: SessionState) -> dict:
@@ -172,7 +174,8 @@ class ClarificationAgent:
             response["action"] = "recommend"
             response["payload"] = {"candidates": candidates}
             return response
-        except Exception:
+        except Exception as e:
+            print_agent_output(f"Clarify recommend failed: {e}, using fallback", agent="CLARIFICATION")
             return {
                 "action": "recommend",
                 "answer": "根据你的描述，以下技术可能适合你的场景。你想比较哪几个？可以多选。",
@@ -190,7 +193,8 @@ class ClarificationAgent:
 
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
-        except Exception:
+        except Exception as e:
+            print_agent_output(f"Clarify confirm failed: {e}, using fallback", agent="CLARIFICATION")
             result = {"message": "需求已整理完毕，确认后开始研究。"}
 
         state.clarified_task = {
@@ -283,7 +287,8 @@ class ClarificationAgent:
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
             return result.get("sub_questions", [])
-        except Exception:
+        except Exception as e:
+            print_agent_output(f"Clarify sub-question generation failed: {e}, using fallback", agent="CLARIFICATION")
             return [
                 f"{techs} 功能覆盖度对比",
                 f"{techs} 性能表现（吞吐量、延迟、资源消耗）",

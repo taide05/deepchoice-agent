@@ -1,6 +1,7 @@
 import time
 
 from .. import outbound as _outbound
+from ..utils.views import print_agent_output
 
 
 def error_text(e: Exception) -> str:
@@ -32,8 +33,8 @@ class BaseRetriever:
             # harmless no-op for sources outside the channel layer (tavily).
             try:
                 await _outbound.get_resolver().invalidate(self.source)
-            except Exception:
-                pass
+            except Exception as e:
+                print_agent_output(f"Resolver invalidate failed for {self.source}: {e}", agent="RETRIEVER")
             return {
                 "source": self.source,
                 "status": "failed",
