@@ -36,7 +36,7 @@ SNAPSHOT = {
 
 @pytest.fixture(autouse=True)
 def _seed_snapshot(monkeypatch):
-    monkeypatch.setattr(app_module, "load_snapshot", lambda tid: dict(SNAPSHOT))
+    monkeypatch.setattr(app_module, "load_snapshot", lambda _: dict(SNAPSHOT))
     yield
 
 
@@ -66,7 +66,7 @@ class TestAnnotatedEndpoint:
         assert '<span id="sec-1"></span>' in report
 
     def test_404_on_missing_task(self, monkeypatch):
-        monkeypatch.setattr(app_module, "load_snapshot", lambda tid: None)
+        monkeypatch.setattr(app_module, "load_snapshot", lambda _: None)
         resp = client.get(f"/research/{TASK_ID}/annotated")
         assert resp.status_code == 404
 
@@ -111,12 +111,12 @@ class TestExportEndpoint:
     def test_stored_report_format_used_when_param_absent(self, monkeypatch):
         snap = dict(SNAPSHOT)
         snap["task"] = {**SNAPSHOT["task"], "report_format": "evidence_first"}
-        monkeypatch.setattr(app_module, "load_snapshot", lambda tid: snap)
+        monkeypatch.setattr(app_module, "load_snapshot", lambda _: snap)
         resp = client.get(f"/research/{TASK_ID}/export", params={"format": "md"})
         assert resp.status_code == 200
         assert "Evidence Brief" in resp.text
 
     def test_404_on_missing_task(self, monkeypatch):
-        monkeypatch.setattr(app_module, "load_snapshot", lambda tid: None)
+        monkeypatch.setattr(app_module, "load_snapshot", lambda _: None)
         resp = client.get(f"/research/{TASK_ID}/export", params={"format": "md"})
         assert resp.status_code == 404

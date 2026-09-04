@@ -111,7 +111,7 @@ class DirectV6Channel(BaseChannel):
             return False
         addr = infos[0][4]
         try:
-            reader, writer = await asyncio.wait_for(
+            _, writer = await asyncio.wait_for(
                 asyncio.open_connection(addr[0], 443, family=socket.AF_INET6), timeout=5
             )
             writer.close()
@@ -139,7 +139,7 @@ class LocalProxyChannel(BaseChannel):
             return False
         port = parsed.port or 7897
         try:
-            reader, writer = await asyncio.wait_for(
+            _, writer = await asyncio.wait_for(
                 asyncio.open_connection(parsed.hostname, port), timeout=3
             )
             writer.close()

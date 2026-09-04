@@ -43,7 +43,7 @@ def _gather_fake_response(content="evidence found", model="deepseek-v4-flash",
     message = types.SimpleNamespace(
         content=content,
         tool_calls=[],
-        model_dump=lambda exclude_none=None: {"role": "assistant", "content": content},
+        model_dump=lambda **_: {"role": "assistant", "content": content},
     )
     return types.SimpleNamespace(
         model=model,

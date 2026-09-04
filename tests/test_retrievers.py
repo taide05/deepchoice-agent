@@ -390,7 +390,7 @@ class TestSearchKBChromaPath:
             def get_collection(self, name):
                 raise NotFoundError("missing")
 
-        def fake_persistent(path, settings):
+        def fake_persistent(path, **_):
             captured["path"] = path
             return FakeClient()
 

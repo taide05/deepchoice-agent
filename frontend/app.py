@@ -673,7 +673,7 @@ LANG_LABELS = {
 
 def render_top_bar():
     """Header bar with single language selector."""
-    col_empty, col_lang = st.columns([9, 1])
+    _, col_lang = st.columns([9, 1])
     with col_lang:
         labels = LANG_LABELS[lang]
         options = list(labels.values())

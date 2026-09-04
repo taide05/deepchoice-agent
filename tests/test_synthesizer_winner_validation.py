@@ -14,11 +14,6 @@ STATE = {
     "token_usage": [],
 }
 
-GENERIC_WORDS = {
-    "flag", "gradual", "feature", "api", "app", "tool", "platform",
-    "service", "system", "framework", "solution", "library", "package",
-}
-
 
 def _fake_call_model(result):
     async def fake(prompt, model=None, response_format=None, timeout=None, **kw):

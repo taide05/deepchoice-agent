@@ -49,7 +49,7 @@ def generate_cases(count: int = 1000) -> list[dict]:
     cases = []
     case_id = 0
 
-    for cat_key, cat_data in taxonomy["categories"].items():
+    for cat_data in taxonomy["categories"].values():
         for subdomain in cat_data["subdomains"]:
             pairs = TECH_PAIRS.get(subdomain, [("OptionA", "OptionB")])
             for tech_a, tech_b in pairs:
