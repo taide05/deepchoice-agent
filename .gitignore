@@ -43,3 +43,11 @@ tavily_key_state.json
 
 # Personal Claude Code settings (machine-specific permissions)
 .claude/settings.local.json
+
+# logs & tool caches
+*.log
+.env.*
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+review-*.txt
