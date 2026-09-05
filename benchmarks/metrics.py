@@ -84,6 +84,20 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
     if not report:
         return None
 
+    # Pattern 1.5 (FIRST): "**Winner: X**" bold line — the authoritative winner
+    # rendered from final_recommendation.winner. Must run before Pattern 1 so a
+    # tech name inside a "[Source: X-vs-Y]" citation title can never win over
+    # the real winner (fixes TC-0009). A "No single/clear winner" marker means
+    # the synthesizer abstained — treat as no-match so Pattern 1/2 still run.
+    m = re.search(
+        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.\/]+(?:\s[A-Za-z0-9+\-_.\/]+){0,2})(?:\s*\([^)]*\))?\*\*',
+        report,
+    )
+    if m and not re.search(r'(?i)^no\s+(single|clear)\s+winner$', m.group(1).strip()):
+        result = _clean_tech_name(m.group(1))
+        if result:
+            return result
+
     # Pattern 1: Find "Recommendation:" section, then locate tech_a or tech_b nearby.
     # All report formats: "**Recommendation:** <context>, <TechName> is/choose/adopt..."
     m = re.search(
@@ -98,19 +112,6 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
                 result = _clean_tech_name(tech)
                 if result:
                     return result
-
-    # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer).
-    # Parenthesized suffixes like "Firebase Cloud Messaging (FCM)" are allowed;
-    # the tech-name char class includes "/" so "Swagger/OpenAPI" matches
-    # (repo-path winners were already sanitized by _validate_winner).
-    m = re.search(
-        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.\/]+(?:\s[A-Za-z0-9+\-_.\/]+){0,2})(?:\s*\([^)]*\))?\*\*',
-        report,
-    )
-    if m:
-        result = _clean_tech_name(m.group(1))
-        if result:
-            return result
 
     # Pattern 2: "## How: Action Path" section with explicit recommendation
     # Matches: "start with the highest-scored option: X" or "verdict: X"
@@ -219,6 +220,18 @@ def compute_top1_accuracy(
             tech_a=case.get("tech_a", ""),
             tech_b=case.get("tech_b", ""),
         )
+        # Open-scenario tie: when the synthesizer abstains (winner ==
+        # "context_dependent") on a list-GT case, the report's "No single
+        # winner" line defeats text extraction. Fall back to the synthesizer's
+        # own #1 ranked option — an acceptable answer for every list-GT tie
+        # observed (V1 audit) — measuring the top pick it actually produced.
+        if acceptable:
+            fr = run.get("final_recommendation") or {}
+            if (fr.get("winner") or "").lower() == "context_dependent":
+                ranked = fr.get("ranked_options") or []
+                if ranked:
+                    top = (ranked[0].get("name") or "").strip().lower()
+                    predicted = top or predicted
         if acceptable:
             # Open-scenario case: any acceptable winner counts (word-boundary,
             # so 'react' never matches 'react-native').

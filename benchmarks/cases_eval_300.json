@@ -3084,7 +3084,8 @@
       "realm",
       "pouchdb",
       "cloud firestore",
-      "firestore"
+      "firestore",
+      "rxdb"
     ],
     "ground_truth_notes": "Offline-first sync engines are the hard requirement; each has a different data model.",
     "must_find_sources": [

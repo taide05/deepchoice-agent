@@ -4,8 +4,8 @@ from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 # Thinking adds ~10x latency to synthesis (14s -> ~144s); give it a wide
-# single-call budget so the per-case timeout (600s) is the binding constraint.
-SYNTHESIS_CALL_TIMEOUT_S = 600.0
+# single-call budget so the per-case timeout (900s) is the binding constraint.
+SYNTHESIS_CALL_TIMEOUT_S = 900.0
 
 SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all evidence into a final, actionable recommendation.
 
@@ -34,13 +34,13 @@ Disputed findings: {disputed_count}
 ## Synthesis Rules
 1. Weight strong evidence chains more heavily than moderate or weak ones
 2. Acknowledge disputed findings — don't pretend they don't exist
-3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong evidence for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it.
+3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong evidence for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it. It is NEVER a license to invent a concrete stack the query did not name: "team" does not imply a Django/.NET stack, and "enterprise" does not imply any specific framework — rate constraint-fit only against constraints actually stated or directly entailed by the query.
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale. If the highest constraint-fit is TIED, set "winner" to "context_dependent" (rule 7).
 5. If evidence is insufficient for a definitive answer, say so honestly
 6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
 7. Winner selection: name a winner ONLY when evidence clearly favors one option for the scene. If balanced — both have meaningful evidence and neither clearly wins — set "winner" to "context_dependent" and give a conditional recommendation ("choose X if ..., choose Y if ..."). If your own rationale says "depends on"/"hinges on"/"context-dependent", the winner MUST be "context_dependent".
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
-9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
+9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale. When the query asks for a CATEGORY of tool (e.g. "a CI/CD platform with preview environments") rather than a specific product, the winner must be a representative product of that category — never a single vendor's branded marketing feature (e.g. "Deploy Previews") treated as the only answer, and do not let one high-scored vendor doc override the category framing.
 
 ## Output Length Limits (CRITICAL — exceed and output will be rejected)
 - recommendation: max 200 words
