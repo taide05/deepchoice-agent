@@ -292,7 +292,7 @@ class ConclusionSynthesizerAgent:
         }]
 
         local_usage: list = []
-        enable_thinking = os.environ.get("DEEPCHOICE_SYNTH_THINKING", "1") == "1"
+        enable_thinking = os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1"
         try:
             result = await call_model(prompt, model="qwen-flash", response_format="json", tag="conclusion_synthesizer",
                                       usage=local_usage, extra_body={"enable_thinking": enable_thinking},
