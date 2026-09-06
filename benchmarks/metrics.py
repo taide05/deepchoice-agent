@@ -185,6 +185,7 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
 # Only "same product/package, different spelling" entries — never fuzzy matching.
 _TECH_ALIASES = {
     "gitlab": "gitlab-ci",  # GitLab platform == GitLab CI product
+    "chromadb": "chroma",   # ChromaDB package == Chroma product
 }
 
 
