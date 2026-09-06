@@ -47,19 +47,30 @@ class CommunitySearch(BaseRetriever):
         try:
             await _wait_for_backoff()
             async with await _outbound.make_client("community") as client:
-                so_resp = await client.get(
-                    "https://api.stackexchange.com/2.3/search",
-                    params={
-                        "intitle": keywords, "site": "stackoverflow",
-                        "pagesize": max(2, max_results),
-                        "order": "desc", "sort": "votes",
-                        "key": se_key,
-                    } if se_key else {
-                        "intitle": keywords, "site": "stackoverflow",
-                        "pagesize": max(2, max_results),
-                        "order": "desc", "sort": "votes",
-                    },
-                )
+                so_resp = None
+                for attempt in range(3):
+                    so_resp = await client.get(
+                        "https://api.stackexchange.com/2.3/search",
+                        params={
+                            "intitle": keywords, "site": "stackoverflow",
+                            "pagesize": max(2, max_results),
+                            "order": "desc", "sort": "votes",
+                            "key": se_key,
+                        } if se_key else {
+                            "intitle": keywords, "site": "stackoverflow",
+                            "pagesize": max(2, max_results),
+                            "order": "desc", "sort": "votes",
+                        },
+                        timeout=15.0,
+                    )
+                    if so_resp.status_code not in (429, 502, 503) or attempt == 2:
+                        break
+                    try:
+                        _b = so_resp.json().get("backoff")
+                        delay = float(_b) if _b else 5.0
+                    except Exception:
+                        delay = 5.0
+                    await asyncio.sleep(delay)
 
             body = so_resp.json() if so_resp.status_code == 200 else None
             if body is not None and body.get("backoff"):
