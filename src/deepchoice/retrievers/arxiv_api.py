@@ -1,7 +1,28 @@
+import asyncio
 import xml.etree.ElementTree as ET
 
 from .. import outbound as _outbound
 from .base import BaseRetriever
+
+# Tranche 2 B5: bound arxiv concurrency + retry on 429/5xx with Retry-After
+# backoff (the original run's arxiv 429 source; github/community/tavily already
+# throttle, arxiv was the gap).
+_ARXIV_SEM = asyncio.Semaphore(2)
+_ARXIV_TIMEOUT_S = 20.0
+_ARXIV_MAX_RETRIES = 2
+_ARXIV_BACKOFF_S = 3.0
+
+
+def _retry_delay(headers) -> float:
+    try:
+        raw = headers.get("Retry-After")
+        if raw is not None:
+            secs = float(raw)
+            if secs > 0.0:
+                return min(secs, 60.0)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return _ARXIV_BACKOFF_S
 
 
 class ArxivSearch(BaseRetriever):
@@ -11,16 +32,25 @@ class ArxivSearch(BaseRetriever):
                          adapted_queries: list[str] | None = None) -> list[dict]:
         keywords = (adapted_queries[0] if adapted_queries else
                     query.replace(" vs ", " ").replace(" versus ", " ")[:200])
-        async with await _outbound.make_client("arxiv") as client:
-            resp = await client.get(
-                "https://export.arxiv.org/api/query",
-                params={
-                    "search_query": f"all:{keywords}",
-                    "max_results": max_results,
-                    "sortBy": "relevance",
-                },
-            )
-            resp.raise_for_status()
+        async with _ARXIV_SEM:
+            async with await _outbound.make_client("arxiv") as client:
+                resp = None
+                for attempt in range(_ARXIV_MAX_RETRIES + 1):
+                    resp = await asyncio.wait_for(
+                        client.get(
+                            "https://export.arxiv.org/api/query",
+                            params={
+                                "search_query": f"all:{keywords}",
+                                "max_results": max_results,
+                                "sortBy": "relevance",
+                            },
+                        ),
+                        timeout=_ARXIV_TIMEOUT_S,
+                    )
+                    if resp.status_code not in (429, 500, 502, 503, 504) or attempt == _ARXIV_MAX_RETRIES:
+                        break
+                    await asyncio.sleep(_retry_delay(resp.headers))
+                resp.raise_for_status()
 
         try:
             root = ET.fromstring(resp.text)

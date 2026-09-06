@@ -1,7 +1,7 @@
 [
   {
     "id": "TC-0001",
-    "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
+    "query": "LangGraph vs CrewAI for building AI agents as a solo developer who needs fine-grained control and long-term maintainability over rapid prototyping",
     "category": "AI/Agent Frameworks",
     "subdomain": "agent_orchestration",
     "scene": "solo",
@@ -862,7 +862,8 @@
       "dramatiq",
       "google cloud tasks",
       "aws step functions",
-      "apscheduler"
+      "apscheduler",
+      "huey"
     ],
     "ground_truth_notes": "Any lightweight Python task queue fits; broker requirements differ slightly.",
     "must_find_sources": [
@@ -1104,7 +1105,7 @@
   },
   {
     "id": "TC-0016",
-    "query": "LangChain vs Semantic Kernel for enterprise AI application with compliance requirements",
+    "query": "LangChain vs Semantic Kernel for a .NET-centric enterprise AI application with compliance requirements",
     "category": "AI/Agent Frameworks",
     "subdomain": "llm_invocation",
     "scene": "enterprise",
@@ -1812,7 +1813,7 @@
   },
   {
     "id": "TC-0026",
-    "query": "JWT vs session-based authentication for a REST API at scale",
+    "query": "JWT vs session-based authentication for a REST API at scale, where horizontal stateless scaling is the primary requirement",
     "category": "Backend Frameworks & API",
     "subdomain": "auth_authorization",
     "scene": "enterprise",
@@ -1979,7 +1980,8 @@
       "peft",
       "trl",
       "hugging face transformers",
-      "transformers"
+      "transformers",
+      "llamafactory"
     ],
     "ground_truth_notes": "Parameter-efficient fine-tuning libraries all fit single-GPU constraints.",
     "must_find_sources": [
@@ -3391,7 +3393,7 @@
   },
   {
     "id": "TC-0049",
-    "query": "Modal vs AWS Lambda for serverless Python ML inference",
+    "query": "Modal vs AWS Lambda for serverless Python ML inference with GPU-accelerated workloads",
     "category": "Deployment & Operations",
     "subdomain": "cloud_platforms",
     "scene": "solo",

@@ -181,6 +181,20 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
     return None
 
 
+# Tranche 2 B1: precise alias + punctuation normalization for near-miss names.
+# Only "same product/package, different spelling" entries — never fuzzy matching.
+_TECH_ALIASES = {
+    "gitlab": "gitlab-ci",  # GitLab platform == GitLab CI product
+}
+
+
+def _normalize_tech_name(s: str) -> str:
+    """Lowercase, map exact aliases, collapse [-_] to space, strip."""
+    s = (s or "").strip().lower()
+    s = _TECH_ALIASES.get(s, s)
+    return re.sub(r"[-_]+", " ", s).strip()
+
+
 def compute_top1_accuracy(
     runs: list[dict[str, Any]],
     annotated_cases: list[dict[str, Any]],
@@ -234,13 +248,18 @@ def compute_top1_accuracy(
                     predicted = top or predicted
         if acceptable:
             # Open-scenario case: any acceptable winner counts (word-boundary,
-            # so 'react' never matches 'react-native').
-            is_correct = bool(predicted) and any(
-                re.search(rf"\b{re.escape(w)}\b", predicted) for w in acceptable)
+            # so 'react' never matches 'react-native'). Normalize aliases and
+            # punctuation (hyphen/underscore -> space) on both sides first.
+            norm_pred = _normalize_tech_name(predicted)
+            is_correct = bool(norm_pred) and any(
+                re.search(rf"\b{re.escape(_normalize_tech_name(w))}\b", norm_pred)
+                for w in acceptable)
             expected_label = "/".join(acceptable)
         else:
-            is_correct = bool(predicted) and re.search(
-                rf"\b{re.escape(expected)}\b", predicted) is not None
+            norm_pred = _normalize_tech_name(predicted)
+            norm_expected = _normalize_tech_name(expected)
+            is_correct = bool(norm_pred) and re.search(
+                rf"\b{re.escape(norm_expected)}\b", norm_pred) is not None
             expected_label = expected
         if is_correct:
             correct += 1
