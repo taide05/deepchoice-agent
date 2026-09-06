@@ -80,8 +80,44 @@ class SelfReviewerAgent:
 
         cite_stats = _citation_coverage(research_state.get("final_recommendation", {}))
 
-        user_content = f"""## Report
-{research_state.get("report", "")}
+        # Structured summary (0b): pass recommendation fields instead of the
+        # full report so self-review input drops ~72%. The 5 report-quality
+        # checks (winner_extractable/source_citations/both_sides/limitation/
+        # dimensions) run in report_quality.py on the report text and are
+        # unaffected by this input change.
+        fr = research_state.get("final_recommendation", {})
+        rec_parts = []
+        if fr.get("winner"):
+            rec_parts.append(f"Winner: {fr.get('winner')}")
+        if fr.get("winner_rationale"):
+            rec_parts.append(f"Winner rationale: {fr.get('winner_rationale')}")
+        if fr.get("recommendation"):
+            rec_parts.append(f"Recommendation: {fr.get('recommendation')}")
+        ro = fr.get("ranked_options", [])
+        if ro:
+            ro_lines = [
+                f"#{o.get('rank', '?')} {o.get('name', '')} (constraint_fit={o.get('constraint_fit', '')})"
+                for o in ro
+            ]
+            rec_parts.append("Ranked options:\n" + "\n".join(ro_lines))
+        tos = fr.get("trade_offs", [])
+        if tos:
+            rec_parts.append("Trade-off dimensions:\n" + "\n".join(
+                f"- {t.get('dimension', '')}" for t in tos))
+        rec_summary = "\n\n".join(rec_parts) or "No recommendation available."
+
+        conflicts = research_state.get("conflicts", [])
+        conflicts_lines = [
+            f"- {c.get('claim_a', '')[:60]} vs {c.get('claim_b', '')[:60]} → {c.get('resolution', '')}"
+            for c in conflicts
+        ]
+        conflicts_text = "\n".join(conflicts_lines) if conflicts_lines else "No conflicts."
+
+        user_content = f"""## Recommendation Summary
+{rec_summary}
+
+## Conflicts
+{conflicts_text}
 
 ## Citation Coverage (pre-computed — trust this, do NOT re-evaluate)
 Total claim fields: {cite_stats["total_fields"]}
