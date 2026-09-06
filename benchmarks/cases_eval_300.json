@@ -1297,7 +1297,8 @@
       "materialize",
       "druid",
       "bigquery",
-      "clickhouse cloud"
+      "clickhouse cloud",
+      "pinot"
     ],
     "ground_truth_notes": "OLAP column stores or streaming-materialized views are the valid routes.",
     "must_find_sources": [
