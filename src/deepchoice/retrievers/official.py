@@ -119,6 +119,12 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "ansible": {"url": "https://docs.ansible.com", "title": "Ansible — Official Documentation"},
     "airflow": {"url": "https://airflow.apache.org", "title": "Apache Airflow — Official Documentation"},
     "prefect": {"url": "https://prefect.io", "title": "Prefect — Official Documentation"},
+    # Workflow / rules engines
+    "temporal": {"url": "https://docs.temporal.io", "title": "Temporal — Official Documentation"},
+    "camunda": {"url": "https://docs.camunda.org", "title": "Camunda — Official Documentation"},
+    "drools": {"url": "https://www.drools.org", "title": "Drools — Official Documentation"},
+    "cadence": {"url": "https://cadenceworkflow.io", "title": "Cadence — Official Documentation"},
+    "conductor": {"url": "https://conductor-oss.org", "title": "Conductor — Official Documentation"},
     "prometheus": {"url": "https://prometheus.io", "title": "Prometheus — Official Documentation"},
     "datadog": {"url": "https://datadoghq.com", "title": "Datadog — Official Documentation"},
     "pydantic": {"url": "https://docs.pydantic.dev", "title": "Pydantic — Official Documentation"},

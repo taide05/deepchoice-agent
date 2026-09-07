@@ -15,6 +15,7 @@ For EACH sub-question, generate 6 query variants:
 Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma). For English-only sources (arxiv/github/official), use English technical terms.
 
 Rules:
+- For open-ended sub-questions (no "vs"/"versus", no named candidate technologies): first enumerate 3-5 mainstream candidate technologies that plausibly satisfy the question, then generate every retriever query naming those candidates — official/github/arxiv especially need concrete tech names to retrieve anything.
 - Each variant MUST be specific and searchable
 - Include version numbers or years where relevant
 - If a sub-question doesn't fit a particular retriever type, still generate the best possible query
