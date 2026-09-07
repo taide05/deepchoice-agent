@@ -39,7 +39,7 @@ Disputed findings: {disputed_count}
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale. If the highest constraint-fit is TIED, set "winner" to "context_dependent" (rule 7).
 5. If evidence is insufficient for a definitive answer, say so honestly
 6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
-7. Winner selection: name a winner ONLY when evidence clearly favors one option for the scene. If balanced — both have meaningful evidence and neither clearly wins — set "winner" to "context_dependent" and give a conditional recommendation ("choose X if ..., choose Y if ..."). If your own rationale says "depends on"/"hinges on"/"context-dependent", the winner MUST be "context_dependent".
+7. Winner selection: rank candidates by a DETERMINISTIC total order and commit to the top — do NOT abstain on a tie. Order: (1) higher constraint_fit (high > medium > low); (2) higher evidence score (source total_score); (3) more supporting sources; (4) lexicographic name order. Set "winner" to "context_dependent" ONLY when every candidate's constraint_fit is "low" (no candidate genuinely fits the scene) — then give a conditional recommendation as before.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
 9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale. When the query asks for a CATEGORY of tool (e.g. "a CI/CD platform with preview environments") rather than a specific product, the winner must be a representative product of that category — never a single vendor's branded marketing feature (e.g. "Deploy Previews") treated as the only answer, and do not let one high-scored vendor doc override the category framing.
 10. CAPABILITY-CATEGORY guard: when the query asks for a capability class (e.g. "semantic search" → a vector store, NOT full-text search), the winner must be a product of that class. Semantic/vector retrieval (Qdrant, Milvus, pgvector, Chroma, Weaviate) is NOT keyword search (Meilisearch, Elasticsearch) — never name a search engine for a "semantic search" need.
@@ -139,14 +139,14 @@ _FIT_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def _validate_constraint_fit(result: dict) -> dict:
-    """Enforce ANTI-BIAS rule 4: if the winner is not among the highest
-    constraint-fit ranked options, fall back to the highest-fit option.
+    """Enforce ANTI-BIAS rule 4 + rule 7 deterministic tie-break: commit to the
+    highest constraint-fit option. Abstain ("context_dependent") only when every
+    candidate's fit is "low" (no genuine answer); a concrete winner that is not
+    the highest-fit is overridden to the highest-fit.
 
     No-op when constraint_fit is absent (older/malformed outputs) — the
     validator must not corrupt a report that predates the field.
     """
-    if (result.get("winner") or "").strip().lower() == "context_dependent":
-        return result
     ranked = result.get("ranked_options", [])
     if not ranked:
         return result
@@ -161,6 +161,14 @@ def _validate_constraint_fit(result: dict) -> dict:
     best_level = min(_FIT_ORDER[fit] for _, fit in scored)
     best_names = [name for name, fit in scored if _FIT_ORDER[fit] == best_level]
     winner = (result.get("winner") or "").strip()
+    if winner.lower() == "context_dependent":
+        # Rule 7: abstain ONLY when every candidate is "low" fit; otherwise
+        # commit deterministically to the highest-fit (ties resolved by the
+        # ranked_options order the model already produced).
+        if best_level >= _FIT_ORDER["low"]:
+            return result
+        result["winner"] = best_names[0]
+        return result
     if winner.lower() in {n.lower() for n in best_names}:
         return result
     result["winner"] = best_names[0]
