@@ -6631,7 +6631,7 @@
   },
   {
     "id": "TC-0011-v61",
-    "query": "Docker Compose vs Kubernetes for a small team deploying 5 microservices for a solo developer (budget under $500/month, open-source preferred)",
+    "query": "Docker Compose vs Kubernetes for a solo developer deploying 5 microservices (budget under $500/month, open-source preferred)",
     "category": "Deployment & Operations",
     "subdomain": "container_orchestration",
     "scene": "solo",
@@ -7261,7 +7261,7 @@
   },
   {
     "id": "TC-0023-v73",
-    "query": "FastAPI vs Django Ninja for building REST APIs in a Python-first team for a solo developer (team of 3 junior developers, ease of use critical)",
+    "query": "FastAPI vs Django Ninja for building REST APIs as a solo developer",
     "category": "Backend Frameworks & API",
     "subdomain": "web_frameworks",
     "scene": "solo",
