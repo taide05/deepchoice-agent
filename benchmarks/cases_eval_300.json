@@ -778,7 +778,9 @@
       "temporal",
       "aws step functions",
       "google cloud composer",
-      "azure data factory"
+      "azure data factory",
+      "argo workflows",
+      "flyte"
     ],
     "ground_truth_notes": "The three major orchestrators all satisfy retries and observability; choice hinges on programming model preference.",
     "must_find_sources": [
@@ -1082,8 +1084,6 @@
     "difficulty": "medium",
     "acceptable_winners": [
       "minio",
-      "s3",
-      "cloudflare",
       "seaweedfs"
     ],
     "ground_truth_notes": "Self-hosted S3-compatible or managed object storage both meet the requirement.",
@@ -1445,9 +1445,7 @@
       "milvus",
       "pgvector",
       "chroma",
-      "weaviate",
-      "pinecone",
-      "zilliz cloud"
+      "weaviate"
     ],
     "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
     "must_find_sources": [
@@ -2847,7 +2845,7 @@
   },
   {
     "id": "TC-0041",
-    "query": "Airflow vs Prefect for data pipeline orchestration in a data engineering team",
+    "query": "Airflow vs Prefect for data pipeline orchestration in a new data engineering team",
     "category": "Infrastructure",
     "subdomain": "task_queues",
     "scene": "team",
@@ -2975,7 +2973,7 @@
   },
   {
     "id": "TC-0043",
-    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production",
+    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production as a single-process containerized deployment",
     "category": "Backend Frameworks & API",
     "subdomain": "async_solutions",
     "scene": "team",
@@ -3018,9 +3016,7 @@
     "acceptable_winners": [
       "keycloak",
       "authentik",
-      "zitadel",
-      "auth0",
-      "okta"
+      "zitadel"
     ],
     "ground_truth_notes": "Open-source identity providers all support SAML and OIDC.",
     "must_find_sources": [
@@ -3109,7 +3105,7 @@
   },
   {
     "id": "TC-0045",
-    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline",
+    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline for OpenAI-compatible APIs",
     "category": "Models & Data",
     "subdomain": "llm_selection",
     "scene": "team",
@@ -3249,7 +3245,7 @@
   },
   {
     "id": "TC-0047",
-    "query": "Bun vs Node.js for building a new backend API in 2026",
+    "query": "Bun vs Node.js for building a new backend API in 2026 as a solo developer prioritizing developer experience over ecosystem maturity",
     "category": "Backend Frameworks & API",
     "subdomain": "web_frameworks",
     "scene": "solo",
@@ -3300,7 +3296,7 @@
       "drools",
       "camunda"
     ],
-    "ground_truth_notes": "Durable execution, plain SQL rules, or an authorization engine are all defensible starting points.",
+    "ground_truth_notes": "Durable execution, plain SQL rules, or a rules/workflow engine are all defensible starting points.",
     "must_find_sources": [
       {
         "pattern": "temporal.io",
@@ -3442,7 +3438,8 @@
     "acceptable_winners": [
       "playwright",
       "scrapy",
-      "puppeteer"
+      "puppeteer",
+      "selenium"
     ],
     "ground_truth_notes": "Browser automation or request-based scraping both handle JS sites with different tradeoffs.",
     "must_find_sources": [

@@ -186,6 +186,8 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
 _TECH_ALIASES = {
     "gitlab": "gitlab-ci",  # GitLab platform == GitLab CI product
     "chromadb": "chroma",   # ChromaDB package == Chroma product
+    "model context protocol": "mcp",  # full name == MCP acronym (TC-0050)
+    "open policy agent": "opa",  # full name == OPA acronym (OS-0048)
 }
 
 
