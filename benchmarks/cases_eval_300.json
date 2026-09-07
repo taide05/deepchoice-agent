@@ -4693,7 +4693,7 @@
   },
   {
     "id": "TC-0029-v29",
-    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a team (existing React frontend, needs REST and WebSocket API)",
+    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a mid-size team",
     "category": "Infrastructure",
     "subdomain": "message_queues",
     "scene": "team",
@@ -5081,7 +5081,7 @@
   },
   {
     "id": "TC-0035-v35",
-    "query": "Prometheus vs Datadog for application monitoring on a startup budget for a team (enterprise with SOC2 compliance, stability over features)",
+    "query": "Prometheus vs Datadog for application monitoring on a startup budget for a team",
     "category": "Deployment & Operations",
     "subdomain": "monitoring",
     "scene": "team",
@@ -5449,7 +5449,7 @@
   },
   {
     "id": "TC-0043-v43",
-    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production for a solo developer (team of 3 junior developers, ease of use critical)",
+    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production as a single-process containerized deployment for a solo developer",
     "category": "Backend Frameworks & API",
     "subdomain": "async_solutions",
     "scene": "solo",
@@ -5601,7 +5601,7 @@
   },
   {
     "id": "TC-0045-v45",
-    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline for an enterprise team (enterprise with SOC2 compliance, stability over features)",
+    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline for OpenAI-compatible APIs for an enterprise team (enterprise with SOC2 compliance, stability over features)",
     "category": "Models & Data",
     "subdomain": "llm_selection",
     "scene": "enterprise",
@@ -6034,11 +6034,10 @@
     "scene": "enterprise",
     "difficulty": "medium",
     "acceptable_winners": [
-      "argo cd",
+      "argocd",
       "helm",
       "kustomize",
-      "flux",
-      "argocd"
+      "flux"
     ],
     "ground_truth_notes": "GitOps and declarative delivery tools for Kubernetes all qualify.",
     "must_find_sources": [
@@ -9371,11 +9370,7 @@
     "scene": "solo",
     "acceptable_winners": [
       "outline",
-      "wikijs",
       "bookstack",
-      "confluence",
-      "notion",
-      "gitbook",
       "docusaurus",
       "wiki.js"
     ],
@@ -10320,11 +10315,7 @@
     "acceptable_winners": [
       "pgbackrest",
       "wal-g",
-      "barman",
-      "aws rds",
-      "neon",
-      "supabase",
-      "google cloud sql"
+      "barman"
     ],
     "ground_truth_notes": "The user needs scheduled backups and point-in-time recovery so a mistake or failure doesn't lose data. pgBackRest, WAL-G and Barman are open-source, while AWS RDS, Neon, Supabase and Google Cloud SQL provide managed backup and PITR. Automated backups with PITR is the requirement.",
     "_idx": 291
