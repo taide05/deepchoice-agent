@@ -8,9 +8,9 @@ from .base import BaseRetriever
 # backoff (the original run's arxiv 429 source; github/community/tavily already
 # throttle, arxiv was the gap).
 _ARXIV_SEM = asyncio.Semaphore(2)
-_ARXIV_TIMEOUT_S = 20.0
-_ARXIV_MAX_RETRIES = 2
-_ARXIV_BACKOFF_S = 3.0
+_ARXIV_TIMEOUT_S = 30.0
+_ARXIV_MAX_RETRIES = 3
+_ARXIV_BACKOFF_S = 5.0
 
 
 def _retry_delay(headers) -> float:

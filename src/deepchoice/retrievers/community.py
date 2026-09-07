@@ -15,7 +15,7 @@ from .base import BaseRetriever
 # only when such a topology actually appears; SO misses are non-fatal
 # (partial_failure + 5 sourcing backstops).
 _SEARCH_SEM = asyncio.Semaphore(1)
-_SEARCH_TIMEOUT_S = 20.0
+_SEARCH_TIMEOUT_S = 40.0
 
 # Stack Exchange throttles dynamically via the response `backoff` field (seconds
 # to wait before the next request). Track the next-allowed instant and honor it
