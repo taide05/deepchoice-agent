@@ -64,7 +64,7 @@ class QueryAnalyzerAgent:
         local_usage: list = []
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_analyzer",
-                                      usage=local_usage)
+                                      usage=local_usage, seed=0)
         except Exception as e:
             print_agent_output(f"Query decomposition failed: {e}, using raw query", agent="QUERY_ANALYZER")
             result = {}

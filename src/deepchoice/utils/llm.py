@@ -123,6 +123,7 @@ async def call_model(
     usage: list | None = None,
     tag: str = "",
     extra_body: dict | None = None,
+    seed: int | None = None,
 ) -> dict | str:
     tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
@@ -131,6 +132,8 @@ async def call_model(
         prompt = list(prompt)
     client = _get_client(timeout=timeout, tier=tier, max_retries=0)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
+    if seed is not None:
+        kwargs["seed"] = seed
     # Per-call extra_body overrides the tier default; otherwise the tier's
     # default (qwen-flash disables thinking) applies. This lets a single node
     # opt back into thinking without forking the tier table.

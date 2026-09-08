@@ -307,7 +307,7 @@ class ConclusionSynthesizerAgent:
         try:
             result = await call_model(prompt, model="qwen-flash", response_format="json", tag="conclusion_synthesizer",
                                       usage=local_usage, extra_body={"enable_thinking": enable_thinking},
-                                      timeout=SYNTHESIS_CALL_TIMEOUT_S)
+                                      timeout=SYNTHESIS_CALL_TIMEOUT_S, seed=0)
         except Exception as e:
             print_agent_output(f"Synthesis failed: {e}", agent="CONCLUSION_SYNTHESIZER")
             result = {

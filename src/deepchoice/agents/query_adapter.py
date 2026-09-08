@@ -66,7 +66,7 @@ class QueryAdapterAgent:
         local_usage: list = []
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_adapter",
-                                      usage=local_usage)
+                                      usage=local_usage, seed=0)
             adapted_items = result.get("adapted", [])
         except Exception as e:
             print_agent_output(f"Query adaptation failed: {e}, using raw sub_questions", agent="QUERY_ADAPTER")
