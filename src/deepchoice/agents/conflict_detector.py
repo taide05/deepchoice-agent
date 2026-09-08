@@ -31,8 +31,8 @@ Rules:
 3. If neither has strong evidence, declare "insufficient_data"
 4. Your reasoning MUST cite the score difference or evidence type difference
 
-Return ONLY a JSON object:
-{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Specific reason citing score/evidence difference", "key_factor": "The single most decisive factor"}"""
+Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; keep "reasoning" and "key_factor" to a short phrase (<=12 words each):
+{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Short phrase citing score/evidence difference", "key_factor": "Short decisive factor"}"""
 
 
 CONTRADICTION_SCAN_SYSTEM = """You are checking if two technical sources present meaningfully different perspectives about a technology comparison.
@@ -324,11 +324,11 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str,
             f"Do these two sources present meaningfully different perspectives? Return JSON."
             """
 
-Return ONLY a JSON object:
+Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; keep "explanation" to a short phrase (<=12 words):
 {{
   "has_difference": true/false,
   "type": "winner_disagreement|tradeoff_disagreement|vendor_bias|none",
-  "explanation": "One sentence explaining the difference (or why there is none)"
+  "explanation": "Short phrase stating the difference (or 'none')"
 }}"""
         )},
     ]
