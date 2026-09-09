@@ -934,11 +934,10 @@ def _render_research_progress():
         progress_bar.progress(1.0, text=t("progress_done", lang))
         st.session_state.research_running = False
         st.session_state.research_complete = True
-        st.rerun()
 
     try:
         with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream",
-                          timeout=httpx.Timeout(connect=15.0, read=None)) as resp:
+                          timeout=httpx.Timeout(None, connect=15.0)) as resp:
             got_done = False
             for line in resp.iter_lines():
                 if not line.startswith("data:"):
@@ -949,6 +948,7 @@ def _render_research_progress():
                 if node == "__done__":
                     got_done = True
                     _complete()
+                    break
                 elif node == "__error__":
                     st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
                     st.session_state.research_running = False
@@ -998,7 +998,7 @@ def _render_research_progress():
                         # earlier nodes — those already match inside the loop).
                         if live_running and live_running not in live_order:
                             entries.append({"label": _node_label(live_running, lang), "running": True})
-                        live.container().markdown(
+                        live.markdown(
                             _timeline_html(entries, total_elapsed, lang),
                             unsafe_allow_html=True,
                         )
@@ -1020,6 +1020,12 @@ def _render_research_progress():
         st.error(f"{t('loss_connection', lang)} {e}")
         st.session_state.research_running = False
         st.session_state.research_failed = True
+
+    # Keep Streamlit's rerun control flow outside the network exception
+    # boundary. Newer Streamlit releases implement rerun with an internal
+    # exception that must not be reported as a connection failure.
+    if st.session_state.research_complete:
+        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════

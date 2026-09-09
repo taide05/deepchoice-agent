@@ -18,6 +18,8 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Do not delete branches, reflogs, tags, or `refs/backup/*`, and do not run `git gc` or `git prune`, without explicit approval.
 - Do not push, force-push, merge to `main`, or create releases without explicit approval.
 - Keep implementation, tests, and directly affected documentation in the same change. Prefer focused commits with conventional prefixes such as `fix:`, `feat:`, `test:`, `docs:`, or `chore:`.
+- Every completed change must have a corresponding Git commit before handoff so it can be traced and rolled back. Do not leave completed work only in the working tree.
+- Every change must add or update the relevant automated tests. Before delivery, run the affected tests and the full validation suite; all tests and required checks must pass. If validation cannot pass, do not present the change as complete.
 
 ## Architecture map
 
@@ -37,22 +39,23 @@ The normal research path is query analysis -> query adaptation -> multi-source r
 
 ## Setup and commands
 
-Use Python 3.11 or 3.12 when creating a fresh environment. Python 3.13 currently emits a native `pyarrow` access-violation diagnostic during test discovery on the known local environment.
+Use Python 3.11 or 3.12 in a project-local virtual environment. Python 3.13 is currently outside the supported range because the former global environment emitted a native `pyarrow` access-violation diagnostic during test discovery.
 
 ```powershell
-python -m pip install -e ".[dev]"
-python -m uvicorn deepchoice.server.app:app --reload
-python -m streamlit run frontend/app.py
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m uvicorn deepchoice.server.app:app --reload
+.\.venv\Scripts\python.exe -m streamlit run frontend/app.py
 ```
 
 Run the smallest relevant test first, then the full suite:
 
 ```powershell
-python -m pytest tests/path_to_test.py -q -p no:cacheprovider
-python -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
+.\.venv\Scripts\python.exe -m pytest tests/path_to_test.py -q -p no:cacheprovider
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-The verified baseline on 2026-09-09 is 305 passed and 1 skipped. Test counts are observations, not constants; update documentation only after collecting/running the current suite. The known environment also reports a Streamlit/Starlette import warning, so frontend import skips must not be mistaken for full frontend compatibility coverage.
+The verified clean-environment baseline on 2026-09-09 is 309 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 

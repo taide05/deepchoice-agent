@@ -4,17 +4,12 @@ Runs the real frontend script (frontend/app.py) inside Streamlit's AppTest run
 context. The backend API is faked entirely (no live server): httpx.get/post/stream
 are replaced with in-memory doubles.
 
-Requires Streamlit — the whole module skips where it cannot be imported
-(e.g. the main Python 3.13 env). Run on the Anaconda env:
+Run this test in the supported project-local Python 3.11/3.12 environment:
 
-    python -m pytest tests/test_frontend_obs.py -q
+    .\\.venv\\Scripts\\python.exe -m pytest tests/test_frontend_obs.py -q
 """
 import json
 from pathlib import Path
-
-import pytest
-
-pytest.importorskip("streamlit")
 
 import httpx
 from streamlit.testing.v1 import AppTest

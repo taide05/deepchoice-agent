@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "deepchoice"
 version = "0.1.0"
 description = "Tech Selection Deep Research Agent"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "langgraph>=0.2.0,<2",
     "langgraph-checkpoint-sqlite>=2.0.0,<4",
@@ -18,9 +18,9 @@ dependencies = [
     "aiosqlite>=0.22,<1",
     "chromadb>=0.5.0,<2",
     "sentence-transformers>=3.0.0,<6",
-    "fastapi>=0.115.0,<1",
+    "fastapi>=0.141.1,<1",
     "uvicorn>=0.30.0,<1",
-    "streamlit>=1.38.0,<2",
+    "streamlit>=1.63.0,<2",
     "json-repair>=0.30.0,<1",
     "python-dotenv>=1.0.0,<2",
     "markdown>=3.5,<4",

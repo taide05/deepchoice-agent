@@ -22,11 +22,13 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 
 ## 快速开始
 
-```bash
+```powershell
 # 1. 克隆
 git clone https://github.com/taide05/deepchoice-agent.git
 cd deepchoice-agent
-pip install -e ".[dev]"
+python -m venv .venv
+# PowerShell：.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+# Linux/macOS：./.venv/bin/python -m pip install -e ".[dev]"
 
 # 2. 配置 API Key（不要提交 .env）
 # DeepSeek 路径：DS_FLASH_API_KEY，或兼容名 DEEPSEEK_API_KEY
@@ -35,10 +37,10 @@ pip install -e ".[dev]"
 # 可选：GITHUB_TOKEN、STACKEXCHANGE_API_KEY
 
 # 3. 启动后端
-uvicorn deepchoice.server.app:app --reload
+.\.venv\Scripts\python.exe -m uvicorn deepchoice.server.app:app --reload
 
 # 4. 开新终端，启动前端
-streamlit run frontend/app.py
+.\.venv\Scripts\python.exe -m streamlit run frontend/app.py
 # 浏览器打开 http://localhost:8501
 ```
 
@@ -48,12 +50,13 @@ streamlit run frontend/app.py
 
 ### 测试
 
-```bash
-python -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-2026-09-09 在 `fix-top1-round1` 候选基线上验证结果为 **305 passed + 1 skipped**。
-Python 3.13 的已知本地环境会输出 `pyarrow` 原生异常诊断，建议新环境使用 Python 3.11 或 3.12。
+项目支持 Python 3.11/3.12。2026-09-09 在 Python 3.12 隔离环境中验证结果为
+**309 passed，0 skipped**；`pip check` 零依赖冲突，pyarrow、Streamlit、Starlette
+和 FastAPI 可同时正常导入。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
