@@ -7,6 +7,7 @@
 - 300-case mixed benchmark and deterministic metric/quality tooling
 - Project-level `AGENTS.md` with repository safety, architecture, configuration, testing, and documentation rules
 - Dependency compatibility smoke test covering FastAPI, Starlette, Streamlit, and pyarrow imports
+- Product requirements and technical design documents for the next engineering-hardening stage, including phased delivery, test, review, migration, and rollback boundaries
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
