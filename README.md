@@ -10,7 +10,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 
 ## 核心特性
 
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（222 条：91 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑，单路挂了不炸全局
+- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑，单路挂了不炸全局
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先让 flash 模型仲裁所有矛盾对（快），再挑出最模糊的一对交给 pro 模型深度重裁（准）。只给一对走 pro，费用可控
@@ -28,11 +28,11 @@ git clone https://github.com/taide05/deepchoice-agent.git
 cd deepchoice-agent
 pip install -e ".[dev]"
 
-# 2. 配置 API Key
-# .env 文件中填入：
-#   DEEPSEEK_API_KEY=sk-xxx
-#   TAVILY_API_KEY=tvly-xxx
-#   GITHUB_TOKEN=ghp_xxx（可选，提升 API 限额）
+# 2. 配置 API Key（不要提交 .env）
+# DeepSeek 路径：DS_FLASH_API_KEY，或兼容名 DEEPSEEK_API_KEY
+# Qwen 路径：QW_FLASH_API_KEY，或兼容名 LLM_API_KEY
+# Tavily：TAVILY_API_KEYS（逗号分隔），或单个 TAVILY_API_KEY
+# 可选：GITHUB_TOKEN、STACKEXCHANGE_API_KEY
 
 # 3. 启动后端
 uvicorn deepchoice.server.app:app --reload
@@ -41,6 +41,19 @@ uvicorn deepchoice.server.app:app --reload
 streamlit run frontend/app.py
 # 浏览器打开 http://localhost:8501
 ```
+
+可选网络配置包括 `LOCAL_PROXY`、`FWD_BASE`、`FWD_KEY`、`FWD_TARGETS`、
+`OUTBOUND_CHANNELS` 和 `OUTBOUND_CHANNELS_COMMUNITY`。完整配置约定见
+[`AGENTS.md`](AGENTS.md)。
+
+### 测试
+
+```bash
+python -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
+```
+
+2026-09-09 在 `fix-top1-round1` 候选基线上验证结果为 **305 passed + 1 skipped**。
+Python 3.13 的已知本地环境会输出 `pyarrow` 原生异常诊断，建议新环境使用 Python 3.11 或 3.12。
 
 ### Docker 部署
 
@@ -131,7 +144,7 @@ docker run -p 8000:8000 --env-file .env \
 | 端到端延迟 P95 | **445.3s** | 95 分位——480s 预算内 |
 | 报告质量 A 级 | **99%**（297/300） | 5 项确定性质检（不调 LLM） |
 
-> **数据来源**：以上数字来自 300 case 混合基准（`benchmarks/cases_eval_300.json` = 150 TC + 150 OS）。采集分 3 批（`--batch 1/2/3 --batch-size 100`），超时/变体集中补跑（`cases_retry_all.json`）后按 case_id 替换合并。评测覆盖经 3 轮审计修正（case 标注缺陷 T1/T2/T3 修正、OS acceptable 补齐托管维度、变体 query 双场景矛盾清除）。**诚实口径**：Top-1 92.0% 是修正评测覆盖后的真实值——剩余 miss 为真·两难（标注无共识，按设计保留）、模型主流偏差、以及模型真错（详见 case 审计记录）。2026-08-31 终测归档；全量测试 **227 passed + 1 skipped**。
+> **数据来源**：以上数字来自 300 case 混合基准（`benchmarks/cases_eval_300.json` = 150 TC + 150 OS）。采集分 3 批（`--batch 1/2/3 --batch-size 100`），超时/变体集中补跑（`cases_retry_all.json`）后按 case_id 替换合并。评测覆盖经 3 轮审计修正（case 标注缺陷 T1/T2/T3 修正、OS acceptable 补齐托管维度、变体 query 双场景矛盾清除）。**诚实口径**：Top-1 92.0% 是修正评测覆盖后的真实值——剩余 miss 为真·两难（标注无共识，按设计保留）、模型主流偏差、以及模型真错（详见 case 审计记录）。2026-08-31 终测归档；当前代码测试基线见上方“测试”小节，不能用后续测试数量反推历史 benchmark 指标。
 
 ```bash
 # 重现 300 case 混合基准（3 批 + 合并）
@@ -154,6 +167,7 @@ LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit
 src/deepchoice/
 ├── agents/          # 9 Agent 节点
 ├── retrievers/      # 6 路检索器（统一 BaseRetriever 接口）
+├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
 ├── server/          # FastAPI（16 端点：app.py 12 + clarify_routes 4，含 SSE）

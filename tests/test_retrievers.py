@@ -242,7 +242,8 @@ class TestCommunitySearch:
         # ensure unlocked state deterministically
         events = []
 
-        async def slow_get(url, params=None, headers=None):
+        async def slow_get(url, params=None, headers=None, timeout=None):
+            assert timeout == 15.0
             events.append("start")
             await _asyncio.sleep(0.15)
             events.append("end")

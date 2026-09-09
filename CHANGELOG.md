@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased] - 2026-09-09
+
+### Added
+- Nine-node research workflow, six-source retrieval, multilingual reports, observability, token accounting, and the outbound channel layer accumulated during the optimization cycle
+- 300-case mixed benchmark and deterministic metric/quality tooling
+- Project-level `AGENTS.md` with repository safety, architecture, configuration, testing, and documentation rules
+
+### Changed
+- LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
+- Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
+- Verified local test baseline is 305 passed and 1 skipped on 2026-09-09
+
+### Fixed
+- Community retriever concurrency test now follows the production HTTP client timeout contract
+
+### Known environment issues
+- Python 3.13 can emit a native `pyarrow` access-violation diagnostic during test discovery; prefer Python 3.11 or 3.12 for a fresh environment
+- The known local Streamlit installation is incompatible with the installed Starlette version and is skipped during frontend observability test import
+
 ## [0.2.0] - 2026-07-19
 
 ### Added
