@@ -8,6 +8,7 @@
 - Project-level `AGENTS.md` with repository safety, architecture, configuration, testing, and documentation rules
 - Dependency compatibility smoke test covering FastAPI, Starlette, Streamlit, and pyarrow imports
 - Product requirements and technical design documents for the next engineering-hardening stage, including phased delivery, test, review, migration, and rollback boundaries
+- Product-owner decisions for the standard runtime budget, evidence-dependent budget exhaustion behavior, seven-day HITL expiry, and non-loopback API-key enforcement
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency

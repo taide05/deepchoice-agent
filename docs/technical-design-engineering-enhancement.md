@@ -345,6 +345,8 @@ DeepChoiceError
 
 ## 11. 预算执行机制
 
+本节预算是 **DeepChoice 产品运行时预算**：覆盖项目调用 DeepSeek、Qwen 等 LLM 的 Token、估算费用和调用次数，并分别记录检索调用、active execution time 与并发占用。Codex 或其他开发工具为编写、测试 DeepChoice 所消耗的 Token 不属于产品运行，也不进入该账本。
+
 ### 11.1 维度
 
 - `prompt_tokens`、`completion_tokens`、`total_tokens`；
@@ -364,6 +366,15 @@ DeepChoiceError
 7. 进程崩溃后的未决 reservation 按持久 call 状态对账；无法确认 provider 是否执行时采用保守扣减并标记 `unknown_spend`，需要显式策略/续批才能释放，避免恢复后双花预算。
 
 运行时间分为 `active_execution_seconds`、task wall-clock age 与 `decision_expires_at`。HITL 等待不消耗 active execution budget，但会受独立决定过期策略约束；兼容恢复继承原 run 的剩余 Token、费用、调用次数和 active-time 预算，从头新 run 才应用新配额。
+
+### 11.3 已确认的默认策略
+
+- 默认档位为 `standard`；`quick` 和 `deep` 可后续提供，但不影响首版验收。
+- 不在设计阶段写死 Token 数。实现时以固定数据集、模型和 manifest 采集成功任务的 Token、调用次数、估算费用和 active-time 分布；每次调整模型/Prompt/工作流版本后重新校准。
+- `standard` 硬上限必须使至少 95% 的代表性健康成功任务不因预算进入受限报告；软阈值默认为对应硬上限的 80%。校准报告必须记录数据集、日期、分母、P50/P95、模型与价格表版本。
+- 触及任一硬预算后停止新的外部调用。若确定性 `MinimumEvidencePolicy` 判定最低证据集成立，则转入不再调用 LLM/检索的受限报告路径并明确列出缺口；否则以 `BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE` 终止。
+- `MinimumEvidencePolicy` 不能由 LLM 自行判断。它至少检查关键结论是否具有最低数量、来源类型和有效/未知引用状态，具体阈值通过引用验证与节点级评测校准。
+- `waiting_for_input` 的 `decision_expires_at` 默认为创建后 7 天；过期策略按 HITL 类型执行，等待时不扣 active execution time。
 
 费用不是 Token 的替代：价格未知时费用为 `unknown`，仍可用 Token/call/time 硬上限保护。首版不实现账户余额或计费，只实现单任务预算与全局并发。
 
@@ -502,7 +513,7 @@ P2 再把 Prompt 和模板迁入注册表（Python/文本资产均可），要�
 ### 18.1 最小实现
 
 - `DEEPCHOICE_API_KEY`：服务启动读取；存储/日志只使用短 fingerprint。验证用 `secrets.compare_digest`。这是**非 loopback 暴露门禁**；纯本地 loopback 开发可显式关闭，不阻塞本地研究算法迭代。
-- 推荐默认：绑定 loopback 时允许开发模式显式关闭；绑定非 loopback 时若无 key 则 fail startup。
+- 已确认的默认部署策略：监听任意非 loopback 地址时必须配置 API Key，否则启动失败；loopback 模式关闭认证必须是显式配置，不能由缺少 Key 自动推断。
 - HTTP 请求限流：按 key + client IP 的进程内 token bucket；只作为滥用/误操作保护，响应 429 + `Retry-After`。
 - 研究 admission：全局 `asyncio.Semaphore` 控制运行 task；LLM/retriever 原有细粒度 semaphore 保留，但配置集中并记录。
 - SQLite lease 防重复执行；单实例不宣称分布式严格限流。
@@ -638,8 +649,8 @@ Phase 6 的基础输入/URL/日志安全应在 Phase 0/1 同步打底，集中�
 - 涉及模块：orchestrator、LLM/retriever/outbound wrappers、server/frontend，新 `observability/`、`budget/`。
 - 前置依赖：Phase 1 run repository。
 - 数据迁移：新增 Trace/ledger 表；旧 run 标为 telemetry unavailable，不伪造数据。
-- 测试：span 配对、重试/fallback trace、预算并发预留、三崩溃点与 unknown spend、usage 缺失、HITL active-time 暂停、deadline、redaction、Trace 失败降级。
-- 验收：任一 provider call 可追到 run/node；硬预算前不再调用；统计与 ledger 对账。
+- 测试：span 配对、重试/fallback trace、预算并发预留、三崩溃点与 unknown spend、usage 缺失、HITL active-time 暂停、7 天 decision expiry、最低证据策略、deadline、redaction、Trace 失败降级。
+- 验收：任一 provider call 可追到 run/node；硬预算前不再调用；统计与 ledger 对账；标准档在固定健康校准集上至少 95% 不因预算进入受限报告，指标带数据集/日期/分母/manifest。
 - 回滚：Trace 可 flag 关闭；预算可切换 report-only，但发布默认 hard enforcement；旧 token_usage 保留。
 - 风险：写放大、估算偏差、双重 retry/计费。
 - 独立复审：**强制**（并发、预算、横切数据）。
