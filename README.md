@@ -175,6 +175,7 @@ LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit
 src/deepchoice/
 ├── agents/          # 9 Agent 节点
 ├── contracts/       # API、结构化错误与不可变 RunManifest
+├── runtime/         # 任务/运行生命周期领域契约（状态与转换规则，纯函数、无 I/O）
 ├── retrievers/      # 6 路检索器（稳定 retrieve 契约 + 兼容 search 接口）
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块

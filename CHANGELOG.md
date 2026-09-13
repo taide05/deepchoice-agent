@@ -12,6 +12,7 @@
 - Pydantic research request/start-response contracts and a structured public error envelope that retains the legacy `detail` field
 - Immutable per-run manifests covering effective model tiers, LLM call parameters, prompt hashes, workflow/state schema, retriever versions, and report template version without persisting credentials or raw endpoints
 - Versioned retriever request/result contracts and a stable `retrieve()` port, with the existing `search()` entry point retained for compatibility
+- Task and run lifecycle domain contracts: separate `TaskStatus`/`RunStatus` vocabularies, immutable terminal/retryable/immutable outcome status sets, pure transition predicates, and a 409 `InvalidLifecycleTransition` error for illegal transitions. Persistence, cancellation, resume, and timeout execution are not implemented yet.
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
