@@ -5,6 +5,7 @@ Regression: open-scenario cases exposed two winner-quality failures —
 (b) a junk PyPI package name returned as winner (OS-0050).
 """
 from deepchoice.agents import conclusion_synthesizer as cs_mod
+from deepchoice.formats.what_why_how import render as render_report
 
 STATE = {
     "task": {"query": "Our team wants feature flags with gradual rollout", "scene_context": "team"},
@@ -19,6 +20,27 @@ def _fake_call_model(result):
     async def fake(prompt, model=None, response_format=None, timeout=None, **kw):
         return result
     return fake
+
+
+def test_synthesis_failure_does_not_leak_exception_into_report(monkeypatch):
+    secret = "https://user:password@example.test/?token=super-secret"
+
+    async def fail(*args, **kwargs):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(cs_mod, "call_model", fail)
+    import asyncio
+
+    output = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
+    report_state = dict(STATE)
+    report_state.update(output)
+    report = render_report(report_state)
+
+    assert secret not in str(output)
+    assert secret not in report
+    assert output["final_recommendation"]["confidence_rationale"].startswith(
+        "Synthesis step failed"
+    )
 
 
 class TestPromptGuards:

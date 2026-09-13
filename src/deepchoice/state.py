@@ -1,8 +1,9 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class ResearchState(TypedDict):
     task: dict
+    run_manifest: NotRequired[dict]
     sub_questions: list[str]
     adapted_queries: dict
     search_results: list[dict]

@@ -8,10 +8,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
+from ..contracts.api import ResearchRequest, ResearchStartedResponse
+from ..contracts.errors import (
+    DeepChoiceError,
+    ErrorCategory,
+    ErrorDetail,
+    ErrorResponse,
+    normalize_error,
+)
+from ..contracts.manifest import build_run_manifest
 from ..formats.citations import build_toc, inject_citations, number_sources
 from ..formats.comparison_matrix import render as render_comparison_matrix
 from ..formats.evidence_first import render as render_evidence_first
@@ -37,6 +47,73 @@ FORMAT_RENDERERS = {
     "evidence_first": render_evidence_first,
     "comparison_matrix": render_comparison_matrix,
 }
+
+
+def _error_response(
+    status_code: int,
+    detail,
+    error: ErrorDetail,
+    *,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    payload = ErrorResponse(detail=detail, error=error).model_dump(mode="json")
+    return JSONResponse(status_code=status_code, content=payload, headers=headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(_request: Request, exc: RequestValidationError):
+    # Do not echo rejected input values: validation failures can contain user
+    # credentials or other sensitive text in Pydantic's default ``input`` key.
+    details = [
+        {"type": item["type"], "loc": item["loc"], "msg": item["msg"]}
+        for item in exc.errors()
+    ]
+    error = ErrorDetail(
+        category=ErrorCategory.VALIDATION,
+        code="REQUEST_VALIDATION_FAILED",
+        message="Request validation failed",
+        action="Correct the invalid fields and submit the request again.",
+        details=details,
+    )
+    return _error_response(422, details, error)
+
+
+@app.exception_handler(DeepChoiceError)
+async def deepchoice_error_handler(_request: Request, exc: DeepChoiceError):
+    return _error_response(exc.status_code, str(exc), exc.error_detail)
+
+
+@app.exception_handler(HTTPException)
+async def http_error_handler(_request: Request, exc: HTTPException):
+    is_server_error = exc.status_code >= 500
+    category = (
+        ErrorCategory.INTERNAL
+        if is_server_error
+        else ErrorCategory.NOT_FOUND if exc.status_code == 404 else ErrorCategory.REQUEST
+    )
+    message = (
+        "Internal request failed"
+        if is_server_error
+        else exc.detail if isinstance(exc.detail, str) else "Request failed"
+    )
+    error = ErrorDetail(
+        category=category,
+        code=(
+            "INTERNAL_HTTP_ERROR"
+            if is_server_error
+            else "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
+        ),
+        message=message,
+        action="Check the request and try again.",
+    )
+    detail = message if is_server_error else exc.detail
+    return _error_response(exc.status_code, detail, error, headers=exc.headers)
+
+
+@app.exception_handler(Exception)
+async def unexpected_error_handler(_request: Request, exc: Exception):
+    error = normalize_error(exc)
+    return _error_response(500, error.message, error)
 
 # Single source of truth: workflow node name -> progress phase. The 7 phase names
 # match the frontend PHASES list; keep the fallback copy in frontend/app.py in sync.
@@ -66,14 +143,17 @@ _STREAM_DONE = object()
 _STREAM_ERROR = object()
 
 
-@app.post("/research")
-async def start_research(task: dict):
+@app.post("/research", response_model=ResearchStartedResponse)
+async def start_research(request: ResearchRequest):
+    task = request.model_dump(exclude_none=True)
+    run_manifest = build_run_manifest(task)
     checkpointer = await _get_sqlite_saver()
     thread_id = str(uuid.uuid4())
     orchestrator = ChiefEditorAgent(
         task,
         checkpointer=checkpointer,
         thread_id=thread_id,
+        run_manifest=run_manifest,
     )
     task_id = orchestrator.task_id
 
@@ -83,11 +163,16 @@ async def start_research(task: dict):
         "queue": asyncio.Queue(),
         "events": [],
         "status": "running",
+        "manifest": run_manifest,
     }
 
     asyncio.create_task(_run_research(task_id, orchestrator))
 
-    return {"task_id": task_id, "status": "started"}
+    return ResearchStartedResponse(
+        task_id=task_id,
+        status="started",
+        manifest_id=run_manifest.manifest_id,
+    )
 
 
 def _format_event(event: dict) -> str:
@@ -100,7 +185,15 @@ def _format_event(event: dict) -> str:
         "ts": time.time(),
     }
     if node_name == "__error__":
-        payload["detail"] = node_data.get("detail", "")
+        error_detail = node_data.get("error_detail") or normalize_error(
+            RuntimeError(node_data.get("detail", ""))
+        ).model_dump(mode="json")
+        payload["detail"] = error_detail["message"]
+        payload["error_detail"] = error_detail
+        payload["update"] = {
+            "detail": error_detail["message"],
+            "error_detail": error_detail,
+        }
     return f"event: {node_name}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 
 
@@ -121,17 +214,27 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
         entry["result"] = result
         entry["queue"].put_nowait(_STREAM_DONE)
     except Exception as e:
+        error_detail = normalize_error(e)
+        public_message = error_detail.message
         # I1 fix: persist whatever the checkpoint holds so a failed run is
         # inspectable after restart instead of vanishing with process memory.
         try:
             state = await orchestrator.get_state()
             partial = state.values if state else {}
-            save_failed_snapshot(task_id, partial, str(e))
+            save_failed_snapshot(task_id, partial, public_message)
         except Exception as persist_err:
             print_agent_output(f"Failed to persist failure snapshot for {task_id}: {persist_err}", agent="SERVER")
         entry["status"] = "failed"
-        entry["error"] = str(e)
-        entry["events"].append({"__error__": {"detail": str(e)}})
+        entry["error"] = public_message
+        entry["error_detail"] = error_detail.model_dump(mode="json")
+        entry["events"].append(
+            {
+                "__error__": {
+                    "detail": public_message,
+                    "error_detail": entry["error_detail"],
+                },
+            }
+        )
         entry["queue"].put_nowait(_STREAM_ERROR)
     finally:
         # I6 fix: the per-request sqlite connection must not outlive the task.
@@ -178,10 +281,14 @@ async def research_status(task_id: str):
             "confidence": entry.get("result", {}).get("confidence", ""),
         }
     if entry and entry.get("status") == "failed":
+        error_detail = entry.get("error_detail") or normalize_error(
+            RuntimeError(entry.get("error", ""))
+        ).model_dump(mode="json")
         return {
             "task_id": task_id,
             "status": "failed",
-            "error": entry.get("error", ""),
+            "error": error_detail["message"],
+            "error_detail": error_detail,
         }
 
     orchestrator = entry.get("orchestrator") if entry else None
@@ -241,7 +348,15 @@ async def research_checkpoints(task_id: str):
             checkpoints.append(cp)
         return {"task_id": task_id, "checkpoints": checkpoints}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise DeepChoiceError(
+            "Unable to read checkpoints",
+            category=ErrorCategory.PERSISTENCE,
+            code="CHECKPOINT_READ_FAILED",
+            status_code=500,
+            retryable=True,
+            action="Retry after checking checkpoint storage availability.",
+            task_id=task_id,
+        ) from e
 
 
 @app.get("/research/{task_id}/report")

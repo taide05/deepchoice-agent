@@ -125,6 +125,21 @@ SEARCH_TOOLS = [
         },
     },
 ]
+EVIDENCE_GATHER_SYSTEM = (
+    "You gather evidence to resolve technical disagreements. "
+    "Search broadly across sources, then summarize the key finding "
+    "in 2-3 sentences that would help an arbitrator decide which claim is more credible."
+)
+EVIDENCE_GATHER_USER_TEMPLATE = (
+    "Topic: {topic}\n"
+    "Claim A: {claim_a}\n"
+    "Claim B: {claim_b}\n\n"
+    "Search for evidence using at least 1 different tool."
+)
+EVIDENCE_GATHER_MAX_ITERATIONS = 2
+EVIDENCE_GATHER_CLIENT_TIMEOUT_S = 60.0
+EVIDENCE_GATHER_CALL_TIMEOUT_S = 30.0
+EVIDENCE_GATHER_TOOL_TIMEOUT_S = 20.0
 
 
 async def _execute_search(tool_name: str, arguments: dict) -> str:
@@ -209,8 +224,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
 
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
-                           max_iterations: int = 2,
-                           per_call_timeout: float = 30.0,
+                           max_iterations: int = EVIDENCE_GATHER_MAX_ITERATIONS,
+                           per_call_timeout: float = EVIDENCE_GATHER_CALL_TIMEOUT_S,
                            usage: list | None = None) -> str:
     """Inline multi-turn evidence gathering via OpenAI-compatible tool calling.
 
@@ -219,20 +234,18 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     """
     from ..utils.llm import TIERS, _get_client
 
-    client = _get_client(timeout=60.0, tier="deepseek-flash")
+    client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash")
 
     messages = [
-        {"role": "system", "content": (
-            "You gather evidence to resolve technical disagreements. "
-            "Search broadly across sources, then summarize the key finding "
-            "in 2-3 sentences that would help an arbitrator decide which claim is more credible."
-        )},
-        {"role": "user", "content": (
-            f"Topic: {topic}\n"
-            f"Claim A: {claim_a}\n"
-            f"Claim B: {claim_b}\n\n"
-            f"Search for evidence using at least 1 different tool."
-        )},
+        {"role": "system", "content": EVIDENCE_GATHER_SYSTEM},
+        {
+            "role": "user",
+            "content": EVIDENCE_GATHER_USER_TEMPLATE.format(
+                topic=topic,
+                claim_a=claim_a,
+                claim_b=claim_b,
+            ),
+        },
     ]
 
     summaries = []
@@ -283,7 +296,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             try:
                 result = await asyncio.wait_for(
                     _execute_search(tc.function.name, arguments),
-                    timeout=20.0,
+                    timeout=EVIDENCE_GATHER_TOOL_TIMEOUT_S,
                 )
             except TimeoutError:
                 result = json.dumps({"error": f"{tc.function.name} timed out"})

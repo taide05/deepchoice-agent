@@ -5,6 +5,11 @@ from pathlib import Path
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from ..contracts.manifest import (
+    RunManifest,
+    build_run_manifest,
+    ensure_run_manifest_compatible,
+)
 from ..state import ResearchState
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import ConclusionSynthesizerAgent
@@ -34,8 +39,9 @@ async def _get_sqlite_saver():
 
 class ChiefEditorAgent:
     def __init__(self, task: dict, websocket=None, stream_output=None, headers=None,
-                 checkpointer=None, thread_id=None):
+                 checkpointer=None, thread_id=None, run_manifest: RunManifest | None = None):
         self.task = task
+        self.run_manifest = run_manifest or build_run_manifest(task)
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers or {}
@@ -52,10 +58,15 @@ class ChiefEditorAgent:
             "source_evaluator": SourceEvaluatorAgent(self.websocket, self.stream_output, self.headers),
             "conflict_detector": ConflictDetectorAgent(
                 self.websocket, self.stream_output, self.headers,
-                gather_evidence=self.task.get("gather_evidence", True),
+                gather_evidence=self.run_manifest.gather_evidence,
             ),
             "evidence_chain": EvidenceChainAgent(self.websocket, self.stream_output, self.headers),
-            "conclusion_synthesizer": ConclusionSynthesizerAgent(self.websocket, self.stream_output, self.headers),
+            "conclusion_synthesizer": ConclusionSynthesizerAgent(
+                self.websocket,
+                self.stream_output,
+                self.headers,
+                run_manifest=self.run_manifest,
+            ),
             "report_generator": ReportGeneratorAgent(self.websocket, self.stream_output, self.headers),
             "self_reviewer": SelfReviewerAgent(self.websocket, self.stream_output, self.headers),
         }
@@ -137,31 +148,38 @@ class ChiefEditorAgent:
     def _make_config(self):
         return {"configurable": {"thread_id": self.thread_id}}
 
+    def _make_initial_state(self, task: dict) -> dict:
+        initial_state = {
+            "task": task,
+            "run_manifest": self.run_manifest.model_dump(mode="json"),
+        }
+        if task.get("sub_questions"):
+            initial_state["sub_questions"] = task["sub_questions"]
+        return initial_state
+
     async def run_research_task(self, task: dict | None = None):
         task = task or self.task
+        ensure_run_manifest_compatible(self.run_manifest, task)
         has_sub_questions = bool(task.get("sub_questions"))
         start_from = "query_adapter" if has_sub_questions else "query_analyzer"
 
         print_agent_output(f"Starting research from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
         config = self._make_config()
-        initial_state = {"task": task}
-        if has_sub_questions:
-            initial_state["sub_questions"] = task["sub_questions"]
+        initial_state = self._make_initial_state(task)
         result = await chain.ainvoke(initial_state, config=config)
         return result
 
     async def astream_research_task(self, task: dict | None = None):
         task = task or self.task
+        ensure_run_manifest_compatible(self.run_manifest, task)
         has_sub_questions = bool(task.get("sub_questions"))
         start_from = "query_adapter" if has_sub_questions else "query_analyzer"
 
         print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
         config = self._make_config()
-        initial_state = {"task": task}
-        if has_sub_questions:
-            initial_state["sub_questions"] = task["sub_questions"]
+        initial_state = self._make_initial_state(task)
 
         async for event in chain.astream(initial_state, config=config, stream_mode="updates"):
             yield event

@@ -140,7 +140,7 @@ class TestGitHubSearch:
             result = await retriever.search("test framework", [])
         assert result["status"] == "failed"
         assert result["results"] == []
-        assert "ConnectError" in result["error"]
+        assert result["error"] == "RuntimeError"
 
     @pytest.mark.asyncio
     async def test_all_non_200_raises(self):
@@ -340,7 +340,7 @@ class TestErrorReporting:
     async def test_message_exception_keeps_type_prefix(self):
         retriever = self._RaisingRetriever(Exception("API timeout"))
         result = await retriever.search("test", [])
-        assert result["error"] == "Exception: API timeout"
+        assert result["error"] == "Exception"
 
     @pytest.mark.asyncio
     async def test_multi_retriever_gather_error_not_empty(self):

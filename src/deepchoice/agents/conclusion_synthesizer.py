@@ -1,3 +1,4 @@
+import json
 import os
 import re
 
@@ -270,10 +271,11 @@ def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
 
 
 class ConclusionSynthesizerAgent:
-    def __init__(self, websocket=None, stream_output=None, headers=None):
+    def __init__(self, websocket=None, stream_output=None, headers=None, run_manifest=None):
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers
+        self.run_manifest = run_manifest
 
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
@@ -303,11 +305,50 @@ class ConclusionSynthesizerAgent:
         }]
 
         local_usage: list = []
-        enable_thinking = os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1"
+        if self.run_manifest is not None:
+            frozen_call = next(
+                item
+                for item in self.run_manifest.llm_calls
+                if item.call_id == "conclusion_synthesizer"
+            )
+            call_config = frozen_call.model_dump(mode="json")
+        else:
+            call_config = next(
+                (
+                    item
+                    for item in research_state.get("run_manifest", {}).get("llm_calls", [])
+                    if item.get("call_id") == "conclusion_synthesizer"
+                ),
+                None,
+            )
+        if call_config is None:
+            # Backward compatibility for states/checkpoints created before
+            # RunManifest existed.
+            model = "qwen-flash"
+            response_format = "json"
+            timeout = SYNTHESIS_CALL_TIMEOUT_S
+            seed = 0
+            extra_body = {
+                "enable_thinking": os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1",
+            }
+        else:
+            model = call_config["tier"]
+            response_format = call_config["response_format"]
+            timeout = call_config["timeout_s"]
+            seed = call_config.get("seed")
+            extra_body_json = call_config.get("extra_body_json")
+            extra_body = json.loads(extra_body_json) if extra_body_json else None
         try:
-            result = await call_model(prompt, model="qwen-flash", response_format="json", tag="conclusion_synthesizer",
-                                      usage=local_usage, extra_body={"enable_thinking": enable_thinking},
-                                      timeout=SYNTHESIS_CALL_TIMEOUT_S, seed=0)
+            result = await call_model(
+                prompt,
+                model=model,
+                response_format=response_format,
+                tag="conclusion_synthesizer",
+                usage=local_usage,
+                extra_body=extra_body,
+                timeout=timeout,
+                seed=seed,
+            )
         except Exception as e:
             print_agent_output(f"Synthesis failed: {e}", agent="CONCLUSION_SYNTHESIZER")
             result = {
@@ -316,7 +357,7 @@ class ConclusionSynthesizerAgent:
                 "trade_offs": [],
                 "evidence_summary": "Synthesis failed — see individual evidence chains.",
                 "confidence": "low",
-                "confidence_rationale": f"Synthesis step failed: {e}",
+                "confidence_rationale": "Synthesis step failed; retry when the model service is available.",
                 "unresolved_questions": [],
                 "scene_fit_note": "",
             }

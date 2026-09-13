@@ -19,6 +19,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
 - **可观测性面板**：运行轨迹时间轴（9 节点瀑布）+ 检索明细（每路延迟/失败）+ 冲突仲裁可视化 + Token 统计（按 Agent/模型聚合），研究过程全程可见
 - **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
+- **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 
 ## 快速开始
 
@@ -48,14 +49,18 @@ python -m venv .venv
 `OUTBOUND_CHANNELS` 和 `OUTBOUND_CHANNELS_COMMUNITY`。完整配置约定见
 [`AGENTS.md`](AGENTS.md)。
 
+`POST /research` 会校验已知字段并拒绝额外字段；成功响应保留
+`task_id`/`status`，同时返回 `manifest_id` 供运行审计。API 错误保留兼容的
+`detail` 字段，并增加稳定的 `error` 对象（类别、错误码、是否可重试和建议动作）。
+
 ### 测试
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-09 在 Python 3.12 隔离环境中验证结果为
-**309 passed，0 skipped**；`pip check` 零依赖冲突，pyarrow、Streamlit、Starlette
+项目支持 Python 3.11/3.12。2026-09-13 在 Python 3.12 隔离环境中验证结果为
+**353 passed，0 skipped**；`pip check` 零依赖冲突，pyarrow、Streamlit、Starlette
 和 FastAPI 可同时正常导入。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
@@ -169,7 +174,8 @@ LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit
 ```
 src/deepchoice/
 ├── agents/          # 9 Agent 节点
-├── retrievers/      # 6 路检索器（统一 BaseRetriever 接口）
+├── contracts/       # API、结构化错误与不可变 RunManifest
+├── retrievers/      # 6 路检索器（稳定 retrieve 契约 + 兼容 search 接口）
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式

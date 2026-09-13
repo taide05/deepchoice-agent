@@ -118,7 +118,8 @@ class TestStreamEventFormat:
 
         assert len(events) == 1
         assert events[0]["node"] == "__error__"
-        assert "boom" in events[0]["detail"]
+        assert events[0]["detail"] == "Research failed"
+        assert "boom" not in json.dumps(events[0])
         assert all(e["node"] != "__done__" for e in events)
 
     def test_stream_replays_only_events_never_executes(self):
@@ -166,11 +167,11 @@ class TestBackgroundRun:
 
         entry = app_module._active_tasks[TASK_ID]
         assert entry["status"] == "failed"
-        assert entry["error"] == "boom"
-        assert entry["events"][-1] == {"__error__": {"detail": "boom"}}
+        assert entry["error"] == "Research failed"
+        assert entry["events"][-1]["__error__"]["detail"] == "Research failed"
         partial_state, error = saved["partial"]
         assert partial_state["task"] == {"query": "x"}
-        assert error == "boom"
+        assert error == "Research failed"
 
     def test_run_closes_checkpointer_connection(self, monkeypatch):
         closed = []
