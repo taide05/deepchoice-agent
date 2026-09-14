@@ -5,12 +5,16 @@ contract rather than derived from the implementation, so a change in
 ``deepchoice.runtime.lifecycle`` cannot silently redefine what is legal.
 """
 
+import re
 from itertools import product
+from pathlib import Path
+from typing import Any, Final
 
 import pytest
 
 import deepchoice.runtime
-from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
+from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory, ErrorDetail
+from deepchoice.runtime import lifecycle
 from deepchoice.runtime import (
     RUN_TERMINAL_STATUSES,
     TASK_IMMUTABLE_OUTCOME_STATUSES,
@@ -351,31 +355,38 @@ def test_queued_and_waiting_for_input_cancel_directly() -> None:
 def test_error_inherits_project_error_and_policy() -> None:
     assert issubclass(InvalidLifecycleTransition, DeepChoiceError)
 
-    error = InvalidLifecycleTransition(
-        entity="task",
-        code="TASK_STATUS_TRANSITION_INVALID",
-        current_status="completed",
-        target_status="running",
-        action="Reload the task status.",
-        creates_new_run=False,
-    )
-    detail = error.error_detail
-    assert error.status_code == 409
+    detail = _task_error_detail(TaskStatus.COMPLETED, TaskStatus.RUNNING)
     assert detail.category is ErrorCategory.CONTRACT
     assert detail.code == "TASK_STATUS_TRANSITION_INVALID"
     assert detail.retryable is False
 
 
+def test_error_cannot_be_constructed_directly() -> None:
+    # entity, code, message, and action are derived by the helpers, so no
+    # caller can inject their own values through the constructor.
+    with pytest.raises(NotImplementedError):
+        InvalidLifecycleTransition()  # type: ignore[call-arg]
+    with pytest.raises(NotImplementedError):
+        InvalidLifecycleTransition(  # type: ignore[call-arg]
+            entity="task",
+            code="TASK_STATUS_TRANSITION_INVALID",
+            message="anything",
+            action="anything",
+        )
+
+
+def test_helper_always_sets_status_code_409() -> None:
+    with pytest.raises(InvalidLifecycleTransition) as task_error:
+        ensure_task_transition_allowed(TaskStatus.COMPLETED, TaskStatus.RUNNING)
+    with pytest.raises(InvalidLifecycleTransition) as run_error:
+        ensure_run_transition_allowed(RunStatus.FAILED, RunStatus.QUEUED)
+    assert task_error.value.status_code == 409
+    assert run_error.value.status_code == 409
+
+
 def test_task_error_details_payload() -> None:
-    error = InvalidLifecycleTransition(
-        entity="task",
-        code="TASK_STATUS_TRANSITION_INVALID",
-        current_status="failed",
-        target_status="queued",
-        action="Reload the task status.",
-        creates_new_run=False,
-    )
-    assert error.error_detail.details == {
+    detail = _task_error_detail(TaskStatus.FAILED, TaskStatus.QUEUED)
+    assert detail.details == {
         "entity": "task",
         "current_status": "failed",
         "target_status": "queued",
@@ -384,14 +395,8 @@ def test_task_error_details_payload() -> None:
 
 
 def test_run_error_details_payload() -> None:
-    error = InvalidLifecycleTransition(
-        entity="run",
-        code="RUN_STATUS_TRANSITION_INVALID",
-        current_status="failed",
-        target_status="queued",
-        action="Reload the run status.",
-    )
-    assert error.error_detail.details == {
+    detail = _run_error_detail(RunStatus.FAILED, RunStatus.QUEUED)
+    assert detail.details == {
         "entity": "run",
         "current_status": "failed",
         "target_status": "queued",
@@ -477,6 +482,11 @@ def test_task_error_text_is_safe_and_stable(
         assert "<" not in text
         assert "object at" not in text
 
+    # The task advice is neutral: it must not suggest that a completed or
+    # cancelled task can be retried by creating a new run.
+    action = detail.action or ""
+    assert "new run" not in action.lower()
+
 
 def test_run_error_text_is_safe_and_stable() -> None:
     with pytest.raises(InvalidLifecycleTransition) as caught:
@@ -492,6 +502,332 @@ def _capture_task_error(current: TaskStatus, target: TaskStatus) -> InvalidLifec
     with pytest.raises(InvalidLifecycleTransition) as caught:
         ensure_task_transition_allowed(current, target)
     return caught.value
+
+
+def _task_error(current: Any, target: Any) -> ErrorDetail | None:
+    """Return the error detail for an illegal task move, or None if allowed."""
+
+    try:
+        ensure_task_transition_allowed(current, target)
+    except InvalidLifecycleTransition as exc:
+        return exc.error_detail
+    return None
+
+
+def _run_error(current: Any, target: Any) -> ErrorDetail | None:
+    """Return the error detail for an illegal run move, or None if allowed."""
+
+    try:
+        ensure_run_transition_allowed(current, target)
+    except InvalidLifecycleTransition as exc:
+        return exc.error_detail
+    return None
+
+
+def _task_error_detail(current: TaskStatus, target: TaskStatus) -> ErrorDetail:
+    detail = _task_error(current, target)
+    assert detail is not None
+    return detail
+
+
+def _run_error_detail(current: RunStatus, target: RunStatus) -> ErrorDetail:
+    detail = _run_error(current, target)
+    assert detail is not None
+    return detail
+
+
+def test_task_action_is_neutral_across_all_illegal_transitions() -> None:
+    actions = set()
+    for current, target in ALL_TASK_PAIRS:
+        detail = _task_error(current, target)
+        if detail is None:
+            continue
+        actions.add(detail.action)
+        action = (detail.action or "").lower()
+        assert "new run" not in action
+        assert "completed" not in action
+        assert "cancel" not in action
+    assert actions == {
+        "Reload the task status and retry the command against its current status."
+    }
+
+
+# --- strict type isolation ---------------------------------------------------
+
+WRONG_TYPE_TASK_ARGS: Final[list[Any]] = [
+    RunStatus.QUEUED,
+    RunStatus.RUNNING,
+    RunStatus.COMPLETED,
+    RunStatus.CANCELLING,
+    "queued",
+    "running",
+    "completed",
+    "not_a_status",
+    "",
+    None,
+    0,
+    1,
+    True,
+    object(),
+]
+
+WRONG_TYPE_RUN_ARGS: Final[list[Any]] = [
+    TaskStatus.QUEUED,
+    TaskStatus.RUNNING,
+    TaskStatus.COMPLETED,
+    TaskStatus.CANCELLING,
+    "queued",
+    "running",
+    "completed",
+    "not_a_status",
+    "",
+    None,
+    0,
+    1,
+    True,
+    object(),
+]
+
+
+@pytest.mark.parametrize("bad", WRONG_TYPE_TASK_ARGS)
+def test_task_helpers_reject_non_task_status_everywhere(bad: Any) -> None:
+    """A wrong-typed argument is rejected in either position, never coerced."""
+
+    for current in TaskStatus:
+        assert is_task_transition_allowed(bad, current) is False
+        assert is_task_transition_allowed(current, bad) is False
+        with pytest.raises(TypeError):
+            ensure_task_transition_allowed(bad, current)
+        with pytest.raises(TypeError):
+            ensure_task_transition_allowed(current, bad)
+
+
+@pytest.mark.parametrize("bad", WRONG_TYPE_RUN_ARGS)
+def test_run_helpers_reject_non_run_status_everywhere(bad: Any) -> None:
+    for current in RunStatus:
+        assert is_run_transition_allowed(bad, current) is False
+        assert is_run_transition_allowed(current, bad) is False
+        with pytest.raises(TypeError):
+            ensure_run_transition_allowed(bad, current)
+        with pytest.raises(TypeError):
+            ensure_run_transition_allowed(current, bad)
+
+
+def test_wrong_type_never_reports_a_specific_transition_error() -> None:
+    """Type errors must not be reported as status-transition violations."""
+
+    for bad in WRONG_TYPE_TASK_ARGS:
+        for current in TaskStatus:
+            with pytest.raises(TypeError) as caught:
+                ensure_task_transition_allowed(bad, current)
+            assert not isinstance(caught.value, InvalidLifecycleTransition)
+    for bad in WRONG_TYPE_RUN_ARGS:
+        for current in RunStatus:
+            with pytest.raises(TypeError) as caught:
+                ensure_run_transition_allowed(bad, current)
+            assert not isinstance(caught.value, InvalidLifecycleTransition)
+
+
+def test_full_cross_vocabulary_product_is_rejected() -> None:
+    """No task/run pairing is ever accepted, in either direction."""
+
+    for task_status in TaskStatus:
+        for run_status in RunStatus:
+            assert is_task_transition_allowed(task_status, run_status) is False
+            assert is_task_transition_allowed(run_status, task_status) is False
+            assert is_task_transition_allowed(
+                task_status, run_status, creates_new_run=True
+            ) is False
+            assert is_run_transition_allowed(run_status, task_status) is False
+            assert is_run_transition_allowed(task_status, run_status) is False
+            with pytest.raises(TypeError):
+                ensure_task_transition_allowed(task_status, run_status)
+            with pytest.raises(TypeError):
+                ensure_run_transition_allowed(task_status, run_status)
+
+    # Same-named members are the case that value equality would wrongly accept.
+    assert TaskStatus.QUEUED == RunStatus.QUEUED
+    assert is_task_transition_allowed(TaskStatus.QUEUED, RunStatus.QUEUED) is False
+    assert is_run_transition_allowed(RunStatus.QUEUED, TaskStatus.QUEUED) is False
+
+
+def test_wrong_type_is_not_silently_treated_as_unknown_status() -> None:
+    """A bad value raises TypeError rather than returning a plain False."""
+
+    with pytest.raises(TypeError):
+        ensure_task_transition_allowed("queued", TaskStatus.RUNNING)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        ensure_run_transition_allowed("queued", RunStatus.RUNNING)  # type: ignore[arg-type]
+
+    # An unknown value must not fall through as a rejected transition either.
+    with pytest.raises(TypeError):
+        ensure_task_transition_allowed("bogus", "bogus")  # type: ignore[arg-type]
+
+
+def test_type_error_text_is_fixed_and_safe() -> None:
+    cases: list[tuple[Any, Any, str]] = [
+        (RunStatus.QUEUED, TaskStatus.RUNNING, "TaskStatus"),
+        (TaskStatus.RUNNING, RunStatus.QUEUED, "TaskStatus"),
+        ("queued", TaskStatus.RUNNING, "TaskStatus"),
+    ]
+    for bad, partner, expected_name in cases:
+        with pytest.raises(TypeError) as caught:
+            ensure_task_transition_allowed(bad, partner)  # type: ignore[arg-type]
+        text = str(caught.value)
+        assert text.startswith(f"expected {expected_name}, got ")
+        assert type(bad).__name__ in text
+        assert ":\\" not in text and ":/" not in text
+        assert "Traceback" not in text
+        assert "0x" not in text
+        assert "object at" not in text
+        if isinstance(bad, str):
+            assert "queued" in text
+
+    with pytest.raises(TypeError) as run_caught:
+        ensure_run_transition_allowed(TaskStatus.QUEUED, RunStatus.RUNNING)  # type: ignore[arg-type]
+    run_text = str(run_caught.value)
+    assert run_text.startswith("expected RunStatus, got ")
+    assert "TaskStatus" in run_text
+    assert ":\\" not in run_text and "Traceback" not in run_text
+
+
+def test_type_error_message_never_echoes_arbitrary_caller_text() -> None:
+    """Only the value's repr and type name reach the message."""
+
+    secret = "SENSITIVE-MARKER"
+    with pytest.raises(TypeError) as caught:
+        ensure_task_transition_allowed(secret, TaskStatus.RUNNING)  # type: ignore[arg-type]
+    text = str(caught.value)
+    assert secret in text  # the value is echoed by repr, not by free-form text
+    assert type(secret).__name__ in text
+    # Nothing else about the caller's state is included.
+    assert text == f"expected TaskStatus, got {secret!r} (str)"
+
+
+def test_is_helpers_never_raise_for_arbitrary_input() -> None:
+    for bad in WRONG_TYPE_TASK_ARGS + WRONG_TYPE_RUN_ARGS:
+        assert is_task_transition_allowed(bad, bad) is False
+        assert is_run_transition_allowed(bad, bad) is False
+        assert is_task_transition_allowed(bad, bad, creates_new_run=True) is False
+    # With every wrong-type guard applied, the matrix is never indexed with an
+    # unknown key, so no KeyError or AttributeError can escape.
+    for bad in (None, object(), 0):
+        try:
+            is_task_transition_allowed(bad, bad)  # type: ignore[arg-type]
+            is_run_transition_allowed(bad, bad)  # type: ignore[arg-type]
+        except (KeyError, AttributeError) as exc:  # pragma: no cover - regression guard
+            pytest.fail(f"unguarded matrix access raised {exc!r}")
+
+
+# --- frozen transition matrices ----------------------------------------------
+
+
+def test_transition_matrices_are_immutable_data() -> None:
+    # Plain module globals (not the private constants) so the invariants are
+    # asserted about shipped objects rather than about this module's aliases.
+    for name in (
+        "_TASK_ALLOWED_TRANSITIONS",
+        "_TASK_NEW_RUN_TRANSITIONS",
+        "_RUN_ALLOWED_TRANSITIONS",
+    ):
+        table = getattr(lifecycle, name)
+        assert isinstance(table, frozenset), name
+        assert table, name
+        for pair in table:
+            assert isinstance(pair, tuple) and len(pair) == 2, name
+
+    for name in ("_TASK_ALLOWED_INDEX", "_TASK_ALLOWED_WITH_NEW_RUN_INDEX", "_RUN_ALLOWED_INDEX"):
+        assert isinstance(getattr(lifecycle, name), frozenset), name
+
+
+def test_transition_matrices_expose_no_mutating_api() -> None:
+    for name in (
+        "_TASK_ALLOWED_TRANSITIONS",
+        "_TASK_NEW_RUN_TRANSITIONS",
+        "_RUN_ALLOWED_TRANSITIONS",
+        "_TASK_ALLOWED_INDEX",
+        "_TASK_ALLOWED_WITH_NEW_RUN_INDEX",
+        "_RUN_ALLOWED_INDEX",
+    ):
+        table = getattr(lifecycle, name)
+        for attribute in ("add", "remove", "discard", "pop", "clear", "update"):
+            assert not hasattr(table, attribute), f"{name}.{attribute}"
+        with pytest.raises(AttributeError):
+            table.add(("x", "y"))  # type: ignore[attr-defined]
+
+
+def test_rule_tables_are_module_level_constants() -> None:
+    for name in (
+        "_TASK_ALLOWED_TRANSITIONS",
+        "_TASK_NEW_RUN_TRANSITIONS",
+        "_RUN_ALLOWED_TRANSITIONS",
+    ):
+        assert hasattr(lifecycle, name)
+    # The lifecycle module and the package export the same public surface.
+    assert set(lifecycle.__all__) == set(deepchoice.runtime.__all__)
+
+
+def test_rule_tables_are_defined_as_frozen_sets_in_source() -> None:
+    """Read-only proof that the tables are authored as immutable literals.
+
+    Truthfulness note: a module attribute cannot be protected against
+    reassignment at runtime, so this asserts the declaration rather than
+    attempting to rebind the shipped object (which would corrupt the module
+    for every later test).
+    """
+
+    source = Path(lifecycle.__file__).read_text(encoding="utf-8")
+    lines = source.splitlines()
+    for name in (
+        "_TASK_ALLOWED_TRANSITIONS",
+        "_TASK_NEW_RUN_TRANSITIONS",
+        "_RUN_ALLOWED_TRANSITIONS",
+    ):
+        # Declared Final and assigned a frozenset literal, even though the
+        # value is formatted across several lines.
+        declaration = re.search(
+            rf"^{name}\b.*?=\s*frozenset\(", source, re.MULTILINE | re.DOTALL
+        )
+        assert declaration, f"{name} is not assigned a frozenset(...) literal"
+        assert "Final[frozenset[" in declaration.group(0), name
+
+    # A bare mutable dict must not carry the rules any more.
+    for forbidden in ("_TASK_TRANSITIONS", "_RUN_TRANSITIONS"):
+        assert not any(
+            re.match(rf"^{forbidden}\s*[:=]", line) for line in lines
+        ), forbidden
+
+    # A bare mutable dict must not carry the rules any more.
+    for forbidden in ("_TASK_TRANSITIONS", "_RUN_TRANSITIONS"):
+        assert not any(
+            re.match(rf"^{forbidden}\s*[:=]", line) for line in lines
+        ), forbidden
+
+
+def test_rule_sets_do_not_alias_each_other() -> None:
+    # Guards against an implementation that keeps a single mutated table for
+    # both vocabularies or for both new-run modes. Read-only: rebinding a
+    # module global here would leak into every later test.
+    assert lifecycle._TASK_ALLOWED_INDEX is lifecycle._TASK_ALLOWED_TRANSITIONS
+    assert lifecycle._RUN_ALLOWED_INDEX is lifecycle._RUN_ALLOWED_TRANSITIONS
+    assert lifecycle._TASK_ALLOWED_WITH_NEW_RUN_INDEX is not lifecycle._TASK_ALLOWED_INDEX
+    assert lifecycle._TASK_ALLOWED_WITH_NEW_RUN_INDEX == (
+        lifecycle._TASK_ALLOWED_TRANSITIONS | lifecycle._TASK_NEW_RUN_TRANSITIONS
+    )
+    # The new-run rules are exactly the retryable retry edges.
+    assert lifecycle._TASK_NEW_RUN_TRANSITIONS == frozenset(
+        {
+            (TaskStatus.FAILED, TaskStatus.QUEUED),
+            (TaskStatus.TIMED_OUT, TaskStatus.QUEUED),
+        }
+    )
+
+
+def test_allowed_sets_are_unchanged_by_the_hardening() -> None:
+    """The frozen matrices still encode exactly the contracted transitions."""
+
+    assert lifecycle._TASK_ALLOWED_TRANSITIONS == ALLOWED_TASK_TRANSITIONS
+    assert lifecycle._RUN_ALLOWED_TRANSITIONS == ALLOWED_RUN_TRANSITIONS
 
 
 # --- 10. package surface -----------------------------------------------------
