@@ -19,7 +19,7 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Do not push, force-push, merge to `main`, or create releases without explicit approval.
 - Keep implementation, tests, and directly affected documentation in the same change. Prefer focused commits with conventional prefixes such as `fix:`, `feat:`, `test:`, `docs:`, or `chore:`.
 - Every completed change must have a corresponding Git commit before handoff so it can be traced and rolled back. Do not leave completed work only in the working tree.
-- Every change must add or update the relevant automated tests. Before delivery, run the affected tests and the full validation suite; all tests and required checks must pass. If validation cannot pass, do not present the change as complete.
+- Every behavior change must add or update the relevant automated tests. Before delivery, run the affected tests and the full validation suite; all tests and required checks must pass. A passing full-suite result remains valid if only documentation, comments, or recorded test results change afterward. If production code, public contracts, migrations, tests, or runtime conditions change, rerun the affected tests and the full validation suite. If validation cannot pass, do not present the change as complete.
 
 ## Architecture map
 
@@ -57,6 +57,10 @@ Run the smallest relevant test first, then the full suite:
 .\.venv\Scripts\python.exe -m pytest tests/path_to_test.py -q -p no:cacheprovider
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
+
+During implementation, keep validation focused on the current change. Freeze production code,
+migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
+because documentation, comments, or the recorded result changed afterward.
 
 The verified clean-environment baseline on 2026-09-14 is 815 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
