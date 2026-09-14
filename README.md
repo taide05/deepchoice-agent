@@ -60,7 +60,8 @@ Phase 1-A 已补齐任务与运行尝试的生命周期契约：两套状态枚�
 Phase 1-B 的产品持久化基础使用 `outputs/deepchoice.db`，与 LangGraph 的
 `outputs/checkpoints.db` 分离。`deepchoice.persistence` 提供可由启动流程调用的向前迁移 runner；
 迁移版本、名称和校验和都会校验，SQLite 连接启用外键、WAL 与有界 busy timeout。
-首版仅建立 `tasks`、`runs` 和迁移历史表，快照导入及 repository 留待后续阶段。
+Phase 1-C 新增任务/运行记录的原子持久化、版本化状态更新、稳定分页和任务查询 API。
+`POST /api/v1/tasks` 目前只负责校验并排队持久化，执行协调留待 Phase 1-D。
 
 ### 测试
 
@@ -68,9 +69,8 @@ Phase 1-B 的产品持久化基础使用 `outputs/deepchoice.db`，与 LangGraph
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-14 在 Python 3.12 隔离环境中验证结果为
-**698 passed，0 skipped**；`pip check` 零依赖冲突，pyarrow、Streamlit、Starlette
-和 FastAPI 可同时正常导入。不要使用混装其他项目依赖的全局 Python 环境。
+项目支持 Python 3.11/3.12。2026-09-14 在项目隔离环境中验证结果为
+**707 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 

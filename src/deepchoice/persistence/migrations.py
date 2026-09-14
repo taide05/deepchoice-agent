@@ -92,8 +92,15 @@ CREATE TABLE runs (
     "CREATE INDEX idx_runs_lease_expires_at ON runs(lease_expires_at)",
 )
 
+_V2_STATEMENTS: Final[tuple[str, ...]] = (
+    "ALTER TABLE runs ADD COLUMN version INTEGER NOT NULL DEFAULT 0 CHECK (version >= 0)",
+    "CREATE INDEX idx_tasks_created_at_task_id ON tasks(created_at DESC, task_id DESC)",
+    "CREATE INDEX idx_tasks_status_created_at_task_id ON tasks(status, created_at DESC, task_id DESC)",
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
+    Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
 )
 
 

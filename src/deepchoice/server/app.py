@@ -2,18 +2,27 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
-from ..contracts.api import ResearchRequest, ResearchStartedResponse
+from ..contracts.api import (
+    ResearchRequest,
+    ResearchStartedResponse,
+    RunRecordResponse,
+    TaskDetailResponse,
+    TaskListResponse,
+    TaskRecordResponse,
+)
 from ..contracts.errors import (
     DeepChoiceError,
     ErrorCategory,
@@ -27,6 +36,12 @@ from ..formats.comparison_matrix import render as render_comparison_matrix
 from ..formats.evidence_first import render as render_evidence_first
 from ..formats.pdf import render_pdf
 from ..formats.what_why_how import render as render_what_why_how
+from ..persistence.database import DEFAULT_DB_PATH, DatabaseConnectionError, _await_cleanup, connect_database
+from ..persistence.migrations import run_migrations
+from ..persistence.records import TaskWithRun
+from ..persistence.repository import SQLiteTaskRunRepository
+from ..runtime.lifecycle import TaskStatus
+from ..services.tasks import TaskService
 from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
 from .snapshot_store import (
@@ -37,7 +52,33 @@ from .snapshot_store import (
     save_snapshot,
 )
 
-app = FastAPI(title="DeepChoice API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Own the product database's one connection for this app lifespan."""
+
+    connection = None
+    try:
+        database_path = getattr(application.state, "product_database_path", None)
+        connection = await connect_database(database_path or DEFAULT_DB_PATH)
+        connection_lock = asyncio.Lock()
+        async with connection_lock:
+            await run_migrations(connection)
+        repository = SQLiteTaskRunRepository(connection, connection_lock)
+        application.state.product_database_connection = connection
+        application.state.product_database_lock = connection_lock
+        application.state.task_repository = repository
+        application.state.task_service = TaskService(repository)
+        yield
+    finally:
+        application.state.task_service = None
+        application.state.task_repository = None
+        application.state.product_database_lock = None
+        application.state.product_database_connection = None
+        if connection is not None:
+            await _await_cleanup(connection.close())
+
+
+app = FastAPI(title="DeepChoice API", version="0.1.0", lifespan=lifespan)
 app.include_router(clarify_router)
 
 OUTPUT_DIR = Path("./outputs")
@@ -47,6 +88,34 @@ FORMAT_RENDERERS = {
     "evidence_first": render_evidence_first,
     "comparison_matrix": render_comparison_matrix,
 }
+
+
+def _get_task_service(request: Request) -> TaskService:
+    service = getattr(request.app.state, "task_service", None)
+    if not isinstance(service, TaskService):
+        raise DatabaseConnectionError(retryable=True)
+    return service
+
+
+def _task_detail_response(record: TaskWithRun) -> TaskDetailResponse:
+    return TaskDetailResponse(
+        task=TaskRecordResponse.model_validate(record.task.model_dump(mode="json")),
+        latest_run=(
+            RunRecordResponse(
+                run_id=record.latest_run.run_id,
+                task_id=record.latest_run.task_id,
+                status=record.latest_run.status.value,
+                manifest_id=record.latest_run.manifest.manifest_id,
+                started_at=record.latest_run.started_at,
+                ended_at=record.latest_run.ended_at,
+                version=record.latest_run.version,
+                created_at=record.latest_run.created_at,
+                updated_at=record.latest_run.updated_at,
+            )
+            if record.latest_run is not None
+            else None
+        ),
+    )
 
 
 def _error_response(
@@ -133,6 +202,48 @@ NODE_TO_PHASE = {
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post(
+    "/api/v1/tasks",
+    response_model=TaskDetailResponse,
+    status_code=202,
+)
+async def create_task(request: Request, body: ResearchRequest) -> TaskDetailResponse:
+    """Persist a queued task/run pair without starting research execution."""
+
+    record = await _get_task_service(request).create(body)
+    return _task_detail_response(record)
+
+
+@app.get(
+    "/api/v1/tasks/{task_id}",
+    response_model=TaskDetailResponse,
+)
+async def get_task(task_id: str, request: Request) -> TaskDetailResponse:
+    record = await _get_task_service(request).get(task_id)
+    return _task_detail_response(record)
+
+
+@app.get(
+    "/api/v1/tasks",
+    response_model=TaskListResponse,
+)
+async def get_tasks(
+    request: Request,
+    status: TaskStatus | None = None,
+    cursor: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> TaskListResponse:
+    page = await _get_task_service(request).list(
+        status=status,
+        cursor=cursor,
+        limit=limit,
+    )
+    return TaskListResponse(
+        items=tuple(_task_detail_response(item) for item in page.items),
+        next_cursor=page.next_cursor,
+    )
 
 
 # Stream wake-up sentinels pushed by _run_research into entry["queue"].

@@ -12,6 +12,16 @@ from .migrations import (
     MigrationExecutionError,
     run_migrations,
 )
+from .records import RunRecord, TaskRecord, TaskWithRun
+from .repository import (
+    RepositoryOperationError,
+    RunNotFoundError,
+    RunRepository,
+    SQLiteTaskRunRepository,
+    TaskNotFoundError,
+    TaskRepository,
+    TaskVersionConflictError,
+)
 
 __all__ = [
     "DEFAULT_DB_PATH",
@@ -20,6 +30,16 @@ __all__ = [
     "Migration",
     "MigrationCompatibilityError",
     "MigrationExecutionError",
+    "RepositoryOperationError",
+    "RunNotFoundError",
+    "RunRecord",
+    "RunRepository",
+    "SQLiteTaskRunRepository",
+    "TaskNotFoundError",
+    "TaskRecord",
+    "TaskRepository",
+    "TaskVersionConflictError",
+    "TaskWithRun",
     "connect_database",
     "run_migrations",
 ]
