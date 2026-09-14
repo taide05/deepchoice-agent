@@ -12,13 +12,14 @@
 - Pydantic research request/start-response contracts and a structured public error envelope that retains the legacy `detail` field
 - Immutable per-run manifests covering effective model tiers, LLM call parameters, prompt hashes, workflow/state schema, retriever versions, and report template version without persisting credentials or raw endpoints
 - Versioned retriever request/result contracts and a stable `retrieve()` port, with the existing `search()` entry point retained for compatibility
+- Phase 1-A task/run lifecycle contracts with strict status boundaries, retry-as-new-run semantics, and complete transition behavior tests
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 353 passed with no skips on 2026-09-13
+- Verified Python 3.12 test baseline is 684 passed with no skips on 2026-09-14
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 

@@ -53,14 +53,18 @@ python -m venv .venv
 `task_id`/`status`，同时返回 `manifest_id` 供运行审计。API 错误保留兼容的
 `detail` 字段，并增加稳定的 `error` 对象（类别、错误码、是否可重试和建议动作）。
 
+Phase 1-A 已补齐任务与运行尝试的生命周期契约：两套状态枚举、完整转移矩阵、
+终态与可重试结果集合，以及严格类型边界。失败或超时任务只能通过创建新 run
+回到队列；已结束的 run 不会被重新打开。
+
 ### 测试
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-13 在 Python 3.12 隔离环境中验证结果为
-**353 passed，0 skipped**；`pip check` 零依赖冲突，pyarrow、Streamlit、Starlette
+项目支持 Python 3.11/3.12。2026-09-14 在 Python 3.12 隔离环境中验证结果为
+**684 passed，0 skipped**；`pip check` 零依赖冲突，pyarrow、Streamlit、Starlette
 和 FastAPI 可同时正常导入。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
