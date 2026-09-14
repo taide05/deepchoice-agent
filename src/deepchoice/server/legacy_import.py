@@ -1,16 +1,20 @@
 """One-shot importer for the pre-Phase-1 durable snapshot files.
 
-The importer is deliberately kept at the server boundary.  Snapshot files are
-untrusted input and are never copied into the product database; only the
-validated request and a small amount of provenance are imported.
+The importer is deliberately kept at the server boundary. Snapshot files are
+untrusted input: only the validated request, public result allowlist, and a
+small amount of provenance are imported. Private state and unknown fields are
+never copied into the product database.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import inspect
 import json
+import os
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,7 +23,8 @@ from typing import Any, Protocol
 
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
-from deepchoice.persistence.records import RunRecord, TaskRecord
+from deepchoice.persistence.records import RunRecord, RunResultRecord, TaskRecord
+from deepchoice.runtime.coordinator import build_public_run_result
 from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
 
 
@@ -36,9 +41,14 @@ class _SnapshotTooLargeError(ValueError):
         self.digest = digest
 
 
+class _ImportBudgetExceededError(TimeoutError):
+    pass
+
+
 class LegacyImportRepository(Protocol):
     async def import_legacy_task(
         self, source_path: str, content_sha256: str, task: TaskRecord, run: RunRecord,
+        result: RunResultRecord | None = None,
         *, imported_at: datetime | None = None
     ) -> Any: ...
 
@@ -54,6 +64,26 @@ class LegacyImportSummary:
     imported: int = 0
     skipped: int = 0
     errors: int = 0
+    budget_exhausted: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyImportLimits:
+    max_candidates: int = 1_000
+    max_io_seconds: float = 5.0
+    max_snapshot_bytes: int = _DEFAULT_MAX_SNAPSHOT_BYTES
+
+    def __post_init__(self) -> None:
+        if type(self.max_candidates) is not int or self.max_candidates <= 0:
+            raise ValueError("max_candidates must be a positive integer")
+        if (
+            isinstance(self.max_io_seconds, bool)
+            or not isinstance(self.max_io_seconds, (int, float))
+            or self.max_io_seconds <= 0
+        ):
+            raise ValueError("max_io_seconds must be positive")
+        if type(self.max_snapshot_bytes) is not int or self.max_snapshot_bytes <= 0:
+            raise ValueError("max_snapshot_bytes must be a positive integer")
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -85,6 +115,8 @@ def _error_code(error: Exception | None) -> str:
         return "LEGACY_SNAPSHOT_JSON_INVALID"
     if isinstance(error, _SnapshotTooLargeError):
         return "LEGACY_SNAPSHOT_TOO_LARGE"
+    if isinstance(error, _ImportBudgetExceededError):
+        return "LEGACY_IMPORT_IO_BUDGET_EXCEEDED"
     if isinstance(error, (UnicodeDecodeError, OSError)):
         return "LEGACY_SNAPSHOT_READ_FAILED"
     return "LEGACY_SNAPSHOT_SCHEMA_INVALID"
@@ -99,27 +131,103 @@ def _request(snapshot: object) -> ResearchRequest:
     return ResearchRequest.model_validate(task)
 
 
+def _decode_snapshot(raw: bytes) -> tuple[dict[str, Any], ResearchRequest]:
+    snapshot = json.loads(raw.decode("utf-8"))
+    request = _request(snapshot)
+    return snapshot, request
+
+
 def _source_path(root: Path, path: Path) -> str:
     # The scanner only passes direct children, but resolve the relative path
     # explicitly so Windows paths are persisted in portable POSIX form.
     return path.relative_to(root).as_posix()
 
 
-def _read_and_hash(path: Path, *, max_bytes: int) -> tuple[bytes, str]:
+def _is_link_like(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    return bool(is_junction()) if callable(is_junction) else False
+
+
+def _is_contained_snapshot(root: Path, task_dir: Path, snapshot_path: Path) -> bool:
+    """Reject symlink/junction escapes before reading untrusted legacy files."""
+
+    try:
+        root_resolved = root.resolve(strict=True)
+        if _is_link_like(task_dir) or _is_link_like(snapshot_path):
+            return False
+        task_resolved = task_dir.resolve(strict=True)
+        snapshot_resolved = snapshot_path.resolve(strict=True)
+        return (
+            task_resolved.parent == root_resolved
+            and snapshot_resolved.parent == task_resolved
+        )
+    except OSError:
+        return False
+
+
+def _metadata_digest(path: Path) -> str:
+    """Return a stable, non-content audit key without reading an unsafe file."""
+
+    try:
+        stat = path.stat()
+        identity = f"unread:{stat.st_size}:{stat.st_mtime_ns}".encode("ascii")
+    except OSError:
+        identity = b"unread:unknown"
+    return hashlib.sha256(identity).hexdigest()
+
+
+def _read_and_hash(
+    path: Path,
+    *,
+    max_bytes: int,
+    deadline: float,
+    monotonic: Any,
+    allowed_parent: Path,
+) -> tuple[bytes, str]:
+    if _is_link_like(path) or path.resolve(strict=True).parent != allowed_parent:
+        raise OSError("legacy snapshot escaped its configured root")
+    try:
+        if path.stat().st_size > max_bytes:
+            raise _SnapshotTooLargeError(_metadata_digest(path))
+    except _SnapshotTooLargeError:
+        raise
+    except OSError:
+        pass
     digest = hashlib.sha256()
     payload = bytearray()
-    oversized = False
     with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
+        while True:
+            if monotonic() >= deadline:
+                raise _ImportBudgetExceededError("legacy import I/O budget exhausted")
+            chunk = stream.read(min(1024 * 1024, max_bytes + 1 - len(payload)))
+            if not chunk:
+                break
             digest.update(chunk)
-            if not oversized and len(payload) + len(chunk) <= max_bytes:
-                payload.extend(chunk)
-            else:
-                oversized = True
-    encoded_digest = digest.hexdigest()
-    if oversized:
-        raise _SnapshotTooLargeError(encoded_digest)
-    return bytes(payload), encoded_digest
+            payload.extend(chunk)
+            if len(payload) > max_bytes:
+                raise _SnapshotTooLargeError(_metadata_digest(path))
+    return bytes(payload), digest.hexdigest()
+
+
+def _list_candidates(
+    root: Path,
+    *,
+    max_candidates: int,
+    deadline: float,
+    monotonic: Any,
+) -> tuple[list[Path], bool]:
+    candidates: list[Path] = []
+    exhausted = False
+    with os.scandir(root) as entries:
+        for entry in entries:
+            if monotonic() >= deadline or len(candidates) >= max_candidates:
+                exhausted = True
+                break
+            candidates.append(Path(entry.path))
+    candidates.sort(key=lambda item: item.name)
+    return candidates, exhausted
 
 
 async def import_legacy_snapshots(
@@ -127,7 +235,9 @@ async def import_legacy_snapshots(
     repository: LegacyImportRepository,
     *,
     clock: Any = lambda: datetime.now(UTC),
-    max_snapshot_bytes: int = _DEFAULT_MAX_SNAPSHOT_BYTES,
+    max_snapshot_bytes: int | None = None,
+    limits: LegacyImportLimits | None = None,
+    monotonic: Any = time.monotonic,
 ) -> LegacyImportSummary:
     """Import direct-child legacy task directories into the durable store.
 
@@ -137,17 +247,35 @@ async def import_legacy_snapshots(
 
     root_path = Path(root)
     scanned = imported = skipped = errors = 0
-    if type(max_snapshot_bytes) is not int or max_snapshot_bytes <= 0:
-        raise ValueError("max_snapshot_bytes must be a positive integer")
+    if limits is not None and max_snapshot_bytes is not None:
+        raise ValueError("pass limits or max_snapshot_bytes, not both")
+    if limits is None:
+        limits = LegacyImportLimits(
+            max_snapshot_bytes=(
+                _DEFAULT_MAX_SNAPSHOT_BYTES
+                if max_snapshot_bytes is None
+                else max_snapshot_bytes
+            )
+        )
+    deadline = monotonic() + float(limits.max_io_seconds)
     if not root_path.is_dir():
         return LegacyImportSummary()
 
     try:
-        task_directories = sorted(root_path.iterdir(), key=lambda item: item.name)
+        task_directories, budget_exhausted = await asyncio.to_thread(
+            _list_candidates,
+            root_path,
+            max_candidates=limits.max_candidates,
+            deadline=deadline,
+            monotonic=monotonic,
+        )
     except OSError:
         return LegacyImportSummary(errors=1)
 
     for task_dir in task_directories:
+        if monotonic() >= deadline:
+            budget_exhausted = True
+            break
         if not task_dir.is_dir() or not _TASK_ID_RE.fullmatch(task_dir.name):
             continue
         success = task_dir / _SUCCESS_FILE
@@ -155,17 +283,25 @@ async def import_legacy_snapshots(
         snapshot_path = success if success.is_file() else failed if failed.is_file() else None
         if snapshot_path is None:
             continue
+        if not _is_contained_snapshot(root_path, task_dir, snapshot_path):
+            continue
 
         scanned += 1
         source_path = _source_path(root_path, snapshot_path)
         now = _file_time(snapshot_path, clock)
+        digest = _metadata_digest(snapshot_path)
         try:
-            raw, digest = _read_and_hash(
+            raw, digest = await asyncio.to_thread(
+                _read_and_hash,
                 snapshot_path,
-                max_bytes=max_snapshot_bytes,
+                max_bytes=limits.max_snapshot_bytes,
+                deadline=deadline,
+                monotonic=monotonic,
+                allowed_parent=task_dir.resolve(strict=True),
             )
-            snapshot = json.loads(raw.decode("utf-8"))
-            request = _request(snapshot)
+            snapshot, request = await asyncio.to_thread(_decode_snapshot, raw)
+            if monotonic() >= deadline:
+                raise _ImportBudgetExceededError("legacy import I/O budget exhausted")
             failed_snapshot = snapshot_path.name == _FAILED_FILE
             run_id = str(uuid.uuid5(_LEGACY_NAMESPACE, f"{source_path}:{digest}"))
             status = RunStatus.FAILED if failed_snapshot else RunStatus.COMPLETED
@@ -196,9 +332,18 @@ async def import_legacy_snapshots(
                 created_at=now,
                 updated_at=now,
             )
+            run_result = None
+            if not failed_snapshot:
+                state = type("LegacyState", (), {"values": snapshot})()
+                run_result = build_public_run_result(
+                    run,
+                    request.model_dump(mode="json", exclude_none=True),
+                    state,
+                    created_at=now,
+                )
             result = await _invoke(
                 repository.import_legacy_task,
-                source_path, digest, task, run, imported_at=now,
+                source_path, digest, task, run, run_result, imported_at=now,
             )
             outcome = getattr(result, "outcome", None)
             if getattr(result, "created", True) is False:
@@ -212,16 +357,6 @@ async def import_legacy_snapshots(
         except Exception as exc:  # noqa: BLE001 - per-file isolation is required
             if isinstance(exc, _SnapshotTooLargeError):
                 digest = exc.digest
-            else:
-                try:
-                    _, digest = _read_and_hash(
-                        snapshot_path,
-                        max_bytes=max_snapshot_bytes,
-                    )
-                except _SnapshotTooLargeError as size_error:
-                    digest = size_error.digest
-                except OSError:
-                    digest = hashlib.sha256(b"").hexdigest()
             code = _error_code(exc)
             try:
                 await _invoke(
@@ -231,12 +366,26 @@ async def import_legacy_snapshots(
             except Exception:  # noqa: BLE001 - one bad record must not stop scanning
                 pass
             errors += 1
+            if isinstance(exc, _ImportBudgetExceededError):
+                budget_exhausted = True
+                break
 
-    return LegacyImportSummary(scanned=scanned, imported=imported, skipped=skipped, errors=errors)
+    return LegacyImportSummary(
+        scanned=scanned,
+        imported=imported,
+        skipped=skipped,
+        errors=errors,
+        budget_exhausted=budget_exhausted,
+    )
 
 
 # Short alias for callers that prefer the singular operation name.
 import_legacy_snapshot = import_legacy_snapshots
 
 
-__all__ = ["LegacyImportSummary", "import_legacy_snapshot", "import_legacy_snapshots"]
+__all__ = [
+    "LegacyImportLimits",
+    "LegacyImportSummary",
+    "import_legacy_snapshot",
+    "import_legacy_snapshots",
+]

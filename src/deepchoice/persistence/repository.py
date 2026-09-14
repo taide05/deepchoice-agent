@@ -28,6 +28,7 @@ from .records import (
     RecoveryRun,
     RunLeaseGrant,
     RunRecord,
+    RunResultRecord,
     TaskRecord,
     TaskEventCursor,
     TaskEventRecord,
@@ -188,6 +189,8 @@ class TaskRepository(Protocol):
         self, task_id: str, *, cursor: int
     ) -> TaskEventCursor: ...
 
+    async def get_run_result(self, run_id: str) -> RunResultRecord | None: ...
+
     async def record_legacy_import_failure(
         self,
         source_path: str,
@@ -203,6 +206,7 @@ class TaskRepository(Protocol):
         content_sha256: str,
         task: TaskRecord,
         run: RunRecord,
+        result: RunResultRecord | None = None,
         *,
         imported_at: datetime | None = None,
     ) -> LegacyImportRecord: ...
@@ -252,6 +256,17 @@ class RunRepository(Protocol):
         now: datetime | None = None,
     ) -> TaskWithRun: ...
 
+    async def finalize_run_with_result(
+        self,
+        run_id: str,
+        result: RunResultRecord,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        status: RunStatus = RunStatus.COMPLETED,
+        now: datetime | None = None,
+    ) -> TaskWithRun: ...
+
     async def add_checkpoint_reference(
         self,
         reference: CheckpointReference,
@@ -287,6 +302,10 @@ r.deadline_at, r.started_at, r.ended_at, r.error_id, r.version, r.created_at, r.
 
 _EVENT_COLUMNS = """
 event_id, task_id, run_id, seq, type, public_payload_json, created_at
+""".strip()
+
+_RESULT_COLUMNS = """
+run_id, result_schema_version, snapshot_json, report, report_format, created_at
 """.strip()
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -360,6 +379,17 @@ def _event_from_values(values: tuple[object, ...]) -> TaskEventRecord:
         type=str(values[4]),
         public_payload=json.loads(str(values[5])),
         created_at=_datetime_from_db(str(values[6])),
+    )
+
+
+def _result_from_values(values: tuple[object, ...]) -> RunResultRecord:
+    return RunResultRecord(
+        run_id=str(values[0]),
+        result_schema_version=int(values[1]),
+        snapshot=json.loads(str(values[2])),
+        report=str(values[3]),
+        report_format=str(values[4]),
+        created_at=_datetime_from_db(str(values[5])),
     )
 
 
@@ -977,6 +1007,17 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             except Exception as exc:
                 raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
 
+    async def get_run_result(self, run_id: str) -> RunResultRecord | None:
+        async with self._lock:
+            try:
+                row = await self._fetchone(
+                    f"SELECT {_RESULT_COLUMNS} FROM run_results WHERE run_id = ?",
+                    (run_id,),
+                )
+                return _result_from_values(row) if row is not None else None
+            except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
     async def list_task_events(
         self, task_id: str, *, after_event_id: int = 0, limit: int = 100
     ) -> tuple[TaskEventRecord, ...]:
@@ -1103,6 +1144,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         content_sha256: str,
         task: TaskRecord,
         run: RunRecord,
+        result: RunResultRecord | None = None,
         *,
         imported_at: datetime | None = None,
     ) -> LegacyImportRecord:
@@ -1121,6 +1163,15 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         }
         if run.status not in terminal:
             raise ValueError("legacy imports must describe a terminal run")
+        if run.status in {RunStatus.COMPLETED, RunStatus.COMPLETED_WITH_WARNINGS}:
+            if result is None or result.run_id != run.run_id:
+                raise ValueError("successful legacy imports require a matching result")
+            if result.snapshot.get("report") != result.report or not result.report.strip():
+                raise ValueError("legacy result report must be non-empty and match snapshot")
+            if result.report_format != task.request.report_format:
+                raise ValueError("legacy result format must match the task request")
+        elif result is not None:
+            raise ValueError("unsuccessful legacy imports cannot publish a result")
         changed_at = imported_at or datetime.now(UTC)
         async with self._lock:
             started = False
@@ -1221,6 +1272,29 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         ),
                     )
                     await cursor.close()
+                    if result is not None:
+                        cursor = await self._connection.execute(
+                            """
+                            INSERT INTO run_results(
+                                run_id, result_schema_version, snapshot_json,
+                                report, report_format, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                result.run_id,
+                                result.result_schema_version,
+                                json.dumps(
+                                    result.snapshot,
+                                    ensure_ascii=False,
+                                    separators=(",", ":"),
+                                    sort_keys=True,
+                                ),
+                                result.report,
+                                result.report_format,
+                                _datetime_to_db(result.created_at),
+                            ),
+                        )
+                        await cursor.close()
                     await self._append_event_unlocked(
                         task_id=task.task_id,
                         run_id=run.run_id,
@@ -1449,7 +1523,6 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                     await self._rollback()
                 raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
 
-
     async def finalize_run(
         self,
         run_id: str,
@@ -1459,6 +1532,55 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         status: RunStatus,
         error_id: str | None = None,
         now: datetime | None = None,
+    ) -> TaskWithRun:
+        return await self._finalize_run_transaction(
+            run_id,
+            lease_owner=lease_owner,
+            execution_epoch=execution_epoch,
+            status=status,
+            error_id=error_id,
+            result=None,
+            now=now,
+        )
+
+    async def finalize_run_with_result(
+        self,
+        run_id: str,
+        result: RunResultRecord,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        status: RunStatus = RunStatus.COMPLETED,
+        now: datetime | None = None,
+    ) -> TaskWithRun:
+        if result.run_id != run_id:
+            raise ValueError("result.run_id must match run_id")
+        if result.snapshot.get("report") != result.report:
+            raise ValueError("result report must match snapshot report")
+        if not result.report.strip():
+            raise ValueError("result report must be non-empty")
+        if status not in {RunStatus.COMPLETED, RunStatus.COMPLETED_WITH_WARNINGS}:
+            raise ValueError("a run result requires a successful final status")
+        return await self._finalize_run_transaction(
+            run_id,
+            lease_owner=lease_owner,
+            execution_epoch=execution_epoch,
+            status=status,
+            error_id=None,
+            result=result,
+            now=now,
+        )
+
+    async def _finalize_run_transaction(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        status: RunStatus,
+        error_id: str | None,
+        result: RunResultRecord | None,
+        now: datetime | None,
     ) -> TaskWithRun:
         allowed = {
             RunStatus.COMPLETED,
@@ -1562,6 +1684,37 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 await cursor.close()
                 if task_updated != 1:
                     raise RunLeaseLostError(run_id)
+                if (
+                    result is not None
+                    and final_status
+                    in {RunStatus.COMPLETED, RunStatus.COMPLETED_WITH_WARNINGS}
+                ):
+                    if result.report_format != current.task.request.report_format:
+                        raise ValueError(
+                            "result report_format must match the task request"
+                        )
+                    cursor = await self._connection.execute(
+                        """
+                        INSERT INTO run_results(
+                            run_id, result_schema_version, snapshot_json,
+                            report, report_format, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            result.run_id,
+                            result.result_schema_version,
+                            json.dumps(
+                                result.snapshot,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                                sort_keys=True,
+                            ),
+                            result.report,
+                            result.report_format,
+                            _datetime_to_db(result.created_at),
+                        ),
+                    )
+                    await cursor.close()
                 result = await self._current_task_unlocked(run.task_id)
                 await self._append_event_unlocked(
                     task_id=run.task_id,

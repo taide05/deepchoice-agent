@@ -58,7 +58,7 @@ Run the smallest relevant test first, then the full suite:
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-The verified clean-environment baseline on 2026-09-14 is 772 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-14 is 799 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -90,17 +90,21 @@ When adding a setting, update the code default, tests, README configuration sect
 
 ### Phase 1 durable runtime
 
-- The full durable lifecycle contract applies to `/api/v1/tasks/*`. `POST /research` remains a separate in-memory compatibility path until an explicit cutover; do not describe legacy-created or current Streamlit tasks as durable.
+- The Streamlit default path and full durable lifecycle contract use `/api/v1/tasks/*`. `POST /research` remains a deprecated, separate in-memory compatibility path for one compatibility version; do not add new consumers to it.
 - Change task/latest-run state and append the corresponding `task_events` record through one repository transaction. API handlers, coordinators, and agents must not write lifecycle tables or events directly.
 - Preserve CAS and fencing semantics: a losing task/run version check or stale `(lease_owner, execution_epoch)` must produce no state mutation, event, or checkpoint reference. Heartbeats renew ownership without user events.
 - Treat lease acquisition and terminal finalization as cancellation-sensitive authority changes. Shutdown must let an in-flight acquisition settle, then fence/finalize any committed grant before propagating cancellation; never leave a committed `running` row merely because the caller was cancelled before receiving the grant.
 - Keep task status aligned with its latest run. `interrupted` is recoverable and may resume the same compatible run; it is not an immutable terminal outcome. Failed/timed-out retries create a new run.
 - Treat `RunManifest` as immutable run identity. Same-run resume must verify manifest identity plus workflow/state schema compatibility and use only a product-accepted checkpoint reference.
 - Product task metadata and LangGraph checkpoint payloads stay in separate SQLite stores. Never infer product state by reading LangGraph private tables; back up and restore the two stores as a pair.
+- Every new coordinator success or successful legacy import must commit its allowlisted public result, task/run terminal state, and completion event in one product-database transaction. Never publish a new successful terminal state without its queryable `run_results` artifact, and never copy private checkpoint state into that artifact. Pre-v6 successful rows are a read-only historical exception and return `TASK_RESULT_UNAVAILABLE` because no result can be reconstructed safely.
+- The SQLite runtime is single-instance and single-worker. Keep the product-database instance lease and worker-count startup checks enabled; do not work around them to scale horizontally. Use an external queue/coordinator before adding workers or replicas.
+- Phase 1 is a single-user trusted-network deployment: the durable APIs do not yet authenticate callers or enforce task ownership. Do not expose port 8000 directly to the public internet; require an authenticated reverse proxy for remote access, and add authentication plus tenant ownership before multi-user deployment.
 - `task_events.event_id` is the global SSE cursor and `seq` is task-local. Public event data may contain status/node/reason and public identifiers/timestamps, but never lease owners, epochs, checkpoint IDs, manifest contents, raw exceptions, secrets, full state, or report bodies.
 - `Last-Event-ID` replay must resync foreign, missing, or future cursors with a public task snapshot. Durable SSE must not depend on optional trace/observability writes.
 - Migrations are append-only and forward-only. Never edit the name, SQL, or checksum of a committed migration; add a new migration, test upgrades from the previous schema, and rely on pre-deploy backups rather than destructive downgrade.
-- Legacy snapshot import stays read-only, direct-child scoped, path/hash idempotent, conflict-preserving, and bounded against malformed or oversized input. Never copy `_error`, reports, or full snapshot state into product events.
+- Legacy snapshot import stays read-only, direct-child scoped, path/hash idempotent, conflict-preserving, and bounded by candidate count, I/O time, and file size. It runs after readiness as a managed background task. Never copy `_error`, reports, or full snapshot state into product events.
+- Back up, verify, restore, and rehearse the product/checkpoint databases as one manifest-verified pair with `scripts/runtime_db.py`; restore requires a stopped service or maintenance mode and explicit confirmation.
 - Any lifecycle, migration, concurrency, checkpoint, SSE, or compatibility change requires focused fault/concurrency tests, the full suite, an update to `docs/phase1-runtime-contract.md`, and independent review.
 
 ## Local and generated data

@@ -1,6 +1,6 @@
 # Phase 1 运行契约与恢复手册
 
-本文固化 Phase 1-A～1-F 的已实现行为。代码、迁移历史和自动化测试仍是最终事实源；
+本文固化 Phase 1-A～1-G 的已实现行为。代码、迁移历史和自动化测试仍是最终事实源；
 设计文档描述目标，不能覆盖这里记录的实现边界。
 
 ## 1. 适用范围与兼容边界
@@ -8,11 +8,13 @@
 具备完整 durable lifecycle 保证的是 `/api/v1/tasks/*`：任务和 run 写入产品 SQLite，
 由 coordinator 执行，通过 durable `task_events` 对外发布状态。
 
-`POST /research` 是一条独立的旧兼容路径，仍使用进程内 `_active_tasks` 和旧 SSE。
+Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使用 `/api/v1/tasks/*`，并保存
+`Last-Event-ID` 以支持断线 replay/resync。
+
+`POST /research` 是一条已弃用的独立兼容路径，仍使用进程内 `_active_tasks` 和旧 SSE。
 它创建的任务不会自动登记为 durable task，也不具备新 API 的取消、恢复、lease/fencing
-或 durable replay 保证。当前 Streamlit 前端仍使用这条兼容路径；迁移前不得宣称默认
-用户路径已经具备 Phase 1 的全部持久化保证。旧 status 别名可在内存记录不存在时读取
-durable task，但这不等于旧创建路径已经切换。
+或 durable replay 保证。旧接口保留一版并返回 `Deprecation`、`Warning` 和 successor `Link`
+响应头；旧结果读取在本地文件不存在时只读 durable artifact，不会创建或重复执行任务。
 
 ## 2. 身份、状态与版本
 
@@ -35,11 +37,18 @@ durable task，但这不等于旧创建路径已经切换。
 | `POST /api/v1/tasks/{task_id}/cancel` | 幂等；queued 直接 cancelled，running 先进入 cancelling |
 | `POST /api/v1/tasks/{task_id}/resume` | 必须携带当前 task version 的 `If-Match`；兼容 checkpoint 可续同 run，否则按允许状态创建新 run |
 | `GET /api/v1/tasks/{task_id}/events` | 从产品库 replay 公开事件，支持 `Last-Event-ID` |
+| `GET /api/v1/tasks/{task_id}/snapshot` | 返回 latest successful run 的 immutable public result；运行中/失败终态使用不同结构化 `409` |
+| `GET /api/v1/tasks/{task_id}/report` | 返回持久化报告，或从同一 public result 确定性渲染指定格式 |
+| `GET /api/v1/tasks/{task_id}/annotated` | 返回带 TOC 和引用映射的阅读投影 |
+| `GET /api/v1/tasks/{task_id}/export` | 从 durable result 导出 Markdown/PDF，不读取旧 snapshot 文件 |
 
 ## 3. 事务、lease 与 checkpoint
 
 - 任务状态、latest run 状态和相应公开事件必须由 repository 在同一 `BEGIN IMMEDIATE`
   事务中提交。API、coordinator 和节点不得绕过 repository 直接改表。
+- 成功 run 结束时，allowlisted `run_results`、task/run 成功终态和 `run.completed` 事件必须
+  在同一事务提交。结果写入失败、过期 lease、旧 epoch、取消或 deadline 获胜时不得留下
+  成功 artifact 或完成事件。产品结果不复制 checkpoint payload、运行所有权或原始异常。
 - 同一 run 的执行权由 `(lease_owner, execution_epoch, lease_expires_at)` 决定。每次重新
   获取执行权都产生更高 epoch；旧 owner/epoch 的 heartbeat、checkpoint 引用或收尾写入
   必须被 fencing 拒绝。
@@ -88,32 +97,49 @@ SSE 规则：
 
 - 产品 schema migration 只向前追加；已经提交的 migration 内容、名称和 checksum 禁止修改。
 - runner 在 `BEGIN IMMEDIATE` 下串行执行，验证连续版本、名称和 checksum；失败整体回滚。
-- 当前产品 schema 为 v5：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
+- 当前产品 schema 为 v7：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
   的前提下重建 `legacy_imports`，强制 imported 行绑定非空 task/run，error 行不得绑定实体；
-  已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。
+  已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。v6 增加
+  immutable `run_results`；v7 增加产品库单实例租约。
+- v6 不臆测或回填旧 completed row 的报告；无法从可信来源重建的 pre-v6 成功记录保留为
+  只读历史，并在结果查询时返回 `TASK_RESULT_UNAVAILABLE`。v6 后的新成功收尾和带有效报告的
+  legacy success import 都必须同时写入 `run_results`。
 - 新 migration 必须覆盖：空库安装、上一版本升级、保留已有数据、重复执行、并发 runner、
   失败回滚、未来版本和历史漂移拒绝。
-- 旧 snapshot importer 只扫描 `outputs` 的直接合法 task 子目录；成功文件优先，只读取并
-  验证 request 和最小 provenance。原文件、报告和 `_error` 原文永不写回或复制进产品库。
+- 旧 snapshot importer 在 readiness 完成后作为受管后台任务运行，只扫描 `outputs` 的直接
+  合法 task 子目录并拒绝 symlink/junction 越界；成功文件优先。原文件永不改写，`_error`、
+  非 allowlist 字段和私有运行 state 不进入产品库；有效公开报告及渲染所需公开字段会作为
+  immutable `run_result` 导入。
 - 导入以相对路径和 SHA-256 幂等；内容变化或 task/run 冲突只记录安全错误，不覆盖现有数据。
-  单文件内存上限为 64 MiB。为获得完整 SHA-256，超限文件仍会被流式读完，这是已知启动
-  I/O 风险，部署前应隔离异常大文件。
+  默认最多检查 1000 个候选、总 I/O 预算 5 秒、单文件上限 64 MiB；超限文件先按元数据
+  拒绝，不为完整哈希继续读取。预算触顶明确记录 `budget_exhausted`，不得伪装为完整扫描。
+  I/O 时间预算在目录枚举、读取块和解析步骤之间协作检查；单次底层文件系统调用若永久阻塞，
+  Python 线程无法强制中止它。导入已移出 readiness，因此不会阻塞服务就绪；对不可信或远程
+  存储应在独立进程或离线维护窗口执行。
 
 ## 6. 升级流程
 
 1. 停止 API/coordinator，确认没有仍在写入的进程。
-2. 成对备份 `outputs/deepchoice.db` 和 `outputs/checkpoints.db`；若存在 WAL/SHM，使用 SQLite
-   一致性备份或在完全停止后连同 sidecar 一起保存。旧 snapshot 目录也保留只读副本。
+2. 使用 `python scripts/runtime_db.py backup --product-db outputs/deepchoice.db
+   --checkpoint-db outputs/checkpoints.db --destination <new-dir> --maintenance-confirmed`
+   成对备份。脚本使用 SQLite backup API 并生成双文件哈希 manifest；旧 snapshot 目录另保留
+   只读副本。两个 SQLite 文件之间没有跨库原子快照，因此确认维护模式是强制前提。
 3. 在备份副本或临时环境启动新版本，确认 migration history 连续、旧 task/run/checkpoint
    可读，并运行对应升级验收测试。若 v4 中存在违反 v5 imported/error 约束的手工数据，
    升级会整体回滚；应在副本中核对并修复来源，不能跳过 v5 或改 checksum。
-4. 只启动一个新实例。启动顺序是：产品 DB migration → 旧 snapshot 只读导入 → checkpoint
-   DB 初始化 → stale-run recovery。
+4. 只启动一个 worker/实例。启动顺序是：worker 配置检查 → 产品 DB migration → 获取实例
+   lease → checkpoint DB 初始化 → stale-run recovery → readiness → 后台旧 snapshot 导入。
 5. 检查没有幽灵 `running`/`cancelling`、旧 owner 已被 fencing、SSE 能 replay；再恢复流量。
 
 禁止 destructive downgrade、手工删除 `schema_migrations` 或修改 checksum。需要回退时停止
 所有新进程，并成对恢复升级前的产品 DB/checkpoint DB 备份及原 snapshot；仅回滚代码而继续
 使用新 schema，旧应用会因 future schema 检查而安全拒绝启动。
+
+恢复前先运行 `python scripts/runtime_db.py verify --backup-dir <dir>`；`restore` 默认只做 dry-run，
+实际替换必须增加 `--apply --replace --maintenance-confirmed`，已有数据库会保留为带时间戳的
+`.pre-restore-*.bak`；对应 `-wal`/`-shm` sidecar 也必须一并隔离或回滚，防止旧 WAL 回放到
+新主库。发布演练使用 `exercise --backup-dir <dir> --drill-dir <new-dir>`，只恢复到
+新目录并执行完整性检查，不接触产品文件。
 
 ## 7. 故障处置
 
@@ -122,15 +148,21 @@ SSE 规则：
 | `SCHEMA_MIGRATION_*` | 停止启动循环，保留数据库，核对应用版本和 migration history；不要改 checksum |
 | `RUN_MANIFEST_*` | 不续旧 run；保留审计记录，使用当前运行时创建新 run |
 | stale `running` | 确认旧实例停止并等待 lease 失效；单实例启动 recovery，验证旧 epoch 被拒绝 |
+| `RUNTIME_SINGLE_WORKER_REQUIRED` / `RUNTIME_INSTANCE_CONFLICT` | 修正 worker/副本配置或等待已确认停止的旧实例 lease 失效；不得绕过 guard |
 | stale `cancelling` | recovery 应收敛为 cancelled；不得强制改为 completed |
 | checkpoint 引用不可读 | 保持 interrupted 或新 run 重试；禁止手工伪造 checkpoint ID |
 | `LEGACY_SOURCE_CHANGED` / `LEGACY_ID_CONFLICT` | 保留原文件和现有 task，人工核对来源；不得覆盖导入 |
-| 超大 legacy snapshot | 在启动前移出扫描目录并保留只读副本，确认来源后离线处理 |
+| legacy import 预算触顶 | readiness 不受影响；查看安全汇总，缩小扫描目录或在维护窗口分批导入 |
 | SSE `resync_required` | 用随事件返回的公开 snapshot 重建本地状态，再保存最新 event ID |
 
 ## 8. 当前运行边界
 
-- SQLite/coordinator 只承诺单实例、单主机的低到中并发；不能把它当作分布式队列或锁。
+- SQLite/coordinator 通过产品库 lease 和启动配置检查强制单实例、单 worker；不能把它当作
+  分布式队列或横向扩缩容机制。
+- 当前 API 面向单用户、可信主机/可信网络，尚无认证、租户隔离和任务 ownership。不得把
+  `0.0.0.0:8000` 直接暴露公网；远程部署必须由认证反向代理限制访问，多用户化前必须补齐
+  API token/会话认证与 tenant ownership。
 - 产品 DB 与 checkpoint DB 必须作为一组备份和恢复。
-- durable API 尚未成为 Streamlit 默认调用路径，这是 Phase 1 后最优先的集成遗留项。
+- 旧 `/research` 创建/SSE 仅用于一版兼容，任何新消费者必须使用 durable API。
+- SSE keepalive 和事件 retention 延后到真实反向代理或生产部署接入前完成。
 - Phase 2 trace、预算账本和观测失败不得影响 task state 或 durable SSE 的正确性。

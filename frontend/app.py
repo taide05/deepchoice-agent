@@ -649,6 +649,12 @@ DEFAULTS = {
     "research_complete": False,
     "research_failed": False,
     "research_events": [],
+    "research_last_event_id": None,
+    "research_task_version": None,
+    "research_snapshot": None,
+    "research_report": None,
+    "research_terminal_status": None,
+    "research_connection_lost": False,
     "lang": "zh",
 }
 for k, v in DEFAULTS.items():
@@ -894,20 +900,66 @@ def render_research_phase():
     if st.session_state.research_complete:
         _render_results()
 
+    if st.session_state.research_connection_lost:
+        st.warning(t("loss_connection", lang))
+        if st.button("重新连接", key="reconnect_durable_task"):
+            st.session_state.research_connection_lost = False
+            st.session_state.research_running = True
+            st.rerun()
+
     if st.session_state.research_failed:
         st.error(t("loss_connection", lang))
+        if (
+            st.session_state.get("research_task_id")
+            and st.session_state.get("research_terminal_status")
+            in {"failed", "timed_out", "interrupted"}
+            and st.button("恢复运行", key="resume_durable_task")
+        ):
+            try:
+                resp = httpx.post(
+                    f"{API_BASE}/api/v1/tasks/{st.session_state.research_task_id}/resume",
+                    headers={"If-Match": str(st.session_state.get("research_task_version", 0))},
+                    timeout=10,
+                )
+                if resp.status_code in (200, 202):
+                    body = resp.json()
+                    durable_task = body.get("task", {})
+                    st.session_state.research_task_version = durable_task.get(
+                        "version", st.session_state.research_task_version
+                    )
+                    st.session_state.research_failed = False
+                    st.session_state.research_running = True
+                    st.session_state.research_terminal_status = None
+                    st.session_state.research_connection_lost = False
+                    st.rerun()
+                else:
+                    st.error(f"恢复失败：HTTP {resp.status_code}")
+            except Exception as exc:
+                st.error(f"恢复失败：{exc}")
         if st.button(t("restart_btn", lang)):
+            for k in DEFAULTS:
+                st.session_state[k] = DEFAULTS[k]
+            st.rerun()
+
+    if st.session_state.get("research_terminal_status") == "cancelled":
+        st.info("任务已取消。")
+        if st.button(t("restart_btn", lang), key="restart_cancelled_task"):
             for k in DEFAULTS:
                 st.session_state[k] = DEFAULTS[k]
             st.rerun()
 
 
 def _start_research(task: dict, sub_questions: list[str]):
-    task["sub_questions"] = sub_questions
+    payload = dict(task)
+    payload["sub_questions"] = sub_questions
     try:
-        resp = httpx.post(f"{API_BASE}/research", json=task, timeout=10)
-        if resp.status_code == 200:
-            st.session_state.research_task_id = resp.json()["task_id"]
+        resp = httpx.post(f"{API_BASE}/api/v1/tasks", json=payload, timeout=10)
+        if resp.status_code in (200, 201, 202):
+            body = resp.json()
+            durable_task = body["task"]
+            st.session_state.research_task_id = durable_task["task_id"]
+            st.session_state.research_task_version = durable_task.get("version", 0)
+            st.session_state.research_last_event_id = None
             st.session_state.research_running = True
         else:
             st.error(f"Failed to start research: HTTP {resp.status_code}")
@@ -917,18 +969,90 @@ def _start_research(task: dict, sub_questions: list[str]):
         st.session_state.research_failed = True
 
 
+def _sse_frames(lines):
+    """Yield SSE frames and support multiline data fields."""
+    frame, data_lines = {}, []
+    for raw in lines:
+        line = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+        # Older compatibility streams emitted one data line per event without
+        # the SSE-required blank separator. Accept that form while keeping the
+        # normal framed parser below.
+        if line.startswith("data:") and data_lines and not frame.get("id") and not frame.get("event"):
+            frame["data"] = "\n".join(data_lines)
+            yield frame
+            frame, data_lines = {}, []
+        if not line:
+            if frame or data_lines:
+                if data_lines:
+                    frame["data"] = "\n".join(data_lines)
+                yield frame
+            frame, data_lines = {}, []
+            continue
+        if line.startswith(":"):
+            continue
+        field, sep, value = line.partition(":")
+        if not sep:
+            continue
+        value = value[1:] if value.startswith(" ") else value
+        if field == "data":
+            data_lines.append(value)
+        elif field in ("id", "event", "retry"):
+            frame[field] = value
+    if frame or data_lines:
+        if data_lines:
+            frame["data"] = "\n".join(data_lines)
+        yield frame
+
+
+def _task_detail(task_id: str):
+    try:
+        resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}", timeout=10)
+        return resp.json() if resp.status_code == 200 else {}
+    except Exception:
+        return {}
+
+
+def _set_terminal_status(status: str):
+    if status not in {"completed", "complete", "completed_with_warnings", "failed", "cancelled", "canceled", "timed_out", "timeout", "interrupted"}:
+        return False
+    normalized = "cancelled" if status == "canceled" else "timed_out" if status == "timeout" else status
+    st.session_state.research_running = False
+    st.session_state.research_complete = status in {"completed", "complete", "completed_with_warnings"}
+    st.session_state.research_failed = status not in {"completed", "complete", "completed_with_warnings", "cancelled", "canceled"}
+    st.session_state.research_terminal_status = normalized
+    st.session_state.research_connection_lost = False
+    return True
+
+
 def _render_research_progress():
     task_id = st.session_state.research_task_id
     progress_bar = st.progress(0, text=t("progress_init", lang))
     live = st.empty()
+    cancel_col, _ = st.columns([1, 4])
+    with cancel_col:
+        if st.button("取消", key="cancel_durable_task"):
+            try:
+                resp = httpx.post(
+                    f"{API_BASE}/api/v1/tasks/{task_id}/cancel",
+                    headers={"If-Match": str(st.session_state.get("research_task_version", 0))},
+                    timeout=10,
+                )
+                if resp.status_code in (200, 202):
+                    body = resp.json()
+                    durable_task = body.get("task", {})
+                    st.session_state.research_task_version = durable_task.get(
+                        "version", st.session_state.research_task_version
+                    )
+                    if not _set_terminal_status(durable_task.get("status", "")):
+                        st.session_state.research_running = True
+                    st.rerun()
+                else:
+                    st.error(f"取消失败：HTTP {resp.status_code}")
+            except Exception as exc:
+                st.error(f"取消失败：{exc}")
     max_idx = 0
-    # Live waterfall state (local to this script run; the authoritative
-    # post-completion version renders from snapshot["agent_timing"]).
-    live_nodes: dict = {}      # node -> last completed segment {"start": ts, "end": ts}
-    live_order: list = []      # first-appearance order
-    live_running = None        # node inferred to be running right now
-    first_ts = None
-    last_ts = None
+    live_nodes, live_order = {}, []
+    first_ts = last_ts = None
 
     def _complete():
         progress_bar.progress(1.0, text=t("progress_done", lang))
@@ -936,90 +1060,98 @@ def _render_research_progress():
         st.session_state.research_complete = True
 
     try:
-        with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream",
-                          timeout=httpx.Timeout(None, connect=15.0)) as resp:
-            got_done = False
-            for line in resp.iter_lines():
-                if not line.startswith("data:"):
-                    continue
-                event = json.loads(line[5:])
-                node = event.get("node")
-
-                if node == "__done__":
-                    got_done = True
-                    _complete()
-                    break
-                elif node == "__error__":
-                    st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
-                    st.session_state.research_running = False
-                    st.session_state.research_failed = True
-                    return
-                else:
+        got_terminal = False
+        for _attempt in range(3):
+            headers = {}
+            if st.session_state.get("research_last_event_id"):
+                headers["Last-Event-ID"] = str(st.session_state.research_last_event_id)
+            with httpx.stream("GET", f"{API_BASE}/api/v1/tasks/{task_id}/events",
+                              headers=headers, timeout=httpx.Timeout(None, connect=15.0)) as resp:
+                for frame in _sse_frames(resp.iter_lines()):
+                    if frame.get("id"):
+                        st.session_state.research_last_event_id = frame["id"]
+                    try:
+                        event = json.loads(frame.get("data", "{}"))
+                    except json.JSONDecodeError:
+                        continue
+                    if frame.get("event") == "resync_required" or event.get("type") == "resync_required":
+                        detail = event.get("snapshot") or {}
+                        durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
+                        if durable_task.get("version") is not None:
+                            st.session_state.research_task_version = durable_task["version"]
+                        if _set_terminal_status(durable_task.get("status", "")):
+                            got_terminal = True
+                        if event.get("latest_event_id") is not None:
+                            st.session_state.research_last_event_id = str(event["latest_event_id"])
+                        if got_terminal:
+                            break
+                        continue
+                    status = event.get("status")
+                    if status in {
+                        "completed", "completed_with_warnings", "failed",
+                        "cancelled", "timed_out", "interrupted",
+                    }:
+                        # Replay may contain an old terminal run event followed
+                        # by auto-resume/retry events for the same task. The
+                        # current task projection is authoritative and refreshes
+                        # the CAS version used by Resume.
+                        detail = _task_detail(task_id)
+                        durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
+                        if durable_task.get("version") is not None:
+                            st.session_state.research_task_version = durable_task["version"]
+                        if _set_terminal_status(durable_task.get("status", "")):
+                            got_terminal = True
+                            break
+                        continue
+                    node = event.get("node")
+                    if node == "__done__":
+                        _complete(); got_terminal = True; break
+                    if node == "__error__":
+                        st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
+                        st.session_state.research_running = False
+                        st.session_state.research_failed = True
+                        return
                     phase = event.get("phase") or NODE_TO_PHASE.get(node, "")
                     if phase in PHASES:
                         idx = PHASES.index(phase)
-                        # Monotonic: self_reviewer retries revisit earlier nodes.
                         max_idx = max(max_idx, idx)
                         name = PHASE_NAME_MAP.get(phase, {}).get(lang, phase)
                         progress_bar.progress(max_idx / len(PHASES), text=t("progress_phase", lang, idx=idx+1, name=name))
-
-                    # Live waterfall: the stream emits updates-mode events, so an
-                    # event means node N just COMPLETED at ts. The next node in
-                    # workflow order is the one currently running.
                     if node:
-                        ts_val = float(event.get("ts") or 0)
-                        if ts_val <= 0:
-                            ts_val = time.time()
+                        ts_val = float(event.get("ts") or time.time())
                         seg_start = last_ts if last_ts is not None else ts_val
                         if node not in live_nodes:
                             live_order.append(node)
                         live_nodes[node] = {"start": seg_start, "end": ts_val}
-                        if first_ts is None:
-                            first_ts = seg_start
+                        if first_ts is None: first_ts = seg_start
                         last_ts = ts_val
-                        live_running = _next_node_in_order(node)
-
-                        total_elapsed = max(last_ts - first_ts, 0.001)
+                        running = _next_node_in_order(node)
                         entries = []
                         for name in live_order:
-                            if name == live_running:
-                                entries.append({"label": _node_label(name, lang), "running": True})
-                            else:
-                                seg = live_nodes[name]
-                                entries.append({
-                                    "label": _node_label(name, lang),
-                                    "seconds": max(seg["end"] - seg["start"], 0.0),
-                                    "running": False,
-                                })
-                        # live_running is the workflow-order successor, which has
-                        # not emitted a completion event yet, so it is never in
-                        # live_order on a normal forward run. Append its pulsing
-                        # running row explicitly (self_reviewer retries revisit
-                        # earlier nodes — those already match inside the loop).
-                        if live_running and live_running not in live_order:
-                            entries.append({"label": _node_label(live_running, lang), "running": True})
-                        live.markdown(
-                            _timeline_html(entries, total_elapsed, lang),
-                            unsafe_allow_html=True,
-                        )
-
-            # Stream ended (EOF) without __done__ — the server may have crashed
-            # mid-run. Ask /status once before declaring the connection lost.
-            if not got_done:
-                try:
-                    status = httpx.get(f"{API_BASE}/research/{task_id}/status", timeout=10).json()
-                except Exception:
-                    status = {}
-                if status.get("status") == "complete":
-                    _complete()
-                else:
-                    st.error(t("loss_connection", lang))
-                    st.session_state.research_running = False
-                    st.session_state.research_failed = True
+                            seg = live_nodes[name]
+                            entries.append({"label": _node_label(name, lang), "running": name == running,
+                                            "seconds": max(seg["end"] - seg["start"], 0.0)})
+                        if running and running not in live_order:
+                            entries.append({"label": _node_label(running, lang), "running": True})
+                        live.markdown(_timeline_html(entries, max(last_ts - first_ts, 0.001), lang), unsafe_allow_html=True)
+            if got_terminal:
+                break
+            detail = _task_detail(task_id)
+            durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
+            if durable_task.get("version") is not None:
+                st.session_state.research_task_version = durable_task["version"]
+            if _set_terminal_status(durable_task.get("status", "")):
+                got_terminal = True; break
+            time.sleep(0.25 * (_attempt + 1))
+        if not got_terminal:
+            st.session_state.research_running = False
+            st.session_state.research_failed = False
+            st.session_state.research_connection_lost = True
     except Exception as e:
         st.error(f"{t('loss_connection', lang)} {e}")
         st.session_state.research_running = False
-        st.session_state.research_failed = True
+        st.session_state.research_failed = False
+        st.session_state.research_connection_lost = True
 
     # Keep Streamlit's rerun control flow outside the network exception
     # boundary. Newer Streamlit releases implement rerun with an internal
@@ -1279,7 +1411,7 @@ def _render_token_panel(snapshot: dict):
 def _render_download_buttons(task_id: str, report_format: str):
     try:
         resp = httpx.get(
-            f"{API_BASE}/research/{task_id}/export",
+            f"{API_BASE}/api/v1/tasks/{task_id}/export",
             params={"format": "md", "report_format": report_format}, timeout=30,
         )
         if resp.status_code == 200:
@@ -1295,7 +1427,7 @@ def _render_download_buttons(task_id: str, report_format: str):
 
     try:
         resp = httpx.get(
-            f"{API_BASE}/research/{task_id}/export",
+            f"{API_BASE}/api/v1/tasks/{task_id}/export",
             params={"format": "pdf", "report_format": report_format}, timeout=60,
         )
         if resp.status_code == 200:
@@ -1316,10 +1448,20 @@ def _render_results():
     task_id = st.session_state.research_task_id
 
     try:
-        snap_resp = httpx.get(f"{API_BASE}/research/{task_id}/snapshot", timeout=10)
+        snap_resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/snapshot", timeout=10)
         snapshot = snap_resp.json() if snap_resp.status_code == 200 else {}
+        if isinstance(snapshot, dict) and "snapshot" in snapshot:
+            snapshot = snapshot["snapshot"]
+        st.session_state.research_snapshot = snapshot
     except Exception:
-        snapshot = {}
+        snapshot = st.session_state.get("research_snapshot") or {}
+
+    try:
+        report_resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/report", timeout=10)
+        if report_resp.status_code == 200:
+            st.session_state.research_report = report_resp.json()
+    except Exception:
+        pass
 
     n_chains = len(snapshot.get("evidence_chains", []))
     n_conflicts = len(snapshot.get("conflicts", []))
@@ -1352,7 +1494,7 @@ def _render_results():
             key="report_fmt",
         )
         try:
-            resp = httpx.get(f"{API_BASE}/research/{task_id}/annotated", params={"format": fmt}, timeout=10)
+            resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/annotated", params={"format": fmt}, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 citations = data.get("citations", [])

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import math
+import re
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -14,6 +16,7 @@ from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import (
     CheckpointReference,
     RunRecord,
+    RunResultRecord,
     TaskWithRun,
 )
 from deepchoice.persistence.repository import (
@@ -32,6 +35,161 @@ def _execution_checkpoint_namespace(execution_epoch: int) -> str:
     """Return an internal namespace never exposed to the root StateGraph."""
 
     return f"deepchoice-execution-{execution_epoch}"
+
+
+_PUBLIC_RESULT_FIELDS = frozenset(
+    {
+        "adapted_queries",
+        "agent_timing",
+        "confidence",
+        "conflicts",
+        "current_phase",
+        "data_source_note",
+        "evidence_chains",
+        "final_recommendation",
+        "knowledge_gaps",
+        "partial_failures",
+        "quality_signals",
+        "report",
+        "retry_count",
+        "search_results",
+        "source_scores",
+        "sub_questions",
+        "token_usage",
+    }
+)
+_PRIVATE_RESULT_KEYS = frozenset(
+    {
+        "checkpoint_id",
+        "checkpoint_ns",
+        "error_detail",
+        "exception",
+        "execution_epoch",
+        "lease_owner",
+        "manifest",
+        "manifest_id",
+        "raw_exception",
+        "run_manifest",
+        "stacktrace",
+        "storage_checkpoint_ns",
+        "traceback",
+    }
+)
+_SENSITIVE_RESULT_KEYS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "access_token",
+        "auth",
+        "authorization",
+        "bearer",
+        "client_secret",
+        "cookie",
+        "credential",
+        "credentials",
+        "password",
+        "passwd",
+        "private_key",
+        "refresh_token",
+        "secret",
+        "secret_key",
+        "session_token",
+        "id_token",
+        "set_cookie",
+        "token",
+    }
+)
+_SENSITIVE_RESULT_SUFFIXES = (
+    "_access_token",
+    "_api_key",
+    "_authorization",
+    "_client_secret",
+    "_credential",
+    "_credentials",
+    "_password",
+    "_private_key",
+    "_refresh_token",
+    "_secret",
+    "_secret_key",
+    "_session_token",
+    "_id_token",
+    "_token",
+)
+_OMIT = object()
+
+
+def _normalize_result_key(key: str) -> str:
+    # Normalize camelCase/PascalCase/acronyms and header-style separators so
+    # secret-shaped keys cannot bypass the recursive filter by changing case.
+    separated = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", key)
+    separated = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", separated)
+    return re.sub(r"[^a-z0-9]+", "_", separated.lower()).strip("_")
+
+
+def _is_private_result_key(key: str) -> bool:
+    normalized = _normalize_result_key(key)
+    return (
+        key.startswith("_")
+        or normalized in _PRIVATE_RESULT_KEYS
+        or normalized in _SENSITIVE_RESULT_KEYS
+        or normalized.endswith(_SENSITIVE_RESULT_SUFFIXES)
+    )
+
+
+def _sanitize_public_json(value: Any) -> Any:
+    """Copy JSON values while dropping private or exception-bearing fields."""
+
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else _OMIT
+    if isinstance(value, (list, tuple)):
+        sanitized = (_sanitize_public_json(item) for item in value)
+        return [item for item in sanitized if item is not _OMIT]
+    if isinstance(value, dict):
+        public: dict[str, Any] = {}
+        for key, item in value.items():
+            if (
+                not isinstance(key, str)
+                or _is_private_result_key(key)
+            ):
+                continue
+            sanitized = _sanitize_public_json(item)
+            if sanitized is not _OMIT:
+                public[key] = sanitized
+        return public
+    return _OMIT
+
+
+def build_public_run_result(
+    run: RunRecord,
+    request: dict[str, Any],
+    state: Any,
+    *,
+    created_at: datetime,
+) -> RunResultRecord:
+    """Freeze the public result allowlist without exposing checkpoint internals."""
+
+    values = getattr(state, "values", None)
+    source = values if isinstance(values, dict) else {}
+    snapshot: dict[str, Any] = {"task": _sanitize_public_json(request)}
+    for key in _PUBLIC_RESULT_FIELDS:
+        if key not in source:
+            continue
+        sanitized = _sanitize_public_json(source[key])
+        if sanitized is not _OMIT:
+            snapshot[key] = sanitized
+    report = snapshot.get("report")
+    if not isinstance(report, str) or not report.strip():
+        raise ValueError("successful run state must contain a non-empty public report")
+    snapshot["report"] = report
+    return RunResultRecord(
+        run_id=run.run_id,
+        snapshot=snapshot,
+        report=report,
+        report_format=run.manifest.report.report_format,
+        created_at=created_at,
+    )
 
 
 async def _settle_shielded(task: asyncio.Task[Any]) -> Any:
@@ -200,8 +358,18 @@ class RunCoordinator:
         status: RunStatus,
         *,
         error_id: str | None = None,
+        result: RunResultRecord | None = None,
     ) -> TaskWithRun | None:
         try:
+            if result is not None:
+                return await self.repository.finalize_run_with_result(
+                    run_id,
+                    result,
+                    lease_owner=self.owner_id,
+                    execution_epoch=execution_epoch,
+                    status=status,
+                    now=self._clock(),
+                )
             return await self.repository.finalize_run(
                 run_id,
                 lease_owner=self.owner_id,
@@ -396,9 +564,23 @@ class RunCoordinator:
                         run.manifest.state_schema_version,
                         write_namespace,
                     )
+            await guard()
+            final_state = await orchestrator.get_state()
+            completed_at = self._clock()
+            public_result = build_public_run_result(
+                run,
+                current.task.request.model_dump(mode="json", exclude_none=True),
+                final_state,
+                created_at=completed_at,
+            )
             await stop_heartbeat()
             await guard()
-            await self._finalize(run_id, grant.execution_epoch, RunStatus.COMPLETED)
+            await self._finalize(
+                run_id,
+                grant.execution_epoch,
+                RunStatus.COMPLETED,
+                result=public_result,
+            )
         except TimeoutError:
             await stop_heartbeat()
             if grant is not None:
@@ -443,4 +625,4 @@ class RunCoordinator:
             await stop_heartbeat()
 
 
-__all__ = ["RunCoordinator"]
+__all__ = ["RunCoordinator", "build_public_run_result"]

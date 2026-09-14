@@ -195,12 +195,57 @@ FROM legacy_imports_v4
     "DROP TABLE legacy_imports_v4",
 )
 
+_V6_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+CREATE TABLE run_results (
+    run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE RESTRICT
+        CHECK (length(run_id) > 0),
+    result_schema_version INTEGER NOT NULL CHECK (result_schema_version = 1),
+    snapshot_json TEXT NOT NULL
+        CHECK (json_valid(snapshot_json) AND json_type(snapshot_json) = 'object'),
+    report TEXT NOT NULL CHECK (length(trim(report)) > 0),
+    report_format TEXT NOT NULL
+        CHECK (report_format IN ('what_why_how', 'evidence_first', 'comparison_matrix')),
+    created_at TEXT NOT NULL
+)
+""".strip(),
+    """
+CREATE TRIGGER run_results_reject_update
+BEFORE UPDATE ON run_results
+BEGIN
+    SELECT RAISE(ABORT, 'run_results are immutable');
+END
+""".strip(),
+    """
+CREATE TRIGGER run_results_reject_delete
+BEFORE DELETE ON run_results
+BEGIN
+    SELECT RAISE(ABORT, 'run_results are immutable');
+END
+""".strip(),
+)
+
+_V7_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+CREATE TABLE runtime_instance_leases (
+    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+    owner_token TEXT NOT NULL CHECK (length(owner_token) > 0),
+    pid INTEGER NOT NULL CHECK (pid > 0),
+    hostname TEXT NOT NULL CHECK (length(hostname) > 0),
+    started_at TEXT NOT NULL,
+    lease_expires_at TEXT NOT NULL
+)
+""".strip(),
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
     Migration(version=3, name="run_deadline_and_checkpoint_references", statements=_V3_STATEMENTS),
     Migration(version=4, name="durable_task_events_and_legacy_imports", statements=_V4_STATEMENTS),
     Migration(version=5, name="tighten_legacy_import_invariants", statements=_V5_STATEMENTS),
+    Migration(version=6, name="immutable_run_results", statements=_V6_STATEMENTS),
+    Migration(version=7, name="single_runtime_instance_lease", statements=_V7_STATEMENTS),
 )
 
 

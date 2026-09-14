@@ -80,8 +80,14 @@ class _FakeStream:
 
     def iter_lines(self):
         def ev(node, phase, ts):
-            return f"data: {json.dumps({'node': node, 'update': {}, 'phase': phase, 'ts': ts})}"
-        return iter([ev(*e) for e in self._events])
+            payload = json.dumps({'node': node, 'phase': phase, 'ts': ts})
+            return [f"id: {int(ts)}", "event: run.progress", f"data: {payload}", ""]
+        return iter([line for event in self._events for line in ev(*event)])
+
+
+class _RawStream(_FakeStream):
+    def iter_lines(self):
+        return iter(self._events)
 
 
 class _FakeBackend:
@@ -91,6 +97,7 @@ class _FakeBackend:
     def __init__(self, stream_events, status_complete):
         self.stream_events = stream_events
         self.status_complete = status_complete
+        self.stream_headers = []
 
     def get(self, url, **kw):
         if url.endswith("/snapshot"):
@@ -106,13 +113,50 @@ class _FakeBackend:
             return _FakeResp({}, content=b"# Fake report\n")
         if url.endswith("/status"):
             return _FakeResp({"status": "complete"} if self.status_complete else {"status": "started"})
-        return _FakeResp({"status": "started"})
+        status = "completed" if self.status_complete else "running"
+        return _FakeResp({"task": {"task_id": "t1", "status": status, "version": 2}, "latest_run": None})
 
     def post(self, url, **kw):
-        return _FakeResp({"task_id": "t1", "status": "started"})
+        status = "running"
+        if url.endswith("/cancel"):
+            status = "cancelling"
+        return _FakeResp({"task": {"task_id": "t1", "status": status, "version": 1}, "latest_run": None}, status_code=202)
 
     def stream(self, method, url, **kw):
+        self.stream_headers.append(kw.get("headers", {}))
         return _FakeStream(self.stream_events)
+
+
+class _RecoveryReplayBackend(_FakeBackend):
+    def __init__(self):
+        super().__init__(stream_events=[], status_complete=True)
+        self.task_statuses = iter(("running", "completed"))
+        self.raw_events = [
+            "id: 1", "event: run.interrupted",
+            'data: {"seq": 1, "status": "interrupted"}', "",
+            "id: 2", "event: run.auto_resumed",
+            'data: {"seq": 2, "status": "queued"}', "",
+            "id: 3", "event: run.started",
+            'data: {"seq": 3, "status": "running"}', "",
+            "id: 4", "event: run.completed",
+            'data: {"seq": 4, "status": "completed"}', "",
+        ]
+
+    def get(self, url, **kw):
+        if url.endswith("/api/v1/tasks/t1"):
+            status = next(self.task_statuses)
+            version = 7 if status == "running" else 9
+            return _FakeResp(
+                {
+                    "task": {"task_id": "t1", "status": status, "version": version},
+                    "latest_run": None,
+                }
+            )
+        return super().get(url, **kw)
+
+    def stream(self, method, url, **kw):
+        self.stream_headers.append(kw.get("headers", {}))
+        return _RawStream(self.raw_events)
 
 
 ANNOTATED = {
@@ -167,6 +211,7 @@ def test_live_waterfall_shows_running_row_for_successor(monkeypatch):
     assert not at.exception, f"initial run: {at.exception}"
 
     _enter_research_phase(at)
+    at.session_state["research_last_event_id"] = "41"
     at.run()
     assert not at.exception, f"live run: {at.exception}"
 
@@ -179,6 +224,7 @@ def test_live_waterfall_shows_running_row_for_successor(monkeypatch):
     assert "tl-bar-running" in md, "running row missing from live waterfall"
     assert "运行中" in md, "running label missing from live waterfall"
     assert "来源评估" in md, "running row must be the successor node (source_evaluator)"
+    assert backend.stream_headers[0]["Last-Event-ID"] == "41"
 
 
 def test_results_phase_renders_observability_panels(monkeypatch):
@@ -256,3 +302,21 @@ def test_report_tab_reading_view(monkeypatch):
     dl_buttons = at.get("download_button")
     assert len(dl_buttons) >= 1, f"MD download button missing: {dl_buttons!r}"
     assert "PDF 不可用" in cap, f"PDF fallback caption missing: {cap!r}"
+
+
+def test_replay_interrupted_then_auto_resume_uses_current_task_projection(monkeypatch):
+    backend = _RecoveryReplayBackend()
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_research_phase(at)
+    at.run()
+
+    assert not at.exception, at.exception
+    assert at.session_state["research_complete"] is True
+    assert at.session_state["research_failed"] is False
+    assert at.session_state["research_task_version"] == 9
+    assert at.session_state["research_last_event_id"] == "4"

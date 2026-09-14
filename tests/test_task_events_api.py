@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -131,18 +132,54 @@ def test_lifespan_imports_legacy_snapshot_once(tmp_path: Path) -> None:
     snapshot_dir = legacy_root / "legacy-task"
     snapshot_dir.mkdir(parents=True)
     (snapshot_dir / "research_snapshot.json").write_text(
-        json.dumps({"task": {"query": "legacy query"}}),
+        json.dumps({"task": {"query": "legacy query"}, "report": "# Legacy report"}),
         encoding="utf-8",
     )
     app_module.app.state.legacy_snapshot_root = legacy_root
 
     with TestClient(app_module.app) as client:
         imported = client.get("/api/v1/tasks/legacy-task")
+        for _ in range(100):
+            if imported.status_code == 200:
+                break
+            time.sleep(0.01)
+            imported = client.get("/api/v1/tasks/legacy-task")
         assert imported.status_code == 200
         assert imported.json()["task"]["status"] == "completed"
+        report = client.get("/api/v1/tasks/legacy-task/report")
+        assert report.status_code == 200
+        assert report.json()["report"] == "# Legacy report"
         summary = app_module.app.state.legacy_import_summary
         assert summary.imported == 1
 
     with TestClient(app_module.app) as client:
+        for _ in range(100):
+            if app_module.app.state.legacy_import_summary is not None:
+                break
+            time.sleep(0.01)
         assert client.get("/api/v1/tasks/legacy-task").status_code == 200
         assert app_module.app.state.legacy_import_summary.skipped == 1
+
+
+def test_legacy_import_does_not_block_readiness(tmp_path: Path, monkeypatch) -> None:
+    import asyncio
+    import threading
+
+    started = threading.Event()
+    release = threading.Event()
+
+    async def slow_import(*_args, **_kwargs):
+        started.set()
+        await asyncio.to_thread(release.wait)
+        return app_module.LegacyImportSummary()
+
+    monkeypatch.setattr(app_module, "import_legacy_snapshots", slow_import)
+    try:
+        with TestClient(app_module.app) as client:
+            assert started.wait(timeout=1)
+            response = client.get("/health")
+            assert response.status_code == 200
+            assert response.json()["legacy_import"]["status"] == "running"
+            release.set()
+    finally:
+        release.set()

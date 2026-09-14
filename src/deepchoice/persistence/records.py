@@ -50,6 +50,19 @@ class RunRecord(_FrozenRecord):
     updated_at: datetime
 
 
+class RunResultRecord(_FrozenRecord):
+    """One immutable, public-safe result produced by a successful run."""
+
+    result_schema_version: Literal[1] = 1
+    run_id: str = Field(min_length=1)
+    snapshot: dict[str, JsonValue]
+    report: str = Field(min_length=1)
+    report_format: Literal[
+        "what_why_how", "evidence_first", "comparison_matrix"
+    ]
+    created_at: datetime
+
+
 class CheckpointReference(_FrozenRecord):
     """A product-owned reference to one durable LangGraph checkpoint."""
 
@@ -132,6 +145,7 @@ __all__ = [
     "RecoveryRun",
     "RunLeaseGrant",
     "RunRecord",
+    "RunResultRecord",
     "TaskRecord",
     "TaskEventCursor",
     "TaskEventRecord",

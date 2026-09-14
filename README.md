@@ -20,6 +20,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **可观测性面板**：运行轨迹时间轴（9 节点瀑布）+ 检索明细（每路延迟/失败）+ 冲突仲裁可视化 + Token 统计（按 Agent/模型聚合），研究过程全程可见
 - **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
+- **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
 
 ## 快速开始
 
@@ -49,7 +50,7 @@ python -m venv .venv
 `OUTBOUND_CHANNELS` 和 `OUTBOUND_CHANNELS_COMMUNITY`。完整配置约定见
 [`AGENTS.md`](AGENTS.md)。
 
-`POST /research` 会校验已知字段并拒绝额外字段；成功响应保留
+新的客户端应使用 `POST /api/v1/tasks`。`POST /research` 仅保留一版兼容，会返回弃用响应头；它仍会校验已知字段并拒绝额外字段，成功响应保留
 `task_id`/`status`，同时返回 `manifest_id` 供运行审计。API 错误保留兼容的
 `detail` 字段，并增加稳定的 `error` 对象（类别、错误码、是否可重试和建议动作）。
 
@@ -78,8 +79,13 @@ Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/C
 运行规范固化；追加的 schema v5 收紧了 legacy import 的 task/run 绑定约束，未修改 v4
 迁移历史。完整行为边界与恢复步骤见
 [`docs/phase1-runtime-contract.md`](docs/phase1-runtime-contract.md)，验收结论和遗留风险见
-[`docs/phase1-acceptance-report.md`](docs/phase1-acceptance-report.md)。需要特别注意：当前
-Streamlit 与 `POST /research` 仍是旧兼容路径，尚不能获得 durable API 的全部保证。
+[`docs/phase1-acceptance-report.md`](docs/phase1-acceptance-report.md)。
+
+Phase 1-G 把 Streamlit 默认路径切换到 durable task API，增加 immutable `run_results`，并将
+公开结果、成功终态和完成事件放在同一事务提交；报告、快照、阅读视图和导出均可在重启后
+查询。产品 schema 现为 v7，并以产品库 lease 加启动配置检查强制单实例/单 worker。旧
+snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选数、I/O 时间和文件大小预算。
+`POST /research` 与旧 SSE 只作为一版弃用兼容保留。
 
 ### 测试
 
@@ -88,7 +94,7 @@ Streamlit 与 `POST /research` 仍是旧兼容路径，尚不能获得 durable A
 ```
 
 项目支持 Python 3.11/3.12。2026-09-14 在项目隔离环境中验证结果为
-**772 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
+**799 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -107,6 +113,21 @@ docker run -p 8000:8000 --env-file .env \
   -v deepchoice-outputs:/app/outputs \
   deepchoice
 ```
+
+后端镜像固定 Python 3.12 和单 worker。SQLite runtime 不支持多副本；检测到多 worker 配置
+或另一实例仍持有产品库 lease 时会拒绝启动。数据库维护使用成对工具：
+
+```bash
+python scripts/runtime_db.py backup --product-db outputs/deepchoice.db --checkpoint-db outputs/checkpoints.db --destination backups/runtime-YYYYMMDD --maintenance-confirmed
+python scripts/runtime_db.py verify --backup-dir backups/runtime-YYYYMMDD
+python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --drill-dir restore-drill
+```
+
+两个数据库之间没有跨文件原子快照，执行 backup/restore 前必须停止服务或进入维护模式。
+
+当前 Phase 1 部署模型是单用户、可信主机/可信网络，API 尚未提供身份认证、租户隔离或任务
+所有权校验。Docker 虽监听 `0.0.0.0`，但不得直接暴露到公网；远程访问必须放在带认证与
+访问控制的反向代理后。进入多用户部署前，API token/会话认证和 tenant ownership 是阻断项。
 
 ## 架构概览
 
@@ -206,7 +227,7 @@ src/deepchoice/
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
-├── server/          # FastAPI（22 端点：app.py 18 + clarify_routes 4，含 durable SSE）
+├── server/          # FastAPI（26 端点：app.py 22 + clarify_routes 4，含 durable SSE）
 ├── state.py         # ResearchState TypedDict
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 

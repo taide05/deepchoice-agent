@@ -18,6 +18,9 @@ LifecycleStatusValue = Literal[
     "cancelled",
     "interrupted",
 ]
+ReportFormatValue = Literal[
+    "what_why_how", "evidence_first", "comparison_matrix"
+]
 
 
 class ResearchRequest(BaseModel):
@@ -35,7 +38,7 @@ class ResearchRequest(BaseModel):
     constraints: list[ShortText] = Field(default_factory=list, max_length=50)
     candidate_techs: list[ShortText] = Field(default_factory=list, max_length=50)
     complexity: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
-    report_format: Literal["what_why_how", "evidence_first", "comparison_matrix"] = "what_why_how"
+    report_format: ReportFormatValue = "what_why_how"
     sub_questions: list[ShortText] = Field(default_factory=list, max_length=20)
     gather_evidence: bool = True
     language: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
@@ -94,3 +97,13 @@ class TaskListResponse(BaseModel):
     schema_version: Literal[1] = 1
     items: tuple[TaskDetailResponse, ...]
     next_cursor: str | None = None
+
+
+class TaskReportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    task_id: str
+    run_id: str
+    format: ReportFormatValue
+    report: str

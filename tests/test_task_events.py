@@ -9,7 +9,12 @@ import pytest_asyncio
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence import connect_database, run_migrations
-from deepchoice.persistence.records import CheckpointReference, RunRecord, TaskRecord
+from deepchoice.persistence.records import (
+    CheckpointReference,
+    RunRecord,
+    RunResultRecord,
+    TaskRecord,
+)
 from deepchoice.persistence.repository import (
     RunLeaseLostError,
     SQLiteTaskRunRepository,
@@ -229,14 +234,21 @@ async def test_legacy_import_is_atomic_safe_and_exact_replay_is_noop(repository)
         }
     )
     digest = "a" * 64
+    result = RunResultRecord(
+        run_id=run.run_id,
+        snapshot={"task": task.request.model_dump(mode="json"), "report": "# Legacy"},
+        report="# Legacy",
+        report_format=task.request.report_format,
+        created_at=ended,
+    )
     imported = await repository.import_legacy_task(
-        "snapshots/task.json", digest, task, run, imported_at=ended
+        "snapshots/task.json", digest, task, run, result, imported_at=ended
     )
     replay = await repository.import_legacy_task(
-        "snapshots/task.json", digest, task, run, imported_at=ended
+        "snapshots/task.json", digest, task, run, result, imported_at=ended
     )
     changed = await repository.import_legacy_task(
-        "snapshots/task.json", "b" * 64, task, run, imported_at=ended
+        "snapshots/task.json", "b" * 64, task, run, result, imported_at=ended
     )
     assert imported.outcome == "imported" and imported.created
     assert replay.outcome == "imported" and not replay.created
@@ -246,6 +258,7 @@ async def test_legacy_import_is_atomic_safe_and_exact_replay_is_noop(repository)
         "legacy.imported",
         "run.completed",
     ]
+    assert (await repository.get_run_result(run.run_id)).report == "# Legacy"
 
 
 @pytest.mark.asyncio

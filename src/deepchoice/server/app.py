@@ -19,9 +19,11 @@ from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
 from ..contracts.api import (
     ResearchRequest,
     ResearchStartedResponse,
+    ReportFormatValue,
     RunRecordResponse,
     TaskDetailResponse,
     TaskListResponse,
+    TaskReportResponse,
     TaskRecordResponse,
 )
 from ..contracts.errors import (
@@ -39,14 +41,19 @@ from ..formats.pdf import render_pdf
 from ..formats.what_why_how import render as render_what_why_how
 from ..persistence.database import DEFAULT_DB_PATH, DatabaseConnectionError, _await_cleanup, connect_database
 from ..persistence.migrations import run_migrations
-from ..persistence.records import TaskWithRun
+from ..persistence.records import RunResultRecord, TaskWithRun
 from ..persistence.repository import SQLiteTaskRunRepository
 from ..runtime.coordinator import RunCoordinator
+from ..runtime.instance_guard import (
+    RuntimeInstanceGuard,
+    RuntimeInstanceLeaseLostError,
+    validate_single_worker_configuration,
+)
 from ..runtime.lifecycle import TaskStatus
 from ..services.tasks import TaskService
 from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
-from .legacy_import import import_legacy_snapshots
+from .legacy_import import LegacyImportLimits, LegacyImportSummary, import_legacy_snapshots
 from .snapshot_store import (
     list_history,
     load_snapshot,
@@ -63,20 +70,39 @@ async def lifespan(application: FastAPI):
     connection = None
     checkpoint_connection = None
     coordinator = None
+    instance_guard = None
+    legacy_import_task = None
     try:
+        validate_single_worker_configuration()
         database_path = getattr(application.state, "product_database_path", None)
         connection = await connect_database(database_path or DEFAULT_DB_PATH)
         connection_lock = asyncio.Lock()
         async with connection_lock:
             await run_migrations(connection)
         repository = SQLiteTaskRunRepository(connection, connection_lock)
+        instance_guard = RuntimeInstanceGuard(connection, connection_lock)
+        await instance_guard.acquire()
+        application.state.runtime_instance_status = "active"
+        application.state.legacy_import_status = "scheduled"
+        application.state.legacy_import_summary = None
         legacy_snapshot_root = Path(
             getattr(application.state, "legacy_snapshot_root", OUTPUT_DIR)
         )
-        legacy_import_summary = await import_legacy_snapshots(
-            legacy_snapshot_root,
-            repository,
-        )
+
+        lease_lost = asyncio.Event()
+
+        async def on_instance_lease_lost() -> None:
+            application.state.runtime_instance_status = "lost"
+            application.state.execution_enabled = False
+            lease_lost.set()
+            if legacy_import_task is not None and not legacy_import_task.done():
+                legacy_import_task.cancel()
+            if coordinator is not None:
+                await coordinator.stop()
+
+        # Renewal starts immediately after acquisition so checkpoint setup and
+        # startup recovery cannot outlive an unrenewed 30-second lease.
+        instance_guard.start_heartbeat(on_instance_lease_lost)
         import aiosqlite
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -96,6 +122,8 @@ async def lifespan(application: FastAPI):
         await cursor.close()
         checkpointer = AsyncSqliteSaver(checkpoint_connection)
         await checkpointer.setup()
+        if lease_lost.is_set():
+            raise RuntimeInstanceLeaseLostError("runtime instance lease was lost during startup")
         execution_enabled = bool(
             getattr(application.state, "execution_enabled", True)
         )
@@ -108,18 +136,58 @@ async def lifespan(application: FastAPI):
         application.state.product_database_lock = connection_lock
         application.state.task_repository = repository
         application.state.task_service = TaskService(repository)
-        application.state.legacy_import_summary = legacy_import_summary
         application.state.run_coordinator = coordinator
         application.state.execution_enabled = execution_enabled
         await coordinator.start()
+        if lease_lost.is_set():
+            raise RuntimeInstanceLeaseLostError("runtime instance lease was lost during startup")
+
+        async def run_legacy_import() -> None:
+            application.state.legacy_import_status = "running"
+            try:
+                summary = await import_legacy_snapshots(
+                    legacy_snapshot_root,
+                    repository,
+                    limits=getattr(
+                        application.state,
+                        "legacy_import_limits",
+                        LegacyImportLimits(),
+                    ),
+                )
+            except asyncio.CancelledError:
+                application.state.legacy_import_status = "cancelled"
+                raise
+            except Exception:
+                application.state.legacy_import_status = "failed"
+                application.state.legacy_import_summary = LegacyImportSummary(errors=1)
+            else:
+                application.state.legacy_import_summary = summary
+                application.state.legacy_import_status = "completed"
+
+        legacy_import_task = asyncio.create_task(
+            run_legacy_import(),
+            name="deepchoice-legacy-snapshot-import",
+        )
+        application.state.legacy_import_task = legacy_import_task
         yield
     finally:
+        if legacy_import_task is not None and not legacy_import_task.done():
+            legacy_import_task.cancel()
+            try:
+                await legacy_import_task
+            except asyncio.CancelledError:
+                pass
         if coordinator is not None:
             await coordinator.stop()
+        if instance_guard is not None:
+            await instance_guard.release()
         application.state.run_coordinator = None
         application.state.task_service = None
         application.state.task_repository = None
         application.state.legacy_import_summary = None
+        application.state.legacy_import_task = None
+        application.state.legacy_import_status = None
+        application.state.runtime_instance_status = None
         application.state.product_database_lock = None
         application.state.product_database_connection = None
         if connection is not None:
@@ -130,6 +198,23 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(title="DeepChoice API", version="0.1.0", lifespan=lifespan)
 app.include_router(clarify_router)
+
+_LEGACY_DEPRECATION_HEADERS = {
+    "Deprecation": "true",
+    "Warning": '299 DeepChoice "Legacy API is deprecated; use /api/v1/tasks/*."',
+    "Link": '</api/v1/tasks>; rel="successor-version"',
+}
+
+
+@app.middleware("http")
+async def add_legacy_deprecation_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/research" or path.startswith("/research/") or path.startswith(
+        "/tasks/"
+    ) or path == "/history":
+        response.headers.update(_LEGACY_DEPRECATION_HEADERS)
+    return response
 
 OUTPUT_DIR = Path("./outputs")
 _active_tasks: dict[str, dict] = {}
@@ -150,6 +235,24 @@ def _get_task_service(request: Request) -> TaskService:
 def _get_run_coordinator(request: Request) -> RunCoordinator | None:
     coordinator = getattr(request.app.state, "run_coordinator", None)
     return coordinator if isinstance(coordinator, RunCoordinator) else None
+
+
+class RuntimeAuthorityUnavailableError(DeepChoiceError):
+    def __init__(self) -> None:
+        super().__init__(
+            "This runtime instance no longer holds execution authority.",
+            category=ErrorCategory.PERSISTENCE,
+            code="RUNTIME_INSTANCE_LEASE_LOST",
+            status_code=503,
+            retryable=True,
+            action="Retry against the active DeepChoice instance.",
+            scope="runtime_instance",
+        )
+
+
+def _require_runtime_authority(request: Request) -> None:
+    if getattr(request.app.state, "runtime_instance_status", None) == "lost":
+        raise RuntimeAuthorityUnavailableError()
 
 
 def _get_task_repository(request: Request) -> SQLiteTaskRunRepository:
@@ -263,8 +366,16 @@ NODE_TO_PHASE = {
 
 
 @app.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(request: Request):
+    runtime_status = getattr(request.app.state, "runtime_instance_status", None)
+    payload = {
+        "status": "ok" if runtime_status == "active" else "unavailable",
+        "runtime_instance": runtime_status,
+        "legacy_import": {
+            "status": getattr(request.app.state, "legacy_import_status", None),
+        },
+    }
+    return JSONResponse(payload, status_code=200 if runtime_status == "active" else 503)
 
 
 @app.post(
@@ -275,6 +386,7 @@ async def health():
 async def create_task(request: Request, body: ResearchRequest) -> TaskDetailResponse:
     """Persist a queued task/run pair and submit it to the durable coordinator."""
 
+    _require_runtime_authority(request)
     record = await _get_task_service(request).create(body)
     coordinator = _get_run_coordinator(request)
     if coordinator is not None and record.latest_run is not None:
@@ -328,6 +440,71 @@ class InvalidLastEventIdError(DeepChoiceError):
         )
 
 
+class TaskResultNotReadyError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "The task result is not ready.",
+            category=ErrorCategory.CONTRACT,
+            code="TASK_RESULT_NOT_READY",
+            status_code=409,
+            retryable=True,
+            action="Wait for a successful terminal task event before retrying.",
+            scope="task_result",
+            task_id=task_id,
+        )
+
+
+class TaskResultUnavailableError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "The completed task has no durable public result.",
+            category=ErrorCategory.PERSISTENCE,
+            code="TASK_RESULT_UNAVAILABLE",
+            status_code=409,
+            retryable=False,
+            action="Inspect the task history or run the research task again.",
+            scope="task_result",
+            task_id=task_id,
+        )
+
+
+async def _get_durable_result(
+    task_id: str, request: Request
+) -> tuple[TaskWithRun, RunResultRecord]:
+    current = await _get_task_service(request).get(task_id)
+    if current.latest_run is None:
+        raise TaskResultUnavailableError(task_id)
+    result = await _get_task_repository(request).get_run_result(
+        current.latest_run.run_id
+    )
+    if result is not None:
+        return current, result
+    if current.task.status in {
+        TaskStatus.COMPLETED,
+        TaskStatus.COMPLETED_WITH_WARNINGS,
+        TaskStatus.FAILED,
+        TaskStatus.TIMED_OUT,
+        TaskStatus.CANCELLED,
+        TaskStatus.INTERRUPTED,
+    }:
+        raise TaskResultUnavailableError(task_id)
+    raise TaskResultNotReadyError(task_id)
+
+
+async def _legacy_snapshot_or_durable_result(
+    task_id: str, request: Request
+) -> dict[str, object]:
+    """Keep file-era 404 behavior when no lifespan repository is available."""
+
+    snapshot = load_snapshot(task_id)
+    if snapshot:
+        return snapshot
+    if not isinstance(getattr(request.app.state, "task_service", None), TaskService):
+        raise HTTPException(status_code=404, detail="Task not found")
+    _, durable = await _get_durable_result(task_id, request)
+    return durable.snapshot
+
+
 def _parse_if_match(value: str | None, task_id: str) -> int:
     if value is None:
         raise IfMatchRequiredError(task_id)
@@ -349,6 +526,7 @@ def _parse_if_match(value: str | None, task_id: str) -> int:
     response_model=TaskDetailResponse,
 )
 async def cancel_task(task_id: str, request: Request) -> TaskDetailResponse:
+    _require_runtime_authority(request)
     record = await _get_task_service(request).cancel(task_id)
     coordinator = _get_run_coordinator(request)
     if (
@@ -366,6 +544,7 @@ async def cancel_task(task_id: str, request: Request) -> TaskDetailResponse:
     status_code=202,
 )
 async def resume_task(task_id: str, request: Request) -> TaskDetailResponse:
+    _require_runtime_authority(request)
     expected = _parse_if_match(request.headers.get("if-match"), task_id)
     record = await _get_task_service(request).resume(
         task_id, expected_task_version=expected
@@ -390,6 +569,108 @@ async def resume_task(task_id: str, request: Request) -> TaskDetailResponse:
 async def get_task(task_id: str, request: Request) -> TaskDetailResponse:
     record = await _get_task_service(request).get(task_id)
     return _task_detail_response(record)
+
+
+@app.get("/api/v1/tasks/{task_id}/snapshot")
+async def get_task_snapshot(task_id: str, request: Request) -> dict[str, object]:
+    """Return the immutable, allowlisted public snapshot for the latest run."""
+
+    _, result = await _get_durable_result(task_id, request)
+    return result.snapshot
+
+
+@app.get(
+    "/api/v1/tasks/{task_id}/report",
+    response_model=TaskReportResponse,
+)
+async def get_task_report(
+    task_id: str,
+    request: Request,
+    format: ReportFormatValue | None = None,
+) -> TaskReportResponse:
+    current, result = await _get_durable_result(task_id, request)
+    requested_format = format or result.report_format
+    report = (
+        result.report
+        if requested_format == result.report_format
+        else FORMAT_RENDERERS[requested_format](result.snapshot)
+    )
+    return TaskReportResponse(
+        task_id=task_id,
+        run_id=current.latest_run.run_id,
+        format=requested_format,
+        report=report,
+    )
+
+
+@app.get("/api/v1/tasks/{task_id}/annotated")
+async def get_task_annotated(
+    task_id: str,
+    request: Request,
+    format: ReportFormatValue | None = None,
+):
+    current, result = await _get_durable_result(task_id, request)
+    requested_format = format or result.report_format
+    report = (
+        result.report
+        if requested_format == result.report_format
+        else FORMAT_RENDERERS[requested_format](result.snapshot)
+    )
+    registry = number_sources(result.snapshot.get("evidence_chains", []))
+    report = inject_citations(report, registry)
+    toc, report = build_toc(report)
+    return {
+        "schema_version": 1,
+        "task_id": task_id,
+        "run_id": current.latest_run.run_id,
+        "format": requested_format,
+        "report": report,
+        "toc": toc,
+        "citations": registry,
+    }
+
+
+@app.get("/api/v1/tasks/{task_id}/export")
+async def export_task_result(
+    task_id: str,
+    request: Request,
+    format: str = "md",
+    report_format: ReportFormatValue | None = None,
+):
+    _, result = await _get_durable_result(task_id, request)
+    requested_format = report_format or result.report_format
+    report = (
+        result.report
+        if requested_format == result.report_format
+        else FORMAT_RENDERERS[requested_format](result.snapshot)
+    )
+    filename = f"deepchoice-report-{task_id}"
+    if format == "md":
+        return Response(
+            content=report,
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.md"'},
+        )
+    if format == "pdf":
+        registry = number_sources(result.snapshot.get("evidence_chains", []))
+        annotated = inject_citations(report, registry)
+        _, annotated = build_toc(annotated)
+        try:
+            pdf_bytes = render_pdf(annotated)
+        except ImportError:
+            raise HTTPException(
+                status_code=501,
+                detail=(
+                    "PDF support not installed (xhtml2pdf). "
+                    "Use format=md or browser print."
+                ),
+            ) from None
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.pdf"'},
+        )
+    raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
 
 @app.get(
@@ -708,10 +989,8 @@ async def research_checkpoints(task_id: str):
 
 
 @app.get("/research/{task_id}/report")
-async def research_report(task_id: str, format: str = ""):
-    snapshot = load_snapshot(task_id)
-    if not snapshot:
-        raise HTTPException(status_code=404, detail="Task not found")
+async def research_report(task_id: str, request: Request, format: str = ""):
+    snapshot = await _legacy_snapshot_or_durable_result(task_id, request)
 
     requested_format = format or snapshot.get("task", {}).get("report_format", "what_why_how")
     renderer = FORMAT_RENDERERS.get(requested_format, render_what_why_how)
@@ -721,11 +1000,9 @@ async def research_report(task_id: str, format: str = ""):
 
 
 @app.get("/research/{task_id}/annotated")
-async def research_annotated(task_id: str, format: str = ""):
+async def research_annotated(task_id: str, request: Request, format: str = ""):
     """Report with numbered citation badges and TOC anchors for the reading view."""
-    snapshot = load_snapshot(task_id)
-    if not snapshot:
-        raise HTTPException(status_code=404, detail="Task not found")
+    snapshot = await _legacy_snapshot_or_durable_result(task_id, request)
 
     requested_format = format or snapshot.get("task", {}).get("report_format", "what_why_how")
     renderer = FORMAT_RENDERERS.get(requested_format, render_what_why_how)
@@ -745,10 +1022,13 @@ async def research_annotated(task_id: str, format: str = ""):
 
 
 @app.get("/research/{task_id}/export")
-async def research_export(task_id: str, format: str = "md", report_format: str = ""):
-    snapshot = load_snapshot(task_id)
-    if not snapshot:
-        raise HTTPException(status_code=404, detail="Task not found")
+async def research_export(
+    task_id: str,
+    request: Request,
+    format: str = "md",
+    report_format: str = "",
+):
+    snapshot = await _legacy_snapshot_or_durable_result(task_id, request)
 
     renderer = FORMAT_RENDERERS.get(
         report_format or snapshot.get("task", {}).get("report_format", "what_why_how"),
@@ -787,18 +1067,15 @@ async def research_export(task_id: str, format: str = "md", report_format: str =
 
 
 @app.get("/research/{task_id}/snapshot")
-async def research_snapshot(task_id: str):
-    snapshot = load_snapshot(task_id)
-    if not snapshot:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return snapshot
+async def research_snapshot(task_id: str, request: Request):
+    return await _legacy_snapshot_or_durable_result(task_id, request)
 
 
 @app.post("/research/{task_id}/regenerate")
-async def regenerate_report(task_id: str, format: str = "what_why_how"):
-    snapshot = load_snapshot(task_id)
-    if not snapshot:
-        raise HTTPException(status_code=404, detail="Task not found")
+async def regenerate_report(
+    task_id: str, request: Request, format: str = "what_why_how"
+):
+    snapshot = await _legacy_snapshot_or_durable_result(task_id, request)
 
     renderer = FORMAT_RENDERERS.get(format, render_what_why_how)
     report = renderer(snapshot)

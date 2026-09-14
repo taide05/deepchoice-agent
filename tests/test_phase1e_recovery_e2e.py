@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import ClassVar
 
 import aiosqlite
+import httpx
 import pytest
 from langgraph.checkpoint.base import empty_checkpoint
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -16,6 +17,7 @@ from deepchoice.persistence.repository import SQLiteTaskRunRepository
 from deepchoice.runtime.coordinator import RunCoordinator
 from deepchoice.runtime.lifecycle import RunStatus
 from deepchoice.services.tasks import TaskService
+from deepchoice.server import app as app_module
 
 
 class LocalRecoveryOrchestrator:
@@ -91,6 +93,7 @@ class LocalRecoveryOrchestrator:
 
         class State:
             config = self._stored_config
+            values = {"report": "# Recovered durable report", "confidence": "high"}
 
         return State()
 
@@ -197,6 +200,25 @@ async def test_process_restart_resumes_checkpoint_reference_and_event_history(
             "run.progress",
             "run.completed",
         ]
+        result = await repository_two.get_run_result(run_id)
+        assert result is not None
+        assert result.report == "# Recovered durable report"
+
+        old_service = getattr(app_module.app.state, "task_service", None)
+        old_repository = getattr(app_module.app.state, "task_repository", None)
+        app_module.app.state.task_service = TaskService(repository_two)
+        app_module.app.state.task_repository = repository_two
+        try:
+            transport = httpx.ASGITransport(app=app_module.app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                report = await client.get(f"/api/v1/tasks/{task_id}/report")
+            assert report.status_code == 200
+            assert report.json()["report"] == "# Recovered durable report"
+        finally:
+            app_module.app.state.task_service = old_service
+            app_module.app.state.task_repository = old_repository
     finally:
         await coordinator_two.stop()
         await product_two.close()

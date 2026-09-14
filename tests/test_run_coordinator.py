@@ -28,6 +28,7 @@ def _records(task_id="task-1", run_id="run-1", *, status=TaskStatus.QUEUED):
 
 class FakeState:
     config = {"configurable": {"checkpoint_id": "cp-1", "checkpoint_ns": ""}}
+    values = {"report": "# Fake durable report"}
 
 
 class FakeOrchestrator:
@@ -84,7 +85,7 @@ async def repo(tmp_path: Path):
 
 
 async def _wait_done(coordinator: RunCoordinator, run_id: str):
-    for _ in range(100):
+    for _ in range(400):
         if run_id not in coordinator.active_runs:
             return
         await asyncio.sleep(0.005)

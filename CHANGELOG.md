@@ -19,19 +19,23 @@
 - Phase 1-E durable task events and compatibility closeout: transactional lifecycle events, SSE replay/resync with `Last-Event-ID`, idempotent legacy snapshot import, durable cancel/resume event history, legacy status adapters, and restart recovery coverage
 - Phase 1-F integrated acceptance: cross-module lifecycle review, real historical-schema upgrades, concurrency/fault checks, durable runtime/API-event contracts, recovery runbook, and an explicit residual-risk register
 - Forward-only product schema v5, preserving valid v4 legacy-import audit rows while enforcing imported/error task/run binding invariants and rolling back safely on invalid historical rows
+- Phase 1-G durable default path: immutable run results, atomic result/success/event finalization, restart-readable report/snapshot/annotated/export APIs, Streamlit durable SSE replay/resync, and cancel/resume controls
+- Forward-only product schema v6 for immutable public run results and v7 for the single-runtime-instance lease
+- Manifest-verified paired product/checkpoint database backup, restore, and restore-drill tooling
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 772 passed with no skips on 2026-09-14
+- Verified Python 3.12 test baseline is 799 passed with no skips on 2026-09-14
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
 - Execution coordination is guarded by an explicit enable switch; product persistence stores checkpoint references while LangGraph checkpoint payloads remain in the checkpoint store
-- Application startup imports legacy snapshots read-only using relative-path/SHA-256 idempotency; the existing `/research` entry point remains available while legacy status aliases can project durable task state
-- Durable guarantees are now documented as applying to `/api/v1/tasks/*`; the current Streamlit and `POST /research` flow remains a separate compatibility path pending cutover
+- Streamlit now uses `/api/v1/tasks/*` for task creation, durable events, result queries, cancellation, and resume; `/research` remains for one deprecated compatibility version and returns deprecation headers
+- Legacy snapshot import runs after readiness as a managed background task with candidate-count, I/O-time, and file-size budgets
+- The SQLite runtime now rejects known multi-worker settings and a second live instance through a renewable product-database lease; Docker is fixed to Python 3.12 and one worker
 - Coordinator shutdown now settles an in-flight lease acquisition and fenced finalization before propagating cancellation, closing the commit-before-grant ghost-running race
 
 ### Fixed
