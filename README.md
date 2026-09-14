@@ -74,6 +74,13 @@ Phase 1-E 将任务状态变更与公开 `task_events` 写入同一 SQLite 事�
 成功/失败 snapshot，以“相对路径 + SHA-256”幂等导入，不修改原文件；旧 `/research`
 入口保持兼容，旧状态别名也可读取 durable task。取消、恢复和跨进程重启的事件历史均保留。
 
+Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/CAS/fencing 故障测试和
+运行规范固化；追加的 schema v5 收紧了 legacy import 的 task/run 绑定约束，未修改 v4
+迁移历史。完整行为边界与恢复步骤见
+[`docs/phase1-runtime-contract.md`](docs/phase1-runtime-contract.md)，验收结论和遗留风险见
+[`docs/phase1-acceptance-report.md`](docs/phase1-acceptance-report.md)。需要特别注意：当前
+Streamlit 与 `POST /research` 仍是旧兼容路径，尚不能获得 durable API 的全部保证。
+
 ### 测试
 
 ```powershell
@@ -81,7 +88,7 @@ Phase 1-E 将任务状态变更与公开 `task_events` 写入同一 SQLite 事�
 ```
 
 项目支持 Python 3.11/3.12。2026-09-14 在项目隔离环境中验证结果为
-**762 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
+**772 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 

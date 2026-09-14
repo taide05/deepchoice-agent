@@ -54,6 +54,24 @@ class MissingCheckpointSaver:
         return None
 
 
+class AcquireReturnBarrierRepository:
+    """Pause after the real lease commit but before returning its grant."""
+
+    def __init__(self, delegate: SQLiteTaskRunRepository) -> None:
+        self.delegate = delegate
+        self.committed = asyncio.Event()
+        self.release = asyncio.Event()
+
+    def __getattr__(self, name):
+        return getattr(self.delegate, name)
+
+    async def acquire_run_lease(self, *args, **kwargs):
+        grant = await self.delegate.acquire_run_lease(*args, **kwargs)
+        self.committed.set()
+        await self.release.wait()
+        return grant
+
+
 @pytest_asyncio.fixture
 async def repo(tmp_path: Path):
     connection = await connect_database(tmp_path / "product.db")
@@ -91,6 +109,41 @@ async def test_submit_deduplicates_and_records_checkpoint_on_success(repo):
     assert reference is not None and reference.checkpoint_id == "cp-1"
     assert FakeOrchestrator.seen_resumes == [False]
     await coordinator.stop()
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_lease_commit_before_grant_return_finalizes_once(repo):
+    task, run = _records("task-acquire-cancel", "run-acquire-cancel")
+    await repo.create_task_with_run(task, run)
+    barrier = AcquireReturnBarrierRepository(repo)
+    coordinator = RunCoordinator(
+        barrier,
+        object(),
+        owner_id="worker",
+        orchestrator_factory=FakeOrchestrator,
+    )
+
+    assert await coordinator.submit(run.run_id, resume=False)
+    await asyncio.wait_for(barrier.committed.wait(), timeout=1)
+    runner = coordinator._active[run.run_id]
+    stop_task = asyncio.create_task(coordinator.stop())
+    await asyncio.sleep(0)
+    runner.cancel()
+    barrier.release.set()
+    await asyncio.wait_for(stop_task, timeout=1)
+    assert runner.cancelled()
+
+    current = await repo.get_run(run.run_id)
+    assert current is not None
+    assert current.status is RunStatus.INTERRUPTED
+    assert current.lease_owner is None
+    assert current.lease_expires_at is None
+    events = await repo.list_task_events(task.task_id)
+    assert [event.type for event in events] == [
+        "task.queued",
+        "run.started",
+        "run.interrupted",
+    ]
 
 
 @pytest.mark.asyncio

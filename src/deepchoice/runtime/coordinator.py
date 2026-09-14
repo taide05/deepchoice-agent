@@ -34,6 +34,23 @@ def _execution_checkpoint_namespace(execution_epoch: int) -> str:
     return f"deepchoice-execution-{execution_epoch}"
 
 
+async def _settle_shielded(task: asyncio.Task[Any]) -> Any:
+    """Wait for an authority-changing operation despite repeated cancellation.
+
+    The caller must still propagate its original ``CancelledError`` after this
+    bounded operation settles.  Shielding avoids the ambiguous state where the
+    SQLite worker commits a lease after cancellation has already unwound the
+    coordinator runner.
+    """
+
+    while True:
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            if task.done():
+                return task.result()
+
+
 class RunCoordinator:
     """Own local runner tasks while SQLite remains the execution authority."""
 
@@ -237,6 +254,7 @@ class RunCoordinator:
     async def _run(self, run_id: str, *, resume: bool) -> None:
         grant = None
         heartbeat: asyncio.Task[None] | None = None
+        acquisition: asyncio.Task[Any] | None = None
 
         async def stop_heartbeat() -> None:
             nonlocal heartbeat
@@ -247,13 +265,17 @@ class RunCoordinator:
             heartbeat = None
 
         try:
-            grant = await self.repository.acquire_run_lease(
-                run_id,
-                lease_owner=self.owner_id,
-                lease_ttl=self.lease_ttl,
-                run_timeout=self.run_timeout,
-                now=self._clock(),
+            acquisition = asyncio.create_task(
+                self.repository.acquire_run_lease(
+                    run_id,
+                    lease_owner=self.owner_id,
+                    lease_ttl=self.lease_ttl,
+                    run_timeout=self.run_timeout,
+                    now=self._clock(),
+                ),
+                name=f"deepchoice-lease-acquire-{run_id}",
             )
+            grant = await asyncio.shield(acquisition)
             resume = grant.resume
             current = await self.repository.get_task(grant.task_id)
             if current is None or current.latest_run is None:
@@ -383,8 +405,26 @@ class RunCoordinator:
                 await self._finalize(run_id, grant.execution_epoch, RunStatus.TIMED_OUT)
         except asyncio.CancelledError:
             await stop_heartbeat()
+            if grant is None and acquisition is not None:
+                try:
+                    grant = await _settle_shielded(acquisition)
+                except (Exception, asyncio.CancelledError):
+                    # Acquisition did not commit a usable lease, so there is no
+                    # owner/epoch with which to perform a legitimate finalize.
+                    grant = None
             if grant is not None:
-                await self._finalize(run_id, grant.execution_epoch, RunStatus.INTERRUPTED)
+                finalization = asyncio.create_task(
+                    self._finalize(
+                        run_id, grant.execution_epoch, RunStatus.INTERRUPTED
+                    ),
+                    name=f"deepchoice-cancel-finalize-{run_id}",
+                )
+                try:
+                    await _settle_shielded(finalization)
+                except (Exception, asyncio.CancelledError):
+                    # Preserve cancellation as the caller-visible outcome. A
+                    # failed fenced finalize remains recoverable after expiry.
+                    pass
             raise
         except RunLeaseLostError:
             await stop_heartbeat()

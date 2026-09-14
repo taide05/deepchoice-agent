@@ -154,11 +154,53 @@ CREATE TABLE legacy_imports (
 """.strip(),
 )
 
+_V5_STATEMENTS: Final[tuple[str, ...]] = (
+    "ALTER TABLE legacy_imports RENAME TO legacy_imports_v4",
+    """
+CREATE TABLE legacy_imports (
+    source_path TEXT NOT NULL CHECK (length(source_path) > 0),
+    content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+    outcome TEXT NOT NULL CHECK (outcome IN ('imported', 'error')),
+    task_id TEXT REFERENCES tasks(task_id) ON DELETE RESTRICT,
+    run_id TEXT REFERENCES runs(run_id) ON DELETE RESTRICT,
+    error_code TEXT,
+    imported_at TEXT NOT NULL,
+    PRIMARY KEY (source_path, content_sha256),
+    CHECK (
+        (
+            outcome = 'imported'
+            AND task_id IS NOT NULL
+            AND run_id IS NOT NULL
+            AND error_code IS NULL
+        )
+        OR
+        (
+            outcome = 'error'
+            AND task_id IS NULL
+            AND run_id IS NULL
+            AND error_code IS NOT NULL
+        )
+    )
+)
+""".strip(),
+    """
+INSERT INTO legacy_imports(
+    source_path, content_sha256, outcome, task_id, run_id,
+    error_code, imported_at
+)
+SELECT source_path, content_sha256, outcome, task_id, run_id,
+       error_code, imported_at
+FROM legacy_imports_v4
+""".strip(),
+    "DROP TABLE legacy_imports_v4",
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
     Migration(version=3, name="run_deadline_and_checkpoint_references", statements=_V3_STATEMENTS),
     Migration(version=4, name="durable_task_events_and_legacy_imports", statements=_V4_STATEMENTS),
+    Migration(version=5, name="tighten_legacy_import_invariants", statements=_V5_STATEMENTS),
 )
 
 
