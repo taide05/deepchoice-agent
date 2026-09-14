@@ -200,3 +200,38 @@ def test_orchestrator_uses_normalized_manifest_evidence_switch():
 
     assert orchestrator.run_manifest.gather_evidence is False
     assert detector.gather_evidence is False
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execution_guard_runs_before_and_after_node():
+    calls = []
+    orchestrator = ChiefEditorAgent({"query": "A vs B"}, execution_guard=lambda: _record(calls))
+
+    async def node(state):
+        calls.append("node")
+        return {}
+
+    wrapped = orchestrator._timed_node("fake", node)
+    await wrapped({})
+    assert calls == ["guard", "node", "guard"]
+
+
+async def _record(calls):
+    calls.append("guard")
+
+
+@pytest.mark.asyncio
+async def test_resume_passes_none_input_to_langgraph(monkeypatch):
+    captured = {}
+
+    class Chain:
+        async def ainvoke(self, graph_input, *, config):
+            captured["input"] = graph_input
+            captured["config"] = config
+            return {}
+
+    orchestrator = ChiefEditorAgent({"query": "A vs B"}, thread_id="thread-1")
+    monkeypatch.setattr(orchestrator, "init_research_team", lambda **_: Chain())
+    await orchestrator.run_research_task(resume=True)
+    assert captured["input"] is None
+    assert captured["config"]["configurable"]["thread_id"] == "thread-1"

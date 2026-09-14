@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,14 +12,17 @@ import pytest_asyncio
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence import connect_database, run_migrations
-from deepchoice.persistence.records import RunRecord, TaskRecord
+from deepchoice.persistence.records import CheckpointReference, RunRecord, TaskRecord
 from deepchoice.persistence.repository import (
+    CheckpointNotAvailableError,
     RepositoryOperationError,
+    RunLeaseLostError,
     SQLiteTaskRunRepository,
     TaskNotFoundError,
     TaskVersionConflictError,
 )
 from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
+from deepchoice.services.tasks import TaskService
 
 
 def _records(task_id: str = "task-1", run_id: str = "run-1", *, created_at: datetime | None = None):
@@ -117,3 +120,322 @@ async def test_keyset_order_and_same_timestamp_tie_break(repository):
         status=None, before=(page[-1].task.created_at, page[-1].task.task_id), limit=3
     )
     assert not next_page
+
+
+@pytest.mark.asyncio
+async def test_lease_is_single_owner_epoch_fenced_and_heartbeat_validates(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id, lease_owner="worker-a", lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5), now=now,
+    )
+    assert grant.execution_epoch == 1
+    assert grant.status is RunStatus.RUNNING
+    with pytest.raises(RunLeaseLostError):
+        await repository.acquire_run_lease(
+            run.run_id, lease_owner="worker-b", lease_ttl=timedelta(seconds=30),
+            run_timeout=timedelta(minutes=5), now=now,
+        )
+    beat = await repository.heartbeat_run_lease(
+        run.run_id, lease_owner="worker-a", execution_epoch=1,
+        lease_ttl=timedelta(seconds=30), now=now + timedelta(seconds=1),
+    )
+    assert beat.execution_epoch == 1
+    assert beat.status is RunStatus.RUNNING
+    with pytest.raises(RunLeaseLostError):
+        await repository.heartbeat_run_lease(
+            run.run_id, lease_owner="worker-b", execution_epoch=1,
+            lease_ttl=timedelta(seconds=30), now=now + timedelta(seconds=1),
+        )
+    await repository.finalize_run(
+        run.run_id, lease_owner="worker-a", execution_epoch=1,
+        status=RunStatus.COMPLETED, now=now + timedelta(seconds=2),
+    )
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_reference_is_idempotent_and_old_epoch_is_fenced(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id, lease_owner="worker-a", lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5), now=now,
+    )
+    reference = CheckpointReference(
+        run_id=run.run_id, checkpoint_id="cp-1", node="retrieve",
+        state_schema_version=run.manifest.state_schema_version,
+        execution_epoch=grant.execution_epoch, created_at=now + timedelta(seconds=1),
+    )
+    await repository.add_checkpoint_reference(reference, lease_owner="worker-a", execution_epoch=1, now=now + timedelta(seconds=1))
+    await repository.add_checkpoint_reference(reference, lease_owner="worker-a", execution_epoch=1, now=now + timedelta(seconds=1))
+    assert (await repository.get_latest_checkpoint_reference(run.run_id)).checkpoint_id == "cp-1"
+    with pytest.raises(RunLeaseLostError):
+        await repository.add_checkpoint_reference(reference, lease_owner="worker-a", execution_epoch=0, now=now + timedelta(seconds=1))
+
+
+@pytest.mark.asyncio
+async def test_latest_checkpoint_prefers_new_epoch_over_clock_timestamp(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    first = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker-a",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now,
+    )
+    await repository.add_checkpoint_reference(
+        CheckpointReference(
+            run_id=run.run_id,
+            storage_checkpoint_ns="epoch-1",
+            checkpoint_id="cp-epoch-1",
+            state_schema_version=run.manifest.state_schema_version,
+            execution_epoch=first.execution_epoch,
+            created_at=now + timedelta(minutes=10),
+        ),
+        lease_owner="worker-a",
+        execution_epoch=first.execution_epoch,
+        now=now,
+    )
+    interrupted = await repository.finalize_run(
+        run.run_id,
+        lease_owner="worker-a",
+        execution_epoch=first.execution_epoch,
+        status=RunStatus.INTERRUPTED,
+        now=now + timedelta(seconds=1),
+    )
+    await repository.resume_interrupted_run(
+        task.task_id,
+        expected_task_version=interrupted.task.version,
+        updated_at=now + timedelta(seconds=1),
+    )
+    second = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker-b",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now + timedelta(seconds=2),
+    )
+    await repository.add_checkpoint_reference(
+        CheckpointReference(
+            run_id=run.run_id,
+            storage_checkpoint_ns="epoch-2",
+            checkpoint_id="cp-epoch-2",
+            state_schema_version=run.manifest.state_schema_version,
+            execution_epoch=second.execution_epoch,
+            created_at=now,
+        ),
+        lease_owner="worker-b",
+        execution_epoch=second.execution_epoch,
+        now=now + timedelta(seconds=2),
+    )
+
+    latest = await repository.get_latest_checkpoint_reference(
+        run.run_id,
+        state_schema_version=run.manifest.state_schema_version,
+        checkpoint_ns="",
+    )
+    assert latest is not None
+    assert latest.execution_epoch == second.execution_epoch
+    assert latest.storage_checkpoint_ns == "epoch-2"
+
+
+@pytest.mark.asyncio
+async def test_cancel_queued_is_idempotent_and_running_becomes_cancelling(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    cancelled = await repository.cancel_task(task.task_id, updated_at=now)
+    assert cancelled.task.status is TaskStatus.CANCELLED
+    assert (await repository.cancel_task(task.task_id, updated_at=now)).task.status is TaskStatus.CANCELLED
+
+    task2, run2 = _records("task-2", "run-2")
+    await repository.create_task_with_run(task2, run2)
+    await repository.acquire_run_lease(run2.run_id, lease_owner="worker", lease_ttl=timedelta(seconds=30), run_timeout=timedelta(minutes=5), now=now)
+    cancelling = await repository.cancel_task(task2.task_id, updated_at=now + timedelta(seconds=1))
+    assert cancelling.task.status is TaskStatus.CANCELLING
+    await repository.finalize_run(run2.run_id, lease_owner="worker", execution_epoch=1, status=RunStatus.COMPLETED, now=now + timedelta(seconds=2))
+    assert (await repository.get_task(task2.task_id)).task.status is TaskStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_expired_recovery_without_checkpoint_is_interrupted(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await repository.acquire_run_lease(run.run_id, lease_owner="worker", lease_ttl=timedelta(seconds=1), run_timeout=timedelta(minutes=5), now=now)
+    recovered = await repository.recover_runs(now=now + timedelta(seconds=2))
+    assert recovered == ()
+    current = await repository.get_task(task.task_id)
+    assert current.task.status is TaskStatus.INTERRUPTED
+    assert current.latest_run.status is RunStatus.INTERRUPTED
+
+
+@pytest.mark.asyncio
+async def test_expired_recovery_after_deadline_is_timed_out(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker",
+        lease_ttl=timedelta(seconds=1),
+        run_timeout=timedelta(seconds=2),
+        now=now,
+    )
+
+    recovered = await repository.recover_runs(now=now + timedelta(seconds=3))
+
+    assert recovered == ()
+    current = await repository.get_task(task.task_id)
+    assert current.task.status is TaskStatus.TIMED_OUT
+    assert current.latest_run.status is RunStatus.TIMED_OUT
+    assert current.latest_run.deadline_at == grant.deadline_at
+    assert current.latest_run.ended_at == now + timedelta(seconds=3)
+
+
+@pytest.mark.asyncio
+async def test_expired_recovery_prioritizes_cancel_over_deadline(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker",
+        lease_ttl=timedelta(seconds=1),
+        run_timeout=timedelta(seconds=1),
+        now=now,
+    )
+    await repository.cancel_task(
+        task.task_id, updated_at=now + timedelta(milliseconds=500)
+    )
+
+    assert await repository.recover_runs(now=now + timedelta(seconds=2)) == ()
+    current = await repository.get_task(task.task_id)
+    assert current.task.status is TaskStatus.CANCELLED
+    assert current.latest_run.status is RunStatus.CANCELLED
+    assert current.latest_run.deadline_at is None
+
+
+@pytest.mark.asyncio
+async def test_interrupted_resume_reuses_compatible_checkpoint(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now,
+    )
+    await repository.add_checkpoint_reference(
+        CheckpointReference(
+            run_id=run.run_id,
+            checkpoint_id="cp-compatible",
+            state_schema_version=run.manifest.state_schema_version,
+            execution_epoch=grant.execution_epoch,
+            created_at=now,
+        ),
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        now=now,
+    )
+    interrupted = await repository.finalize_run(
+        run.run_id,
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        status=RunStatus.INTERRUPTED,
+        now=now + timedelta(seconds=1),
+    )
+    service = TaskService(repository)
+    resumed = await service.resume(
+        task.task_id, expected_task_version=interrupted.task.version
+    )
+    assert resumed.task.status is TaskStatus.QUEUED
+    assert resumed.latest_run.run_id == run.run_id
+    assert resumed.latest_run.thread_id == run.thread_id
+    assert resumed.latest_run.manifest == run.manifest
+
+
+@pytest.mark.asyncio
+async def test_interrupted_without_checkpoint_retries_as_new_run_with_cas(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now,
+    )
+    interrupted = await repository.finalize_run(
+        run.run_id,
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        status=RunStatus.INTERRUPTED,
+        now=now + timedelta(seconds=1),
+    )
+    service = TaskService(repository)
+    results = await asyncio.gather(
+        service.resume(task.task_id, expected_task_version=interrupted.task.version),
+        service.resume(task.task_id, expected_task_version=interrupted.task.version),
+        return_exceptions=True,
+    )
+    resumed = next(result for result in results if not isinstance(result, Exception))
+    assert sum(isinstance(result, TaskVersionConflictError) for result in results) == 1
+    assert resumed.latest_run.run_id != run.run_id
+    assert resumed.latest_run.thread_id == resumed.latest_run.run_id
+    assert (await repository.get_run(run.run_id)).status is RunStatus.INTERRUPTED
+
+
+@pytest.mark.asyncio
+async def test_interrupted_non_root_checkpoint_retries_as_new_run(repository):
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now,
+    )
+    await repository.add_checkpoint_reference(
+        CheckpointReference(
+            run_id=run.run_id,
+            checkpoint_ns="subgraph:worker",
+            storage_checkpoint_ns="physical-subgraph",
+            checkpoint_id="cp-subgraph",
+            state_schema_version=run.manifest.state_schema_version,
+            execution_epoch=grant.execution_epoch,
+            created_at=now,
+        ),
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        now=now,
+    )
+    interrupted = await repository.finalize_run(
+        run.run_id,
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        status=RunStatus.INTERRUPTED,
+        now=now + timedelta(seconds=1),
+    )
+    with pytest.raises(CheckpointNotAvailableError):
+        await repository.resume_interrupted_run(
+            task.task_id,
+            expected_task_version=interrupted.task.version,
+        )
+
+    resumed = await TaskService(repository).resume(
+        task.task_id, expected_task_version=interrupted.task.version
+    )
+
+    assert resumed.latest_run.run_id != run.run_id
+    assert resumed.latest_run.execution_epoch == 0

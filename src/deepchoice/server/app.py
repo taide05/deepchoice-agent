@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -40,6 +41,7 @@ from ..persistence.database import DEFAULT_DB_PATH, DatabaseConnectionError, _aw
 from ..persistence.migrations import run_migrations
 from ..persistence.records import TaskWithRun
 from ..persistence.repository import SQLiteTaskRunRepository
+from ..runtime.coordinator import RunCoordinator
 from ..runtime.lifecycle import TaskStatus
 from ..services.tasks import TaskService
 from ..utils.views import print_agent_output
@@ -57,6 +59,8 @@ async def lifespan(application: FastAPI):
     """Own the product database's one connection for this app lifespan."""
 
     connection = None
+    checkpoint_connection = None
+    coordinator = None
     try:
         database_path = getattr(application.state, "product_database_path", None)
         connection = await connect_database(database_path or DEFAULT_DB_PATH)
@@ -64,18 +68,53 @@ async def lifespan(application: FastAPI):
         async with connection_lock:
             await run_migrations(connection)
         repository = SQLiteTaskRunRepository(connection, connection_lock)
+        import aiosqlite
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+        checkpoint_path = Path(
+            getattr(
+                application.state,
+                "checkpoint_database_path",
+                OUTPUT_DIR / "checkpoints.db",
+            )
+        )
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_connection = await aiosqlite.connect(str(checkpoint_path))
+        cursor = await checkpoint_connection.execute("PRAGMA busy_timeout = 5000")
+        await cursor.close()
+        cursor = await checkpoint_connection.execute("PRAGMA journal_mode = WAL")
+        await cursor.fetchone()
+        await cursor.close()
+        checkpointer = AsyncSqliteSaver(checkpoint_connection)
+        await checkpointer.setup()
+        execution_enabled = bool(
+            getattr(application.state, "execution_enabled", True)
+        )
+        coordinator = RunCoordinator(
+            repository,
+            checkpointer,
+            enabled=execution_enabled,
+        )
         application.state.product_database_connection = connection
         application.state.product_database_lock = connection_lock
         application.state.task_repository = repository
         application.state.task_service = TaskService(repository)
+        application.state.run_coordinator = coordinator
+        application.state.execution_enabled = execution_enabled
+        await coordinator.start()
         yield
     finally:
+        if coordinator is not None:
+            await coordinator.stop()
+        application.state.run_coordinator = None
         application.state.task_service = None
         application.state.task_repository = None
         application.state.product_database_lock = None
         application.state.product_database_connection = None
         if connection is not None:
             await _await_cleanup(connection.close())
+        if checkpoint_connection is not None:
+            await _await_cleanup(checkpoint_connection.close())
 
 
 app = FastAPI(title="DeepChoice API", version="0.1.0", lifespan=lifespan)
@@ -97,6 +136,11 @@ def _get_task_service(request: Request) -> TaskService:
     return service
 
 
+def _get_run_coordinator(request: Request) -> RunCoordinator | None:
+    coordinator = getattr(request.app.state, "run_coordinator", None)
+    return coordinator if isinstance(coordinator, RunCoordinator) else None
+
+
 def _task_detail_response(record: TaskWithRun) -> TaskDetailResponse:
     return TaskDetailResponse(
         task=TaskRecordResponse.model_validate(record.task.model_dump(mode="json")),
@@ -108,6 +152,7 @@ def _task_detail_response(record: TaskWithRun) -> TaskDetailResponse:
                 manifest_id=record.latest_run.manifest.manifest_id,
                 started_at=record.latest_run.started_at,
                 ended_at=record.latest_run.ended_at,
+                deadline_at=record.latest_run.deadline_at,
                 version=record.latest_run.version,
                 created_at=record.latest_run.created_at,
                 updated_at=record.latest_run.updated_at,
@@ -210,9 +255,99 @@ async def health():
     status_code=202,
 )
 async def create_task(request: Request, body: ResearchRequest) -> TaskDetailResponse:
-    """Persist a queued task/run pair without starting research execution."""
+    """Persist a queued task/run pair and submit it to the durable coordinator."""
 
     record = await _get_task_service(request).create(body)
+    coordinator = _get_run_coordinator(request)
+    if coordinator is not None and record.latest_run is not None:
+        try:
+            await coordinator.submit(record.latest_run.run_id, resume=False)
+        except Exception:
+            # Persistence is authoritative; periodic recovery will submit queued work.
+            pass
+    return _task_detail_response(record)
+
+
+class IfMatchRequiredError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "The If-Match task version is required.",
+            category=ErrorCategory.CONTRACT,
+            code="TASK_VERSION_REQUIRED",
+            status_code=428,
+            retryable=False,
+            action='Send If-Match with the current task version, for example "3".',
+            scope="task_lifecycle",
+            task_id=task_id,
+        )
+
+
+class InvalidIfMatchError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "The If-Match task version is invalid.",
+            category=ErrorCategory.VALIDATION,
+            code="INVALID_TASK_VERSION",
+            status_code=422,
+            retryable=False,
+            action='Use a non-negative integer or quoted integer, for example "3".',
+            scope="task_lifecycle",
+            task_id=task_id,
+        )
+
+
+def _parse_if_match(value: str | None, task_id: str) -> int:
+    if value is None:
+        raise IfMatchRequiredError(task_id)
+    candidate = value.strip()
+    match = re.fullmatch(r'(?:"(\d+)"|(\d+))', candidate)
+    if match is None:
+        raise InvalidIfMatchError(task_id)
+    digits = match.group(1) or match.group(2)
+    if len(digits) > 19:
+        raise InvalidIfMatchError(task_id)
+    parsed = int(digits)
+    if parsed > 9_223_372_036_854_775_807:
+        raise InvalidIfMatchError(task_id)
+    return parsed
+
+
+@app.post(
+    "/api/v1/tasks/{task_id}/cancel",
+    response_model=TaskDetailResponse,
+)
+async def cancel_task(task_id: str, request: Request) -> TaskDetailResponse:
+    record = await _get_task_service(request).cancel(task_id)
+    coordinator = _get_run_coordinator(request)
+    if (
+        coordinator is not None
+        and record.latest_run is not None
+        and record.task.status is TaskStatus.CANCELLING
+    ):
+        await coordinator.cancel_active(record.latest_run.run_id)
+    return _task_detail_response(record)
+
+
+@app.post(
+    "/api/v1/tasks/{task_id}/resume",
+    response_model=TaskDetailResponse,
+    status_code=202,
+)
+async def resume_task(task_id: str, request: Request) -> TaskDetailResponse:
+    expected = _parse_if_match(request.headers.get("if-match"), task_id)
+    record = await _get_task_service(request).resume(
+        task_id, expected_task_version=expected
+    )
+    coordinator = _get_run_coordinator(request)
+    if coordinator is not None and record.latest_run is not None:
+        try:
+            await coordinator.submit(
+                record.latest_run.run_id,
+                resume=record.latest_run.execution_epoch > 0,
+            )
+        except Exception:
+            # The durable mutation succeeded; periodic recovery is the wake-up fallback.
+            pass
     return _task_detail_response(record)
 
 

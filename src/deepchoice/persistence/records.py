@@ -40,12 +40,47 @@ class RunRecord(_FrozenRecord):
     execution_epoch: int = Field(default=0, ge=0)
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
+    deadline_at: datetime | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
     error_id: str | None = None
     version: int = Field(default=0, ge=0)
     created_at: datetime
     updated_at: datetime
+
+
+class CheckpointReference(_FrozenRecord):
+    """A product-owned reference to one durable LangGraph checkpoint."""
+
+    run_id: str = Field(min_length=1)
+    checkpoint_ns: str = ""
+    storage_checkpoint_ns: str = ""
+    checkpoint_id: str = Field(min_length=1)
+    node: str | None = None
+    state_schema_version: int = Field(gt=0)
+    execution_epoch: int = Field(ge=1)
+    created_at: datetime
+
+
+class RunLeaseGrant(_FrozenRecord):
+    """A fencing token granted to exactly one execution attempt."""
+
+    task_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    lease_owner: str = Field(min_length=1)
+    execution_epoch: int = Field(ge=1)
+    lease_expires_at: datetime
+    deadline_at: datetime
+    status: RunStatus
+    resume: bool = False
+
+
+class RecoveryRun(_FrozenRecord):
+    """A queued run selected by startup/periodic recovery."""
+
+    task_id: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    resume: bool = False
 
 
 class TaskWithRun(_FrozenRecord):
@@ -55,4 +90,11 @@ class TaskWithRun(_FrozenRecord):
     latest_run: RunRecord | None
 
 
-__all__ = ["RunRecord", "TaskRecord", "TaskWithRun"]
+__all__ = [
+    "CheckpointReference",
+    "RecoveryRun",
+    "RunLeaseGrant",
+    "RunRecord",
+    "TaskRecord",
+    "TaskWithRun",
+]

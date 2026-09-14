@@ -98,9 +98,29 @@ _V2_STATEMENTS: Final[tuple[str, ...]] = (
     "CREATE INDEX idx_tasks_status_created_at_task_id ON tasks(status, created_at DESC, task_id DESC)",
 )
 
+_V3_STATEMENTS: Final[tuple[str, ...]] = (
+    "ALTER TABLE runs ADD COLUMN deadline_at TEXT",
+    """
+CREATE TABLE run_checkpoints (
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE
+        CHECK (length(run_id) > 0),
+    checkpoint_ns TEXT NOT NULL,
+    storage_checkpoint_ns TEXT NOT NULL,
+    checkpoint_id TEXT NOT NULL CHECK (length(checkpoint_id) > 0),
+    node TEXT,
+    state_schema_version INTEGER NOT NULL CHECK (state_schema_version > 0),
+    execution_epoch INTEGER NOT NULL CHECK (execution_epoch >= 1),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, storage_checkpoint_ns, checkpoint_id)
+)
+""".strip(),
+    "CREATE INDEX idx_run_checkpoints_run_created ON run_checkpoints(run_id, created_at DESC)",
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
+    Migration(version=3, name="run_deadline_and_checkpoint_references", statements=_V3_STATEMENTS),
 )
 
 

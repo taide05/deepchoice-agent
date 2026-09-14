@@ -12,9 +12,18 @@ from .migrations import (
     MigrationExecutionError,
     run_migrations,
 )
-from .records import RunRecord, TaskRecord, TaskWithRun
+from .records import (
+    CheckpointReference,
+    RecoveryRun,
+    RunLeaseGrant,
+    RunRecord,
+    TaskRecord,
+    TaskWithRun,
+)
 from .repository import (
+    CheckpointNotAvailableError,
     RepositoryOperationError,
+    RunLeaseLostError,
     RunNotFoundError,
     RunRepository,
     SQLiteTaskRunRepository,
@@ -24,6 +33,7 @@ from .repository import (
 )
 
 __all__ = [
+    "CheckpointNotAvailableError",
     "DEFAULT_DB_PATH",
     "MIGRATIONS",
     "DatabaseConnectionError",
@@ -32,7 +42,11 @@ __all__ = [
     "MigrationExecutionError",
     "RepositoryOperationError",
     "RunNotFoundError",
+    "RunLeaseLostError",
     "RunRecord",
+    "CheckpointReference",
+    "RecoveryRun",
+    "RunLeaseGrant",
     "RunRepository",
     "SQLiteTaskRunRepository",
     "TaskNotFoundError",

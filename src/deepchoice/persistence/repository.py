@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 import aiosqlite
@@ -20,7 +20,14 @@ from deepchoice.runtime.lifecycle import (
 )
 
 from .database import _await_cleanup, _is_locked_error
-from .records import RunRecord, TaskRecord, TaskWithRun
+from .records import (
+    CheckpointReference,
+    RecoveryRun,
+    RunLeaseGrant,
+    RunRecord,
+    TaskRecord,
+    TaskWithRun,
+)
 
 
 class RepositoryOperationError(DeepChoiceError):
@@ -81,6 +88,38 @@ class TaskVersionConflictError(DeepChoiceError):
         )
 
 
+class RunLeaseLostError(DeepChoiceError):
+    """The caller no longer owns the fenced execution lease."""
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(
+            "The run execution lease is no longer valid.",
+            category=ErrorCategory.CONTRACT,
+            code="RUN_LEASE_LOST",
+            status_code=409,
+            retryable=False,
+            action="Stop this worker and let the current lease owner continue.",
+            scope="run_lease",
+            run_id=run_id,
+        )
+
+
+class CheckpointNotAvailableError(DeepChoiceError):
+    """The product database has no compatible accepted resume checkpoint."""
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(
+            "A compatible accepted checkpoint is not available for this run.",
+            category=ErrorCategory.CONTRACT,
+            code="RUN_CHECKPOINT_NOT_AVAILABLE",
+            status_code=409,
+            retryable=False,
+            action="Retry the task with a new run.",
+            scope="run_checkpoint",
+            run_id=run_id,
+        )
+
+
 @runtime_checkable
 class TaskRepository(Protocol):
     async def create_task_with_run(
@@ -107,10 +146,100 @@ class TaskRepository(Protocol):
         updated_at: datetime | None = None,
     ) -> TaskWithRun: ...
 
+    async def cancel_task(
+        self, task_id: str, *, updated_at: datetime | None = None
+    ) -> TaskWithRun: ...
+
+    async def resume_interrupted_run(
+        self,
+        task_id: str,
+        *,
+        expected_task_version: int,
+        updated_at: datetime | None = None,
+    ) -> TaskWithRun: ...
+
+    async def retry_task_with_run(
+        self,
+        task_id: str,
+        run: RunRecord,
+        *,
+        expected_task_version: int,
+        updated_at: datetime | None = None,
+    ) -> TaskWithRun: ...
+
+    async def get_latest_checkpoint_reference(
+        self,
+        run_id: str,
+        *,
+        state_schema_version: int | None = None,
+        checkpoint_ns: str | None = None,
+    ) -> CheckpointReference | None: ...
+
 
 @runtime_checkable
 class RunRepository(Protocol):
     async def get_run(self, run_id: str) -> RunRecord | None: ...
+
+    async def acquire_run_lease(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        lease_ttl: timedelta,
+        run_timeout: timedelta,
+        now: datetime | None = None,
+    ) -> RunLeaseGrant: ...
+
+    async def heartbeat_run_lease(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        lease_ttl: timedelta,
+        now: datetime | None = None,
+    ) -> RunLeaseGrant: ...
+
+    async def fence_run(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        now: datetime | None = None,
+    ) -> RunRecord: ...
+
+    async def finalize_run(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        status: RunStatus,
+        error_id: str | None = None,
+        now: datetime | None = None,
+    ) -> TaskWithRun: ...
+
+    async def add_checkpoint_reference(
+        self,
+        reference: CheckpointReference,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        now: datetime | None = None,
+    ) -> CheckpointReference: ...
+
+    async def get_latest_checkpoint_reference(
+        self,
+        run_id: str,
+        *,
+        state_schema_version: int | None = None,
+        checkpoint_ns: str | None = None,
+    ) -> CheckpointReference | None: ...
+
+    async def recover_runs(
+        self, *, now: datetime | None = None
+    ) -> tuple[RecoveryRun, ...]: ...
 
 
 _TASK_COLUMNS = """
@@ -121,7 +250,7 @@ t.cancel_requested_at, t.version, t.created_at, t.updated_at
 _RUN_COLUMNS = """
 r.run_id, r.task_id, r.status, r.manifest_json, r.thread_id,
 r.checkpoint_ns, r.execution_epoch, r.lease_owner, r.lease_expires_at,
-r.started_at, r.ended_at, r.error_id, r.version, r.created_at, r.updated_at
+r.deadline_at, r.started_at, r.ended_at, r.error_id, r.version, r.created_at, r.updated_at
 """.strip()
 
 
@@ -168,12 +297,13 @@ def _run_from_values(values: tuple[object, ...]) -> RunRecord:
         lease_expires_at=_datetime_from_db(
             str(values[8]) if values[8] is not None else None
         ),
-        started_at=_datetime_from_db(str(values[9]) if values[9] is not None else None),
-        ended_at=_datetime_from_db(str(values[10]) if values[10] is not None else None),
-        error_id=str(values[11]) if values[11] is not None else None,
-        version=int(values[12]),
-        created_at=_datetime_from_db(str(values[13])),
-        updated_at=_datetime_from_db(str(values[14])),
+        deadline_at=_datetime_from_db(str(values[9]) if values[9] is not None else None),
+        started_at=_datetime_from_db(str(values[10]) if values[10] is not None else None),
+        ended_at=_datetime_from_db(str(values[11]) if values[11] is not None else None),
+        error_id=str(values[12]) if values[12] is not None else None,
+        version=int(values[13]),
+        created_at=_datetime_from_db(str(values[14])),
+        updated_at=_datetime_from_db(str(values[15])),
     )
 
 
@@ -214,6 +344,29 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             return await cursor.fetchall()
         finally:
             await cursor.close()
+
+    async def _begin(self) -> None:
+        cursor = await self._connection.execute("BEGIN IMMEDIATE")
+        await cursor.close()
+
+    async def _current_task_unlocked(self, task_id: str) -> TaskWithRun | None:
+        row = await self._fetchone(
+            f"""
+            SELECT {_TASK_COLUMNS}, {_RUN_COLUMNS}
+            FROM tasks AS t
+            LEFT JOIN runs AS r ON r.run_id = t.latest_run_id
+            WHERE t.task_id = ?
+            """,
+            (task_id,),
+        )
+        return _joined_from_row(row) if row is not None else None
+
+    async def _run_unlocked(self, run_id: str) -> RunRecord | None:
+        row = await self._fetchone(
+            f"SELECT {_RUN_COLUMNS} FROM runs AS r WHERE r.run_id = ?",
+            (run_id,),
+        )
+        return _run_from_values(row) if row is not None else None
 
     async def create_task_with_run(
         self, task: TaskRecord, run: RunRecord
@@ -259,9 +412,9 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                     INSERT INTO runs(
                         run_id, task_id, status, manifest_json, thread_id,
                         checkpoint_ns, execution_epoch, lease_owner,
-                        lease_expires_at, started_at, ended_at, error_id,
+                        lease_expires_at, deadline_at, started_at, ended_at, error_id,
                         version, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         run.run_id,
@@ -274,6 +427,9 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         run.lease_owner,
                         _datetime_to_db(run.lease_expires_at)
                         if run.lease_expires_at is not None
+                        else None,
+                        _datetime_to_db(run.deadline_at)
+                        if run.deadline_at is not None
                         else None,
                         _datetime_to_db(run.started_at)
                         if run.started_at is not None
@@ -302,6 +458,334 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             except Exception as exc:
                 if transaction_started or self._connection.in_transaction:
                     await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def acquire_run_lease(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        lease_ttl: timedelta,
+        run_timeout: timedelta,
+        now: datetime | None = None,
+    ) -> RunLeaseGrant:
+        if not lease_owner:
+            raise ValueError("lease_owner must be non-empty")
+        if lease_ttl <= timedelta(0) or run_timeout <= timedelta(0):
+            raise ValueError("lease_ttl and run_timeout must be positive")
+        changed_at = now or datetime.now(UTC)
+        encoded_now = _datetime_to_db(changed_at)
+        lease_expires_at = changed_at + lease_ttl
+        deadline_at = changed_at + run_timeout
+
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                run = await self._run_unlocked(run_id)
+                if run is None:
+                    raise RunNotFoundError(run_id)
+                current = await self._current_task_unlocked(run.task_id)
+                if (
+                    current is None
+                    or current.latest_run is None
+                    or current.task.latest_run_id != run_id
+                    or current.task.status is not TaskStatus.QUEUED
+                    or run.status is not RunStatus.QUEUED
+                    or (
+                        run.lease_owner is not None
+                        and (
+                            run.lease_expires_at is None
+                            or run.lease_expires_at > changed_at
+                        )
+                    )
+                ):
+                    raise RunLeaseLostError(run_id)
+                checkpoint = await self._fetchone(
+                    """
+                    SELECT checkpoint_id FROM run_checkpoints
+                    WHERE run_id = ? AND checkpoint_ns = ? AND state_schema_version = ?
+                    ORDER BY created_at DESC LIMIT 1
+                    """,
+                    (run_id, run.checkpoint_ns, run.manifest.state_schema_version),
+                )
+                next_epoch = run.execution_epoch + 1
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs
+                    SET status = ?, execution_epoch = ?, lease_owner = ?,
+                        lease_expires_at = ?, started_at = COALESCE(started_at, ?),
+                        deadline_at = ?, ended_at = NULL, error_id = NULL,
+                        version = version + 1, updated_at = ?
+                    WHERE run_id = ? AND version = ? AND status = ?
+                    """,
+                    (
+                        RunStatus.RUNNING.value,
+                        next_epoch,
+                        lease_owner,
+                        _datetime_to_db(lease_expires_at),
+                        encoded_now,
+                        _datetime_to_db(deadline_at),
+                        encoded_now,
+                        run_id,
+                        run.version,
+                        RunStatus.QUEUED.value,
+                    ),
+                )
+                updated = cursor.rowcount
+                await cursor.close()
+                if updated != 1:
+                    raise RunLeaseLostError(run_id)
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks
+                    SET status = ?, version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND latest_run_id = ? AND version = ? AND status = ?
+                    """,
+                    (
+                        TaskStatus.RUNNING.value,
+                        encoded_now,
+                        run.task_id,
+                        run_id,
+                        current.task.version,
+                        TaskStatus.QUEUED.value,
+                    ),
+                )
+                task_updated = cursor.rowcount
+                await cursor.close()
+                if task_updated != 1:
+                    raise RunLeaseLostError(run_id)
+                await self._connection.commit()
+                started = False
+                return RunLeaseGrant(
+                    task_id=run.task_id,
+                    run_id=run_id,
+                    lease_owner=lease_owner,
+                    execution_epoch=next_epoch,
+                    lease_expires_at=lease_expires_at,
+                    deadline_at=deadline_at,
+                    status=RunStatus.RUNNING,
+                    resume=checkpoint is not None,
+                )
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def heartbeat_run_lease(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        lease_ttl: timedelta,
+        now: datetime | None = None,
+    ) -> RunLeaseGrant:
+        changed_at = now or datetime.now(UTC)
+        if not lease_owner or execution_epoch < 1 or lease_ttl <= timedelta(0):
+            raise ValueError("invalid lease heartbeat")
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                run = await self._run_unlocked(run_id)
+                if (
+                    run is None
+                    or run.lease_owner != lease_owner
+                    or run.execution_epoch != execution_epoch
+                    or run.status not in {RunStatus.RUNNING, RunStatus.CANCELLING}
+                    or run.lease_expires_at is None
+                    or run.lease_expires_at <= changed_at
+                    or run.deadline_at is None
+                ):
+                    raise RunLeaseLostError(run_id)
+                lease_expires_at = changed_at + lease_ttl
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs SET lease_expires_at = ?, updated_at = ?
+                    WHERE run_id = ? AND lease_owner = ? AND execution_epoch = ?
+                      AND status IN (?, ?) AND lease_expires_at > ?
+                    """,
+                    (
+                        _datetime_to_db(lease_expires_at),
+                        _datetime_to_db(changed_at),
+                        run_id,
+                        lease_owner,
+                        execution_epoch,
+                        RunStatus.RUNNING.value,
+                        RunStatus.CANCELLING.value,
+                        _datetime_to_db(changed_at),
+                    ),
+                )
+                updated = cursor.rowcount
+                await cursor.close()
+                if updated != 1:
+                    raise RunLeaseLostError(run_id)
+                await self._connection.commit()
+                started = False
+                return RunLeaseGrant(
+                    task_id=run.task_id,
+                    run_id=run_id,
+                    lease_owner=lease_owner,
+                    execution_epoch=execution_epoch,
+                    lease_expires_at=lease_expires_at,
+                    deadline_at=run.deadline_at,
+                    status=run.status,
+                    resume=True,
+                )
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def fence_run(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        now: datetime | None = None,
+    ) -> RunRecord:
+        checked_at = now or datetime.now(UTC)
+        async with self._lock:
+            try:
+                run = await self._run_unlocked(run_id)
+                if (
+                    run is None
+                    or run.lease_owner != lease_owner
+                    or run.execution_epoch != execution_epoch
+                    or run.status not in {RunStatus.RUNNING, RunStatus.CANCELLING}
+                    or run.lease_expires_at is None
+                    or run.lease_expires_at <= checked_at
+                ):
+                    raise RunLeaseLostError(run_id)
+                return run
+            except DeepChoiceError:
+                raise
+            except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def add_checkpoint_reference(
+        self,
+        reference: CheckpointReference,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        now: datetime | None = None,
+    ) -> CheckpointReference:
+        checked_at = now or datetime.now(UTC)
+        if reference.execution_epoch != execution_epoch:
+            raise RunLeaseLostError(reference.run_id)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                run = await self._run_unlocked(reference.run_id)
+                if (
+                    run is None
+                    or run.lease_owner != lease_owner
+                    or run.execution_epoch != execution_epoch
+                    or run.status not in {RunStatus.RUNNING, RunStatus.CANCELLING}
+                    or run.lease_expires_at is None
+                    or run.lease_expires_at <= checked_at
+                ):
+                    raise RunLeaseLostError(reference.run_id)
+                cursor = await self._connection.execute(
+                    """
+                    INSERT OR IGNORE INTO run_checkpoints(
+                        run_id, checkpoint_ns, storage_checkpoint_ns,
+                        checkpoint_id, node,
+                        state_schema_version, execution_epoch, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        reference.run_id,
+                        reference.checkpoint_ns,
+                        reference.storage_checkpoint_ns,
+                        reference.checkpoint_id,
+                        reference.node,
+                        reference.state_schema_version,
+                        reference.execution_epoch,
+                        _datetime_to_db(reference.created_at),
+                    ),
+                )
+                await cursor.close()
+                await self._connection.commit()
+                started = False
+                return reference
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def get_latest_checkpoint_reference(
+        self,
+        run_id: str,
+        *,
+        state_schema_version: int | None = None,
+        checkpoint_ns: str | None = None,
+    ) -> CheckpointReference | None:
+        clauses = "run_id = ?"
+        parameters: tuple[object, ...] = (run_id,)
+        if state_schema_version is not None:
+            clauses += " AND state_schema_version = ?"
+            parameters += (state_schema_version,)
+        if checkpoint_ns is not None:
+            clauses += " AND checkpoint_ns = ?"
+            parameters += (checkpoint_ns,)
+        async with self._lock:
+            try:
+                row = await self._fetchone(
+                    f"""
+                    SELECT run_id, checkpoint_ns, storage_checkpoint_ns,
+                           checkpoint_id, node,
+                           state_schema_version, execution_epoch, created_at
+                    FROM run_checkpoints WHERE {clauses}
+                    ORDER BY execution_epoch DESC, created_at DESC, rowid DESC
+                    LIMIT 1
+                    """,
+                    parameters,
+                )
+                if row is None:
+                    return None
+                return CheckpointReference(
+                    run_id=str(row[0]),
+                    checkpoint_ns=str(row[1]),
+                    storage_checkpoint_ns=str(row[2]),
+                    checkpoint_id=str(row[3]),
+                    node=str(row[4]) if row[4] is not None else None,
+                    state_schema_version=int(row[5]),
+                    execution_epoch=int(row[6]),
+                    created_at=_datetime_from_db(str(row[7])),
+                )
+            except Exception as exc:
                 raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
 
     async def get_task(self, task_id: str) -> TaskWithRun | None:
@@ -504,9 +988,599 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
 
 
+    async def finalize_run(
+        self,
+        run_id: str,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        status: RunStatus,
+        error_id: str | None = None,
+        now: datetime | None = None,
+    ) -> TaskWithRun:
+        allowed = {
+            RunStatus.COMPLETED,
+            RunStatus.COMPLETED_WITH_WARNINGS,
+            RunStatus.FAILED,
+            RunStatus.TIMED_OUT,
+            RunStatus.CANCELLED,
+            RunStatus.INTERRUPTED,
+        }
+        if status not in allowed:
+            raise ValueError("finalize status is not supported")
+        changed_at = now or datetime.now(UTC)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                run = await self._run_unlocked(run_id)
+                current = (
+                    await self._current_task_unlocked(run.task_id)
+                    if run is not None
+                    else None
+                )
+                if (
+                    run is None
+                    or current is None
+                    or current.latest_run is None
+                    or current.task.latest_run_id != run_id
+                    or run.lease_owner != lease_owner
+                    or run.execution_epoch != execution_epoch
+                    or run.status not in {RunStatus.RUNNING, RunStatus.CANCELLING}
+                    or run.lease_expires_at is None
+                    or run.lease_expires_at <= changed_at
+                ):
+                    raise RunLeaseLostError(run_id)
+                if (
+                    current.task.cancel_requested_at is not None
+                    or run.status is RunStatus.CANCELLING
+                    or current.task.status is TaskStatus.CANCELLING
+                ):
+                    final_status = RunStatus.CANCELLED
+                elif run.deadline_at is not None and run.deadline_at <= changed_at:
+                    final_status = RunStatus.TIMED_OUT
+                else:
+                    final_status = status
+                task_status = TaskStatus(final_status.value)
+                encoded_now = _datetime_to_db(changed_at)
+                ended_at = (
+                    encoded_now
+                    if final_status
+                    in {
+                        RunStatus.COMPLETED,
+                        RunStatus.COMPLETED_WITH_WARNINGS,
+                        RunStatus.FAILED,
+                        RunStatus.TIMED_OUT,
+                        RunStatus.CANCELLED,
+                    }
+                    else None
+                )
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs
+                    SET status = ?, lease_owner = NULL, lease_expires_at = NULL,
+                        deadline_at = CASE WHEN ? = ? THEN NULL ELSE deadline_at END,
+                        ended_at = ?, error_id = ?, version = version + 1, updated_at = ?
+                    WHERE run_id = ? AND version = ? AND lease_owner = ?
+                      AND execution_epoch = ? AND lease_expires_at > ?
+                    """,
+                    (
+                        final_status.value,
+                        final_status.value,
+                        RunStatus.INTERRUPTED.value,
+                        ended_at,
+                        error_id,
+                        encoded_now,
+                        run_id,
+                        run.version,
+                        lease_owner,
+                        execution_epoch,
+                        encoded_now,
+                    ),
+                )
+                updated = cursor.rowcount
+                await cursor.close()
+                if updated != 1:
+                    raise RunLeaseLostError(run_id)
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks SET status = ?, version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND latest_run_id = ? AND version = ?
+                    """,
+                    (
+                        task_status.value,
+                        encoded_now,
+                        run.task_id,
+                        run_id,
+                        current.task.version,
+                    ),
+                )
+                task_updated = cursor.rowcount
+                await cursor.close()
+                if task_updated != 1:
+                    raise RunLeaseLostError(run_id)
+                result = await self._current_task_unlocked(run.task_id)
+                await self._connection.commit()
+                started = False
+                if result is None:  # pragma: no cover
+                    raise TaskNotFoundError(run.task_id)
+                return result
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def cancel_task(
+        self, task_id: str, *, updated_at: datetime | None = None
+    ) -> TaskWithRun:
+        changed_at = updated_at or datetime.now(UTC)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                current = await self._current_task_unlocked(task_id)
+                if current is None:
+                    raise TaskNotFoundError(task_id)
+                if current.latest_run is None:
+                    raise RunNotFoundError(current.task.latest_run_id or "")
+                if current.task.status.value != current.latest_run.status.value:
+                    raise RepositoryOperationError(retryable=False)
+                if current.task.status in {
+                    TaskStatus.CANCELLING,
+                    TaskStatus.COMPLETED,
+                    TaskStatus.COMPLETED_WITH_WARNINGS,
+                    TaskStatus.FAILED,
+                    TaskStatus.TIMED_OUT,
+                    TaskStatus.CANCELLED,
+                }:
+                    await self._connection.commit()
+                    started = False
+                    return current
+                target = (
+                    TaskStatus.CANCELLING
+                    if current.task.status is TaskStatus.RUNNING
+                    else TaskStatus.CANCELLED
+                )
+                encoded_now = _datetime_to_db(changed_at)
+                ended_at = encoded_now if target is TaskStatus.CANCELLED else None
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks SET status = ?, cancel_requested_at = ?,
+                        version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND version = ? AND latest_run_id = ?
+                    """,
+                    (
+                        target.value,
+                        encoded_now,
+                        encoded_now,
+                        task_id,
+                        current.task.version,
+                        current.latest_run.run_id,
+                    ),
+                )
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs SET status = ?, ended_at = ?,
+                        lease_owner = CASE WHEN ? = ? THEN NULL ELSE lease_owner END,
+                        lease_expires_at = CASE WHEN ? = ? THEN NULL ELSE lease_expires_at END,
+                        deadline_at = CASE WHEN ? = ? THEN NULL ELSE deadline_at END,
+                        version = version + 1, updated_at = ?
+                    WHERE run_id = ? AND version = ?
+                    """,
+                    (
+                        target.value,
+                        ended_at,
+                        target.value,
+                        TaskStatus.CANCELLED.value,
+                        target.value,
+                        TaskStatus.CANCELLED.value,
+                        target.value,
+                        TaskStatus.CANCELLED.value,
+                        encoded_now,
+                        current.latest_run.run_id,
+                        current.latest_run.version,
+                    ),
+                )
+                await cursor.close()
+                result = await self._current_task_unlocked(task_id)
+                await self._connection.commit()
+                started = False
+                if result is None:  # pragma: no cover
+                    raise TaskNotFoundError(task_id)
+                return result
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def resume_interrupted_run(
+        self,
+        task_id: str,
+        *,
+        expected_task_version: int,
+        updated_at: datetime | None = None,
+    ) -> TaskWithRun:
+        changed_at = updated_at or datetime.now(UTC)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                current = await self._current_task_unlocked(task_id)
+                if current is None:
+                    raise TaskNotFoundError(task_id)
+                if current.task.version != expected_task_version:
+                    raise TaskVersionConflictError(
+                        task_id, expected=expected_task_version, actual=current.task.version
+                    )
+                if current.latest_run is None:
+                    raise RunNotFoundError(current.task.latest_run_id or "")
+                ensure_task_transition_allowed(
+                    current.task.status,
+                    TaskStatus.QUEUED,
+                    intent=TaskTransitionIntent.SAME_RUN,
+                )
+                ensure_run_transition_allowed(current.latest_run.status, RunStatus.QUEUED)
+                checkpoint = await self._fetchone(
+                    """
+                    SELECT 1 FROM run_checkpoints
+                    WHERE run_id = ? AND checkpoint_ns = ?
+                      AND state_schema_version = ?
+                    LIMIT 1
+                    """,
+                    (
+                        current.latest_run.run_id,
+                        current.latest_run.checkpoint_ns,
+                        current.latest_run.manifest.state_schema_version,
+                    ),
+                )
+                if (
+                    checkpoint is None
+                    or current.latest_run.manifest.workflow_version != "research-v1"
+                ):
+                    raise CheckpointNotAvailableError(current.latest_run.run_id)
+                encoded_now = _datetime_to_db(changed_at)
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks SET status = ?, cancel_requested_at = NULL,
+                        version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND version = ? AND latest_run_id = ?
+                    """,
+                    (
+                        TaskStatus.QUEUED.value,
+                        encoded_now,
+                        task_id,
+                        expected_task_version,
+                        current.latest_run.run_id,
+                    ),
+                )
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs SET status = ?, lease_owner = NULL,
+                        lease_expires_at = NULL, deadline_at = NULL,
+                        ended_at = NULL, error_id = NULL,
+                        version = version + 1, updated_at = ?
+                    WHERE run_id = ? AND version = ?
+                    """,
+                    (
+                        RunStatus.QUEUED.value,
+                        encoded_now,
+                        current.latest_run.run_id,
+                        current.latest_run.version,
+                    ),
+                )
+                await cursor.close()
+                result = await self._current_task_unlocked(task_id)
+                await self._connection.commit()
+                started = False
+                if result is None:  # pragma: no cover
+                    raise TaskNotFoundError(task_id)
+                return result
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def retry_task_with_run(
+        self,
+        task_id: str,
+        run: RunRecord,
+        *,
+        expected_task_version: int,
+        updated_at: datetime | None = None,
+    ) -> TaskWithRun:
+        changed_at = updated_at or datetime.now(UTC)
+        if run.task_id != task_id or run.status is not RunStatus.QUEUED:
+            raise ValueError("replacement run must be a queued run for this task")
+        if run.thread_id != run.run_id or run.checkpoint_ns:
+            raise ValueError("new run must use its run id and the root checkpoint namespace")
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                current = await self._current_task_unlocked(task_id)
+                if current is None:
+                    raise TaskNotFoundError(task_id)
+                if current.task.version != expected_task_version:
+                    raise TaskVersionConflictError(
+                        task_id, expected=expected_task_version, actual=current.task.version
+                    )
+                ensure_task_transition_allowed(
+                    current.task.status,
+                    TaskStatus.QUEUED,
+                    intent=TaskTransitionIntent.NEW_RUN,
+                )
+                encoded_now = _datetime_to_db(changed_at)
+                cursor = await self._connection.execute(
+                    """
+                    INSERT INTO runs(
+                        run_id, task_id, status, manifest_json, thread_id,
+                        checkpoint_ns, execution_epoch, lease_owner, lease_expires_at,
+                        deadline_at, started_at, ended_at, error_id, version,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run.run_id,
+                        task_id,
+                        run.status.value,
+                        run.manifest.model_dump_json(),
+                        run.thread_id,
+                        run.checkpoint_ns,
+                        run.execution_epoch,
+                        run.lease_owner,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        run.version,
+                        _datetime_to_db(run.created_at),
+                        _datetime_to_db(run.updated_at),
+                    ),
+                )
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks SET status = ?, latest_run_id = ?,
+                        cancel_requested_at = NULL, version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND version = ?
+                    """,
+                    (
+                        TaskStatus.QUEUED.value,
+                        run.run_id,
+                        encoded_now,
+                        task_id,
+                        expected_task_version,
+                    ),
+                )
+                updated = cursor.rowcount
+                await cursor.close()
+                if updated != 1:
+                    raise TaskVersionConflictError(
+                        task_id, expected=expected_task_version, actual=current.task.version
+                    )
+                result = await self._current_task_unlocked(task_id)
+                await self._connection.commit()
+                started = False
+                if result is None:  # pragma: no cover
+                    raise TaskNotFoundError(task_id)
+                return result
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def recover_runs(
+        self, *, now: datetime | None = None
+    ) -> tuple[RecoveryRun, ...]:
+        """Project expired leases and return runs safe to submit."""
+
+        changed_at = now or datetime.now(UTC)
+        encoded_now = _datetime_to_db(changed_at)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                rows = await self._fetchall(
+                    f"""
+                    SELECT {_TASK_COLUMNS}, {_RUN_COLUMNS}
+                    FROM tasks AS t JOIN runs AS r ON r.run_id = t.latest_run_id
+                    WHERE r.status IN (?, ?)
+                      AND (r.lease_expires_at IS NULL OR r.lease_expires_at <= ?)
+                    """,
+                    (
+                        RunStatus.RUNNING.value,
+                        RunStatus.CANCELLING.value,
+                        encoded_now,
+                    ),
+                )
+                for row in rows:
+                    current = _joined_from_row(row)
+                    run = current.latest_run
+                    if run is None:  # pragma: no cover
+                        continue
+                    cancelled = (
+                        current.task.cancel_requested_at is not None
+                        or current.task.status is TaskStatus.CANCELLING
+                        or run.status is RunStatus.CANCELLING
+                    )
+                    deadline_expired = (
+                        run.deadline_at is not None and run.deadline_at <= changed_at
+                    )
+                    if cancelled:
+                        target = RunStatus.CANCELLED
+                    elif deadline_expired:
+                        target = RunStatus.TIMED_OUT
+                    else:
+                        target = RunStatus.INTERRUPTED
+                    ended_at = (
+                        encoded_now
+                        if target in {RunStatus.CANCELLED, RunStatus.TIMED_OUT}
+                        else None
+                    )
+                    deadline_at = (
+                        _datetime_to_db(run.deadline_at)
+                        if target is RunStatus.TIMED_OUT and run.deadline_at is not None
+                        else None
+                    )
+                    cursor = await self._connection.execute(
+                        """
+                        UPDATE runs SET status = ?, lease_owner = NULL,
+                            lease_expires_at = NULL, deadline_at = ?, ended_at = ?,
+                            version = version + 1, updated_at = ?
+                        WHERE run_id = ? AND version = ?
+                        """,
+                        (
+                            target.value,
+                            deadline_at,
+                            ended_at,
+                            encoded_now,
+                            run.run_id,
+                            run.version,
+                        ),
+                    )
+                    await cursor.close()
+                    cursor = await self._connection.execute(
+                        """
+                        UPDATE tasks SET status = ?, version = version + 1, updated_at = ?
+                        WHERE task_id = ? AND version = ? AND latest_run_id = ?
+                        """,
+                        (
+                            TaskStatus(target.value).value,
+                            encoded_now,
+                            current.task.task_id,
+                            current.task.version,
+                            run.run_id,
+                        ),
+                    )
+                    await cursor.close()
+
+                interrupted = await self._fetchall(
+                    f"""
+                    SELECT {_TASK_COLUMNS}, {_RUN_COLUMNS}
+                    FROM tasks AS t JOIN runs AS r ON r.run_id = t.latest_run_id
+                    WHERE t.status = ? AND r.status = ?
+                      AND EXISTS (
+                        SELECT 1 FROM run_checkpoints AS rc
+                        WHERE rc.run_id = r.run_id
+                          AND rc.checkpoint_ns = r.checkpoint_ns
+                          AND rc.state_schema_version = json_extract(
+                              r.manifest_json, '$.state_schema_version')
+                          AND json_extract(r.manifest_json, '$.workflow_version') = 'research-v1'
+                      )
+                    """,
+                    (TaskStatus.INTERRUPTED.value, RunStatus.INTERRUPTED.value),
+                )
+                for row in interrupted:
+                    current = _joined_from_row(row)
+                    run = current.latest_run
+                    if run is None:  # pragma: no cover
+                        continue
+                    cursor = await self._connection.execute(
+                        """
+                        UPDATE runs SET status = ?, deadline_at = NULL, ended_at = NULL,
+                            error_id = NULL, version = version + 1, updated_at = ?
+                        WHERE run_id = ? AND version = ?
+                        """,
+                        (RunStatus.QUEUED.value, encoded_now, run.run_id, run.version),
+                    )
+                    await cursor.close()
+                    cursor = await self._connection.execute(
+                        """
+                        UPDATE tasks SET status = ?, version = version + 1, updated_at = ?
+                        WHERE task_id = ? AND version = ? AND latest_run_id = ?
+                        """,
+                        (
+                            TaskStatus.QUEUED.value,
+                            encoded_now,
+                            current.task.task_id,
+                            current.task.version,
+                            run.run_id,
+                        ),
+                    )
+                    await cursor.close()
+
+                queued = await self._fetchall(
+                    """
+                    SELECT t.task_id, r.run_id,
+                           EXISTS (
+                             SELECT 1 FROM run_checkpoints AS rc
+                             WHERE rc.run_id = r.run_id
+                               AND rc.checkpoint_ns = r.checkpoint_ns
+                               AND rc.state_schema_version = json_extract(
+                                   r.manifest_json, '$.state_schema_version')
+                               AND json_extract(r.manifest_json, '$.workflow_version') = 'research-v1'
+                           )
+                    FROM tasks AS t JOIN runs AS r ON r.run_id = t.latest_run_id
+                    WHERE t.status = ? AND r.status = ?
+                    ORDER BY t.created_at, t.task_id
+                    """,
+                    (TaskStatus.QUEUED.value, RunStatus.QUEUED.value),
+                )
+                await self._connection.commit()
+                started = False
+                return tuple(
+                    RecoveryRun(task_id=str(row[0]), run_id=str(row[1]), resume=bool(row[2]))
+                    for row in queued
+                )
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+
 __all__ = [
+    "CheckpointNotAvailableError",
     "RepositoryOperationError",
     "RunNotFoundError",
+    "RunLeaseLostError",
     "RunRepository",
     "SQLiteTaskRunRepository",
     "TaskNotFoundError",

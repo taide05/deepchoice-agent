@@ -74,6 +74,7 @@ class RunRecordResponse(BaseModel):
     manifest_id: str
     started_at: datetime | None
     ended_at: datetime | None
+    deadline_at: datetime | None = None
     version: int
     created_at: datetime
     updated_at: datetime

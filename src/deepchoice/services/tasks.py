@@ -15,8 +15,18 @@ from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import RunRecord, TaskRecord, TaskWithRun
-from deepchoice.persistence.repository import TaskNotFoundError, TaskRepository
-from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
+from deepchoice.persistence.repository import (
+    CheckpointNotAvailableError,
+    TaskNotFoundError,
+    TaskRepository,
+    TaskVersionConflictError,
+)
+from deepchoice.runtime.lifecycle import (
+    RunStatus,
+    TaskStatus,
+    TaskTransitionIntent,
+    ensure_task_transition_allowed,
+)
 
 
 class TaskPage(BaseModel):
@@ -126,6 +136,7 @@ class TaskService:
             status=RunStatus.QUEUED,
             manifest=manifest,
             thread_id=run_id,
+            checkpoint_ns="",
             version=0,
             created_at=created_at,
             updated_at=created_at,
@@ -178,6 +189,76 @@ class TaskService:
             target_run_status=RunStatus(target_status.value),
             updated_at=self._clock(),
         )
+
+    async def cancel(self, task_id: str) -> TaskWithRun:
+        return await self._repository.cancel_task(task_id, updated_at=self._clock())
+
+    async def resume(
+        self, task_id: str, *, expected_task_version: int
+    ) -> TaskWithRun:
+        if type(expected_task_version) is not int or expected_task_version < 0:
+            raise ValueError("expected_task_version must be a non-negative integer")
+        current = await self.get(task_id)
+        if current.task.version != expected_task_version:
+            raise TaskVersionConflictError(
+                task_id,
+                expected=expected_task_version,
+                actual=current.task.version,
+            )
+        if current.task.status is TaskStatus.INTERRUPTED:
+            latest_run = current.latest_run
+            if latest_run is None:
+                raise TaskNotFoundError(task_id)
+            checkpoint = await self._repository.get_latest_checkpoint_reference(
+                latest_run.run_id,
+                state_schema_version=latest_run.manifest.state_schema_version,
+                checkpoint_ns=latest_run.checkpoint_ns,
+            )
+            if (
+                checkpoint is not None
+                and latest_run.manifest.workflow_version == "research-v1"
+            ):
+                try:
+                    return await self._repository.resume_interrupted_run(
+                        task_id,
+                        expected_task_version=expected_task_version,
+                        updated_at=self._clock(),
+                    )
+                except CheckpointNotAvailableError:
+                    # A concurrent checkpoint change makes this a new-run retry.
+                    pass
+        if current.task.status in {
+            TaskStatus.INTERRUPTED,
+            TaskStatus.FAILED,
+            TaskStatus.TIMED_OUT,
+        }:
+            ensure_task_transition_allowed(
+                current.task.status,
+                TaskStatus.QUEUED,
+                intent=TaskTransitionIntent.NEW_RUN,
+            )
+            run_id = str(self._uuid_factory())
+            created_at = self._clock()
+            request_payload = current.task.request.model_dump(exclude_none=True)
+            replacement = RunRecord(
+                run_id=run_id,
+                task_id=task_id,
+                status=RunStatus.QUEUED,
+                manifest=build_run_manifest(request_payload),
+                thread_id=run_id,
+                checkpoint_ns="",
+                version=0,
+                created_at=created_at,
+                updated_at=created_at,
+            )
+            return await self._repository.retry_task_with_run(
+                task_id,
+                replacement,
+                expected_task_version=expected_task_version,
+                updated_at=created_at,
+            )
+        ensure_task_transition_allowed(current.task.status, TaskStatus.QUEUED)
+        raise AssertionError("unreachable lifecycle transition")
 
 
 __all__ = [

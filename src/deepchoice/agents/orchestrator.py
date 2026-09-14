@@ -1,5 +1,6 @@
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -39,7 +40,12 @@ async def _get_sqlite_saver():
 
 class ChiefEditorAgent:
     def __init__(self, task: dict, websocket=None, stream_output=None, headers=None,
-                 checkpointer=None, thread_id=None, run_manifest: RunManifest | None = None):
+                 checkpointer=None, thread_id=None, run_manifest: RunManifest | None = None,
+                 checkpoint_ns: str = "",
+                 checkpoint_id: str | None = None,
+                 execution_guard: Callable[[], Awaitable[None]] | None = None):
+        if checkpoint_ns:
+            raise ValueError("The root research graph must use an empty checkpoint namespace.")
         self.task = task
         self.run_manifest = run_manifest or build_run_manifest(task)
         self.websocket = websocket
@@ -47,7 +53,10 @@ class ChiefEditorAgent:
         self.headers = headers or {}
         self.task_id = thread_id or str(uuid.uuid4())
         self.thread_id = thread_id or self.task_id
+        self.checkpoint_ns = checkpoint_ns
+        self.checkpoint_id = checkpoint_id
         self.checkpointer = checkpointer if checkpointer is not None else MemorySaver()
+        self.execution_guard = execution_guard
         self.live_phase = None
 
     def _initialize_agents(self) -> dict:
@@ -75,8 +84,12 @@ class ChiefEditorAgent:
         """Wrap an agent node with per-node timing, recording to state['agent_timing']."""
         async def _wrapper(state: dict) -> dict:
             self.live_phase = name
+            if self.execution_guard is not None:
+                await self.execution_guard()
             t0 = time.monotonic()
             result = await fn(state)
+            if self.execution_guard is not None:
+                await self.execution_guard()
             elapsed = round(time.monotonic() - t0, 2)
             timing = dict(state.get("agent_timing", {}))
             timing[name] = elapsed
@@ -145,8 +158,11 @@ class ChiefEditorAgent:
         workflow = self._create_workflow(agents, start_from=start_from)
         return workflow.compile(checkpointer=self.checkpointer)
 
-    def _make_config(self):
-        return {"configurable": {"thread_id": self.thread_id}}
+    def _make_config(self, *, pin_checkpoint: bool = False):
+        configurable = {"thread_id": self.thread_id}
+        if pin_checkpoint and self.checkpoint_id:
+            configurable["checkpoint_id"] = self.checkpoint_id
+        return {"configurable": configurable}
 
     def _make_initial_state(self, task: dict) -> dict:
         initial_state = {
@@ -157,7 +173,7 @@ class ChiefEditorAgent:
             initial_state["sub_questions"] = task["sub_questions"]
         return initial_state
 
-    async def run_research_task(self, task: dict | None = None):
+    async def run_research_task(self, task: dict | None = None, *, resume: bool = False):
         task = task or self.task
         ensure_run_manifest_compatible(self.run_manifest, task)
         has_sub_questions = bool(task.get("sub_questions"))
@@ -165,12 +181,14 @@ class ChiefEditorAgent:
 
         print_agent_output(f"Starting research from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
-        config = self._make_config()
-        initial_state = self._make_initial_state(task)
-        result = await chain.ainvoke(initial_state, config=config)
+        config = self._make_config(pin_checkpoint=resume)
+        graph_input = None if resume else self._make_initial_state(task)
+        result = await chain.ainvoke(graph_input, config=config)
         return result
 
-    async def astream_research_task(self, task: dict | None = None):
+    async def astream_research_task(
+        self, task: dict | None = None, *, resume: bool = False
+    ):
         task = task or self.task
         ensure_run_manifest_compatible(self.run_manifest, task)
         has_sub_questions = bool(task.get("sub_questions"))
@@ -178,10 +196,10 @@ class ChiefEditorAgent:
 
         print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
-        config = self._make_config()
-        initial_state = self._make_initial_state(task)
+        config = self._make_config(pin_checkpoint=resume)
+        graph_input = None if resume else self._make_initial_state(task)
 
-        async for event in chain.astream(initial_state, config=config, stream_mode="updates"):
+        async for event in chain.astream(graph_input, config=config, stream_mode="updates"):
             yield event
 
     async def get_state(self):

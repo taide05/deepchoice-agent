@@ -4,9 +4,32 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from deepchoice.server import app as app_module
+from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
+
+
+@pytest.fixture(autouse=True)
+def isolate_execution_state(tmp_path: Path):
+    state = app_module.app.state
+    missing = object()
+    old = {
+        "execution_enabled": getattr(state, "execution_enabled", missing),
+        "checkpoint_database_path": getattr(state, "checkpoint_database_path", missing),
+        "product_database_path": getattr(state, "product_database_path", missing),
+    }
+    state.execution_enabled = False
+    state.checkpoint_database_path = tmp_path / "checkpoints.db"
+    try:
+        yield
+    finally:
+        for name, value in old.items():
+            if value is missing:
+                delattr(state, name)
+            else:
+                setattr(state, name, value)
 
 
 def _payload(query: str = "compare FastAPI and Flask") -> dict[str, object]:
@@ -82,3 +105,121 @@ def test_task_list_status_filter_and_cursor_are_stable(tmp_path: Path) -> None:
         second_ids = {item["task"]["task_id"] for item in second["items"]}
         assert first_ids.isdisjoint(second_ids)
         assert first_ids | second_ids == set(ids)
+
+
+def test_cancel_queued_is_idempotent_and_public_run_hides_fencing_fields(tmp_path: Path) -> None:
+    app_module.app.state.product_database_path = tmp_path / "product.db"
+    with TestClient(app_module.app) as client:
+        created = client.post("/api/v1/tasks", json=_payload()).json()
+        task_id = created["task"]["task_id"]
+        first = client.post(f"/api/v1/tasks/{task_id}/cancel")
+        assert first.status_code == 200
+        assert first.json()["task"]["status"] == "cancelled"
+        second = client.post(f"/api/v1/tasks/{task_id}/cancel")
+        assert second.status_code == 200
+        body = second.json()
+        assert body["latest_run"]["status"] == "cancelled"
+        assert "deadline_at" in body["latest_run"]
+        for forbidden in ("lease_owner", "execution_epoch", "checkpoint_id", "checkpoint_ns"):
+            assert forbidden not in body["latest_run"]
+
+
+def test_resume_requires_strong_if_match_and_rejects_stale_version(tmp_path: Path) -> None:
+    app_module.app.state.product_database_path = tmp_path / "product.db"
+    with TestClient(app_module.app) as client:
+        created = client.post("/api/v1/tasks", json=_payload()).json()
+        task_id = created["task"]["task_id"]
+        missing = client.post(f"/api/v1/tasks/{task_id}/resume")
+        assert missing.status_code == 428
+        assert missing.json()["error"]["code"] == "TASK_VERSION_REQUIRED"
+        for value in ("W/\"0\"", "bogus", "9" * 30):
+            invalid = client.post(f"/api/v1/tasks/{task_id}/resume", headers={"If-Match": value})
+            assert invalid.status_code == 422
+            assert invalid.json()["error"]["code"] == "INVALID_TASK_VERSION"
+        stale = client.post(f"/api/v1/tasks/{task_id}/resume", headers={"If-Match": '"99"'})
+        assert stale.status_code == 409
+        assert stale.json()["error"]["code"] in {"TASK_VERSION_CONFLICT", "TASK_STATUS_TRANSITION_NOT_ALLOWED"}
+
+
+def test_create_submits_to_lifespan_coordinator_without_running_provider(
+    tmp_path: Path, monkeypatch
+) -> None:
+    submitted: list[tuple[str, bool | None]] = []
+
+    class FakeCoordinator:
+        def __init__(self, _repository, _checkpointer, *, enabled=True):
+            self.enabled = enabled
+
+        async def start(self):
+            return ()
+
+        async def stop(self):
+            return None
+
+        async def submit(self, run_id: str, *, resume: bool | None = None):
+            submitted.append((run_id, resume))
+            return True
+
+    monkeypatch.setattr(app_module, "RunCoordinator", FakeCoordinator)
+    app_module.app.state.execution_enabled = True
+    app_module.app.state.product_database_path = tmp_path / "product.db"
+    with TestClient(app_module.app) as client:
+        response = client.post("/api/v1/tasks", json=_payload())
+        assert response.status_code == 202
+        run_id = response.json()["latest_run"]["run_id"]
+        assert submitted == [(run_id, False)]
+
+
+def test_resume_returns_accepted_when_post_commit_wakeup_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    class FakeCoordinator:
+        fail = False
+
+        def __init__(self, _repository, _checkpointer, *, enabled=True):
+            self.enabled = enabled
+
+        async def start(self):
+            return ()
+
+        async def stop(self):
+            return None
+
+        async def submit(self, _run_id: str, *, resume: bool | None = None):
+            if self.fail:
+                raise RuntimeError("transient wake-up failure")
+            return True
+
+    monkeypatch.setattr(app_module, "RunCoordinator", FakeCoordinator)
+    app_module.app.state.execution_enabled = True
+    app_module.app.state.product_database_path = tmp_path / "product.db"
+    with TestClient(app_module.app) as client:
+        created = client.post("/api/v1/tasks", json=_payload()).json()
+        task_id = created["task"]["task_id"]
+        repository = app_module.app.state.task_repository
+
+        async def interrupt_queued_run():
+            running = await repository.transition_current_run(
+                task_id,
+                expected_task_version=0,
+                target_task_status=TaskStatus.RUNNING,
+                target_run_status=RunStatus.RUNNING,
+            )
+            return await repository.transition_current_run(
+                task_id,
+                expected_task_version=running.task.version,
+                target_task_status=TaskStatus.INTERRUPTED,
+                target_run_status=RunStatus.INTERRUPTED,
+            )
+
+        interrupted = client.portal.call(interrupt_queued_run)
+        app_module.app.state.run_coordinator.fail = True
+        response = client.post(
+            f"/api/v1/tasks/{task_id}/resume",
+            headers={"If-Match": str(interrupted.task.version)},
+        )
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["task"]["status"] == "queued"
+        assert body["task"]["version"] == interrupted.task.version + 1
