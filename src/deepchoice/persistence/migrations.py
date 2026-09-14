@@ -117,10 +117,48 @@ CREATE TABLE run_checkpoints (
     "CREATE INDEX idx_run_checkpoints_run_created ON run_checkpoints(run_id, created_at DESC)",
 )
 
+_V4_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+CREATE TABLE task_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE
+        CHECK (length(task_id) > 0),
+    run_id TEXT REFERENCES runs(run_id) ON DELETE CASCADE
+        CHECK (run_id IS NULL OR length(run_id) > 0),
+    seq INTEGER NOT NULL CHECK (seq >= 1),
+    type TEXT NOT NULL CHECK (length(type) > 0),
+    public_payload_json TEXT NOT NULL
+        CHECK (json_valid(public_payload_json) AND json_type(public_payload_json) = 'object'),
+    created_at TEXT NOT NULL,
+    UNIQUE (task_id, seq)
+)
+""".strip(),
+    "CREATE INDEX idx_task_events_task_event ON task_events(task_id, event_id)",
+    "CREATE INDEX idx_task_events_run_event ON task_events(run_id, event_id)",
+    """
+CREATE TABLE legacy_imports (
+    source_path TEXT NOT NULL CHECK (length(source_path) > 0),
+    content_sha256 TEXT NOT NULL CHECK (length(content_sha256) = 64),
+    outcome TEXT NOT NULL CHECK (outcome IN ('imported', 'error')),
+    task_id TEXT REFERENCES tasks(task_id) ON DELETE SET NULL,
+    run_id TEXT REFERENCES runs(run_id) ON DELETE SET NULL,
+    error_code TEXT,
+    imported_at TEXT NOT NULL,
+    PRIMARY KEY (source_path, content_sha256),
+    CHECK (
+        (outcome = 'imported' AND error_code IS NULL)
+        OR
+        (outcome = 'error' AND task_id IS NULL AND run_id IS NULL AND error_code IS NOT NULL)
+    )
+)
+""".strip(),
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
     Migration(version=3, name="run_deadline_and_checkpoint_references", statements=_V3_STATEMENTS),
+    Migration(version=4, name="durable_task_events_and_legacy_imports", statements=_V4_STATEMENTS),
 )
 
 

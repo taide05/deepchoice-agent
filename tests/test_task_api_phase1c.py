@@ -19,9 +19,11 @@ def isolate_execution_state(tmp_path: Path):
         "execution_enabled": getattr(state, "execution_enabled", missing),
         "checkpoint_database_path": getattr(state, "checkpoint_database_path", missing),
         "product_database_path": getattr(state, "product_database_path", missing),
+        "legacy_snapshot_root": getattr(state, "legacy_snapshot_root", missing),
     }
     state.execution_enabled = False
     state.checkpoint_database_path = tmp_path / "checkpoints.db"
+    state.legacy_snapshot_root = tmp_path / "legacy-snapshots"
     try:
         yield
     finally:
@@ -223,3 +225,6 @@ def test_resume_returns_accepted_when_post_commit_wakeup_fails(
         body = response.json()
         assert body["task"]["status"] == "queued"
         assert body["task"]["version"] == interrupted.task.version + 1
+        events = client.portal.call(repository.list_task_events, task_id)
+        assert events[-1].type == "run.retry_queued"
+        assert events[-1].run_id == body["latest_run"]["run_id"]

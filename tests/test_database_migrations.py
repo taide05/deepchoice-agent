@@ -33,7 +33,7 @@ async def test_fresh_database_has_schema_and_constraints(tmp_path: Path) -> None
     path = tmp_path / "deepchoice.db"
     connection = await connect_database(path)
     try:
-        assert await run_migrations(connection) == (1, 2, 3)
+        assert await run_migrations(connection) == (1, 2, 3, 4)
         history = await (await connection.execute(
             "SELECT version, name, checksum FROM schema_migrations"
         )).fetchall()
@@ -43,6 +43,8 @@ async def test_fresh_database_has_schema_and_constraints(tmp_path: Path) -> None
         assert history[1][2] == "6730ecdfdcf9996267a0ed2b5451ee2a316fd727567c0fe083d00d801f43ca54"
         assert history[2][0:2] == (3, "run_deadline_and_checkpoint_references")
         assert history[2][2] == "0daf8d9051a5d952d4412fd4550fac9503c213fa4ff9afb1b3e40f45b344f109"
+        assert history[3][0:2] == (4, "durable_task_events_and_legacy_imports")
+        assert history[3][2] == "b55cb8ad4d86639851c4fcf6e358b5e4a1d78ff244eaedc644e19f63fa90c93a"
 
         for table in ("tasks", "runs"):
             names = {
@@ -68,6 +70,19 @@ async def test_fresh_database_has_schema_and_constraints(tmp_path: Path) -> None
             row[1] for row in await (await connection.execute("PRAGMA index_list(run_checkpoints)")).fetchall()
         }
         assert "idx_run_checkpoints_run_created" in checkpoint_indexes
+        event_columns = {
+            row[1]
+            for row in await (await connection.execute("PRAGMA table_info(task_events)")).fetchall()
+        }
+        assert {
+            "event_id", "task_id", "run_id", "seq", "type",
+            "public_payload_json", "created_at",
+        } <= event_columns
+        import_columns = {
+            row[1]
+            for row in await (await connection.execute("PRAGMA table_info(legacy_imports)")).fetchall()
+        }
+        assert {"source_path", "content_sha256", "outcome", "error_code"} <= import_columns
         fk = await (await connection.execute("PRAGMA foreign_key_list(run_checkpoints)")).fetchall()
         assert any(row[2] == "runs" and row[6] == "CASCADE" for row in fk)
         assert {"task_id", "status", "request_json", "latest_run_id", "version"} <= task_columns
@@ -165,9 +180,9 @@ async def test_each_connection_enables_required_pragmas(tmp_path: Path) -> None:
 async def test_second_run_is_noop(tmp_path: Path) -> None:
     connection = await connect_database(tmp_path / "deepchoice.db")
     try:
-        assert await run_migrations(connection) == (1, 2, 3)
+        assert await run_migrations(connection) == (1, 2, 3, 4)
         assert await run_migrations(connection) == ()
-        assert (await (await connection.execute("SELECT count(*) FROM schema_migrations")).fetchone())[0] == 3
+        assert (await (await connection.execute("SELECT count(*) FROM schema_migrations")).fetchone())[0] == 4
     finally:
         await connection.close()
 
@@ -194,11 +209,11 @@ async def test_existing_v1_database_upgrades_to_v2(tmp_path: Path) -> None:
             )
             """
         )
-        assert await run_migrations(connection) == (2, 3)
+        assert await run_migrations(connection) == (2, 3, 4)
         versions = await (await connection.execute(
             "SELECT version FROM schema_migrations ORDER BY version"
         )).fetchall()
-        assert [row[0] for row in versions] == [1, 2, 3]
+        assert [row[0] for row in versions] == [1, 2, 3, 4]
         assert "version" in {
             row[1] for row in await (await connection.execute("PRAGMA table_info(runs)")).fetchall()
         }
@@ -230,7 +245,7 @@ async def test_existing_v2_database_upgrades_to_v3_and_preserves_runs(tmp_path: 
         await connection.execute(
             "INSERT INTO runs(run_id,task_id,status,manifest_json,thread_id,created_at,updated_at) VALUES ('run-v2','task-v2','queued','{}','run-v2','2026-01-01','2026-01-01')"
         )
-        assert await run_migrations(connection) == (3,)
+        assert await run_migrations(connection) == (3, 4)
         assert await (await connection.execute("SELECT deadline_at FROM runs WHERE run_id='run-v2'")).fetchone() == (None,)
         await connection.execute(
             "INSERT INTO run_checkpoints(run_id,checkpoint_ns,storage_checkpoint_ns,checkpoint_id,state_schema_version,execution_epoch,created_at) VALUES ('run-v2','','','cp-1',1,1,'now')"
@@ -239,6 +254,32 @@ async def test_existing_v2_database_upgrades_to_v3_and_preserves_runs(tmp_path: 
             await connection.execute(
                 "INSERT INTO run_checkpoints(run_id,checkpoint_ns,storage_checkpoint_ns,checkpoint_id,state_schema_version,execution_epoch,created_at) VALUES ('run-v2','','','cp-1',1,1,'now')"
             )
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_existing_v3_database_upgrades_to_v4_and_preserves_runs(tmp_path: Path) -> None:
+    connection = await connect_database(tmp_path / "deepchoice.db")
+    try:
+        assert await run_migrations(connection, MIGRATIONS[:3]) == (1, 2, 3)
+        await connection.execute(
+            "INSERT INTO tasks(task_id,status,request_json,latest_run_id,created_at,updated_at) "
+            "VALUES ('task-v3','queued','{}','run-v3','2026-01-01','2026-01-01')"
+        )
+        await connection.execute(
+            "INSERT INTO runs(run_id,task_id,status,manifest_json,thread_id,created_at,updated_at) "
+            "VALUES ('run-v3','task-v3','queued','{}','run-v3','2026-01-01','2026-01-01')"
+        )
+        await connection.commit()
+
+        assert await run_migrations(connection) == (4,)
+        assert await (
+            await connection.execute("SELECT status FROM tasks WHERE task_id='task-v3'")
+        ).fetchone() == ("queued",)
+        assert await (
+            await connection.execute("SELECT COUNT(*) FROM task_events")
+        ).fetchone() == (0,)
     finally:
         await connection.close()
 
@@ -338,8 +379,8 @@ async def test_concurrent_runners_produce_one_history_row(tmp_path: Path) -> Non
     first, second = await asyncio.gather(connect_database(path), connect_database(path))
     try:
         results = await asyncio.gather(run_migrations(first), run_migrations(second))
-        assert sorted(results) == [(), (1, 2, 3)]
-        assert (await (await first.execute("SELECT count(*) FROM schema_migrations")).fetchone())[0] == 3
+        assert sorted(results) == [(), (1, 2, 3, 4)]
+        assert (await (await first.execute("SELECT count(*) FROM schema_migrations")).fetchone())[0] == 4
     finally:
         await first.close()
         await second.close()
@@ -443,7 +484,7 @@ async def test_cancelled_migration_rolls_back_and_releases_write_lock(
             await migration_task
         monkeypatch.setattr(migration_module, "_begin_immediate", original_begin)
         assert first.in_transaction is False
-        assert await run_migrations(second) == (1, 2, 3)
+        assert await run_migrations(second) == (1, 2, 3, 4)
     finally:
         await first.close()
         await second.close()

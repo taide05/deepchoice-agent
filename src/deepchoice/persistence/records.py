@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import RunManifest
@@ -90,11 +91,49 @@ class TaskWithRun(_FrozenRecord):
     latest_run: RunRecord | None
 
 
+class TaskEventRecord(_FrozenRecord):
+    """One public, replayable lifecycle event for a task."""
+
+    event_id: int = Field(gt=0)
+    task_id: str = Field(min_length=1)
+    run_id: str | None = Field(default=None, min_length=1)
+    seq: int = Field(gt=0)
+    type: str = Field(min_length=1)
+    public_payload: dict[str, JsonValue]
+    created_at: datetime
+
+
+class TaskEventCursor(_FrozenRecord):
+    """Bounds and ownership result for a task-scoped SSE cursor."""
+
+    task_id: str = Field(min_length=1)
+    first_event_id: int | None = Field(default=None, gt=0)
+    latest_event_id: int | None = Field(default=None, gt=0)
+    cursor: int = Field(ge=0)
+    cursor_valid: bool
+
+
+class LegacyImportRecord(_FrozenRecord):
+    """A safe audit record for one legacy snapshot import attempt."""
+
+    source_path: str = Field(min_length=1)
+    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    outcome: Literal["imported", "error"]
+    task_id: str | None = Field(default=None, min_length=1)
+    run_id: str | None = Field(default=None, min_length=1)
+    error_code: str | None = Field(default=None, min_length=1)
+    imported_at: datetime
+    created: bool = True
+
+
 __all__ = [
     "CheckpointReference",
+    "LegacyImportRecord",
     "RecoveryRun",
     "RunLeaseGrant",
     "RunRecord",
     "TaskRecord",
+    "TaskEventCursor",
+    "TaskEventRecord",
     "TaskWithRun",
 ]

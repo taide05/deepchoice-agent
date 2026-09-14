@@ -68,6 +68,12 @@ LangGraph checkpoint 引用。旧 run 和 manifest 保留用于审计；根 chec
 固定从产品库已接受且 schema 兼容的 checkpoint ID 起步。执行协调器与 API 的执行开关仍可关闭，
 本阶段不承诺多进程调度、分布式锁服务或 checkpoint 内容本身的产品库复制。
 
+Phase 1-E 将任务状态变更与公开 `task_events` 写入同一 SQLite 事务，并以全局单调
+`event_id` 支持 `GET /api/v1/tasks/{task_id}/events` 的 `Last-Event-ID` 重放；游标不属于
+当前任务或超前时返回 `resync_required` 和脱敏后的当前任务快照。启动流程会只读扫描旧
+成功/失败 snapshot，以“相对路径 + SHA-256”幂等导入，不修改原文件；旧 `/research`
+入口保持兼容，旧状态别名也可读取 durable task。取消、恢复和跨进程重启的事件历史均保留。
+
 ### 测试
 
 ```powershell
@@ -75,7 +81,7 @@ LangGraph checkpoint 引用。旧 run 和 manifest 保留用于审计；根 chec
 ```
 
 项目支持 Python 3.11/3.12。2026-09-14 在项目隔离环境中验证结果为
-**734 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
+**762 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -193,7 +199,7 @@ src/deepchoice/
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
-├── server/          # FastAPI（16 端点：app.py 12 + clarify_routes 4，含 SSE）
+├── server/          # FastAPI（22 端点：app.py 18 + clarify_routes 4，含 durable SSE）
 ├── state.py         # ResearchState TypedDict
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 

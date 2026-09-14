@@ -46,6 +46,7 @@ from ..runtime.lifecycle import TaskStatus
 from ..services.tasks import TaskService
 from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
+from .legacy_import import import_legacy_snapshots
 from .snapshot_store import (
     list_history,
     load_snapshot,
@@ -53,6 +54,7 @@ from .snapshot_store import (
     save_report,
     save_snapshot,
 )
+from .task_event_stream import iter_task_event_sse, parse_last_event_id
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
@@ -68,6 +70,13 @@ async def lifespan(application: FastAPI):
         async with connection_lock:
             await run_migrations(connection)
         repository = SQLiteTaskRunRepository(connection, connection_lock)
+        legacy_snapshot_root = Path(
+            getattr(application.state, "legacy_snapshot_root", OUTPUT_DIR)
+        )
+        legacy_import_summary = await import_legacy_snapshots(
+            legacy_snapshot_root,
+            repository,
+        )
         import aiosqlite
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -99,6 +108,7 @@ async def lifespan(application: FastAPI):
         application.state.product_database_lock = connection_lock
         application.state.task_repository = repository
         application.state.task_service = TaskService(repository)
+        application.state.legacy_import_summary = legacy_import_summary
         application.state.run_coordinator = coordinator
         application.state.execution_enabled = execution_enabled
         await coordinator.start()
@@ -109,6 +119,7 @@ async def lifespan(application: FastAPI):
         application.state.run_coordinator = None
         application.state.task_service = None
         application.state.task_repository = None
+        application.state.legacy_import_summary = None
         application.state.product_database_lock = None
         application.state.product_database_connection = None
         if connection is not None:
@@ -139,6 +150,13 @@ def _get_task_service(request: Request) -> TaskService:
 def _get_run_coordinator(request: Request) -> RunCoordinator | None:
     coordinator = getattr(request.app.state, "run_coordinator", None)
     return coordinator if isinstance(coordinator, RunCoordinator) else None
+
+
+def _get_task_repository(request: Request) -> SQLiteTaskRunRepository:
+    repository = getattr(request.app.state, "task_repository", None)
+    if not isinstance(repository, SQLiteTaskRunRepository):
+        raise DatabaseConnectionError(retryable=True)
+    return repository
 
 
 def _task_detail_response(record: TaskWithRun) -> TaskDetailResponse:
@@ -296,6 +314,20 @@ class InvalidIfMatchError(DeepChoiceError):
         )
 
 
+class InvalidLastEventIdError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "The Last-Event-ID cursor is invalid.",
+            category=ErrorCategory.VALIDATION,
+            code="INVALID_LAST_EVENT_ID",
+            status_code=422,
+            retryable=False,
+            action="Reconnect without Last-Event-ID or use a non-negative event ID.",
+            scope="task_events",
+            task_id=task_id,
+        )
+
+
 def _parse_if_match(value: str | None, task_id: str) -> int:
     if value is None:
         raise IfMatchRequiredError(task_id)
@@ -378,6 +410,34 @@ async def get_tasks(
     return TaskListResponse(
         items=tuple(_task_detail_response(item) for item in page.items),
         next_cursor=page.next_cursor,
+    )
+
+
+@app.get("/api/v1/tasks/{task_id}/events")
+async def stream_task_events(task_id: str, request: Request) -> StreamingResponse:
+    """Replay durable public task events and continue from Last-Event-ID."""
+
+    service = _get_task_service(request)
+    await service.get(task_id)
+    try:
+        last_event_id = parse_last_event_id(request.headers.get("last-event-id"))
+    except ValueError:
+        raise InvalidLastEventIdError(task_id) from None
+
+    repository = _get_task_repository(request)
+
+    async def load_public_snapshot(snapshot_task_id: str) -> TaskDetailResponse:
+        return _task_detail_response(await service.get(snapshot_task_id))
+
+    return StreamingResponse(
+        iter_task_event_sse(
+            repository,
+            task_id,
+            last_event_id=last_event_id,
+            snapshot_loader=load_public_snapshot,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -518,7 +578,7 @@ async def stream_research(task_id: str):
 
 
 @app.get("/research/{task_id}/status")
-async def research_status(task_id: str):
+async def research_status(task_id: str, request: Request):
     entry = _active_tasks.get(task_id)
     if entry and entry.get("status") == "complete":
         return {
@@ -562,7 +622,49 @@ async def research_status(task_id: str):
         snapshot = load_snapshot(task_id)
         if snapshot:
             return {"task_id": task_id, "status": "complete"}
-        raise HTTPException(status_code=404, detail="Task not found")
+        repository = getattr(request.app.state, "task_repository", None)
+        if not isinstance(repository, SQLiteTaskRunRepository):
+            raise HTTPException(status_code=404, detail="Task not found")
+        record = await repository.get_task(task_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        status = record.task.status
+        if status in {TaskStatus.COMPLETED, TaskStatus.COMPLETED_WITH_WARNINGS}:
+            return {"task_id": task_id, "status": "complete"}
+        if status in {
+            TaskStatus.FAILED,
+            TaskStatus.TIMED_OUT,
+            TaskStatus.CANCELLED,
+            TaskStatus.INTERRUPTED,
+        }:
+            error_detail = ErrorDetail(
+                category=(
+                    ErrorCategory.TIMEOUT
+                    if status is TaskStatus.TIMED_OUT
+                    else ErrorCategory.RESEARCH
+                ),
+                code=f"TASK_{status.value.upper()}",
+                message=f"Task ended with status {status.value}.",
+                action="Inspect the durable task detail or resume the task when allowed.",
+                retryable=status in {
+                    TaskStatus.FAILED,
+                    TaskStatus.TIMED_OUT,
+                    TaskStatus.INTERRUPTED,
+                },
+                scope="task_lifecycle",
+                task_id=task_id,
+            )
+            return {
+                "task_id": task_id,
+                "status": "failed",
+                "error": error_detail.message,
+                "error_detail": error_detail.model_dump(mode="json"),
+            }
+        return {
+            "task_id": task_id,
+            "status": "running",
+            "phase": status.value,
+        }
 
     return {
         "task_id": task_id,
@@ -705,9 +807,9 @@ async def regenerate_report(task_id: str, format: str = "what_why_how"):
 
 
 @app.get("/tasks/{task_id}")
-async def task_status(task_id: str):
+async def task_status(task_id: str, request: Request):
     """Convenience alias for /research/{task_id}/status."""
-    return await research_status(task_id)
+    return await research_status(task_id, request)
 
 
 @app.get("/history")

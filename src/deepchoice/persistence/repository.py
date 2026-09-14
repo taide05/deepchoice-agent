@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
@@ -22,10 +24,13 @@ from deepchoice.runtime.lifecycle import (
 from .database import _await_cleanup, _is_locked_error
 from .records import (
     CheckpointReference,
+    LegacyImportRecord,
     RecoveryRun,
     RunLeaseGrant,
     RunRecord,
     TaskRecord,
+    TaskEventCursor,
+    TaskEventRecord,
     TaskWithRun,
 )
 
@@ -175,6 +180,33 @@ class TaskRepository(Protocol):
         checkpoint_ns: str | None = None,
     ) -> CheckpointReference | None: ...
 
+    async def list_task_events(
+        self, task_id: str, *, after_event_id: int = 0, limit: int = 100
+    ) -> tuple[TaskEventRecord, ...]: ...
+
+    async def get_task_event_cursor(
+        self, task_id: str, *, cursor: int
+    ) -> TaskEventCursor: ...
+
+    async def record_legacy_import_failure(
+        self,
+        source_path: str,
+        content_sha256: str,
+        error_code: str,
+        *,
+        imported_at: datetime | None = None,
+    ) -> LegacyImportRecord: ...
+
+    async def import_legacy_task(
+        self,
+        source_path: str,
+        content_sha256: str,
+        task: TaskRecord,
+        run: RunRecord,
+        *,
+        imported_at: datetime | None = None,
+    ) -> LegacyImportRecord: ...
+
 
 @runtime_checkable
 class RunRepository(Protocol):
@@ -253,6 +285,12 @@ r.checkpoint_ns, r.execution_epoch, r.lease_owner, r.lease_expires_at,
 r.deadline_at, r.started_at, r.ended_at, r.error_id, r.version, r.created_at, r.updated_at
 """.strip()
 
+_EVENT_COLUMNS = """
+event_id, task_id, run_id, seq, type, public_payload_json, created_at
+""".strip()
+
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
 
 def _datetime_to_db(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() is None:
@@ -313,6 +351,30 @@ def _joined_from_row(row: tuple[object, ...]) -> TaskWithRun:
     return TaskWithRun(task=task, latest_run=run)
 
 
+def _event_from_values(values: tuple[object, ...]) -> TaskEventRecord:
+    return TaskEventRecord(
+        event_id=int(values[0]),
+        task_id=str(values[1]),
+        run_id=str(values[2]) if values[2] is not None else None,
+        seq=int(values[3]),
+        type=str(values[4]),
+        public_payload=json.loads(str(values[5])),
+        created_at=_datetime_from_db(str(values[6])),
+    )
+
+
+def _legacy_import_from_values(values: tuple[object, ...]) -> LegacyImportRecord:
+    return LegacyImportRecord(
+        source_path=str(values[0]),
+        content_sha256=str(values[1]),
+        outcome=str(values[2]),
+        task_id=str(values[3]) if values[3] is not None else None,
+        run_id=str(values[4]) if values[4] is not None else None,
+        error_code=str(values[5]) if values[5] is not None else None,
+        imported_at=_datetime_from_db(str(values[6])),
+    )
+
+
 class SQLiteTaskRunRepository(TaskRepository, RunRepository):
     """Serialize every operation over one lifespan-owned SQLite connection."""
 
@@ -367,6 +429,80 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             (run_id,),
         )
         return _run_from_values(row) if row is not None else None
+
+    async def _append_event_unlocked(
+        self,
+        *,
+        task_id: str,
+        run_id: str | None,
+        event_type: str,
+        public_payload: dict[str, object],
+        created_at: datetime,
+    ) -> TaskEventRecord:
+        """Append under the caller's write transaction.
+
+        ``BEGIN IMMEDIATE`` plus the repository lock serializes the per-task
+        sequence allocation.  Only deliberately public payloads reach this
+        helper; execution ownership and checkpoint identifiers are excluded.
+        """
+
+        row = await self._fetchone(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events WHERE task_id = ?",
+            (task_id,),
+        )
+        seq = int(row[0]) if row is not None else 1
+        encoded_payload = json.dumps(
+            public_payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        )
+        cursor = await self._connection.execute(
+            """
+            INSERT INTO task_events(
+                task_id, run_id, seq, type, public_payload_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                run_id,
+                seq,
+                event_type,
+                encoded_payload,
+                _datetime_to_db(created_at),
+            ),
+        )
+        event_id = cursor.lastrowid
+        await cursor.close()
+        return TaskEventRecord(
+            event_id=int(event_id),
+            task_id=task_id,
+            run_id=run_id,
+            seq=seq,
+            type=event_type,
+            public_payload=public_payload,
+            created_at=created_at,
+        )
+
+    async def _legacy_import_unlocked(
+        self, source_path: str, content_sha256: str
+    ) -> LegacyImportRecord | None:
+        row = await self._fetchone(
+            """
+            SELECT source_path, content_sha256, outcome, task_id, run_id,
+                   error_code, imported_at
+            FROM legacy_imports
+            WHERE source_path = ? AND content_sha256 = ?
+            """,
+            (source_path, content_sha256),
+        )
+        return _legacy_import_from_values(row) if row is not None else None
+
+    @staticmethod
+    def _validate_legacy_import_identity(
+        source_path: str, content_sha256: str
+    ) -> None:
+        if not source_path:
+            raise ValueError("source_path must be non-empty")
+        if not _SHA256_RE.fullmatch(content_sha256):
+            raise ValueError("content_sha256 must be a lowercase SHA-256 digest")
 
     async def create_task_with_run(
         self, task: TaskRecord, run: RunRecord
@@ -444,6 +580,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                     ),
                 )
                 await run_cursor.close()
+                await self._append_event_unlocked(
+                    task_id=task.task_id,
+                    run_id=run.run_id,
+                    event_type="task.queued",
+                    public_payload={"status": TaskStatus.QUEUED.value},
+                    created_at=task.created_at,
+                )
                 await self._connection.commit()
                 transaction_started = False
                 return TaskWithRun(task=task, latest_run=run)
@@ -556,6 +699,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 await cursor.close()
                 if task_updated != 1:
                     raise RunLeaseLostError(run_id)
+                await self._append_event_unlocked(
+                    task_id=run.task_id,
+                    run_id=run_id,
+                    event_type="run.started",
+                    public_payload={"status": RunStatus.RUNNING.value},
+                    created_at=changed_at,
+                )
                 await self._connection.commit()
                 started = False
                 return RunLeaseGrant(
@@ -728,7 +878,19 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         _datetime_to_db(reference.created_at),
                     ),
                 )
+                inserted = cursor.rowcount
                 await cursor.close()
+                if inserted == 1:
+                    payload: dict[str, object] = {}
+                    if reference.node is not None:
+                        payload["node"] = reference.node
+                    await self._append_event_unlocked(
+                        task_id=run.task_id,
+                        run_id=reference.run_id,
+                        event_type="run.progress",
+                        public_payload=payload,
+                        created_at=reference.created_at,
+                    )
                 await self._connection.commit()
                 started = False
                 return reference
@@ -813,6 +975,299 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 )
                 return _run_from_values(row) if row is not None else None
             except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def list_task_events(
+        self, task_id: str, *, after_event_id: int = 0, limit: int = 100
+    ) -> tuple[TaskEventRecord, ...]:
+        if type(after_event_id) is not int or after_event_id < 0:
+            raise ValueError("after_event_id must be a non-negative integer")
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("limit must be between 1 and 1000")
+        async with self._lock:
+            try:
+                task = await self._fetchone(
+                    "SELECT 1 FROM tasks WHERE task_id = ?", (task_id,)
+                )
+                if task is None:
+                    raise TaskNotFoundError(task_id)
+                rows = await self._fetchall(
+                    f"""
+                    SELECT {_EVENT_COLUMNS} FROM task_events
+                    WHERE task_id = ? AND event_id > ?
+                    ORDER BY event_id ASC LIMIT ?
+                    """,
+                    (task_id, after_event_id, limit),
+                )
+                return tuple(_event_from_values(row) for row in rows)
+            except DeepChoiceError:
+                raise
+            except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def get_task_event_cursor(
+        self, task_id: str, *, cursor: int
+    ) -> TaskEventCursor:
+        if type(cursor) is not int or cursor < 0:
+            raise ValueError("cursor must be a non-negative integer")
+        async with self._lock:
+            try:
+                task = await self._fetchone(
+                    "SELECT 1 FROM tasks WHERE task_id = ?", (task_id,)
+                )
+                if task is None:
+                    raise TaskNotFoundError(task_id)
+                bounds = await self._fetchone(
+                    "SELECT MIN(event_id), MAX(event_id) FROM task_events WHERE task_id = ?",
+                    (task_id,),
+                )
+                first = int(bounds[0]) if bounds and bounds[0] is not None else None
+                latest = int(bounds[1]) if bounds and bounds[1] is not None else None
+                owned = cursor == 0
+                if cursor != 0:
+                    owner = await self._fetchone(
+                        "SELECT task_id FROM task_events WHERE event_id = ?", (cursor,)
+                    )
+                    owned = owner is not None and str(owner[0]) == task_id
+                return TaskEventCursor(
+                    task_id=task_id,
+                    first_event_id=first,
+                    latest_event_id=latest,
+                    cursor=cursor,
+                    cursor_valid=owned,
+                )
+            except DeepChoiceError:
+                raise
+            except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def record_legacy_import_failure(
+        self,
+        source_path: str,
+        content_sha256: str,
+        error_code: str,
+        *,
+        imported_at: datetime | None = None,
+    ) -> LegacyImportRecord:
+        self._validate_legacy_import_identity(source_path, content_sha256)
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", error_code):
+            raise ValueError("error_code must be a safe stable code")
+        changed_at = imported_at or datetime.now(UTC)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                existing = await self._legacy_import_unlocked(source_path, content_sha256)
+                if existing is not None:
+                    await self._connection.commit()
+                    started = False
+                    return existing.model_copy(update={"created": False})
+                cursor = await self._connection.execute(
+                    """
+                    INSERT INTO legacy_imports(
+                        source_path, content_sha256, outcome, task_id, run_id,
+                        error_code, imported_at
+                    ) VALUES (?, ?, 'error', NULL, NULL, ?, ?)
+                    """,
+                    (
+                        source_path,
+                        content_sha256,
+                        error_code,
+                        _datetime_to_db(changed_at),
+                    ),
+                )
+                await cursor.close()
+                result = await self._legacy_import_unlocked(source_path, content_sha256)
+                await self._connection.commit()
+                started = False
+                if result is None:  # pragma: no cover
+                    raise RepositoryOperationError(retryable=False)
+                return result
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def import_legacy_task(
+        self,
+        source_path: str,
+        content_sha256: str,
+        task: TaskRecord,
+        run: RunRecord,
+        *,
+        imported_at: datetime | None = None,
+    ) -> LegacyImportRecord:
+        self._validate_legacy_import_identity(source_path, content_sha256)
+        if task.task_id != run.task_id or task.latest_run_id != run.run_id:
+            raise ValueError("legacy task and run identifiers do not match")
+        if task.status.value != run.status.value:
+            raise ValueError("legacy task and run statuses must match")
+        terminal = {
+            RunStatus.COMPLETED,
+            RunStatus.COMPLETED_WITH_WARNINGS,
+            RunStatus.FAILED,
+            RunStatus.TIMED_OUT,
+            RunStatus.CANCELLED,
+            RunStatus.INTERRUPTED,
+        }
+        if run.status not in terminal:
+            raise ValueError("legacy imports must describe a terminal run")
+        changed_at = imported_at or datetime.now(UTC)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                existing = await self._legacy_import_unlocked(source_path, content_sha256)
+                if existing is not None:
+                    await self._connection.commit()
+                    started = False
+                    return existing.model_copy(update={"created": False})
+
+                prior_source = await self._fetchone(
+                    "SELECT 1 FROM legacy_imports WHERE source_path = ? LIMIT 1",
+                    (source_path,),
+                )
+                conflict = await self._fetchone(
+                    "SELECT 1 FROM tasks WHERE task_id = ? UNION ALL SELECT 1 FROM runs WHERE run_id = ? LIMIT 1",
+                    (task.task_id, run.run_id),
+                )
+                error_code = (
+                    "LEGACY_SOURCE_CHANGED"
+                    if prior_source is not None
+                    else "LEGACY_ID_CONFLICT"
+                    if conflict is not None
+                    else None
+                )
+                if error_code is not None:
+                    cursor = await self._connection.execute(
+                        """
+                        INSERT INTO legacy_imports(
+                            source_path, content_sha256, outcome, task_id, run_id,
+                            error_code, imported_at
+                        ) VALUES (?, ?, 'error', NULL, NULL, ?, ?)
+                        """,
+                        (
+                            source_path,
+                            content_sha256,
+                            error_code,
+                            _datetime_to_db(changed_at),
+                        ),
+                    )
+                    await cursor.close()
+                else:
+                    cursor = await self._connection.execute(
+                        """
+                        INSERT INTO tasks(
+                            task_id, status, request_json, latest_run_id,
+                            cancel_requested_at, version, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            task.task_id,
+                            task.status.value,
+                            task.request.model_dump_json(),
+                            task.latest_run_id,
+                            _datetime_to_db(task.cancel_requested_at)
+                            if task.cancel_requested_at is not None
+                            else None,
+                            task.version,
+                            _datetime_to_db(task.created_at),
+                            _datetime_to_db(task.updated_at),
+                        ),
+                    )
+                    await cursor.close()
+                    cursor = await self._connection.execute(
+                        """
+                        INSERT INTO runs(
+                            run_id, task_id, status, manifest_json, thread_id,
+                            checkpoint_ns, execution_epoch, lease_owner,
+                            lease_expires_at, deadline_at, started_at, ended_at,
+                            error_id, version, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            run.run_id,
+                            run.task_id,
+                            run.status.value,
+                            run.manifest.model_dump_json(),
+                            run.thread_id,
+                            run.checkpoint_ns,
+                            run.execution_epoch,
+                            None,
+                            None,
+                            _datetime_to_db(run.deadline_at)
+                            if run.deadline_at is not None
+                            else None,
+                            _datetime_to_db(run.started_at)
+                            if run.started_at is not None
+                            else None,
+                            _datetime_to_db(run.ended_at)
+                            if run.ended_at is not None
+                            else None,
+                            run.error_id,
+                            run.version,
+                            _datetime_to_db(run.created_at),
+                            _datetime_to_db(run.updated_at),
+                        ),
+                    )
+                    await cursor.close()
+                    await self._append_event_unlocked(
+                        task_id=task.task_id,
+                        run_id=run.run_id,
+                        event_type="legacy.imported",
+                        public_payload={"status": run.status.value},
+                        created_at=changed_at,
+                    )
+                    await self._append_event_unlocked(
+                        task_id=task.task_id,
+                        run_id=run.run_id,
+                        event_type=f"run.{run.status.value}",
+                        public_payload={"status": run.status.value},
+                        created_at=changed_at,
+                    )
+                    cursor = await self._connection.execute(
+                        """
+                        INSERT INTO legacy_imports(
+                            source_path, content_sha256, outcome, task_id, run_id,
+                            error_code, imported_at
+                        ) VALUES (?, ?, 'imported', ?, ?, NULL, ?)
+                        """,
+                        (
+                            source_path,
+                            content_sha256,
+                            task.task_id,
+                            run.run_id,
+                            _datetime_to_db(changed_at),
+                        ),
+                    )
+                    await cursor.close()
+                result = await self._legacy_import_unlocked(source_path, content_sha256)
+                await self._connection.commit()
+                started = False
+                if result is None:  # pragma: no cover
+                    raise RepositoryOperationError(retryable=False)
+                return result
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
                 raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
 
     async def list_tasks(
@@ -971,6 +1426,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 )
                 if updated_row is None:  # pragma: no cover - guarded by transaction
                     raise TaskNotFoundError(task_id)
+                await self._append_event_unlocked(
+                    task_id=task_id,
+                    run_id=current.latest_run.run_id,
+                    event_type="run.status_changed",
+                    public_payload={"status": target_run_status.value},
+                    created_at=changed_at,
+                )
                 await self._connection.commit()
                 transaction_started = False
                 return _joined_from_row(updated_row)
@@ -1101,6 +1563,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 if task_updated != 1:
                     raise RunLeaseLostError(run_id)
                 result = await self._current_task_unlocked(run.task_id)
+                await self._append_event_unlocked(
+                    task_id=run.task_id,
+                    run_id=run_id,
+                    event_type=f"run.{final_status.value}",
+                    public_payload={"status": final_status.value},
+                    created_at=changed_at,
+                )
                 await self._connection.commit()
                 started = False
                 if result is None:  # pragma: no cover
@@ -1194,6 +1663,17 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 )
                 await cursor.close()
                 result = await self._current_task_unlocked(task_id)
+                await self._append_event_unlocked(
+                    task_id=task_id,
+                    run_id=current.latest_run.run_id,
+                    event_type=(
+                        "task.cancel_requested"
+                        if target is TaskStatus.CANCELLING
+                        else "task.cancelled"
+                    ),
+                    public_payload={"status": target.value},
+                    created_at=changed_at,
+                )
                 await self._connection.commit()
                 started = False
                 if result is None:  # pragma: no cover
@@ -1291,6 +1771,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 )
                 await cursor.close()
                 result = await self._current_task_unlocked(task_id)
+                await self._append_event_unlocked(
+                    task_id=task_id,
+                    run_id=current.latest_run.run_id,
+                    event_type="run.resumed",
+                    public_payload={"status": RunStatus.QUEUED.value},
+                    created_at=changed_at,
+                )
                 await self._connection.commit()
                 started = False
                 if result is None:  # pragma: no cover
@@ -1390,6 +1877,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         task_id, expected=expected_task_version, actual=current.task.version
                     )
                 result = await self._current_task_unlocked(task_id)
+                await self._append_event_unlocked(
+                    task_id=task_id,
+                    run_id=run.run_id,
+                    event_type="run.retry_queued",
+                    public_payload={"status": RunStatus.QUEUED.value},
+                    created_at=changed_at,
+                )
                 await self._connection.commit()
                 started = False
                 if result is None:  # pragma: no cover
@@ -1479,6 +1973,13 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         ),
                     )
                     await cursor.close()
+                    await self._append_event_unlocked(
+                        task_id=current.task.task_id,
+                        run_id=run.run_id,
+                        event_type=f"run.{target.value}",
+                        public_payload={"status": target.value, "reason": "startup_recovery"},
+                        created_at=changed_at,
+                    )
                     cursor = await self._connection.execute(
                         """
                         UPDATE tasks SET status = ?, version = version + 1, updated_at = ?
@@ -1493,7 +1994,6 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         ),
                     )
                     await cursor.close()
-
                 interrupted = await self._fetchall(
                     f"""
                     SELECT {_TASK_COLUMNS}, {_RUN_COLUMNS}
@@ -1538,6 +2038,16 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                         ),
                     )
                     await cursor.close()
+                    await self._append_event_unlocked(
+                        task_id=current.task.task_id,
+                        run_id=run.run_id,
+                        event_type="run.auto_resumed",
+                        public_payload={
+                            "status": RunStatus.QUEUED.value,
+                            "reason": "startup_recovery",
+                        },
+                        created_at=changed_at,
+                    )
 
                 queued = await self._fetchall(
                     """

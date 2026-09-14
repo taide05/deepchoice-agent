@@ -14,10 +14,13 @@ from .migrations import (
 )
 from .records import (
     CheckpointReference,
+    LegacyImportRecord,
     RecoveryRun,
     RunLeaseGrant,
     RunRecord,
     TaskRecord,
+    TaskEventCursor,
+    TaskEventRecord,
     TaskWithRun,
 )
 from .repository import (
@@ -40,6 +43,7 @@ __all__ = [
     "Migration",
     "MigrationCompatibilityError",
     "MigrationExecutionError",
+    "LegacyImportRecord",
     "RepositoryOperationError",
     "RunNotFoundError",
     "RunLeaseLostError",
@@ -50,6 +54,8 @@ __all__ = [
     "RunRepository",
     "SQLiteTaskRunRepository",
     "TaskNotFoundError",
+    "TaskEventCursor",
+    "TaskEventRecord",
     "TaskRecord",
     "TaskRepository",
     "TaskVersionConflictError",

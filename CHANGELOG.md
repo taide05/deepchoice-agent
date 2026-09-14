@@ -16,17 +16,19 @@
 - Phase 1-B product SQLite migration foundation with transactional schema history and contract coverage
 - Phase 1-C durable task/run repository, queue-only task API, stable keyset pagination, and lifecycle CAS contract coverage
 - Phase 1-D execution control and recovery: fenced leases/heartbeats, startup recovery, cancellation/deadline precedence, epoch-isolated checkpoint writes, interrupted resume, retry-as-new-run, and durable checkpoint references
+- Phase 1-E durable task events and compatibility closeout: transactional lifecycle events, SSE replay/resync with `Last-Event-ID`, idempotent legacy snapshot import, durable cancel/resume event history, legacy status adapters, and restart recovery coverage
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 734 passed with no skips on 2026-09-14
+- Verified Python 3.12 test baseline is 762 passed with no skips on 2026-09-14
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
 - Execution coordination is guarded by an explicit enable switch; product persistence stores checkpoint references while LangGraph checkpoint payloads remain in the checkpoint store
+- Application startup imports legacy snapshots read-only using relative-path/SHA-256 idempotency; the existing `/research` entry point remains available while legacy status aliases can project durable task state
 
 ### Fixed
 - Community retriever concurrency test now follows the production HTTP client timeout contract
