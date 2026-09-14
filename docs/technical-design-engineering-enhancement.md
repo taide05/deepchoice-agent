@@ -655,6 +655,20 @@ Phase 6 的基础输入/URL/日志安全应在 Phase 0/1 同步打底，集中�
 - 风险：写放大、估算偏差、双重 retry/计费。
 - 独立复审：**强制**（并发、预算、横切数据）。
 
+#### Phase 2-A：运行上下文与观测/预算契约
+
+- 目标：先冻结跨节点、跨 provider call 的上下文和数据边界，为后续接线提供稳定端口。
+- 产出：`RunContext`、Trace/Budget DTO 与 Protocol、版本化策略 `standard-observe-v1` 与
+  `unpriced-v1`，以及 schema v8 的骨架表：`run_budget_policies`、`node_attempts`、
+  `external_calls`、`trace_events`、`budget_ledger`。
+- 一致性：新 durable run/retry 在创建事务中原子冻结上述策略；价格未知保持 unknown，不能
+  当作零成本。`task_events` 仍是用户状态与 SSE 的唯一正确性路径，`RunManifest` 暂保持 v1。
+- 兼容：旧 run 不回填 Trace 或预算数据，内部 policy 投影保持 unavailable；后续相关查询 API
+  必须显示 `telemetry/budget unavailable`，不能伪造零用量或默认策略。
+- 明确不在本小阶段：node/call wrapper 接入、Trace 写入与查询 API、预算预留/结算、硬限制和
+  provider usage 对账；这些进入 Phase 2-B/2-C。验收只检查契约、版本冻结、迁移和旧 run
+  的缺失语义，不把骨架表误认为已启用运行时能力。
+
 ### Phase 3：缓存、去重与引用验证
 
 - 目标：降低重复成本，提升引用可信度而不制造大量 LLM 调用。

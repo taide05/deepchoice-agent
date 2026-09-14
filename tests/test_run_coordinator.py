@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence import connect_database, run_migrations
@@ -22,7 +23,7 @@ def _records(task_id="task-1", run_id="run-1", *, status=TaskStatus.QUEUED):
     now = datetime(2026, 1, 1, tzinfo=UTC)
     request = ResearchRequest(query="compare FastAPI and Flask")
     task = TaskRecord(task_id=task_id, status=status, request=request, latest_run_id=run_id, created_at=now, updated_at=now)
-    run = RunRecord(run_id=run_id, task_id=task_id, status=RunStatus(status.value), manifest=build_run_manifest(request.model_dump()), thread_id=run_id, created_at=now, updated_at=now)
+    run = RunRecord(run_id=run_id, task_id=task_id, status=RunStatus(status.value), manifest=build_run_manifest(request.model_dump()), budget_policy=DEFAULT_RUN_BUDGET_POLICY, thread_id=run_id, created_at=now, updated_at=now)
     return task, run
 
 

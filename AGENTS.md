@@ -58,7 +58,7 @@ Run the smallest relevant test first, then the full suite:
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-The verified clean-environment baseline on 2026-09-14 is 799 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-14 is 815 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -106,6 +106,16 @@ When adding a setting, update the code default, tests, README configuration sect
 - Legacy snapshot import stays read-only, direct-child scoped, path/hash idempotent, conflict-preserving, and bounded by candidate count, I/O time, and file size. It runs after readiness as a managed background task. Never copy `_error`, reports, or full snapshot state into product events.
 - Back up, verify, restore, and rehearse the product/checkpoint databases as one manifest-verified pair with `scripts/runtime_db.py`; restore requires a stopped service or maintenance mode and explicit confirmation.
 - Any lifecycle, migration, concurrency, checkpoint, SSE, or compatibility change requires focused fault/concurrency tests, the full suite, an update to `docs/phase1-runtime-contract.md`, and independent review.
+
+### Phase 2-A observability/budget contracts
+
+- `RunContext`、Trace/Budget DTO/Protocol 和 schema v8 骨架表是契约层产出；骨架表包括
+  `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、`budget_ledger`。
+- New durable runs/retries must atomically freeze `standard-observe-v1` and `unpriced-v1`.
+  Unknown prices remain unknown, never zero. Historical runs are not backfilled; their internal
+  policy projection remains unavailable, and future telemetry/budget APIs must report that absence.
+- Phase 2-A 尚未接入 node/call wrapper、Trace 写入/API、预算预留结算或硬限制；这些属于
+  Phase 2-B/2-C。`task_events` 仍是任务状态与 SSE 的唯一正确性路径，`RunManifest` 保持 v1。
 
 ## Local and generated data
 

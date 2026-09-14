@@ -13,6 +13,7 @@ import aiosqlite
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 from deepchoice.contracts.manifest import RunManifest
+from deepchoice.budget import RunBudgetPolicy
 from deepchoice.runtime.lifecycle import (
     RunStatus,
     TaskStatus,
@@ -297,7 +298,9 @@ t.cancel_requested_at, t.version, t.created_at, t.updated_at
 _RUN_COLUMNS = """
 r.run_id, r.task_id, r.status, r.manifest_json, r.thread_id,
 r.checkpoint_ns, r.execution_epoch, r.lease_owner, r.lease_expires_at,
-r.deadline_at, r.started_at, r.ended_at, r.error_id, r.version, r.created_at, r.updated_at
+r.deadline_at, r.started_at, r.ended_at, r.error_id, r.version, r.created_at, r.updated_at,
+(SELECT rbp.policy_json FROM run_budget_policies AS rbp WHERE rbp.run_id = r.run_id),
+(SELECT rbp.price_catalog_version FROM run_budget_policies AS rbp WHERE rbp.run_id = r.run_id)
 """.strip()
 
 _EVENT_COLUMNS = """
@@ -342,11 +345,23 @@ def _task_from_values(values: tuple[object, ...]) -> TaskRecord:
 
 
 def _run_from_values(values: tuple[object, ...]) -> RunRecord:
+    budget_policy = (
+        RunBudgetPolicy.model_validate_json(str(values[16]))
+        if len(values) > 16 and values[16] is not None
+        else None
+    )
+    if budget_policy is not None and (
+        len(values) <= 17
+        or values[17] is None
+        or budget_policy.price_catalog_version != str(values[17])
+    ):
+        raise ValueError("stored budget policy price catalog version is inconsistent")
     return RunRecord(
         run_id=str(values[0]),
         task_id=str(values[1]),
         status=RunStatus(str(values[2])),
         manifest=RunManifest.model_validate_json(str(values[3])),
+        budget_policy=budget_policy,
         thread_id=str(values[4]),
         checkpoint_ns=str(values[5]),
         execution_epoch=int(values[6]),
@@ -439,6 +454,28 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
 
     async def _begin(self) -> None:
         cursor = await self._connection.execute("BEGIN IMMEDIATE")
+        await cursor.close()
+
+    async def _insert_run_budget_policy_unlocked(self, run: RunRecord) -> None:
+        if run.budget_policy is None:
+            return
+        policy = run.budget_policy
+        cursor = await self._connection.execute(
+            """
+            INSERT INTO run_budget_policies(
+                run_id, policy_schema_version, policy_version, policy_json,
+                price_catalog_version, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run.run_id,
+                policy.policy_schema_version,
+                policy.policy_version,
+                policy.model_dump_json(),
+                policy.price_catalog_version,
+                _datetime_to_db(run.created_at),
+            ),
+        )
         await cursor.close()
 
     async def _current_task_unlocked(self, task_id: str) -> TaskWithRun | None:
@@ -539,6 +576,8 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
     ) -> TaskWithRun:
         if task.status is not TaskStatus.QUEUED or run.status is not RunStatus.QUEUED:
             raise ValueError("new tasks and runs must be queued")
+        if run.budget_policy is None:
+            raise ValueError("new durable runs require a frozen budget policy")
         if task.task_id != run.task_id:
             raise ValueError("task and run identifiers do not match")
         if task.latest_run_id != run.run_id:
@@ -610,6 +649,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                     ),
                 )
                 await run_cursor.close()
+                await self._insert_run_budget_policy_unlocked(run)
                 await self._append_event_unlocked(
                     task_id=task.task_id,
                     run_id=run.run_id,
@@ -1962,6 +2002,8 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             raise ValueError("replacement run must be a queued run for this task")
         if run.thread_id != run.run_id or run.checkpoint_ns:
             raise ValueError("new run must use its run id and the root checkpoint namespace")
+        if run.budget_policy is None:
+            raise ValueError("replacement durable runs require a frozen budget policy")
         async with self._lock:
             started = False
             try:
@@ -2009,6 +2051,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                     ),
                 )
                 await cursor.close()
+                await self._insert_run_budget_policy_unlocked(run)
                 cursor = await self._connection.execute(
                     """
                     UPDATE tasks SET status = ?, latest_run_id = ?,

@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from deepchoice.budget import RunBudgetPolicy
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import RunManifest
 from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
@@ -36,6 +37,7 @@ class RunRecord(_FrozenRecord):
     task_id: str = Field(min_length=1)
     status: RunStatus
     manifest: RunManifest
+    budget_policy: RunBudgetPolicy | None = None
     thread_id: str = Field(min_length=1)
     checkpoint_ns: str = ""
     execution_epoch: int = Field(default=0, ge=0)

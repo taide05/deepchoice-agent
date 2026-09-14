@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from deepchoice.agents.orchestrator import ChiefEditorAgent
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.errors import normalize_error
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import (
@@ -516,6 +517,7 @@ class RunCoordinator:
                             manifest=build_run_manifest(
                                 finalized.task.request.model_dump(exclude_none=True)
                             ),
+                            budget_policy=DEFAULT_RUN_BUDGET_POLICY,
                             thread_id=replacement_id,
                             checkpoint_ns="",
                             created_at=created_at,

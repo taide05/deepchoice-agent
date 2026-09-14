@@ -255,6 +255,7 @@ async def test_real_sqlite_saver_rejects_late_write_from_old_epoch(
             task_id="task-1",
             status=RunStatus.QUEUED,
             manifest=manifest,
+            budget_policy=DEFAULT_RUN_BUDGET_POLICY,
             thread_id="run-1",
             created_at=now,
             updated_at=now,
@@ -348,3 +349,4 @@ async def test_real_sqlite_saver_rejects_late_write_from_old_epoch(
     finally:
         await checkpoint_connection.close()
         await product_connection.close()
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY

@@ -322,6 +322,7 @@ async def import_legacy_snapshots(
                 task_id=task_dir.name,
                 status=status,
                 manifest=manifest,
+                budget_policy=None,
                 thread_id=run_id,
                 checkpoint_ns="",
                 execution_epoch=0,

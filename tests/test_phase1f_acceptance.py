@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence import MIGRATIONS, connect_database, run_migrations
@@ -50,7 +51,7 @@ async def test_legacy_schema_steps_to_current_without_losing_task_run_checkpoint
                 ("legacy-run", "", "", "legacy-cp",  "retrieve", 1, 1, "2026-01-01"),
             )
         applied = await run_migrations(connection)
-        assert applied == tuple(range(starting_version + 1, 8))
+        assert applied == tuple(range(starting_version + 1, 9))
         assert await (await connection.execute("SELECT task_id FROM tasks WHERE task_id='legacy-task'")).fetchone() == ("legacy-task",)
         assert await (await connection.execute("SELECT run_id FROM runs WHERE run_id='legacy-run'")).fetchone() == ("legacy-run",)
         assert await (await connection.execute("SELECT COUNT(*) FROM task_events WHERE task_id='legacy-task'")).fetchone() == (0,)
@@ -64,7 +65,7 @@ def _records():
     now = datetime(2026, 1, 1, tzinfo=UTC)
     request = ResearchRequest(query="CAS acceptance")
     task = TaskRecord(task_id="cas-task", status=TaskStatus.QUEUED, request=request, latest_run_id="cas-run", created_at=now, updated_at=now)
-    run = RunRecord(run_id="cas-run", task_id="cas-task", status=RunStatus.QUEUED, manifest=build_run_manifest(request.model_dump()), thread_id="cas-run", created_at=now, updated_at=now)
+    run = RunRecord(run_id="cas-run", task_id="cas-task", status=RunStatus.QUEUED, manifest=build_run_manifest(request.model_dump()), budget_policy=DEFAULT_RUN_BUDGET_POLICY, thread_id="cas-run", created_at=now, updated_at=now)
     return task, run
 
 

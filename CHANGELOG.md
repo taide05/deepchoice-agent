@@ -21,6 +21,7 @@
 - Forward-only product schema v5, preserving valid v4 legacy-import audit rows while enforcing imported/error task/run binding invariants and rolling back safely on invalid historical rows
 - Phase 1-G durable default path: immutable run results, atomic result/success/event finalization, restart-readable report/snapshot/annotated/export APIs, Streamlit durable SSE replay/resync, and cancel/resume controls
 - Forward-only product schema v6 for immutable public run results and v7 for the single-runtime-instance lease
+- Phase 2-A RunContext, Trace/Budget DTO and Protocol contracts, plus the forward-only schema v8 skeleton for run budget policies, node attempts, external calls, trace events, and budget ledger
 - Manifest-verified paired product/checkpoint database backup, restore, and restore-drill tooling
 
 ### Changed
@@ -28,7 +29,7 @@
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 799 passed with no skips on 2026-09-14
+- Verified Python 3.12 test baseline is 815 passed with no skips on 2026-09-14
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
@@ -37,6 +38,8 @@
 - Legacy snapshot import runs after readiness as a managed background task with candidate-count, I/O-time, and file-size budgets
 - The SQLite runtime now rejects known multi-worker settings and a second live instance through a renewable product-database lease; Docker is fixed to Python 3.12 and one worker
 - Coordinator shutdown now settles an in-flight lease acquisition and fenced finalization before propagating cancellation, closing the commit-before-grant ghost-running race
+- New durable runs and retries atomically freeze `standard-observe-v1` and `unpriced-v1`; unknown prices remain unknown rather than being treated as zero. Historical runs are not backfilled and retain an unavailable internal policy projection for future APIs to report honestly
+- Phase 2-A does not yet write Trace events, expose Trace APIs, or enforce budget reservation/settlement/hard limits; those remain Phase 2-B/2-C. Durable `task_events` remains the sole task/SSE correctness path, and `RunManifest` stays v1
 
 ### Fixed
 - Community retriever concurrency test now follows the production HTTP client timeout contract

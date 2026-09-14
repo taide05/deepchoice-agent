@@ -83,9 +83,18 @@ Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/C
 
 Phase 1-G 把 Streamlit 默认路径切换到 durable task API，增加 immutable `run_results`，并将
 公开结果、成功终态和完成事件放在同一事务提交；报告、快照、阅读视图和导出均可在重启后
-查询。产品 schema 现为 v7，并以产品库 lease 加启动配置检查强制单实例/单 worker。旧
+查询。产品 schema 现为 v8：v8 先建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
+观测/预算骨架表；新 durable run/retry 原子冻结 `standard-observe-v1` 与 `unpriced-v1`，
+价格未知不按零成本处理。旧
 snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选数、I/O 时间和文件大小预算。
 `POST /research` 与旧 SSE 只作为一版弃用兼容保留。
+
+Phase 2-A 只冻结运行上下文、Trace/Budget DTO/Protocol、版本化预算策略和产品 schema
+骨架（`run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、
+`budget_ledger`）。旧 run 不回填，内部 policy 投影为 unavailable；后续查询 API 必须如实显示
+该缺失状态。node/call
+wrapper、Trace 写入/API、预算预留结算和硬限制属于后续 Phase 2-B/2-C，不能提前假定已经生效。
+`task_events` 仍是任务状态与 SSE 正确性的唯一事实源，`RunManifest` 保持 v1，不因本阶段升级。
 
 ### 测试
 
@@ -94,7 +103,7 @@ snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选
 ```
 
 项目支持 Python 3.11/3.12。2026-09-14 在项目隔离环境中验证结果为
-**799 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
+**815 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 

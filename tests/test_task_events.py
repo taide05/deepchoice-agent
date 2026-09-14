@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence import connect_database, run_migrations
@@ -44,6 +45,7 @@ def _records(task_id: str = "task-1", run_id: str = "run-1") -> tuple[TaskRecord
             task_id=task_id,
             status=RunStatus.QUEUED,
             manifest=build_run_manifest(request.model_dump()),
+            budget_policy=DEFAULT_RUN_BUDGET_POLICY,
             thread_id=run_id,
             created_at=now,
             updated_at=now,

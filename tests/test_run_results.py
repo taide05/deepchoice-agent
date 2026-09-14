@@ -9,6 +9,7 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence import connect_database, run_migrations
@@ -39,6 +40,7 @@ def _records(task_id: str = "task-result", run_id: str = "run-result"):
         task_id=task_id,
         status=RunStatus.QUEUED,
         manifest=build_run_manifest(request.model_dump()),
+        budget_policy=DEFAULT_RUN_BUDGET_POLICY,
         thread_id=run_id,
         created_at=now,
         updated_at=now,

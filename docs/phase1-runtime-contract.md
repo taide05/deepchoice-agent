@@ -97,10 +97,12 @@ SSE 规则：
 
 - 产品 schema migration 只向前追加；已经提交的 migration 内容、名称和 checksum 禁止修改。
 - runner 在 `BEGIN IMMEDIATE` 下串行执行，验证连续版本、名称和 checksum；失败整体回滚。
-- 当前产品 schema 为 v7：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
+- 当前产品 schema 为 v8：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
   的前提下重建 `legacy_imports`，强制 imported 行绑定非空 task/run，error 行不得绑定实体；
   已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。v6 增加
-  immutable `run_results`；v7 增加产品库单实例租约。
+  immutable `run_results`；v7 增加产品库单实例租约；v8 建立 Phase 2-A 的预算/Trace
+  骨架表 `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events` 和
+  `budget_ledger`，但尚不代表这些表已接入运行写入或限制执行。
 - v6 不臆测或回填旧 completed row 的报告；无法从可信来源重建的 pre-v6 成功记录保留为
   只读历史，并在结果查询时返回 `TASK_RESULT_UNAVAILABLE`。v6 后的新成功收尾和带有效报告的
   legacy success import 都必须同时写入 `run_results`。
@@ -166,3 +168,7 @@ SSE 规则：
 - 旧 `/research` 创建/SSE 仅用于一版兼容，任何新消费者必须使用 durable API。
 - SSE keepalive 和事件 retention 延后到真实反向代理或生产部署接入前完成。
 - Phase 2 trace、预算账本和观测失败不得影响 task state 或 durable SSE 的正确性。
+- Phase 2-A 为新 durable run/retry 原子冻结 `standard-observe-v1` 与 `unpriced-v1`；
+  价格未知保持 unknown，不得按零成本结算。旧 run 不回填，内部 policy 投影保持 unavailable；
+  后续查询 API 必须如实显示该缺失。Trace 写入/API、node/call wrapper、预算预留结算和硬限制分别留给 Phase 2-B/2-C；
+  `RunManifest` 保持 v1。

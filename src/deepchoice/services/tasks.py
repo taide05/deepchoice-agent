@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 from deepchoice.contracts.manifest import build_run_manifest
@@ -135,6 +136,7 @@ class TaskService:
             task_id=task_id,
             status=RunStatus.QUEUED,
             manifest=manifest,
+            budget_policy=DEFAULT_RUN_BUDGET_POLICY,
             thread_id=run_id,
             checkpoint_ns="",
             version=0,
@@ -245,6 +247,7 @@ class TaskService:
                 task_id=task_id,
                 status=RunStatus.QUEUED,
                 manifest=build_run_manifest(request_payload),
+                budget_policy=DEFAULT_RUN_BUDGET_POLICY,
                 thread_id=run_id,
                 checkpoint_ns="",
                 version=0,

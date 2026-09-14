@@ -238,6 +238,221 @@ CREATE TABLE runtime_instance_leases (
 """.strip(),
 )
 
+_V8_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+CREATE TABLE run_budget_policies (
+    run_id TEXT PRIMARY KEY REFERENCES runs(run_id) ON DELETE RESTRICT
+        CHECK (length(run_id) > 0),
+    policy_schema_version INTEGER NOT NULL CHECK (policy_schema_version = 1),
+    policy_version TEXT NOT NULL CHECK (length(policy_version) > 0),
+    policy_json TEXT NOT NULL CHECK (
+        json_valid(policy_json)
+        AND json_type(policy_json) = 'object'
+        AND json_extract(policy_json, '$.policy_schema_version') = policy_schema_version
+        AND json_type(policy_json, '$.policy_version') = 'text'
+        AND json_extract(policy_json, '$.policy_version') = policy_version
+    ),
+    price_catalog_version TEXT NOT NULL CHECK (
+        length(price_catalog_version) > 0
+        AND json_type(policy_json, '$.price_catalog_version') = 'text'
+        AND json_extract(policy_json, '$.price_catalog_version') = price_catalog_version
+    ),
+    created_at TEXT NOT NULL
+)
+""".strip(),
+    "CREATE INDEX idx_run_budget_policies_catalog ON run_budget_policies(price_catalog_version, run_id)",
+    """
+CREATE TRIGGER run_budget_policies_reject_update
+BEFORE UPDATE ON run_budget_policies
+BEGIN
+    SELECT RAISE(ABORT, 'run budget policies are immutable');
+END
+""".strip(),
+    """
+CREATE TRIGGER run_budget_policies_reject_delete
+BEFORE DELETE ON run_budget_policies
+BEGIN
+    SELECT RAISE(ABORT, 'run budget policies are immutable');
+END
+""".strip(),
+    """
+CREATE TABLE node_attempts (
+    node_attempt_id TEXT PRIMARY KEY CHECK (length(node_attempt_id) > 0),
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE
+        CHECK (length(run_id) > 0),
+    execution_epoch INTEGER NOT NULL CHECK (execution_epoch >= 1),
+    node_name TEXT NOT NULL CHECK (length(node_name) > 0),
+    attempt_no INTEGER NOT NULL CHECK (attempt_no >= 1),
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'started', 'succeeded', 'failed', 'cancelled',
+            'timed_out', 'interrupted', 'unknown'
+        )
+    ),
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    summary_json TEXT NOT NULL CHECK (
+        json_valid(summary_json) AND json_type(summary_json) = 'object'
+    ),
+    UNIQUE (run_id, execution_epoch, node_name, attempt_no),
+    UNIQUE (run_id, execution_epoch, node_attempt_id),
+    CHECK (
+        (status = 'started' AND ended_at IS NULL)
+        OR (status <> 'started' AND ended_at IS NOT NULL)
+    )
+)
+""".strip(),
+    "CREATE INDEX idx_node_attempts_run_started ON node_attempts(run_id, execution_epoch, started_at, attempt_no)",
+    """
+CREATE TABLE external_calls (
+    call_id TEXT PRIMARY KEY CHECK (length(call_id) > 0),
+    run_id TEXT NOT NULL CHECK (length(run_id) > 0),
+    execution_epoch INTEGER NOT NULL CHECK (execution_epoch >= 1),
+    node_attempt_id TEXT NOT NULL CHECK (length(node_attempt_id) > 0),
+    call_no INTEGER NOT NULL CHECK (call_no >= 1),
+    kind TEXT NOT NULL CHECK (kind IN ('llm', 'retrieval', 'http', 'other')),
+    provider TEXT NOT NULL CHECK (length(provider) > 0),
+    operation TEXT NOT NULL CHECK (length(operation) > 0),
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'started', 'succeeded', 'failed', 'cancelled',
+            'timed_out', 'interrupted', 'unknown'
+        )
+    ),
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    request_summary_json TEXT NOT NULL CHECK (
+        json_valid(request_summary_json) AND json_type(request_summary_json) = 'object'
+    ),
+    result_summary_json TEXT NOT NULL CHECK (
+        json_valid(result_summary_json) AND json_type(result_summary_json) = 'object'
+    ),
+    usage_summary_json TEXT NOT NULL CHECK (
+        json_valid(usage_summary_json) AND json_type(usage_summary_json) = 'object'
+    ),
+    UNIQUE (run_id, node_attempt_id, call_no),
+    UNIQUE (run_id, execution_epoch, call_id),
+    UNIQUE (run_id, execution_epoch, node_attempt_id, call_id),
+    FOREIGN KEY (run_id, execution_epoch, node_attempt_id)
+        REFERENCES node_attempts(run_id, execution_epoch, node_attempt_id)
+        ON DELETE RESTRICT,
+    CHECK (
+        (status = 'started' AND ended_at IS NULL)
+        OR (status <> 'started' AND ended_at IS NOT NULL)
+    )
+)
+""".strip(),
+    "CREATE INDEX idx_external_calls_run_started ON external_calls(run_id, execution_epoch, started_at, call_no)",
+    "CREATE INDEX idx_external_calls_attempt ON external_calls(run_id, node_attempt_id, call_no)",
+    """
+CREATE TABLE trace_events (
+    trace_event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE
+        CHECK (length(run_id) > 0),
+    execution_epoch INTEGER NOT NULL CHECK (execution_epoch >= 1),
+    seq INTEGER NOT NULL CHECK (seq >= 1),
+    event_type TEXT NOT NULL CHECK (length(event_type) > 0),
+    node_attempt_id TEXT,
+    call_id TEXT,
+    summary_json TEXT NOT NULL CHECK (
+        json_valid(summary_json) AND json_type(summary_json) = 'object'
+    ),
+    created_at TEXT NOT NULL,
+    UNIQUE (run_id, seq),
+    FOREIGN KEY (run_id, execution_epoch, node_attempt_id)
+        REFERENCES node_attempts(run_id, execution_epoch, node_attempt_id)
+        ON DELETE RESTRICT,
+    FOREIGN KEY (run_id, execution_epoch, node_attempt_id, call_id)
+        REFERENCES external_calls(
+            run_id, execution_epoch, node_attempt_id, call_id
+        )
+        ON DELETE RESTRICT,
+    CHECK (node_attempt_id IS NULL OR length(node_attempt_id) > 0),
+    CHECK (call_id IS NULL OR length(call_id) > 0),
+    CHECK (call_id IS NULL OR node_attempt_id IS NOT NULL)
+)
+""".strip(),
+    "CREATE INDEX idx_trace_events_run_sequence ON trace_events(run_id, seq)",
+    "CREATE INDEX idx_trace_events_attempt ON trace_events(run_id, node_attempt_id, seq)",
+    "CREATE INDEX idx_trace_events_call ON trace_events(run_id, call_id, seq)",
+    """
+CREATE TRIGGER trace_events_reject_update
+BEFORE UPDATE ON trace_events
+BEGIN
+    SELECT RAISE(ABORT, 'trace events are append-only');
+END
+""".strip(),
+    """
+CREATE TRIGGER trace_events_reject_delete
+BEFORE DELETE ON trace_events
+BEGIN
+    SELECT RAISE(ABORT, 'trace events are append-only');
+END
+""".strip(),
+    """
+CREATE TABLE budget_ledger (
+    ledger_entry_id TEXT PRIMARY KEY CHECK (length(ledger_entry_id) > 0),
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE
+        CHECK (length(run_id) > 0),
+    execution_epoch INTEGER NOT NULL CHECK (execution_epoch >= 1),
+    call_id TEXT CHECK (call_id IS NULL OR length(call_id) > 0),
+    reservation_id TEXT NOT NULL CHECK (length(reservation_id) > 0),
+    entry_sequence INTEGER NOT NULL CHECK (entry_sequence >= 1),
+    status TEXT NOT NULL CHECK (
+        status IN ('reserved', 'settled', 'released', 'unknown_spend')
+    ),
+    resource TEXT NOT NULL CHECK (
+        resource IN (
+            'input_tokens', 'output_tokens', 'total_tokens', 'cost_micro_usd',
+            'llm_calls', 'retrieval_calls', 'http_calls',
+            'active_milliseconds', 'wall_clock_milliseconds'
+        )
+    ),
+    reserved_amount INTEGER NOT NULL CHECK (reserved_amount >= 0),
+    actual_amount INTEGER CHECK (actual_amount IS NULL OR actual_amount >= 0),
+    price_status TEXT NOT NULL CHECK (
+        price_status IN ('priced', 'unknown', 'not_applicable')
+    ),
+    price_catalog_version TEXT NOT NULL CHECK (length(price_catalog_version) > 0),
+    summary_json TEXT NOT NULL CHECK (
+        json_valid(summary_json) AND json_type(summary_json) = 'object'
+    ),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    settled_at TEXT,
+    UNIQUE (run_id, execution_epoch, reservation_id, entry_sequence),
+    CHECK (
+        (status IN ('reserved', 'released') AND actual_amount IS NULL)
+        OR (status IN ('settled', 'unknown_spend') AND actual_amount IS NOT NULL)
+    ),
+    CHECK (status <> 'unknown_spend' OR actual_amount = reserved_amount),
+    CHECK (
+        (status = 'reserved' AND settled_at IS NULL)
+        OR (status <> 'reserved' AND settled_at IS NOT NULL)
+    ),
+    FOREIGN KEY (run_id, execution_epoch, call_id)
+        REFERENCES external_calls(run_id, execution_epoch, call_id)
+        ON DELETE RESTRICT
+)
+""".strip(),
+    "CREATE INDEX idx_budget_ledger_run_created ON budget_ledger(run_id, execution_epoch, created_at, entry_sequence)",
+    "CREATE INDEX idx_budget_ledger_reservation ON budget_ledger(run_id, execution_epoch, reservation_id, entry_sequence)",
+    """
+CREATE TRIGGER budget_ledger_reject_update
+BEFORE UPDATE ON budget_ledger
+BEGIN
+    SELECT RAISE(ABORT, 'budget ledger is append-only');
+END
+""".strip(),
+    """
+CREATE TRIGGER budget_ledger_reject_delete
+BEFORE DELETE ON budget_ledger
+BEGIN
+    SELECT RAISE(ABORT, 'budget ledger is append-only');
+END
+""".strip(),
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
@@ -246,6 +461,7 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=5, name="tighten_legacy_import_invariants", statements=_V5_STATEMENTS),
     Migration(version=6, name="immutable_run_results", statements=_V6_STATEMENTS),
     Migration(version=7, name="single_runtime_instance_lease", statements=_V7_STATEMENTS),
+    Migration(version=8, name="trace_and_budget_contract_schema", statements=_V8_STATEMENTS),
 )
 
 
