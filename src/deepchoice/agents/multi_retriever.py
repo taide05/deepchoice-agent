@@ -533,7 +533,7 @@ class MultiRetrieverAgent:
                         raise ValueError(
                             f"source mismatch: expected {name!r}, got {validated.source!r}"
                         )
-                except Exception as exc:
+                except Exception:
                     validated = RetrievalResult(
                         source=name,
                         status="failed",

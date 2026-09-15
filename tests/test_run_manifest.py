@@ -1,12 +1,25 @@
 import json
+import re
 
 import pytest
 
 from deepchoice.agents import conclusion_synthesizer as cs_mod
+from deepchoice.agents.conflict_detector import (
+    ARBITRATION_SYSTEM,
+    CONTRADICTION_SCAN_SYSTEM,
+    EVIDENCE_GATHER_SYSTEM,
+    EVIDENCE_GATHER_USER_TEMPLATE,
+)
 from deepchoice.agents.orchestrator import ChiefEditorAgent
+from deepchoice.agents.query_adapter import ADAPT_SYSTEM
+from deepchoice.agents.query_analyzer import DECOMPOSITION_SYSTEM
+from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
 from deepchoice.contracts.errors import DeepChoiceError
 from deepchoice.contracts.manifest import (
+    REPORT_TEMPLATE_VERSIONS,
     WORKFLOW_NODES,
+    _expected_core_asset_registry_id,
+    build_core_asset_registry,
     build_run_manifest,
     ensure_run_manifest_compatible,
 )
@@ -34,6 +47,94 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.security_policy_version == "outbound-url-v1"
     assert first.citation_policy_version == "deterministic-citation-v1"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
+
+
+def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
+    registry = build_core_asset_registry()
+    expected_prompt_ids = (
+        "query_analyzer.decomposition_system",
+        "query_adapter.adapt_system",
+        "conflict_detector.contradiction_scan_system",
+        "conflict_detector.arbitration_system",
+        "conflict_detector.evidence_gather",
+        "conclusion_synthesizer.synthesis_prompt",
+        "self_reviewer.review_system",
+    )
+    expected_nodes = (
+        "query_analyzer",
+        "query_adapter",
+        "multi_retriever",
+        "source_evaluator",
+        "conflict_detector",
+        "evidence_chain",
+        "conclusion_synthesizer",
+        "citation_validator",
+        "evidence_decision_gate",
+        "report_generator",
+        "self_reviewer",
+    )
+
+    assert registry.registry_schema_version == 1
+    assert registry.manifest_schema_version == 1
+    assert registry.workflow_version == "research-v3"
+    assert registry.state_schema_version == 3
+    assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
+    assert registry.citation_policy_version == "deterministic-citation-v1"
+    assert registry.hitl_policy_version == "evidence-insufficient-v1"
+    assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
+    assert all(prompt.version == "v1" for prompt in registry.prompts)
+    assert all(re.fullmatch(r"[0-9a-f]{64}", prompt.sha256) for prompt in registry.prompts)
+    assert {
+        template.report_format: template.template_version
+        for template in registry.report_templates
+    } == {
+        "what_why_how": "what-why-how-v1",
+        "evidence_first": "evidence-first-v1",
+        "comparison_matrix": "comparison-matrix-v1",
+    } == REPORT_TEMPLATE_VERSIONS
+    assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
+
+
+def test_core_asset_registry_hash_is_stable_and_covers_its_content():
+    registry = build_core_asset_registry()
+    again = build_core_asset_registry()
+    changed = registry.model_copy(update={
+        "workflow_nodes": (*registry.workflow_nodes, "new_core_node"),
+    })
+
+    assert registry.registry_id == again.registry_id
+    assert registry.registry_id == _expected_core_asset_registry_id(registry)
+    assert _expected_core_asset_registry_id(changed) != registry.registry_id
+
+
+def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
+    registry = build_core_asset_registry()
+    serialized = json.dumps(registry.model_dump(mode="json"), ensure_ascii=False)
+    prompt_texts = (
+        DECOMPOSITION_SYSTEM,
+        ADAPT_SYSTEM,
+        CONTRADICTION_SCAN_SYSTEM,
+        ARBITRATION_SYSTEM,
+        EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE,
+        cs_mod.SYNTHESIS_PROMPT,
+        REVIEW_SYSTEM,
+    )
+
+    assert all(prompt_text not in serialized for prompt_text in prompt_texts)
+    assert "api_key" not in serialized.lower()
+    assert "endpoint" not in serialized.lower()
+    assert set(type(registry).model_fields) == {
+        "registry_schema_version",
+        "registry_id",
+        "manifest_schema_version",
+        "workflow_version",
+        "state_schema_version",
+        "workflow_nodes",
+        "citation_policy_version",
+        "hitl_policy_version",
+        "prompts",
+        "report_templates",
+    }
 
 
 def test_pre_citation_manifest_identity_is_valid_but_runtime_incompatible():

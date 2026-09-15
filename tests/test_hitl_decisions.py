@@ -17,7 +17,6 @@ from deepchoice.persistence.records import CheckpointReference, RunRecord, TaskR
 from deepchoice.persistence.repository import (
     CheckpointNotAvailableError,
     DecisionConflictError,
-    DecisionExpiredError,
     RepositoryOperationError,
     RunLeaseLostError,
     SQLiteTaskRunRepository,

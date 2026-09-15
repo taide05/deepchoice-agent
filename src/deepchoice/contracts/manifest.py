@@ -119,12 +119,64 @@ class RunManifest(FrozenModel):
     report: ReportTemplateSnapshot
 
 
+class CoreAssetRegistry(FrozenModel):
+    """Small, deterministic index of the versioned assets in the core path."""
+
+    registry_schema_version: Literal[1] = 1
+    registry_id: str
+    manifest_schema_version: Literal[1] = 1
+    workflow_version: Literal["research-v3"] = "research-v3"
+    state_schema_version: Literal[3] = 3
+    workflow_nodes: tuple[str, ...]
+    citation_policy_version: Literal["deterministic-citation-v1"]
+    hitl_policy_version: Literal["evidence-insufficient-v1"]
+    prompts: tuple[PromptSnapshot, ...]
+    report_templates: tuple[ReportTemplateSnapshot, ...]
+
+
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _expected_core_asset_registry_id(registry: CoreAssetRegistry) -> str:
+    content = registry.model_dump(mode="json", exclude={"registry_id"})
+    return _sha256(_canonical_json(content))
+
+
+def build_core_asset_registry() -> CoreAssetRegistry:
+    """Project the current manifest's core assets without copying prompt text."""
+
+    manifest = build_run_manifest({})
+    content = {
+        "registry_schema_version": 1,
+        "manifest_schema_version": manifest.manifest_schema_version,
+        "workflow_version": manifest.workflow_version,
+        "state_schema_version": manifest.state_schema_version,
+        "workflow_nodes": manifest.workflow_nodes,
+        "citation_policy_version": manifest.citation_policy_version,
+        "hitl_policy_version": manifest.hitl_policy_version,
+        "prompts": manifest.prompts,
+        "report_templates": tuple(
+            ReportTemplateSnapshot(
+                report_format=report_format,
+                template_version=template_version,
+            )
+            for report_format, template_version in REPORT_TEMPLATE_VERSIONS.items()
+        ),
+    }
+    normalized = {
+        key: value.model_dump(mode="json") if isinstance(value, BaseModel) else [
+            item.model_dump(mode="json") if isinstance(item, BaseModel) else item
+            for item in value
+        ] if isinstance(value, tuple) else value
+        for key, value in content.items()
+    }
+    registry_id = _sha256(_canonical_json(normalized))
+    return CoreAssetRegistry(registry_id=registry_id, **content)
 
 
 def _provider_for_tier(tier: str) -> str:

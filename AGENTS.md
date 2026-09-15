@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 1011 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 1022 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -203,6 +203,24 @@ When adding a setting, update the code default, tests, README configuration sect
 - Phase 3-1 stores its bounded checks and per-source projection in the immutable public run snapshot;
   it does not add a lifecycle table or treat verification warnings as task lifecycle events.
 
+### Phase 5-1 versioned assets and offline evaluation
+
+- The core asset registry is a small audit index, not a generalized prompt registry. Include only
+  prompt hashes/versions used by the default workflow, `research-v3`, state schema v3, workflow
+  nodes, citation/HITL policy versions, and the three report template versions. Never store prompt
+  text or credentials in the registry.
+- `smoke-v1` is a fixed 12-case fixture-replay suite: three cases each for query analysis, citation
+  verification, conclusion post-processing, and report rendering. It must not call an LLM, judge, or
+  network service. Its results validate deterministic code paths and fixture structure; they do not
+  measure real-model semantic quality or live source availability.
+- Evaluation artifacts must include the dataset ID/version/hash/freeze date, evaluation timestamp,
+  case denominators, current manifest ID, core asset registry ID, and explicit source-health
+  `not_run`/`degraded` status. Do not imply live sources were checked by fixture replay.
+- Keep the historical 300-case benchmark and its dated metrics unchanged. Smoke-v1 results are a
+  separate dataset and must not be merged with or compared as if they shared a denominator.
+- Phase 5-1 does not include the real-case demonstrations, test-growth audit, architecture/interview
+  package, or final acceptance assigned to Phase 5-2.
+
 ### Phase 4-1 single durable HITL decision gate
 
 - Product schema v10 adds `hitl_decisions`. Migrations remain append-only and forward-only; never
@@ -255,8 +273,9 @@ When adding a setting, update the code default, tests, README configuration sect
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
 - Phase 3 is complete. Phase 4 PR 4-1 (single durable decision backend) and PR 4-2
-  (decision UI and recovery acceptance) are implemented. Then continue to Phase 5. Keep each remaining
-  phase to at most two implementation PRs and prioritize the durable default path.
+  (decision UI and recovery acceptance) are implemented. Phase 5-1 (bounded version assets and
+  offline evaluation) is complete. Phase 5-2 remains pending. Keep each
+  remaining phase to at most two implementation PRs and prioritize the durable default path.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
   the roadmap is explicitly revised again.

@@ -156,11 +156,27 @@ PR 4-2 完成标准：pending 决策界面和 SSE 断开/续接行为符合上�
 
 **PR 5-1：最小版本资产与离线评估**
 
-- 只登记默认路径实际使用的核心 Prompt、workflow 和 report template 版本。
-- 为 query analysis、引用验证、结论和报告建立固定离线 smoke/eval 集。
-- 评估产物必须记录数据集、日期、分母、manifest 和 degraded source 状态。
+状态：已完成（2026-09-15）。
+
+- 核心资产 registry 仅记录默认路径实际使用的 7 个核心 Prompt hash/version、`research-v3`、
+  state schema v3、workflow nodes、citation/HITL policy 版本和三个报告模板版本；不保存
+  Prompt 正文、密钥，也不扩建通用 Prompt registry。
+- `smoke-v1` 固定为 12 个 fixture replay case：query analysis、引用验证、结论后处理、报告渲染
+  各 3 个。评估全程不得调用 LLM/judge 或网络，只验证确定性代码路径、fixture 结构和报告结构。
+- 评估 artifact 记录数据集 ID/version/hash/freeze date、评估时间、各项分母、当前 manifest ID、
+  core asset registry ID，以及来源健康为 `not_run`/`degraded` 的明确状态。
+- 该 smoke 集不代表真实模型语义质量，也不代表在线信源健康；不改变或混合历史 300-case
+  benchmark 指标及其原有日期、数据集和分母。
+- 本 PR 只包含版本资产与离线 smoke/eval。真实演示案例、测试数量审计、面试材料和最终验收
+  留给 PR 5-2，不提前实施。
+
+PR 5-1 完成标准：资产 registry 可稳定复算；固定 12-case fixture replay 在无 LLM/网络下运行，
+artifact 含可追溯版本和数据集元信息，并明确标记 source health 未执行；不能将 smoke 结果
+描述为真实模型质量结论。命令与 baseline 检查说明见 [`phase5-offline-eval.md`](phase5-offline-eval.md)。
 
 **PR 5-2：最终验收与面试交付**
+
+状态：未开始；作为下一步实施项。
 
 - 选定少量真实演示案例，记录成功、受限和失败路径。
 - 审计测试数量增长、重复/低价值测试、死代码和默认路径文档一致性。

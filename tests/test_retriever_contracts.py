@@ -2,15 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from deepchoice.agents.multi_retriever import MultiRetrieverAgent
-from deepchoice.retrievers import (
-    RETRIEVER_REGISTRY,
-    ArxivSearch,
-    ChromaKB,
-    CommunitySearch,
-    GitHubSearch,
-    OfficialSearch,
-    TavilySearch,
-)
+from deepchoice.retrievers import RETRIEVER_REGISTRY
 from deepchoice.retrievers.base import BaseRetriever, error_text
 from deepchoice.retrievers.contracts import (
     RetrievalRequest,

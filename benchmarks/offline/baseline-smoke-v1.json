@@ -1,0 +1,214 @@
+{
+  "artifact_schema_version": 1,
+  "dataset": {
+    "dataset_id": "deepchoice-offline-smoke",
+    "version": "smoke-v1",
+    "freeze_date": "2026-09-15",
+    "file_sha256": "e9cdbcc650e93eee38ed891a89ac8eaecc23b1b3419a431adcc8e7bead2113cd"
+  },
+  "evaluated_at": "2026-09-15T11:18:04.397633+00:00",
+  "case_count": 12,
+  "evaluated_case_count": 12,
+  "execution_mode": "fixture_replay",
+  "judge": "none",
+  "current_manifest_id": "be96254f8e6eb6fbf0bce625b523ae651ec1d8ef2df0356f90603e2a9046f59f",
+  "core_asset_registry_id": "8918c0fd30e14ab9888b6e6472486d1da0c8a8601337c12e803e704b14d65d7c",
+  "source_health": {
+    "status": "not_run",
+    "default_sources": {
+      "tavily": "degraded/unmeasured",
+      "chroma": "degraded/unmeasured",
+      "github": "degraded/unmeasured",
+      "arxiv": "degraded/unmeasured",
+      "community": "degraded/unmeasured",
+      "official": "degraded/unmeasured"
+    }
+  },
+  "metrics": {
+    "query_analysis.cases_passed": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1.0
+    },
+    "citation_verification.cases_passed": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1.0
+    },
+    "conclusion.cases_passed": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1.0
+    },
+    "report.cases_passed": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1.0
+    },
+    "report.structure": {
+      "numerator": 3,
+      "denominator": 3,
+      "rate": 1.0
+    },
+    "report.what_why_how.quality": {
+      "numerator": 5,
+      "denominator": 5,
+      "rate": 1.0
+    },
+    "report.evidence_first.quality": {
+      "numerator": 4,
+      "denominator": 5,
+      "rate": 0.8
+    },
+    "report.comparison_matrix.quality": {
+      "numerator": 4,
+      "denominator": 5,
+      "rate": 0.8
+    },
+    "deterministic_replay": {
+      "numerator": 12,
+      "denominator": 12,
+      "rate": 1.0
+    },
+    "overall": {
+      "numerator": 12,
+      "denominator": 12,
+      "rate": 1.0
+    }
+  },
+  "cases": [
+    {
+      "case_id": "QA-001",
+      "stage": "query_analysis",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "scene": "solo",
+        "fixture_valid": true,
+        "sub_question_count": 5
+      }
+    },
+    {
+      "case_id": "QA-002",
+      "stage": "query_analysis",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "scene": "enterprise",
+        "fixture_valid": true,
+        "sub_question_count": 5
+      }
+    },
+    {
+      "case_id": "QA-003",
+      "stage": "query_analysis",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "scene": "team",
+        "fixture_valid": true,
+        "sub_question_count": 5
+      }
+    },
+    {
+      "case_id": "CV-001",
+      "stage": "citation_verification",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "status": "verified",
+        "reason": "lexical_support"
+      }
+    },
+    {
+      "case_id": "CV-002",
+      "stage": "citation_verification",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "status": "unsupported",
+        "reason": "numeric_mismatch"
+      }
+    },
+    {
+      "case_id": "CV-003",
+      "stage": "citation_verification",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "status": "unknown",
+        "reason": "cross_language"
+      }
+    },
+    {
+      "case_id": "CS-001",
+      "stage": "conclusion",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "winner": "Alpha",
+        "result_sha256": "666f5959e78d6e6e72772c77406b2263bc0f431b4977983e2836e671307708f7"
+      }
+    },
+    {
+      "case_id": "CS-002",
+      "stage": "conclusion",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "winner": "Gamma",
+        "result_sha256": "6eea0be363f3ce362ffca08a9cbd68a72d10f0aa14d29bba07cf36d9e42086eb"
+      }
+    },
+    {
+      "case_id": "CS-003",
+      "stage": "conclusion",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "winner": "context_dependent",
+        "result_sha256": "e87656e608c4e5629c0a07af241af5d465f3f1dcfc21ae13f3e16ea2a511243b"
+      }
+    },
+    {
+      "case_id": "RP-001",
+      "stage": "report",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "template": "what_why_how",
+        "quality_pass_count": 5,
+        "quality_denominator": 5,
+        "structure_passed": true,
+        "report_sha256": "a7758ac731da68d5e6d8859229606e96481fc3eb3cee9a9cb141734158fb48e0"
+      }
+    },
+    {
+      "case_id": "RP-002",
+      "stage": "report",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "template": "evidence_first",
+        "quality_pass_count": 4,
+        "quality_denominator": 5,
+        "structure_passed": true,
+        "report_sha256": "fb62c3b5d87e89d8bba8c25905554a1fc25213cba4bdb9b31234a764c6afdf2f"
+      }
+    },
+    {
+      "case_id": "RP-003",
+      "stage": "report",
+      "passed": true,
+      "deterministic": true,
+      "output": {
+        "template": "comparison_matrix",
+        "quality_pass_count": 4,
+        "quality_denominator": 5,
+        "structure_passed": true,
+        "report_sha256": "58a61b082a76df80d6dfa49d8cfac28cae4db532d628e41fa6aea38982ed9f39"
+      }
+    }
+  ],
+  "artifact_fingerprint": "0e4dd8d574ea8554881eb7f39039e0a1131320f547b22e7cae382e83825ef919"
+}

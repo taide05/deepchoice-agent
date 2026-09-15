@@ -9,13 +9,20 @@ from .api import (
     TaskRecordResponse,
 )
 from .errors import DeepChoiceError, ErrorCategory, ErrorDetail, ErrorResponse
-from .manifest import RunManifest, build_run_manifest, ensure_run_manifest_compatible
+from .manifest import (
+    CoreAssetRegistry,
+    RunManifest,
+    build_core_asset_registry,
+    build_run_manifest,
+    ensure_run_manifest_compatible,
+)
 
 __all__ = [
     "DeepChoiceError",
     "ErrorCategory",
     "ErrorDetail",
     "ErrorResponse",
+    "CoreAssetRegistry",
     "ResearchRequest",
     "ResearchStartedResponse",
     "RunRecordResponse",
@@ -24,5 +31,6 @@ __all__ = [
     "TaskListResponse",
     "TaskRecordResponse",
     "build_run_manifest",
+    "build_core_asset_registry",
     "ensure_run_manifest_compatible",
 ]

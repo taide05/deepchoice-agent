@@ -146,6 +146,15 @@ fencing identity 也只保留在内部。旧 `/research` 兼容路径绕过该�
 Streamlit 待决策界面及 SSE 等待断开/按 `Last-Event-ID` 续接，并以真实双 SQLite、
 StateGraph/checkpoint 验证 pending 跨重启、幂等/冲突、过期、取消和绑定 checkpoint 的单次 resume。
 
+Phase 5-1 已完成最小版本资产清单和离线 smoke/eval。当前契约限定为默认路径使用的 7 个
+核心 Prompt hash/version、`research-v3`/state v3/workflow nodes、citation/HITL policy 及三个报告
+模板版本；固定 12 个 fixture replay case 覆盖 query analysis、引用验证、结论后处理和报告渲染，
+每项 3 个，不调用 LLM、judge 或网络。其 artifact 会记录数据集 hash/date、各指标分母、manifest、
+registry 与 source health `not_run`/`degraded`。此测试只验证确定性代码和 fixture/报告结构，不能
+作为真实模型语义质量或实时信源可用性的证明，也不改变历史 300-case benchmark 指标。最终真实
+演示、测试数量审计和面试交付留在后续 Phase 5-2。
+运行命令、baseline 检查和指标解释见[Phase 5-1 离线评估说明](docs/phase5-offline-eval.md)。
+
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
 [`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成轻量检索去重/缓存、单一 HITL
 和质量评估闭环；多租户认证、分布式基础设施及其他企业级扩展不在当前实施范围。
@@ -157,7 +166,7 @@ StateGraph/checkpoint 验证 pending 跨重启、幂等/冲突、过期、取消
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**1011 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**1022 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 

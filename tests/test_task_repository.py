@@ -19,7 +19,6 @@ from deepchoice.persistence.repository import (
     RepositoryOperationError,
     RunLeaseLostError,
     SQLiteTaskRunRepository,
-    TaskNotFoundError,
     TaskVersionConflictError,
 )
 from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
