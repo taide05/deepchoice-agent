@@ -44,6 +44,24 @@ T = {
         "confirm_scene": "场景: {scene}  |  复杂度: {complexity}",
         "start_research_btn": "开始深度研究",
         "researching": "研究中:",
+        "decision_title": "需要更多信息",
+        "decision_reason": "暂停原因",
+        "decision_gaps": "仍待补充的证据缺口",
+        "decision_expires": "决定有效期至 {expires_at}",
+        "decision_context_label": "补充背景信息（最多 4000 字符）",
+        "decision_context_placeholder": "补充与技术选型有关的约束或使用场景...",
+        "decision_provide_context": "补充信息并继续",
+        "decision_limited_report": "基于现有证据生成受限报告",
+        "decision_cancel": "取消任务",
+        "decision_expired": "此决策已过期，任务已停止。请重新开始研究。",
+        "decision_cancelled": "此任务已取消。",
+        "decision_conflict": "决策状态已变化。页面已刷新；如提交结果不确定，可安全重试相同选择。",
+        "decision_retry": "使用相同选择重试",
+        "decision_network_error": "暂时无法确认提交结果。可以安全重试相同选择；补充内容不会显示在事件或日志中。",
+        "decision_submit_error": "无法提交决策（HTTP {status}）。请刷新状态后重试。",
+        "decision_invalid_context": "请先填写补充信息。",
+        "decision_loading_error": "无法读取当前决策状态，请稍后重试。",
+        "decision_pending": "研究已暂停，等待你的选择。",
         "progress_init": "初始化...",
         "progress_phase": "阶段 {idx}/7: {name}",
         "progress_done": "研究完成",
@@ -182,6 +200,24 @@ T = {
         "confirm_scene": "Scene: {scene}  |  Complexity: {complexity}",
         "start_research_btn": "Start Deep Research",
         "researching": "Researching:",
+        "decision_title": "More information is needed",
+        "decision_reason": "Why research paused",
+        "decision_gaps": "Evidence gaps to address",
+        "decision_expires": "Decision available until {expires_at}",
+        "decision_context_label": "Additional context (up to 4,000 characters)",
+        "decision_context_placeholder": "Add relevant constraints or usage context...",
+        "decision_provide_context": "Provide context and continue",
+        "decision_limited_report": "Generate a limited report from current evidence",
+        "decision_cancel": "Cancel task",
+        "decision_expired": "This decision expired and the task has stopped. Start a new research task.",
+        "decision_cancelled": "This task was cancelled.",
+        "decision_conflict": "The decision state changed. The page was refreshed; if the outcome is uncertain, retry the same choice safely.",
+        "decision_retry": "Retry the same choice",
+        "decision_network_error": "The submission outcome could not be confirmed. Retry the same choice safely; supplemental text is not shown in events or logs.",
+        "decision_submit_error": "Could not submit the decision (HTTP {status}). Refresh the state and retry.",
+        "decision_invalid_context": "Enter supplemental context first.",
+        "decision_loading_error": "Could not load the current decision. Please retry shortly.",
+        "decision_pending": "Research is paused and waiting for your choice.",
         "progress_init": "Initializing...",
         "progress_phase": "Phase {idx}/7: {name}",
         "progress_done": "Research complete",
@@ -320,6 +356,24 @@ T = {
         "confirm_scene": "シーン: {scene}  |  複雑さ: {complexity}",
         "start_research_btn": "深層リサーチを開始",
         "researching": "研究中:",
+        "decision_title": "追加情報が必要です",
+        "decision_reason": "一時停止の理由",
+        "decision_gaps": "補足が必要な証拠の不足",
+        "decision_expires": "決定期限: {expires_at}",
+        "decision_context_label": "追加情報（最大 4000 文字）",
+        "decision_context_placeholder": "技術選定に関する制約や利用状況を入力してください...",
+        "decision_provide_context": "情報を補足して続行",
+        "decision_limited_report": "現在の証拠で制限付きレポートを作成",
+        "decision_cancel": "タスクをキャンセル",
+        "decision_expired": "この決定は期限切れとなり、タスクは停止しました。新しく研究を開始してください。",
+        "decision_cancelled": "このタスクはキャンセルされました。",
+        "decision_conflict": "決定状態が変更されました。画面を更新しました。結果が不明な場合は同じ選択を安全に再試行できます。",
+        "decision_retry": "同じ選択を再試行",
+        "decision_network_error": "送信結果を確認できません。同じ選択を安全に再試行できます。補足情報はイベントやログに表示されません。",
+        "decision_submit_error": "決定を送信できませんでした（HTTP {status}）。状態を更新して再試行してください。",
+        "decision_invalid_context": "先に追加情報を入力してください。",
+        "decision_loading_error": "現在の決定状態を読み込めません。しばらくしてから再試行してください。",
+        "decision_pending": "研究は一時停止中です。選択してください。",
         "progress_init": "初期化中...",
         "progress_phase": "フェーズ {idx}/7: {name}",
         "progress_done": "研究完了",
@@ -458,6 +512,24 @@ T = {
         "confirm_scene": "장면: {scene}  |  복잡도: {complexity}",
         "start_research_btn": "심층 연구 시작",
         "researching": "연구 중:",
+        "decision_title": "추가 정보가 필요합니다",
+        "decision_reason": "일시 중지 이유",
+        "decision_gaps": "보완이 필요한 증거 공백",
+        "decision_expires": "결정 기한: {expires_at}",
+        "decision_context_label": "추가 맥락 (최대 4,000자)",
+        "decision_context_placeholder": "기술 선택과 관련된 제약이나 사용 맥락을 입력하세요...",
+        "decision_provide_context": "정보를 보완하고 계속",
+        "decision_limited_report": "현재 증거로 제한 보고서 생성",
+        "decision_cancel": "작업 취소",
+        "decision_expired": "결정이 만료되어 작업이 중지되었습니다. 새 연구를 시작하세요.",
+        "decision_cancelled": "작업이 취소되었습니다.",
+        "decision_conflict": "결정 상태가 변경되었습니다. 화면을 새로 고쳤습니다. 결과가 불확실하면 같은 선택을 안전하게 재시도할 수 있습니다.",
+        "decision_retry": "같은 선택으로 재시도",
+        "decision_network_error": "제출 결과를 확인할 수 없습니다. 같은 선택을 안전하게 재시도할 수 있습니다. 추가 내용은 이벤트나 로그에 표시되지 않습니다.",
+        "decision_submit_error": "결정을 제출할 수 없습니다 (HTTP {status}). 상태를 새로 고친 뒤 재시도하세요.",
+        "decision_invalid_context": "먼저 추가 맥락을 입력하세요.",
+        "decision_loading_error": "현재 결정 상태를 불러오지 못했습니다. 잠시 후 다시 시도하세요.",
+        "decision_pending": "연구가 일시 중지되었습니다. 선택해 주세요.",
         "progress_init": "초기화 중...",
         "progress_phase": "단계 {idx}/7: {name}",
         "progress_done": "연구 완료",
@@ -878,10 +950,16 @@ DEFAULTS = {
     "research_events": [],
     "research_last_event_id": None,
     "research_task_version": None,
+    "research_task_status": None,
     "research_snapshot": None,
     "research_report": None,
     "research_terminal_status": None,
     "research_connection_lost": False,
+    "research_waiting_for_input": False,
+    "research_decision": None,
+    "research_decision_error": None,
+    "research_decision_submission": None,
+    "research_decision_clear_context_key": None,
     "lang": "zh",
 }
 for k, v in DEFAULTS.items():
@@ -1101,6 +1179,11 @@ def _handle_finalize():
 # Research Phase
 # ═══════════════════════════════════════════════════════════════════════════
 def render_research_phase():
+    clear_context_key = st.session_state.get("research_decision_clear_context_key")
+    if clear_context_key:
+        st.session_state.pop(clear_context_key, None)
+        st.session_state.research_decision_clear_context_key = None
+
     data = st.session_state.clarified_data
     if not data:
         st.error(t("no_data_error", lang))
@@ -1123,6 +1206,13 @@ def render_research_phase():
 
     if st.session_state.research_running:
         _render_research_progress()
+
+    current_decision = st.session_state.get("research_decision") or {}
+    if (
+        st.session_state.get("research_waiting_for_input")
+        or current_decision.get("status") == "expired"
+    ):
+        _render_decision_panel()
 
     if st.session_state.research_complete:
         _render_results()
@@ -1168,8 +1258,11 @@ def render_research_phase():
                 st.session_state[k] = DEFAULTS[k]
             st.rerun()
 
-    if st.session_state.get("research_terminal_status") == "cancelled":
-        st.info("任务已取消。")
+    if (
+        st.session_state.get("research_terminal_status") == "cancelled"
+        and current_decision.get("status") != "expired"
+    ):
+        st.info(t("decision_cancelled", lang))
         if st.button(t("restart_btn", lang), key="restart_cancelled_task"):
             for k in DEFAULTS:
                 st.session_state[k] = DEFAULTS[k]
@@ -1239,6 +1332,297 @@ def _task_detail(task_id: str):
         return {}
 
 
+def _decision_task_projection(detail: dict) -> dict:
+    task = detail.get("task", {}) if isinstance(detail, dict) else {}
+    return task if isinstance(task, dict) else {}
+
+
+def _remember_task_projection(detail: dict) -> dict:
+    task = _decision_task_projection(detail)
+    if task.get("version") is not None:
+        st.session_state.research_task_version = task["version"]
+    if task.get("status") is not None:
+        st.session_state.research_task_status = task["status"]
+    return task
+
+
+def _set_waiting_for_input(detail: dict | None = None) -> bool:
+    """Load authoritative task and pending-decision projections after an SSE pause."""
+    task_id = st.session_state.get("research_task_id")
+    if not task_id:
+        return False
+    if detail is None:
+        detail = _task_detail(task_id)
+    task = _remember_task_projection(detail)
+    if task.get("status") != "waiting_for_input":
+        return False
+
+    st.session_state.research_running = False
+    st.session_state.research_failed = False
+    st.session_state.research_complete = False
+    st.session_state.research_terminal_status = None
+    st.session_state.research_connection_lost = False
+    st.session_state.research_waiting_for_input = True
+    try:
+        response = httpx.get(
+            f"{API_BASE}/api/v1/tasks/{task_id}/decision", timeout=10
+        )
+        decision = response.json() if response.status_code == 200 else {}
+        if (
+            response.status_code == 200
+            and isinstance(decision, dict)
+            and decision.get("status") == "pending"
+        ):
+            st.session_state.research_decision = decision
+            st.session_state.research_decision_error = None
+            return True
+    except Exception:
+        pass
+    st.session_state.research_decision = None
+    st.session_state.research_decision_error = t("decision_loading_error", lang)
+    return True
+
+
+def _refresh_decision_authority(task_id: str) -> tuple[dict, dict]:
+    """Refresh both CAS version and public decision state before submitting."""
+    detail_response = httpx.get(
+        f"{API_BASE}/api/v1/tasks/{task_id}", timeout=10
+    )
+    detail = detail_response.json() if detail_response.status_code == 200 else {}
+    task = _remember_task_projection(detail)
+    decision_response = httpx.get(
+        f"{API_BASE}/api/v1/tasks/{task_id}/decision", timeout=10
+    )
+    decision = decision_response.json() if decision_response.status_code == 200 else {}
+    return task, decision
+
+
+def _clear_decision_submission() -> None:
+    submission = st.session_state.get("research_decision_submission") or {}
+    decision = st.session_state.get("research_decision") or {}
+    decision_id = submission.get("decision_id") or decision.get("decision_id")
+    if decision_id:
+        st.session_state.research_decision_clear_context_key = (
+            f"decision_context_{decision_id}"
+        )
+    st.session_state.research_decision_submission = None
+
+
+def _apply_authoritative_task_projection(task: dict) -> bool:
+    """Move the visible lifecycle controls to the server's current task status."""
+    status = task.get("status")
+    if status is None:
+        return False
+    st.session_state.research_task_status = status
+    if status in {
+        "completed", "complete", "completed_with_warnings", "failed",
+        "cancelled", "canceled", "timed_out", "timeout", "interrupted",
+    }:
+        st.session_state.research_waiting_for_input = False
+        return _set_terminal_status(status)
+    if status in {"queued", "running"}:
+        st.session_state.research_waiting_for_input = False
+        st.session_state.research_running = True
+        st.session_state.research_complete = False
+        st.session_state.research_failed = False
+        st.session_state.research_terminal_status = None
+        st.session_state.research_connection_lost = False
+        return True
+    if status == "waiting_for_input":
+        st.session_state.research_waiting_for_input = True
+        st.session_state.research_running = False
+        st.session_state.research_complete = False
+        st.session_state.research_failed = False
+        st.session_state.research_terminal_status = None
+        st.session_state.research_connection_lost = False
+    return False
+
+
+def _apply_decision_conflict(task: dict, decision: dict) -> bool:
+    """Discard sensitive submitted text and render the refreshed server state."""
+    _clear_decision_submission()
+    if isinstance(decision, dict) and decision:
+        st.session_state.research_decision = decision
+    status = decision.get("status") if isinstance(decision, dict) else None
+    if status == "expired":
+        st.session_state.research_decision_error = t("decision_expired", lang)
+    elif status == "cancelled":
+        st.session_state.research_decision_error = t("decision_cancelled", lang)
+    else:
+        st.session_state.research_decision_error = t("decision_conflict", lang)
+    _apply_authoritative_task_projection(task)
+    # Rerun so a still-pending decision reopens all three choices, or a newer
+    # task status returns to the stream/results/terminal view immediately.
+    return True
+
+
+def _apply_decision_resolution(payload: dict) -> bool:
+    task_container = payload.get("task", {}) if isinstance(payload, dict) else {}
+    task = _decision_task_projection(task_container)
+    _remember_task_projection(task_container)
+    _clear_decision_submission()
+    st.session_state.research_decision = payload.get("decision")
+    st.session_state.research_decision_error = None
+    return _apply_authoritative_task_projection(task)
+
+
+def _submit_decision(action: str, supplemental_input: str | None = None) -> bool:
+    """Resolve a decision using a freshly-read task version and retryable body."""
+    task_id = st.session_state.get("research_task_id")
+    decision = st.session_state.get("research_decision") or {}
+    if not task_id or not decision.get("decision_id"):
+        st.session_state.research_decision_error = t("decision_loading_error", lang)
+        return False
+    if action == "provide_context":
+        supplemental_input = str(supplemental_input or "").strip()
+        if not supplemental_input:
+            st.session_state.research_decision_error = t("decision_invalid_context", lang)
+            return False
+        body = {"action": action, "supplemental_input": supplemental_input}
+    else:
+        body = {"action": action}
+
+    # Keep the exact request in session state across network uncertainty. This
+    # lets the backend's body-hash idempotency make a retry safe without logging
+    # or putting supplemental text into public events.
+    submission = st.session_state.get("research_decision_submission")
+    if submission is None:
+        submission = {"decision_id": decision["decision_id"], "body": body}
+        st.session_state.research_decision_submission = submission
+    else:
+        body = submission["body"]
+        decision_id = submission["decision_id"]
+        if decision_id != decision.get("decision_id"):
+            st.session_state.research_decision_error = t("decision_conflict", lang)
+            return False
+
+    try:
+        task, current_decision = _refresh_decision_authority(task_id)
+        if task.get("version") is None:
+            st.session_state.research_decision_error = t(
+                "decision_loading_error", lang
+            )
+            return False
+        if current_decision.get("status") == "expired":
+            return _apply_decision_conflict(task, current_decision)
+        # The backend accepts an identical body as an idempotent replay even
+        # after queueing, so keep retrying it with the freshest task version.
+        if (
+            current_decision.get("status") == "pending"
+            and task.get("status") != "waiting_for_input"
+        ):
+            return _apply_decision_conflict(task, current_decision)
+        response = httpx.post(
+            f"{API_BASE}/api/v1/tasks/{task_id}/decisions/{submission['decision_id']}",
+            json=body,
+            headers={"If-Match": str(task.get("version", 0))},
+            timeout=15,
+        )
+        if response.status_code in (200, 202):
+            accepted = response.json()
+            if _apply_decision_resolution(accepted):
+                return True
+            st.session_state.research_decision_error = t("decision_conflict", lang)
+            return False
+        if response.status_code in (409, 410):
+            refreshed_task, refreshed_decision = _refresh_decision_authority(task_id)
+            return _apply_decision_conflict(refreshed_task, refreshed_decision)
+        st.session_state.research_decision_error = t(
+            "decision_submit_error", lang, status=response.status_code
+        )
+        return False
+    except Exception:
+        st.session_state.research_decision_error = t("decision_network_error", lang)
+        return False
+
+
+def _render_decision_panel():
+    decision = st.session_state.get("research_decision")
+    error = st.session_state.get("research_decision_error")
+    if decision and decision.get("status") == "expired":
+        st.info(t("decision_expired", lang))
+        if st.button(t("restart_btn", lang), key="restart_expired_decision"):
+            for key in DEFAULTS:
+                st.session_state[key] = DEFAULTS[key]
+            st.rerun()
+        return
+    if decision and decision.get("status") == "cancelled":
+        st.info(t("decision_cancelled", lang))
+        return
+    if st.session_state.get("research_task_status") != "waiting_for_input":
+        st.info(error or t("decision_conflict", lang))
+        if st.button(t("decision_retry", lang), key="decision_refresh_task_state"):
+            if not _set_waiting_for_input():
+                st.session_state.research_decision_error = t("decision_conflict", lang)
+            st.rerun()
+        return
+    if not decision or decision.get("status") != "pending":
+        st.info(error or t("decision_pending", lang))
+        if st.button(t("decision_retry", lang), key="decision_refresh_state"):
+            _set_waiting_for_input()
+            st.rerun()
+        return
+
+    st.subheader(t("decision_title", lang))
+    st.caption(t("decision_pending", lang))
+    st.markdown(f"**{t('decision_reason', lang)}**")
+    st.text(decision.get("reason", ""))
+    st.markdown(f"**{t('decision_gaps', lang)}**")
+    gaps = decision.get("gaps", [])
+    if gaps:
+        for gap in gaps:
+            st.text(f"• {gap}")
+    else:
+        st.write("—")
+    st.caption(t("decision_expires", lang, expires_at=decision.get("expires_at", "—")))
+
+    submission = st.session_state.get("research_decision_submission")
+    if submission:
+        body = submission["body"]
+        action = body.get("action")
+        st.info(error or t("decision_network_error", lang))
+        if st.button(t("decision_retry", lang), key="decision_retry_same_body"):
+            if _submit_decision(action, body.get("supplemental_input")):
+                st.rerun()
+        return
+
+    context = st.text_area(
+        t("decision_context_label", lang),
+        placeholder=t("decision_context_placeholder", lang),
+        max_chars=4000,
+        key=f"decision_context_{decision.get('decision_id', 'pending')}",
+    )
+    if error:
+        st.warning(error)
+    actions = set(decision.get("allowed_actions", []))
+    context_col, report_col, cancel_col = st.columns(3)
+    with context_col:
+        if "provide_context" in actions and st.button(
+            t("decision_provide_context", lang),
+            key="decision_provide_context",
+            type="primary",
+            use_container_width=True,
+        ):
+            if _submit_decision("provide_context", context):
+                st.rerun()
+    with report_col:
+        if "limited_report" in actions and st.button(
+            t("decision_limited_report", lang),
+            key="decision_limited_report",
+            use_container_width=True,
+        ):
+            if _submit_decision("limited_report"):
+                st.rerun()
+    with cancel_col:
+        if "cancel" in actions and st.button(
+            t("decision_cancel", lang),
+            key="decision_cancel",
+            use_container_width=True,
+        ):
+            if _submit_decision("cancel"):
+                st.rerun()
+
+
 def _set_terminal_status(status: str):
     if status not in {"completed", "complete", "completed_with_warnings", "failed", "cancelled", "canceled", "timed_out", "timeout", "interrupted"}:
         return False
@@ -1247,12 +1631,25 @@ def _set_terminal_status(status: str):
     st.session_state.research_complete = status in {"completed", "complete", "completed_with_warnings"}
     st.session_state.research_failed = status not in {"completed", "complete", "completed_with_warnings", "cancelled", "canceled"}
     st.session_state.research_terminal_status = normalized
+    st.session_state.research_task_status = normalized
     st.session_state.research_connection_lost = False
     return True
 
 
 def _render_research_progress():
     task_id = st.session_state.research_task_id
+    # A reconnect can begin after the decision.required event was already
+    # acknowledged by Last-Event-ID. Since waiting_for_input is nonterminal,
+    # that SSE stream would otherwise stay open without replaying the pause.
+    if st.session_state.get("research_last_event_id"):
+        current_detail = _task_detail(task_id)
+        current_task = _remember_task_projection(current_detail)
+        if current_task.get("status") == "waiting_for_input":
+            if not _set_waiting_for_input(current_detail):
+                st.session_state.research_running = False
+                st.session_state.research_connection_lost = True
+            return
+
     progress_bar = st.progress(0, text=t("progress_init", lang))
     live = st.empty()
     cancel_col, _ = st.columns([1, 4])
@@ -1288,6 +1685,7 @@ def _render_research_progress():
 
     try:
         got_terminal = False
+        got_decision_pause = False
         for _attempt in range(3):
             headers = {}
             if st.session_state.get("research_last_event_id"):
@@ -1303,17 +1701,32 @@ def _render_research_progress():
                         continue
                     if frame.get("event") == "resync_required" or event.get("type") == "resync_required":
                         detail = event.get("snapshot") or {}
-                        durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
+                        durable_task = _decision_task_projection(detail)
+                        if event.get("latest_event_id") is not None:
+                            st.session_state.research_last_event_id = str(
+                                event["latest_event_id"]
+                            )
                         if durable_task.get("version") is not None:
                             st.session_state.research_task_version = durable_task["version"]
+                        if durable_task.get("status") == "waiting_for_input":
+                            got_decision_pause = True
+                            break
                         if _set_terminal_status(durable_task.get("status", "")):
                             got_terminal = True
-                        if event.get("latest_event_id") is not None:
-                            st.session_state.research_last_event_id = str(event["latest_event_id"])
                         if got_terminal:
                             break
                         continue
                     status = event.get("status")
+                    if (
+                        frame.get("event") == "decision.required"
+                        or event.get("type") == "decision.required"
+                        or status == "waiting_for_input"
+                    ):
+                        # Stop consuming this response as soon as the durable
+                        # pause is observed. The task + decision GETs below are
+                        # authoritative and avoid acting on stale SSE payloads.
+                        got_decision_pause = True
+                        break
                     if status in {
                         "completed", "completed_with_warnings", "failed",
                         "cancelled", "timed_out", "interrupted",
@@ -1363,13 +1776,23 @@ def _render_research_progress():
                         live.markdown(_timeline_html(entries, max(last_ts - first_ts, 0.001), lang), unsafe_allow_html=True)
             if got_terminal:
                 break
+            if got_decision_pause:
+                break
             detail = _task_detail(task_id)
             durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
             if durable_task.get("version") is not None:
                 st.session_state.research_task_version = durable_task["version"]
+            if durable_task.get("status") == "waiting_for_input":
+                got_decision_pause = True
+                break
             if _set_terminal_status(durable_task.get("status", "")):
                 got_terminal = True; break
             time.sleep(0.25 * (_attempt + 1))
+        if got_decision_pause:
+            if not _set_waiting_for_input():
+                st.session_state.research_running = False
+                st.session_state.research_connection_lost = True
+            return
         if not got_terminal:
             st.session_state.research_running = False
             st.session_state.research_failed = False

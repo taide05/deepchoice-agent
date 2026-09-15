@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 from streamlit.testing.v1 import AppTest
 
 APP_PATH = str(Path(__file__).resolve().parents[1] / "frontend" / "app.py")
@@ -233,6 +234,142 @@ class _BudgetBackend(_FakeBackend):
         if url.endswith("/snapshot"):
             return _FakeResp(self.snapshot)
         return super().get(url, **kw)
+
+
+class _DecisionStream(_RawStream):
+    def __init__(self, events, backend):
+        super().__init__(events)
+        self.backend = backend
+
+    def iter_lines(self):
+        def lines():
+            current_event = None
+            for line in self._events:
+                if line.startswith("event:"):
+                    current_event = line.partition(":")[2].strip()
+                if line == "":
+                    self.backend.consumed_sse_events.append(current_event)
+                    current_event = None
+                yield line
+        return iter(lines())
+
+
+class _DecisionBackend(_FakeBackend):
+    def __init__(self, task_status="waiting_for_input", task_version=41, stream_events=None):
+        super().__init__(stream_events=[], status_complete=False)
+        self.task_status = task_status
+        self.task_version = task_version
+        self.decision = {
+            "schema_version": 1,
+            "decision_id": "d-1",
+            "kind": "evidence-insufficient",
+            "status": "pending",
+            "reason": "重要约束尚未确定",
+            "gaps": ["目标并发量", "部署环境"],
+            "allowed_actions": ["provide_context", "limited_report", "cancel"],
+            "expires_at": "2026-09-22T12:00:00Z",
+        }
+        self.stream_lines = stream_events or []
+        self.consumed_sse_events = []
+        self.decision_requests = 0
+        self.task_requests = 0
+        self.decision_posts = []
+        self.post_status = 202
+        self.post_statuses = []
+        self.post_exception = None
+        self.post_exception_task_status = None
+        self.decision_on_conflict = None
+        self.task_on_conflict = None
+        self.status_after_post = None
+        self.version_after_post = 42
+        self.status_after_stream = None
+
+    def get(self, url, **kw):
+        if url.endswith("/api/v1/tasks/t1/decision"):
+            self.decision_requests += 1
+            return _FakeResp(self.decision)
+        if url.endswith("/api/v1/tasks/t1"):
+            self.task_requests += 1
+            return _FakeResp({
+                "task": {
+                    "task_id": "t1",
+                    "status": self.task_status,
+                    "version": self.task_version,
+                },
+                "latest_run": None,
+            })
+        return super().get(url, **kw)
+
+    def post(self, url, **kw):
+        if "/decisions/d-1" in url:
+            self.decision_posts.append({
+                "url": url,
+                "json": copy.deepcopy(kw.get("json")),
+                "headers": copy.deepcopy(kw.get("headers", {})),
+            })
+            if self.post_exception is not None:
+                error, self.post_exception = self.post_exception, None
+                if self.post_exception_task_status is not None:
+                    action = kw.get("json", {}).get("action")
+                    self.task_status = self.post_exception_task_status
+                    self.task_version = self.version_after_post
+                    self.decision = {
+                        **self.decision,
+                        "status": "resolved",
+                        "resolved_action": action,
+                    }
+                raise error
+            response_status = self.post_statuses.pop(0) if self.post_statuses else self.post_status
+            if self.decision.get("status") == "resolved":
+                return _FakeResp({
+                    "decision": self.decision,
+                    "task": {
+                        "task": {
+                            "task_id": "t1",
+                            "status": self.task_status,
+                            "version": self.task_version,
+                        },
+                        "latest_run": None,
+                    },
+                    "replayed": True,
+                }, status_code=response_status)
+            if response_status in (200, 202):
+                action = kw.get("json", {}).get("action")
+                status = self.status_after_post or ("cancelled" if action == "cancel" else "queued")
+                self.task_status = status
+                self.task_version = self.version_after_post
+                self.decision = {
+                    **self.decision,
+                    "status": "cancelled" if action == "cancel" else "resolved",
+                    "resolved_action": action,
+                }
+                response_task = {
+                    "task": {
+                        "task_id": "t1",
+                        "status": status,
+                        "version": self.task_version,
+                    },
+                    "latest_run": None,
+                }
+                return _FakeResp({
+                    "decision": self.decision,
+                    "task": response_task,
+                    "replayed": False,
+                }, status_code=response_status)
+            if self.decision_on_conflict is not None:
+                self.decision = {**self.decision, "status": self.decision_on_conflict}
+            if self.task_on_conflict is not None:
+                self.task_status = self.task_on_conflict
+            return _FakeResp({"detail": {"code": "TASK_DECISION_CONFLICT"}}, response_status)
+        return super().post(url, **kw)
+
+    def stream(self, method, url, **kw):
+        self.stream_headers.append(kw.get("headers", {}))
+        if self.task_status == "queued":
+            self.task_status = "completed"
+        elif self.status_after_stream is not None:
+            self.task_status = self.status_after_stream
+        return _DecisionStream(self.stream_lines, self)
 
 
 ANNOTATED = {
@@ -560,6 +697,355 @@ def test_report_skips_non_integer_citation_number_before_html_render(monkeypatch
 
     assert not at.exception, at.exception
     assert "onmouseover" not in _md_text(at)
+
+
+def _enter_waiting_decision(at, backend, lang_code="en"):
+    _enter_research_phase(at)
+    at.session_state["lang"] = lang_code
+    at.session_state["research_running"] = False
+    at.session_state["research_waiting_for_input"] = True
+    at.session_state["research_task_status"] = "waiting_for_input"
+    at.session_state["research_decision"] = backend.decision
+    at.session_state["research_task_version"] = 3
+    at.session_state["research_decision_error"] = None
+
+
+@pytest.mark.parametrize(
+    ("lang_code", "title", "gaps_heading"),
+    [
+        ("zh", "需要更多信息", "仍待补充的证据缺口"),
+        ("en", "More information is needed", "Evidence gaps to address"),
+        ("ja", "追加情報が必要です", "補足が必要な証拠の不足"),
+        ("ko", "추가 정보가 필요합니다", "보완이 필요한 증거 공백"),
+    ],
+)
+def test_waiting_decision_panel_shows_public_details_in_all_locales(
+    monkeypatch, lang_code, title, gaps_heading
+):
+    backend = _DecisionBackend()
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend, lang_code)
+    at.run()
+
+    assert not at.exception, at.exception
+    md = _md_text(at)
+    caption = "\n".join(str(item.value) for item in at.caption)
+    plain_text = "\n".join(str(item.value) for item in at.text)
+    assert title in "\n".join(str(item.value) for item in at.subheader)
+    assert gaps_heading in md
+    assert "目标并发量" in plain_text  # Public decision content is rendered as returned.
+    assert "重要约束尚未确定" in plain_text
+    assert "2026-09-22T12:00:00Z" in caption
+    assert all(at.button(key=key) for key in (
+        "decision_provide_context", "decision_limited_report", "decision_cancel"
+    ))
+
+
+@pytest.mark.parametrize(
+    ("lang_code", "message"),
+    [
+        ("zh", "此任务已取消。"),
+        ("en", "This task was cancelled."),
+        ("ja", "このタスクはキャンセルされました。"),
+        ("ko", "작업이 취소되었습니다."),
+    ],
+)
+def test_cancelled_terminal_message_uses_selected_locale(lang_code, message):
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_research_phase(at)
+    at.session_state["lang"] = lang_code
+    at.session_state["research_running"] = False
+    at.session_state["research_terminal_status"] = "cancelled"
+    at.session_state["research_task_status"] = "cancelled"
+    at.run()
+
+    assert not at.exception, at.exception
+    assert message in "\n".join(str(item.value) for item in at.info)
+
+
+@pytest.mark.parametrize(
+    ("button_key", "body", "task_status"),
+    [
+        (
+            "decision_provide_context",
+            {"action": "provide_context", "supplemental_input": "仅私有补充"},
+            "completed",
+        ),
+        ("decision_limited_report", {"action": "limited_report"}, "completed"),
+        ("decision_cancel", {"action": "cancel"}, "cancelled"),
+    ],
+)
+def test_decision_actions_use_fresh_if_match_and_follow_durable_transition(
+    monkeypatch, button_key, body, task_status
+):
+    backend = _DecisionBackend(stream_events=[
+        "id: 22", "event: run.completed", 'data: {"status":"completed"}', ""
+    ])
+    backend.version_after_post = 57
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend)
+    at.run()
+    if body["action"] == "provide_context":
+        at.text_area(key="decision_context_d-1").set_value(body["supplemental_input"])
+    at.button(key=button_key).click().run()
+
+    assert not at.exception, at.exception
+    assert backend.decision_posts[0]["json"] == body
+    assert backend.decision_posts[0]["headers"]["If-Match"] == "41"
+    assert backend.task_requests >= 1
+    if task_status == "cancelled":
+        assert at.session_state["research_terminal_status"] == "cancelled"
+        assert at.session_state["research_waiting_for_input"] is False
+        assert len(backend.stream_headers) == 0
+    else:
+        assert at.session_state["research_terminal_status"] == "completed"
+        assert at.session_state["research_waiting_for_input"] is False
+        assert at.session_state["research_task_version"] == 57
+        assert backend.stream_headers
+    if body["action"] == "provide_context":
+        assert "仅私有补充" not in _md_text(at)
+
+
+@pytest.mark.parametrize(
+    "trigger",
+    ["decision.required", "resync_waiting_snapshot", "reconnect_after_pause_event"],
+)
+def test_sse_decision_pause_breaks_stream_and_fetches_authoritative_decision(
+    monkeypatch, trigger
+):
+    if trigger == "decision.required":
+        lines = [
+            "id: 18", "event: decision.required",
+            'data: {"status":"waiting_for_input","decision_id":"d-1"}', "",
+            "id: 19", "event: run.progress", 'data: {"node":"should_not_be_read"}', "",
+        ]
+    elif trigger == "resync_waiting_snapshot":
+        lines = [
+            "id: 18", "event: resync_required",
+            'data: {"type":"resync_required","latest_event_id":20,"snapshot":{"task":{"task_id":"t1","status":"waiting_for_input","version":44}}}', "",
+            "id: 19", "event: run.progress", 'data: {"node":"should_not_be_read"}', "",
+        ]
+    else:
+        lines = []
+    initial_status = (
+        "waiting_for_input" if trigger == "reconnect_after_pause_event" else "running"
+    )
+    backend = _DecisionBackend(task_status=initial_status, stream_events=lines)
+    if initial_status == "running":
+        backend.status_after_stream = "waiting_for_input"
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_research_phase(at)
+    at.session_state["research_last_event_id"] = "17"
+    at.run()
+
+    assert not at.exception, at.exception
+    assert at.session_state["research_waiting_for_input"] is True
+    assert at.session_state["research_running"] is False
+    assert at.session_state["research_decision"]["decision_id"] == "d-1"
+    assert backend.decision_requests == 1
+    expected_sse_events = {
+        "decision.required": ["decision.required"],
+        "resync_waiting_snapshot": ["resync_required"],
+        "reconnect_after_pause_event": [],
+    }[trigger]
+    assert backend.consumed_sse_events == expected_sse_events
+    if trigger == "reconnect_after_pause_event":
+        assert backend.stream_headers == []
+        assert at.session_state["research_last_event_id"] == "17"
+    elif trigger == "resync_waiting_snapshot":
+        assert at.session_state["research_last_event_id"] == "20"
+    else:
+        assert at.session_state["research_last_event_id"] == "18"
+
+
+@pytest.mark.parametrize(
+    ("decision_status", "task_status", "message"),
+    [
+        ("expired", "cancelled", "expired"),
+        ("cancelled", "cancelled", "cancelled"),
+    ],
+)
+def test_decision_conflict_projects_terminal_decision_without_retaining_body(
+    monkeypatch, decision_status, task_status, message
+):
+    backend = _DecisionBackend()
+    backend.post_status = 409
+    backend.decision_on_conflict = decision_status
+    backend.task_on_conflict = task_status
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend)
+    at.run()
+    at.text_area(key="decision_context_d-1").set_value("private conflict context")
+    at.button(key="decision_provide_context").click().run()
+    assert not at.exception, at.exception
+    assert backend.decision_posts, "decision POST was not attempted"
+    assert at.session_state["research_decision"]["status"] == decision_status
+    assert at.session_state["research_task_status"] == task_status
+    assert at.session_state["research_decision_submission"] is None
+    assert "private conflict context" not in repr(at.session_state)
+    assert any(message in str(item.value).lower() for item in at.info)
+    if decision_status == "expired":
+        assert at.button(key="restart_expired_decision")
+        at.button(key="restart_expired_decision").click().run()
+        assert at.session_state["phase"] == "clarify"
+        assert at.session_state["research_started"] is False
+        assert at.session_state["research_decision"] is None
+
+
+def test_pending_conflict_discards_supplement_and_reopens_actions(monkeypatch):
+    backend = _DecisionBackend()
+    backend.post_status = 409
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend)
+    at.run()
+    at.text_area(key="decision_context_d-1").set_value("do not retain after conflict")
+    at.button(key="decision_provide_context").click().run()
+
+    assert not at.exception, at.exception
+    assert backend.decision_posts, "decision POST was not attempted"
+    assert at.session_state["research_decision"]["status"] == "pending"
+    assert at.session_state["research_decision_submission"] is None
+    assert "do not retain after conflict" not in repr(at.session_state)
+    assert any("changed" in str(item.value).lower() for item in at.warning)
+    assert all(at.button(key=key) for key in (
+        "decision_provide_context", "decision_limited_report", "decision_cancel"
+    ))
+
+
+def test_decision_submit_requires_fresh_task_version(monkeypatch):
+    backend = _DecisionBackend()
+    original_get = backend.get
+
+    def unavailable_task(url, **kwargs):
+        if url.endswith("/api/v1/tasks/t1"):
+            return _FakeResp({}, status_code=503)
+        return original_get(url, **kwargs)
+
+    monkeypatch.setattr(httpx, "get", unavailable_task)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend)
+    at.run()
+    at.button(key="decision_limited_report").click().run()
+
+    assert not at.exception, at.exception
+    assert backend.decision_posts == []
+    assert at.session_state["research_decision_submission"]["body"] == {
+        "action": "limited_report"
+    }
+    at.run()
+    assert at.button(key="decision_retry_same_body")
+
+
+def test_uncertain_decision_submission_retries_identical_body_with_refreshed_version(monkeypatch):
+    backend = _DecisionBackend()
+    backend.post_exception = httpx.ReadTimeout("read timeout")
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend)
+    at.run()
+    at.text_area(key="decision_context_d-1").set_value("same body")
+    at.button(key="decision_provide_context").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["research_decision_submission"]["body"] == {
+        "action": "provide_context", "supplemental_input": "same body"
+    }
+
+    backend.task_status = "waiting_for_input"
+    backend.task_version = 46
+    at.run()
+    at.button(key="decision_retry_same_body").click().run()
+
+    assert not at.exception, at.exception
+    assert [item["json"] for item in backend.decision_posts] == [
+        {"action": "provide_context", "supplemental_input": "same body"},
+        {"action": "provide_context", "supplemental_input": "same body"},
+    ]
+    assert backend.decision_posts[0]["headers"]["If-Match"] == "41"
+    assert backend.decision_posts[1]["headers"]["If-Match"] == "46"
+
+
+@pytest.mark.parametrize(
+    ("replay_status", "expected_terminal", "expect_stream"),
+    [
+        ("running", "completed", True),
+        ("completed_with_warnings", "completed_with_warnings", False),
+    ],
+)
+def test_idempotent_replay_restores_current_task_state(
+    monkeypatch, replay_status, expected_terminal, expect_stream
+):
+    backend = _DecisionBackend(stream_events=[
+        "id: 23", "event: run.completed", 'data: {"status":"completed"}', ""
+    ])
+    backend.post_exception = httpx.ReadTimeout("response lost after commit")
+    backend.post_exception_task_status = replay_status
+    backend.version_after_post = 71
+    if replay_status == "running":
+        backend.status_after_stream = "completed"
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_waiting_decision(at, backend)
+    at.run()
+    at.text_area(key="decision_context_d-1").set_value("private replay context")
+    at.button(key="decision_provide_context").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["research_decision_submission"]["body"] == {
+        "action": "provide_context",
+        "supplemental_input": "private replay context",
+    }
+
+    at.run()
+    at.button(key="decision_retry_same_body").click().run()
+
+    assert not at.exception, at.exception
+    assert [post["json"] for post in backend.decision_posts] == [
+        {"action": "provide_context", "supplemental_input": "private replay context"},
+        {"action": "provide_context", "supplemental_input": "private replay context"},
+    ]
+    assert at.session_state["research_task_status"] == expected_terminal
+    assert at.session_state["research_terminal_status"] == expected_terminal
+    assert at.session_state["research_waiting_for_input"] is False
+    assert at.session_state["research_decision_submission"] is None
+    assert (len(backend.stream_headers) > 0) is expect_stream
+    assert "decision_context_d-1" not in at.session_state
 
 
 def test_replay_interrupted_then_auto_resume_uses_current_task_projection(monkeypatch):

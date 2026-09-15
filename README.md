@@ -142,8 +142,9 @@ schema v3 与 `evidence-insufficient-v1`。该 gate 位于引用验证之后、�
 checkpoint、state schema 和暂停 epoch 绑定；相同请求幂等，冲突请求不覆盖已提交决定，7 天
 未决后收敛为取消。暂停后 lease、deadline 与执行槽都会释放。重启恢复只会续接兼容的已解决
 decision/checkpoint。补充文本不会进入公开 decision 响应或 `task_events`；checkpoint ID 和
-fencing identity 也只保留在内部。旧 `/research` 兼容路径绕过该持久决策门。Phase 4-2 的
-Streamlit 决策界面与恢复端到端验收仍待实施。
+fencing identity 也只保留在内部。旧 `/research` 兼容路径绕过该持久决策门。Phase 4-2 已完成
+Streamlit 待决策界面及 SSE 等待断开/按 `Last-Event-ID` 续接，并以真实双 SQLite、
+StateGraph/checkpoint 验证 pending 跨重启、幂等/冲突、过期、取消和绑定 checkpoint 的单次 resume。
 
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
 [`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成轻量检索去重/缓存、单一 HITL
@@ -156,7 +157,7 @@ Streamlit 决策界面与恢复端到端验收仍待实施。
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**986 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**1011 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 

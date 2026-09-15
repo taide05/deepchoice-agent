@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 986 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 1011 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -231,12 +231,31 @@ When adding a setting, update the code default, tests, README configuration sect
   actions, expiry, and action; never checkpoint/fencing identity, supplemental content, or private
   state.
 
+### Phase 4-2 decision UI and recovery acceptance
+
+- The Streamlit durable-task view displays only the public pending-decision projection: reason, evidence
+  gaps, allowed actions, and expiry. It offers `provide_context`, `limited_report`, and `cancel`; every
+  resolution sends the current task version in `If-Match`.
+- On `waiting_for_input` / `decision.required`, end the current durable SSE response so the client does
+  not hold a connection while awaiting the user. After resolution, reconnect from the last received
+  `Last-Event-ID`; if replay requests resync, refresh the public task/decision snapshot before resuming
+  the stream. Preserve the existing replay/resync behavior for all other task states.
+- A retry after an uncertain submission must repeat the same action body. On a version/body conflict,
+  refresh public state and require a new user action; do not silently rewrite or replay a different
+  choice. Supplemental text may remain only in the user's input widget and the private session retry
+  body while an outcome is uncertain; never copy it into public projections, events, logs, or errors.
+  Never expose checkpoint identity, execution epoch, lease owner, manifest contents, or private state.
+- Recovery acceptance must use separate real product and LangGraph checkpoint SQLite databases, a real
+  `StateGraph`, and its checkpoint saver. Cover restart with a pending decision, same-body idempotency,
+  conflicting resolution/version, seven-day expiry, cancellation without graph resume, and a valid
+  resolution resuming the bound run exactly once from its accepted checkpoint.
+
 ### Current implementation scope
 
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
-- Phase 3 is complete. Phase 4 PR 4-1 (single durable decision backend) is implemented; PR 4-2
-  (frontend and recovery acceptance) has not started. Then continue to Phase 5. Keep each remaining
+- Phase 3 is complete. Phase 4 PR 4-1 (single durable decision backend) and PR 4-2
+  (decision UI and recovery acceptance) are implemented. Then continue to Phase 5. Keep each remaining
   phase to at most two implementation PRs and prioritize the durable default path.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless

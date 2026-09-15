@@ -140,13 +140,15 @@ v3 和 `evidence-insufficient-v1`。唯一决策 gate 位于引用验证之后�
 
 **PR 4-2：前端与恢复验收**
 
-状态：未开始。
+状态：已实现并完成恢复验收。
 
-- Streamlit 展示待决策原因、证据缺口和三个明确动作。
-- 覆盖重启、重复提交、过期、取消和 resume 端到端测试。
+- Streamlit 在 durable SSE 收到 `waiting_for_input`/`decision.required` 后结束当前流并展示待决策原因、证据缺口、允许动作及 7 天有效期；等待期间不持续占用 SSE 连接。
+- 用户提交后重新连接 durable SSE，并从最后收到的 `Last-Event-ID` 续接；若服务端要求 resync，先刷新 task/decision 快照，再续接事件流。
+- 三个动作分别为补充信息继续、基于现有证据生成受限报告、取消。所有 resolve 请求携带当前 task version 的 `If-Match`；提交结果不确定时可用相同请求体安全重试，冲突时刷新状态，不自动改写用户选择。
+- UI 只展示公开 decision projection。补充文本、checkpoint identity、execution epoch、lease owner、manifest 和内部 state 不得进入页面事件、日志或公开响应；报告正文继续遵循已有 HTML sanitizer 约束。
+- 恢复验收使用独立的真实产品 SQLite 与 LangGraph checkpoint SQLite、真实 `StateGraph` 和 checkpoint saver；至少覆盖 pending decision 跨进程重启保留、相同 resolution 幂等、不同 body/过期版本冲突、七天过期收敛、取消不恢复图，以及合法补充信息从绑定 checkpoint 将同一 run 恢复且只执行一次。
 
-PR 4-2 完成标准：前端清楚展示待决策原因、证据缺口与三个动作；等待期间不占执行槽；
-重启、重复提交、过期、取消和 resume 端到端验收证明一次合法决策只恢复一次正确 run。
+PR 4-2 完成标准：pending 决策界面和 SSE 断开/续接行为符合上述契约；等待期间不占执行槽；真实双 SQLite/checkpoint 端到端验收证明重启后决策仍可处理，且一次合法 resume 只恢复一次正确 run。
 
 ### Phase 5：质量评估与项目收口
 

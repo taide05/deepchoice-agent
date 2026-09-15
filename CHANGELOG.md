@@ -29,13 +29,14 @@
 - Phase 3-1 deterministic citation verification between synthesis and report rendering, with canonical-URL deduplication, bounded safe fetches, four honest public statuses, immutable result projection, and report/Streamlit warnings without an LLM judge
 - Phase 3-2 retrieval-only SQLite TTL cache with manifest/policy-aware hashed keys, run-scoped single-flight, bounded expiry pruning, cache-before-Trace/budget behavior, Docker opt-out configuration, and preserved legacy retriever/API adapters
 - Phase 4-1 single durable HITL decision gate on schema v10: research-v3/state v3 manifest policy, checkpoint/fencing-bound decisions, idempotent three-action resolution, seven-day expiry and recovery, with durable GET/resolve APIs; frontend acceptance remains pending
+- Phase 4-2 Streamlit pending-decision UI with safe three-action resolution, SSE wait termination and `Last-Event-ID` continuation, plus real dual-SQLite/StateGraph recovery acceptance for restart, idempotency/conflict, expiry, cancellation, and bound single resume
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 986 passed with no skips on 2026-09-15
+- Verified Python 3.12 test baseline is 1011 passed with no skips on 2026-09-15
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely

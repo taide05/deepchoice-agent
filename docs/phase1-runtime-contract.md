@@ -98,6 +98,21 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
   action/status；不得暴露 supplement、checkpoint ID/namespace、execution epoch、lease owner、
   manifest 或完整 state。
 
+#### Streamlit 交互与恢复验收（Phase 4-2）
+
+- durable SSE 收到 `waiting_for_input` 或 `decision.required` 后，客户端结束本次 SSE 响应并呈现
+  最新公开 decision projection；等待用户期间不维持 SSE 连接。决策提交后从最近收到的
+  `Last-Event-ID` 续接；若 replay 返回 resync，则先读取公开 task/decision 快照，再恢复事件流。
+- 页面展示 reason、evidence gaps、allowed actions 和 expiry，并提供补充信息继续、受限报告、取消。
+  每次 resolve 携带当前 task version 的 `If-Match`。提交结果不确定时仅以相同 body 重试；版本或
+  resolution 冲突后刷新状态，不自动替用户选择。
+- 补充文本只允许暂存在用户输入控件及提交结果不确定时的私有 session 重试体；不得进入公开
+  decision 投影、页面事件、日志或错误信息。checkpoint/fencing identity、lease owner、manifest
+  和完整研究 state 同样不得进入这些公开表面。页面渲染报告仍须使用服务端提供的安全 HTML。
+- 端到端恢复验收使用独立产品 SQLite 与 LangGraph checkpoint SQLite、真实 StateGraph/checkpoint
+  saver，验证 pending decision 重启保留、相同提交幂等、不同提交/旧版本冲突、七天过期、取消不
+  resume，以及合法 resolution 从绑定 checkpoint 恢复同一 run 且只恢复一次。
+
 ## 4. Durable task events 与 SSE
 
 `task_events.event_id` 是数据库级全局单调 cursor；`seq` 只在单个 task 内从 1 单调递增。

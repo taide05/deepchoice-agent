@@ -715,7 +715,10 @@ Phase 6 的基础输入/URL/日志安全应在 Phase 0/1 同步打底，集中�
   `evidence-insufficient-v1` manifest policy；gate 位于 citation verification 后、report rendering
   前，决策绑定 run/checkpoint/state schema/pause epoch，支持三动作、幂等 resolve、7 天过期、
   fencing 和重启恢复。等待时释放 lease 与执行槽；durable GET/resolve API 已提供。
-- PR 4-2 尚未开始：Streamlit 决策界面和恢复端到端验收。
+- PR 4-2 已实现并完成恢复验收：Streamlit 只展示公开 pending decision 投影，支持三动作和 `If-Match`；收到
+  `waiting_for_input` / `decision.required` 后结束 SSE，决定提交后从 `Last-Event-ID` 续接并处理
+  resync。真实双 SQLite、StateGraph/checkpoint 验收覆盖重启、幂等/冲突、过期、取消及绑定
+  checkpoint 的单次 resume；最终结果以 roadmap、代码和实际验证记录为准。
 - 不实现原设计中的四类触发器；旧 run 不注入 HITL，旧 `/research` 兼容路径绕过 durable gate。
 - 公开 API/event 投影不得暴露 supplement 文本、checkpoint/fencing identity 或完整 state。
 - PR 4-1/4-2 仍需独立复审持久化、并发和公共接口；测试与状态以当前 roadmap、代码和实际
