@@ -47,3 +47,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+    # Starlette 1.6.0 evaluates this deprecated AnyIO 4.15 alias at import time.
+    # Remove after a Starlette release uses anyio.from_thread.BlockingPortal.
+    'ignore:^The anyio\.abc\.BlockingPortal alias is deprecated, use anyio\.from_thread\.BlockingPortal instead\.$:DeprecationWarning:starlette\.testclient$',
+]

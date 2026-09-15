@@ -49,6 +49,7 @@
 - Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and measurable project closeout; enterprise-only expansion is removed from the current Phase scope
 
 ### Fixed
+- Scoped out Starlette 1.6.0's import-time `anyio.abc.BlockingPortal` deprecation warning until the already-corrected upstream code is released, without downgrading AnyIO or hiding unrelated warnings
 - Community retriever concurrency test now follows the production HTTP client timeout contract
 - Isolated the project from the conflicting global Python 3.13 environment; `pip check` is clean and frontend observability tests no longer skip because of Streamlit/Starlette incompatibility
 - Updated frontend streaming for current httpx timeout validation and kept Streamlit rerun control flow outside network-error handling
