@@ -218,8 +218,24 @@ When adding a setting, update the code default, tests, README configuration sect
   `not_run`/`degraded` status. Do not imply live sources were checked by fixture replay.
 - Keep the historical 300-case benchmark and its dated metrics unchanged. Smoke-v1 results are a
   separate dataset and must not be merged with or compared as if they shared a denominator.
-- Phase 5-1 does not include the real-case demonstrations, test-growth audit, architecture/interview
-  package, or final acceptance assigned to Phase 5-2.
+- Phase 5-1 does not include test-growth/default-path consistency audits; those belong to Phase 5-2.
+  Real-case metric baselining and optimization, demonstrations, and the architecture/interview package
+  are outside Phase 5 entirely and require a separately approved roadmap after engineering acceptance.
+
+### Phase 5-2 engineering-foundation acceptance
+
+- Phase 5-2 is an engineering acceptance pass, not final product-quality or interview acceptance.
+  Review the durable default path across migrations, recovery, lifecycle, budget/Trace, citation
+  verification, retrieval cache, HITL, security, SSE, and compatibility boundaries.
+- Audit test-count growth, duplicate/low-value tests, dead code, deprecated upstream/public entry
+  points, and documentation drift. Preserve tests that still carry distinct regression value; do not
+  optimize for a smaller count.
+- Run the complete CI and focused fault/recovery acceptance, obtain independent review, and record a
+  concise engineering acceptance report plus residual-risk list.
+- Do not run paid benchmarks, claim real-report quality, select interview demo cases, optimize key
+  outcome metrics, or create interview/architecture presentation material in Phase 5-2.
+- Completion means the repository is a reproducible engineering baseline ready for later real-case
+  measurement and targeted optimization. It does not mean the product or interview package is final.
 
 ### Phase 4-1 single durable HITL decision gate
 
@@ -274,7 +290,8 @@ When adding a setting, update the code default, tests, README configuration sect
   design remains historical design space and must not be interpreted as authorized current scope.
 - Phase 3 is complete. Phase 4 PR 4-1 (single durable decision backend) and PR 4-2
   (decision UI and recovery acceptance) are implemented. Phase 5-1 (bounded version assets and
-  offline evaluation) is complete. Phase 5-2 remains pending. Keep each
+  offline evaluation) is complete. Phase 5-2 engineering-foundation acceptance remains pending and
+  is the end of the currently authorized roadmap. Keep each
   remaining phase to at most two implementation PRs and prioritize the durable default path.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless

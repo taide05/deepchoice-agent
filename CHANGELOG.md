@@ -51,7 +51,8 @@
 - Phase 6-A intentionally does not add authentication/API-key enforcement or rate limiting, and does not claim that every static provider has migrated to the safe-fetch path; those remain separate follow-up boundaries
 - New runs use `research-v2` and state schema v2 with `deterministic-citation-v1`; historical `research-v1` manifests remain identity-readable but require a new run instead of incompatible same-run resume
 - New runs use `research-v3` and state schema v3 with `deterministic-citation-v1` and `evidence-insufficient-v1`; historical v1/v2 manifests remain readable but require a new run instead of incompatible same-run resume
-- Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and measurable project closeout; enterprise-only expansion is removed from the current Phase scope
+- Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and engineering-baseline closeout; enterprise-only expansion is removed from the current Phase scope
+- Phase 5-2 is re-scoped from final/interview delivery to engineering-foundation acceptance; real-case metric baselining, targeted quality optimization, demonstrations, and interview materials require a later separately approved roadmap
 
 ### Fixed
 - Scoped out Starlette 1.6.0's import-time `anyio.abc.BlockingPortal` deprecation warning until the already-corrected upstream code is released, without downgrading AnyIO or hiding unrelated warnings

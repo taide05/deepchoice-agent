@@ -151,13 +151,15 @@ Phase 5-1 已完成最小版本资产清单和离线 smoke/eval。当前契约�
 模板版本；固定 12 个 fixture replay case 覆盖 query analysis、引用验证、结论后处理和报告渲染，
 每项 3 个，不调用 LLM、judge 或网络。其 artifact 会记录数据集 hash/date、各指标分母、manifest、
 registry 与 source health `not_run`/`degraded`。此测试只验证确定性代码和 fixture/报告结构，不能
-作为真实模型语义质量或实时信源可用性的证明，也不改变历史 300-case benchmark 指标。最终真实
-演示、测试数量审计和面试交付留在后续 Phase 5-2。
+作为真实模型语义质量或实时信源可用性的证明，也不改变历史 300-case benchmark 指标。测试数量、
+死代码、默认路径一致性和完整 CI 的工程验收留在 Phase 5-2；真实 case 指标优化与面试交付不属于
+当前 Phase 5。
 运行命令、baseline 检查和指标解释见[Phase 5-1 离线评估说明](docs/phase5-offline-eval.md)。
 
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
-[`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成轻量检索去重/缓存、单一 HITL
-和质量评估闭环；多租户认证、分布式基础设施及其他企业级扩展不在当前实施范围。
+[`docs/current-roadmap.md`](docs/current-roadmap.md)：当前只剩 Phase 5-2 工程基础整体验收。完成后
+再依据真实 case 重新规划重点指标测量与优化；多租户认证、分布式基础设施及其他企业级扩展不在
+当前实施范围。
 
 ### 测试
 
