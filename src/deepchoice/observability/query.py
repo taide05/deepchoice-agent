@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 import aiosqlite
 
 from deepchoice.contracts.api import (
+    ObservabilityBudgetResourceResponse,
+    ObservabilityBudgetSummaryResponse,
     ObservabilityExternalCallResponse,
     ObservabilityNodeAttemptResponse,
     ObservabilityTotalsResponse,
@@ -20,6 +22,138 @@ from deepchoice.persistence.repository import TaskNotFoundError
 
 _TOKEN_FIELDS = ("input_tokens", "output_tokens", "total_tokens")
 _FAILURE_STATUSES = {"failed", "timed_out", "unknown"}
+_BUDGET_RESOURCES = {
+    "input_tokens", "output_tokens", "total_tokens", "cost_micro_usd",
+    "llm_calls", "retrieval_calls", "http_calls", "active_milliseconds",
+    "wall_clock_milliseconds",
+}
+_BUDGET_DENIAL_ERROR_IDS = {
+    "RUN_BUDGET_EXCEEDED",
+    "BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE",
+}
+
+
+def _unavailable_budget(
+    *, admission_denied: bool = False, denied_resource: str | None = None
+) -> ObservabilityBudgetSummaryResponse:
+    return ObservabilityBudgetSummaryResponse(
+        availability="unavailable",
+        admission_denied=admission_denied,
+        denied_resource=denied_resource,
+        price_availability="unavailable",
+    )
+
+
+def _policy_summary(value: str) -> tuple[dict[str, int], dict[str, object]] | None:
+    """Parse only versioned public policy fields and positive integer limits."""
+
+    try:
+        policy = json.loads(value)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(policy, dict):
+        return None
+    version = policy.get("policy_version")
+    tier = policy.get("tier")
+    mode = policy.get("enforcement_mode")
+    ratio = policy.get("soft_limit_ratio")
+    price_version = policy.get("price_catalog_version")
+    limits = policy.get("hard_limits")
+    if (
+        version not in {"standard-observe-v1", "standard-enforced-v1"}
+        or tier != "standard"
+        or mode not in {"observe_only", "enforced"}
+        or type(ratio) not in {float, int}
+        or not 0 < ratio <= 1
+        or not isinstance(price_version, str)
+        or not isinstance(limits, dict)
+    ):
+        return None
+    configured = {
+        key: amount
+        for key, amount in limits.items()
+        if key in _BUDGET_RESOURCES and type(amount) is int and amount > 0
+    }
+    return configured, {
+        "policy_version": version,
+        "tier": tier,
+        "enforcement_mode": mode,
+        "soft_limit_ratio": float(ratio),
+        "price_catalog_version": price_version,
+    }
+
+
+def _budget_summary(
+    *,
+    policy_json: str | None,
+    ledger_rows: list[tuple[str, str, int, int | None, str]],
+    admission_denied: bool = False,
+    denied_resource: str | None = None,
+) -> ObservabilityBudgetSummaryResponse:
+    if policy_json is None:
+        return _unavailable_budget(
+            admission_denied=admission_denied, denied_resource=denied_resource
+        )
+    parsed = _policy_summary(policy_json)
+    if parsed is None:
+        return _unavailable_budget(
+            admission_denied=admission_denied, denied_resource=denied_resource
+        )
+    limits, metadata = parsed
+
+    usage: dict[str, dict[str, int]] = {}
+    cost_unpriced = metadata["price_catalog_version"] == "unpriced-v1"
+    for resource, status, reserved_amount, actual_amount, price_status in ledger_rows:
+        if resource not in _BUDGET_RESOURCES:
+            continue
+        if resource == "cost_micro_usd" and price_status == "unknown":
+            cost_unpriced = True
+        totals = usage.setdefault(
+            resource, {"settled": 0, "unknown_spend": 0, "reserved": 0}
+        )
+        if status == "reserved":
+            totals["reserved"] += reserved_amount
+        elif status == "settled":
+            totals["settled"] += actual_amount or 0
+        elif status == "unknown_spend":
+            totals["unknown_spend"] += actual_amount or 0
+
+    resources: dict[str, ObservabilityBudgetResourceResponse] = {}
+    for resource, limit in limits.items():
+        if resource == "cost_micro_usd" and cost_unpriced:
+            resources[resource] = ObservabilityBudgetResourceResponse(
+                availability="unavailable"
+            )
+            continue
+        amounts = usage.get(
+            resource, {"settled": 0, "unknown_spend": 0, "reserved": 0}
+        )
+        consumed = sum(amounts.values())
+        resources[resource] = ObservabilityBudgetResourceResponse(
+            availability="available",
+            hard_limit=limit,
+            settled=amounts["settled"],
+            unknown_spend=amounts["unknown_spend"],
+            reserved=amounts["reserved"],
+            remaining=max(0, limit - consumed),
+            soft_limit_reached=consumed >= limit * float(metadata["soft_limit_ratio"]),
+            exhausted=consumed >= limit,
+        )
+    if cost_unpriced and "cost_micro_usd" not in resources:
+        resources["cost_micro_usd"] = ObservabilityBudgetResourceResponse(
+            availability="unavailable"
+        )
+    return ObservabilityBudgetSummaryResponse(
+        availability="available",
+        policy_version=metadata["policy_version"],
+        tier=metadata["tier"],
+        enforcement_mode=metadata["enforcement_mode"],
+        soft_limit_ratio=metadata["soft_limit_ratio"],
+        admission_denied=admission_denied,
+        denied_resource=denied_resource,
+        price_availability="unavailable" if cost_unpriced else "priced",
+        resources=resources,
+    )
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -104,6 +238,7 @@ class SQLiteObservabilityQuery:
             unavailable_reason=reason,
             budget_policy_availability="unavailable",
             budget_policy_unavailable_reason=budget_policy_reason or reason,
+            budget=_unavailable_budget(),
             totals=ObservabilityTotalsResponse(
                 node_attempts=0,
                 node_retries=0,
@@ -141,7 +276,7 @@ class SQLiteObservabilityQuery:
                     )
 
                 cursor = await self._connection.execute(
-                    "SELECT execution_epoch, status FROM runs WHERE run_id = ? AND task_id = ?",
+                    "SELECT execution_epoch, status, error_id FROM runs WHERE run_id = ? AND task_id = ?",
                     (run_id, task_id),
                 )
                 run_row = await cursor.fetchone()
@@ -156,12 +291,88 @@ class SQLiteObservabilityQuery:
                     )
                 current_epoch = int(run_row[0])
                 run_status = str(run_row[1])
+                run_error_id = str(run_row[2]) if run_row[2] is not None else None
+                denied_resource: str | None = None
+                marker_denied = False
+                cursor = await self._connection.execute(
+                    """
+                    SELECT json_extract(snapshot_json, '$.budget_limited.limited'),
+                           json_extract(snapshot_json, '$.budget_limited.exhausted_resource'),
+                           json_extract(snapshot_json, '$.budget_limited.reason'),
+                           json_extract(snapshot_json, '$.budget_limited.minimum_evidence_met'),
+                           json_extract(snapshot_json, '$.budget_limited.policy_version')
+                    FROM run_results WHERE run_id = ?
+                    """,
+                    (run_id,),
+                )
+                result_marker = await cursor.fetchone()
+                await cursor.close()
+                if result_marker is not None:
+                    (
+                        marker_limited,
+                        marker_resource,
+                        marker_reason,
+                        marker_has_minimum_evidence,
+                        marker_policy_version,
+                    ) = result_marker
+                    marker_denied = (
+                        marker_limited in (1, True)
+                        and marker_reason == "RUN_BUDGET_EXCEEDED"
+                        and marker_has_minimum_evidence in (1, True)
+                        and marker_policy_version
+                        in {"standard-observe-v1", "standard-enforced-v1"}
+                    )
+                    if (
+                        marker_denied
+                        and isinstance(marker_resource, str)
+                        and marker_resource in _BUDGET_RESOURCES
+                    ):
+                        denied_resource = marker_resource
+                admission_denied = marker_denied or (
+                    run_status == "failed"
+                    and run_error_id in _BUDGET_DENIAL_ERROR_IDS
+                )
 
                 cursor = await self._connection.execute(
-                    "SELECT 1 FROM run_budget_policies WHERE run_id = ?", (run_id,)
+                    "SELECT policy_json FROM run_budget_policies WHERE run_id = ?",
+                    (run_id,),
                 )
-                has_budget_policy = await cursor.fetchone() is not None
+                policy_row = await cursor.fetchone()
                 await cursor.close()
+                has_budget_policy = policy_row is not None
+                policy_json = str(policy_row[0]) if policy_row is not None else None
+
+                ledger_rows: list[tuple[str, str, int, int | None, str]] = []
+                if has_budget_policy:
+                    cursor = await self._connection.execute(
+                        """
+                        WITH ranked AS (
+                            SELECT resource, status, reserved_amount, actual_amount,
+                                   price_status,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY execution_epoch, reservation_id
+                                       ORDER BY entry_sequence DESC
+                                   ) AS row_no
+                            FROM budget_ledger WHERE run_id = ?
+                        )
+                        SELECT resource, status, reserved_amount, actual_amount,
+                               price_status
+                        FROM ranked WHERE row_no = 1
+                        """,
+                        (run_id,),
+                    )
+                    rows = await cursor.fetchall()
+                    await cursor.close()
+                    ledger_rows = [
+                        (
+                            str(row[0]),
+                            str(row[1]),
+                            int(row[2]),
+                            int(row[3]) if row[3] is not None else None,
+                            str(row[4]),
+                        )
+                        for row in rows
+                    ]
 
                 cursor = await self._connection.execute(
                     """
@@ -284,6 +495,12 @@ class SQLiteObservabilityQuery:
             ),
             budget_policy_unavailable_reason=(
                 None if has_budget_policy else "historical_run"
+            ),
+            budget=_budget_summary(
+                policy_json=policy_json,
+                ledger_rows=ledger_rows,
+                admission_denied=admission_denied,
+                denied_resource=denied_resource,
             ),
             nodes=tuple(nodes),
             calls=tuple(calls),

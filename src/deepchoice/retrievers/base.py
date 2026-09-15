@@ -3,7 +3,7 @@ import time
 
 from .contracts import RetrievalRequest, RetrievalResult
 from .. import outbound as _outbound
-from ..budget.errors import BudgetError
+from ..budget_errors import BudgetError
 from ..utils.views import print_agent_output
 
 

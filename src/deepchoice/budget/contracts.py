@@ -69,7 +69,9 @@ class RunBudgetPolicy(_FrozenContract):
     """Immutable per-run policy snapshot stored outside ``RunManifest``."""
 
     policy_schema_version: Literal[1] = 1
-    policy_version: Literal["standard-observe-v1"] = "standard-observe-v1"
+    policy_version: Literal[
+        "standard-observe-v1", "standard-enforced-v1"
+    ] = "standard-observe-v1"
     tier: BudgetTier = BudgetTier.STANDARD
     enforcement_mode: BudgetEnforcementMode = BudgetEnforcementMode.OBSERVE_ONLY
     soft_limit_ratio: float = Field(default=0.8, gt=0, le=1)

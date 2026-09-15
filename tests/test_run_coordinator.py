@@ -263,6 +263,8 @@ async def test_missing_accepted_raw_checkpoint_replaces_interrupted_run(repo):
     current = await repo.get_task(task.task_id)
     assert current is not None and current.latest_run is not None
     assert current.latest_run.run_id != run.run_id
+    assert current.latest_run.budget_policy is not None
+    assert current.latest_run.budget_policy.policy_version == "standard-enforced-v1"
     await _wait_done(coordinator, current.latest_run.run_id)
     assert (await repo.get_run(run.run_id)).status is RunStatus.INTERRUPTED
     assert (await repo.get_run(current.latest_run.run_id)).status is RunStatus.COMPLETED

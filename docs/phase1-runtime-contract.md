@@ -103,8 +103,8 @@ SSE 规则：
   已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。v6 增加
   immutable `run_results`；v7 增加产品库单实例租约；v8 建立 Phase 2-A 的预算/Trace
   表 `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events` 和
-  `budget_ledger`。Phase 2-B 已将节点尝试和 LLM/检索调用写入 Trace 表，并提供只读摘要查询；
-  预算预留、结算和硬限制尚未接入。
+  `budget_ledger`。Phase 2-B 已将节点尝试和 LLM/检索调用写入 Trace 表并提供只读摘要查询；
+  Phase 2-C 已接入预算预留、结算、硬限制、受限结果和预算摘要。
 - v6 不臆测或回填旧 completed row 的报告；无法从可信来源重建的 pre-v6 成功记录保留为
   只读历史，并在结果查询时返回 `TASK_RESULT_UNAVAILABLE`。v6 后的新成功收尾和带有效报告的
   legacy success import 都必须同时写入 `run_results`。
@@ -169,8 +169,11 @@ SSE 规则：
 - 产品 DB 与 checkpoint DB 必须作为一组备份和恢复。
 - 旧 `/research` 创建/SSE 仅用于一版兼容，任何新消费者必须使用 durable API。
 - SSE keepalive 和事件 retention 延后到真实反向代理或生产部署接入前完成。
-- Phase 2 trace、预算账本和观测失败不得影响 task state 或 durable SSE 的正确性。
-- Phase 2-A 为新 durable run/retry 原子冻结 `standard-observe-v1` 与 `unpriced-v1`；
+- Phase 2 Trace 与观测失败不得影响 task state 或 durable SSE 的正确性；预算账本属于
+  fail-closed 正确性路径，预留失败必须阻止外呼并使 run 进入可解释终态。
+- Phase 2-C 后新 durable run/retry 原子冻结 `standard-enforced-v1` 与 `unpriced-v1`；已有
+  `standard-observe-v1` run 在同 run resume 时保留原策略。标准硬上限为 60,000 total token、
+  96 次 LLM、72 次 retrieval 和 900,000 active milliseconds，80% 触发软提示。
   价格未知保持 unknown，不得按零成本结算。旧 run 不回填，policy 投影在
   `GET /api/v1/tasks/{task_id}/observability` 中明确为 unavailable。该 endpoint 在同一个
   SQLite read transaction 中读取 task 的 latest run、该 run 的状态/epoch/policy 和 Trace，避免
@@ -179,8 +182,15 @@ SSE 规则：
   不公开内部 attempt/call ID、epoch、lease、checkpoint、manifest、原始异常或其他请求/结果摘要。
   跨 epoch 残留或 run 本身已 `interrupted` 的 started 记录投影为 `interrupted`；其他非活动 run
   当前 epoch 的 started 记录投影为 `unknown`，避免呈现为仍运行。无 Trace 返回 unavailable；Token 汇总只累加已知字段并标明是否
-  完整，unknown 不当作零。Streamlit 查询不可用时回退 snapshot panels。Trace 是可选观测，不影响
-  task state、结果或 durable SSE；预算预留、结算与硬限制仍属于 Phase 2-C，`RunManifest` 保持 v1。
+  完整，unknown 不当作零。预算摘要按每个 reservation 的最新 append-only 状态聚合 settled、
+  unknown、reserved、剩余额度与软/硬限制；`admission_denied` 单独表示“仍有余额但不足以准入
+  下一次调用”，不把它伪装成已消费到硬上限。不公开 reservation/call ID、epoch 或内部 summary。
+  Streamlit 查询不可用时回退 snapshot panels。Trace 是可选观测，不影响 task state、结果或
+  durable SSE；预算预留与结算按当前 lease/epoch fencing，并发不得超发。触顶后仅当确定性结构
+  证据门满足（三条非争议可用链、两个有效 HTTP(S) host、至少一条 moderate/strong）时生成
+  不再外呼的受限报告并以 `completed_with_warnings` 原子持久化，否则以
+  `BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE` 失败。`RunManifest` 保持 schema v1，并冻结每个 LLM
+  call 的 `max_output_tokens`；旧 manifest 按历史 identity 可读，但不能兼容恢复。
 - Phase 6-A 的受管 URL 外呼只允许 HTTP(S)、80/443 和无 userinfo；DNS 解析、实际 direct-IP
   连接以及每一跳 redirect 都必须重新验证公网地址、hostname、端口和响应上限。无法证明安全的
   proxy/forward 动态 URL 必须拒绝。forward allowlist 只接受完整 hostname 精确匹配或显式

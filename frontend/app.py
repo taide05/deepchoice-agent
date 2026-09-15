@@ -88,6 +88,25 @@ T = {
         "obs_usage_partial": "Token 总量仅汇总已知用量，记录不完整。",
         "obs_usage_complete": "所有已记录 LLM 调用均包含 Token 用量。",
         "obs_no_durable_calls": "没有已记录的外部调用。",
+        "budget_title": "运行预算",
+        "budget_mode": "策略 {policy} · {mode}",
+        "budget_usage": "用量 {used:,} / 上限 {limit:,}",
+        "budget_settled": "已结算 {value:,}",
+        "budget_reserved": "预留 {value:,}",
+        "budget_unknown_spend": "未知用量 {value:,}（按预留上限计入）",
+        "budget_soft_warning": "已达到软预算提醒阈值（80%）。",
+        "budget_exhausted": "已触及预算上限。",
+        "budget_admission_denied": "预算闸门拒绝了后续调用（资源：{resource}）；已消耗量仍按实际账本显示。",
+        "budget_unknown_resource": "未知",
+        "budget_unknown_cost": "成本金额未知，当前价格目录无法提供可靠估算。",
+        "budget_unavailable": "预算信息不可用。",
+        "budget_limited_report": "本报告受预算限制：{reason}",
+        "budget_cap_reason": "已达到{resource}预算上限",
+        "budget_total_tokens": "总 Token",
+        "budget_llm_calls": "LLM 调用",
+        "budget_retrieval_calls": "检索调用",
+        "budget_active_milliseconds": "运行时间（毫秒）",
+        "budget_resource_fallback": "预算资源 {resource}",
         "obs_unavailable": "不可用",
         "obs_total_elapsed": "总耗时",
         "obs_no_timing": "暂无运行时间数据",
@@ -201,6 +220,25 @@ T = {
         "obs_usage_partial": "Token totals sum known usage only; records are incomplete.",
         "obs_usage_complete": "Token usage is present for every recorded LLM call.",
         "obs_no_durable_calls": "No external calls were recorded.",
+        "budget_title": "Run Budget",
+        "budget_mode": "Policy {policy} · {mode}",
+        "budget_usage": "Used {used:,} / limit {limit:,}",
+        "budget_settled": "Settled {value:,}",
+        "budget_reserved": "Reserved {value:,}",
+        "budget_unknown_spend": "Unknown spend {value:,} (charged at reservation ceiling)",
+        "budget_soft_warning": "The 80% soft budget warning threshold has been reached.",
+        "budget_exhausted": "The budget limit has been reached.",
+        "budget_admission_denied": "The budget gate denied a call (resource: {resource}); recorded consumption still reflects ledgered spend.",
+        "budget_unknown_resource": "unknown",
+        "budget_unknown_cost": "Cost is unknown; the current price catalog cannot provide a reliable estimate.",
+        "budget_unavailable": "Budget information is unavailable.",
+        "budget_limited_report": "This report is limited by the run budget: {reason}",
+        "budget_cap_reason": "The {resource} budget limit was reached",
+        "budget_total_tokens": "Total tokens",
+        "budget_llm_calls": "LLM calls",
+        "budget_retrieval_calls": "Retrieval calls",
+        "budget_active_milliseconds": "Active time (ms)",
+        "budget_resource_fallback": "Budget resource {resource}",
         "obs_unavailable": "Unavailable",
         "obs_total_elapsed": "Total elapsed",
         "obs_no_timing": "No timing data available",
@@ -314,6 +352,25 @@ T = {
         "obs_usage_partial": "既知のトークン使用量のみを合算しています。記録は不完全です。",
         "obs_usage_complete": "記録されたすべての LLM 呼び出しにトークン使用量があります。",
         "obs_no_durable_calls": "外部呼び出しは記録されていません。",
+        "budget_title": "実行予算",
+        "budget_mode": "ポリシー {policy} · {mode}",
+        "budget_usage": "使用量 {used:,} / 上限 {limit:,}",
+        "budget_settled": "確定 {value:,}",
+        "budget_reserved": "予約 {value:,}",
+        "budget_unknown_spend": "不明な使用量 {value:,}（予約上限で計上）",
+        "budget_soft_warning": "予算のソフト警告しきい値（80%）に達しました。",
+        "budget_exhausted": "予算上限に達しました。",
+        "budget_admission_denied": "予算ゲートが後続の呼び出しを拒否しました（リソース: {resource}）。消費量は記録済みの台帳に基づきます。",
+        "budget_unknown_resource": "不明",
+        "budget_unknown_cost": "費用は不明です。現在の価格カタログでは信頼できる推定を提供できません。",
+        "budget_unavailable": "予算情報を利用できません。",
+        "budget_limited_report": "このレポートは実行予算により制限されています: {reason}",
+        "budget_cap_reason": "{resource}の予算上限に達しました",
+        "budget_total_tokens": "合計トークン",
+        "budget_llm_calls": "LLM 呼び出し",
+        "budget_retrieval_calls": "検索呼び出し",
+        "budget_active_milliseconds": "実行時間（ミリ秒）",
+        "budget_resource_fallback": "予算リソース {resource}",
         "obs_unavailable": "利用不可",
         "obs_total_elapsed": "合計時間",
         "obs_no_timing": "タイミングデータがありません",
@@ -427,6 +484,25 @@ T = {
         "obs_usage_partial": "알려진 토큰 사용량만 합산했으며 기록은 불완전합니다.",
         "obs_usage_complete": "기록된 모든 LLM 호출에 토큰 사용량이 있습니다.",
         "obs_no_durable_calls": "기록된 외부 호출이 없습니다.",
+        "budget_title": "실행 예산",
+        "budget_mode": "정책 {policy} · {mode}",
+        "budget_usage": "사용량 {used:,} / 한도 {limit:,}",
+        "budget_settled": "정산 {value:,}",
+        "budget_reserved": "예약 {value:,}",
+        "budget_unknown_spend": "알 수 없는 사용량 {value:,} (예약 상한으로 계산)",
+        "budget_soft_warning": "예산 소프트 경고 임계값(80%)에 도달했습니다.",
+        "budget_exhausted": "예산 한도에 도달했습니다.",
+        "budget_admission_denied": "예산 게이트가 후속 호출을 거부했습니다(리소스: {resource}). 기록된 사용량은 원장 기준입니다.",
+        "budget_unknown_resource": "알 수 없음",
+        "budget_unknown_cost": "비용을 알 수 없습니다. 현재 가격표로는 신뢰할 수 있는 추정치를 제공할 수 없습니다.",
+        "budget_unavailable": "예산 정보를 사용할 수 없습니다.",
+        "budget_limited_report": "실행 예산으로 보고서가 제한되었습니다: {reason}",
+        "budget_cap_reason": "{resource} 예산 한도에 도달했습니다",
+        "budget_total_tokens": "총 토큰",
+        "budget_llm_calls": "LLM 호출",
+        "budget_retrieval_calls": "검색 호출",
+        "budget_active_milliseconds": "실행 시간(ms)",
+        "budget_resource_fallback": "예산 리소스 {resource}",
         "obs_unavailable": "사용 불가",
         "obs_total_elapsed": "총 소요 시간",
         "obs_no_timing": "타이밍 데이터 없음",
@@ -1271,7 +1347,10 @@ def _render_obs_panels(
                 reason=observability.get("unavailable_reason")
                 or t("obs_unavailable", lang),
             )
-        )
+            )
+
+    if isinstance(observability, dict):
+        _render_durable_budget(observability.get("budget"))
 
     st.markdown(f"### {t('obs_timeline_title', lang)}")
     if durable_available:
@@ -1407,6 +1486,132 @@ def _render_durable_tokens(observability: dict):
             lang,
         )
     )
+
+
+def _budget_resource_label(resource: str) -> str:
+    key = {
+        "total_tokens": "budget_total_tokens",
+        "llm_calls": "budget_llm_calls",
+        "retrieval_calls": "budget_retrieval_calls",
+        "active_milliseconds": "budget_active_milliseconds",
+    }.get(resource)
+    if key is not None:
+        return t(key, lang)
+    return t("budget_resource_fallback", lang, resource=str(resource)[:60])
+
+
+def _budget_resource_rows(budget: dict | None) -> list[dict]:
+    """Convert public budget DTO data into display-only rows."""
+
+    if not isinstance(budget, dict) or budget.get("availability") != "available":
+        return []
+    resources = budget.get("resources")
+    if not isinstance(resources, dict):
+        return []
+    rows = []
+    for resource, values in resources.items():
+        if not isinstance(values, dict):
+            continue
+        label = _budget_resource_label(str(resource))
+        if values.get("availability") != "available":
+            rows.append({"label": label, "unavailable": True})
+            continue
+        limit = values.get("hard_limit")
+        settled = values.get("settled")
+        unknown = values.get("unknown_spend")
+        reserved = values.get("reserved")
+        if any(type(value) is not int or value < 0 for value in (limit, settled, unknown, reserved)):
+            continue
+        rows.append(
+            {
+                "label": label,
+                "used": settled + unknown + reserved,
+                "limit": limit,
+                "settled": settled,
+                "unknown_spend": unknown,
+                "reserved": reserved,
+                "soft_limit_reached": values.get("soft_limit_reached") is True,
+                "exhausted": values.get("exhausted") is True,
+                "unavailable": False,
+            }
+        )
+    return rows
+
+
+def _render_durable_budget(budget: dict | None):
+    if not isinstance(budget, dict):
+        return
+    st.markdown(f"### {t('budget_title', lang)}")
+    if budget.get("availability") != "available":
+        st.caption(t("budget_unavailable", lang))
+        return
+    policy = budget.get("policy_version")
+    mode = budget.get("enforcement_mode")
+    if isinstance(policy, str) and isinstance(mode, str):
+        st.caption(t("budget_mode", lang, policy=policy, mode=mode))
+    if budget.get("admission_denied") is True:
+        denied_resource = budget.get("denied_resource")
+        resource_label = (
+            _budget_resource_label(denied_resource)
+            if isinstance(denied_resource, str)
+            else t("budget_unknown_resource", lang)
+        )
+        st.warning(
+            t("budget_admission_denied", lang, resource=resource_label),
+            icon="⚠️",
+        )
+    rows = _budget_resource_rows(budget)
+    if not rows:
+        st.caption(t("budget_unavailable", lang))
+        return
+    for row in rows:
+        if row["unavailable"]:
+            st.markdown(f"**{row['label']}**")
+            st.caption(t("budget_unknown_cost", lang))
+            continue
+        st.markdown(
+            f"**{row['label']}** · "
+            + t("budget_usage", lang, used=row["used"], limit=row["limit"])
+        )
+        if row["unknown_spend"]:
+            st.caption(
+                t("budget_unknown_spend", lang, value=row["unknown_spend"])
+            )
+        details = []
+        if row["settled"]:
+            details.append(t("budget_settled", lang, value=row["settled"]))
+        if row["reserved"]:
+            details.append(t("budget_reserved", lang, value=row["reserved"]))
+        if details:
+            st.caption(" · ".join(details))
+        if row["exhausted"]:
+            st.error(t("budget_exhausted", lang))
+        elif row["soft_limit_reached"]:
+            st.warning(t("budget_soft_warning", lang))
+
+
+def _render_budget_limited_notice(snapshot: dict):
+    limited = snapshot.get("budget_limited") if isinstance(snapshot, dict) else None
+    if limited is True:
+        reason = t("budget_unavailable", lang)
+    elif isinstance(limited, dict) and limited.get("limited") is not False:
+        reason_code = limited.get("reason")
+        resource = limited.get("exhausted_resource") or limited.get("resource")
+        if reason_code == "RUN_BUDGET_EXCEEDED" and isinstance(resource, str):
+            reason = t(
+                "budget_cap_reason",
+                lang,
+                resource=_budget_resource_label(resource),
+            )
+        elif isinstance(reason_code, str) and reason_code.strip():
+            reason = reason_code.strip()[:180]
+        elif isinstance(resource, str):
+            reason = _budget_resource_label(resource)
+        else:
+            reason = t("budget_unavailable", lang)
+    else:
+        return
+    st.warning(t("budget_limited_report", lang, reason=reason), icon="⚠️")
 
 
 def _render_timeline_panel(snapshot: dict):
@@ -1738,6 +1943,7 @@ def _render_results():
         )
 
     with tab1:
+        _render_budget_limited_notice(snapshot)
         fmt = st.selectbox(
             t("format_label", lang),
             ["what_why_how", "evidence_first", "comparison_matrix"],

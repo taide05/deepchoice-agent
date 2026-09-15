@@ -1,4 +1,4 @@
-from ..budget.errors import BudgetError
+from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 

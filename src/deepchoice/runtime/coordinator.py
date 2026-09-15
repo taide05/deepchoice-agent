@@ -13,9 +13,12 @@ from typing import Any
 from deepchoice.agents.orchestrator import ChiefEditorAgent
 from deepchoice.budget import (
     DEFAULT_RUN_BUDGET_POLICY,
+    BudgetExceededError,
+    BudgetInsufficientEvidenceError,
     BudgetPersistenceError,
     SQLiteBudgetStore,
 )
+from deepchoice.budget.limited import build_budget_limited_state
 from deepchoice.contracts.errors import normalize_error
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import (
@@ -64,6 +67,7 @@ _PUBLIC_RESULT_FIELDS = frozenset(
     {
         "adapted_queries",
         "agent_timing",
+        "budget_limited",
         "confidence",
         "conflicts",
         "current_phase",
@@ -193,7 +197,7 @@ def build_public_run_result(
 ) -> RunResultRecord:
     """Freeze the public result allowlist without exposing checkpoint internals."""
 
-    values = getattr(state, "values", None)
+    values = state if isinstance(state, dict) else getattr(state, "values", None)
     source = values if isinstance(values, dict) else {}
     snapshot: dict[str, Any] = {"task": _sanitize_public_json(request)}
     for key in _PUBLIC_RESULT_FIELDS:
@@ -469,6 +473,7 @@ class RunCoordinator:
         context_binding = None
         trace: RuntimeTraceRecorder | None = None
         budget = None
+        orchestrator: ChiefEditorAgent | None = None
         trace_finished = False
 
         async def finish_trace(status: TraceStatus) -> None:
@@ -692,6 +697,78 @@ class RunCoordinator:
                 RunStatus.COMPLETED,
                 result=public_result,
             )
+        except BudgetExceededError as exc:
+            await stop_heartbeat()
+            if grant is not None:
+                try:
+                    await record_active_budget()
+                    partial_state = exc.partial_state
+                    if not isinstance(partial_state, dict) and orchestrator is not None:
+                        checkpoint_state = await orchestrator.get_state()
+                        checkpoint_values = getattr(checkpoint_state, "values", None)
+                        if isinstance(checkpoint_values, dict):
+                            partial_state = checkpoint_values
+                    limited_state = build_budget_limited_state(
+                        partial_state if isinstance(partial_state, dict) else {},
+                        request=current.task.request.model_dump(
+                            mode="json", exclude_none=True
+                        ),
+                        policy=run.budget_policy,
+                        error=exc,
+                    )
+                    if limited_state is None:
+                        await finish_trace(TraceStatus.FAILED)
+                        detail = normalize_error(BudgetInsufficientEvidenceError())
+                        await self._finalize(
+                            run_id,
+                            grant.execution_epoch,
+                            RunStatus.FAILED,
+                            error_id=detail.code,
+                        )
+                    else:
+                        completed_at = self._clock()
+                        public_result = build_public_run_result(
+                            run,
+                            current.task.request.model_dump(
+                                mode="json", exclude_none=True
+                            ),
+                            limited_state,
+                            created_at=completed_at,
+                        )
+                        await finish_trace(TraceStatus.SUCCEEDED)
+                        await self._finalize(
+                            run_id,
+                            grant.execution_epoch,
+                            RunStatus.COMPLETED_WITH_WARNINGS,
+                            result=public_result,
+                        )
+                except asyncio.CancelledError:
+                    await finish_trace(TraceStatus.CANCELLED)
+                    finalization = asyncio.create_task(
+                        self._finalize(
+                            run_id, grant.execution_epoch, RunStatus.INTERRUPTED
+                        ),
+                        name=f"deepchoice-budget-cancel-finalize-{run_id}",
+                    )
+                    try:
+                        await _settle_shielded(finalization)
+                    except (Exception, asyncio.CancelledError):
+                        pass
+                    raise
+                except Exception as fallback_exc:
+                    await finish_trace(TraceStatus.FAILED)
+                    detail = normalize_error(fallback_exc)
+                    try:
+                        await self._finalize(
+                            run_id,
+                            grant.execution_epoch,
+                            RunStatus.FAILED,
+                            error_id=detail.code,
+                        )
+                    except Exception:
+                        # Recovery will fence an expired lease if persistence is
+                        # unavailable during the terminal fallback itself.
+                        pass
         except TimeoutError:
             await stop_heartbeat()
             if grant is not None:

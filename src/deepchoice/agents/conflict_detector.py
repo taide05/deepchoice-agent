@@ -6,7 +6,7 @@ import httpx
 import numpy as np
 
 from .. import outbound as _outbound
-from ..budget.errors import BudgetError
+from ..budget_errors import BudgetError
 from ..retrievers.tavily_keypool import post_with_failover
 from ..utils.embedding import get_embedding_model
 from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, summarize_usage

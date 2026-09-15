@@ -17,7 +17,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **自审查 + 定向重试**：最后一环用 6 项清单审查报告质量，发现问题自动补搜知识缺口，区分小缺口（重走检索适配）和大缺口（重走全管道）
 - **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
 - **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
-- **可观测性面板**：持久化节点尝试与 LLM/检索调用（耗时、重试、失败、已知 Token 用量），并保留检索明细和冲突仲裁快照；Trace 不可用时回退快照面板
+- **可观测性与预算面板**：持久化节点尝试与 LLM/检索调用，展示耗时、重试、失败、Token 与预算余量；外呼先经过原子预算门，触顶时按最低证据生成受限报告或安全终止
 - **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 - **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
@@ -84,8 +84,9 @@ Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/C
 Phase 1-G 把 Streamlit 默认路径切换到 durable task API，增加 immutable `run_results`，并将
 公开结果、成功终态和完成事件放在同一事务提交；报告、快照、阅读视图和导出均可在重启后
 查询。产品 schema 现为 v8：v8 先建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
-观测/预算骨架表；新 durable run/retry 原子冻结 `standard-observe-v1` 与 `unpriced-v1`，
-价格未知不按零成本处理。旧
+观测/预算骨架表；Phase 2-C 后新 durable run/retry 原子冻结 `standard-enforced-v1` 与
+`unpriced-v1`，已有 `standard-observe-v1` run 在同 run 恢复时保持原策略，价格未知不按零成本
+处理。旧
 snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选数、I/O 时间和文件大小预算。
 `POST /research` 与旧 SSE 只作为一版弃用兼容保留。
 
@@ -99,8 +100,17 @@ read snapshot 中读取；调用显示安全节点归属、run 内节点尝试�
 记录投影为 interrupted/unknown。Token 聚合保留缺失字段并标记完整性，未知值不按零处理。
 Streamlit 展示 durable 节点、调用、重试、失败及已知 token；查询失败或不可用时回退已有
 snapshot panels。Trace 写入仍是 best-effort，不影响 task lifecycle/SSE；`task_events` 仍是
-状态与 SSE 正确性的唯一事实源，`RunManifest` 保持 v1。Phase 2-B 已通过完整测试和独立 Review。
-预算预留、结算和触顶策略属于 Phase 2-C，当前尚未实施。
+状态与 SSE 正确性的唯一事实源。Phase 2-B 已通过完整测试和独立 Review。
+
+Phase 2-C 已在默认 durable 路径接入 fenced、append-only 的预算预留与结算：每次实际 LLM
+重试、每个 Retriever 来源和冲突证据工具调用都先通过原子预算门，并发不能超发；未知用量按
+预留上界记为 `unknown_spend`。标准档为 60,000 total token、96 次 LLM、72 次检索和 900 秒
+active-time，80% 时提示。60,000 token 与 900 秒分别给用户提供的历史上界（约 20,000 token、
+约 6 分钟）保留约 3 倍和 2.5 倍余量；这是保守的项目经验配置，不是付费健康集的 95% 实测。
+触顶后若已有至少三条非争议可用证据链、两个有效 HTTP(S) host 且含一条 moderate/strong
+证据，则不再外呼并生成明显标注的受限报告；否则稳定失败。Observability API 与 Streamlit
+展示 settled/unknown/reserved 用量、剩余额度和软/硬限制状态。`RunManifest` 仍为 schema v1，
+但现在冻结每个 LLM call 的 `max_output_tokens`，旧 manifest 会安全拒绝同 run 恢复。
 
 Phase 6-A 已收敛默认安全边界：所有受管 URL 外呼使用 `SafeUrlPolicy`/安全 fetch，仅允许
 HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redirect 上重新验证公网地址、
@@ -112,7 +122,7 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全 fetch。
 
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
-[`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成最小 Trace/预算、引用可信、单一 HITL
+[`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成引用可信、单一 HITL
 和质量评估闭环；多租户认证、分布式基础设施及其他企业级扩展不在当前实施范围。
 
 ### 测试
@@ -122,7 +132,7 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**863 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**895 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 

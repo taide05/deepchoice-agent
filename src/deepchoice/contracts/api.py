@@ -175,6 +175,47 @@ class ObservabilityTotalsResponse(BaseModel):
     token_usage_complete: bool
 
 
+class ObservabilityBudgetResourceResponse(BaseModel):
+    """Allowlisted accounting totals for one configured budget resource."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    availability: Literal["available", "unavailable"]
+    hard_limit: int | None = Field(default=None, ge=0)
+    settled: int | None = Field(default=None, ge=0)
+    unknown_spend: int | None = Field(default=None, ge=0)
+    reserved: int | None = Field(default=None, ge=0)
+    remaining: int | None = Field(default=None, ge=0)
+    soft_limit_reached: bool | None = None
+    exhausted: bool | None = None
+
+
+class ObservabilityBudgetSummaryResponse(BaseModel):
+    """Safe latest-run budget view; excludes ledger and execution identifiers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    availability: Literal["available", "unavailable"]
+    policy_version: Literal["standard-observe-v1", "standard-enforced-v1"] | None = None
+    tier: Literal["standard"] | None = None
+    enforcement_mode: Literal["observe_only", "enforced"] | None = None
+    soft_limit_ratio: float | None = Field(default=None, gt=0, le=1)
+    admission_denied: bool = False
+    denied_resource: Literal[
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "cost_micro_usd",
+        "llm_calls",
+        "retrieval_calls",
+        "http_calls",
+        "active_milliseconds",
+        "wall_clock_milliseconds",
+    ] | None = None
+    price_availability: Literal["priced", "unavailable"]
+    resources: dict[str, ObservabilityBudgetResourceResponse] = Field(default_factory=dict)
+
+
 class TaskObservabilityResponse(BaseModel):
     """Allowlisted latest-run telemetry; never includes private trace identifiers."""
 
@@ -191,6 +232,7 @@ class TaskObservabilityResponse(BaseModel):
     budget_policy_unavailable_reason: Literal[
         "no_latest_run", "latest_run_missing", "historical_run"
     ] | None = None
+    budget: ObservabilityBudgetSummaryResponse
     nodes: tuple[ObservabilityNodeAttemptResponse, ...] = ()
     calls: tuple[ObservabilityExternalCallResponse, ...] = ()
     totals: ObservabilityTotalsResponse

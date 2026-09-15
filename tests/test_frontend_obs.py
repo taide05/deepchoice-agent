@@ -168,6 +168,72 @@ class _RecoveryReplayBackend(_FakeBackend):
         return _RawStream(self.raw_events)
 
 
+class _BudgetBackend(_FakeBackend):
+    def __init__(self):
+        super().__init__(stream_events=[], status_complete=True)
+        self.snapshot = {
+            **SNAP,
+            "budget_limited": {
+                "limited": True,
+                "policy_version": "standard-enforced-v1",
+                "exhausted_resource": "total_tokens",
+                "minimum_evidence_met": True,
+                "reason": "RUN_BUDGET_EXCEEDED",
+            },
+        }
+        self.observability = {
+            "availability": "available",
+            "nodes": [],
+            "calls": [],
+            "totals": {
+                "node_attempts": 0,
+                "node_retries": 0,
+                "external_calls": 0,
+                "failed_calls": 0,
+                "llm_calls": 1,
+                "retrieval_calls": 0,
+                "token_usage_complete": False,
+            },
+            "budget": {
+                "availability": "available",
+                "policy_version": "standard-enforced-v1",
+                "tier": "standard",
+                "enforcement_mode": "enforced",
+                "soft_limit_ratio": 0.8,
+                "admission_denied": True,
+                "denied_resource": "total_tokens",
+                "price_availability": "unavailable",
+                "resources": {
+                    "total_tokens": {
+                        "availability": "available",
+                        "hard_limit": 100,
+                        "settled": 60,
+                        "unknown_spend": 20,
+                        "reserved": 0,
+                        "remaining": 20,
+                        "soft_limit_reached": True,
+                        "exhausted": False,
+                    },
+                    "cost_micro_usd": {
+                        "availability": "unavailable",
+                        "hard_limit": None,
+                        "settled": None,
+                        "unknown_spend": None,
+                        "reserved": None,
+                        "remaining": None,
+                        "soft_limit_reached": None,
+                        "exhausted": None,
+                    },
+                },
+            },
+        }
+
+    def get(self, url, **kw):
+        if url.endswith("/snapshot"):
+            return _FakeResp(self.snapshot)
+        return super().get(url, **kw)
+
+
 ANNOTATED = {
     "report": (
         '<span id="sec-1"></span>\n# Fake report\n\n'
@@ -368,6 +434,30 @@ def test_results_phase_falls_back_to_snapshot_when_observability_request_fails(m
     assert backend.observability_requests == 1
     assert "Token 统计" in md and "195" in md
     assert "持久化运行追踪查询失败" in cap
+
+
+def test_budget_summary_and_limited_report_notice_render(monkeypatch):
+    backend = _BudgetBackend()
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_results_phase(at)
+    at.run()
+
+    assert not at.exception, at.exception
+    md = _md_text(at)
+    captions = "\n".join(str(c.value) for c in at.caption)
+    assert "运行预算" in md
+    assert "用量 80 / 上限 100" in md
+    assert "未知用量 20" in captions
+    assert any("80%" in str(w.value) for w in at.warning)
+    assert any("拒绝了后续调用" in str(w.value) for w in at.warning)
+    assert any("受预算限制" in str(w.value) for w in at.warning)
+    assert any("总 Token" in str(w.value) for w in at.warning)
+    assert "成本金额未知" in captions
 
 
 def test_report_tab_reading_view(monkeypatch):

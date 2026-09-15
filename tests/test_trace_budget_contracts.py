@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from deepchoice.budget import (
     CURRENT_PRICE_CATALOG,
     DEFAULT_RUN_BUDGET_POLICY,
+    STANDARD_OBSERVE_RUN_BUDGET_POLICY,
     BudgetAmount,
     BudgetLedgerEntry,
     BudgetReservation,
@@ -62,13 +63,24 @@ class _Budget:
     async def record_active_milliseconds(self): return None
 
 
-def test_standard_policy_and_unknown_price_are_explicit() -> None:
+def test_standard_policies_and_unknown_price_are_explicit() -> None:
     policy = DEFAULT_RUN_BUDGET_POLICY
-    assert policy.policy_version == "standard-observe-v1"
+    assert policy.policy_version == "standard-enforced-v1"
     assert policy.tier.value == "standard"
-    assert policy.enforcement_mode.value == "observe_only"
+    assert policy.enforcement_mode.value == "enforced"
     assert policy.soft_limit_ratio == 0.8
-    assert all(value is None for value in policy.hard_limits.model_dump().values())
+    assert policy.hard_limits.llm_calls == 96
+    assert policy.hard_limits.retrieval_calls == 72
+    assert policy.hard_limits.total_tokens == 60_000
+    assert policy.hard_limits.active_milliseconds == 900_000
+    assert policy.hard_limits.cost_micro_usd is None
+
+    historical = STANDARD_OBSERVE_RUN_BUDGET_POLICY
+    assert historical.policy_version == "standard-observe-v1"
+    assert historical.enforcement_mode.value == "observe_only"
+    assert all(
+        value is None for value in historical.hard_limits.model_dump().values()
+    )
     quote = CURRENT_PRICE_CATALOG.quote(provider="unknown", model="unknown")
     assert quote.status is PriceStatus.UNKNOWN
     assert quote.input_micro_usd_per_million_tokens is None
@@ -255,7 +267,7 @@ async def test_v8_schema_fences_trace_epochs_and_keeps_audit_rows_immutable(
                 (run_id,),
             )
         ).fetchone()
-        assert policy == ("standard-observe-v1", "unpriced-v1")
+        assert policy == ("standard-enforced-v1", "unpriced-v1")
         with pytest.raises(sqlite3.IntegrityError):
             await connection.execute(
                 "UPDATE run_budget_policies SET price_catalog_version='changed' "

@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 863 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 895 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -111,13 +111,16 @@ When adding a setting, update the code default, tests, README configuration sect
 - Back up, verify, restore, and rehearse the product/checkpoint databases as one manifest-verified pair with `scripts/runtime_db.py`; restore requires a stopped service or maintenance mode and explicit confirmation.
 - Any lifecycle, migration, concurrency, checkpoint, SSE, or compatibility change requires focused fault/concurrency tests, the full suite, an update to `docs/phase1-runtime-contract.md`, and independent review.
 
-### Phase 2-A/2-B observability contracts
+### Phase 2 observability and budget contracts
 
 - `RunContext`、Trace/Budget DTO/Protocol 和 schema v8 骨架表是契约层产出；骨架表包括
   `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、`budget_ledger`。
-- New durable runs/retries must atomically freeze `standard-observe-v1` and `unpriced-v1`.
-  Unknown prices remain unknown, never zero. Historical runs are not backfilled; their internal
-  policy projection remains unavailable and the observability API must report that absence.
+- New durable runs/retries must atomically freeze `standard-enforced-v1` and `unpriced-v1`.
+  The standard hard limits are 60,000 total tokens, 96 LLM calls, 72 retrieval calls, and 900,000
+  active milliseconds, with an 80% soft warning. Existing `standard-observe-v1` runs retain their
+  frozen observe-only policy on same-run resume. Unknown prices remain unknown, never zero.
+  Historical runs are not backfilled; their internal policy projection remains unavailable and the
+  observability API must report that absence.
 - Phase 2-B records default durable node attempts and LLM/retrieval external calls in the existing
   product-database Trace tables. Trace writes are best-effort and cannot change task state, results,
   or durable SSE correctness; `task_events` remains the sole lifecycle/SSE correctness path.
@@ -135,8 +138,24 @@ When adding a setting, update the code default, tests, README configuration sect
 - Trace rows left `started` by recovery are projected as `interrupted` when their epoch is stale or
   the run itself is `interrupted`; current-epoch rows for other non-active runs are projected as
   `unknown`. Do not present stale/inconsistent started rows as actively running.
-- Phase 2-B does not reserve or settle budget and does not enforce limits; those are Phase 2-C.
-  `RunManifest` remains v1.
+- Every default-path LLM retry, retriever source, and conflict evidence tool call must reserve its
+  budget before dispatch. Reservation is an atomic bundle, is valid only for the current running
+  lease owner/epoch, and must not oversubscribe under concurrency. Settlement and stale-reservation
+  reconciliation remain append-only; missing or uncertain usage is charged conservatively as
+  `unknown_spend`, never zero. Budget persistence failures fail closed and must not be swallowed by
+  agent fallback logic. Trace remains best-effort and independent from this correctness path.
+- On `RUN_BUDGET_EXCEEDED`, no further external call is allowed. A deterministic minimum-evidence
+  gate may create a visibly restricted local report only with at least three undisputed usable
+  chains, two distinct valid HTTP(S) hostnames, and one moderate/strong chain. This is structural
+  sufficiency, not claim-level verification. The result, `completed_with_warnings` state, and event
+  commit atomically; otherwise finalize failed with `BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE`.
+- The observability API budget projection aggregates only the latest entry for each reservation and
+  exposes configured limits, settled/unknown/reserved usage, remaining capacity, and soft/hard
+  status. `admission_denied` is distinct from consumed spend reaching the limit: a next call may be
+  rejected while some unusable remainder is still displayed. Never expose reservation/call IDs,
+  execution epochs, summaries, or private errors.
+- `RunManifest` remains schema v1 but now freezes `max_output_tokens` for each LLM call. Older v1
+  manifests remain readable by historical identity and fail same-run compatibility safely.
 
 ### Phase 6-A security boundaries
 
@@ -160,7 +179,7 @@ When adding a setting, update the code default, tests, README configuration sect
 
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
-- The current sequence is Phase 2-C, Phase 3, Phase 4, then Phase 5. Keep each remaining
+- The current sequence is Phase 3, Phase 4, then Phase 5. Keep each remaining
   phase to at most two implementation PRs and prioritize the durable default path.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless

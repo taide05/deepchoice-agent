@@ -110,7 +110,10 @@ async def _wait_for_event(repository, task_id: str, event_type: str) -> None:
 
 
 async def _wait_run_done(coordinator: RunCoordinator, repository, task_id: str, run_id: str) -> None:
-    for _ in range(100):
+    # Full-suite SQLite load now includes terminal Trace and budget ledger
+    # writes. Allow the coordinator time to finish those fenced transactions;
+    # the lifecycle/event commit remains atomic and is asserted below.
+    for _ in range(400):
         if run_id not in coordinator.active_runs:
             return
         await asyncio.sleep(0.01)

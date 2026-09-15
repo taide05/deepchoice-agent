@@ -7,9 +7,9 @@
 
 ## 1. 诊断
 
-DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A、Phase 2-B 和 Phase 6-A；Phase 2-B 的
-运行接线、latest-run 摘要 API 和 Streamlit 展示已通过完整测试与独立 Review。
-当前主要增量是预算控制、引用可信、人工决策和质量评估闭环。
+DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A～2-C 和 Phase 6-A；Phase 2 的
+运行接线、latest-run 摘要 API、预算闭环和 Streamlit 展示已通过测试与独立 Review。
+当前主要增量是引用可信、人工决策和质量评估闭环；Phase 2-C 预算控制已完成。
 
 继续按原始企业级设计全面扩张，会提高维护和讲解成本，却未必改善研究结果或面试展示。
 已完成能力保持不动；调整只作用于尚未实施的范围。
@@ -31,6 +31,7 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A、Phase 2-B 和 Phase
 - Phase 2-A：`RunContext`、Trace/Budget 契约、策略冻结和 schema v8 骨架。
 - Phase 2-B：默认 durable 运行节点与外部调用 Trace、latest-run 摘要 API 和 Streamlit 展示；
   已通过 Phase 级完整测试与独立 Review。
+- Phase 2-C：原子预算门、append-only 结算、结构证据受限报告和预算摘要展示。
 - Phase 6-A：安全 URL、输入 admission、集中脱敏和报告 HTML/PDF 安全。
 
 以上能力进入维护状态：只修复缺陷和默认路径回归，不继续横向扩展。
@@ -63,11 +64,13 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A、Phase 2-B 和 Phase
 
 完成标准已满足：默认运行可从 run 定位到 node/call；Trace 故障不影响任务正确性。
 
-### Phase 2-C：标准预算闭环
+### Phase 2-C：标准预算闭环（已完成）
 
 目标：让项目实际执行已冻结的标准预算，而不是只展示 token 统计。
 
 **PR 2-C1：预留与结算**
+
+状态：已实现并通过聚焦测试与独立 Review。
 
 - 在现有 ledger 上实现原子 reservation/settlement，覆盖 LLM token、外部调用次数和 active time。
 - 接入默认 LLM/retriever wrapper；重试、fallback 和 usage 缺失必须保留可解释状态。
@@ -75,11 +78,16 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A、Phase 2-B 和 Phase
 
 **PR 2-C2：触顶策略与校准**
 
+状态：已实现；标准档采用用户提供的历史运行经验作保守初始校准，真实分布继续由后续运行
+遥测验证，不声称已完成付费健康集的 95% 实测。
+
 - 预算触顶且已有最低证据时生成受限报告；达不到最低证据时终止。
 - 前端展示预算消耗、限制原因和结果是否受限。
-- 用固定小型健康集校准标准档，避免正常任务普遍触发受限报告。
+- 标准档为 60,000 total token、96 次 LLM、72 次 retrieval、900 秒 active-time 和 80% 软提示；
+  token/active 上限相对历史约 20,000 token/6 分钟分别保留约 3 倍/2.5 倍余量，离线 profile
+  只验证结构 headroom，不伪造 provider telemetry。
 
-完成标准：任何新外呼都先过预算门；并发下不超发；触顶行为与用户已确认策略一致。
+完成标准已满足：任何新外呼都先过预算门；并发下不超发；触顶行为与用户已确认策略一致。
 
 ### Phase 3：引用可信与重复成本
 
@@ -150,7 +158,7 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A、Phase 2-B 和 Phase
 
 ## 6. 实施顺序
 
-`Phase 2-C → Phase 3 → Phase 4 → Phase 5`
+`Phase 3 → Phase 4 → Phase 5`
 
 Phase 6-A 已完成并维持，不再单独安排 Phase 6-B。完成 Phase 5 后先验收和审计，再决定是否
 开启新的产品增量，不自动恢复本文件列出的范围外事项。

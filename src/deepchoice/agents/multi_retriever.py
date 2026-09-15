@@ -8,7 +8,7 @@ from ..retrievers.learned_docs import extract_terms, harvest
 from ..retrievers.official import TECH_DOCS
 from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
 from ..runtime.context import classify_cancelled_trace_status
-from ..budget.errors import BudgetError
+from ..budget_errors import BudgetError
 from ..utils.views import print_agent_output
 
 
