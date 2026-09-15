@@ -96,6 +96,15 @@ Phase 2-A 只冻结运行上下文、Trace/Budget DTO/Protocol、版本化预算
 wrapper、Trace 写入/API、预算预留结算和硬限制属于后续 Phase 2-B/2-C，不能提前假定已经生效。
 `task_events` 仍是任务状态与 SSE 正确性的唯一事实源，`RunManifest` 保持 v1，不因本阶段升级。
 
+Phase 6-A 已收敛默认安全边界：所有受管 URL 外呼使用 `SafeUrlPolicy`/安全 fetch，仅允许
+HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redirect 上重新验证公网地址、
+端口和响应限制；无法证明安全的 proxy/forward 动态 URL fail closed。forward 目标采用完整
+hostname 精确匹配或显式 `*.example.com` 子域匹配。HTTP body 上限为 128 KiB，query、候选、
+澄清和聚合输入另有字段/数量限制。日志、错误、Trace 和 LLM diagnostics 统一脱敏，后者只保留
+hash、length、usage 和 error type。报告继续提供 Markdown，并由服务端生成经过 sanitizer 的
+`report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。
+本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全 fetch。
+
 ### 测试
 
 ```powershell

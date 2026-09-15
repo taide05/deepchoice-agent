@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from typing_extensions import Annotated
+
+from ..security.input_limits import MAX_RESEARCH_TEXT_CHARS, validate_safe_text
 
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 QueryText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
@@ -42,6 +44,23 @@ class ResearchRequest(BaseModel):
     sub_questions: list[ShortText] = Field(default_factory=list, max_length=20)
     gather_evidence: bool = True
     language: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
+
+    @model_validator(mode="after")
+    def validate_text_boundary(self) -> "ResearchRequest":
+        values = [self.query]
+        values.extend(
+            value
+            for value in (self.scene_context, self.complexity, self.language)
+            if value is not None
+        )
+        values.extend(self.constraints)
+        values.extend(self.candidate_techs)
+        values.extend(self.sub_questions)
+        for value in values:
+            validate_safe_text(value)
+        if sum(len(value) for value in values) > MAX_RESEARCH_TEXT_CHARS:
+            raise ValueError("aggregate request text exceeds the allowed size")
+        return self
 
 
 class ResearchStartedResponse(BaseModel):

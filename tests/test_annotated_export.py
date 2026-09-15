@@ -49,6 +49,8 @@ class TestAnnotatedEndpoint:
         assert data["format"] == "what_why_how"
         assert isinstance(data["report"], str)
         assert data["report"]  # non-empty markdown
+        assert isinstance(data["report_html"], str)
+        assert data["report_html"]
         assert isinstance(data["toc"], list) and data["toc"]
         assert any(t["text"] for t in data["toc"])
         assert isinstance(data["citations"], list)
@@ -64,6 +66,23 @@ class TestAnnotatedEndpoint:
         resp = client.get(f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"})
         report = resp.json()["report"]
         assert '<span id="sec-1"></span>' in report
+
+    def test_html_view_is_sanitized_without_changing_markdown_contract(self, monkeypatch):
+        monkeypatch.setitem(
+            app_module.FORMAT_RENDERERS,
+            "what_why_how",
+            lambda _snapshot: (
+                '# Safe <img src=x onerror="alert(1)">\n'
+                '[bad](javascript:alert(2)) <script>alert(3)</script>'
+            ),
+        )
+        data = client.get(
+            f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"}
+        ).json()
+        assert "<script>" in data["report"]
+        assert "<script" not in data["report_html"].lower()
+        assert "onerror" not in data["report_html"].lower()
+        assert "javascript:" not in data["report_html"].lower()
 
     def test_404_on_missing_task(self, monkeypatch):
         monkeypatch.setattr(app_module, "load_snapshot", lambda _: None)

@@ -134,7 +134,9 @@ class MultiRetrieverAgent:
                 agent="MULTI_RETRIEVER",
             )
 
-        print_agent_output(f"Searching 6 sources for: {query}", agent="MULTI_RETRIEVER")
+        print_agent_output(
+            f"Searching 6 sources ({len(query)} query chars)", agent="MULTI_RETRIEVER"
+        )
 
         # Fallback: if LLM-decomposed sub_questions are too generic,
         # inject the original query as a concrete search dimension.
@@ -204,8 +206,7 @@ class MultiRetrieverAgent:
         learned_new = harvest(official_terms, search_results, existing=set(TECH_DOCS))
         if learned_new:
             print_agent_output(
-                f"Learned {len(learned_new)} official docs: "
-                f"{', '.join(e['term'] for e in learned_new)}",
+                f"Learned {len(learned_new)} official docs",
                 agent="MULTI_RETRIEVER",
             )
 

@@ -1,7 +1,9 @@
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from deepchoice.security.redaction import redact_text, redact_value
 
 
 class ErrorCategory(StrEnum):
@@ -38,6 +40,18 @@ class ErrorDetail(BaseModel):
     trace_id: str | None = Field(default=None, max_length=200)
     details: Any | None = None
 
+    @field_validator("message", "action", "provider", mode="before")
+    @classmethod
+    def _redact_text_fields(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return redact_text(value, max_length=2000)
+
+    @field_validator("details", mode="before")
+    @classmethod
+    def _redact_details(cls, value: Any) -> Any:
+        return redact_value(value) if value is not None else None
+
 
 class ErrorResponse(BaseModel):
     """Unified error envelope; ``detail`` remains for API compatibility."""
@@ -68,11 +82,12 @@ class DeepChoiceError(Exception):
         trace_id: str | None = None,
         details: Any | None = None,
     ) -> None:
-        super().__init__(message)
+        safe_message = redact_text(message, max_length=2000)
+        super().__init__(safe_message)
         self.error_detail = ErrorDetail(
             category=category,
             code=code,
-            message=message,
+            message=safe_message,
             retryable=retryable,
             action=action,
             scope=scope,

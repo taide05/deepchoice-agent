@@ -580,6 +580,26 @@ def _esc(text) -> str:
     return _html.escape(str(text or ""), quote=True)
 
 
+def _safe_external_href(value) -> str | None:
+    """Return an escaped HTTP(S) link without credentials or unsafe ports."""
+    from urllib.parse import urlsplit
+
+    raw = str(value or "")
+    if not raw or len(raw) > 2048 or any(ord(char) < 32 for char in raw):
+        return None
+    try:
+        parsed = urlsplit(raw)
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if not parsed.hostname or parsed.username is not None or parsed.password is not None:
+            return None
+        if parsed.port is not None and parsed.port not in {80, 443}:
+            return None
+    except ValueError:
+        return None
+    return _esc(raw)
+
+
 def _node_label(node: str, lang_code: str) -> str:
     """Display name for a workflow node in the current language."""
     return t("obs_nodes", lang_code).get(node, node)
@@ -778,11 +798,11 @@ def _render_clarity_panel():
         if filled:
             st.markdown(f"**{t('known', lang)}**")
             for item in filled:
-                st.markdown(f'<span class="badge badge-success">{tech_map.get(item, item)}</span>', unsafe_allow_html=True)
+                st.markdown(f'<span class="badge badge-success">{_esc(tech_map.get(item, item))}</span>', unsafe_allow_html=True)
         if missing:
             st.markdown(f"**{t('missing', lang)}**")
             for item in missing:
-                st.markdown(f'<span class="badge badge-weak">{tech_map.get(item, item)}</span>', unsafe_allow_html=True)
+                st.markdown(f'<span class="badge badge-weak">{_esc(tech_map.get(item, item))}</span>', unsafe_allow_html=True)
 
         rounds_left = 3 - last.get("clarify_rounds", 0)
         st.caption(t("rounds_left", lang, n=rounds_left))
@@ -886,7 +906,7 @@ def render_research_phase():
     task = data.get("clarified_task", {})
     st.markdown(f'<h1 class="app-title">{t("title", lang)}</h1>', unsafe_allow_html=True)
     st.markdown(
-        f'<p class="app-subtitle">{t("researching", lang)} <strong style="color:#a78bfa">{task.get("query", "Tech comparison")}</strong></p>',
+        f'<p class="app-subtitle">{t("researching", lang)} <strong style="color:#a78bfa">{_esc(task.get("query", "Tech comparison"))}</strong></p>',
         unsafe_allow_html=True,
     )
 
@@ -1210,7 +1230,7 @@ def _render_retrieval_panel(snapshot: dict):
     if failures:
         st.markdown(
             f'<div class="glass-card" style="padding:14px; margin-bottom:10px; border-color:rgba(239,68,68,0.25);">'
-            f'<span class="badge badge-weak">{t("obs_partial_failures", lang, n=len(failures), list=", ".join(failures))}</span>'
+            f'<span class="badge badge-weak">{_esc(t("obs_partial_failures", lang, n=len(failures), list=", ".join(failures)))}</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1471,7 +1491,7 @@ def _render_results():
     <div class="stat-row">
         <div class="stat-card"><div class="stat-value">{n_chains}</div><div class="stat-label">{t("stats_chains", lang)}</div></div>
         <div class="stat-card"><div class="stat-value">{n_conflicts}</div><div class="stat-label">{t("stats_conflicts", lang)}</div></div>
-        <div class="stat-card"><div class="stat-value">{confidence.upper()}</div><div class="stat-label">{t("stats_confidence", lang)}</div></div>
+        <div class="stat-card"><div class="stat-value">{_esc(str(confidence).upper())}</div><div class="stat-label">{t("stats_confidence", lang)}</div></div>
         <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">{t("stats_formats", lang)}</div></div>
     </div>
     """, unsafe_allow_html=True)
@@ -1512,7 +1532,16 @@ def _render_results():
                     _render_download_buttons(task_id, fmt)
 
                 with report_col:
-                    st.markdown(f'<div class="report-container">{data["report"]}</div>', unsafe_allow_html=True)
+                    report_html = data.get("report_html")
+                    if isinstance(report_html, str):
+                        st.markdown(
+                            f'<div class="report-container">{report_html}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        # Compatibility with one-version-old servers: render
+                        # Markdown with raw HTML disabled.
+                        st.markdown(data.get("report", ""))
 
                 if citations:
                     st.markdown(f"### {t('evidence_chains_title', lang)}")
@@ -1521,7 +1550,9 @@ def _render_results():
                     url_to_n = {c["url"]: c["n"] for c in citations}
                     for cit in citations:
                         chain = chains[cit["chain_idx"]] if cit["chain_idx"] < len(chains) else {}
-                        strength = chain.get("evidence_strength", "weak")
+                        strength = str(chain.get("evidence_strength", "weak")).lower()
+                        if strength not in {"strong", "moderate", "weak"}:
+                            strength = "weak"
                         disputed = chain.get("disputed", False)
                         badge = "badge-disputed" if disputed else f"badge-{strength}"
                         src_parts = []
@@ -1529,8 +1560,10 @@ def _render_results():
                             url = str(src.get("url", ""))
                             n = url_to_n.get(url, cit["n"])
                             title = _esc(src.get("title", ""))
-                            if url.startswith(("http://", "https://")):
-                                link = (f'<a href="{_esc(url)}" target="_blank" '
+                            safe_href = _safe_external_href(url)
+                            if safe_href is not None:
+                                link = (f'<a href="{safe_href}" target="_blank" '
+                                        f'rel="noopener noreferrer nofollow" '
                                         f'style="color:#a78bfa; text-decoration:none;">{title}</a>')
                             else:
                                 link = title

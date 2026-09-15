@@ -544,6 +544,27 @@ P2 再把 Prompt 和模板迁入注册表（Python/文本资产均可），要�
 - 报告展示不能直接信任 Markdown/LLM HTML。推荐 Markdown 转 HTML 后用 allowlist sanitizer（如 Bleach）清理；链接加安全属性，禁止 script/style/event handler/iframe。若不新增 sanitizer，前端暂时用 Streamlit 安全 Markdown，不把报告插入 `unsafe_allow_html` 容器。
 - 导出文件名只由 server 生成；task ID 使用严格格式。
 
+### 19.4 Phase 6-A 已冻结的安全边界
+
+Phase 6-A 将上述原则收敛为可测试的默认路径契约：
+
+- `SafeUrlPolicy`/安全 fetch 只接受 HTTP(S)、80/443 端口和无 userinfo 的 URL。DNS 解析后
+  拒绝 loopback、private、link-local、reserved、multicast 和元数据地址；实际连接固定到
+  已验证的 direct IP，同时保留正确的 Host/TLS SNI。redirect 必须逐跳重新解析、重验
+  scheme/hostname/port/IP 和响应限制；响应体、content-type、redirect 次数和总耗时均有上限。
+  代理或 forward 无法证明最终连接安全时必须 fail closed。
+- forward 目标只允许完整 hostname 精确匹配，或显式 `*.example.com` 子域匹配；不能使用
+  模糊字符串前缀。输入 admission 的 HTTP body 上限为 128 KiB，query、候选项、澄清文本、
+  字段和聚合输入另有数量/长度限制，超限直接返回结构化错误。
+- 日志、错误、Trace 和 LLM diagnostics 使用同一集中脱敏边界。LLM diagnostics 只保留
+  hash、length、usage 和 error type；完整 prompt、模型响应、headers、凭据、原始 URL 和
+  traceback 不进入日志或公开 API。
+- 报告继续提供 Markdown 兼容表示，同时由服务端生成经过 allowlist sanitizer 的
+  `report_html`；PDF 复用同一 sanitizer。前端不得将未清洗报告正文放进
+  `unsafe_allow_html`。
+- 本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到统一安全
+  fetch。未迁移的 provider 必须保持既有适配边界，不能因此宣称全链路安全 fetch 已覆盖。
+
 ## 20. 数据迁移与兼容
 
 1. Phase 0 引入 schema version、DTO 和 migration runner，但不迁移旧数据。
@@ -720,6 +741,22 @@ Phase 6 的基础输入/URL/日志安全应在 Phase 0/1 同步打底，集中�
 - 回滚：仅允许在 loopback 开发模式关闭 auth；安全 URL/HTML 修复不提供危险回滚开关。
 - 风险：误拦合法来源、开发体验、配置错误锁死服务。
 - 独立复审：**强制**（认证、限流、安全、配置）。
+
+#### Phase 6-A：安全 URL、输入 admission、脱敏与报告输出
+
+- 目标：先封住 SSRF、动态代理 URL、超大输入、日志泄漏和报告 HTML 注入边界，为后续认证
+  和限流提供稳定的安全底座。
+- 产出：统一 `SafeUrlPolicy`/安全 fetch、DNS 公网地址验证、direct-IP pin、逐跳 redirect
+  复验、forward hostname 精确/显式子域匹配、128 KiB body admission、字段/聚合/澄清限制、
+  集中日志和错误脱敏，以及服务端 `report_html`/PDF sanitizer 共用路径。
+- 不在本阶段：认证/API key、rate limiting、所有静态 provider 的迁移；这些仍是后续 Phase 6
+  工作或独立 provider 适配，不得在验收中扩大为“所有外呼已安全迁移”。
+- 验收：危险 scheme、userinfo、非 80/443 端口、解析到私网/本机的 URL、DNS rebinding、
+  不安全 redirect 和无法证明安全的代理动态 URL 均 fail closed；超限输入被拒绝；日志/Trace/
+  diagnostics 不含秘密或完整 prompt/响应；恶意报告在 Markdown、HTML 和 PDF 路径均不执行脚本。
+- 回滚：不提供关闭 URL 安全、输入限制、脱敏或 HTML sanitizer 的危险开关；Markdown 兼容
+  输出保留，若 sanitizer 出错则返回结构化错误或安全降级，不输出未清洗 HTML。
+- 独立复审：**强制**（SSRF、DNS/redirect、输入边界、日志/报告输出）。
 
 ## 25. 十项关键决策的明确回答
 

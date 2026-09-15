@@ -121,6 +121,24 @@ When adding a setting, update the code default, tests, README configuration sect
 - Phase 2-A 尚未接入 node/call wrapper、Trace 写入/API、预算预留结算或硬限制；这些属于
   Phase 2-B/2-C。`task_events` 仍是任务状态与 SSE 的唯一正确性路径，`RunManifest` 保持 v1。
 
+### Phase 6-A security boundaries
+
+- URL 外呼必须统一经过 `SafeUrlPolicy`/安全 fetch：只允许 HTTP(S)、端口仅 80/443、拒绝
+  userinfo；DNS 解析后必须拒绝 loopback、private、link-local、reserved 和 multicast 地址，
+  并在实际连接时固定到已验证的 direct IP（保留正确 Host/TLS SNI）。每一跳 redirect 都要
+  重新执行完整策略和端口检查，并限制响应体大小、content-type、重定向次数与总耗时。
+  无法证明安全的 proxy/forward 动态 URL 必须 fail closed。
+- forward allowlist 必须按完整 hostname 精确匹配，或按显式 `*.example.com` 子域规则匹配；
+  不能用字符串前缀代替 hostname 边界。
+- 请求 body 的 admission 上限为 128 KiB；query、候选项、澄清文本、字段长度、候选数量和
+  聚合输入必须分别受限。拒绝超限输入，不通过截断继续执行。
+- 日志、结构化错误、Trace 与 LLM diagnostics 统一走集中脱敏。LLM diagnostics 只保留
+  hash、length、usage 和 error type，不保存完整 prompt、响应、headers、URL 凭据或原始堆栈。
+- 报告必须保留 Markdown 兼容输出，并由服务端生成经过 allowlist sanitizer 的 `report_html`；
+  PDF 使用同一 sanitizer。前端不得把未清洗的报告正文放入 `unsafe_allow_html`。
+- Phase 6-A 不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全
+  fetch；这些边界仍需在后续安全收口中单独验证。
+
 ## Local and generated data
 
 `.env`, `outputs/`, `chroma_db/`, benchmark runs, model caches, `.pytest_cache/`, `.ruff_cache/`, `.claude/`, and `.superpowers/` may contain local state even when Git reports a clean tree. Do not delete, normalize, or commit them unless the task names the exact target. Test-created temporary directories must be removed after verification.

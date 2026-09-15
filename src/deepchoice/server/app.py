@@ -50,6 +50,8 @@ from ..runtime.instance_guard import (
     validate_single_worker_configuration,
 )
 from ..runtime.lifecycle import TaskStatus
+from ..security.html import render_safe_report_html
+from ..security.input_limits import RequestBodyLimitMiddleware
 from ..services.tasks import TaskService
 from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
@@ -197,6 +199,7 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(title="DeepChoice API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(RequestBodyLimitMiddleware)
 app.include_router(clarify_router)
 
 _LEGACY_DEPRECATION_HEADERS = {
@@ -625,6 +628,7 @@ async def get_task_annotated(
         "run_id": current.latest_run.run_id,
         "format": requested_format,
         "report": report,
+        "report_html": render_safe_report_html(report),
         "toc": toc,
         "citations": registry,
     }
@@ -809,8 +813,10 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
             state = await orchestrator.get_state()
             partial = state.values if state else {}
             save_failed_snapshot(task_id, partial, public_message)
-        except Exception as persist_err:
-            print_agent_output(f"Failed to persist failure snapshot for {task_id}: {persist_err}", agent="SERVER")
+        except Exception:
+            print_agent_output(
+                f"Failed to persist failure snapshot for {task_id}", agent="SERVER"
+            )
         entry["status"] = "failed"
         entry["error"] = public_message
         entry["error_detail"] = error_detail.model_dump(mode="json")
@@ -896,8 +902,8 @@ async def research_status(task_id: str, request: Request):
                     "phase": current,
                     "checkpoint_step": state.metadata.get("step", -1) if state.metadata else -1,
                 }
-        except Exception as e:
-            print_agent_output(f"Status check failed for {task_id}: {e}", agent="SERVER")
+        except Exception:
+            print_agent_output(f"Status check failed for {task_id}", agent="SERVER")
 
     if not entry:
         snapshot = load_snapshot(task_id)
@@ -1016,6 +1022,7 @@ async def research_annotated(task_id: str, request: Request, format: str = ""):
         "task_id": task_id,
         "format": requested_format,
         "report": report,
+        "report_html": render_safe_report_html(report),
         "toc": toc,
         "citations": registry,
     }

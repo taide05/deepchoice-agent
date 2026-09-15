@@ -172,3 +172,13 @@ SSE 规则：
   价格未知保持 unknown，不得按零成本结算。旧 run 不回填，内部 policy 投影保持 unavailable；
   后续查询 API 必须如实显示该缺失。Trace 写入/API、node/call wrapper、预算预留结算和硬限制分别留给 Phase 2-B/2-C；
   `RunManifest` 保持 v1。
+- Phase 6-A 的受管 URL 外呼只允许 HTTP(S)、80/443 和无 userinfo；DNS 解析、实际 direct-IP
+  连接以及每一跳 redirect 都必须重新验证公网地址、hostname、端口和响应上限。无法证明安全的
+  proxy/forward 动态 URL 必须拒绝。forward allowlist 只接受完整 hostname 精确匹配或显式
+  `*.example.com` 子域匹配。
+- 请求 body 上限为 128 KiB，query、候选项、澄清文本、字段和聚合输入另有数量/长度上限。
+  日志、错误、Trace 和 LLM diagnostics 统一脱敏；LLM diagnostics 只保留 hash、length、usage
+  和 error type。报告继续支持 Markdown，`report_html` 和 PDF 使用服务端同一 sanitizer；
+  前端不得把未清洗报告放入 `unsafe_allow_html`。
+- Phase 6-A 不包含认证/API key 或 rate limiting，也不声称所有静态 provider 已迁移到安全 fetch；
+  这些仍是后续安全收口或独立适配任务。

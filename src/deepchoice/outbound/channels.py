@@ -11,6 +11,7 @@ import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -165,14 +166,75 @@ class SelfForwardChannel(BaseChannel):
         self.key = cfg.fwd_key
         self.allowed = cfg.fwd_allowed
         self._http_factory = http_factory or (lambda: httpx.AsyncClient(timeout=15))
+        self._allowed_patterns = self._parse_allowed_patterns(self.allowed)
+        self._configuration_valid = self._valid_base(self.base) and self._allowed_patterns is not None
+
+    @staticmethod
+    def _valid_base(value: str | None) -> bool:
+        if not value:
+            return False
+        try:
+            parsed = urlsplit(value)
+            return (
+                parsed.scheme.lower() == "https"
+                and parsed.hostname is not None
+                and parsed.username is None
+                and parsed.password is None
+                and (parsed.port or 443) == 443
+            )
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _parse_allowed_patterns(values: tuple[str, ...]) -> tuple[tuple[bool, str], ...] | None:
+        parsed_patterns: list[tuple[bool, str]] = []
+        for raw in values:
+            wildcard = raw.startswith("*.")
+            hostname = raw[2:] if wildcard else raw
+            if not hostname or any(char in hostname for char in "/:@[]"):
+                return None
+            try:
+                hostname = hostname.rstrip(".").encode("idna").decode("ascii").lower()
+            except UnicodeError:
+                return None
+            if not hostname or any(
+                not label
+                or len(label) > 63
+                or label.startswith("-")
+                or label.endswith("-")
+                or any(
+                    not (char.isascii() and (char.isalnum() or char == "-"))
+                    for char in label
+                )
+                for label in hostname.split(".")
+            ):
+                return None
+            parsed_patterns.append((wildcard, hostname))
+        return tuple(parsed_patterns)
 
     def is_allowed(self, target: str) -> bool:
-        low = target.lower()
-        return any(low.startswith("https://" + h + "/") or low == "https://" + h
-                   for h in self.allowed)
+        if not self._configuration_valid or self._allowed_patterns is None:
+            return False
+        try:
+            parsed = urlsplit(target)
+            if (
+                parsed.scheme.lower() != "https"
+                or parsed.hostname is None
+                or parsed.username is not None
+                or parsed.password is not None
+                or (parsed.port or 443) != 443
+            ):
+                return False
+            hostname = parsed.hostname.rstrip(".").encode("idna").decode("ascii").lower()
+        except (UnicodeError, ValueError):
+            return False
+        return any(
+            hostname == pattern if not wildcard else hostname.endswith("." + pattern)
+            for wildcard, pattern in self._allowed_patterns
+        )
 
     async def reachable(self) -> bool:
-        if not self.base:
+        if not self._configuration_valid:
             return False
         try:
             async with self._http_factory() as c:
@@ -184,6 +246,8 @@ class SelfForwardChannel(BaseChannel):
             return False
 
     def build_transport(self) -> httpx.AsyncBaseTransport:
+        if not self._configuration_valid:
+            raise ValueError("self-forward configuration is invalid")
         return _ForwardTransport(self)
 
 
@@ -197,7 +261,7 @@ class _ForwardTransport(httpx.AsyncBaseTransport):
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         target = str(request.url)
         if not self.channel.is_allowed(target):
-            raise ValueError(f"target not allowed by forward endpoint: {target}")
+            raise ValueError("target not allowed by forward endpoint")
         async with self._http_factory() as c:
             r = await c.post(self.channel.base, json={"target": target},
                              headers={"X-Fwd-Key": self.channel.key or ""})

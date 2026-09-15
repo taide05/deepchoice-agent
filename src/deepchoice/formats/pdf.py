@@ -8,6 +8,8 @@ export is the canonical format.
 """
 from pathlib import Path
 
+from deepchoice.security.html import render_safe_report_html
+
 FONT_CANDIDATES = [
     # Plain TTFs first; .ttc needs reportlab's subfontIndex and must be
     # TrueType-outlined (NotoSansCJK is CFF-based — reportlab cannot open it)
@@ -72,11 +74,10 @@ def _register_cjk_font() -> str:
 
 
 def render_pdf(md: str) -> bytes:
-    import markdown
     from xhtml2pdf import pisa
 
     font_family = _register_cjk_font()
-    body = markdown.markdown(md, extensions=["tables"])
+    body = render_safe_report_html(md)
     html = HTML_TEMPLATE.format(font_family=font_family, body=body)
 
     from io import BytesIO

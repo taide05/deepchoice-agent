@@ -50,9 +50,9 @@ class BaseRetriever:
             # harmless no-op for sources outside the channel layer (tavily).
             try:
                 await _outbound.get_resolver().invalidate(self.source)
-            except Exception as invalidate_error:
+            except Exception:
                 print_agent_output(
-                    f"Resolver invalidate failed for {self.source}: {invalidate_error}",
+                    f"Resolver invalidate failed for {self.source}",
                     agent="RETRIEVER",
                 )
             return RetrievalResult(

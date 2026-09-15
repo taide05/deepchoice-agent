@@ -349,8 +349,8 @@ class ConclusionSynthesizerAgent:
                 timeout=timeout,
                 seed=seed,
             )
-        except Exception as e:
-            print_agent_output(f"Synthesis failed: {e}", agent="CONCLUSION_SYNTHESIZER")
+        except Exception:
+            print_agent_output("Synthesis failed", agent="CONCLUSION_SYNTHESIZER")
             result = {
                 "recommendation": "Unable to synthesize recommendation due to insufficient evidence.",
                 "ranked_options": [],

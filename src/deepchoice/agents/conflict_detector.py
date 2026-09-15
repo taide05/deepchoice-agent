@@ -168,8 +168,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                                     "content": r.get("content", "")[:300],
                                     "url": r.get("url", "")} for r in results],
                                   ensure_ascii=False)
-            except Exception as e:
-                return json.dumps({"error": str(e)})
+            except Exception as exc:
+                return json.dumps({"error": type(exc).__name__})
 
     elif tool_name == "search_scholarly":
         import urllib.parse
@@ -193,8 +193,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                         "url": link.text.strip() if link is not None else "",
                     })
                 return json.dumps(results[:max_results], ensure_ascii=False)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
+        except Exception as exc:
+            return json.dumps({"error": type(exc).__name__})
 
     elif tool_name == "search_kb":
         chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
@@ -217,8 +217,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
             return json.dumps(docs, ensure_ascii=False)
         except ImportError:
             return json.dumps({"error": "chromadb not installed in this process"})
-        except Exception as e:
-            return json.dumps({"error": str(e)})
+        except Exception as exc:
+            return json.dumps({"error": type(exc).__name__})
 
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -264,8 +264,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         except TimeoutError:
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
-        except Exception as e:
-            print_agent_output(f"Evidence gathering LLM error: {e}", agent="CONFLICT_DETECTOR")
+        except Exception:
+            print_agent_output("Evidence gathering LLM error", agent="CONFLICT_DETECTOR")
             break
 
         # Capture token usage (same 4-field shape as call_model) so the
@@ -300,8 +300,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 )
             except TimeoutError:
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
-            except Exception as e:
-                result = json.dumps({"error": str(e)})
+            except Exception as exc:
+                result = json.dumps({"error": type(exc).__name__})
             return tc.id, result
 
         tool_results = await asyncio.gather(*[_run_tool(tc) for tc in tool_calls])
@@ -356,8 +356,8 @@ Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; 
         if isinstance(result, dict) and result.get("has_difference"):
             return result
         return None
-    except Exception as e:
-        print_agent_output(f"Conflict scan failed: {e}", agent="CONFLICT_DETECTOR")
+    except Exception:
+        print_agent_output("Conflict scan failed", agent="CONFLICT_DETECTOR")
         return None
 
 
@@ -512,7 +512,7 @@ class ConflictDetectorAgent:
         low_confidence_pairs = []
         for pair, result in zip(pairs, raw_conflicts):
             if isinstance(result, Exception):
-                print_agent_output(f"Flash arbitration failed: {result}", agent="CONFLICT_DETECTOR")
+                print_agent_output("Flash arbitration failed", agent="CONFLICT_DETECTOR")
                 continue
             conflicts.append(result)
             if result["confidence"] == "low":
@@ -541,8 +541,8 @@ class ConflictDetectorAgent:
                             claim_b=b.get("title", ""),
                             usage=local_usage,
                         )
-                    except Exception as e:
-                        print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+                    except Exception:
+                        print_agent_output("Evidence gathering failed", agent="CONFLICT_DETECTOR")
 
                     enriched_claim_a = a.get("title", "")
                     enriched_claim_b = b.get("title", "")
@@ -568,8 +568,8 @@ class ConflictDetectorAgent:
                                 timeout=300.0,
                                 usage=local_usage,
                             )
-                    except Exception as e:
-                        print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                    except Exception:
+                        print_agent_output("Pro re-arbitration failed", agent="CONFLICT_DETECTOR")
                         return None
 
                     qw_conflict = _build_conflict(pair, qw_result, model="qwen-flash+evidence")

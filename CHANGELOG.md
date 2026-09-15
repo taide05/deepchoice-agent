@@ -23,6 +23,7 @@
 - Forward-only product schema v6 for immutable public run results and v7 for the single-runtime-instance lease
 - Phase 2-A RunContext, Trace/Budget DTO and Protocol contracts, plus the forward-only schema v8 skeleton for run budget policies, node attempts, external calls, trace events, and budget ledger
 - Manifest-verified paired product/checkpoint database backup, restore, and restore-drill tooling
+- Phase 6-A security boundary: SafeUrlPolicy with DNS/public-address and redirect revalidation, direct-IP pinning, bounded HTTP admission, forward hostname matching, centralized redaction, and sanitized report HTML/PDF output
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
@@ -40,6 +41,7 @@
 - Coordinator shutdown now settles an in-flight lease acquisition and fenced finalization before propagating cancellation, closing the commit-before-grant ghost-running race
 - New durable runs and retries atomically freeze `standard-observe-v1` and `unpriced-v1`; unknown prices remain unknown rather than being treated as zero. Historical runs are not backfilled and retain an unavailable internal policy projection for future APIs to report honestly
 - Phase 2-A does not yet write Trace events, expose Trace APIs, or enforce budget reservation/settlement/hard limits; those remain Phase 2-B/2-C. Durable `task_events` remains the sole task/SSE correctness path, and `RunManifest` stays v1
+- Phase 6-A intentionally does not add authentication/API-key enforcement or rate limiting, and does not claim that every static provider has migrated to the safe-fetch path; those remain separate follow-up boundaries
 
 ### Fixed
 - Community retriever concurrency test now follows the production HTTP client timeout contract

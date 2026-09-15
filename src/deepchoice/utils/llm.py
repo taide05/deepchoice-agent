@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import os
 import random
 import time
@@ -9,6 +11,8 @@ from typing import Any
 import json_repair
 from langchain_core.utils.json import parse_json_markdown
 from openai import APIConnectionError, AsyncOpenAI
+
+from deepchoice.security.redaction import redact_text
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -34,6 +38,44 @@ async def _emit_record(entry: dict[str, Any]) -> None:
             await _record_callback(entry)
         except Exception:
             pass  # diagnostics must never break the pipeline
+
+
+def _content_metadata(value: Any, prefix: str) -> dict[str, Any]:
+    """Return reproducible diagnostics without retaining model content."""
+
+    if value is None:
+        return {f"{prefix}_sha256": None, f"{prefix}_chars": 0}
+    if isinstance(value, str):
+        encoded = value
+    else:
+        try:
+            encoded = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+        except (TypeError, ValueError):
+            encoded = str(type(value).__name__)
+    return {
+        f"{prefix}_sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+        f"{prefix}_chars": len(encoded),
+    }
+
+
+def _safe_error_metadata(exc: Exception) -> dict[str, Any]:
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int) or isinstance(status, bool):
+        status = None
+    label = type(exc).__name__
+    if status is not None:
+        label = f"{label}: HTTP {status}"
+    return {
+        "error": label,
+        "error_type": type(exc).__name__,
+        "error_status": status,
+    }
 
 
 def _env(*names: str, default: str = "") -> str:
@@ -167,18 +209,18 @@ async def call_model(
                 delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
                 await _retry_sleep(delay)
     except Exception as e:
-        await _emit_record({
+        record = {
             "case_id": _current_case.get(),
             "tag": tag or tier,
             "tier": tier,
             "model": model,
             "elapsed_ms": round((time.monotonic() - t0) * 1000),
-            "error": f"{type(e).__name__}: {str(e)[:300]}",
-            "prompt": prompt,
-            "raw_content": None,
-            "parsed": None,
             "usage": None,
-        })
+            **_safe_error_metadata(e),
+            **_content_metadata(prompt, "prompt"),
+            **_content_metadata(None, "response"),
+        }
+        await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         raise
 
     # Capture token usage before content parsing so calls whose JSON parsing
@@ -205,31 +247,37 @@ async def call_model(
         except Exception:
             parsed = {}
             parse_ok = False
-        await _emit_record({
+        record = {
             "case_id": _current_case.get(),
             "tag": tag or tier,
             "tier": tier,
             "model": model,
             "elapsed_ms": round((time.monotonic() - t0) * 1000),
             "error": None,
+            "error_type": None,
+            "error_status": None,
             "parse_ok": parse_ok,
-            "prompt": prompt,
-            "raw_content": content,
-            "parsed": parsed,
+            "parsed_type": type(parsed).__name__,
             "usage": usage_entry,
-        })
+            **_content_metadata(prompt, "prompt"),
+            **_content_metadata(content, "response"),
+        }
+        await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         return parsed
 
-    await _emit_record({
+    record = {
         "case_id": _current_case.get(),
         "tag": tag or tier,
         "tier": tier,
         "model": model,
         "elapsed_ms": round((time.monotonic() - t0) * 1000),
         "error": None,
-        "prompt": prompt,
-        "raw_content": content,
-        "parsed": None,
+        "error_type": None,
+        "error_status": None,
+        "parsed_type": None,
         "usage": usage_entry,
-    })
+        **_content_metadata(prompt, "prompt"),
+        **_content_metadata(content, "response"),
+    }
+    await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
     return content
