@@ -36,7 +36,6 @@ class QueryAdapterAgent:
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
         sub_questions = research_state.get("sub_questions", [])
-
         # On retry, knowledge_gaps are the new adaptation targets
         knowledge_gaps = research_state.get("knowledge_gaps", [])
         if knowledge_gaps and research_state.get("retry_count", 0) > 0:
@@ -45,6 +44,13 @@ class QueryAdapterAgent:
                 f"Retry adaptation: targeting {len(knowledge_gaps)} knowledge gaps",
                 agent="QUERY_ADAPTER",
             )
+
+        # A user's explicit answer must survive the retry targeting above.
+        supplemental_input = research_state.get("_supplemental_input")
+        if isinstance(supplemental_input, str) and supplemental_input.strip():
+            supplement = supplemental_input.strip()
+            if supplement not in sub_questions:
+                sub_questions = [*sub_questions, supplement]
 
         if not sub_questions:
             return {

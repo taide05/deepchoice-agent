@@ -709,16 +709,17 @@ Phase 6 的基础输入/URL/日志安全应在 Phase 0/1 同步打底，集中�
 
 ### Phase 4：Human-in-the-loop 检查点
 
-- 目标：仅在高价值不确定点暂停，并可跨重启恢复。
-- 修改范围：四类 gate、LangGraph interrupt adapter、decision store/API/UI、过期策略。
-- 涉及模块：orchestrator、task service、frontend，新 `hitl/`。
-- 前置依赖：Phase 1 checkpoint/lifecycle，Phase 2 budget，Phase 3 evidence/citation signals。
-- 数据迁移：新增 decision 表；旧 run 不注入 HITL。
-- 测试：四触发器、暂停释放槽、重启、重复/冲突/过期 decision、取消竞态、恶意补充文本。
-- 验收：暂停持久、决策一次生效、恢复绑定正确 checkpoint；默认行为符合产品方案。
-- 回滚：按 gate 类型关闭；pending task 可按保存策略转 limited/cancelled，不能直接丢失。
-- 风险：状态组合爆炸、用户永久不响应、恢复版本不兼容。
-- 独立复审：**强制**（持久化、并发、公共接口）。
+- 本节原始四类 gate 方案属于历史设计空间；当前范围由 `docs/current-roadmap.md` 决定，收敛为
+  一个 `evidence-insufficient` gate。
+- PR 4-1 已实现：schema v10 `hitl_decisions`、`research-v3`/state schema v3 和
+  `evidence-insufficient-v1` manifest policy；gate 位于 citation verification 后、report rendering
+  前，决策绑定 run/checkpoint/state schema/pause epoch，支持三动作、幂等 resolve、7 天过期、
+  fencing 和重启恢复。等待时释放 lease 与执行槽；durable GET/resolve API 已提供。
+- PR 4-2 尚未开始：Streamlit 决策界面和恢复端到端验收。
+- 不实现原设计中的四类触发器；旧 run 不注入 HITL，旧 `/research` 兼容路径绕过 durable gate。
+- 公开 API/event 投影不得暴露 supplement 文本、checkpoint/fencing identity 或完整 state。
+- PR 4-1/4-2 仍需独立复审持久化、并发和公共接口；测试与状态以当前 roadmap、代码和实际
+  验证结果为准。
 
 ### Phase 5：Prompt/工作流版本注册表与节点级评估
 

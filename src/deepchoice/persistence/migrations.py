@@ -474,6 +474,80 @@ CREATE TABLE retrieval_cache (
     "CREATE INDEX idx_retrieval_cache_expires_at ON retrieval_cache(expires_at)",
 )
 
+_V10_STATEMENTS: Final[tuple[str, ...]] = (
+    "CREATE UNIQUE INDEX idx_runs_task_run_identity ON runs(task_id, run_id)",
+    """
+CREATE UNIQUE INDEX idx_run_checkpoints_hitl_identity
+ON run_checkpoints(
+    run_id, checkpoint_ns, storage_checkpoint_ns, checkpoint_id,
+    state_schema_version, execution_epoch
+)
+""".strip(),
+    """
+CREATE TABLE hitl_decisions (
+    decision_id TEXT PRIMARY KEY CHECK (length(decision_id) BETWEEN 1 AND 100),
+    task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE RESTRICT
+        CHECK (length(task_id) > 0),
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE RESTRICT
+        CHECK (length(run_id) > 0),
+    kind TEXT NOT NULL CHECK (kind = 'evidence-insufficient'),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'resolved', 'expired', 'cancelled')),
+    request_json TEXT NOT NULL CHECK (
+        json_valid(request_json) AND json_type(request_json) = 'object'
+        AND length(CAST(request_json AS BLOB)) <= 32768
+    ),
+    checkpoint_ns TEXT NOT NULL,
+    storage_checkpoint_ns TEXT NOT NULL,
+    checkpoint_id TEXT NOT NULL CHECK (length(checkpoint_id) > 0),
+    state_schema_version INTEGER NOT NULL CHECK (state_schema_version > 0),
+    pause_execution_epoch INTEGER NOT NULL CHECK (pause_execution_epoch >= 1),
+    expires_at TEXT NOT NULL,
+    resolution_json TEXT CHECK (
+        resolution_json IS NULL OR (
+            json_valid(resolution_json) AND json_type(resolution_json) = 'object'
+            AND length(CAST(resolution_json AS BLOB)) <= 32768
+        )
+    ),
+    resolution_body_sha256 TEXT CHECK (
+        resolution_body_sha256 IS NULL OR (
+            length(resolution_body_sha256) = 64
+            AND resolution_body_sha256 NOT GLOB '*[^0-9a-f]*'
+        )
+    ),
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    FOREIGN KEY (run_id, storage_checkpoint_ns, checkpoint_id)
+        REFERENCES run_checkpoints(run_id, storage_checkpoint_ns, checkpoint_id)
+        ON DELETE RESTRICT,
+    FOREIGN KEY (task_id, run_id)
+        REFERENCES runs(task_id, run_id) ON DELETE RESTRICT,
+    FOREIGN KEY (
+        run_id, checkpoint_ns, storage_checkpoint_ns, checkpoint_id,
+        state_schema_version, pause_execution_epoch
+    ) REFERENCES run_checkpoints(
+        run_id, checkpoint_ns, storage_checkpoint_ns, checkpoint_id,
+        state_schema_version, execution_epoch
+    ) ON DELETE RESTRICT,
+    CHECK (
+        (status = 'pending' AND resolution_json IS NULL
+            AND resolution_body_sha256 IS NULL AND resolved_at IS NULL)
+        OR
+        (status IN ('resolved', 'cancelled') AND resolution_json IS NOT NULL
+            AND resolution_body_sha256 IS NOT NULL AND resolved_at IS NOT NULL)
+        OR
+        (status = 'expired' AND resolution_json IS NULL
+            AND resolution_body_sha256 IS NULL AND resolved_at IS NOT NULL)
+    )
+)
+""".strip(),
+    """
+CREATE UNIQUE INDEX idx_hitl_decisions_one_pending_run
+ON hitl_decisions(run_id) WHERE status = 'pending'
+""".strip(),
+    "CREATE INDEX idx_hitl_decisions_task_created ON hitl_decisions(task_id, created_at DESC)",
+    "CREATE INDEX idx_hitl_decisions_expiry ON hitl_decisions(status, expires_at)",
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
@@ -484,6 +558,7 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=7, name="single_runtime_instance_lease", statements=_V7_STATEMENTS),
     Migration(version=8, name="trace_and_budget_contract_schema", statements=_V8_STATEMENTS),
     Migration(version=9, name="retrieval_result_cache", statements=_V9_STATEMENTS),
+    Migration(version=10, name="single_hitl_decision_gate", statements=_V10_STATEMENTS),
 )
 
 

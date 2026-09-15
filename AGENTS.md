@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 967 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 986 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -186,12 +186,14 @@ When adding a setting, update the code default, tests, README configuration sect
 
 ### Phase 3-1 citation verification
 
-- New runs freeze workflow `research-v2`, state schema v2, and citation policy
-  `deterministic-citation-v1`. Historical `research-v1` manifests remain readable and identity-valid,
-  but they are incompatible with same-run resume on the v2 runtime and must start a new run.
+- New runs freeze workflow `research-v3`, state schema v3, citation policy
+  `deterministic-citation-v1`, and HITL policy `evidence-insufficient-v1`. Historical v1/v2 manifests
+  remain readable and identity-valid, but are incompatible with same-run resume on the v3 runtime
+  and must start a new run.
 - Citation verification is deterministic and runs after conclusion synthesis and before report
-  rendering. Do not add an LLM judge to the default path or describe lexical verification as semantic
-  proof.
+  rendering; the sole evidence-insufficient HITL gate runs after citation verification and before
+  report rendering. Do not add an LLM judge to the default path or describe lexical verification as
+  semantic proof.
 - Public citation status is limited to `verified`, `unsupported`, `unreachable`, and `unknown`.
   Temporary network, DNS, routing, proxy-safety, and cross-language uncertainty must remain
   `unknown`; they are not evidence that a claim is false.
@@ -201,11 +203,40 @@ When adding a setting, update the code default, tests, README configuration sect
 - Phase 3-1 stores its bounded checks and per-source projection in the immutable public run snapshot;
   it does not add a lifecycle table or treat verification warnings as task lifecycle events.
 
+### Phase 4-1 single durable HITL decision gate
+
+- Product schema v10 adds `hitl_decisions`. Migrations remain append-only and forward-only; never
+  edit committed migrations. Decision data stays in the product SQLite store, separate from
+  LangGraph checkpoint payloads.
+- Only the `evidence-insufficient` gate is in scope. It can pause only when evidence is structurally
+  insufficient and the recommendation is materially uncertain. It runs after citation verification
+  and before report rendering; the legacy `/research` path and executions without `RunContext` bypass
+  durable decisions.
+- Supported actions are `provide_context` (required bounded supplemental text), `limited_report`
+  (report from evidence already collected, clearly marked as restricted), and `cancel` (terminal,
+  without graph resume). Supplemental text is untrusted context and must never enter public events,
+  decision GET projections, or error details.
+- A pending decision is bound internally to task/run, the accepted checkpoint reference, state schema,
+  and pause fencing epoch. Public decision responses/events must not reveal checkpoint identity,
+  execution epoch, lease owner, or supplemental text.
+- Pausing atomically persists the decision and moves task/run to `waiting_for_input`, clears the lease
+  and active deadline, and releases the execution slot. The decision expires after seven days; expiry
+  atomically marks it expired and the waiting task/run cancelled. Startup/recovery must preserve
+  pending decisions and resume only a valid resolved decision from its bound checkpoint.
+- `GET /api/v1/tasks/{task_id}/decision` returns the latest public decision projection.
+  `POST /api/v1/tasks/{task_id}/decisions/{decision_id}` resolves it using `If-Match` task-version
+  CAS. Repeating the same resolution body is idempotent; a different body, stale task version,
+  mismatched run/checkpoint, or expired decision conflicts/fails without resuming stale execution.
+- Decision lifecycle events may expose only public status, decision ID/kind, reason, gaps, allowed
+  actions, expiry, and action; never checkpoint/fencing identity, supplemental content, or private
+  state.
+
 ### Current implementation scope
 
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
-- The current sequence is Phase 3, Phase 4, then Phase 5. Keep each remaining
+- Phase 3 is complete. Phase 4 PR 4-1 (single durable decision backend) is implemented; PR 4-2
+  (frontend and recovery acceptance) has not started. Then continue to Phase 5. Keep each remaining
   phase to at most two implementation PRs and prioritize the durable default path.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless

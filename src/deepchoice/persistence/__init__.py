@@ -14,6 +14,7 @@ from .migrations import (
 )
 from .records import (
     CheckpointReference,
+    DecisionResolutionResult,
     LegacyImportRecord,
     RecoveryRun,
     RunLeaseGrant,
@@ -26,6 +27,9 @@ from .records import (
 )
 from .repository import (
     CheckpointNotAvailableError,
+    DecisionConflictError,
+    DecisionExpiredError,
+    DecisionNotFoundError,
     RepositoryOperationError,
     RunLeaseLostError,
     RunNotFoundError,
@@ -38,6 +42,10 @@ from .repository import (
 
 __all__ = [
     "CheckpointNotAvailableError",
+    "DecisionConflictError",
+    "DecisionExpiredError",
+    "DecisionNotFoundError",
+    "DecisionResolutionResult",
     "DEFAULT_DB_PATH",
     "MIGRATIONS",
     "DatabaseConnectionError",

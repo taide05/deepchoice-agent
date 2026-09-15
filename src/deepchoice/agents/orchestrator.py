@@ -5,7 +5,9 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.errors import GraphInterrupt
 from langgraph.graph import END, StateGraph
+from langgraph.types import Command
 
 from ..budget.errors import BudgetExceededError
 from ..contracts.manifest import (
@@ -25,6 +27,7 @@ from .citation_validator import CitationValidatorAgent
 from .conclusion_synthesizer import ConclusionSynthesizerAgent
 from .conflict_detector import ConflictDetectorAgent
 from .evidence_chain import EvidenceChainAgent
+from .evidence_decision_gate import EvidenceDecisionGateAgent, route_after_evidence_decision
 from .multi_retriever import MultiRetrieverAgent
 from .query_adapter import QueryAdapterAgent
 from .query_analyzer import QueryAnalyzerAgent
@@ -88,6 +91,7 @@ class ChiefEditorAgent:
             "citation_validator": CitationValidatorAgent(
                 self.websocket, self.stream_output, self.headers
             ),
+            "evidence_decision_gate": EvidenceDecisionGateAgent(),
             "report_generator": ReportGeneratorAgent(self.websocket, self.stream_output, self.headers),
             "self_reviewer": SelfReviewerAgent(self.websocket, self.stream_output, self.headers),
         }
@@ -120,6 +124,14 @@ class ChiefEditorAgent:
                         await context.budget.raise_if_exhausted(
                             partial_state={**state, **result}
                         )
+            except GraphInterrupt:
+                if trace is not None:
+                    await trace.finish_node_attempt(
+                        attempt,
+                        status=TraceStatus.INTERRUPTED,
+                        summary={"elapsed_ms": round((time.monotonic() - t0) * 1000)},
+                    )
+                raise
             except asyncio.CancelledError:
                 if trace is not None:
                     await trace.finish_node_attempt(
@@ -186,6 +198,7 @@ class ChiefEditorAgent:
         workflow.add_node("evidence_chain", self._timed_node("evidence_chain", agents["evidence_chain"].run))
         workflow.add_node("conclusion_synthesizer", self._timed_node("conclusion_synthesizer", agents["conclusion_synthesizer"].run))
         workflow.add_node("citation_validator", self._timed_node("citation_validator", agents["citation_validator"].run))
+        workflow.add_node("evidence_decision_gate", self._timed_node("evidence_decision_gate", agents["evidence_decision_gate"].run))
         workflow.add_node("report_generator", self._timed_node("report_generator", agents["report_generator"].run))
         workflow.add_node("self_reviewer", self._timed_node("self_reviewer", agents["self_reviewer"].run))
 
@@ -198,7 +211,16 @@ class ChiefEditorAgent:
         workflow.add_edge("conflict_detector", "evidence_chain")
         workflow.add_edge("evidence_chain", "conclusion_synthesizer")
         workflow.add_edge("conclusion_synthesizer", "citation_validator")
-        workflow.add_edge("citation_validator", "report_generator")
+        workflow.add_edge("citation_validator", "evidence_decision_gate")
+        workflow.add_conditional_edges(
+            "evidence_decision_gate",
+            route_after_evidence_decision,
+            {
+                "continue_report": "report_generator",
+                "provide_context": "query_adapter",
+                "limited_report": END,
+            },
+        )
         workflow.add_edge("report_generator", "self_reviewer")
         workflow.add_conditional_edges(
             "self_reviewer",
@@ -252,7 +274,13 @@ class ChiefEditorAgent:
             initial_state["sub_questions"] = task["sub_questions"]
         return initial_state
 
-    async def run_research_task(self, task: dict | None = None, *, resume: bool = False):
+    async def run_research_task(
+        self,
+        task: dict | None = None,
+        *,
+        resume: bool = False,
+        resume_value: dict | None = None,
+    ):
         task = task or self.task
         ensure_run_manifest_compatible(self.run_manifest, task)
         has_sub_questions = bool(task.get("sub_questions"))
@@ -261,12 +289,20 @@ class ChiefEditorAgent:
         print_agent_output(f"Starting research from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
         config = self._make_config(pin_checkpoint=resume)
-        graph_input = None if resume else self._make_initial_state(task)
+        graph_input = (
+            Command(resume=resume_value)
+            if resume and resume_value is not None
+            else None if resume else self._make_initial_state(task)
+        )
         result = await chain.ainvoke(graph_input, config=config)
         return result
 
     async def astream_research_task(
-        self, task: dict | None = None, *, resume: bool = False
+        self,
+        task: dict | None = None,
+        *,
+        resume: bool = False,
+        resume_value: dict | None = None,
     ):
         task = task or self.task
         ensure_run_manifest_compatible(self.run_manifest, task)
@@ -276,7 +312,11 @@ class ChiefEditorAgent:
         print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
         config = self._make_config(pin_checkpoint=resume)
-        graph_input = None if resume else self._make_initial_state(task)
+        graph_input = (
+            Command(resume=resume_value)
+            if resume and resume_value is not None
+            else None if resume else self._make_initial_state(task)
+        )
 
         async for event in chain.astream(graph_input, config=config, stream_mode="updates"):
             yield event

@@ -124,16 +124,29 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A～2-C 和 Phase 6-A�
 
 **PR 4-1：持久决策后端**
 
+状态：已实现。产品 schema v10 新增 `hitl_decisions`；新运行冻结 `research-v3`、state schema
+v3 和 `evidence-insufficient-v1`。唯一决策 gate 位于引用验证之后、报告生成之前，并仅用于
+结构性证据不足且推荐方向实质不确定的 durable run。旧 `/research` 兼容路径保持绕过。
+
 - 仅实现一个 evidence-insufficient gate，不实现原方案的四类 gate 矩阵。
 - 支持“补充信息后继续、按现有证据生成受限报告、取消”。
-- 决策与 checkpoint/run 绑定，幂等生效，7 天过期，并复用 Phase 1 的恢复与 fencing。
+- 决策与 task/run、已接受 checkpoint、state schema 与暂停 fencing epoch 绑定；相同提交幂等，
+  不同 body 或过期/版本冲突不覆盖已提交结果。
+- 决策 7 天过期；等待状态释放 lease、active deadline 与执行槽。重启后保留 pending 决策；
+  合法 resolve 从绑定 checkpoint 恢复，过期则原子收敛为取消。
+- durable API：`GET /api/v1/tasks/{task_id}/decision` 查询公开决策；
+  `POST /api/v1/tasks/{task_id}/decisions/{decision_id}` 以 `If-Match` task version 提交。
+  公开 projection/event 不含补充文本、checkpoint identity 或 fencing identity。
 
 **PR 4-2：前端与恢复验收**
+
+状态：未开始。
 
 - Streamlit 展示待决策原因、证据缺口和三个明确动作。
 - 覆盖重启、重复提交、过期、取消和 resume 端到端测试。
 
-完成标准：等待期间不占执行槽；一次合法决策只恢复一次正确 run。
+PR 4-2 完成标准：前端清楚展示待决策原因、证据缺口与三个动作；等待期间不占执行槽；
+重启、重复提交、过期、取消和 resume 端到端验收证明一次合法决策只恢复一次正确 run。
 
 ### Phase 5：质量评估与项目收口
 

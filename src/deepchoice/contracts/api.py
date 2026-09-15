@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from typing_extensions import Annotated
 
+from deepchoice.hitl import DecisionResolution
+
 from ..security.input_limits import MAX_RESEARCH_TEXT_CHARS, validate_safe_text
 
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
@@ -126,6 +128,35 @@ class TaskReportResponse(BaseModel):
     run_id: str
     format: ReportFormatValue
     report: str
+
+
+class TaskDecisionResponse(BaseModel):
+    """Public decision projection; checkpoint and fencing identity stay private."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    decision_id: str
+    kind: Literal["evidence-insufficient"]
+    status: Literal["pending", "resolved", "expired", "cancelled"]
+    reason: str
+    gaps: tuple[str, ...]
+    allowed_actions: tuple[Literal["provide_context", "limited_report", "cancel"], ...]
+    expires_at: datetime
+    resolved_action: Literal["provide_context", "limited_report", "cancel"] | None = None
+    resolved_at: datetime | None = None
+
+
+class TaskDecisionResolutionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    decision: TaskDecisionResponse
+    task: TaskDetailResponse
+    replayed: bool = False
+
+
+DecisionResolutionRequest = DecisionResolution
 
 
 class ObservabilityNodeAttemptResponse(BaseModel):

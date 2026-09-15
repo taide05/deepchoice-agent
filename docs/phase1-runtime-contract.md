@@ -1,7 +1,8 @@
 # Phase 1 运行契约与恢复手册
 
-本文固化 Phase 1-A～1-G 的已实现行为。代码、迁移历史和自动化测试仍是最终事实源；
-设计文档描述目标，不能覆盖这里记录的实现边界。
+本文固化 Phase 1-A～1-G 的 durable lifecycle 契约，并记录后续阶段对恢复、事件和持久化
+决策的增量。代码、迁移历史和自动化测试仍是最终事实源；设计文档描述目标，不能覆盖这里
+记录的实现边界。
 
 ## 1. 适用范围与兼容边界
 
@@ -23,9 +24,10 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 - task/run 的 `version` 是乐观并发控制字段。读取后再写的生命周期操作必须做 CAS；
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
-  模板版本。当前新运行使用 `research-v2`/state schema v2，并冻结确定性引用验证策略；
-  历史 `research-v1` manifest 仍可读取和校验身份，但不能在 v2 runtime 上续同一 run，须创建
-  新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
+  模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
+  `deterministic-citation-v1` 与 `evidence-insufficient-v1` 策略；历史 v1/v2 manifest 仍可读取
+  和校验身份，但不能在 v3 runtime 上续同一 run，须创建新 run。same-run resume 必须校验
+  manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
 
@@ -41,6 +43,8 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 | `GET /api/v1/tasks/{task_id}/events` | 从产品库 replay 公开事件，支持 `Last-Event-ID` |
 | `GET /api/v1/tasks/{task_id}/snapshot` | 返回 latest successful run 的 immutable public result；运行中/失败终态使用不同结构化 `409` |
 | `GET /api/v1/tasks/{task_id}/observability` | 返回 latest run 的 allowlisted Trace/usage 摘要；无 latest run、无 Trace 或历史策略缺失时以 `available`/`unavailable` 明确表达 |
+| `GET /api/v1/tasks/{task_id}/decision` | 返回最新 HITL 决策的公开投影；不包含补充文本、checkpoint 或 fencing identity |
+| `POST /api/v1/tasks/{task_id}/decisions/{decision_id}` | 携带当前 task version 的 `If-Match` 原子提交一个允许动作；相同 resolution 重放幂等 |
 | `GET /api/v1/tasks/{task_id}/report` | 返回持久化报告，或从同一 public result 确定性渲染指定格式 |
 | `GET /api/v1/tasks/{task_id}/annotated` | 返回带 TOC 和引用映射的阅读投影 |
 | `GET /api/v1/tasks/{task_id}/export` | 从 durable result 导出 Markdown/PDF，不读取旧 snapshot 文件 |
@@ -70,6 +74,30 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 - 已持久化 cancel request 优先于普通完成；deadline 到期优先投影为 `timed_out`；
   stale `cancelling` 在恢复时收敛为 `cancelled`。
 
+### 3.1 Durable HITL 决策暂停与恢复
+
+- 新运行的唯一人工决策门为 `evidence-insufficient`，位于引用验证之后、报告渲染之前；它只在
+  证据结构不足且推荐方向实质不确定时触发。`POST /research` 及无 `RunContext` 执行不进入该
+  durable 决策路径。
+- schema v10 的 `hitl_decisions` 记录决策状态及其产品库接受的 checkpoint 引用、run、state
+  schema 和暂停 execution epoch。LangGraph checkpoint payload 仍保存在 checkpoint store。
+- 创建决策、task/run 进入 `waiting_for_input`、清除 lease/lease deadline，并追加
+  `decision.required` 事件在一个产品库事务中提交。等待期间不持有 worker lease、active runtime
+  deadline 或执行槽；pending decision 可跨进程重启保留。
+- 允许的 resolution 为 `provide_context`（带 1–4000 字符补充内容）、`limited_report`（仅使用
+  暂停前已收集证据并标记为受限）、`cancel`（不恢复图，task/run 进入 cancelled）。补充文本
+  只作为 untrusted context 提供给恢复图，不得进入公开事件或 GET decision 响应。
+- 每个 decision 在创建后 7 天过期。到期由 recovery 或 resolve 路径原子标记 decision expired，
+  并将仍等待的 task/run 收敛为 cancelled；过期 resolution 不得恢复执行。
+- resolve 需要当前 task version `If-Match`。decision 的 task/run 状态、已接受 checkpoint、
+  state schema 和暂停 epoch 必须一致；同 body 重放返回原结果，不同 body 冲突。非取消动作
+  原子地把 run/task 入队并保存 resolution，再由 coordinator 从绑定 checkpoint 恢复；只有已
+  解决且匹配 checkpoint 的 resolution 可注入 LangGraph interrupt resume。
+- cancellation 不恢复图。公开 `decision.required`、`decision.resolved`、`decision.cancelled`、
+  `decision.expired` 事件只包含必要的 decision ID/kind、reason、gaps、allowed actions、expiry、
+  action/status；不得暴露 supplement、checkpoint ID/namespace、execution epoch、lease owner、
+  manifest 或完整 state。
+
 ## 4. Durable task events 与 SSE
 
 `task_events.event_id` 是数据库级全局单调 cursor；`seq` 只在单个 task 内从 1 单调递增。
@@ -80,10 +108,13 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 - `run.resumed`、`run.retry_queued`、`run.auto_resumed`
 - `run.completed`、`run.completed_with_warnings`、`run.failed`、`run.timed_out`、`run.interrupted`
 - `legacy.imported`
+- `decision.required`、`decision.resolved`、`decision.cancelled`、`decision.expired`
 
 事件 envelope 可以包含 `id`、`seq`、公开 `run_id`、`created_at`；payload 只允许稳定的
-`status`、`node`、`reason` 等最小公开字段。禁止写入 lease owner、epoch、checkpoint ID、
-manifest 内容、原始异常、密钥、完整请求、完整研究 state 或报告正文。
+`status`、`node`、`reason` 等最小公开字段。decision events 可额外包含公开 decision ID/kind、
+evidence gaps、allowed actions、expiry 和用户选择的 action，但禁止写入补充文本、lease owner、
+epoch、checkpoint ID/namespace、manifest 内容、原始异常、密钥、完整请求、完整研究 state 或
+报告正文。
 
 SSE 规则：
 
@@ -100,14 +131,15 @@ SSE 规则：
 
 - 产品 schema migration 只向前追加；已经提交的 migration 内容、名称和 checksum 禁止修改。
 - runner 在 `BEGIN IMMEDIATE` 下串行执行，验证连续版本、名称和 checksum；失败整体回滚。
-- 当前产品 schema 为 v9：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
+- 当前产品 schema 为 v10：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
   的前提下重建 `legacy_imports`，强制 imported 行绑定非空 task/run，error 行不得绑定实体；
   已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。v6 增加
   immutable `run_results`；v7 增加产品库单实例租约；v8 建立 Phase 2-A 的预算/Trace
   表 `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events` 和
   `budget_ledger`。Phase 2-B 已将节点尝试和 LLM/检索调用写入 Trace 表并提供只读摘要查询；
   Phase 2-C 已接入预算预留、结算、硬限制、受限结果和预算摘要；v9 增加带 TTL 的
-  `retrieval_cache` 表。该表属于产品数据库，现有成对备份中的产品库副本会一并包含缓存数据。
+  `retrieval_cache` 表；v10 增加唯一 `evidence-insufficient` 决策门的 `hitl_decisions`。这些
+  表均属于产品数据库，现有成对备份中的产品库副本会一并包含缓存与决策元数据。
 - v6 不臆测或回填旧 completed row 的报告；无法从可信来源重建的 pre-v6 成功记录保留为
   只读历史，并在结果查询时返回 `TASK_RESULT_UNAVAILABLE`。v6 后的新成功收尾和带有效报告的
   legacy success import 都必须同时写入 `run_results`。

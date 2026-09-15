@@ -27,6 +27,9 @@ from ..contracts.api import (
     TaskListResponse,
     TaskReportResponse,
     TaskRecordResponse,
+    TaskDecisionResponse,
+    TaskDecisionResolutionResponse,
+    DecisionResolutionRequest,
 )
 from ..contracts.errors import (
     DeepChoiceError,
@@ -44,6 +47,7 @@ from ..formats.what_why_how import render as render_what_why_how
 from ..persistence.database import DEFAULT_DB_PATH, DatabaseConnectionError, _await_cleanup, connect_database
 from ..persistence.migrations import run_migrations
 from ..persistence.records import RunResultRecord, TaskWithRun
+from ..hitl import DecisionRecord
 from ..persistence.repository import SQLiteTaskRunRepository
 from ..observability import SQLiteTraceStore
 from ..budget import SQLiteBudgetStore
@@ -393,6 +397,7 @@ NODE_TO_PHASE = {
     "evidence_chain": "evidence_chain",
     "conclusion_synthesizer": "evidence_chain",
     "citation_validator": "report_generation",
+    "evidence_decision_gate": "report_generation",
     "report_generator": "report_generation",
     "self_reviewer": "self_review",
 }
@@ -554,6 +559,20 @@ def _parse_if_match(value: str | None, task_id: str) -> int:
     return parsed
 
 
+def _task_decision_response(decision: DecisionRecord) -> TaskDecisionResponse:
+    return TaskDecisionResponse(
+        decision_id=decision.decision_id,
+        kind=decision.kind,
+        status=decision.status,
+        reason=decision.reason,
+        gaps=decision.gaps,
+        allowed_actions=decision.allowed_actions,
+        expires_at=decision.expires_at,
+        resolved_action=decision.resolution.action if decision.resolution is not None else None,
+        resolved_at=decision.resolved_at,
+    )
+
+
 @app.post(
     "/api/v1/tasks/{task_id}/cancel",
     response_model=TaskDetailResponse,
@@ -593,6 +612,54 @@ async def resume_task(task_id: str, request: Request) -> TaskDetailResponse:
             # The durable mutation succeeded; periodic recovery is the wake-up fallback.
             pass
     return _task_detail_response(record)
+
+
+@app.get(
+    "/api/v1/tasks/{task_id}/decision",
+    response_model=TaskDecisionResponse,
+)
+async def get_task_decision(
+    task_id: str, request: Request
+) -> TaskDecisionResponse:
+    return _task_decision_response(await _get_task_service(request).get_decision(task_id))
+
+
+@app.post(
+    "/api/v1/tasks/{task_id}/decisions/{decision_id}",
+    response_model=TaskDecisionResolutionResponse,
+    status_code=202,
+)
+async def resolve_task_decision(
+    task_id: str,
+    decision_id: str,
+    body: DecisionResolutionRequest,
+    request: Request,
+) -> TaskDecisionResolutionResponse:
+    _require_runtime_authority(request)
+    expected = _parse_if_match(request.headers.get("if-match"), task_id)
+    result = await _get_task_service(request).resolve_decision(
+        task_id,
+        decision_id,
+        body,
+        expected_task_version=expected,
+    )
+    if (
+        body.action != "cancel"
+        and result.task.latest_run is not None
+        and result.task.task.status is TaskStatus.QUEUED
+    ):
+        coordinator = _get_run_coordinator(request)
+        if coordinator is not None:
+            try:
+                await coordinator.submit(result.task.latest_run.run_id, resume=True)
+            except Exception:
+                # The durable queued state is picked up by periodic recovery.
+                pass
+    return TaskDecisionResolutionResponse(
+        decision=_task_decision_response(result.decision),
+        task=_task_detail_response(result.task),
+        replayed=result.replayed,
+    )
 
 
 @app.get(

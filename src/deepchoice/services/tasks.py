@@ -16,11 +16,15 @@ from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 from deepchoice.contracts.manifest import CURRENT_WORKFLOW_VERSION, build_run_manifest
 from deepchoice.persistence.records import RunRecord, TaskRecord, TaskWithRun
+from deepchoice.hitl import DecisionRecord, DecisionResolution
+from deepchoice.persistence.records import DecisionResolutionResult
 from deepchoice.persistence.repository import (
     CheckpointNotAvailableError,
+    DecisionConflictError,
     TaskNotFoundError,
     TaskRepository,
     TaskVersionConflictError,
+    DecisionNotFoundError,
 )
 from deepchoice.runtime.lifecycle import (
     RunStatus,
@@ -195,6 +199,28 @@ class TaskService:
     async def cancel(self, task_id: str) -> TaskWithRun:
         return await self._repository.cancel_task(task_id, updated_at=self._clock())
 
+    async def get_decision(self, task_id: str) -> DecisionRecord:
+        decision = await self._repository.get_latest_decision(task_id)
+        if decision is None:
+            raise DecisionNotFoundError(task_id)
+        return decision
+
+    async def resolve_decision(
+        self,
+        task_id: str,
+        decision_id: str,
+        resolution: DecisionResolution,
+        *,
+        expected_task_version: int,
+    ) -> DecisionResolutionResult:
+        return await self._repository.resolve_decision(
+            task_id,
+            decision_id,
+            resolution,
+            expected_task_version=expected_task_version,
+            now=self._clock(),
+        )
+
     async def resume(
         self, task_id: str, *, expected_task_version: int
     ) -> TaskWithRun:
@@ -207,6 +233,8 @@ class TaskService:
                 expected=expected_task_version,
                 actual=current.task.version,
             )
+        if current.task.status is TaskStatus.WAITING_FOR_INPUT:
+            raise DecisionConflictError(task_id, code="TASK_DECISION_REQUIRED")
         if current.task.status is TaskStatus.INTERRUPTED:
             latest_run = current.latest_run
             if latest_run is None:

@@ -365,7 +365,7 @@ async def test_interrupted_resume_reuses_compatible_checkpoint(repository):
 
 
 @pytest.mark.asyncio
-async def test_interrupted_v1_checkpoint_retries_as_current_v2_run(repository):
+async def test_interrupted_v1_checkpoint_retries_as_current_v3_run(repository):
     task, run = _records()
     old_manifest = run.manifest.model_copy(
         update={
@@ -373,10 +373,11 @@ async def test_interrupted_v1_checkpoint_retries_as_current_v2_run(repository):
             "workflow_nodes": tuple(
                 node
                 for node in run.manifest.workflow_nodes
-                if node != "citation_validator"
+                if node not in {"citation_validator", "evidence_decision_gate"}
             ),
             "state_schema_version": 1,
             "citation_policy_version": None,
+            "hitl_policy_version": None,
         }
     )
     old_manifest = old_manifest.model_copy(
@@ -417,11 +418,12 @@ async def test_interrupted_v1_checkpoint_retries_as_current_v2_run(repository):
     )
 
     assert resumed.latest_run.run_id != run.run_id
-    assert resumed.latest_run.manifest.workflow_version == "research-v2"
-    assert resumed.latest_run.manifest.state_schema_version == 2
+    assert resumed.latest_run.manifest.workflow_version == "research-v3"
+    assert resumed.latest_run.manifest.state_schema_version == 3
     assert resumed.latest_run.manifest.citation_policy_version == (
         "deterministic-citation-v1"
     )
+    assert resumed.latest_run.manifest.hitl_policy_version == "evidence-insufficient-v1"
     assert (await repository.get_run(run.run_id)).status is RunStatus.INTERRUPTED
 
 

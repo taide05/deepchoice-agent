@@ -28,32 +28,104 @@ def _records(task_id="task-1", run_id="run-1", *, status=TaskStatus.QUEUED):
 
 
 class FakeState:
-    config = {"configurable": {"checkpoint_id": "cp-1", "checkpoint_ns": ""}}
-    values = {"report": "# Fake durable report"}
+    def __init__(self, values=None):
+        self.config = {"configurable": {"checkpoint_id": "cp-1", "checkpoint_ns": ""}}
+        self.values = values or {"report": "# Fake durable report"}
 
 
 class FakeOrchestrator:
     mode = "success"
     seen_resumes: list[bool] = []
+    seen_resume_values: list[dict | None] = []
 
     def __init__(self, *_args, **kwargs):
         self.kwargs = kwargs
+        self.values = {"report": "# Fake durable report"}
 
     async def get_state(self):
-        return FakeState()
+        return FakeState(self.values)
 
-    async def astream_research_task(self, *, resume=False):
+    async def astream_research_task(self, *, resume=False, resume_value=None):
         self.seen_resumes.append(resume)
+        self.seen_resume_values.append(resume_value)
         if self.mode == "error":
             raise RuntimeError("fake failure")
         if self.mode == "block":
             await asyncio.Event().wait()
+        if self.mode == "interrupt":
+            from langgraph.types import Interrupt
+            yield {
+                "__interrupt__": (
+                    Interrupt(
+                        value={
+                            "decision_id": "decision-coordinator",
+                            "kind": "evidence-insufficient",
+                            "reason": "Evidence is structurally insufficient.",
+                            "gaps": ["Missing independent evidence."],
+                            "allowed_actions": [
+                                "provide_context", "limited_report", "cancel"
+                            ],
+                            "expires_at": "2026-01-08T00:00:00+00:00",
+                        },
+                        id="interrupt-1",
+                    ),
+                )
+            }
+            return
+        if self.mode == "limited":
+            from deepchoice.agents.evidence_decision_gate import _build_limited_report
+
+            assert resume_value == {"action": "limited_report"}
+            self.values = _build_limited_report(
+                {
+                    "task": {"query": "A vs B", "report_format": "what_why_how"},
+                    "evidence_chains": [{
+                        "conclusion": "A is simpler",
+                        "evidence_strength": "moderate",
+                        "disputed": False,
+                        "sources": [{
+                            "url": "https://docs.example/a",
+                            "title": "A docs",
+                            "snippet": "A has a smaller API.",
+                            "score": 7,
+                        }],
+                    }],
+                    "conflicts": [],
+                    "final_recommendation": {
+                        "winner": "context_dependent",
+                        "recommendation": "Choose based on deployment needs.",
+                        "ranked_options": [],
+                        "confidence": "low",
+                    },
+                    "knowledge_gaps": ["Deployment evidence is missing."],
+                    "partial_failures": [],
+                }
+            )
         yield {"fake_node": {"resume": resume}}
 
 
 class MissingCheckpointSaver:
     async def aget_tuple(self, _config):
         return None
+
+
+class AcceptedCheckpointSaver:
+    def __init__(self):
+        self.requested_configs = []
+
+    async def aget_tuple(self, config):
+        from langgraph.checkpoint.base import CheckpointTuple, empty_checkpoint
+
+        self.requested_configs.append(config)
+        checkpoint = empty_checkpoint()
+        checkpoint["id"] = config["configurable"]["checkpoint_id"]
+        return CheckpointTuple(
+            config=config,
+            checkpoint=checkpoint,
+            metadata={},
+            parent_config=None,
+            pending_writes=[],
+        )
 
 
 class AcquireReturnBarrierRepository:
@@ -110,6 +182,200 @@ async def test_submit_deduplicates_and_records_checkpoint_on_success(repo):
     reference = await repo.get_latest_checkpoint_reference(run.run_id)
     assert reference is not None and reference.checkpoint_id == "cp-1"
     assert FakeOrchestrator.seen_resumes == [False]
+    await coordinator.stop()
+
+
+@pytest.mark.asyncio
+async def test_interrupt_pauses_and_resolved_command_resumes_same_run(repo):
+    from deepchoice.hitl import DecisionResolution
+
+    FakeOrchestrator.mode = "interrupt"
+    FakeOrchestrator.seen_resumes.clear()
+    FakeOrchestrator.seen_resume_values.clear()
+    task, run = _records("task-hitl", "run-hitl")
+    await repo.create_task_with_run(task, run)
+    coordinator = RunCoordinator(
+        repo,
+        object(),
+        owner_id="worker",
+        lease_ttl=timedelta(minutes=1),
+        heartbeat_interval=timedelta(seconds=1),
+        run_timeout=timedelta(minutes=30),
+        orchestrator_factory=FakeOrchestrator,
+    )
+    assert await coordinator.submit(run.run_id, resume=False)
+    await _wait_done(coordinator, run.run_id)
+    waiting = await repo.get_task(task.task_id)
+    assert waiting.task.status is TaskStatus.WAITING_FOR_INPUT
+    decision = await repo.get_latest_decision(task.task_id)
+    assert decision.status == "pending"
+
+    await repo.resolve_decision(
+        task.task_id,
+        decision.decision_id,
+        DecisionResolution(
+            action="provide_context", supplemental_input="Offline deployment is required."
+        ),
+        expected_task_version=waiting.task.version,
+    )
+    FakeOrchestrator.mode = "success"
+    assert await coordinator.submit(run.run_id, resume=True)
+    await _wait_done(coordinator, run.run_id)
+    assert (await repo.get_run(run.run_id)).status is RunStatus.COMPLETED
+    assert FakeOrchestrator.seen_resumes == [False, True]
+    assert FakeOrchestrator.seen_resume_values[-1] == {
+        "action": "provide_context",
+        "supplemental_input": "Offline deployment is required.",
+    }
+    await coordinator.stop()
+
+
+@pytest.mark.asyncio
+async def test_resolved_decision_survives_process_restart_and_start_recovers_command(
+    tmp_path: Path,
+):
+    from deepchoice.hitl import DecisionResolution
+
+    path = tmp_path / "restart-product.db"
+    first_connection = await connect_database(path)
+    await run_migrations(first_connection)
+    first_repo = SQLiteTaskRunRepository(first_connection)
+    task, run = _records("task-hitl-restart", "run-hitl-restart")
+    await first_repo.create_task_with_run(task, run)
+    FakeOrchestrator.mode = "interrupt"
+    FakeOrchestrator.seen_resumes.clear()
+    FakeOrchestrator.seen_resume_values.clear()
+    first = RunCoordinator(
+        first_repo,
+        object(),
+        owner_id="worker-before-restart",
+        lease_ttl=timedelta(minutes=1),
+        heartbeat_interval=timedelta(seconds=1),
+        run_timeout=timedelta(minutes=30),
+        orchestrator_factory=FakeOrchestrator,
+    )
+    try:
+        assert await first.submit(run.run_id, resume=False)
+        await _wait_done(first, run.run_id)
+        waiting = await first_repo.get_task(task.task_id)
+        decision = await first_repo.get_latest_decision(task.task_id)
+        await first_repo.resolve_decision(
+            task.task_id,
+            decision.decision_id,
+            DecisionResolution(
+                action="provide_context",
+                supplemental_input="The service must run fully offline.",
+            ),
+            expected_task_version=waiting.task.version,
+        )
+    finally:
+        await first.stop()
+        await first_connection.close()
+
+    second_connection = await connect_database(path)
+    second_repo = SQLiteTaskRunRepository(second_connection)
+    accepted_checkpointer = AcceptedCheckpointSaver()
+    FakeOrchestrator.mode = "success"
+    second = RunCoordinator(
+        second_repo,
+        accepted_checkpointer,
+        owner_id="worker-after-restart",
+        lease_ttl=timedelta(minutes=1),
+        heartbeat_interval=timedelta(seconds=1),
+        run_timeout=timedelta(minutes=30),
+        recovery_interval=timedelta(minutes=1),
+        orchestrator_factory=FakeOrchestrator,
+    )
+    try:
+        assert await second.start() == (run.run_id,)
+        await _wait_done(second, run.run_id)
+        completed = await second_repo.get_task(task.task_id)
+        assert completed.task.status is TaskStatus.COMPLETED
+        assert completed.latest_run.run_id == run.run_id
+        assert FakeOrchestrator.seen_resumes == [False, True]
+        assert FakeOrchestrator.seen_resume_values[-1] == {
+            "action": "provide_context",
+            "supplemental_input": "The service must run fully offline.",
+        }
+        assert accepted_checkpointer.requested_configs
+        requested = accepted_checkpointer.requested_configs[0]["configurable"]
+        assert requested["thread_id"] == run.run_id
+        assert requested["checkpoint_id"] == "cp-1"
+    finally:
+        await second.stop()
+        await second_connection.close()
+
+
+@pytest.mark.asyncio
+async def test_limited_report_resume_is_local_and_persists_warning_result(repo):
+    from deepchoice.hitl import DecisionResolution
+
+    FakeOrchestrator.mode = "interrupt"
+    task, run = _records("task-hitl-limited", "run-hitl-limited")
+    await repo.create_task_with_run(task, run)
+    coordinator = RunCoordinator(
+        repo,
+        object(),
+        owner_id="worker",
+        lease_ttl=timedelta(minutes=1),
+        heartbeat_interval=timedelta(seconds=1),
+        run_timeout=timedelta(minutes=30),
+        orchestrator_factory=FakeOrchestrator,
+    )
+    assert await coordinator.submit(run.run_id, resume=False)
+    await _wait_done(coordinator, run.run_id)
+    waiting = await repo.get_task(task.task_id)
+    decision = await repo.get_latest_decision(task.task_id)
+    calls_before = await (
+        await repo._connection.execute(
+            "SELECT COUNT(*) FROM external_calls WHERE run_id = ?", (run.run_id,)
+        )
+    ).fetchone()
+    ledger_before = await (
+        await repo._connection.execute(
+            """
+            SELECT COUNT(*) FROM budget_ledger
+            WHERE run_id = ? AND resource IN ('llm_calls', 'retrieval_calls', 'http_calls')
+            """,
+            (run.run_id,),
+        )
+    ).fetchone()
+
+    await repo.resolve_decision(
+        task.task_id,
+        decision.decision_id,
+        DecisionResolution(action="limited_report"),
+        expected_task_version=waiting.task.version,
+    )
+    FakeOrchestrator.mode = "limited"
+    assert await coordinator.submit(run.run_id, resume=True)
+    await _wait_done(coordinator, run.run_id)
+
+    completed = await repo.get_task(task.task_id)
+    assert completed.task.status is TaskStatus.COMPLETED_WITH_WARNINGS
+    assert completed.latest_run.status is RunStatus.COMPLETED_WITH_WARNINGS
+    result = await repo.get_run_result(run.run_id)
+    assert result is not None
+    assert result.report.startswith("> **Evidence-limited report:**")
+    assert result.snapshot["partial_failures"] == [
+        "evidence_insufficient_user_limited"
+    ]
+    calls_after = await (
+        await repo._connection.execute(
+            "SELECT COUNT(*) FROM external_calls WHERE run_id = ?", (run.run_id,)
+        )
+    ).fetchone()
+    ledger_after = await (
+        await repo._connection.execute(
+            """
+            SELECT COUNT(*) FROM budget_ledger
+            WHERE run_id = ? AND resource IN ('llm_calls', 'retrieval_calls', 'http_calls')
+            """,
+            (run.run_id,),
+        )
+    ).fetchone()
+    assert calls_after == calls_before == (0,)
+    assert ledger_after == ledger_before == (0,)
     await coordinator.stop()
 
 

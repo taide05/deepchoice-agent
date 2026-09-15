@@ -318,5 +318,9 @@ def test_workflow_runs_citation_validation_between_synthesis_and_rendering():
     workflow = orchestrator._create_workflow(orchestrator._initialize_agents())
 
     assert ("conclusion_synthesizer", "citation_validator") in workflow.edges
-    assert ("citation_validator", "report_generator") in workflow.edges
+    assert ("citation_validator", "evidence_decision_gate") in workflow.edges
+    branch = workflow.branches["evidence_decision_gate"]["route_after_evidence_decision"]
+    assert branch.ends["continue_report"] == "report_generator"
+    assert branch.ends["provide_context"] == "query_adapter"
+    assert branch.ends["limited_report"] == "__end__"
     assert ("conclusion_synthesizer", "report_generator") not in workflow.edges

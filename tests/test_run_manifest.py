@@ -20,9 +20,9 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.manifest_id == second.manifest_id
     assert first.manifest_schema_version == 1
     assert first.app_version
-    assert first.workflow_version == "research-v2"
+    assert first.workflow_version == "research-v3"
     assert first.workflow_nodes == WORKFLOW_NODES
-    assert first.state_schema_version == 2
+    assert first.state_schema_version == 3
     assert len(first.prompts) == 7
     assert len(first.llm_calls) == 8
     assert all(
@@ -33,6 +33,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.scoring_policy_version == "source-score-v1"
     assert first.security_policy_version == "outbound-url-v1"
     assert first.citation_policy_version == "deterministic-citation-v1"
+    assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
 def test_pre_citation_manifest_identity_is_valid_but_runtime_incompatible():
@@ -41,10 +42,32 @@ def test_pre_citation_manifest_identity_is_valid_but_runtime_incompatible():
     old = current.model_copy(update={
         "workflow_version": "research-v1",
         "workflow_nodes": tuple(
-            node for node in current.workflow_nodes if node != "citation_validator"
+            node for node in current.workflow_nodes
+            if node not in {"citation_validator", "evidence_decision_gate"}
         ),
         "state_schema_version": 1,
         "citation_policy_version": None,
+        "hitl_policy_version": None,
+    })
+    from deepchoice.contracts.manifest import _expected_manifest_id
+
+    old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
+    assert old.manifest_id == _expected_manifest_id(old)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(old, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_pre_hitl_v2_manifest_identity_is_valid_but_runtime_incompatible():
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    old = current.model_copy(update={
+        "workflow_version": "research-v2",
+        "workflow_nodes": tuple(
+            node for node in current.workflow_nodes if node != "evidence_decision_gate"
+        ),
+        "state_schema_version": 2,
+        "hitl_policy_version": None,
     })
     from deepchoice.contracts.manifest import _expected_manifest_id
 

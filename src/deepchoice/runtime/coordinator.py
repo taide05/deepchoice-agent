@@ -32,6 +32,7 @@ from deepchoice.persistence.repository import (
     RunLeaseLostError,
     SQLiteTaskRunRepository,
 )
+from deepchoice.hitl import DecisionPause
 from deepchoice.observability import RuntimeTraceRecorder, SQLiteTraceStore, TraceStatus
 from deepchoice.runtime.checkpoints import FencedCheckpointSaver
 from deepchoice.runtime.context import RunContext, bind_run_context
@@ -454,7 +455,7 @@ class RunCoordinator:
         node: str | None,
         state_schema_version: int,
         storage_namespace: str,
-    ) -> None:
+    ) -> CheckpointReference | None:
         await self.repository.fence_run(
             run_id,
             lease_owner=self.owner_id,
@@ -466,7 +467,7 @@ class RunCoordinator:
         configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
         checkpoint_id = configurable.get("checkpoint_id")
         if not isinstance(checkpoint_id, str) or not checkpoint_id:
-            return
+            return None
         reference = CheckpointReference(
             run_id=run_id,
             checkpoint_ns=getattr(orchestrator, "checkpoint_ns", ""),
@@ -477,7 +478,7 @@ class RunCoordinator:
             execution_epoch=execution_epoch,
             created_at=self._clock(),
         )
-        await self.repository.add_checkpoint_reference(
+        return await self.repository.add_checkpoint_reference(
             reference,
             lease_owner=self.owner_id,
             execution_epoch=execution_epoch,
@@ -594,6 +595,7 @@ class RunCoordinator:
 
             checkpoint_id = None
             read_namespace = None
+            resume_value = None
             if resume:
                 reference = await self.repository.get_latest_checkpoint_reference(
                     run_id,
@@ -603,6 +605,13 @@ class RunCoordinator:
                 if reference is not None:
                     checkpoint_id = reference.checkpoint_id
                     read_namespace = reference.storage_checkpoint_ns
+                    resolved_decision = (
+                        await self.repository.get_resolved_decision_for_checkpoint(reference)
+                    )
+                    if resolved_decision is not None and resolved_decision.resolution is not None:
+                        resume_value = resolved_decision.resolution.model_dump(
+                            mode="json", exclude_none=True
+                        )
                 else:
                     resume = False
 
@@ -686,10 +695,17 @@ class RunCoordinator:
             )
             remaining = max(0.0, (grant.deadline_at - self._clock()).total_seconds())
             async with asyncio.timeout(remaining):
-                async for event in orchestrator.astream_research_task(resume=resume):
+                stream = (
+                    orchestrator.astream_research_task(
+                        resume=resume, resume_value=resume_value
+                    )
+                    if resume_value is not None
+                    else orchestrator.astream_research_task(resume=resume)
+                )
+                async for event in stream:
                     await guard()
                     node = next(iter(event), None) if isinstance(event, dict) else None
-                    await self._record_checkpoint(
+                    reference = await self._record_checkpoint(
                         orchestrator,
                         run_id,
                         grant.execution_epoch,
@@ -697,8 +713,36 @@ class RunCoordinator:
                         run.manifest.state_schema_version,
                         write_namespace,
                     )
+                    if node == "__interrupt__":
+                        raw_interrupts = event.get("__interrupt__", ())
+                        raw = raw_interrupts[0] if raw_interrupts else None
+                        payload = getattr(raw, "value", None)
+                        pause = DecisionPause.model_validate(payload)
+                        if reference is None:
+                            raise RuntimeError("HITL interrupt has no accepted checkpoint")
+                        await record_active_budget()
+                        await finish_trace(TraceStatus.INTERRUPTED)
+                        await self.repository.pause_for_decision(
+                            pause,
+                            reference,
+                            lease_owner=self.owner_id,
+                            execution_epoch=grant.execution_epoch,
+                            now=self._clock(),
+                        )
+                        # The repository lock serializes a concurrent heartbeat
+                        # with the fenced pause. Cancel it immediately after the
+                        # authoritative transaction releases the running lease.
+                        await stop_heartbeat()
+                        return
             await guard()
             final_state = await orchestrator.get_state()
+            final_values = getattr(final_state, "values", None)
+            completed_status = (
+                RunStatus.COMPLETED_WITH_WARNINGS
+                if isinstance(final_values, dict)
+                and final_values.get("_hitl_limited_report") is True
+                else RunStatus.COMPLETED
+            )
             completed_at = self._clock()
             public_result = build_public_run_result(
                 run,
@@ -713,7 +757,7 @@ class RunCoordinator:
             await self._finalize(
                 run_id,
                 grant.execution_epoch,
-                RunStatus.COMPLETED,
+                completed_status,
                 result=public_result,
             )
         except BudgetExceededError as exc:

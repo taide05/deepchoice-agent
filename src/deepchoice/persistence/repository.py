@@ -14,6 +14,12 @@ from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 from deepchoice.contracts.manifest import CURRENT_WORKFLOW_VERSION, RunManifest
 from deepchoice.budget import RunBudgetPolicy
+from deepchoice.hitl.contracts import (
+    DECISION_TTL,
+    DecisionPause,
+    DecisionRecord,
+    DecisionResolution,
+)
 from deepchoice.runtime.lifecycle import (
     RunStatus,
     TaskStatus,
@@ -25,6 +31,7 @@ from deepchoice.runtime.lifecycle import (
 from .database import _await_cleanup, _is_locked_error
 from .records import (
     CheckpointReference,
+    DecisionResolutionResult,
     LegacyImportRecord,
     RecoveryRun,
     RunLeaseGrant,
@@ -127,6 +134,48 @@ class CheckpointNotAvailableError(DeepChoiceError):
         )
 
 
+class DecisionNotFoundError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "Decision not found",
+            category=ErrorCategory.NOT_FOUND,
+            code="TASK_DECISION_NOT_FOUND",
+            status_code=404,
+            retryable=False,
+            action="Refresh the task and wait for a decision request.",
+            scope="task_decision",
+            task_id=task_id,
+        )
+
+
+class DecisionConflictError(DeepChoiceError):
+    def __init__(self, task_id: str, *, code: str = "TASK_DECISION_CONFLICT") -> None:
+        super().__init__(
+            "The task decision conflicts with the current run state.",
+            category=ErrorCategory.CONTRACT,
+            code=code,
+            status_code=409,
+            retryable=False,
+            action="Refresh the task decision before retrying.",
+            scope="task_decision",
+            task_id=task_id,
+        )
+
+
+class DecisionExpiredError(DeepChoiceError):
+    def __init__(self, task_id: str) -> None:
+        super().__init__(
+            "The task decision has expired.",
+            category=ErrorCategory.CONTRACT,
+            code="TASK_DECISION_EXPIRED",
+            status_code=409,
+            retryable=False,
+            action="Start a new research task.",
+            scope="task_decision",
+            task_id=task_id,
+        )
+
+
 @runtime_checkable
 class TaskRepository(Protocol):
     async def create_task_with_run(
@@ -156,6 +205,18 @@ class TaskRepository(Protocol):
     async def cancel_task(
         self, task_id: str, *, updated_at: datetime | None = None
     ) -> TaskWithRun: ...
+
+    async def get_latest_decision(self, task_id: str) -> DecisionRecord | None: ...
+
+    async def resolve_decision(
+        self,
+        task_id: str,
+        decision_id: str,
+        resolution: DecisionResolution,
+        *,
+        expected_task_version: int,
+        now: datetime | None = None,
+    ) -> DecisionResolutionResult: ...
 
     async def resume_interrupted_run(
         self,
@@ -277,6 +338,20 @@ class RunRepository(Protocol):
         now: datetime | None = None,
     ) -> CheckpointReference: ...
 
+    async def pause_for_decision(
+        self,
+        pause: DecisionPause,
+        checkpoint: CheckpointReference,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        now: datetime | None = None,
+    ) -> DecisionRecord: ...
+
+    async def get_resolved_decision_for_checkpoint(
+        self, checkpoint: CheckpointReference
+    ) -> DecisionRecord | None: ...
+
     async def get_latest_checkpoint_reference(
         self,
         run_id: str,
@@ -309,6 +384,13 @@ event_id, task_id, run_id, seq, type, public_payload_json, created_at
 
 _RESULT_COLUMNS = """
 run_id, result_schema_version, snapshot_json, report, report_format, created_at
+""".strip()
+
+_DECISION_COLUMNS = """
+decision_id, task_id, run_id, kind, status, request_json,
+checkpoint_ns, storage_checkpoint_ns, checkpoint_id, state_schema_version,
+pause_execution_epoch, expires_at, resolution_json,
+resolution_body_sha256, created_at, resolved_at
 """.strip()
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -405,6 +487,35 @@ def _result_from_values(values: tuple[object, ...]) -> RunResultRecord:
         report=str(values[3]),
         report_format=str(values[4]),
         created_at=_datetime_from_db(str(values[5])),
+    )
+
+
+def _decision_from_values(values: tuple[object, ...]) -> DecisionRecord:
+    request = json.loads(str(values[5]))
+    resolution = (
+        DecisionResolution.model_validate_json(str(values[12]))
+        if values[12] is not None
+        else None
+    )
+    return DecisionRecord(
+        decision_id=str(values[0]),
+        task_id=str(values[1]),
+        run_id=str(values[2]),
+        kind=str(values[3]),
+        status=str(values[4]),
+        reason=str(request["reason"]),
+        gaps=tuple(request.get("gaps", ())),
+        allowed_actions=tuple(request["allowed_actions"]),
+        checkpoint_ns=str(values[6]),
+        storage_checkpoint_ns=str(values[7]),
+        checkpoint_id=str(values[8]),
+        state_schema_version=int(values[9]),
+        pause_execution_epoch=int(values[10]),
+        expires_at=_datetime_from_db(str(values[11])),
+        resolution=resolution,
+        resolution_body_sha256=(str(values[13]) if values[13] is not None else None),
+        created_at=_datetime_from_db(str(values[14])),
+        resolved_at=_datetime_from_db(str(values[15]) if values[15] is not None else None),
     )
 
 
@@ -1057,6 +1168,497 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 return _result_from_values(row) if row is not None else None
             except Exception as exc:
                 raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def get_latest_decision(self, task_id: str) -> DecisionRecord | None:
+        async with self._lock:
+            try:
+                exists = await self._fetchone(
+                    "SELECT 1 FROM tasks WHERE task_id = ?", (task_id,)
+                )
+                if exists is None:
+                    raise TaskNotFoundError(task_id)
+                row = await self._fetchone(
+                    f"""
+                    SELECT {_DECISION_COLUMNS} FROM hitl_decisions
+                    WHERE task_id = ?
+                    ORDER BY created_at DESC, rowid DESC LIMIT 1
+                    """,
+                    (task_id,),
+                )
+                return _decision_from_values(row) if row is not None else None
+            except DeepChoiceError:
+                raise
+            except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def get_resolved_decision_for_checkpoint(
+        self, checkpoint: CheckpointReference
+    ) -> DecisionRecord | None:
+        async with self._lock:
+            try:
+                row = await self._fetchone(
+                    f"""
+                    SELECT {_DECISION_COLUMNS} FROM hitl_decisions
+                    WHERE run_id = ? AND checkpoint_ns = ?
+                      AND storage_checkpoint_ns = ? AND checkpoint_id = ?
+                      AND state_schema_version = ? AND status = 'resolved'
+                    ORDER BY created_at DESC, rowid DESC LIMIT 1
+                    """,
+                    (
+                        checkpoint.run_id,
+                        checkpoint.checkpoint_ns,
+                        checkpoint.storage_checkpoint_ns,
+                        checkpoint.checkpoint_id,
+                        checkpoint.state_schema_version,
+                    ),
+                )
+                return _decision_from_values(row) if row is not None else None
+            except Exception as exc:
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def pause_for_decision(
+        self,
+        pause: DecisionPause,
+        checkpoint: CheckpointReference,
+        *,
+        lease_owner: str,
+        execution_epoch: int,
+        now: datetime | None = None,
+    ) -> DecisionRecord:
+        changed_at = now or datetime.now(UTC)
+        if (
+            not lease_owner
+            or execution_epoch < 1
+            or checkpoint.execution_epoch != execution_epoch
+        ):
+            raise RunLeaseLostError(checkpoint.run_id)
+        request_json = json.dumps(
+            {
+                "kind": pause.kind,
+                "reason": pause.reason,
+                "gaps": list(pause.gaps),
+                "allowed_actions": list(pause.allowed_actions),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        expires_at = changed_at + DECISION_TTL
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                existing_row = await self._fetchone(
+                    f"SELECT {_DECISION_COLUMNS} FROM hitl_decisions WHERE decision_id = ?",
+                    (pause.decision_id,),
+                )
+                if existing_row is not None:
+                    existing = _decision_from_values(existing_row)
+                    if (
+                        existing.run_id == checkpoint.run_id
+                        and existing.status == "pending"
+                        and existing.reason == pause.reason
+                        and existing.gaps == pause.gaps
+                        and existing.allowed_actions == pause.allowed_actions
+                        and existing.checkpoint_ns == checkpoint.checkpoint_ns
+                        and existing.storage_checkpoint_ns == checkpoint.storage_checkpoint_ns
+                        and existing.checkpoint_id == checkpoint.checkpoint_id
+                        and existing.state_schema_version == checkpoint.state_schema_version
+                        and existing.pause_execution_epoch == execution_epoch
+                    ):
+                        await self._connection.commit()
+                        started = False
+                        return existing
+                    raise DecisionConflictError(existing.task_id)
+                run = await self._run_unlocked(checkpoint.run_id)
+                if run is None:
+                    raise RunNotFoundError(checkpoint.run_id)
+                current = await self._current_task_unlocked(run.task_id)
+                if (
+                    current is None
+                    or current.latest_run is None
+                    or current.task.latest_run_id != run.run_id
+                    or current.task.status is not TaskStatus.RUNNING
+                    or run.status is not RunStatus.RUNNING
+                    or run.lease_owner != lease_owner
+                    or run.execution_epoch != execution_epoch
+                    or run.lease_expires_at is None
+                    or run.lease_expires_at <= changed_at
+                    or checkpoint.checkpoint_ns != run.checkpoint_ns
+                    or checkpoint.state_schema_version != run.manifest.state_schema_version
+                ):
+                    raise RunLeaseLostError(checkpoint.run_id)
+                accepted = await self._fetchone(
+                    """
+                    SELECT storage_checkpoint_ns, checkpoint_id
+                    FROM run_checkpoints
+                    WHERE run_id = ? AND checkpoint_ns = ?
+                      AND storage_checkpoint_ns = ? AND checkpoint_id = ?
+                      AND state_schema_version = ? AND execution_epoch = ?
+                    ORDER BY execution_epoch DESC, created_at DESC, rowid DESC
+                    LIMIT 1
+                    """,
+                    (
+                        checkpoint.run_id,
+                        checkpoint.checkpoint_ns,
+                        checkpoint.storage_checkpoint_ns,
+                        checkpoint.checkpoint_id,
+                        checkpoint.state_schema_version,
+                        execution_epoch,
+                    ),
+                )
+                latest = await self._fetchone(
+                    """
+                    SELECT storage_checkpoint_ns, checkpoint_id
+                    FROM run_checkpoints
+                    WHERE run_id = ? AND checkpoint_ns = ? AND state_schema_version = ?
+                    ORDER BY execution_epoch DESC, created_at DESC, rowid DESC LIMIT 1
+                    """,
+                    (checkpoint.run_id, checkpoint.checkpoint_ns, checkpoint.state_schema_version),
+                )
+                if accepted is None or latest != accepted:
+                    raise CheckpointNotAvailableError(checkpoint.run_id)
+                prior = await self._fetchone(
+                    "SELECT 1 FROM hitl_decisions WHERE run_id = ? LIMIT 1",
+                    (checkpoint.run_id,),
+                )
+                if prior is not None:
+                    raise DecisionConflictError(run.task_id, code="TASK_DECISION_ALREADY_REQUESTED")
+                cursor = await self._connection.execute(
+                    """
+                    INSERT INTO hitl_decisions(
+                        decision_id, task_id, run_id, kind, status, request_json,
+                        checkpoint_ns, storage_checkpoint_ns, checkpoint_id,
+                        state_schema_version, pause_execution_epoch, expires_at,
+                        resolution_json, resolution_body_sha256, created_at, resolved_at
+                    ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL)
+                    """,
+                    (
+                        pause.decision_id,
+                        run.task_id,
+                        run.run_id,
+                        pause.kind,
+                        request_json,
+                        checkpoint.checkpoint_ns,
+                        checkpoint.storage_checkpoint_ns,
+                        checkpoint.checkpoint_id,
+                        checkpoint.state_schema_version,
+                        execution_epoch,
+                        _datetime_to_db(expires_at),
+                        _datetime_to_db(changed_at),
+                    ),
+                )
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs SET status = ?, lease_owner = NULL,
+                        lease_expires_at = NULL, deadline_at = NULL,
+                        version = version + 1, updated_at = ?
+                    WHERE run_id = ? AND version = ? AND status = ?
+                      AND lease_owner = ? AND execution_epoch = ? AND lease_expires_at > ?
+                    """,
+                    (
+                        RunStatus.WAITING_FOR_INPUT.value,
+                        _datetime_to_db(changed_at),
+                        run.run_id,
+                        run.version,
+                        RunStatus.RUNNING.value,
+                        lease_owner,
+                        execution_epoch,
+                        _datetime_to_db(changed_at),
+                    ),
+                )
+                run_updated = cursor.rowcount
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks SET status = ?, version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND latest_run_id = ? AND version = ? AND status = ?
+                    """,
+                    (
+                        TaskStatus.WAITING_FOR_INPUT.value,
+                        _datetime_to_db(changed_at),
+                        run.task_id,
+                        run.run_id,
+                        current.task.version,
+                        TaskStatus.RUNNING.value,
+                    ),
+                )
+                task_updated = cursor.rowcount
+                await cursor.close()
+                if run_updated != 1 or task_updated != 1:
+                    raise RunLeaseLostError(run.run_id)
+                await self._append_event_unlocked(
+                    task_id=run.task_id,
+                    run_id=run.run_id,
+                    event_type="decision.required",
+                    public_payload={
+                        "status": TaskStatus.WAITING_FOR_INPUT.value,
+                        "decision_id": pause.decision_id,
+                        "kind": pause.kind,
+                        "reason": pause.reason,
+                        "gaps": list(pause.gaps),
+                        "allowed_actions": list(pause.allowed_actions),
+                        "expires_at": _datetime_to_db(expires_at),
+                    },
+                    created_at=changed_at,
+                )
+                row = await self._fetchone(
+                    f"SELECT {_DECISION_COLUMNS} FROM hitl_decisions WHERE decision_id = ?",
+                    (pause.decision_id,),
+                )
+                await self._connection.commit()
+                started = False
+                return _decision_from_values(row)
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def resolve_decision(
+        self,
+        task_id: str,
+        decision_id: str,
+        resolution: DecisionResolution,
+        *,
+        expected_task_version: int,
+        now: datetime | None = None,
+    ) -> DecisionResolutionResult:
+        changed_at = now or datetime.now(UTC)
+        body_hash = resolution.body_sha256()
+        encoded_resolution = resolution.model_dump_json(exclude_none=True)
+        async with self._lock:
+            started = False
+            try:
+                await self._begin()
+                started = True
+                row = await self._fetchone(
+                    f"SELECT {_DECISION_COLUMNS} FROM hitl_decisions WHERE decision_id = ? AND task_id = ?",
+                    (decision_id, task_id),
+                )
+                if row is None:
+                    raise DecisionNotFoundError(task_id)
+                decision = _decision_from_values(row)
+                current = await self._current_task_unlocked(task_id)
+                if current is None or current.latest_run is None:
+                    raise TaskNotFoundError(task_id)
+                if decision.status in {"resolved", "cancelled"}:
+                    if decision.resolution_body_sha256 != body_hash:
+                        raise DecisionConflictError(task_id)
+                    await self._connection.commit()
+                    started = False
+                    return DecisionResolutionResult(
+                        decision=decision, task=current, replayed=True
+                    )
+                if decision.status == "expired" or decision.expires_at <= changed_at:
+                    if decision.status == "pending":
+                        await self._expire_decision_unlocked(decision, current, changed_at)
+                    await self._connection.commit()
+                    started = False
+                    raise DecisionExpiredError(task_id)
+                if current.task.version != expected_task_version:
+                    raise TaskVersionConflictError(
+                        task_id, expected=expected_task_version, actual=current.task.version
+                    )
+                run = current.latest_run
+                if (
+                    current.task.latest_run_id != decision.run_id
+                    or run.run_id != decision.run_id
+                    or current.task.status is not TaskStatus.WAITING_FOR_INPUT
+                    or run.status is not RunStatus.WAITING_FOR_INPUT
+                    or run.lease_owner is not None
+                    or run.lease_expires_at is not None
+                    or run.manifest.state_schema_version != decision.state_schema_version
+                ):
+                    raise DecisionConflictError(task_id)
+                accepted = await self._fetchone(
+                    """
+                    SELECT 1 FROM run_checkpoints
+                    WHERE run_id = ? AND checkpoint_ns = ?
+                      AND storage_checkpoint_ns = ? AND checkpoint_id = ?
+                      AND state_schema_version = ? AND execution_epoch = ?
+                    LIMIT 1
+                    """,
+                    (
+                        run.run_id,
+                        decision.checkpoint_ns,
+                        decision.storage_checkpoint_ns,
+                        decision.checkpoint_id,
+                        decision.state_schema_version,
+                        decision.pause_execution_epoch,
+                    ),
+                )
+                if accepted is None:
+                    raise CheckpointNotAvailableError(run.run_id)
+                is_cancel = resolution.action == "cancel"
+                decision_status = "cancelled" if is_cancel else "resolved"
+                target = RunStatus.CANCELLED if is_cancel else RunStatus.QUEUED
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE hitl_decisions SET status = ?, resolution_json = ?,
+                        resolution_body_sha256 = ?, resolved_at = ?
+                    WHERE decision_id = ? AND status = 'pending'
+                    """,
+                    (
+                        decision_status,
+                        encoded_resolution,
+                        body_hash,
+                        _datetime_to_db(changed_at),
+                        decision_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    await cursor.close()
+                    raise DecisionConflictError(task_id)
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runs SET status = ?, lease_owner = NULL,
+                        lease_expires_at = NULL, deadline_at = NULL,
+                        ended_at = ?, error_id = NULL, version = version + 1, updated_at = ?
+                    WHERE run_id = ? AND version = ? AND status = ?
+                    """,
+                    (
+                        target.value,
+                        _datetime_to_db(changed_at) if is_cancel else None,
+                        _datetime_to_db(changed_at),
+                        run.run_id,
+                        run.version,
+                        RunStatus.WAITING_FOR_INPUT.value,
+                    ),
+                )
+                run_updated = cursor.rowcount
+                await cursor.close()
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE tasks SET status = ?, cancel_requested_at = ?,
+                        version = version + 1, updated_at = ?
+                    WHERE task_id = ? AND latest_run_id = ? AND version = ? AND status = ?
+                    """,
+                    (
+                        TaskStatus(target.value).value,
+                        _datetime_to_db(changed_at) if is_cancel else None,
+                        _datetime_to_db(changed_at),
+                        task_id,
+                        run.run_id,
+                        current.task.version,
+                        TaskStatus.WAITING_FOR_INPUT.value,
+                    ),
+                )
+                task_updated = cursor.rowcount
+                await cursor.close()
+                if run_updated != 1 or task_updated != 1:
+                    raise DecisionConflictError(task_id)
+                await self._append_event_unlocked(
+                    task_id=task_id,
+                    run_id=run.run_id,
+                    event_type="decision.cancelled" if is_cancel else "decision.resolved",
+                    public_payload={
+                        "status": target.value,
+                        "decision_id": decision_id,
+                        "kind": decision.kind,
+                        "action": resolution.action,
+                    },
+                    created_at=changed_at,
+                )
+                resolved_row = await self._fetchone(
+                    f"SELECT {_DECISION_COLUMNS} FROM hitl_decisions WHERE decision_id = ?",
+                    (decision_id,),
+                )
+                result_task = await self._current_task_unlocked(task_id)
+                await self._connection.commit()
+                started = False
+                return DecisionResolutionResult(
+                    decision=_decision_from_values(resolved_row),
+                    task=result_task,
+                    replayed=False,
+                )
+            except asyncio.CancelledError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except DeepChoiceError:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise
+            except Exception as exc:
+                if started or self._connection.in_transaction:
+                    await self._rollback()
+                raise RepositoryOperationError(retryable=_is_locked_error(exc)) from None
+
+    async def _expire_decision_unlocked(
+        self, decision: DecisionRecord, current: TaskWithRun, changed_at: datetime
+    ) -> None:
+        encoded_now = _datetime_to_db(changed_at)
+        cursor = await self._connection.execute(
+            """
+            UPDATE hitl_decisions SET status = 'expired', resolved_at = ?
+            WHERE decision_id = ? AND status = 'pending' AND expires_at <= ?
+            """,
+            (encoded_now, decision.decision_id, encoded_now),
+        )
+        updated = cursor.rowcount
+        await cursor.close()
+        if updated != 1:
+            return
+        run = current.latest_run
+        if (
+            run is not None
+            and current.task.latest_run_id == decision.run_id
+            and current.task.status is TaskStatus.WAITING_FOR_INPUT
+            and run.status is RunStatus.WAITING_FOR_INPUT
+        ):
+            cursor = await self._connection.execute(
+                """
+                UPDATE runs SET status = ?, ended_at = ?, lease_owner = NULL,
+                    lease_expires_at = NULL, deadline_at = NULL,
+                    version = version + 1, updated_at = ?
+                WHERE run_id = ? AND version = ? AND status = ?
+                """,
+                (
+                    RunStatus.CANCELLED.value, encoded_now, encoded_now,
+                    run.run_id, run.version, RunStatus.WAITING_FOR_INPUT.value,
+                ),
+            )
+            run_updated = cursor.rowcount
+            await cursor.close()
+            cursor = await self._connection.execute(
+                """
+                UPDATE tasks SET status = ?, cancel_requested_at = ?,
+                    version = version + 1, updated_at = ?
+                WHERE task_id = ? AND latest_run_id = ? AND version = ? AND status = ?
+                """,
+                (
+                    TaskStatus.CANCELLED.value, encoded_now, encoded_now,
+                    current.task.task_id, run.run_id, current.task.version,
+                    TaskStatus.WAITING_FOR_INPUT.value,
+                ),
+            )
+            task_updated = cursor.rowcount
+            await cursor.close()
+            if run_updated != 1 or task_updated != 1:
+                raise DecisionConflictError(current.task.task_id)
+            await self._append_event_unlocked(
+                task_id=current.task.task_id,
+                run_id=run.run_id,
+                event_type="decision.expired",
+                public_payload={
+                    "status": TaskStatus.CANCELLED.value,
+                    "decision_id": decision.decision_id,
+                    "kind": decision.kind,
+                    "reason": "decision_expired",
+                },
+                created_at=changed_at,
+            )
 
     async def list_task_events(
         self, task_id: str, *, after_event_id: int = 0, limit: int = 100
@@ -1855,6 +2457,26 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                     ),
                 )
                 await cursor.close()
+                if (
+                    target is TaskStatus.CANCELLED
+                    and current.task.status is TaskStatus.WAITING_FOR_INPUT
+                ):
+                    cancellation = DecisionResolution(action="cancel")
+                    cursor = await self._connection.execute(
+                        """
+                        UPDATE hitl_decisions SET status = 'cancelled',
+                            resolution_json = ?, resolution_body_sha256 = ?, resolved_at = ?
+                        WHERE task_id = ? AND run_id = ? AND status = 'pending'
+                        """,
+                        (
+                            cancellation.model_dump_json(exclude_none=True),
+                            cancellation.body_sha256(),
+                            encoded_now,
+                            task_id,
+                            current.latest_run.run_id,
+                        ),
+                    )
+                    await cursor.close()
                 result = await self._current_task_unlocked(task_id)
                 await self._append_event_unlocked(
                     task_id=task_id,
@@ -2111,6 +2733,24 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             try:
                 await self._begin()
                 started = True
+                expired_rows = await self._fetchall(
+                    f"""
+                    SELECT {_DECISION_COLUMNS} FROM hitl_decisions
+                    WHERE status = 'pending' AND expires_at <= ?
+                    ORDER BY expires_at, decision_id
+                    """,
+                    (encoded_now,),
+                )
+                for expired_row in expired_rows:
+                    decision = _decision_from_values(expired_row)
+                    current_decision_task = await self._current_task_unlocked(
+                        decision.task_id
+                    )
+                    if current_decision_task is None:
+                        continue
+                    await self._expire_decision_unlocked(
+                        decision, current_decision_task, changed_at
+                    )
                 rows = await self._fetchall(
                     f"""
                     SELECT {_TASK_COLUMNS}, {_RUN_COLUMNS}
@@ -2293,6 +2933,9 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
 
 __all__ = [
     "CheckpointNotAvailableError",
+    "DecisionConflictError",
+    "DecisionExpiredError",
+    "DecisionNotFoundError",
     "RepositoryOperationError",
     "RunNotFoundError",
     "RunLeaseLostError",

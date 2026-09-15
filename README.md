@@ -19,6 +19,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
 - **可观测性与预算面板**：持久化节点尝试与 LLM/检索调用，展示耗时、重试、失败、Token 与预算余量；外呼先经过原子预算门，触顶时按最低证据生成受限报告或安全终止
 - **确定性引用验证**：在结论合成后检查关键声明的引用绑定、规范 URL、公开可达性、数字/否定冲突和词法支持度，只给出 `verified` / `unsupported` / `unreachable` / `unknown`，不增加第二个 LLM 裁判
+- **单一持久化人工决策门**：证据结构不足且推荐方向存在实质不确定性时暂停 durable run；用户可补充信息继续、基于现有证据生成明确标记的受限报告，或取消
 - **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 - **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
@@ -88,10 +89,10 @@ Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/C
 
 Phase 1-G 把 Streamlit 默认路径切换到 durable task API，增加 immutable `run_results`，并将
 公开结果、成功终态和完成事件放在同一事务提交；报告、快照、阅读视图和导出均可在重启后
-查询。产品 schema 现为 v9：v8 建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
+查询。产品 schema 现为 v10：v8 建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
 观测/预算骨架表；Phase 2-C 后新 durable run/retry 原子冻结 `standard-enforced-v1` 与
 `unpriced-v1`，已有 `standard-observe-v1` run 在同 run 恢复时保持原策略，价格未知不按零成本
-处理；v9 新增 retrieval-only TTL cache。旧
+处理；v9 新增 retrieval-only TTL cache；v10 增加唯一 evidence-insufficient 决策的持久化表。旧
 snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选数、I/O 时间和文件大小预算。
 `POST /research` 与旧 SSE 只作为一版弃用兼容保留。
 
@@ -133,6 +134,17 @@ Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等�
 `research-v2`、state schema v2 与 `deterministic-citation-v1`；历史 v1 manifest 可审计但须新建
 run，不能在新工作流上续跑旧 checkpoint。
 
+Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v3`、state
+schema v3 与 `evidence-insufficient-v1`。该 gate 位于引用验证之后、报告渲染之前，只在证据
+结构不足且推荐方向实质不确定时暂停。`GET /api/v1/tasks/{task_id}/decision` 读取当前决策；
+`POST /api/v1/tasks/{task_id}/decisions/{decision_id}` 以 `If-Match` task version 提交动作。
+三个动作是 `provide_context`、`limited_report` 和 `cancel`。决定与 run、产品库接受的
+checkpoint、state schema 和暂停 epoch 绑定；相同请求幂等，冲突请求不覆盖已提交决定，7 天
+未决后收敛为取消。暂停后 lease、deadline 与执行槽都会释放。重启恢复只会续接兼容的已解决
+decision/checkpoint。补充文本不会进入公开 decision 响应或 `task_events`；checkpoint ID 和
+fencing identity 也只保留在内部。旧 `/research` 兼容路径绕过该持久决策门。Phase 4-2 的
+Streamlit 决策界面与恢复端到端验收仍待实施。
+
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
 [`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成轻量检索去重/缓存、单一 HITL
 和质量评估闭环；多租户认证、分布式基础设施及其他企业级扩展不在当前实施范围。
@@ -144,7 +156,7 @@ run，不能在新工作流上续跑旧 checkpoint。
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**967 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**986 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -267,7 +279,7 @@ python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --
 
 ## 技术栈
 
-LangGraph（9 个研究/生成节点 + 1 个确定性引用验证节点 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
+LangGraph（研究/生成节点 + 确定性引用验证与单一 HITL 决策门 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
 
 ## 项目结构
 
@@ -280,7 +292,7 @@ src/deepchoice/
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
-├── server/          # FastAPI（27 端点：app.py 23 + clarify_routes 4，含 durable Trace 摘要与 SSE）
+├── server/          # FastAPI（29 端点：app.py 25 + clarify_routes 4，含 durable decision、Trace 摘要与 SSE）
 ├── state.py         # ResearchState TypedDict
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 

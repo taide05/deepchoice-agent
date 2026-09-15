@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 from deepchoice.budget import RunBudgetPolicy
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import RunManifest
+from deepchoice.hitl.contracts import DecisionRecord
 from deepchoice.runtime.lifecycle import RunStatus, TaskStatus
 
 
@@ -106,6 +107,14 @@ class TaskWithRun(_FrozenRecord):
     latest_run: RunRecord | None
 
 
+class DecisionResolutionResult(_FrozenRecord):
+    """Atomic decision resolution and resulting task state."""
+
+    decision: DecisionRecord
+    task: TaskWithRun
+    replayed: bool = False
+
+
 class TaskEventRecord(_FrozenRecord):
     """One public, replayable lifecycle event for a task."""
 
@@ -143,6 +152,7 @@ class LegacyImportRecord(_FrozenRecord):
 
 __all__ = [
     "CheckpointReference",
+    "DecisionResolutionResult",
     "LegacyImportRecord",
     "RecoveryRun",
     "RunLeaseGrant",

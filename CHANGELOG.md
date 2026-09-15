@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - 2026-09-09
+## [Unreleased] - 2026-09-15
 
 ### Added
 - Nine-node research workflow, six-source retrieval, multilingual reports, observability, token accounting, and the outbound channel layer accumulated during the optimization cycle
@@ -28,13 +28,14 @@
 - Phase 6-A security boundary: SafeUrlPolicy with DNS/public-address and redirect revalidation, direct-IP pinning, bounded HTTP admission, forward hostname matching, centralized redaction, and sanitized report HTML/PDF output
 - Phase 3-1 deterministic citation verification between synthesis and report rendering, with canonical-URL deduplication, bounded safe fetches, four honest public statuses, immutable result projection, and report/Streamlit warnings without an LLM judge
 - Phase 3-2 retrieval-only SQLite TTL cache with manifest/policy-aware hashed keys, run-scoped single-flight, bounded expiry pruning, cache-before-Trace/budget behavior, Docker opt-out configuration, and preserved legacy retriever/API adapters
+- Phase 4-1 single durable HITL decision gate on schema v10: research-v3/state v3 manifest policy, checkpoint/fencing-bound decisions, idempotent three-action resolution, seven-day expiry and recovery, with durable GET/resolve APIs; frontend acceptance remains pending
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 967 passed with no skips on 2026-09-15
+- Verified Python 3.12 test baseline is 986 passed with no skips on 2026-09-15
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
@@ -47,6 +48,7 @@
 - Phase 2 observability reads only the product SQLite latest run and exposes allowlisted Trace and latest-reservation budget aggregates. Trace remains best-effort, while the budget gate fails closed. `RunManifest` remains schema v1 and now freezes each LLM call's maximum output tokens so older manifests fail incompatible resume safely
 - Phase 6-A intentionally does not add authentication/API-key enforcement or rate limiting, and does not claim that every static provider has migrated to the safe-fetch path; those remain separate follow-up boundaries
 - New runs use `research-v2` and state schema v2 with `deterministic-citation-v1`; historical `research-v1` manifests remain identity-readable but require a new run instead of incompatible same-run resume
+- New runs use `research-v3` and state schema v3 with `deterministic-citation-v1` and `evidence-insufficient-v1`; historical v1/v2 manifests remain readable but require a new run instead of incompatible same-run resume
 - Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and measurable project closeout; enterprise-only expansion is removed from the current Phase scope
 
 ### Fixed

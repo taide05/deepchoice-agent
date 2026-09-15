@@ -22,3 +22,7 @@ class ResearchState(TypedDict):
     data_source_note: NotRequired[str]
     agent_timing: dict
     token_usage: list[dict]
+    _evidence_decision_gate_seen: NotRequired[bool]
+    _evidence_decision_route: NotRequired[str]
+    _supplemental_input: NotRequired[str]
+    _hitl_limited_report: NotRequired[bool]
