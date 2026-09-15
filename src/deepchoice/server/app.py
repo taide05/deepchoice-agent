@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 import time
 import uuid
@@ -46,6 +47,7 @@ from ..persistence.records import RunResultRecord, TaskWithRun
 from ..persistence.repository import SQLiteTaskRunRepository
 from ..observability import SQLiteTraceStore
 from ..budget import SQLiteBudgetStore
+from ..cache import SQLiteRetrievalCache, parse_retrieval_cache_enabled
 from ..observability.query import SQLiteObservabilityQuery
 from ..runtime.coordinator import RunCoordinator
 from ..runtime.instance_guard import (
@@ -79,6 +81,9 @@ async def lifespan(application: FastAPI):
     instance_guard = None
     legacy_import_task = None
     try:
+        retrieval_cache_enabled = parse_retrieval_cache_enabled(
+            os.getenv("RETRIEVAL_CACHE_ENABLED")
+        )
         validate_single_worker_configuration()
         database_path = getattr(application.state, "product_database_path", None)
         connection = await connect_database(database_path or DEFAULT_DB_PATH)
@@ -144,6 +149,17 @@ async def lifespan(application: FastAPI):
         configure_budget_store = getattr(coordinator, "configure_budget_store", None)
         if callable(configure_budget_store):
             configure_budget_store(SQLiteBudgetStore(connection, connection_lock))
+        configure_retrieval_cache = getattr(
+            coordinator, "configure_retrieval_cache", None
+        )
+        if callable(configure_retrieval_cache):
+            configure_retrieval_cache(
+                SQLiteRetrievalCache(
+                    connection,
+                    connection_lock,
+                    enabled=retrieval_cache_enabled,
+                )
+            )
         application.state.product_database_connection = connection
         application.state.product_database_lock = connection_lock
         application.state.observability_query = SQLiteObservabilityQuery(

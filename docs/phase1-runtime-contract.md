@@ -100,13 +100,14 @@ SSE 规则：
 
 - 产品 schema migration 只向前追加；已经提交的 migration 内容、名称和 checksum 禁止修改。
 - runner 在 `BEGIN IMMEDIATE` 下串行执行，验证连续版本、名称和 checksum；失败整体回滚。
-- 当前产品 schema 为 v8：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
+- 当前产品 schema 为 v9：v4 引入 `task_events`/`legacy_imports`，v5 在不修改 v4 checksum
   的前提下重建 `legacy_imports`，强制 imported 行绑定非空 task/run，error 行不得绑定实体；
   已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。v6 增加
   immutable `run_results`；v7 增加产品库单实例租约；v8 建立 Phase 2-A 的预算/Trace
   表 `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events` 和
   `budget_ledger`。Phase 2-B 已将节点尝试和 LLM/检索调用写入 Trace 表并提供只读摘要查询；
-  Phase 2-C 已接入预算预留、结算、硬限制、受限结果和预算摘要。
+  Phase 2-C 已接入预算预留、结算、硬限制、受限结果和预算摘要；v9 增加带 TTL 的
+  `retrieval_cache` 表。该表属于产品数据库，现有成对备份中的产品库副本会一并包含缓存数据。
 - v6 不臆测或回填旧 completed row 的报告；无法从可信来源重建的 pre-v6 成功记录保留为
   只读历史，并在结果查询时返回 `TASK_RESULT_UNAVAILABLE`。v6 后的新成功收尾和带有效报告的
   legacy success import 都必须同时写入 `run_results`。

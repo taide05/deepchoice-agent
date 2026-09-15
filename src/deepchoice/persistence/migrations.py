@@ -453,6 +453,27 @@ END
 """.strip(),
 )
 
+_V9_STATEMENTS: Final[tuple[str, ...]] = (
+    """
+CREATE TABLE retrieval_cache (
+    cache_key_sha256 TEXT PRIMARY KEY CHECK (
+        length(cache_key_sha256) = 64
+        AND cache_key_sha256 NOT GLOB '*[^0-9a-f]*'
+    ),
+    result_json TEXT NOT NULL CHECK (
+        json_valid(result_json) AND json_type(result_json) = 'object'
+    ),
+    payload_bytes INTEGER NOT NULL CHECK (
+        payload_bytes >= 0 AND payload_bytes <= 524288
+        AND payload_bytes = length(CAST(result_json AS BLOB))
+    ),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+)
+""".strip(),
+    "CREATE INDEX idx_retrieval_cache_expires_at ON retrieval_cache(expires_at)",
+)
+
 MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=1, name="initial_task_and_run_schema", statements=_V1_STATEMENTS),
     Migration(version=2, name="run_version_and_task_history_indexes", statements=_V2_STATEMENTS),
@@ -462,6 +483,7 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
     Migration(version=6, name="immutable_run_results", statements=_V6_STATEMENTS),
     Migration(version=7, name="single_runtime_instance_lease", statements=_V7_STATEMENTS),
     Migration(version=8, name="trace_and_budget_contract_schema", statements=_V8_STATEMENTS),
+    Migration(version=9, name="retrieval_result_cache", statements=_V9_STATEMENTS),
 )
 
 

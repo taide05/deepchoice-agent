@@ -107,9 +107,14 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A～2-C 和 Phase 6-A�
 
 **PR 3-2：轻量去重与缓存**
 
-- 只为检索结果建立版本化 SQLite cache、TTL 和进程内 single-flight。
-- cache key 包含 source、规范化请求和相关 manifest/policy 版本。
-- 失败不缓存；命中不重复扣外部调用预算；不实现通用 LLM response cache。
+状态：已实现。durable Retriever 已在 Trace 与预算预留之前接入 cache；schema v9、关闭开关及兼容路径均有自动化测试覆盖。
+
+- 只为 durable retrieval result 建立 SQLite v9 TTL cache，并使用每 run 的进程内 single-flight；默认启用，可通过 `RETRIEVAL_CACHE_ENABLED=0` 安全关闭。
+- cache key 是规范化请求、source、immutable manifest identity 和 cache-policy version 的哈希，不持久化明文请求。
+- 仅缓存通过 stable result contract 校验的成功结果；失败、非法或超尺寸结果不缓存。`/research` 兼容路径和无 `RunContext` 的调用绕过缓存。
+- cache hit/coalesced waiter 不消耗 `retrieval_calls` 预算，也不生成 external-call Trace；只为真实外呼记录调用。保留 `retrieve()` 与 legacy `search()` 两个入口，不做 LLM response cache。
+- leader 的失败、非法或超尺寸结果不会落盘，但同一 run 内已经等待该次调用的 follower 会复用该次结果，避免失败风暴；leader 被取消时 follower 才重新竞争。
+- 写入后以有界批次惰性清理过期行；缓存数据库异常 fail-open，不改变检索成功/失败语义。
 
 完成标准：关键引用有明确状态；同一运行的相同检索不会重复请求；缓存可安全关闭。
 

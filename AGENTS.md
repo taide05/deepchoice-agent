@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 937 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 967 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -77,7 +77,7 @@ python -m benchmarks.run_baseline --health-check
 - Qwen tier: `QW_FLASH_API_KEY` or legacy `PRO_API_KEY` / `LLM_API_KEY`; optional model/base overrides use `QW_FLASH_*`, `PRO_*`, or `LLM_BASE_URL`.
 - Search services: `TAVILY_API_KEYS` (comma-separated) or `TAVILY_API_KEY`; optional `GITHUB_TOKEN` and `STACKEXCHANGE_API_KEY`.
 - Outbound routing: `OUTBOUND_CHANNELS`, `OUTBOUND_CHANNELS_COMMUNITY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
-- Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, and `TAVILY_REPROBE`.
+- Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, `TAVILY_REPROBE`, and `RETRIEVAL_CACHE_ENABLED` (default `1`; set `0` to disable the retrieval cache).
 - Concurrency/behavior: `LLM_DS_CONCURRENCY`, `LLM_QW_CONCURRENCY`, and `DEEPCHOICE_SYNTH_THINKING`.
 - Frontend: `API_BASE`.
 
@@ -91,6 +91,15 @@ When adding a setting, update the code default, tests, README configuration sect
 - Keep LLM calls in `utils/llm.py` or use its helpers so retry, deterministic settings, diagnostics, and token accounting remain consistent.
 - Update `ResearchState` deliberately when adding node outputs, and cover routing/state changes with tests.
 - Benchmark case and ground-truth changes affect reported metrics. Keep them separate from production refactors when practical and document the evaluation rationale.
+- Before changing a dependency-facing wrapper or public port, inventory both current and deprecated entry points and any upstream deprecations. Keep required compatibility adapters covered by tests; do not silently remove them or broadly suppress unrelated warnings.
+
+### Phase 3-2 retrieval cache
+
+- Cache only successful retrieval results that pass the `RetrievalResult` contract and provenance validation. Do not cache failed, invalid, or oversized results.
+- Use the product SQLite store with TTL. Cache keys are hashes over the normalized request, source, immutable run manifest identity, and cache-policy version; never persist plaintext requests in cache keys or cache metadata.
+- Coalesce same-key in-flight retrievals within a run using process-local single-flight. Cache hits and coalesced waiters do not reserve `retrieval_calls` and do not create external-call Trace rows; only an actual outbound retrieval does.
+- Bypass the cache for the deprecated `/research` compatibility path and any execution without a `RunContext`. Preserve both `BaseRetriever.retrieve()` and the legacy `search()` interface.
+- `RETRIEVAL_CACHE_ENABLED` defaults to `1`; setting it to `0` safely bypasses reads and writes. Pass it through Docker configuration. This cache is retrieval-only; do not add LLM response caching.
 
 ### Phase 1 durable runtime
 

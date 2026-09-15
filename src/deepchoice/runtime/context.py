@@ -26,6 +26,50 @@ class CancellationPort(Protocol):
     async def raise_if_cancelled(self) -> None: ...
 
 
+@runtime_checkable
+class AsyncEventPort(Protocol):
+    async def wait(self) -> bool: ...
+
+
+@runtime_checkable
+class RetrievalFlightClaim(Protocol):
+    is_leader: bool
+    invocation: tuple[object, bool] | None
+    error: Exception | None
+    retry: bool
+    released: AsyncEventPort
+
+
+@runtime_checkable
+class RetrievalCachePort(Protocol):
+    enabled: bool
+
+    def make_key(self, *, source: str, request: object, manifest_id: str) -> str: ...
+
+    async def get(self, cache_key: str) -> object | None: ...
+
+    async def put(self, cache_key: str, result: object, *, source: str) -> bool: ...
+
+    async def claim(
+        self, run_id: str, cache_key: str
+    ) -> RetrievalFlightClaim: ...
+
+    async def wait(self, claim: RetrievalFlightClaim) -> None: ...
+
+    def publish(
+        self,
+        claim: RetrievalFlightClaim,
+        *,
+        invocation: tuple[object, bool] | None = None,
+        error: Exception | None = None,
+        retry: bool = False,
+    ) -> None: ...
+
+    async def complete(
+        self, run_id: str, cache_key: str, claim: RetrievalFlightClaim
+    ) -> None: ...
+
+
 class RunContext(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -43,6 +87,7 @@ class RunContext(BaseModel):
     cancellation: CancellationPort
     trace: TraceSink
     budget: BudgetManager
+    retrieval_cache: RetrievalCachePort | None = None
 
     @field_validator("deadline_at")
     @classmethod
@@ -59,6 +104,7 @@ class RunContext(BaseModel):
         cancellation: CancellationPort,
         trace: TraceSink,
         budget: BudgetManager,
+        retrieval_cache: RetrievalCachePort | None = None,
     ) -> "RunContext":
         """Build identity only from a persisted, currently running run record."""
 
@@ -77,6 +123,7 @@ class RunContext(BaseModel):
             cancellation=cancellation,
             trace=trace,
             budget=budget,
+            retrieval_cache=retrieval_cache,
         )
 
 
@@ -147,7 +194,10 @@ def bind_node_attempt(node_attempt_id: str | None) -> Iterator[None]:
 
 
 __all__ = [
+    "AsyncEventPort",
     "CancellationPort",
+    "RetrievalCachePort",
+    "RetrievalFlightClaim",
     "RunContext",
     "bind_node_attempt",
     "bind_run_context",

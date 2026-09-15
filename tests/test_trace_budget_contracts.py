@@ -199,7 +199,7 @@ async def test_v8_upgrade_preserves_old_run_without_policy(tmp_path) -> None:
             ("run-old", "task-old", "queued", manifest.model_dump_json(), "run-old", NOW.isoformat(), NOW.isoformat()),
         )
         await connection.commit()
-        assert await run_migrations(connection) == (8,)
+        assert await run_migrations(connection) == (8, 9)
         repository = SQLiteTaskRunRepository(connection)
         old_run = await repository.get_run("run-old")
         assert old_run is not None and old_run.budget_policy is None

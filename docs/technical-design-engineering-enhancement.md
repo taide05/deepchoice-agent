@@ -222,8 +222,7 @@ SQLite 适合当前单实例、低到中并发和本地可运维目标。它不�
 | `budget_ledger` | reservation_id, run_id, dimension, reserved, actual, unit, call_id, execution_epoch, status, expires_at, created_at | append-only 预留/结算/释放/未知消费 |
 | `errors` | error_id, run_id, node/call, category, code, retryable, sanitized_message, details_json | 结构化错误 |
 | `hitl_requests` | decision_id, run_id, checkpoint ref, kind, payload, status, expires_at, resolved_at | 暂停与决定 |
-| `cache_entries` | namespace, key_hash, value_blob/json, created/expires, version, size, last_access | 跨运行 TTL cache |
-| `citation_checks` | run_id, claim_id, source_id/url_hash, reachability, support, reasons, checked_at | 引用验证 |
+| `retrieval_cache` | cache_key_sha256, result_json, payload_bytes, created_at, expires_at | 仅成功检索结果的跨运行 TTL cache；source/manifest/policy 已进入哈希键 |
 | `task_events` | event_id, task_id, run_id, seq, type, ts, public_payload_json | 状态事务内的 durable outbox 与 SSE 重放事实 |
 | `trace_events` | event_id, run_id, seq, type, ts, payload_json | 可降级的调试/评估事件，不承载 SSE 正确性 |
 | `idempotency_records` | scope, key_hash, request_hash, resource_id, response_json, status, expires_at | 创建/恢复/决定的跨重启幂等与 body 冲突检测 |
@@ -698,13 +697,13 @@ Phase 6 的基础输入/URL/日志安全应在 Phase 0/1 同步打底，集中�
 ### Phase 3：缓存、去重与引用验证
 
 - 目标：降低重复成本，提升引用可信度而不制造大量 LLM 调用。
-- 修改范围：CacheStore、single-flight、adapter cache policy、安全 fetcher、citation validator 节点、报告 warning/置信度接入。
-- 涉及模块：retriever/LLM wrapper、outbound、evidence/report flow、frontend，新增 `cache/`、`citations/validator.py`。
+- 修改范围：retrieval CacheStore、run-scoped single-flight、adapter cache policy、安全 fetcher、citation validator 节点、报告 warning/置信度接入；不缓存 LLM 响应。
+- 涉及模块：retriever wrapper、outbound、evidence/report flow、frontend，新增 `cache/`、`citations/validator.py`。
 - 前置依赖：Phase 2 manifest、Trace、budget；安全 URL policy 必须先就绪。
-- 数据迁移：新增 cache/citation 表；不导入未知 provenance 的旧缓存。
+- 数据迁移：schema v9 新增 `retrieval_cache`；引用验证结果保存在 immutable `run_results` 快照，不另建 citation 表；不导入未知 provenance 的旧缓存。
 - 测试：key/TTL/版本失效、stampede、失败不缓存、SSRF/redirect、support golden、未知状态、报告一致性。
 - 验收：并发相同请求单次执行；cache 命中不扣外部调用预算；关键声明有验证状态；无额外默认 LLM 二审。
-- 回滚：按 namespace feature flag 关闭；validator 可变为只报告不阻断；删除 cache 行不是回滚必需。
+- 回滚：通过 `RETRIEVAL_CACHE_ENABLED=0` 关闭 retrieval cache；validator 可变为只报告不阻断；删除 cache 行不是回滚必需。
 - 风险：陈旧数据、误判支持度、验证增加尾延迟。
 - 独立复审：**强制**（缓存一致性、URL 安全）。
 

@@ -19,6 +19,7 @@ from deepchoice.budget import (
     SQLiteBudgetStore,
 )
 from deepchoice.budget.limited import build_budget_limited_state
+from deepchoice.cache import SQLiteRetrievalCache
 from deepchoice.contracts.errors import normalize_error
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import (
@@ -260,6 +261,7 @@ class RunCoordinator:
         orchestrator_factory: Callable[..., ChiefEditorAgent] = ChiefEditorAgent,
         trace_store: SQLiteTraceStore | None = None,
         budget_store: SQLiteBudgetStore | None = None,
+        retrieval_cache: SQLiteRetrievalCache | None = None,
     ) -> None:
         if min(lease_ttl, heartbeat_interval, run_timeout, recovery_interval) <= timedelta(0):
             raise ValueError("coordinator durations must be positive")
@@ -279,6 +281,7 @@ class RunCoordinator:
         self._budget_store = budget_store or SQLiteBudgetStore(
             repository._connection, repository._lock, clock=clock
         )
+        self._retrieval_cache = retrieval_cache
         self._active: dict[str, asyncio.Task[None]] = {}
         self._active_lock = asyncio.Lock()
         self._recovery_task: asyncio.Task[None] | None = None
@@ -297,6 +300,15 @@ class RunCoordinator:
         if self._active or self._recovery_task is not None:
             raise RuntimeError("budget store must be configured before coordinator start")
         self._budget_store = budget_store
+
+    def configure_retrieval_cache(
+        self, retrieval_cache: SQLiteRetrievalCache
+    ) -> None:
+        """Attach the shared fail-open cache before execution starts."""
+
+        if self._active or self._recovery_task is not None:
+            raise RuntimeError("retrieval cache must be configured before coordinator start")
+        self._retrieval_cache = retrieval_cache
 
     @property
     def active_runs(self) -> tuple[str, ...]:
@@ -573,6 +585,7 @@ class RunCoordinator:
                 cancellation=GuardCancellationPort(),
                 trace=trace_port,
                 budget=budget,
+                retrieval_cache=self._retrieval_cache,
             )
             context_binding = bind_run_context(context)
             context_binding.__enter__()

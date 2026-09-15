@@ -27,13 +27,14 @@
 - Manifest-verified paired product/checkpoint database backup, restore, and restore-drill tooling
 - Phase 6-A security boundary: SafeUrlPolicy with DNS/public-address and redirect revalidation, direct-IP pinning, bounded HTTP admission, forward hostname matching, centralized redaction, and sanitized report HTML/PDF output
 - Phase 3-1 deterministic citation verification between synthesis and report rendering, with canonical-URL deduplication, bounded safe fetches, four honest public statuses, immutable result projection, and report/Streamlit warnings without an LLM judge
+- Phase 3-2 retrieval-only SQLite TTL cache with manifest/policy-aware hashed keys, run-scoped single-flight, bounded expiry pruning, cache-before-Trace/budget behavior, Docker opt-out configuration, and preserved legacy retriever/API adapters
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 937 passed with no skips on 2026-09-15
+- Verified Python 3.12 test baseline is 967 passed with no skips on 2026-09-15
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely

@@ -51,7 +51,7 @@ async def test_legacy_schema_steps_to_current_without_losing_task_run_checkpoint
                 ("legacy-run", "", "", "legacy-cp",  "retrieve", 1, 1, "2026-01-01"),
             )
         applied = await run_migrations(connection)
-        assert applied == tuple(range(starting_version + 1, 9))
+        assert applied == tuple(range(starting_version + 1, 10))
         assert await (await connection.execute("SELECT task_id FROM tasks WHERE task_id='legacy-task'")).fetchone() == ("legacy-task",)
         assert await (await connection.execute("SELECT run_id FROM runs WHERE run_id='legacy-run'")).fetchone() == ("legacy-run",)
         assert await (await connection.execute("SELECT COUNT(*) FROM task_events WHERE task_id='legacy-task'")).fetchone() == (0,)

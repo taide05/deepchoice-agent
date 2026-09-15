@@ -51,6 +51,10 @@ python -m venv .venv
 `OUTBOUND_CHANNELS` 和 `OUTBOUND_CHANNELS_COMMUNITY`。完整配置约定见
 [`AGENTS.md`](AGENTS.md)。
 
+Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
+`RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
+契约与来源校验的成功检索结果，不缓存失败结果或 LLM 响应，旧 `/research` 兼容路径继续绕过缓存。
+
 新的客户端应使用 `POST /api/v1/tasks`。`POST /research` 仅保留一版兼容，会返回弃用响应头；它仍会校验已知字段并拒绝额外字段，成功响应保留
 `task_id`/`status`，同时返回 `manifest_id` 供运行审计。API 错误保留兼容的
 `detail` 字段，并增加稳定的 `error` 对象（类别、错误码、是否可重试和建议动作）。
@@ -84,10 +88,10 @@ Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/C
 
 Phase 1-G 把 Streamlit 默认路径切换到 durable task API，增加 immutable `run_results`，并将
 公开结果、成功终态和完成事件放在同一事务提交；报告、快照、阅读视图和导出均可在重启后
-查询。产品 schema 现为 v8：v8 先建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
+查询。产品 schema 现为 v9：v8 建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
 观测/预算骨架表；Phase 2-C 后新 durable run/retry 原子冻结 `standard-enforced-v1` 与
 `unpriced-v1`，已有 `standard-observe-v1` run 在同 run 恢复时保持原策略，价格未知不按零成本
-处理。旧
+处理；v9 新增 retrieval-only TTL cache。旧
 snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选数、I/O 时间和文件大小预算。
 `POST /research` 与旧 SSE 只作为一版弃用兼容保留。
 
@@ -140,7 +144,7 @@ run，不能在新工作流上续跑旧 checkpoint。
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**937 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**967 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
