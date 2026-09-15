@@ -105,6 +105,10 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 `report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。
 本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全 fetch。
 
+后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
+[`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成最小 Trace/预算、引用可信、单一 HITL
+和质量评估闭环；多租户认证、分布式基础设施及其他企业级扩展不在当前实施范围。
+
 ### 测试
 
 ```powershell

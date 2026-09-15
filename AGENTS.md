@@ -137,7 +137,17 @@ When adding a setting, update the code default, tests, README configuration sect
 - 报告必须保留 Markdown 兼容输出，并由服务端生成经过 allowlist sanitizer 的 `report_html`；
   PDF 使用同一 sanitizer。前端不得把未清洗的报告正文放入 `unsafe_allow_html`。
 - Phase 6-A 不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全
-  fetch；这些边界仍需在后续安全收口中单独验证。
+  fetch；这些能力不在当前实施路线，除非后续明确重新修订范围。
+
+### Current implementation scope
+
+- `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
+  design remains historical design space and must not be interpreted as authorized current scope.
+- The current sequence is Phase 2-B, Phase 2-C, Phase 3, Phase 4, then Phase 5. Keep each remaining
+  phase to at most two implementation PRs and prioritize the durable default path.
+- Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
+  external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
+  the roadmap is explicitly revised again.
 
 ## Local and generated data
 

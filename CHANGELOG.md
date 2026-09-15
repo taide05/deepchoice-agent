@@ -42,6 +42,7 @@
 - New durable runs and retries atomically freeze `standard-observe-v1` and `unpriced-v1`; unknown prices remain unknown rather than being treated as zero. Historical runs are not backfilled and retain an unavailable internal policy projection for future APIs to report honestly
 - Phase 2-A does not yet write Trace events, expose Trace APIs, or enforce budget reservation/settlement/hard limits; those remain Phase 2-B/2-C. Durable `task_events` remains the sole task/SSE correctness path, and `RunManifest` stays v1
 - Phase 6-A intentionally does not add authentication/API-key enforcement or rate limiting, and does not claim that every static provider has migrated to the safe-fetch path; those remain separate follow-up boundaries
+- Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and measurable project closeout; enterprise-only expansion is removed from the current Phase scope
 
 ### Fixed
 - Community retriever concurrency test now follows the production HTTP client timeout contract
