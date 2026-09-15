@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 1022 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 1040 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -76,7 +76,9 @@ python -m benchmarks.run_baseline --health-check
 - DeepSeek tier: `DS_FLASH_API_KEY` or legacy `FLASH_API_KEY` / `DEEPSEEK_API_KEY`; optional model/base overrides use the corresponding `DS_FLASH_*`, `FLASH_*`, or `DEEPSEEK_BASE_URL` names.
 - Qwen tier: `QW_FLASH_API_KEY` or legacy `PRO_API_KEY` / `LLM_API_KEY`; optional model/base overrides use `QW_FLASH_*`, `PRO_*`, or `LLM_BASE_URL`.
 - Search services: `TAVILY_API_KEYS` (comma-separated) or `TAVILY_API_KEY`; optional `GITHUB_TOKEN` and `STACKEXCHANGE_API_KEY`.
-- Outbound routing: `OUTBOUND_CHANNELS`, `OUTBOUND_CHANNELS_COMMUNITY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
+- Outbound routing: `OUTBOUND_CHANNELS`, `OUTBOUND_CHANNELS_COMMUNITY`,
+  `OUTBOUND_CHANNELS_TAVILY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
+  Tavily must exclude `self-forward` because that transport does not preserve POST bodies.
 - Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, `TAVILY_REPROBE`, and `RETRIEVAL_CACHE_ENABLED` (default `1`; set `0` to disable the retrieval cache).
 - Concurrency/behavior: `LLM_DS_CONCURRENCY`, `LLM_QW_CONCURRENCY`, and `DEEPCHOICE_SYNTH_THINKING`.
 - Frontend: `API_BASE`.
@@ -86,6 +88,9 @@ When adding a setting, update the code default, tests, README configuration sect
 ## Implementation contracts
 
 - Keep network access in retrievers routed through `deepchoice.outbound`; do not add ad-hoc direct clients that bypass channel selection and health reporting.
+- Tavily route probing is a credential-free static HEAD. Its keypool POSTs in retrieval, conflict
+  evidence, and benchmark health checks use the selected outbound client. The legacy artifact label
+  `tavily_direct` does not mean direct routing is forced.
 - Preserve the `BaseRetriever.search()` signature and the uniform source/status/results/error envelope.
 - Retrieval failure must remain visible as failed or partial failure; do not convert external errors into silent empty success.
 - Keep LLM calls in `utils/llm.py` or use its helpers so retry, deterministic settings, diagnostics, and token accounting remain consistent.
@@ -153,6 +158,9 @@ When adding a setting, update the code default, tests, README configuration sect
   reconciliation remain append-only; missing or uncertain usage is charged conservatively as
   `unknown_spend`, never zero. Budget persistence failures fail closed and must not be swallowed by
   agent fallback logic. Trace remains best-effort and independent from this correctness path.
+- The first enforced admission denial latches budget exhaustion for that run in serialized admission.
+  A queued request that crossed the fast check but has not committed must recheck the latch and fail;
+  reservations committed before the denial are not retroactively cancelled.
 - On `RUN_BUDGET_EXCEEDED`, no further external call is allowed. A deterministic minimum-evidence
   gate may create a visibly restricted local report only with at least three undisputed usable
   chains, two distinct valid HTTP(S) hostnames, and one moderate/strong chain. This is structural
@@ -288,11 +296,10 @@ When adding a setting, update the code default, tests, README configuration sect
 
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
-- Phase 3 is complete. Phase 4 PR 4-1 (single durable decision backend) and PR 4-2
-  (decision UI and recovery acceptance) are implemented. Phase 5-1 (bounded version assets and
-  offline evaluation) is complete. Phase 5-2 engineering-foundation acceptance remains pending and
-  is the end of the currently authorized roadmap. Keep each
-  remaining phase to at most two implementation PRs and prioritize the durable default path.
+- Phase 3 and Phase 4 are complete. Phase 5-1 (bounded version assets and offline evaluation) and
+  Phase 5-2 (engineering-foundation acceptance) are complete. The currently authorized roadmap ends
+  here; real-case metrics, targeted optimization, and interview delivery require a separately
+  approved roadmap. See `docs/phase5-engineering-acceptance.md` for evidence and residual risks.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
   the roadmap is explicitly revised again.

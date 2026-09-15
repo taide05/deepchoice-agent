@@ -110,6 +110,53 @@ class TestStreamEventFormat:
 
         assert events[-1] == {"node": "__done__", "update": {}}
 
+    def test_legacy_stream_and_status_include_deprecation_headers(self):
+        _register(FakeOrchestrator(), status="complete", events=NODE_EVENTS)
+
+        stream_response = client.get(f"/research/{TASK_ID}/stream")
+        status_response = client.get(f"/research/{TASK_ID}/status")
+
+        for response in (stream_response, status_response):
+            assert response.headers["Deprecation"] == "true"
+            assert response.headers["Warning"].startswith("299 DeepChoice")
+            assert response.headers["Link"] == '</api/v1/tasks>; rel="successor-version"'
+
+    def test_legacy_post_research_includes_deprecation_headers(self, monkeypatch):
+        class FakeStartedOrchestrator:
+            task_id = "legacy_header_test"
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+        async def fake_research(*args, **kwargs):
+            return None
+
+        async def fake_checkpointer():
+            return object()
+
+        monkeypatch.setattr(app_module, "_get_sqlite_saver", fake_checkpointer)
+        monkeypatch.setattr(app_module, "ChiefEditorAgent", FakeStartedOrchestrator)
+        monkeypatch.setattr(app_module, "_run_research", fake_research)
+
+        response = client.post("/research", json={"query": "legacy endpoint"})
+
+        assert response.status_code == 200
+        assert response.headers["Deprecation"] == "true"
+        assert response.headers["Warning"].startswith("299 DeepChoice")
+        assert response.headers["Link"] == '</api/v1/tasks>; rel="successor-version"'
+        app_module._active_tasks.pop("legacy_header_test", None)
+
+    def test_legacy_history_includes_deprecation_headers(self, monkeypatch):
+        monkeypatch.setattr(app_module, "list_history", lambda: [])
+
+        response = client.get("/history")
+
+        assert response.status_code == 200
+        assert response.json() == {"tasks": []}
+        assert response.headers["Deprecation"] == "true"
+        assert response.headers["Warning"].startswith("299 DeepChoice")
+        assert response.headers["Link"] == '</api/v1/tasks>; rel="successor-version"'
+
     def test_stream_error_event_and_no_done_after_error(self):
         _register(FakeOrchestrator(), status="failed",
                   events=[{"__error__": {"detail": "boom"}}])

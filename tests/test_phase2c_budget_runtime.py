@@ -159,6 +159,105 @@ async def test_concurrent_atomic_reservations_do_not_overspend(tmp_path) -> None
 
 
 @pytest.mark.asyncio
+async def test_denied_admission_latches_before_queued_smaller_reservation(
+    tmp_path, monkeypatch
+) -> None:
+    connection, lock, manager, policy, clock = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(llm_calls=2)
+    )
+    large_in_admission = asyncio.Event()
+    release_large = asyncio.Event()
+    small_crossed_entry_check = asyncio.Event()
+    original_check_active_elapsed = manager._check_active_elapsed
+    original_reconcile = manager.reconcile
+
+    async def block_large_admission(now):
+        if asyncio.current_task().get_name() == "large-reservation":
+            large_in_admission.set()
+            await release_large.wait()
+        await original_check_active_elapsed(now)
+
+    async def observe_entry_check():
+        if asyncio.current_task().get_name() == "small-reservation":
+            small_crossed_entry_check.set()
+        return await original_reconcile()
+
+    monkeypatch.setattr(manager, "_check_active_elapsed", block_large_admission)
+    monkeypatch.setattr(manager, "reconcile", observe_entry_check)
+
+    async def reserve(amount: int):
+        return await manager.reserve(
+            run_id="run-1",
+            execution_epoch=1,
+            amount=BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=amount),
+            expires_at=NOW + timedelta(minutes=1),
+        )
+
+    try:
+        large = asyncio.create_task(reserve(3), name="large-reservation")
+        await large_in_admission.wait()
+        small = asyncio.create_task(reserve(1), name="small-reservation")
+        await small_crossed_entry_check.wait()
+        release_large.set()
+
+        large_result, small_result = await asyncio.gather(
+            large, small, return_exceptions=True
+        )
+        assert isinstance(large_result, BudgetExceededError)
+        assert isinstance(small_result, BudgetExceededError)
+        assert small_result is large_result
+        assert await _count(connection) == 0
+
+        other_request = ResearchRequest(query="compare c and d")
+        other_task = TaskRecord(
+            task_id="task-2",
+            status=TaskStatus.QUEUED,
+            request=other_request,
+            latest_run_id="run-2",
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        other_run = RunRecord(
+            run_id="run-2",
+            task_id="task-2",
+            status=RunStatus.QUEUED,
+            manifest=build_run_manifest(other_request.model_dump(mode="json")),
+            budget_policy=policy,
+            thread_id="run-2",
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        repository = SQLiteTaskRunRepository(connection, lock)
+        await repository.create_task_with_run(other_task, other_run)
+        grant = await repository.acquire_run_lease(
+            "run-2",
+            lease_owner="worker-2",
+            lease_ttl=timedelta(minutes=10),
+            run_timeout=timedelta(hours=1),
+            now=NOW,
+        )
+        running = await repository.get_run("run-2")
+        assert running is not None and running.started_at is not None
+        other_manager = SQLiteBudgetStore(connection, lock, clock=clock).bind(
+            run_id="run-2",
+            execution_epoch=grant.execution_epoch,
+            lease_owner="worker-2",
+            policy=policy,
+            run_started_at=running.started_at,
+        )
+        accepted = await other_manager.reserve(
+            run_id="run-2",
+            execution_epoch=grant.execution_epoch,
+            amount=BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=1),
+            expires_at=NOW + timedelta(minutes=1),
+        )
+        assert accepted.run_id == "run-2"
+    finally:
+        release_large.set()
+        await connection.close()
+
+
+@pytest.mark.asyncio
 async def test_bundle_limit_failure_writes_nothing(tmp_path) -> None:
     connection, _, manager, _, _ = await _running_budget(
         tmp_path,

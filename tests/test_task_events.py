@@ -9,6 +9,7 @@ import pytest_asyncio
 from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
+from deepchoice.hitl import DecisionPause, DecisionResolution
 from deepchoice.persistence import connect_database, run_migrations
 from deepchoice.persistence.records import (
     CheckpointReference,
@@ -304,6 +305,107 @@ async def test_sse_replays_after_disconnect_resyncs_foreign_cursor_and_closes(re
     assert len(resync) == 1
     assert "event: resync_required" in resync[0]
     assert '"latest_event_id":' in resync[0]
+
+
+@pytest.mark.asyncio
+async def test_sse_closes_after_waiting_event_and_when_reconnecting_caught_up(
+    repository,
+) -> None:
+    task, run = _records()
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="owner",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now,
+    )
+    reference = CheckpointReference(
+        run_id=run.run_id,
+        checkpoint_ns="",
+        storage_checkpoint_ns="deepchoice-execution-1",
+        checkpoint_id="decision-checkpoint",
+        node="__interrupt__",
+        state_schema_version=run.manifest.state_schema_version,
+        execution_epoch=grant.execution_epoch,
+        created_at=now + timedelta(seconds=1),
+    )
+    await repository.add_checkpoint_reference(
+        reference,
+        lease_owner="owner",
+        execution_epoch=grant.execution_epoch,
+        now=now + timedelta(seconds=1),
+    )
+    await repository.pause_for_decision(
+        DecisionPause(
+            decision_id="decision-1",
+            reason="Evidence is structurally insufficient.",
+            gaps=("Missing independent evidence.",),
+        ),
+        reference,
+        lease_owner="owner",
+        execution_epoch=grant.execution_epoch,
+        now=now + timedelta(seconds=2),
+    )
+    events = await repository.list_task_events(task.task_id)
+    waiting_event = events[-1]
+    assert waiting_event.type == "decision.required"
+
+    async def snapshot_loader(task_id: str):
+        loaded = await repository.get_task(task_id)
+        assert loaded is not None
+        return {"task_id": loaded.task.task_id, "status": loaded.task.status.value}
+
+    replay = [
+        item
+        async for item in iter_task_event_sse(
+            repository,
+            task.task_id,
+            last_event_id=events[-2].event_id,
+            snapshot_loader=snapshot_loader,
+            poll_interval=0,
+        )
+    ]
+    assert len(replay) == 1
+    assert "event: decision.required" in replay[0]
+
+    caught_up = [
+        item
+        async for item in iter_task_event_sse(
+            repository,
+            task.task_id,
+            last_event_id=waiting_event.event_id,
+            snapshot_loader=snapshot_loader,
+            poll_interval=0,
+        )
+    ]
+    assert caught_up == []
+
+    await repository.resolve_decision(
+        task.task_id,
+        "decision-1",
+        DecisionResolution(action="limited_report"),
+        expected_task_version=2,
+        now=now + timedelta(seconds=3),
+    )
+    await repository.cancel_task(task.task_id, updated_at=now + timedelta(seconds=4))
+    after_resolution = [
+        item
+        async for item in iter_task_event_sse(
+            repository,
+            task.task_id,
+            last_event_id=waiting_event.event_id,
+            snapshot_loader=snapshot_loader,
+            poll_interval=0,
+        )
+    ]
+    assert [
+        line
+        for item in after_resolution
+        for line in item.splitlines()
+        if line.startswith("event: ")
+    ] == ["event: decision.resolved", "event: task.cancelled"]
 
 
 @pytest.mark.parametrize("value", ["-1", "+1", " 1", "1 ", "1.0", "x", "9223372036854775808"])

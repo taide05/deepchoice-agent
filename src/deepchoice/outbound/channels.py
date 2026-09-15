@@ -24,6 +24,10 @@ FWD_ALLOWED_DEFAULT = "export.arxiv.org,api.github.com,api.stackexchange.com"
 # forward endpoint is the preferred channel, proxy second, direct last.
 DEFAULT_ORDER_OVERRIDES: dict[str, str] = {
     "community": "self-forward,local-proxy,direct",
+    # The current self-forward transport relays only a target URL. It cannot
+    # preserve Tavily's POST method or JSON body, so Tavily must use a channel
+    # that carries the original request end to end.
+    "tavily": "local-proxy,direct,direct-v6",
 }
 
 
@@ -42,7 +46,10 @@ class OutboundConfig:
     v6_enabled: bool = False
 
     def order_for(self, source: str) -> tuple[str, ...]:
-        return self.order_overrides.get(source, self.channel_order)
+        order = self.order_overrides.get(source, self.channel_order)
+        if source == "tavily":
+            return tuple(name for name in order if name != "self-forward")
+        return order
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "OutboundConfig":

@@ -49,7 +49,10 @@ python -m venv .venv
 ```
 
 可选网络配置包括 `LOCAL_PROXY`、`FWD_BASE`、`FWD_KEY`、`FWD_TARGETS`、
-`OUTBOUND_CHANNELS` 和 `OUTBOUND_CHANNELS_COMMUNITY`。完整配置约定见
+`OUTBOUND_CHANNELS`、`OUTBOUND_CHANNELS_COMMUNITY` 和 `OUTBOUND_CHANNELS_TAVILY`；Tavily
+需要保留 POST body，因此该 source 的路由会拒绝 `self-forward`。Docker Compose 中
+`TAVILY_KEY_STATE_PATH` 默认位于 `/app/outputs/tavily_key_state.json`，随 `outputs` volume
+持久化；可通过同名宿主机环境变量覆盖。完整配置约定见
 [`AGENTS.md`](AGENTS.md)。
 
 Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
@@ -157,9 +160,10 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 运行命令、baseline 检查和指标解释见[Phase 5-1 离线评估说明](docs/phase5-offline-eval.md)。
 
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
-[`docs/current-roadmap.md`](docs/current-roadmap.md)：当前只剩 Phase 5-2 工程基础整体验收。完成后
-再依据真实 case 重新规划重点指标测量与优化；多租户认证、分布式基础设施及其他企业级扩展不在
-当前实施范围。
+[`docs/current-roadmap.md`](docs/current-roadmap.md)：Phase 5-2 工程基础整体验收已经完成，结果见
+[`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。当前路线到此结束；
+下一阶段需依据真实 case 重新规划重点指标测量与优化。多租户认证、分布式基础设施及其他企业级
+扩展不在当前实施范围。
 
 ### 测试
 
@@ -168,7 +172,7 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**1022 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**1040 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -188,7 +192,7 @@ docker run -p 8000:8000 --env-file .env \
   deepchoice
 ```
 
-后端镜像固定 Python 3.12 和单 worker。SQLite runtime 不支持多副本；检测到多 worker 配置
+后端与前端镜像固定 Python 3.12，后端保持单 worker。SQLite runtime 不支持多副本；检测到多 worker 配置
 或另一实例仍持有产品库 lease 时会拒绝启动。数据库维护使用成对工具：
 
 ```bash

@@ -50,14 +50,13 @@ from deepchoice.utils.llm import set_current_case, set_record_callback
 # ---------------------------------------------------------------------------
 
 async def probe_tavily_direct() -> tuple[bool, str]:
-    """Tavily stays direct (user decision 2026-09-01): one keypool POST probe."""
-    import httpx
-
+    """Check Tavily key availability through its selected outbound route."""
+    from deepchoice import outbound
     from deepchoice.retrievers.base import error_text
     from deepchoice.retrievers.tavily_keypool import post_with_failover
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with await outbound.make_client("tavily") as client:
 
             async def post(url, json=None, **kw):
                 return await client.post(url, json=json, **kw)

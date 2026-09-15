@@ -338,6 +338,12 @@ class SQLiteBudgetManager:
         await self.reconcile()
 
         async def operation(now: datetime) -> tuple[BudgetReservation, ...]:
+            # Another concurrent caller may have crossed the fast-path check
+            # above before a preceding admission latched exhaustion. Recheck
+            # while holding the transaction lock so no queued reservation can
+            # commit after the first denial for this run.
+            if self._exhausted is not None:
+                raise self._exhausted
             if expires_at <= now:
                 raise ValueError("expires_at must be in the future")
             await self._check_active_elapsed(now)

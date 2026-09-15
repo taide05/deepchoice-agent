@@ -1,7 +1,6 @@
 import asyncio
 
-import httpx
-
+from .. import outbound as _outbound
 from .base import BaseRetriever
 from .tavily_keypool import post_with_failover
 
@@ -13,7 +12,7 @@ class TavilySearch(BaseRetriever):
                          adapted_queries: list[str] | None = None) -> list[dict]:
         queries = adapted_queries if adapted_queries else [query] + sub_questions[:2]
 
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with await _outbound.make_client("tavily") as client:
 
             async def post(url, json=None, **kw):
                 return await client.post(url, json=json, **kw)

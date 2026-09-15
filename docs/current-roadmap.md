@@ -9,9 +9,9 @@
 
 DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A～2-C 和 Phase 6-A；Phase 2 的
 运行接线、latest-run 摘要 API、预算闭环和 Streamlit 展示已通过测试与独立 Review。
-重复成本、人工决策和确定性质量 smoke 等主要工程能力已经实现；Phase 2-C 预算控制和
-Phase 3-1 确定性引用验证也已完成，但跨模块工程验收仍待 PR 5-2。项目尚未基于真实 case
-建立当前版本的重点指标基线，
+重复成本、人工决策和确定性质量 smoke 等主要工程能力已经实现；Phase 3、Phase 4 和 Phase 5
+也已完成，PR 5-2 已对默认 durable 路径做跨模块工程验收。项目尚未基于真实 case 建立当前版本
+的重点指标基线，
 更没有针对这些指标完成优化，因此当前阶段不能声称产品效果已最终验收或已经具备面试交付条件。
 
 继续按原始企业级设计全面扩张，会提高维护和讲解成本，却未必改善研究结果或面试展示。
@@ -23,7 +23,7 @@ Phase 3-1 确定性引用验证也已完成，但跨模块工程验收仍待 PR 
 - 每项新增能力必须至少改善一个结果：用户可见体验、报告可信度、成本可控性或可验证质量。
 - 优先接通默认 durable 路径，不为旧兼容路径继续增加功能。
 - 复用现有 Python、FastAPI、LangGraph、Streamlit 和成对 SQLite；不因抽象完整性引入新平台。
-- 当前 Phase 5 保持两个 PR；跨阶段工程验收和文档包含在 PR 5-2，不另拆细碎 PR。
+- Phase 5 已按两个 PR 收口；跨阶段工程验收和文档包含在 PR 5-2，没有另拆细碎 PR。
 - 安全、预算和状态决策保持确定性；LLM 只负责研究内容，不负责执行这些规则。
 - 已完成但未来不属于面试主线的能力不删除；展示取舍在完成真实指标优化后再决定。
 
@@ -36,6 +36,9 @@ Phase 3-1 确定性引用验证也已完成，但跨模块工程验收仍待 PR 
   已通过 Phase 级完整测试与独立 Review。
 - Phase 2-C：原子预算门、append-only 结算、结构证据受限报告和预算摘要展示。
 - Phase 6-A：安全 URL、输入 admission、集中脱敏和报告 HTML/PDF 安全。
+- Phase 3：确定性引用验证及 durable retrieval cache/single-flight。
+- Phase 4：单一 `evidence-insufficient` 决策门、前端交互和完整恢复验收。
+- Phase 5：版本化核心资产、离线 smoke 和工程基础整体验收。
 
 以上能力进入维护状态：只修复缺陷和默认路径回归，不继续横向扩展。
 
@@ -179,7 +182,8 @@ artifact 含可追溯版本和数据集元信息，并明确标记 source health
 
 **PR 5-2：工程基础整体验收与收口**
 
-状态：未开始；作为下一步实施项。
+状态：已完成（2026-09-15）。验收证据与遗留风险见
+[`phase5-engineering-acceptance.md`](phase5-engineering-acceptance.md)。
 
 - 跨模块复核默认 durable 路径，覆盖迁移、恢复、状态机、预算、Trace、引用验证、缓存、
   HITL、安全边界、SSE 和旧接口兼容约束。

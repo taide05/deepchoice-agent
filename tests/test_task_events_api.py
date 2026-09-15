@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from deepchoice.hitl import DecisionPause
+from deepchoice.persistence.records import CheckpointReference
 from deepchoice.server import app as app_module
 
 
@@ -99,6 +102,66 @@ def test_durable_sse_foreign_cursor_requests_public_resync() -> None:
         assert "lease_owner" not in json.dumps(snapshot)
         assert "execution_epoch" not in json.dumps(snapshot)
         assert "checkpoint_ns" not in json.dumps(snapshot)
+
+
+def test_durable_sse_waiting_task_delivers_decision_then_closes() -> None:
+    with TestClient(app_module.app) as client:
+        created = client.post(
+            "/api/v1/tasks", json={"query": "compare FastAPI and Flask"}
+        ).json()
+        task_id = created["task"]["task_id"]
+        run_id = created["latest_run"]["run_id"]
+        repository = app_module.app.state.task_repository
+
+        async def pause():
+            now = datetime.now(UTC)
+            run = await repository.get_run(run_id)
+            grant = await repository.acquire_run_lease(
+                run_id,
+                lease_owner="worker",
+                lease_ttl=timedelta(minutes=1),
+                run_timeout=timedelta(minutes=30),
+                now=now,
+            )
+            reference = CheckpointReference(
+                run_id=run_id,
+                storage_checkpoint_ns="deepchoice-execution-1",
+                checkpoint_id="decision-checkpoint",
+                state_schema_version=run.manifest.state_schema_version,
+                execution_epoch=grant.execution_epoch,
+                created_at=now + timedelta(seconds=1),
+            )
+            await repository.add_checkpoint_reference(
+                reference,
+                lease_owner="worker",
+                execution_epoch=grant.execution_epoch,
+                now=now + timedelta(seconds=1),
+            )
+            await repository.pause_for_decision(
+                DecisionPause(
+                    decision_id="decision-api-sse",
+                    reason="Evidence is structurally insufficient.",
+                    gaps=("Missing independent evidence.",),
+                ),
+                reference,
+                lease_owner="worker",
+                execution_epoch=grant.execution_epoch,
+                now=now + timedelta(seconds=2),
+            )
+
+        client.portal.call(pause)
+        response = client.get(f"/api/v1/tasks/{task_id}/events")
+        assert response.status_code == 200
+        events = _decode_sse(response.text)
+        assert events[-1]["event"] == "decision.required"
+        assert events[-1]["data"]["status"] == "waiting_for_input"
+
+        caught_up = client.get(
+            f"/api/v1/tasks/{task_id}/events",
+            headers={"Last-Event-ID": events[-1]["id"]},
+        )
+        assert caught_up.status_code == 200
+        assert caught_up.text == ""
 
 
 def test_durable_sse_rejects_invalid_cursor_and_missing_task() -> None:

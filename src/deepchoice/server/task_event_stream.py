@@ -38,6 +38,8 @@ _TERMINAL_TASK_STATUSES = {
     TaskStatus.INTERRUPTED,
 }
 
+_STREAM_PAUSE_TASK_STATUSES = {TaskStatus.WAITING_FOR_INPUT}
+
 
 def parse_last_event_id(value: str | None) -> int:
     """Parse the SSE header without accepting signs, whitespace, or overflow."""
@@ -139,7 +141,8 @@ async def iter_task_event_sse(
             return
         bounds = await repository.get_task_event_cursor(task_id, cursor=cursor)
         if (
-            current.task.status in _TERMINAL_TASK_STATUSES
+            current.task.status
+            in (_TERMINAL_TASK_STATUSES | _STREAM_PAUSE_TASK_STATUSES)
             and cursor >= (bounds.latest_event_id or 0)
         ):
             return

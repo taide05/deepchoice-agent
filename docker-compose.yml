@@ -18,7 +18,9 @@ services:
       - FWD_TARGETS=${FWD_TARGETS:-export.arxiv.org,api.github.com,api.stackexchange.com}
       - OUTBOUND_CHANNELS=${OUTBOUND_CHANNELS:-local-proxy,self-forward,direct,direct-v6}
       - OUTBOUND_CHANNELS_COMMUNITY=${OUTBOUND_CHANNELS_COMMUNITY:-self-forward,local-proxy,direct}
+      - OUTBOUND_CHANNELS_TAVILY=${OUTBOUND_CHANNELS_TAVILY:-local-proxy,direct,direct-v6}
       - RETRIEVAL_CACHE_ENABLED=${RETRIEVAL_CACHE_ENABLED:-1}
+      - TAVILY_KEY_STATE_PATH=${TAVILY_KEY_STATE_PATH:-/app/outputs/tavily_key_state.json}
       # SQLite runtime coordination is intentionally single-instance/single-worker.
       - WEB_CONCURRENCY=1
     volumes:

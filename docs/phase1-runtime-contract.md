@@ -100,8 +100,8 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 #### Streamlit 交互与恢复验收（Phase 4-2）
 
-- durable SSE 收到 `waiting_for_input` 或 `decision.required` 后，客户端结束本次 SSE 响应并呈现
-  最新公开 decision projection；等待用户期间不维持 SSE 连接。决策提交后从最近收到的
+- durable SSE 收到 `waiting_for_input` 或 `decision.required` 后，服务端在事件追平时结束本次
+  SSE 响应，客户端呈现最新公开 decision projection；等待用户期间不维持 SSE 连接。决策提交后从最近收到的
   `Last-Event-ID` 续接；若 replay 返回 resync，则先读取公开 task/decision 快照，再恢复事件流。
 - 页面展示 reason、evidence gaps、allowed actions 和 expiry，并提供补充信息继续、受限报告、取消。
   每次 resolve 携带当前 task version 的 `If-Match`。提交结果不确定时仅以相同 body 重试；版本或
@@ -138,7 +138,8 @@ SSE 规则：
 3. cursor 不属于当前 task、已不存在或超前时，服务发送 `resync_required` 和公开 task
    snapshot。客户端必须用 snapshot 覆盖本地投影，再从返回的最新 ID 继续。
 4. 当前状态为 completed/failed/timed-out/cancelled/interrupted 且事件已追平时连接关闭。
-   `interrupted` 后若发生 resume，客户端应重新连接读取后续事件。
+   `waiting_for_input` 也会结束本次连接，但仍是可恢复的非终态；decision resolve 后客户端从最后
+   event ID 新建连接。`interrupted` 后若发生 resume，客户端同样重新连接读取后续事件。
 5. SSE 不依赖 Phase 2 trace。当前未实现事件 retention 和空闲 keepalive；代理断线后依靠
    浏览器重连及最后收到的 event ID 恢复。
 
@@ -236,7 +237,8 @@ SSE 规则：
   unknown、reserved、剩余额度与软/硬限制；`admission_denied` 单独表示“仍有余额但不足以准入
   下一次调用”，不把它伪装成已消费到硬上限。不公开 reservation/call ID、epoch 或内部 summary。
   Streamlit 查询不可用时回退 snapshot panels。Trace 是可选观测，不影响 task state、结果或
-  durable SSE；预算预留与结算按当前 lease/epoch fencing，并发不得超发。触顶后仅当确定性结构
+  durable SSE；预算预留与结算按当前 lease/epoch fencing，并发不得超发。首次 admission denial
+  会在串行事务内锁存该 run，已经越过快速检查但尚未提交的并发申请也必须拒绝。触顶后仅当确定性结构
   证据门满足（三条非争议可用链、两个有效 HTTP(S) host、至少一条 moderate/strong）时生成
   不再外呼的受限报告并以 `completed_with_warnings` 原子持久化，否则以
   `BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE` 失败。`RunManifest` 保持 schema v1，并冻结每个 LLM

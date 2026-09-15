@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 
-import httpx
 import numpy as np
 
 from .. import outbound as _outbound
@@ -149,12 +148,12 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
     max_results = min(arguments.get("max_results", 3), 5)
 
     if tool_name == "search_web":
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            async with await _outbound.make_client("tavily") as client:
 
-            async def post(url, json=None, **kw):
-                return await client.post(url, json=json, **kw)
+                async def post(url, json=None, **kw):
+                    return await client.post(url, json=json, **kw)
 
-            try:
                 resp, _ = await post_with_failover(post, {
                     "query": query,
                     "search_depth": "basic",
@@ -169,10 +168,10 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                                     "content": r.get("content", "")[:300],
                                     "url": r.get("url", "")} for r in results],
                                   ensure_ascii=False)
-            except BudgetError:
-                raise
-            except Exception as exc:
-                return json.dumps({"error": type(exc).__name__})
+        except BudgetError:
+            raise
+        except Exception as exc:
+            return json.dumps({"error": type(exc).__name__})
 
     elif tool_name == "search_scholarly":
         import urllib.parse

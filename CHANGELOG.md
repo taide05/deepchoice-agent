@@ -31,13 +31,14 @@
 - Phase 4-1 single durable HITL decision gate on schema v10: research-v3/state v3 manifest policy, checkpoint/fencing-bound decisions, idempotent three-action resolution, seven-day expiry and recovery, with durable GET/resolve APIs; frontend acceptance remains pending
 - Phase 4-2 Streamlit pending-decision UI with safe three-action resolution, SSE wait termination and `Last-Event-ID` continuation, plus real dual-SQLite/StateGraph recovery acceptance for restart, idempotency/conflict, expiry, cancellation, and bound single resume
 - Phase 5-1 bounded core asset registry and 12-case fixture-replay smoke evaluation for query analysis, citation verification, conclusion post-processing, and report rendering; the checked-in baseline is deployment-configuration independent and does not measure real-model semantic quality or live source health
+- Phase 5-2 engineering-foundation acceptance report with cross-module runtime, test-growth, compatibility, dependency, deployment, and residual-risk audits
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 1022 passed with no skips on 2026-09-15
+- Verified Python 3.12 test baseline is 1040 passed with no skips on 2026-09-15
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
@@ -53,8 +54,13 @@
 - New runs use `research-v3` and state schema v3 with `deterministic-citation-v1` and `evidence-insufficient-v1`; historical v1/v2 manifests remain readable but require a new run instead of incompatible same-run resume
 - Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and engineering-baseline closeout; enterprise-only expansion is removed from the current Phase scope
 - Phase 5-2 is re-scoped from final/interview delivery to engineering-foundation acceptance; real-case metric baselining, targeted quality optimization, demonstrations, and interview materials require a later separately approved roadmap
+- CI now tests the declared Python 3.11/3.12 range; benchmark and frontend images use Python 3.12, and Docker Compose persists Tavily key state under the outputs volume
+- Tavily retrieval, conflict evidence, and benchmark health checks now use the outbound-selected route; credential-free HEAD probing replaces direct-only route assumptions while preserving the legacy `tavily_direct` report label
 
 ### Fixed
+- Budget exhaustion now latches inside serialized admission so a queued smaller request cannot commit after an earlier denial for the same run
+- Durable SSE now closes server-side after a `waiting_for_input` event is caught up and resumes from `Last-Event-ID` after the decision is resolved
+- Legacy research creation, stream/status, and history compatibility paths now have regression coverage for their deprecation headers
 - Scoped out Starlette 1.6.0's import-time `anyio.abc.BlockingPortal` deprecation warning until the already-corrected upstream code is released, without downgrading AnyIO or hiding unrelated warnings
 - Community retriever concurrency test now follows the production HTTP client timeout contract
 - Isolated the project from the conflicting global Python 3.13 environment; `pip check` is clean and frontend observability tests no longer skip because of Streamlit/Starlette incompatibility
