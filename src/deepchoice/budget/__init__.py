@@ -19,6 +19,7 @@ from .pricing import (
     PriceQuote,
     PriceStatus,
 )
+from .deferred import BudgetExecutionDeferredError, DeferredBudgetManager
 
 
 DEFAULT_RUN_BUDGET_POLICY = RunBudgetPolicy(
@@ -29,6 +30,7 @@ DEFAULT_RUN_BUDGET_POLICY = RunBudgetPolicy(
 __all__ = [
     "BudgetAmount",
     "BudgetEnforcementMode",
+    "BudgetExecutionDeferredError",
     "BudgetHardLimits",
     "BudgetLedgerEntry",
     "BudgetManager",
@@ -37,6 +39,7 @@ __all__ = [
     "BudgetTier",
     "CURRENT_PRICE_CATALOG",
     "DEFAULT_RUN_BUDGET_POLICY",
+    "DeferredBudgetManager",
     "ModelTokenPrice",
     "PriceCatalog",
     "PriceQuote",

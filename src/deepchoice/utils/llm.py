@@ -167,6 +167,13 @@ async def call_model(
     extra_body: dict | None = None,
     seed: int | None = None,
 ) -> dict | str:
+    # Lazy to keep the historic agent/manifest import graph acyclic.
+    from deepchoice.observability import (
+        ExternalCallKind,
+        TraceStatus,
+        current_trace_recorder,
+    )
+
     tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
     model = cfg["model"]
@@ -198,16 +205,77 @@ async def call_model(
     response = None
     try:
         for attempt in range(_MAX_RETRIES + 1):
+            trace, node_attempt_id = current_trace_recorder()
+            trace_call = None
+            if trace is not None:
+                trace_call = await trace.start_external_call(
+                    node_attempt_id=node_attempt_id,
+                    kind=ExternalCallKind.LLM,
+                    provider=tier,
+                    operation="chat.completions.create",
+                    request_summary={
+                        "model": model,
+                        "retry_no": attempt,
+                        "response_format": response_format or "text",
+                    },
+                )
+            attempt_started = time.monotonic()
             try:
                 response = await client.chat.completions.create(**kwargs)
-                break
+            except asyncio.CancelledError:
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=TraceStatus.CANCELLED,
+                        result_summary={"retry_no": attempt},
+                    )
+                raise
             except Exception as e:
                 status = getattr(e, "status_code", None)
                 retryable = isinstance(e, APIConnectionError) or status in _RETRYABLE_STATUSES
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=(
+                            TraceStatus.TIMED_OUT
+                            if isinstance(e, TimeoutError)
+                            else TraceStatus.FAILED
+                        ),
+                        result_summary={
+                            "elapsed_ms": round(
+                                (time.monotonic() - attempt_started) * 1000
+                            ),
+                            "error_type": type(e).__name__,
+                            "error_status": status if isinstance(status, int) else None,
+                            "retry_no": attempt,
+                            "retryable": retryable,
+                        },
+                    )
                 if not retryable or attempt >= _MAX_RETRIES:
                     raise
                 delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
                 await _retry_sleep(delay)
+            else:
+                trace_usage = {}
+                if response.usage is not None:
+                    trace_usage = {
+                        "input_tokens": response.usage.prompt_tokens,
+                        "output_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens,
+                    }
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=TraceStatus.SUCCEEDED,
+                        result_summary={
+                            "elapsed_ms": round(
+                                (time.monotonic() - attempt_started) * 1000
+                            ),
+                            "retry_no": attempt,
+                        },
+                        usage_summary=trace_usage,
+                    )
+                break
     except Exception as e:
         record = {
             "case_id": _current_case.get(),

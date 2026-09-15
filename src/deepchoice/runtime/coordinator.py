@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from deepchoice.agents.orchestrator import ChiefEditorAgent
-from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
+from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY, DeferredBudgetManager
 from deepchoice.contracts.errors import normalize_error
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import (
@@ -24,7 +24,9 @@ from deepchoice.persistence.repository import (
     RunLeaseLostError,
     SQLiteTaskRunRepository,
 )
+from deepchoice.observability import RuntimeTraceRecorder, SQLiteTraceStore, TraceStatus
 from deepchoice.runtime.checkpoints import FencedCheckpointSaver
+from deepchoice.runtime.context import RunContext, bind_run_context
 from deepchoice.runtime.lifecycle import RunStatus
 
 
@@ -226,6 +228,7 @@ class RunCoordinator:
         owner_id: str | None = None,
         clock: Callable[[], datetime] = _utc_now,
         orchestrator_factory: Callable[..., ChiefEditorAgent] = ChiefEditorAgent,
+        trace_store: SQLiteTraceStore | None = None,
     ) -> None:
         if min(lease_ttl, heartbeat_interval, run_timeout, recovery_interval) <= timedelta(0):
             raise ValueError("coordinator durations must be positive")
@@ -241,10 +244,18 @@ class RunCoordinator:
         self.owner_id = owner_id or str(uuid.uuid4())
         self._clock = clock
         self._orchestrator_factory = orchestrator_factory
+        self._trace_store = trace_store
         self._active: dict[str, asyncio.Task[None]] = {}
         self._active_lock = asyncio.Lock()
         self._recovery_task: asyncio.Task[None] | None = None
         self._stopping = False
+
+    def configure_trace_store(self, trace_store: SQLiteTraceStore) -> None:
+        """Attach the composition-root trace store before execution starts."""
+
+        if self._active or self._recovery_task is not None:
+            raise RuntimeError("trace store must be configured before coordinator start")
+        self._trace_store = trace_store
 
     @property
     def active_runs(self) -> tuple[str, ...]:
@@ -424,6 +435,15 @@ class RunCoordinator:
         grant = None
         heartbeat: asyncio.Task[None] | None = None
         acquisition: asyncio.Task[Any] | None = None
+        context_binding = None
+        trace: RuntimeTraceRecorder | None = None
+        trace_finished = False
+
+        async def finish_trace(status: TraceStatus) -> None:
+            nonlocal trace_finished
+            if trace is not None and not trace_finished:
+                await trace.finish_run(status)
+                trace_finished = True
 
         async def stop_heartbeat() -> None:
             nonlocal heartbeat
@@ -460,6 +480,27 @@ class RunCoordinator:
                 )
                 if fenced.status is RunStatus.CANCELLING:
                     raise asyncio.CancelledError
+
+            class GuardCancellationPort:
+                async def raise_if_cancelled(self) -> None:
+                    await guard()
+
+            if self._trace_store is not None:
+                sink = self._trace_store.bind(
+                    run_id=run_id,
+                    execution_epoch=grant.execution_epoch,
+                    lease_owner=self.owner_id,
+                )
+                trace = RuntimeTraceRecorder(sink, task_id=grant.task_id)
+                context = RunContext.from_run_record(
+                    run,
+                    cancellation=GuardCancellationPort(),
+                    trace=trace,
+                    budget=DeferredBudgetManager(),
+                )
+                context_binding = bind_run_context(context)
+                context_binding.__enter__()
+                await trace.start_run()
 
             checkpoint_id = None
             read_namespace = None
@@ -577,6 +618,7 @@ class RunCoordinator:
             )
             await stop_heartbeat()
             await guard()
+            await finish_trace(TraceStatus.SUCCEEDED)
             await self._finalize(
                 run_id,
                 grant.execution_epoch,
@@ -586,6 +628,7 @@ class RunCoordinator:
         except TimeoutError:
             await stop_heartbeat()
             if grant is not None:
+                await finish_trace(TraceStatus.TIMED_OUT)
                 await self._finalize(run_id, grant.execution_epoch, RunStatus.TIMED_OUT)
         except asyncio.CancelledError:
             await stop_heartbeat()
@@ -597,6 +640,7 @@ class RunCoordinator:
                     # owner/epoch with which to perform a legitimate finalize.
                     grant = None
             if grant is not None:
+                await finish_trace(TraceStatus.CANCELLED)
                 finalization = asyncio.create_task(
                     self._finalize(
                         run_id, grant.execution_epoch, RunStatus.INTERRUPTED
@@ -616,6 +660,7 @@ class RunCoordinator:
         except Exception as exc:
             await stop_heartbeat()
             if grant is not None:
+                await finish_trace(TraceStatus.FAILED)
                 detail = normalize_error(exc)
                 await self._finalize(
                     run_id,
@@ -625,6 +670,8 @@ class RunCoordinator:
                 )
         finally:
             await stop_heartbeat()
+            if context_binding is not None:
+                context_binding.__exit__(None, None, None)
 
 
 __all__ = ["RunCoordinator", "build_public_run_result"]

@@ -43,6 +43,7 @@ from ..persistence.database import DEFAULT_DB_PATH, DatabaseConnectionError, _aw
 from ..persistence.migrations import run_migrations
 from ..persistence.records import RunResultRecord, TaskWithRun
 from ..persistence.repository import SQLiteTaskRunRepository
+from ..observability import SQLiteTraceStore
 from ..runtime.coordinator import RunCoordinator
 from ..runtime.instance_guard import (
     RuntimeInstanceGuard,
@@ -134,6 +135,9 @@ async def lifespan(application: FastAPI):
             checkpointer,
             enabled=execution_enabled,
         )
+        configure_trace_store = getattr(coordinator, "configure_trace_store", None)
+        if callable(configure_trace_store):
+            configure_trace_store(SQLiteTraceStore(connection, connection_lock))
         application.state.product_database_connection = connection
         application.state.product_database_lock = connection_lock
         application.state.task_repository = repository

@@ -6,6 +6,7 @@ from ..retrievers.base import error_text
 from ..retrievers.contracts import RetrievalRequest, RetrievalResult
 from ..retrievers.learned_docs import extract_terms, harvest
 from ..retrievers.official import TECH_DOCS
+from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
 from ..utils.views import print_agent_output
 
 
@@ -33,7 +34,7 @@ async def _contract_failure(source: str, _exc: Exception) -> RetrievalResult:
     )
 
 
-async def _invoke_retriever(
+async def _invoke_retriever_untraced(
     name: str,
     cls: type,
     *,
@@ -89,7 +90,9 @@ async def _invoke_retriever(
         )
 
     if not hasattr(pending, "__await__"):
-        return await _contract_failure(name, TypeError("retriever result is not awaitable")), is_stable
+        return await _contract_failure(
+            name, TypeError("retriever result is not awaitable")
+        ), is_stable
     try:
         return await pending, is_stable
     except Exception as exc:
@@ -104,6 +107,76 @@ async def _invoke_retriever(
             is_stable,
         )
 
+
+async def _invoke_retriever(
+    name: str,
+    cls: type,
+    *,
+    query: str,
+    sub_questions: list[str],
+    adapted_queries: list[str],
+) -> tuple[object, bool]:
+    """Record one independent retrieval call without retaining its query."""
+
+    trace, node_attempt_id = current_trace_recorder()
+    trace_call = None
+    if trace is not None:
+        trace_call = await trace.start_external_call(
+            node_attempt_id=node_attempt_id,
+            kind=ExternalCallKind.RETRIEVAL,
+            provider=name,
+            operation="retrieve",
+            request_summary={
+                "max_results": 7,
+                "sub_question_count": len(sub_questions),
+                "adapted_query_count": len(adapted_queries),
+            },
+        )
+    try:
+        invocation = await _invoke_retriever_untraced(
+            name,
+            cls,
+            query=query,
+            sub_questions=sub_questions,
+            adapted_queries=adapted_queries,
+        )
+    except asyncio.CancelledError:
+        if trace is not None:
+            await trace.finish_external_call(
+                trace_call, status=TraceStatus.CANCELLED
+            )
+        raise
+    except Exception as exc:
+        if trace is not None:
+            await trace.finish_external_call(
+                trace_call,
+                status=TraceStatus.FAILED,
+                result_summary={"error_type": type(exc).__name__},
+            )
+        raise
+
+    raw_result, is_stable = invocation
+    try:
+        result = RetrievalResult.model_validate(raw_result)
+    except Exception:
+        trace_status = TraceStatus.FAILED
+        summary = {"retrieval_status": "invalid_contract"}
+    else:
+        trace_status = (
+            TraceStatus.FAILED
+            if result.status == "failed"
+            else TraceStatus.SUCCEEDED
+        )
+        summary = {
+            "retrieval_status": result.status,
+            "result_count": len(result.results),
+            "latency_ms": result.latency_ms,
+        }
+    if trace is not None:
+        await trace.finish_external_call(
+            trace_call, status=trace_status, result_summary=summary
+        )
+    return invocation
 
 class MultiRetrieverAgent:
     def __init__(

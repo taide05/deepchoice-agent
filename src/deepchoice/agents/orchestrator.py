@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -12,6 +13,8 @@ from ..contracts.manifest import (
     ensure_run_manifest_compatible,
 )
 from ..state import ResearchState
+from ..observability import RuntimeTraceRecorder, TraceStatus
+from ..runtime.context import bind_node_attempt, get_run_context
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import ConclusionSynthesizerAgent
 from .conflict_detector import ConflictDetectorAgent
@@ -86,11 +89,59 @@ class ChiefEditorAgent:
             self.live_phase = name
             if self.execution_guard is not None:
                 await self.execution_guard()
+            context = get_run_context()
+            trace = (
+                context.trace
+                if context is not None
+                and isinstance(context.trace, RuntimeTraceRecorder)
+                else None
+            )
+            attempt = (
+                await trace.start_node_attempt(name) if trace is not None else None
+            )
             t0 = time.monotonic()
-            result = await fn(state)
-            if self.execution_guard is not None:
-                await self.execution_guard()
-            elapsed = round(time.monotonic() - t0, 2)
+            try:
+                with bind_node_attempt(
+                    attempt.node_attempt_id if attempt is not None else None
+                ):
+                    result = await fn(state)
+                    if self.execution_guard is not None:
+                        await self.execution_guard()
+            except asyncio.CancelledError:
+                if trace is not None:
+                    await trace.finish_node_attempt(
+                        attempt,
+                        status=TraceStatus.CANCELLED,
+                        summary={"elapsed_ms": round((time.monotonic() - t0) * 1000)},
+                    )
+                raise
+            except TimeoutError:
+                if trace is not None:
+                    await trace.finish_node_attempt(
+                        attempt,
+                        status=TraceStatus.TIMED_OUT,
+                        summary={"elapsed_ms": round((time.monotonic() - t0) * 1000)},
+                    )
+                raise
+            except Exception as exc:
+                if trace is not None:
+                    await trace.finish_node_attempt(
+                        attempt,
+                        status=TraceStatus.FAILED,
+                        summary={
+                            "elapsed_ms": round((time.monotonic() - t0) * 1000),
+                            "error_type": type(exc).__name__,
+                        },
+                    )
+                raise
+            elapsed_ms = round((time.monotonic() - t0) * 1000)
+            if trace is not None:
+                await trace.finish_node_attempt(
+                    attempt,
+                    status=TraceStatus.SUCCEEDED,
+                    summary={"elapsed_ms": elapsed_ms},
+                )
+            elapsed = round(elapsed_ms / 1000, 2)
             timing = dict(state.get("agent_timing", {}))
             timing[name] = elapsed
             result["agent_timing"] = timing

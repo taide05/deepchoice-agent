@@ -7,8 +7,10 @@ boundaries.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Iterator, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -78,4 +80,51 @@ class RunContext(BaseModel):
         )
 
 
-__all__ = ["CancellationPort", "RunContext"]
+_current_run_context: ContextVar[RunContext | None] = ContextVar(
+    "deepchoice_run_context", default=None
+)
+_current_node_attempt_id: ContextVar[str | None] = ContextVar(
+    "deepchoice_node_attempt_id", default=None
+)
+
+
+def get_run_context() -> RunContext | None:
+    """Return the out-of-band durable run context for the current async task."""
+
+    return _current_run_context.get()
+
+
+def get_node_attempt_id() -> str | None:
+    return _current_node_attempt_id.get()
+
+
+@contextmanager
+def bind_run_context(context: RunContext) -> Iterator[None]:
+    """Bind context without ever adding it to ResearchState/checkpoints."""
+
+    context_token = _current_run_context.set(context)
+    node_token = _current_node_attempt_id.set(None)
+    try:
+        yield
+    finally:
+        _current_node_attempt_id.reset(node_token)
+        _current_run_context.reset(context_token)
+
+
+@contextmanager
+def bind_node_attempt(node_attempt_id: str | None) -> Iterator[None]:
+    token = _current_node_attempt_id.set(node_attempt_id)
+    try:
+        yield
+    finally:
+        _current_node_attempt_id.reset(token)
+
+
+__all__ = [
+    "CancellationPort",
+    "RunContext",
+    "bind_node_attempt",
+    "bind_run_context",
+    "get_node_attempt_id",
+    "get_run_context",
+]

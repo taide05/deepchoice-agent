@@ -233,6 +233,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     enriching claim descriptions in the arbitration prompt.
     """
     from ..utils.llm import TIERS, _get_client
+    from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
 
     client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash")
 
@@ -250,7 +251,17 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 
     summaries = []
 
-    for _ in range(max_iterations):
+    for iteration in range(max_iterations):
+        trace, node_attempt_id = current_trace_recorder()
+        trace_call = None
+        if trace is not None:
+            trace_call = await trace.start_external_call(
+                node_attempt_id=node_attempt_id,
+                kind=ExternalCallKind.LLM,
+                provider="deepseek-flash",
+                operation="evidence_gather.chat",
+                request_summary={"iteration_no": iteration + 1},
+            )
         try:
             response = await asyncio.wait_for(
                 client.chat.completions.create(
@@ -261,12 +272,42 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 ),
                 timeout=per_call_timeout,
             )
+        except asyncio.CancelledError:
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call, status=TraceStatus.CANCELLED
+                )
+            raise
         except TimeoutError:
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call, status=TraceStatus.TIMED_OUT
+                )
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
-        except Exception:
+        except Exception as exc:
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call,
+                    status=TraceStatus.FAILED,
+                    result_summary={"error_type": type(exc).__name__},
+                )
             print_agent_output("Evidence gathering LLM error", agent="CONFLICT_DETECTOR")
             break
+
+        trace_usage = {}
+        if getattr(response, "usage", None) is not None:
+            trace_usage = {
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            }
+        if trace is not None:
+            await trace.finish_external_call(
+                trace_call,
+                status=TraceStatus.SUCCEEDED,
+                usage_summary=trace_usage,
+            )
 
         # Capture token usage (same 4-field shape as call_model) so the
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
@@ -289,6 +330,15 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         tool_calls = [tc for tc in msg.tool_calls if tc.type == "function"]
 
         async def _run_tool(tc):
+            tool_trace = None
+            if trace is not None:
+                tool_trace = await trace.start_external_call(
+                    node_attempt_id=node_attempt_id,
+                    kind=ExternalCallKind.RETRIEVAL,
+                    provider=tc.function.name,
+                    operation="evidence_gather.tool",
+                    request_summary={"iteration_no": iteration + 1},
+                )
             try:
                 arguments = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
@@ -298,10 +348,33 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     _execute_search(tc.function.name, arguments),
                     timeout=EVIDENCE_GATHER_TOOL_TIMEOUT_S,
                 )
+            except asyncio.CancelledError:
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace, status=TraceStatus.CANCELLED
+                    )
+                raise
             except TimeoutError:
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace, status=TraceStatus.TIMED_OUT
+                    )
             except Exception as exc:
                 result = json.dumps({"error": type(exc).__name__})
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace,
+                        status=TraceStatus.FAILED,
+                        result_summary={"error_type": type(exc).__name__},
+                    )
+            else:
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace,
+                        status=TraceStatus.SUCCEEDED,
+                        result_summary={"result_chars": len(result)},
+                    )
             return tc.id, result
 
         tool_results = await asyncio.gather(*[_run_tool(tc) for tc in tool_calls])

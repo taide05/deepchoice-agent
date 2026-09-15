@@ -9,13 +9,20 @@ from .contracts import (
     TraceSink,
     TraceStatus,
 )
+from .runtime import RuntimeTraceRecorder, current_trace_recorder
+from .sqlite import SQLiteTraceSink, SQLiteTraceStore, StaleTraceAuthorityError
 
 __all__ = [
     "ExternalCall",
     "ExternalCallKind",
     "NodeAttempt",
     "RunTrace",
+    "RuntimeTraceRecorder",
+    "SQLiteTraceSink",
+    "SQLiteTraceStore",
+    "StaleTraceAuthorityError",
     "TraceEvent",
     "TraceSink",
     "TraceStatus",
+    "current_trace_recorder",
 ]
