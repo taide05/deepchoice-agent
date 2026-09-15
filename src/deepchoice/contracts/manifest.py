@@ -26,6 +26,8 @@ from ..agents.self_reviewer import REVIEW_SYSTEM
 from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS
 
 
+CURRENT_WORKFLOW_VERSION = "research-v2"
+
 WORKFLOW_NODES = (
     "query_analyzer",
     "query_adapter",
@@ -34,6 +36,7 @@ WORKFLOW_NODES = (
     "conflict_detector",
     "evidence_chain",
     "conclusion_synthesizer",
+    "citation_validator",
     "report_generator",
     "self_reviewer",
 )
@@ -100,15 +103,16 @@ class RunManifest(FrozenModel):
     manifest_id: str
     created_at: datetime
     app_version: str
-    workflow_version: Literal["research-v1"] = "research-v1"
+    workflow_version: Literal["research-v1", "research-v2"] = "research-v2"
     workflow_nodes: tuple[str, ...] = WORKFLOW_NODES
-    state_schema_version: Literal[1] = 1
+    state_schema_version: Literal[1, 2] = 2
     models: tuple[ModelConfigSnapshot, ...]
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
     scoring_policy_version: Literal["source-score-v1"] = "source-score-v1"
     security_policy_version: Literal["outbound-url-v1"] = "outbound-url-v1"
+    citation_policy_version: Literal["deterministic-citation-v1"] | None = None
     gather_evidence: bool
     report: ReportTemplateSnapshot
 
@@ -169,9 +173,9 @@ def _manifest_content(task: dict) -> dict[str, Any]:
     return {
         "manifest_schema_version": 1,
         "app_version": APP_VERSION,
-        "workflow_version": "research-v1",
+        "workflow_version": CURRENT_WORKFLOW_VERSION,
         "workflow_nodes": WORKFLOW_NODES,
-        "state_schema_version": 1,
+        "state_schema_version": 2,
         "models": tuple(
             ModelConfigSnapshot(
                 tier=tier,
@@ -258,6 +262,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         ),
         "scoring_policy_version": "source-score-v1",
         "security_policy_version": "outbound-url-v1",
+        "citation_policy_version": "deterministic-citation-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(
             report_format=report_format,
@@ -293,6 +298,8 @@ def _expected_manifest_id(manifest: RunManifest) -> str:
     for call in content["llm_calls"]:
         if call.get("max_output_tokens") is None:
             call.pop("max_output_tokens", None)
+    if content.get("citation_policy_version") is None:
+        content.pop("citation_policy_version", None)
     return _sha256(_canonical_json(content))
 
 

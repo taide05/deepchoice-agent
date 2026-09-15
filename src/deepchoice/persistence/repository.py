@@ -12,7 +12,7 @@ import aiosqlite
 
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
-from deepchoice.contracts.manifest import RunManifest
+from deepchoice.contracts.manifest import CURRENT_WORKFLOW_VERSION, RunManifest
 from deepchoice.budget import RunBudgetPolicy
 from deepchoice.runtime.lifecycle import (
     RunStatus,
@@ -1928,7 +1928,8 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                 )
                 if (
                     checkpoint is None
-                    or current.latest_run.manifest.workflow_version != "research-v1"
+                    or current.latest_run.manifest.workflow_version
+                    != CURRENT_WORKFLOW_VERSION
                 ):
                     raise CheckpointNotAvailableError(current.latest_run.run_id)
                 encoded_now = _datetime_to_db(changed_at)
@@ -2201,10 +2202,14 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                           AND rc.checkpoint_ns = r.checkpoint_ns
                           AND rc.state_schema_version = json_extract(
                               r.manifest_json, '$.state_schema_version')
-                          AND json_extract(r.manifest_json, '$.workflow_version') = 'research-v1'
+                          AND json_extract(r.manifest_json, '$.workflow_version') = ?
                       )
                     """,
-                    (TaskStatus.INTERRUPTED.value, RunStatus.INTERRUPTED.value),
+                    (
+                        TaskStatus.INTERRUPTED.value,
+                        RunStatus.INTERRUPTED.value,
+                        CURRENT_WORKFLOW_VERSION,
+                    ),
                 )
                 for row in interrupted:
                     current = _joined_from_row(row)
@@ -2254,13 +2259,17 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
                                AND rc.checkpoint_ns = r.checkpoint_ns
                                AND rc.state_schema_version = json_extract(
                                    r.manifest_json, '$.state_schema_version')
-                               AND json_extract(r.manifest_json, '$.workflow_version') = 'research-v1'
+                               AND json_extract(r.manifest_json, '$.workflow_version') = ?
                            )
                     FROM tasks AS t JOIN runs AS r ON r.run_id = t.latest_run_id
                     WHERE t.status = ? AND r.status = ?
                     ORDER BY t.created_at, t.task_id
                     """,
-                    (TaskStatus.QUEUED.value, RunStatus.QUEUED.value),
+                    (
+                        CURRENT_WORKFLOW_VERSION,
+                        TaskStatus.QUEUED.value,
+                        RunStatus.QUEUED.value,
+                    ),
                 )
                 await self._connection.commit()
                 started = False

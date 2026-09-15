@@ -11,6 +11,7 @@ class ResearchState(TypedDict):
     conflicts: list[dict]
     evidence_chains: list[dict]
     final_recommendation: dict
+    citation_verification: NotRequired[dict]
     report: str
     confidence: str
     knowledge_gaps: list[str]

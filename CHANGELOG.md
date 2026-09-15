@@ -26,13 +26,14 @@
 - Phase 2-C atomic fenced budget reservation and append-only settlement for LLM retries, retriever sources, conflict tools, and active runtime; conservative unknown-spend accounting; deterministic evidence-gated restricted reports; and budget usage/limit panels in the observability API and Streamlit
 - Manifest-verified paired product/checkpoint database backup, restore, and restore-drill tooling
 - Phase 6-A security boundary: SafeUrlPolicy with DNS/public-address and redirect revalidation, direct-IP pinning, bounded HTTP admission, forward hostname matching, centralized redaction, and sanitized report HTML/PDF output
+- Phase 3-1 deterministic citation verification between synthesis and report rendering, with canonical-URL deduplication, bounded safe fetches, four honest public statuses, immutable result projection, and report/Streamlit warnings without an LLM judge
 
 ### Changed
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 895 passed with no skips on 2026-09-15
+- Verified Python 3.12 test baseline is 937 passed with no skips on 2026-09-15
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
@@ -44,6 +45,7 @@
 - New durable runs and retries atomically freeze `standard-enforced-v1` and `unpriced-v1`; existing observe-only runs preserve their frozen policy on same-run resume. The standard limits are 60,000 total tokens, 96 LLM calls, 72 retrieval calls, and 900 seconds of active time with an 80% soft warning. Unknown prices and uncertain usage are never treated as zero
 - Phase 2 observability reads only the product SQLite latest run and exposes allowlisted Trace and latest-reservation budget aggregates. Trace remains best-effort, while the budget gate fails closed. `RunManifest` remains schema v1 and now freezes each LLM call's maximum output tokens so older manifests fail incompatible resume safely
 - Phase 6-A intentionally does not add authentication/API-key enforcement or rate limiting, and does not claim that every static provider has migrated to the safe-fetch path; those remain separate follow-up boundaries
+- New runs use `research-v2` and state schema v2 with `deterministic-citation-v1`; historical `research-v1` manifests remain identity-readable but require a new run instead of incompatible same-run resume
 - Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and measurable project closeout; enterprise-only expansion is removed from the current Phase scope
 
 ### Fixed

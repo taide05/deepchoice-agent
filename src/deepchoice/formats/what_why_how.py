@@ -1,3 +1,6 @@
+from deepchoice.formats.citations import citation_verification_section
+
+
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
@@ -171,5 +174,7 @@ def render(state: dict) -> str:
             break
     if total_sources > 12:
         lines.append(f"*(+{total_sources - 12} more sources)")
+
+    lines.extend(citation_verification_section(state, lang))
 
     return "\n".join(lines)

@@ -11,7 +11,7 @@ import pytest_asyncio
 
 from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
-from deepchoice.contracts.manifest import build_run_manifest
+from deepchoice.contracts.manifest import _expected_manifest_id, build_run_manifest
 from deepchoice.persistence import connect_database, run_migrations
 from deepchoice.persistence.records import CheckpointReference, RunRecord, TaskRecord
 from deepchoice.persistence.repository import (
@@ -362,6 +362,67 @@ async def test_interrupted_resume_reuses_compatible_checkpoint(repository):
     assert resumed.latest_run.run_id == run.run_id
     assert resumed.latest_run.thread_id == run.thread_id
     assert resumed.latest_run.manifest == run.manifest
+
+
+@pytest.mark.asyncio
+async def test_interrupted_v1_checkpoint_retries_as_current_v2_run(repository):
+    task, run = _records()
+    old_manifest = run.manifest.model_copy(
+        update={
+            "workflow_version": "research-v1",
+            "workflow_nodes": tuple(
+                node
+                for node in run.manifest.workflow_nodes
+                if node != "citation_validator"
+            ),
+            "state_schema_version": 1,
+            "citation_policy_version": None,
+        }
+    )
+    old_manifest = old_manifest.model_copy(
+        update={"manifest_id": _expected_manifest_id(old_manifest)}
+    )
+    run = run.model_copy(update={"manifest": old_manifest})
+    await repository.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repository.acquire_run_lease(
+        run.run_id,
+        lease_owner="worker",
+        lease_ttl=timedelta(seconds=30),
+        run_timeout=timedelta(minutes=5),
+        now=now,
+    )
+    await repository.add_checkpoint_reference(
+        CheckpointReference(
+            run_id=run.run_id,
+            checkpoint_id="cp-v1",
+            state_schema_version=1,
+            execution_epoch=grant.execution_epoch,
+            created_at=now,
+        ),
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        now=now,
+    )
+    interrupted = await repository.finalize_run(
+        run.run_id,
+        lease_owner="worker",
+        execution_epoch=grant.execution_epoch,
+        status=RunStatus.INTERRUPTED,
+        now=now + timedelta(seconds=1),
+    )
+
+    resumed = await TaskService(repository).resume(
+        task.task_id, expected_task_version=interrupted.task.version
+    )
+
+    assert resumed.latest_run.run_id != run.run_id
+    assert resumed.latest_run.manifest.workflow_version == "research-v2"
+    assert resumed.latest_run.manifest.state_schema_version == 2
+    assert resumed.latest_run.manifest.citation_policy_version == (
+        "deterministic-citation-v1"
+    )
+    assert (await repository.get_run(run.run_id)).status is RunStatus.INTERRUPTED
 
 
 @pytest.mark.asyncio

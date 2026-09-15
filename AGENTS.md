@@ -27,7 +27,7 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Durable lifecycle service and coordinator: `src/deepchoice/services/tasks.py`, `src/deepchoice/runtime/`
 - Product SQLite schema, records, and repositories: `src/deepchoice/persistence/`
 - Phase 1 API/event contract and recovery runbook: `docs/phase1-runtime-contract.md`
-- LangGraph orchestration and nine-node workflow: `src/deepchoice/agents/orchestrator.py`
+- LangGraph orchestration, research nodes, and deterministic citation validation: `src/deepchoice/agents/orchestrator.py`
 - Shared state contract: `src/deepchoice/state.py`
 - Agent nodes: `src/deepchoice/agents/`
 - Six-source retrieval and common result envelope: `src/deepchoice/retrievers/`
@@ -38,7 +38,7 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Offline evaluation: `benchmarks/`
 - Automated tests: `tests/`
 
-The normal research path is query analysis -> query adaptation -> multi-source retrieval -> source evaluation -> conflict detection -> evidence chains -> conclusion synthesis -> report generation -> self-review, with conditional retry routing in the orchestrator.
+The normal research path is query analysis -> query adaptation -> multi-source retrieval -> source evaluation -> conflict detection -> evidence chains -> conclusion synthesis -> deterministic citation validation -> report generation -> self-review, with conditional retry routing in the orchestrator.
 
 ## Setup and commands
 
@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-15 is 895 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 937 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -174,6 +174,23 @@ When adding a setting, update the code default, tests, README configuration sect
   PDF 使用同一 sanitizer。前端不得把未清洗的报告正文放入 `unsafe_allow_html`。
 - Phase 6-A 不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全
   fetch；这些能力不在当前实施路线，除非后续明确重新修订范围。
+
+### Phase 3-1 citation verification
+
+- New runs freeze workflow `research-v2`, state schema v2, and citation policy
+  `deterministic-citation-v1`. Historical `research-v1` manifests remain readable and identity-valid,
+  but they are incompatible with same-run resume on the v2 runtime and must start a new run.
+- Citation verification is deterministic and runs after conclusion synthesis and before report
+  rendering. Do not add an LLM judge to the default path or describe lexical verification as semantic
+  proof.
+- Public citation status is limited to `verified`, `unsupported`, `unreachable`, and `unknown`.
+  Temporary network, DNS, routing, proxy-safety, and cross-language uncertainty must remain
+  `unknown`; they are not evidence that a claim is false.
+- Dynamic citation URLs must use the bounded outbound safe-fetch path. Equivalent canonical URLs
+  are fetched at most once per validation pass, each logical fetch reserves `http_calls` first, and
+  no raw page body, exception, DNS/IP detail, or redirect trace may enter graph state or run results.
+- Phase 3-1 stores its bounded checks and per-source projection in the immutable public run snapshot;
+  it does not add a lifecycle table or treat verification warnings as task lifecycle events.
 
 ### Current implementation scope
 

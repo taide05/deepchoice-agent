@@ -18,6 +18,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
 - **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
 - **可观测性与预算面板**：持久化节点尝试与 LLM/检索调用，展示耗时、重试、失败、Token 与预算余量；外呼先经过原子预算门，触顶时按最低证据生成受限报告或安全终止
+- **确定性引用验证**：在结论合成后检查关键声明的引用绑定、规范 URL、公开可达性、数字/否定冲突和词法支持度，只给出 `verified` / `unsupported` / `unreachable` / `unknown`，不增加第二个 LLM 裁判
 - **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 - **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
@@ -121,8 +122,15 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 `report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。
 本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全 fetch。
 
+Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等价 URL 规范化后每轮最多安全
+抓取一次，额外请求先预留 `http_calls`；检查结果随 immutable run snapshot 持久化，并由报告
+和 Streamlit 证据卡展示。该状态是可解释的规则判断，不是语义事实证明：临时网络、DNS、
+安全路由限制或跨语言难以判断时保持 `unknown`，不会被误写成错误引用。新运行冻结
+`research-v2`、state schema v2 与 `deterministic-citation-v1`；历史 v1 manifest 可审计但须新建
+run，不能在新工作流上续跑旧 checkpoint。
+
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
-[`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成引用可信、单一 HITL
+[`docs/current-roadmap.md`](docs/current-roadmap.md)：继续完成轻量检索去重/缓存、单一 HITL
 和质量评估闭环；多租户认证、分布式基础设施及其他企业级扩展不在当前实施范围。
 
 ### 测试
@@ -132,7 +140,7 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 ```
 
 项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**895 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+**937 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -180,7 +188,7 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
           │ 澄清后的研究任务 + 5 个分解子问题
           ▼
    ┌──────────────────────────────────────────────────────┐
-   │              LangGraph 管道（9 Agent）                │
+   │          LangGraph 研究管道 + 确定性验证               │
    │                                                      │
    │  [1] QueryAnalyzer      查询分解为 5 维子问题         │
    │         │                                            │
@@ -196,9 +204,11 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
    │         │                                            │
    │  [7] ConclusionSynth    最终推荐 + 排序 + trade-off   │
    │         │                                            │
-   │  [8] ReportGenerator    3 种格式选一渲染               │
+   │  [8] CitationValidator  URL/声明支持确定性检查          │
    │         │                                            │
-   │  [9] SelfReviewer       6 项质量审查                  │
+   │  [9] ReportGenerator    3 种格式选一渲染               │
+   │         │                                            │
+   │ [10] SelfReviewer       6 项质量审查                  │
    │         │              confidence < high → retry ──┐  │
    │         ▼                                         │  │
    │       END  ◄──────────────────────────────────────┘  │
@@ -231,7 +241,7 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 |------|-----|------|
 | Top-1 准确率 | **92.0%**（287 可判定） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC 为 context_dependent 标注——无单一正确答案，按设计不计入 Top-1） |
 | 任务成功率 | **100%**（300/300） | 零失败——str.get bug 已根除（`llm.py` 兜底）+ 超时补跑 |
-| 声明溯源率 | **93.0%** | 精确口径（claim_citation_rate）：每条事实声明带 `[Source: title]` 且 title 真实存在于证据链；**伪造引用 0**（后置校验剔除幻觉引用） |
+| 声明溯源率 | **93.0%** | 历史精确口径（claim_citation_rate）：每条事实声明带 `[Source: title]` 且 title 真实存在于证据链；**伪造引用 0**（后置校验剔除幻觉引用）。该 2026-08-31 指标不包含后来加入的在线可达性/词法支持验证 |
 | 信源召回率 | **66.7%** | official_doc 65.6% / github_repo 73.0% / package_registry 50% / academic+community ~100%（300 case，与 200 case 66.2% 持平） |
 | official_doc 召回率 | **65.6%**（346/528） | 官方文档直连 222 条（91 种子 + 131 运行时自学习入库，2026-08-31 种子化） |
 | 端到端延迟 P50 | **342.1s** | 中位数——约 5.7 分钟完成一次技术选型研究 |
@@ -253,13 +263,14 @@ python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --
 
 ## 技术栈
 
-LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
+LangGraph（9 个研究/生成节点 + 1 个确定性引用验证节点 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
 
 ## 项目结构
 
 ```
 src/deepchoice/
-├── agents/          # 9 Agent 节点
+├── agents/          # 研究/生成节点与确定性引用验证节点
+├── citations/       # 引用状态契约、规范 URL 与确定性支持度验证
 ├── contracts/       # API、结构化错误与不可变 RunManifest
 ├── retrievers/      # 6 路检索器（稳定 retrieve 契约 + 兼容 search 接口）
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计

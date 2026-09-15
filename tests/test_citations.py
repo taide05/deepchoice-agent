@@ -1,5 +1,11 @@
 """Tests for report citation injection and TOC building (formats/citations.py)."""
-from deepchoice.formats.citations import build_toc, inject_citations, number_sources
+from deepchoice.formats.citations import (
+    build_toc,
+    citation_verification_section,
+    inject_citations,
+    number_sources,
+)
+from deepchoice.formats import comparison_matrix, evidence_first, what_why_how
 
 CHAINS = [
     {
@@ -48,6 +54,57 @@ class TestNumberSources:
     def test_empty_chains(self):
         assert number_sources([]) == []
 
+    def test_canonical_equivalent_urls_dedupe_and_aggregate_highest_risk_status(self):
+        chains = [
+            {"sources": [{
+                "title": "First", "url": "https://EXAMPLE.com/article#top",
+                "verification_status": "verified", "verification_reason": "lexical_support",
+            }]},
+            {"sources": [
+                {
+                    "title": "Second", "url": "https://example.com/article#other",
+                    "verification_status": "unreachable", "verification_reason": "network_uncertain",
+                },
+                {
+                    "title": "Third", "url": "https://example.com/article#last",
+                    "verification_status": "unsupported", "verification_reason": "numeric_mismatch",
+                },
+            ]},
+        ]
+        registry = number_sources(chains)
+        assert len(registry) == 1
+        assert registry[0]["url"] == "https://example.com/article"
+        assert registry[0]["canonical_url"] == "https://example.com/article"
+        assert registry[0]["chain_idx"] == 0
+        assert registry[0]["source_idx"] == 0
+        assert registry[0]["verification_status"] == "unsupported"
+        assert registry[0]["verification_reason"] == "numeric_mismatch"
+
+    def test_status_priority_unsupported_then_unreachable_then_unknown_then_verified(self):
+        def aggregate(statuses):
+            return number_sources([{"sources": [
+                {"url": f"https://example.com/x#{i}", "verification_status": status}
+                for i, status in enumerate(statuses)
+            ]}])[0]["verification_status"]
+
+        assert aggregate(["verified", "unknown"]) == "unknown"
+        assert aggregate(["unknown", "unreachable"]) == "unreachable"
+        assert aggregate(["unreachable", "unsupported"]) == "unsupported"
+
+    def test_historical_sources_project_as_unknown_not_checked(self):
+        registry = number_sources([{"sources": [{"title": "Old", "url": "https://example.com/old"}]}])
+        assert registry[0]["verification_status"] == "unknown"
+        assert registry[0]["verification_reason"] == "not_checked"
+
+    def test_untrusted_stored_canonical_url_is_recomputed_from_source_url(self):
+        registry = number_sources([{"sources": [{
+            "title": "Docs",
+            "url": "https://example.com/real#section",
+            "canonical_url": "javascript:alert(1)",
+        }]}])
+        assert registry[0]["url"] == "https://example.com/real"
+        assert registry[0]["canonical_url"] == "https://example.com/real"
+
 
 class TestInjectCitations:
     def test_replaces_known_link_with_title_plus_sup_anchor(self):
@@ -71,6 +128,14 @@ class TestInjectCitations:
         registry = number_sources(CHAINS)
         md = "[External](https://elsewhere.com/x)"
         assert inject_citations(md, registry) == md
+
+    def test_canonical_equivalent_url_gets_same_number(self):
+        registry = number_sources([{"sources": [{
+            "title": "Original", "url": "https://EXAMPLE.com/article#one",
+        }]}])
+        out = inject_citations("[Equivalent](HTTPS://example.com/article#two)", registry)
+        assert 'href="#ev-1"' in out
+        assert "(https://" not in out
 
     def test_plain_text_unaffected(self):
         registry = number_sources(CHAINS)
@@ -98,3 +163,30 @@ class TestBuildToc:
         toc, annotated = build_toc(md)
         assert toc == []
         assert annotated == md
+
+
+def test_citation_verification_summary_warns_and_clarifies_unknown():
+    state = {
+        "citation_verification": {
+            "status_counts": {"verified": 2, "unsupported": 1, "unreachable": 0, "unknown": 3}
+        }
+    }
+    section = "\n".join(citation_verification_section(state, "en"))
+    assert "Unsupported 1" in section and "Unknown 3" in section
+    assert "review" in section
+    assert "not necessarily incorrect" in section
+    assert citation_verification_section({}, "en") == []
+
+
+def test_all_report_formats_include_verification_warning_and_legacy_omits_it():
+    state = {
+        "task": {"query": "FastAPI vs Flask"},
+        "evidence_chains": [],
+        "citation_verification": {
+            "status_counts": {"verified": 1, "unsupported": 0, "unreachable": 0, "unknown": 0}
+        },
+    }
+    for renderer in (what_why_how.render, evidence_first.render, comparison_matrix.render):
+        assert "Citation Verification" in renderer(state)
+        assert "All checked citations passed" in renderer(state)
+        assert "Citation Verification" not in renderer({"task": {"query": "FastAPI vs Flask"}})

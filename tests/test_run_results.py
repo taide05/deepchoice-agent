@@ -207,6 +207,26 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
                     }
                 ],
                 "token_usage": {"input_tokens": 12, "output_tokens": 7},
+                "citation_verification": {
+                    "schema_version": 1,
+                    "policy_version": "deterministic-citation-v1",
+                    "status_counts": {
+                        "verified": 1,
+                        "unsupported": 0,
+                        "unreachable": 0,
+                        "unknown": 0,
+                    },
+                    "checks": [{
+                        "claim_id": "claim-public",
+                        "claim_path": "final_recommendation.winner_rationale",
+                        "claim_text": "Public claim",
+                        "source_title": "Public docs",
+                        "canonical_url": "https://example.com/docs",
+                        "status": "verified",
+                        "reason": "lexical_support",
+                        "raw_body": "must not survive nested sanitization",
+                    }],
+                },
                 "run_manifest": {"manifest_id": "private"},
                 "unknown_state": "private",
             }
@@ -233,6 +253,9 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
     assert "private-key-material" not in encoded
     assert "private-camel-api-key" not in encoded
     assert result.snapshot["token_usage"]["input_tokens"] == 12
+    assert result.snapshot["citation_verification"]["status_counts"]["verified"] == 1
+    assert "raw_body" not in result.snapshot["citation_verification"]["checks"][0]
+    assert "must not survive nested sanitization" not in encoded
 
 
 def test_public_result_rejects_success_without_report():

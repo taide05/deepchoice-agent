@@ -9,7 +9,8 @@
 
 DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A～2-C 和 Phase 6-A；Phase 2 的
 运行接线、latest-run 摘要 API、预算闭环和 Streamlit 展示已通过测试与独立 Review。
-当前主要增量是引用可信、人工决策和质量评估闭环；Phase 2-C 预算控制已完成。
+当前主要增量是重复成本、人工决策和质量评估闭环；Phase 2-C 预算控制和 Phase 3-1
+确定性引用验证已完成。
 
 继续按原始企业级设计全面扩张，会提高维护和讲解成本，却未必改善研究结果或面试展示。
 已完成能力保持不动；调整只作用于尚未实施的范围。
@@ -95,9 +96,14 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A～2-C 和 Phase 6-A�
 
 **PR 3-1：确定性引用验证**
 
+状态：已实现。新运行冻结 `research-v2`、state schema v2 和
+`deterministic-citation-v1`；历史 v1 run 保持可读，但不做不兼容的同 run 恢复。
+
 - 对报告关键引用执行可访问性、URL 规范和声明支持度的确定性检查。
 - 状态仅使用 verified、unsupported、unreachable、unknown 等诚实结果。
 - 报告和前端展示引用 warning；默认不增加第二轮 LLM judge。
+- 动态 URL 复用安全 fetch，每个规范 URL 每轮最多请求一次，并在请求前预留 `http_calls`；
+  临时网络与跨语言不确定性保持 unknown，运行结果不保存页面正文或原始异常。
 
 **PR 3-2：轻量去重与缓存**
 

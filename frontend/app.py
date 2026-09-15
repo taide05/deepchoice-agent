@@ -142,7 +142,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "查询分析", "query_adapter": "查询适配", "multi_retriever": "多源检索",
             "source_evaluator": "来源评估", "conflict_detector": "矛盾检测", "evidence_chain": "证据链构建",
-            "conclusion_synthesizer": "结论合成", "report_generator": "报告生成", "self_reviewer": "自我审查",
+            "conclusion_synthesizer": "结论合成", "citation_validator": "引用验证", "report_generator": "报告生成", "self_reviewer": "自我审查",
         },
         "rv_toc_title": "目录",
         "rv_download_md": "下载 Markdown",
@@ -151,6 +151,12 @@ T = {
         "rv_download_failed": "下载失败",
         "rv_citations_empty": "本报告格式无引用标注",
         "rv_chain_anchor_note": "引用角标 [N] 对应下方证据链",
+        "rv_citation_reason_supported": "确定性检查发现了支持证据。",
+        "rv_citation_reason_missing": "未找到与该主张匹配的引用来源。",
+        "rv_citation_reason_unavailable": "核验期间无法访问该来源。",
+        "rv_citation_reason_inconclusive": "证据不足以判断；这不代表引用有误。",
+        "rv_citation_reason_mismatch": "确定性检查未能确认来源支持该主张。",
+        "rv_citation_reason_generic": "核验说明不可用，请人工复核。",
         "tech_map": {"candidate_techs": "候选技术", "scene": "使用场景", "complexity": "复杂度"},
     },
     "en": {
@@ -274,7 +280,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "Query Analysis", "query_adapter": "Query Adaptation", "multi_retriever": "Multi-Source Retrieval",
             "source_evaluator": "Source Evaluation", "conflict_detector": "Conflict Detection", "evidence_chain": "Evidence Chain",
-            "conclusion_synthesizer": "Conclusion Synthesis", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
+            "conclusion_synthesizer": "Conclusion Synthesis", "citation_validator": "Citation Verification", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
         },
         "rv_toc_title": "Contents",
         "rv_download_md": "Download Markdown",
@@ -283,6 +289,12 @@ T = {
         "rv_download_failed": "Download failed",
         "rv_citations_empty": "This report format has no citations",
         "rv_chain_anchor_note": "Citation badges [N] link to evidence chains below",
+        "rv_citation_reason_supported": "Deterministic checks found supporting evidence.",
+        "rv_citation_reason_missing": "No matching citation source was found for this claim.",
+        "rv_citation_reason_unavailable": "The source could not be reached during verification.",
+        "rv_citation_reason_inconclusive": "Evidence was inconclusive; this does not mean the citation is incorrect.",
+        "rv_citation_reason_mismatch": "Deterministic checks did not establish support for this claim.",
+        "rv_citation_reason_generic": "A safe verification explanation is unavailable; review manually.",
         "tech_map": {"candidate_techs": "Tech candidates", "scene": "Usage scene", "complexity": "Complexity"},
     },
     "ja": {
@@ -406,7 +418,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "クエリ分析", "query_adapter": "クエリ適応", "multi_retriever": "マルチソース検索",
             "source_evaluator": "情報源評価", "conflict_detector": "矛盾検出", "evidence_chain": "証拠チェーン",
-            "conclusion_synthesizer": "結論合成", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
+            "conclusion_synthesizer": "結論合成", "citation_validator": "引用検証", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
         },
         "rv_toc_title": "目次",
         "rv_download_md": "Markdown をダウンロード",
@@ -415,6 +427,12 @@ T = {
         "rv_download_failed": "ダウンロード失敗",
         "rv_citations_empty": "このレポート形式には引用がありません",
         "rv_chain_anchor_note": "引用バッジ [N] は以下の証拠チェーンに対応",
+        "rv_citation_reason_supported": "決定的な検査で裏付ける証拠が見つかりました。",
+        "rv_citation_reason_missing": "この主張に一致する引用元が見つかりませんでした。",
+        "rv_citation_reason_unavailable": "検証中に情報源へアクセスできませんでした。",
+        "rv_citation_reason_inconclusive": "証拠から判断できません。引用が誤りとは限りません。",
+        "rv_citation_reason_mismatch": "決定的な検査では主張の裏付けを確認できませんでした。",
+        "rv_citation_reason_generic": "安全な検証説明がありません。手動で確認してください。",
         "tech_map": {"candidate_techs": "候補技術", "scene": "利用シーン", "complexity": "複雑さ"},
     },
     "ko": {
@@ -538,7 +556,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "쿼리 분석", "query_adapter": "쿼리 어댑터", "multi_retriever": "다중 소스 검색",
             "source_evaluator": "출처 평가", "conflict_detector": "충돌 탐지", "evidence_chain": "증거 체인",
-            "conclusion_synthesizer": "결론 합성", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
+            "conclusion_synthesizer": "결론 합성", "citation_validator": "인용 검증", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
         },
         "rv_toc_title": "목차",
         "rv_download_md": "Markdown 다운로드",
@@ -547,6 +565,12 @@ T = {
         "rv_download_failed": "다운로드 실패",
         "rv_citations_empty": "이 보고서 형식에는 인용이 없습니다",
         "rv_chain_anchor_note": "인용 배지 [N]은 아래 증거 체인에 연결",
+        "rv_citation_reason_supported": "결정적 검사에서 근거를 뒷받침하는 증거를 찾았습니다.",
+        "rv_citation_reason_missing": "이 주장에 맞는 인용 출처를 찾지 못했습니다.",
+        "rv_citation_reason_unavailable": "검증 중 출처에 접근할 수 없었습니다.",
+        "rv_citation_reason_inconclusive": "증거만으로 판단할 수 없습니다. 인용이 틀렸다는 뜻은 아닙니다.",
+        "rv_citation_reason_mismatch": "결정적 검사에서 주장을 뒷받침하는 근거를 확인하지 못했습니다.",
+        "rv_citation_reason_generic": "안전한 검증 설명을 사용할 수 없습니다. 직접 확인해 주세요.",
         "tech_map": {"candidate_techs": "후보 기술", "scene": "사용 환경", "complexity": "복잡도"},
     },
 }
@@ -625,6 +649,10 @@ st.markdown("""<style>
     .badge-disputed { background: rgba(249, 115, 22, 0.12); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.25); }
     .badge-info { background: rgba(124, 58, 237, 0.12); color: #a78bfa; border: 1px solid rgba(124, 58, 237, 0.25); }
     .badge-success { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.25); }
+    .badge-verified { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.25); }
+    .badge-unsupported { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+    .badge-unreachable { background: rgba(249, 115, 22, 0.12); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.25); }
+    .badge-unknown { background: rgba(161, 161, 170, 0.12); color: #d4d4d8; border: 1px solid rgba(161, 161, 170, 0.25); }
 
     .clarity-panel { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 18px; padding: 28px; }
     .clarity-meter { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; }
@@ -712,6 +740,7 @@ NODE_TO_PHASE = {
     "conflict_detector": "conflict_detection",
     "evidence_chain": "evidence_chain",
     "conclusion_synthesizer": "evidence_chain",
+    "citation_validator": "report_generation",
     "report_generator": "report_generation",
     "self_reviewer": "self_review",
 }
@@ -742,6 +771,40 @@ def _safe_external_href(value) -> str | None:
     except ValueError:
         return None
     return _esc(raw)
+
+
+_CITATION_REASON_TEXT = {
+    "lexical_support": "rv_citation_reason_supported",
+    "citation_missing": "rv_citation_reason_missing",
+    "source_not_found": "rv_citation_reason_missing",
+    "source_ambiguous": "rv_citation_reason_missing",
+    "not_cited": "rv_citation_reason_missing",
+    "url_invalid": "rv_citation_reason_unavailable",
+    "not_publicly_accessible": "rv_citation_reason_unavailable",
+    "network_uncertain": "rv_citation_reason_inconclusive",
+    "http_uncertain": "rv_citation_reason_inconclusive",
+    "source_limit": "rv_citation_reason_inconclusive",
+    "content_insufficient": "rv_citation_reason_inconclusive",
+    "cross_language": "rv_citation_reason_inconclusive",
+    "numeric_mismatch": "rv_citation_reason_mismatch",
+    "negation_conflict": "rv_citation_reason_mismatch",
+    "lexical_mismatch": "rv_citation_reason_mismatch",
+}
+
+
+def _citation_verification_display(status, reason, lang_code: str) -> tuple[str, str, str]:
+    """Map untrusted citation metadata to a closed status label, CSS class, and text."""
+    allowed = {"verified", "unsupported", "unreachable", "unknown"}
+    safe_status = status if isinstance(status, str) and status in allowed else "unknown"
+    reason_key = _CITATION_REASON_TEXT.get(reason) if isinstance(reason, str) else None
+    if reason_key is None:
+        reason_key = {
+            "verified": "rv_citation_reason_supported",
+            "unsupported": "rv_citation_reason_mismatch",
+            "unreachable": "rv_citation_reason_unavailable",
+            "unknown": "rv_citation_reason_inconclusive",
+        }[safe_status]
+    return safe_status.upper(), f"badge-{safe_status}", t(reason_key, lang_code)
 
 
 def _node_label(node: str, lang_code: str) -> str:
@@ -1984,37 +2047,62 @@ def _render_results():
                     st.markdown(f"### {t('evidence_chains_title', lang)}")
                     st.caption(t("rv_chain_anchor_note", lang))
                     chains = snapshot.get("evidence_chains", [])
-                    url_to_n = {c["url"]: c["n"] for c in citations}
                     for cit in citations:
-                        chain = chains[cit["chain_idx"]] if cit["chain_idx"] < len(chains) else {}
+                        citation_n = cit.get("n")
+                        if type(citation_n) is not int or citation_n <= 0:
+                            continue
+                        chain_idx = cit.get("chain_idx")
+                        chain = chains[chain_idx] if isinstance(chain_idx, int) and 0 <= chain_idx < len(chains) else {}
                         strength = str(chain.get("evidence_strength", "weak")).lower()
                         if strength not in {"strong", "moderate", "weak"}:
                             strength = "weak"
                         disputed = chain.get("disputed", False)
                         badge = "badge-disputed" if disputed else f"badge-{strength}"
-                        src_parts = []
-                        for src in chain.get("sources", []):
-                            url = str(src.get("url", ""))
-                            n = url_to_n.get(url, cit["n"])
-                            title = _esc(src.get("title", ""))
-                            safe_href = _safe_external_href(url)
-                            if safe_href is not None:
-                                link = (f'<a href="{safe_href}" target="_blank" '
-                                        f'rel="noopener noreferrer nofollow" '
-                                        f'style="color:#a78bfa; text-decoration:none;">{title}</a>')
-                            else:
-                                link = title
-                            src_parts.append(f'[{n}] {link} (score: {_esc(src.get("score", ""))})')
-                        src_lines = "".join(
-                            f'<div style="font-size:0.78rem; color:#71717a;">{p}</div>'
-                            for p in src_parts
+                        chain_sources = chain.get("sources", [])
+                        source_idx = cit.get("source_idx")
+                        source = None
+                        if (isinstance(chain_sources, list) and isinstance(source_idx, int)
+                                and 0 <= source_idx < len(chain_sources)):
+                            source = chain_sources[source_idx]
+                        if source is None and isinstance(chain_sources, list):
+                            citation_url = cit.get("url", "")
+                            citation_canonical = cit.get("canonical_url")
+                            source = next((candidate for candidate in chain_sources
+                                           if candidate.get("url") == citation_url
+                                           or (citation_canonical and candidate.get("canonical_url") == citation_canonical)), None)
+                        if not isinstance(source, dict):
+                            source = {
+                                "url": cit.get("url", ""),
+                                "title": cit.get("title", ""),
+                                "score": "",
+                            }
+                        url = str(cit.get("url") or source.get("url", ""))
+                        title = _esc(source.get("title") or cit.get("title", ""))
+                        safe_href = _safe_external_href(url)
+                        if safe_href is not None:
+                            link = (f'<a href="{safe_href}" target="_blank" '
+                                    f'rel="noopener noreferrer nofollow" '
+                                    f'style="color:#a78bfa; text-decoration:none;">{title}</a>')
+                        else:
+                            link = title
+                        source_line = (
+                            f'<div style="font-size:0.78rem; color:#71717a;">'
+                            f'[{citation_n}] {link} '
+                            f'(score: {_esc(source.get("score", ""))})</div>'
+                        )
+                        status_label, status_class, reason_text = _citation_verification_display(
+                            cit.get("verification_status", "unknown"),
+                            cit.get("verification_reason", "not_checked"),
+                            lang,
                         )
                         st.markdown(f"""
-                        <div class="glass-card evidence-anchor" id="ev-{cit["n"]}" style="padding:16px; margin-bottom:10px;">
+                        <div class="glass-card evidence-anchor" id="ev-{citation_n}" style="padding:16px; margin-bottom:10px;">
                             <strong style="color:#e4e4e7">{_esc(chain.get("conclusion", "Finding")[:150])}</strong><br>
                             <span class="badge {badge}">{strength.upper()}</span>
                             {'<span class="badge badge-disputed">DISPUTED</span>' if disputed else ''}
-                            {src_lines}
+                            <span class="badge {status_class}">{status_label}</span>
+                            {source_line}
+                            <div style="font-size:0.78rem; color:#a1a1aa;">{_esc(reason_text)}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:

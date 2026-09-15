@@ -21,6 +21,7 @@ from ..runtime.context import (
     get_run_context,
 )
 from ..utils.views import print_agent_output
+from .citation_validator import CitationValidatorAgent
 from .conclusion_synthesizer import ConclusionSynthesizerAgent
 from .conflict_detector import ConflictDetectorAgent
 from .evidence_chain import EvidenceChainAgent
@@ -83,6 +84,9 @@ class ChiefEditorAgent:
                 self.stream_output,
                 self.headers,
                 run_manifest=self.run_manifest,
+            ),
+            "citation_validator": CitationValidatorAgent(
+                self.websocket, self.stream_output, self.headers
             ),
             "report_generator": ReportGeneratorAgent(self.websocket, self.stream_output, self.headers),
             "self_reviewer": SelfReviewerAgent(self.websocket, self.stream_output, self.headers),
@@ -181,6 +185,7 @@ class ChiefEditorAgent:
         workflow.add_node("conflict_detector", self._timed_node("conflict_detector", agents["conflict_detector"].run))
         workflow.add_node("evidence_chain", self._timed_node("evidence_chain", agents["evidence_chain"].run))
         workflow.add_node("conclusion_synthesizer", self._timed_node("conclusion_synthesizer", agents["conclusion_synthesizer"].run))
+        workflow.add_node("citation_validator", self._timed_node("citation_validator", agents["citation_validator"].run))
         workflow.add_node("report_generator", self._timed_node("report_generator", agents["report_generator"].run))
         workflow.add_node("self_reviewer", self._timed_node("self_reviewer", agents["self_reviewer"].run))
 
@@ -192,7 +197,8 @@ class ChiefEditorAgent:
         workflow.add_edge("source_evaluator", "conflict_detector")
         workflow.add_edge("conflict_detector", "evidence_chain")
         workflow.add_edge("evidence_chain", "conclusion_synthesizer")
-        workflow.add_edge("conclusion_synthesizer", "report_generator")
+        workflow.add_edge("conclusion_synthesizer", "citation_validator")
+        workflow.add_edge("citation_validator", "report_generator")
         workflow.add_edge("report_generator", "self_reviewer")
         workflow.add_conditional_edges(
             "self_reviewer",

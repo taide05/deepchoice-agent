@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
-from deepchoice.contracts.manifest import build_run_manifest
+from deepchoice.contracts.manifest import CURRENT_WORKFLOW_VERSION, build_run_manifest
 from deepchoice.persistence.records import RunRecord, TaskRecord, TaskWithRun
 from deepchoice.persistence.repository import (
     CheckpointNotAvailableError,
@@ -218,7 +218,7 @@ class TaskService:
             )
             if (
                 checkpoint is not None
-                and latest_run.manifest.workflow_version == "research-v1"
+                and latest_run.manifest.workflow_version == CURRENT_WORKFLOW_VERSION
             ):
                 try:
                     return await self._repository.resume_interrupted_run(

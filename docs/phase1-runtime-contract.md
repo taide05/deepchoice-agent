@@ -23,7 +23,9 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 - task/run 的 `version` 是乐观并发控制字段。读取后再写的生命周期操作必须做 CAS；
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
-  模板版本。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
+  模板版本。当前新运行使用 `research-v2`/state schema v2，并冻结确定性引用验证策略；
+  历史 `research-v1` manifest 仍可读取和校验身份，但不能在 v2 runtime 上续同一 run，须创建
+  新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
 

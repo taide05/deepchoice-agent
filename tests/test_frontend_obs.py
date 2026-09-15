@@ -8,6 +8,7 @@ Run this test in the supported project-local Python 3.11/3.12 environment:
 
     .\\.venv\\Scripts\\python.exe -m pytest tests/test_frontend_obs.py -q
 """
+import copy
 import json
 from pathlib import Path
 
@@ -499,6 +500,66 @@ def test_report_tab_reading_view(monkeypatch):
     dl_buttons = at.get("download_button")
     assert len(dl_buttons) >= 1, f"MD download button missing: {dl_buttons!r}"
     assert "PDF 不可用" in cap, f"PDF fallback caption missing: {cap!r}"
+
+
+def test_report_citation_badge_uses_allowlisted_reason_and_only_selected_source(monkeypatch):
+    backend = _FakeBackend(stream_events=[], status_complete=True)
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    snapshot = copy.deepcopy(SNAP)
+    snapshot["evidence_chains"][0]["sources"].append({
+        "title": "Unselected second source",
+        "url": "https://example.org/other",
+        "score": 4,
+    })
+    monkeypatch.setitem(globals(), "SNAP", snapshot)
+    monkeypatch.setitem(ANNOTATED, "citations", [{
+        "n": 1,
+        "url": "https://example.com/bench",
+        "title": "Bench",
+        "chain_idx": 0,
+        "source_idx": 0,
+        "verification_status": "unsupported",
+        "verification_reason": "<script>alert('untrusted')</script>",
+    }])
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_results_phase(at)
+    at.run()
+
+    assert not at.exception, at.exception
+    md = _md_text(at)
+    assert "UNSUPPORTED" in md
+    assert "确定性检查未能确认来源支持该主张。" in md
+    assert "<script>alert('untrusted')</script>" not in md
+    assert "Unselected second source" not in md
+
+
+def test_report_skips_non_integer_citation_number_before_html_render(monkeypatch):
+    backend = _FakeBackend(stream_events=[], status_complete=True)
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+    monkeypatch.setitem(ANNOTATED, "citations", [{
+        "n": '\" onmouseover=\"alert(1)',
+        "url": "https://example.com/bench",
+        "title": "Bench",
+        "chain_idx": 0,
+        "source_idx": 0,
+        "verification_status": "unknown",
+        "verification_reason": "network_uncertain",
+    }])
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_results_phase(at)
+    at.run()
+
+    assert not at.exception, at.exception
+    assert "onmouseover" not in _md_text(at)
 
 
 def test_replay_interrupted_then_auto_resume_uses_current_task_projection(monkeypatch):

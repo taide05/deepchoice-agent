@@ -62,6 +62,42 @@ class TestAnnotatedEndpoint:
         assert '<a class="cite" href="#ev-1">[1]</a>' in report
         assert 'href="#ev-2"' in report
 
+    def test_historical_citations_are_projected_as_unknown(self):
+        citations = client.get(
+            f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"}
+        ).json()["citations"]
+        assert all(citation["verification_status"] == "unknown" for citation in citations)
+        assert all(citation["verification_reason"] == "not_checked" for citation in citations)
+        assert all(isinstance(citation["source_idx"], int) for citation in citations)
+
+    def test_annotated_citations_include_canonical_status_and_reason(self, monkeypatch):
+        snapshot = {
+            **SNAPSHOT,
+            "evidence_chains": [{
+                **SNAPSHOT["evidence_chains"][0],
+                "sources": [{
+                    "title": "Benchmark Post",
+                    "url": "https://EXAMPLE.com/bench#result",
+                    "canonical_url": "https://example.com/bench",
+                    "verification_status": "unsupported",
+                    "verification_reason": "numeric_mismatch",
+                    "score": 8,
+                }],
+            }],
+            "citation_verification": {
+                "status_counts": {"verified": 0, "unsupported": 1, "unreachable": 0, "unknown": 0}
+            },
+        }
+        monkeypatch.setattr(app_module, "load_snapshot", lambda _: snapshot)
+        citation = client.get(
+            f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"}
+        ).json()["citations"][0]
+        assert citation["url"] == "https://example.com/bench"
+        assert citation["canonical_url"] == "https://example.com/bench"
+        assert citation["verification_status"] == "unsupported"
+        assert citation["verification_reason"] == "numeric_mismatch"
+        assert citation["source_idx"] == 0
+
     def test_toc_anchors_injected(self):
         resp = client.get(f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"})
         report = resp.json()["report"]

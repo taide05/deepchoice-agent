@@ -33,6 +33,7 @@ from deepchoice.agents.multi_retriever import MultiRetrieverAgent
 from deepchoice.agents import conflict_detector as conflict_module
 from deepchoice.agents import query_analyzer as query_analyzer_module
 from deepchoice.agents.query_analyzer import QueryAnalyzerAgent
+from deepchoice.citations.verifier import verify_citations
 from deepchoice.utils import llm as llm_module
 
 
@@ -452,6 +453,53 @@ async def test_retriever_concurrency_denial_propagates_without_overcalling(tmp_p
                 )
         assert len(invoked) == 1
         assert (await manager._usage())[BudgetResource.RETRIEVAL_CALLS] == 1
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_citation_http_budget_uses_nullable_trace_call_fk(
+    tmp_path, monkeypatch
+) -> None:
+    connection, _, manager, _, _ = await _running_budget(tmp_path)
+
+    async def safe_fetch(*_args, **_kwargs):
+        import httpx
+
+        return httpx.Response(
+            200,
+            text="FastAPI supports WebSockets and asynchronous APIs." * 4,
+            headers={"content-type": "text/html"},
+            request=httpx.Request("GET", "https://example.com/docs"),
+        )
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", safe_fetch)
+    try:
+        with bind_run_context(_context(manager)):
+            verification, _ = await verify_citations(
+                {
+                    "winner_rationale": (
+                        "FastAPI supports WebSockets. [Source: FastAPI Docs]"
+                    )
+                },
+                [{
+                    "conclusion": "FastAPI Docs",
+                    "sources": [{
+                        "title": "FastAPI Docs",
+                        "url": "https://example.com/docs",
+                        "snippet": "FastAPI WebSockets",
+                        "score": 8,
+                    }],
+                    "evidence_strength": "strong",
+                    "disputed": False,
+                }],
+            )
+        assert verification.status_counts.verified == 1
+        latest = await manager._latest_rows()
+        http_rows = [row for row in latest if row[5] == "http_calls"]
+        assert len(http_rows) == 1
+        assert http_rows[0][1] is None
+        assert http_rows[0][4] == "settled"
     finally:
         await connection.close()
 
