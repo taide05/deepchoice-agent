@@ -9,13 +9,13 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Iterator, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from deepchoice.budget import BudgetManager
-from deepchoice.observability import TraceSink
+from deepchoice.observability import TraceSink, TraceStatus
 
 if TYPE_CHECKING:
     from deepchoice.persistence.records import RunRecord
@@ -98,6 +98,32 @@ def get_node_attempt_id() -> str | None:
     return _current_node_attempt_id.get()
 
 
+def classify_cancelled_trace_status(
+    context: RunContext | None = None,
+    *,
+    now: datetime | None = None,
+) -> TraceStatus:
+    """Distinguish an asyncio deadline cancellation from user/shutdown cancel.
+
+    ``asyncio.timeout`` injects ``CancelledError`` into the inner operation and
+    only converts it to ``TimeoutError`` after control leaves the context.  The
+    persisted, timezone-aware run deadline is therefore the stable signal at
+    node/call boundaries.  Equality belongs to the timed-out side.
+    """
+
+    active = context if context is not None else get_run_context()
+    if active is None:
+        return TraceStatus.CANCELLED
+    observed_at = now or datetime.now(UTC)
+    if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    return (
+        TraceStatus.TIMED_OUT
+        if observed_at >= active.deadline_at
+        else TraceStatus.CANCELLED
+    )
+
+
 @contextmanager
 def bind_run_context(context: RunContext) -> Iterator[None]:
     """Bind context without ever adding it to ResearchState/checkpoints."""
@@ -125,6 +151,7 @@ __all__ = [
     "RunContext",
     "bind_node_attempt",
     "bind_run_context",
+    "classify_cancelled_trace_status",
     "get_node_attempt_id",
     "get_run_context",
 ]

@@ -62,7 +62,7 @@ During implementation, keep validation focused on the current change. Freeze pro
 migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
 because documentation, comments, or the recorded result changed afterward.
 
-The verified clean-environment baseline on 2026-09-14 is 815 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+The verified clean-environment baseline on 2026-09-15 is 863 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -111,15 +111,32 @@ When adding a setting, update the code default, tests, README configuration sect
 - Back up, verify, restore, and rehearse the product/checkpoint databases as one manifest-verified pair with `scripts/runtime_db.py`; restore requires a stopped service or maintenance mode and explicit confirmation.
 - Any lifecycle, migration, concurrency, checkpoint, SSE, or compatibility change requires focused fault/concurrency tests, the full suite, an update to `docs/phase1-runtime-contract.md`, and independent review.
 
-### Phase 2-A observability/budget contracts
+### Phase 2-A/2-B observability contracts
 
 - `RunContext`、Trace/Budget DTO/Protocol 和 schema v8 骨架表是契约层产出；骨架表包括
   `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、`budget_ledger`。
 - New durable runs/retries must atomically freeze `standard-observe-v1` and `unpriced-v1`.
   Unknown prices remain unknown, never zero. Historical runs are not backfilled; their internal
-  policy projection remains unavailable, and future telemetry/budget APIs must report that absence.
-- Phase 2-A 尚未接入 node/call wrapper、Trace 写入/API、预算预留结算或硬限制；这些属于
-  Phase 2-B/2-C。`task_events` 仍是任务状态与 SSE 的唯一正确性路径，`RunManifest` 保持 v1。
+  policy projection remains unavailable and the observability API must report that absence.
+- Phase 2-B records default durable node attempts and LLM/retrieval external calls in the existing
+  product-database Trace tables. Trace writes are best-effort and cannot change task state, results,
+  or durable SSE correctness; `task_events` remains the sole lifecycle/SSE correctness path.
+- `GET /api/v1/tasks/{task_id}/observability` returns only latest-run allowlisted node/call fields
+  and aggregates from one product-database read snapshot that resolves `tasks.latest_run_id`, run
+  status/epoch, policy, and Trace together. Calls include their safe node name and run-level node
+  attempt ordinal; `retry_no` may be exposed only as a validated non-negative integer extracted
+  from the request summary. Do not expose attempt/call IDs, epochs, lease owners, checkpoint
+  references, manifest contents, raw exceptions, other request/result summaries, or report bodies.
+  Read only the product SQLite database; never inspect LangGraph private checkpoint tables.
+- Missing latest run, absent Trace, historical policy absence, and incomplete token usage must be
+  explicit. Sum only known token fields, preserve unknown values as unknown (never zero), and report
+  whether LLM token usage is complete. The Streamlit view falls back to snapshot panels when the
+  endpoint errors or reports unavailable.
+- Trace rows left `started` by recovery are projected as `interrupted` when their epoch is stale or
+  the run itself is `interrupted`; current-epoch rows for other non-active runs are projected as
+  `unknown`. Do not present stale/inconsistent started rows as actively running.
+- Phase 2-B does not reserve or settle budget and does not enforce limits; those are Phase 2-C.
+  `RunManifest` remains v1.
 
 ### Phase 6-A security boundaries
 
@@ -143,7 +160,7 @@ When adding a setting, update the code default, tests, README configuration sect
 
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
-- The current sequence is Phase 2-B, Phase 2-C, Phase 3, Phase 4, then Phase 5. Keep each remaining
+- The current sequence is Phase 2-C, Phase 3, Phase 4, then Phase 5. Keep each remaining
   phase to at most two implementation PRs and prioritize the durable default path.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless

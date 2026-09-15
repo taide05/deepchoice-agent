@@ -126,3 +126,71 @@ class TaskReportResponse(BaseModel):
     run_id: str
     format: ReportFormatValue
     report: str
+
+
+class ObservabilityNodeAttemptResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_name: str
+    attempt_no: int
+    status: Literal[
+        "started", "succeeded", "failed", "cancelled", "timed_out", "interrupted", "unknown"
+    ]
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_ms: int | None = None
+
+
+class ObservabilityExternalCallResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["llm", "retrieval", "http", "other"]
+    node_name: str
+    node_attempt_no: int
+    retry_no: int | None = None
+    provider: str
+    operation: str
+    call_no: int
+    status: Literal[
+        "started", "succeeded", "failed", "cancelled", "timed_out", "interrupted", "unknown"
+    ]
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_ms: int | None = None
+    usage: dict[str, int] | None = None
+
+
+class ObservabilityTotalsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_attempts: int = Field(ge=0)
+    node_retries: int = Field(ge=0)
+    external_calls: int = Field(ge=0)
+    failed_calls: int = Field(ge=0)
+    llm_calls: int = Field(ge=0)
+    retrieval_calls: int = Field(ge=0)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    token_usage_complete: bool
+
+
+class TaskObservabilityResponse(BaseModel):
+    """Allowlisted latest-run telemetry; never includes private trace identifiers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    task_id: str
+    run_id: str | None = None
+    availability: Literal["available", "unavailable"]
+    unavailable_reason: Literal[
+        "no_latest_run", "latest_run_missing", "trace_not_recorded"
+    ] | None = None
+    budget_policy_availability: Literal["available", "unavailable"]
+    budget_policy_unavailable_reason: Literal[
+        "no_latest_run", "latest_run_missing", "historical_run"
+    ] | None = None
+    nodes: tuple[ObservabilityNodeAttemptResponse, ...] = ()
+    calls: tuple[ObservabilityExternalCallResponse, ...] = ()
+    totals: ObservabilityTotalsResponse

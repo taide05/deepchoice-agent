@@ -38,6 +38,7 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 | `POST /api/v1/tasks/{task_id}/resume` | 必须携带当前 task version 的 `If-Match`；兼容 checkpoint 可续同 run，否则按允许状态创建新 run |
 | `GET /api/v1/tasks/{task_id}/events` | 从产品库 replay 公开事件，支持 `Last-Event-ID` |
 | `GET /api/v1/tasks/{task_id}/snapshot` | 返回 latest successful run 的 immutable public result；运行中/失败终态使用不同结构化 `409` |
+| `GET /api/v1/tasks/{task_id}/observability` | 返回 latest run 的 allowlisted Trace/usage 摘要；无 latest run、无 Trace 或历史策略缺失时以 `available`/`unavailable` 明确表达 |
 | `GET /api/v1/tasks/{task_id}/report` | 返回持久化报告，或从同一 public result 确定性渲染指定格式 |
 | `GET /api/v1/tasks/{task_id}/annotated` | 返回带 TOC 和引用映射的阅读投影 |
 | `GET /api/v1/tasks/{task_id}/export` | 从 durable result 导出 Markdown/PDF，不读取旧 snapshot 文件 |
@@ -101,8 +102,9 @@ SSE 规则：
   的前提下重建 `legacy_imports`，强制 imported 行绑定非空 task/run，error 行不得绑定实体；
   已绑定的 imported 审计行以 `RESTRICT` 防止删除其 task/run 后形成悬空记录。v6 增加
   immutable `run_results`；v7 增加产品库单实例租约；v8 建立 Phase 2-A 的预算/Trace
-  骨架表 `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events` 和
-  `budget_ledger`，但尚不代表这些表已接入运行写入或限制执行。
+  表 `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events` 和
+  `budget_ledger`。Phase 2-B 已将节点尝试和 LLM/检索调用写入 Trace 表，并提供只读摘要查询；
+  预算预留、结算和硬限制尚未接入。
 - v6 不臆测或回填旧 completed row 的报告；无法从可信来源重建的 pre-v6 成功记录保留为
   只读历史，并在结果查询时返回 `TASK_RESULT_UNAVAILABLE`。v6 后的新成功收尾和带有效报告的
   legacy success import 都必须同时写入 `run_results`。
@@ -169,9 +171,16 @@ SSE 规则：
 - SSE keepalive 和事件 retention 延后到真实反向代理或生产部署接入前完成。
 - Phase 2 trace、预算账本和观测失败不得影响 task state 或 durable SSE 的正确性。
 - Phase 2-A 为新 durable run/retry 原子冻结 `standard-observe-v1` 与 `unpriced-v1`；
-  价格未知保持 unknown，不得按零成本结算。旧 run 不回填，内部 policy 投影保持 unavailable；
-  后续查询 API 必须如实显示该缺失。Trace 写入/API、node/call wrapper、预算预留结算和硬限制分别留给 Phase 2-B/2-C；
-  `RunManifest` 保持 v1。
+  价格未知保持 unknown，不得按零成本结算。旧 run 不回填，policy 投影在
+  `GET /api/v1/tasks/{task_id}/observability` 中明确为 unavailable。该 endpoint 在同一个
+  SQLite read transaction 中读取 task 的 latest run、该 run 的状态/epoch/policy 和 Trace，避免
+  retry 时混读旧 run。Phase 2-B 写入节点尝试与 LLM/检索调用 Trace，并通过该 API 返回
+  latest-run allowlist 摘要；调用包含安全的节点名、run 内节点尝试序号和可选的非负 `retry_no`，
+  不公开内部 attempt/call ID、epoch、lease、checkpoint、manifest、原始异常或其他请求/结果摘要。
+  跨 epoch 残留或 run 本身已 `interrupted` 的 started 记录投影为 `interrupted`；其他非活动 run
+  当前 epoch 的 started 记录投影为 `unknown`，避免呈现为仍运行。无 Trace 返回 unavailable；Token 汇总只累加已知字段并标明是否
+  完整，unknown 不当作零。Streamlit 查询不可用时回退 snapshot panels。Trace 是可选观测，不影响
+  task state、结果或 durable SSE；预算预留、结算与硬限制仍属于 Phase 2-C，`RunManifest` 保持 v1。
 - Phase 6-A 的受管 URL 外呼只允许 HTTP(S)、80/443 和无 userinfo；DNS 解析、实际 direct-IP
   连接以及每一跳 redirect 都必须重新验证公网地址、hostname、端口和响应上限。无法证明安全的
   proxy/forward 动态 URL 必须拒绝。forward allowlist 只接受完整 hostname 精确匹配或显式

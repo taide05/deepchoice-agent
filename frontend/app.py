@@ -72,6 +72,23 @@ T = {
         "new_research_btn": "开始新研究",
         "tab_observability": "  观测  ",
         "obs_timeline_title": "运行轨迹时间轴",
+        "obs_trace_fallback": "持久化运行追踪不可用（{reason}），以下显示现有快照观测数据。",
+        "obs_trace_request_failed": "持久化运行追踪查询失败，以下显示现有快照观测数据。",
+        "obs_durable_nodes": "持久化节点尝试",
+        "obs_durable_calls": "持久化外部调用",
+        "obs_durable_counts": "节点尝试 {attempts} · 节点重试 {retries} · 外部调用 {calls} · 失败调用 {failures}",
+        "obs_status_label": "状态",
+        "obs_call_node_label": "节点",
+        "obs_call_attempt_label": "节点尝试",
+        "obs_retry_no": "重试序号",
+        "obs_attempt_label": "尝试",
+        "obs_provider_label": "提供方",
+        "obs_operation_label": "操作",
+        "obs_duration_ms": "耗时（毫秒）",
+        "obs_usage_partial": "Token 总量仅汇总已知用量，记录不完整。",
+        "obs_usage_complete": "所有已记录 LLM 调用均包含 Token 用量。",
+        "obs_no_durable_calls": "没有已记录的外部调用。",
+        "obs_unavailable": "不可用",
         "obs_total_elapsed": "总耗时",
         "obs_no_timing": "暂无运行时间数据",
         "obs_running": "运行中",
@@ -168,6 +185,23 @@ T = {
         "new_research_btn": "Start New Research",
         "tab_observability": "  Observability  ",
         "obs_timeline_title": "Run Timeline",
+        "obs_trace_fallback": "Durable trace is unavailable ({reason}); showing snapshot observability panels.",
+        "obs_trace_request_failed": "Durable trace query failed; showing snapshot observability panels.",
+        "obs_durable_nodes": "Durable node attempts",
+        "obs_durable_calls": "Durable external calls",
+        "obs_durable_counts": "Node attempts {attempts} · Retries {retries} · External calls {calls} · Failed calls {failures}",
+        "obs_status_label": "Status",
+        "obs_call_node_label": "Node",
+        "obs_call_attempt_label": "Node attempt",
+        "obs_retry_no": "Retry number",
+        "obs_attempt_label": "Attempt",
+        "obs_provider_label": "Provider",
+        "obs_operation_label": "Operation",
+        "obs_duration_ms": "Duration (ms)",
+        "obs_usage_partial": "Token totals sum known usage only; records are incomplete.",
+        "obs_usage_complete": "Token usage is present for every recorded LLM call.",
+        "obs_no_durable_calls": "No external calls were recorded.",
+        "obs_unavailable": "Unavailable",
         "obs_total_elapsed": "Total elapsed",
         "obs_no_timing": "No timing data available",
         "obs_running": "Running",
@@ -264,6 +298,23 @@ T = {
         "new_research_btn": "新しい研究を開始",
         "tab_observability": "  観測  ",
         "obs_timeline_title": "実行タイムライン",
+        "obs_trace_fallback": "永続トレースを利用できません（{reason}）。スナップショットの観測データを表示します。",
+        "obs_trace_request_failed": "永続トレースの取得に失敗しました。スナップショットの観測データを表示します。",
+        "obs_durable_nodes": "永続ノード試行",
+        "obs_durable_calls": "永続外部呼び出し",
+        "obs_durable_counts": "ノード試行 {attempts} · 再試行 {retries} · 外部呼び出し {calls} · 失敗 {failures}",
+        "obs_status_label": "状態",
+        "obs_call_node_label": "ノード",
+        "obs_call_attempt_label": "ノード試行",
+        "obs_retry_no": "再試行番号",
+        "obs_attempt_label": "試行",
+        "obs_provider_label": "プロバイダー",
+        "obs_operation_label": "操作",
+        "obs_duration_ms": "所要時間（ミリ秒）",
+        "obs_usage_partial": "既知のトークン使用量のみを合算しています。記録は不完全です。",
+        "obs_usage_complete": "記録されたすべての LLM 呼び出しにトークン使用量があります。",
+        "obs_no_durable_calls": "外部呼び出しは記録されていません。",
+        "obs_unavailable": "利用不可",
         "obs_total_elapsed": "合計時間",
         "obs_no_timing": "タイミングデータがありません",
         "obs_running": "実行中",
@@ -360,6 +411,23 @@ T = {
         "new_research_btn": "새 연구 시작",
         "tab_observability": "  관측  ",
         "obs_timeline_title": "실행 타임라인",
+        "obs_trace_fallback": "영구 추적을 사용할 수 없습니다({reason}). 스냅샷 관측 데이터를 표시합니다.",
+        "obs_trace_request_failed": "영구 추적 조회에 실패했습니다. 스냅샷 관측 데이터를 표시합니다.",
+        "obs_durable_nodes": "영구 노드 시도",
+        "obs_durable_calls": "영구 외부 호출",
+        "obs_durable_counts": "노드 시도 {attempts} · 재시도 {retries} · 외부 호출 {calls} · 실패 호출 {failures}",
+        "obs_status_label": "상태",
+        "obs_call_node_label": "노드",
+        "obs_call_attempt_label": "노드 시도",
+        "obs_retry_no": "재시도 번호",
+        "obs_attempt_label": "시도",
+        "obs_provider_label": "제공자",
+        "obs_operation_label": "작업",
+        "obs_duration_ms": "소요 시간(ms)",
+        "obs_usage_partial": "알려진 토큰 사용량만 합산했으며 기록은 불완전합니다.",
+        "obs_usage_complete": "기록된 모든 LLM 호출에 토큰 사용량이 있습니다.",
+        "obs_no_durable_calls": "기록된 외부 호출이 없습니다.",
+        "obs_unavailable": "사용 불가",
         "obs_total_elapsed": "총 소요 시간",
         "obs_no_timing": "타이밍 데이터 없음",
         "obs_running": "실행 중",
@@ -1181,17 +1249,164 @@ def _render_research_progress():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Observability Tab — four panels rendered from the research snapshot
+# Observability Tab — durable Trace plus snapshot-backed research details
 # ═══════════════════════════════════════════════════════════════════════════
-def _render_obs_panels(snapshot: dict):
+def _render_obs_panels(
+    snapshot: dict,
+    observability: dict | None = None,
+    *,
+    observability_error: bool = False,
+):
+    durable_available = (
+        isinstance(observability, dict)
+        and observability.get("availability") == "available"
+    )
+    if observability_error:
+        st.caption(t("obs_trace_request_failed", lang))
+    elif isinstance(observability, dict) and not durable_available:
+        st.caption(
+            t(
+                "obs_trace_fallback",
+                lang,
+                reason=observability.get("unavailable_reason")
+                or t("obs_unavailable", lang),
+            )
+        )
+
     st.markdown(f"### {t('obs_timeline_title', lang)}")
-    _render_timeline_panel(snapshot)
+    if durable_available:
+        _render_durable_nodes(observability)
+    else:
+        _render_timeline_panel(snapshot)
     st.markdown(f"### {t('obs_retrieval_title', lang)}")
     _render_retrieval_panel(snapshot)
     st.markdown(f"### {t('obs_conflict_title', lang)}")
     _render_conflict_panel(snapshot)
+    if durable_available:
+        _render_durable_calls(observability)
     st.markdown(f"### {t('obs_token_title', lang)}")
-    _render_token_panel(snapshot)
+    if durable_available:
+        _render_durable_tokens(observability)
+    else:
+        _render_token_panel(snapshot)
+
+
+def _render_durable_nodes(observability: dict):
+    nodes = observability.get("nodes") or []
+    totals = observability.get("totals") or {}
+    st.caption(
+        t(
+            "obs_durable_counts",
+            lang,
+            attempts=totals.get("node_attempts", 0),
+            retries=totals.get("node_retries", 0),
+            calls=totals.get("external_calls", 0),
+            failures=totals.get("failed_calls", 0),
+        )
+    )
+    if not nodes:
+        _render_timeline_panel({})
+        return
+
+    rows = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        duration = node.get("duration_ms")
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(_node_label(str(node.get('node_name') or ''), lang))}</td>"
+            f"<td>{_esc(node.get('attempt_no', '—'))}</td>"
+            f"<td>{_esc(node.get('status', '—'))}</td>"
+            f"<td>{_esc(f'{duration:,}' if isinstance(duration, int) else '—')}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        '<div class="report-container" style="padding:16px;"><table>'
+        f"<tr><th>{t('obs_durable_nodes', lang)}</th>"
+        f"<th>{t('obs_attempt_label', lang)}</th>"
+        f"<th>{t('obs_status_label', lang)}</th>"
+        f"<th>{t('obs_duration_ms', lang)}</th></tr>"
+        f"{''.join(rows)}</table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_durable_calls(observability: dict):
+    calls = observability.get("calls") or []
+    totals = observability.get("totals") or {}
+    st.markdown(f"### {t('obs_durable_calls', lang)}")
+    if not calls:
+        st.caption(t("obs_no_durable_calls", lang))
+        return
+    rows = []
+    for call in calls:
+        if not isinstance(call, dict):
+            continue
+        duration = call.get("duration_ms")
+        usage = call.get("usage") or {}
+        usage_text = ", ".join(
+            f"{_esc(label)}: {_esc(usage[field])}"
+            for field, label in (
+                ("input_tokens", "in"),
+                ("output_tokens", "out"),
+                ("total_tokens", "total"),
+            )
+            if field in usage
+        ) or "—"
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(call.get('kind', '—'))}</td>"
+            f"<td>{_esc(_node_label(str(call.get('node_name') or ''), lang))}</td>"
+            f"<td>{_esc(call.get('node_attempt_no', '—'))}</td>"
+            f"<td>{_esc(call.get('retry_no', '—'))}</td>"
+            f"<td>{_esc(call.get('provider', '—'))}</td>"
+            f"<td>{_esc(call.get('operation', '—'))}</td>"
+            f"<td>{_esc(call.get('call_no', '—'))}</td>"
+            f"<td>{_esc(call.get('status', '—'))}</td>"
+            f"<td>{_esc(f'{duration:,}' if isinstance(duration, int) else '—')}</td>"
+            f"<td>{usage_text}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        '<div class="report-container" style="padding:16px;"><table>'
+        f"<tr><th>Kind</th><th>{t('obs_call_node_label', lang)}</th>"
+        f"<th>{t('obs_call_attempt_label', lang)}</th><th>{t('obs_retry_no', lang)}</th>"
+        f"<th>{t('obs_provider_label', lang)}</th>"
+        f"<th>{t('obs_operation_label', lang)}</th><th>Call</th>"
+        f"<th>{t('obs_status_label', lang)}</th>"
+        f"<th>{t('obs_duration_ms', lang)}</th><th>Tokens</th></tr>"
+        f"{''.join(rows)}</table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_durable_tokens(observability: dict):
+    totals = observability.get("totals") or {}
+    if not totals.get("llm_calls"):
+        st.caption(t("obs_no_token_data", lang))
+        return
+    values = (
+        (t("obs_token_prompt_label", lang), totals.get("input_tokens")),
+        (t("obs_token_completion_label", lang), totals.get("output_tokens")),
+        (t("obs_token_total_label", lang), totals.get("total_tokens")),
+    )
+    rendered = " · ".join(
+        f"{_esc(label)}: {_esc(f'{value:,}' if isinstance(value, int) else '—')}"
+        for label, value in values
+    )
+    st.markdown(
+        f'<div class="glass-card" style="padding:16px;">{rendered}</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        t(
+            "obs_usage_complete"
+            if totals.get("token_usage_complete")
+            else "obs_usage_partial",
+            lang,
+        )
+    )
 
 
 def _render_timeline_panel(snapshot: dict):
@@ -1466,6 +1681,8 @@ def _render_download_buttons(task_id: str, report_format: str):
 
 def _render_results():
     task_id = st.session_state.research_task_id
+    observability = None
+    observability_error = False
 
     try:
         snap_resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/snapshot", timeout=10)
@@ -1475,6 +1692,18 @@ def _render_results():
         st.session_state.research_snapshot = snapshot
     except Exception:
         snapshot = st.session_state.get("research_snapshot") or {}
+
+    try:
+        trace_resp = httpx.get(
+            f"{API_BASE}/api/v1/tasks/{task_id}/observability", timeout=10
+        )
+        if trace_resp.status_code == 200:
+            trace_payload = trace_resp.json()
+            observability = trace_payload if isinstance(trace_payload, dict) else None
+        else:
+            observability_error = True
+    except Exception:
+        observability_error = True
 
     try:
         report_resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/report", timeout=10)
@@ -1504,7 +1733,9 @@ def _render_results():
     ])
 
     with tab_obs:
-        _render_obs_panels(snapshot)
+        _render_obs_panels(
+            snapshot, observability, observability_error=observability_error
+        )
 
     with tab1:
         fmt = st.selectbox(

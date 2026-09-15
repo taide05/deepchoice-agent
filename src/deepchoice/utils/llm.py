@@ -173,6 +173,7 @@ async def call_model(
         TraceStatus,
         current_trace_recorder,
     )
+    from deepchoice.runtime.context import classify_cancelled_trace_status
 
     tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
@@ -226,7 +227,7 @@ async def call_model(
                 if trace is not None:
                     await trace.finish_external_call(
                         trace_call,
-                        status=TraceStatus.CANCELLED,
+                        status=classify_cancelled_trace_status(),
                         result_summary={"retry_no": attempt},
                     )
                 raise

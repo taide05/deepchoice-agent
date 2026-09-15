@@ -19,6 +19,7 @@ from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
 from ..contracts.api import (
     ResearchRequest,
     ResearchStartedResponse,
+    TaskObservabilityResponse,
     ReportFormatValue,
     RunRecordResponse,
     TaskDetailResponse,
@@ -44,6 +45,7 @@ from ..persistence.migrations import run_migrations
 from ..persistence.records import RunResultRecord, TaskWithRun
 from ..persistence.repository import SQLiteTaskRunRepository
 from ..observability import SQLiteTraceStore
+from ..observability.query import SQLiteObservabilityQuery
 from ..runtime.coordinator import RunCoordinator
 from ..runtime.instance_guard import (
     RuntimeInstanceGuard,
@@ -140,6 +142,9 @@ async def lifespan(application: FastAPI):
             configure_trace_store(SQLiteTraceStore(connection, connection_lock))
         application.state.product_database_connection = connection
         application.state.product_database_lock = connection_lock
+        application.state.observability_query = SQLiteObservabilityQuery(
+            connection, connection_lock
+        )
         application.state.task_repository = repository
         application.state.task_service = TaskService(repository)
         application.state.run_coordinator = coordinator
@@ -584,6 +589,21 @@ async def get_task_snapshot(task_id: str, request: Request) -> dict[str, object]
 
     _, result = await _get_durable_result(task_id, request)
     return result.snapshot
+
+
+@app.get(
+    "/api/v1/tasks/{task_id}/observability",
+    response_model=TaskObservabilityResponse,
+)
+async def get_task_observability(
+    task_id: str, request: Request
+) -> TaskObservabilityResponse:
+    """Return one snapshot-consistent allowlisted latest-run Trace summary."""
+
+    query = getattr(request.app.state, "observability_query", None)
+    if not isinstance(query, SQLiteObservabilityQuery):
+        raise DatabaseConnectionError(retryable=True)
+    return await query.for_task(task_id)
 
 
 @app.get(

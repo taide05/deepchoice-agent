@@ -223,6 +223,25 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
 
+def _tool_failure_category(result: str) -> str | None:
+    """Map a structured tool error to a public-safe trace category."""
+
+    try:
+        payload = json.loads(result)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or "error" not in payload:
+        return None
+    error = str(payload.get("error", "")).lower()
+    if "unknown tool" in error:
+        return "unsupported_tool"
+    if "kb collection" in error:
+        return "knowledge_base_unavailable"
+    if "api key" in error or "provider" in error or "available" in error:
+        return "provider_unavailable"
+    return "provider_error"
+
+
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                            max_iterations: int = EVIDENCE_GATHER_MAX_ITERATIONS,
                            per_call_timeout: float = EVIDENCE_GATHER_CALL_TIMEOUT_S,
@@ -234,6 +253,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     """
     from ..utils.llm import TIERS, _get_client
     from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
+    from ..runtime.context import classify_cancelled_trace_status
 
     client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash")
 
@@ -275,7 +295,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         except asyncio.CancelledError:
             if trace is not None:
                 await trace.finish_external_call(
-                    trace_call, status=TraceStatus.CANCELLED
+                    trace_call, status=classify_cancelled_trace_status()
                 )
             raise
         except TimeoutError:
@@ -351,7 +371,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             except asyncio.CancelledError:
                 if trace is not None:
                     await trace.finish_external_call(
-                        tool_trace, status=TraceStatus.CANCELLED
+                        tool_trace, status=classify_cancelled_trace_status()
                     )
                 raise
             except TimeoutError:
@@ -369,11 +389,20 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                         result_summary={"error_type": type(exc).__name__},
                     )
             else:
+                failure_category = _tool_failure_category(result)
                 if trace is not None:
                     await trace.finish_external_call(
                         tool_trace,
-                        status=TraceStatus.SUCCEEDED,
-                        result_summary={"result_chars": len(result)},
+                        status=(
+                            TraceStatus.FAILED
+                            if failure_category is not None
+                            else TraceStatus.SUCCEEDED
+                        ),
+                        result_summary=(
+                            {"failure_category": failure_category}
+                            if failure_category is not None
+                            else {"result_chars": len(result)}
+                        ),
                     )
             return tc.id, result
 

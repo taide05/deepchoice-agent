@@ -17,7 +17,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **自审查 + 定向重试**：最后一环用 6 项清单审查报告质量，发现问题自动补搜知识缺口，区分小缺口（重走检索适配）和大缺口（重走全管道）
 - **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
 - **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
-- **可观测性面板**：运行轨迹时间轴（9 节点瀑布）+ 检索明细（每路延迟/失败）+ 冲突仲裁可视化 + Token 统计（按 Agent/模型聚合），研究过程全程可见
+- **可观测性面板**：持久化节点尝试与 LLM/检索调用（耗时、重试、失败、已知 Token 用量），并保留检索明细和冲突仲裁快照；Trace 不可用时回退快照面板
 - **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 - **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
@@ -92,9 +92,15 @@ snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选
 Phase 2-A 只冻结运行上下文、Trace/Budget DTO/Protocol、版本化预算策略和产品 schema
 骨架（`run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、
 `budget_ledger`）。旧 run 不回填，内部 policy 投影为 unavailable；后续查询 API 必须如实显示
-该缺失状态。node/call
-wrapper、Trace 写入/API、预算预留结算和硬限制属于后续 Phase 2-B/2-C，不能提前假定已经生效。
-`task_events` 仍是任务状态与 SSE 正确性的唯一事实源，`RunManifest` 保持 v1，不因本阶段升级。
+该缺失状态。Phase 2-B 已接入默认 durable 路径的节点/外部调用 Trace，并提供
+`GET /api/v1/tasks/{task_id}/observability`；查询只返回最新 run 的 allowlisted 摘要，旧 run、
+无 Trace 和无 latest run 明确标记 unavailable。latest run、run epoch/status 与 Trace 在同一 SQLite
+read snapshot 中读取；调用显示安全节点归属、run 内节点尝试序号和整数 retry 序号。过期 started
+记录投影为 interrupted/unknown。Token 聚合保留缺失字段并标记完整性，未知值不按零处理。
+Streamlit 展示 durable 节点、调用、重试、失败及已知 token；查询失败或不可用时回退已有
+snapshot panels。Trace 写入仍是 best-effort，不影响 task lifecycle/SSE；`task_events` 仍是
+状态与 SSE 正确性的唯一事实源，`RunManifest` 保持 v1。Phase 2-B 已通过完整测试和独立 Review。
+预算预留、结算和触顶策略属于 Phase 2-C，当前尚未实施。
 
 Phase 6-A 已收敛默认安全边界：所有受管 URL 外呼使用 `SafeUrlPolicy`/安全 fetch，仅允许
 HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redirect 上重新验证公网地址、
@@ -115,8 +121,8 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-14 在项目隔离环境中验证结果为
-**815 passed，0 skipped**（2026-09-14）。不要使用混装其他项目依赖的全局 Python 环境。
+项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
+**863 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -249,7 +255,7 @@ src/deepchoice/
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
-├── server/          # FastAPI（26 端点：app.py 22 + clarify_routes 4，含 durable SSE）
+├── server/          # FastAPI（27 端点：app.py 23 + clarify_routes 4，含 durable Trace 摘要与 SSE）
 ├── state.py         # ResearchState TypedDict
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 

@@ -98,8 +98,17 @@ class _FakeBackend:
         self.stream_events = stream_events
         self.status_complete = status_complete
         self.stream_headers = []
+        self.observability_requests = 0
+        self.observability_status = 200
+        self.observability = {
+            "availability": "unavailable",
+            "unavailable_reason": "trace_not_recorded",
+        }
 
     def get(self, url, **kw):
+        if url.endswith("/observability"):
+            self.observability_requests += 1
+            return _FakeResp(self.observability, status_code=self.observability_status)
         if url.endswith("/snapshot"):
             return _FakeResp(SNAP)
         if url.endswith("/report"):
@@ -261,6 +270,104 @@ def test_results_phase_renders_observability_panels(monkeypatch):
                    "A 正确", "得分 8.2", "Token 统计", "flash", "195"):
         assert needle in md, f"missing {needle!r} in rendered markdown"
     assert "129.49s" in cap, f"total elapsed caption missing: {cap!r}"
+    assert backend.observability_requests == 1
+    assert "trace_not_recorded" in cap
+
+
+def test_results_phase_prefers_durable_nodes_calls_and_known_token_usage(monkeypatch):
+    backend = _FakeBackend(stream_events=[], status_complete=True)
+    backend.observability = {
+        "availability": "available",
+        "nodes": [
+            {
+                "node_name": "query_analyzer",
+                "attempt_no": 1,
+                "status": "failed",
+                "duration_ms": 123,
+            },
+            {
+                "node_name": "query_analyzer",
+                "attempt_no": 2,
+                "status": "succeeded",
+                "duration_ms": 456,
+            },
+        ],
+        "calls": [
+            {
+                "kind": "llm",
+                "node_name": "query_analyzer",
+                "node_attempt_no": 2,
+                "retry_no": 1,
+                "provider": "deepseek-flash",
+                "operation": "chat.completions.create",
+                "call_no": 2,
+                "status": "succeeded",
+                "duration_ms": 45,
+                "usage": {"input_tokens": 15, "total_tokens": 17},
+            }
+        ],
+        "totals": {
+            "node_attempts": 2,
+            "node_retries": 1,
+            "external_calls": 1,
+            "failed_calls": 0,
+            "llm_calls": 1,
+            "retrieval_calls": 0,
+            "input_tokens": 15,
+            "output_tokens": None,
+            "total_tokens": 17,
+            "token_usage_complete": False,
+        },
+    }
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_results_phase(at)
+    at.run()
+
+    assert not at.exception, at.exception
+    md = _md_text(at)
+    cap = "\n".join(str(c.value) for c in at.caption)
+    assert backend.observability_requests == 1
+    for expected in (
+        "持久化节点尝试",
+        "查询分析",
+        "失败",
+        "deepseek-flash",
+        "chat.completions.create",
+        "重试序号",
+        "15",
+        "17",
+    ):
+        assert expected in md
+    assert "重试 1" in cap
+    assert "查询分析" in md
+    assert " 1 " in md
+    assert "记录不完整" in cap
+    assert "195" not in md  # snapshot Token rows are replaced by durable usage.
+
+
+def test_results_phase_falls_back_to_snapshot_when_observability_request_fails(monkeypatch):
+    backend = _FakeBackend(stream_events=[], status_complete=True)
+    backend.observability_status = 503
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    _enter_results_phase(at)
+    at.run()
+
+    assert not at.exception, at.exception
+    md = _md_text(at)
+    cap = "\n".join(str(c.value) for c in at.caption)
+    assert backend.observability_requests == 1
+    assert "Token 统计" in md and "195" in md
+    assert "持久化运行追踪查询失败" in cap
 
 
 def test_report_tab_reading_view(monkeypatch):

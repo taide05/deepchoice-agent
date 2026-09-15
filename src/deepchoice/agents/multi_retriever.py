@@ -7,6 +7,7 @@ from ..retrievers.contracts import RetrievalRequest, RetrievalResult
 from ..retrievers.learned_docs import extract_terms, harvest
 from ..retrievers.official import TECH_DOCS
 from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
+from ..runtime.context import classify_cancelled_trace_status
 from ..utils.views import print_agent_output
 
 
@@ -143,7 +144,7 @@ async def _invoke_retriever(
     except asyncio.CancelledError:
         if trace is not None:
             await trace.finish_external_call(
-                trace_call, status=TraceStatus.CANCELLED
+                trace_call, status=classify_cancelled_trace_status()
             )
         raise
     except Exception as exc:

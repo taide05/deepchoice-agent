@@ -22,6 +22,7 @@
 - Phase 1-G durable default path: immutable run results, atomic result/success/event finalization, restart-readable report/snapshot/annotated/export APIs, Streamlit durable SSE replay/resync, and cancel/resume controls
 - Forward-only product schema v6 for immutable public run results and v7 for the single-runtime-instance lease
 - Phase 2-A RunContext, Trace/Budget DTO and Protocol contracts, plus the forward-only schema v8 skeleton for run budget policies, node attempts, external calls, trace events, and budget ledger
+- Phase 2-B default durable Trace recording for workflow node attempts and LLM/retrieval calls, plus a snapshot-consistent latest-run observability API with safe call-to-node/retry attribution and Streamlit panels for attempts, failures, durations, and known token usage
 - Manifest-verified paired product/checkpoint database backup, restore, and restore-drill tooling
 - Phase 6-A security boundary: SafeUrlPolicy with DNS/public-address and redirect revalidation, direct-IP pinning, bounded HTTP admission, forward hostname matching, centralized redaction, and sanitized report HTML/PDF output
 
@@ -30,7 +31,7 @@
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment
 - FastAPI and Streamlit minimums now select the verified compatible dependency generation
-- Verified Python 3.12 test baseline is 815 passed with no skips on 2026-09-14
+- Verified Python 3.12 test baseline is 863 passed with no skips on 2026-09-15
 - Research startup now returns a `manifest_id`, and the same manifest is carried through the initial workflow state for auditability
 - Multi-source retrieval validates stable result envelopes and converts contract violations into visible failed-source results
 - Product persistence is kept separate from LangGraph checkpoints; migrations serialize concurrent runners and reject drift/future schemas safely
@@ -40,7 +41,7 @@
 - The SQLite runtime now rejects known multi-worker settings and a second live instance through a renewable product-database lease; Docker is fixed to Python 3.12 and one worker
 - Coordinator shutdown now settles an in-flight lease acquisition and fenced finalization before propagating cancellation, closing the commit-before-grant ghost-running race
 - New durable runs and retries atomically freeze `standard-observe-v1` and `unpriced-v1`; unknown prices remain unknown rather than being treated as zero. Historical runs are not backfilled and retain an unavailable internal policy projection for future APIs to report honestly
-- Phase 2-A does not yet write Trace events, expose Trace APIs, or enforce budget reservation/settlement/hard limits; those remain Phase 2-B/2-C. Durable `task_events` remains the sole task/SSE correctness path, and `RunManifest` stays v1
+- Phase 2-B Trace summaries read only the product SQLite latest run and expose allowlisted metadata; unavailable historical policy/trace and incomplete token usage remain explicit, and the Streamlit UI falls back to snapshot panels. Trace writes do not affect durable lifecycle/SSE correctness; budget reservation, settlement, and hard limits remain Phase 2-C, while `RunManifest` stays v1
 - Phase 6-A intentionally does not add authentication/API-key enforcement or rate limiting, and does not claim that every static provider has migrated to the safe-fetch path; those remain separate follow-up boundaries
 - Remaining implementation roadmap is narrowed to minimal Trace/budget, citation/cache, one HITL gate, and measurable project closeout; enterprise-only expansion is removed from the current Phase scope
 

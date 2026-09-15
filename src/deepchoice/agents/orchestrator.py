@@ -14,7 +14,11 @@ from ..contracts.manifest import (
 )
 from ..state import ResearchState
 from ..observability import RuntimeTraceRecorder, TraceStatus
-from ..runtime.context import bind_node_attempt, get_run_context
+from ..runtime.context import (
+    bind_node_attempt,
+    classify_cancelled_trace_status,
+    get_run_context,
+)
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import ConclusionSynthesizerAgent
 from .conflict_detector import ConflictDetectorAgent
@@ -111,7 +115,7 @@ class ChiefEditorAgent:
                 if trace is not None:
                     await trace.finish_node_attempt(
                         attempt,
-                        status=TraceStatus.CANCELLED,
+                        status=classify_cancelled_trace_status(context),
                         summary={"elapsed_ms": round((time.monotonic() - t0) * 1000)},
                     )
                 raise

@@ -7,10 +7,9 @@
 
 ## 1. 诊断
 
-DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A 和 Phase 6-A，工程底座已经足够
-支撑单用户、单实例的个人项目。当前主要问题不再是缺少基础设施，而是尚未形成一条可直接
-展示、度量并由项目作者清晰解释的“运行追踪 → 预算控制 → 引用可信 → 人工决策 → 质量评估”
-闭环。
+DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A、Phase 2-B 和 Phase 6-A；Phase 2-B 的
+运行接线、latest-run 摘要 API 和 Streamlit 展示已通过完整测试与独立 Review。
+当前主要增量是预算控制、引用可信、人工决策和质量评估闭环。
 
 继续按原始企业级设计全面扩张，会提高维护和讲解成本，却未必改善研究结果或面试展示。
 已完成能力保持不动；调整只作用于尚未实施的范围。
@@ -30,17 +29,21 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A 和 Phase 6-A，工�
 - Phase 0：请求/响应、错误、Retriever 契约和 `RunManifest`。
 - Phase 1-A～1-G：SQLite 生命周期、恢复、fencing、事件/SSE、结果持久化和默认前端接入。
 - Phase 2-A：`RunContext`、Trace/Budget 契约、策略冻结和 schema v8 骨架。
+- Phase 2-B：默认 durable 运行节点与外部调用 Trace、latest-run 摘要 API 和 Streamlit 展示；
+  已通过 Phase 级完整测试与独立 Review。
 - Phase 6-A：安全 URL、输入 admission、集中脱敏和报告 HTML/PDF 安全。
 
 以上能力进入维护状态：只修复缺陷和默认路径回归，不继续横向扩展。
 
 ## 4. 当前实施范围
 
-### Phase 2-B：最小可观测闭环
+### Phase 2-B：最小可观测闭环（已完成）
 
 目标：回答“一次报告经历了哪些节点和外部调用、哪里失败或重试、耗时多少”。
 
 **PR 2-B1：运行接线**
+
+状态：已实现并进入当前分支。
 
 - 为默认 durable 工作流接入 node attempt 和 LLM/retriever external-call wrapper。
 - 写入现有 `node_attempts`、`external_calls` 和必要的 `trace_events`。
@@ -49,11 +52,16 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A 和 Phase 6-A，工�
 
 **PR 2-B2：查询与展示**
 
-- 提供 run 级 Trace/usage 摘要 API，并明确旧 run 的 unavailable 语义。
-- Streamlit 展示节点耗时、调用次数、重试和失败摘要。
-- 完成 wrapper、降级、重试配对和旧 run 兼容测试。
+- 已实现 `GET /api/v1/tasks/{task_id}/observability`，只读取产品 SQLite latest run，返回
+  allowlisted 节点/调用与聚合；latest run 选择、run epoch/status 与 Trace 来自同一个 SQLite
+  read snapshot。调用包含节点归属、run 内节点尝试序号和可选的数值 retry 序号；过期 started
+  记录投影为 interrupted 或 unknown。旧 run policy、无 Trace 和无 latest run 均显式 unavailable。
+- Streamlit 请求该 API，展示 durable 节点、调用、重试、失败和已知 token；API 不可用时回退
+  现有 snapshot panels。
+- API 聚合/白名单/历史/无 Trace、前端接入与回退的聚焦测试、Phase 级 full suite 和独立
+  Review 均已通过。
 
-完成标准：默认运行可从 run 定位到 node/call；Trace 故障不影响任务正确性。
+完成标准已满足：默认运行可从 run 定位到 node/call；Trace 故障不影响任务正确性。
 
 ### Phase 2-C：标准预算闭环
 
@@ -142,7 +150,7 @@ DeepChoice 已完成 Phase 0、Phase 1-A～1-G、Phase 2-A 和 Phase 6-A，工�
 
 ## 6. 实施顺序
 
-`Phase 2-B → Phase 2-C → Phase 3 → Phase 4 → Phase 5`
+`Phase 2-C → Phase 3 → Phase 4 → Phase 5`
 
 Phase 6-A 已完成并维持，不再单独安排 Phase 6-B。完成 Phase 5 后先验收和审计，再决定是否
 开启新的产品增量，不自动恢复本文件列出的范围外事项。
