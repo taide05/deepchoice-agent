@@ -107,6 +107,7 @@ TIERS = {
 
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+MAX_OUTPUT_TOKENS = 4096
 
 
 async def _retry_sleep(delay: float) -> None:
@@ -181,7 +182,12 @@ async def call_model(
     if isinstance(prompt, list):
         prompt = list(prompt)
     client = _get_client(timeout=timeout, tier=tier, max_retries=0)
-    kwargs = {"model": model, "messages": prompt, "temperature": 0}
+    kwargs = {
+        "model": model,
+        "messages": prompt,
+        "temperature": 0,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+    }
     if seed is not None:
         kwargs["seed"] = seed
     # Per-call extra_body overrides the tier default; otherwise the tier's
@@ -206,6 +212,16 @@ async def call_model(
     response = None
     try:
         for attempt in range(_MAX_RETRIES + 1):
+            from deepchoice.budget import (
+                BudgetAmount,
+                BudgetError,
+                BudgetExceededError,
+                BudgetResource,
+                reserve_call,
+                settle_call,
+                unknown_call,
+            )
+
             trace, node_attempt_id = current_trace_recorder()
             trace_call = None
             if trace is not None:
@@ -220,10 +236,51 @@ async def call_model(
                         "response_format": response_format or "text",
                     },
                 )
+            sent_messages = kwargs["messages"]
+            message_bytes = len(
+                json.dumps(
+                    sent_messages,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode("utf-8")
+            )
+            reservations = ()
+            try:
+                reservations = await reserve_call(
+                    (
+                        BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=1),
+                        BudgetAmount(
+                            resource=BudgetResource.TOTAL_TOKENS,
+                            amount=message_bytes + MAX_OUTPUT_TOKENS,
+                        ),
+                    ),
+                    call_id=trace_call.call_id if trace_call is not None else None,
+                    summary={"operation": "llm", "retry_no": attempt},
+                )
+            except BudgetError as budget_exc:
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=TraceStatus.FAILED,
+                        result_summary={
+                            "failure_category": (
+                                "budget_exceeded"
+                                if isinstance(budget_exc, BudgetExceededError)
+                                else "budget_gate_failed"
+                            ),
+                            "retry_no": attempt,
+                        },
+                    )
+                raise
             attempt_started = time.monotonic()
             try:
                 response = await client.chat.completions.create(**kwargs)
             except asyncio.CancelledError:
+                await unknown_call(
+                    reservations,
+                    known_actuals={BudgetResource.LLM_CALLS: 1},
+                )
                 if trace is not None:
                     await trace.finish_external_call(
                         trace_call,
@@ -232,6 +289,10 @@ async def call_model(
                     )
                 raise
             except Exception as e:
+                await unknown_call(
+                    reservations,
+                    known_actuals={BudgetResource.LLM_CALLS: 1},
+                )
                 status = getattr(e, "status_code", None)
                 retryable = isinstance(e, APIConnectionError) or status in _RETRYABLE_STATUSES
                 if trace is not None:
@@ -264,6 +325,17 @@ async def call_model(
                         "output_tokens": response.usage.completion_tokens,
                         "total_tokens": response.usage.total_tokens,
                     }
+                await settle_call(
+                    reservations,
+                    {
+                        BudgetResource.LLM_CALLS: 1,
+                        BudgetResource.TOTAL_TOKENS: (
+                            response.usage.total_tokens
+                            if response.usage is not None
+                            else None
+                        ),
+                    },
+                )
                 if trace is not None:
                     await trace.finish_external_call(
                         trace_call,

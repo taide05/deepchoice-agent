@@ -8,6 +8,7 @@ from ..retrievers.learned_docs import extract_terms, harvest
 from ..retrievers.official import TECH_DOCS
 from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
 from ..runtime.context import classify_cancelled_trace_status
+from ..budget.errors import BudgetError
 from ..utils.views import print_agent_output
 
 
@@ -45,6 +46,8 @@ async def _invoke_retriever_untraced(
 ) -> tuple[object, bool]:
     try:
         retriever = cls()
+    except BudgetError:
+        raise
     except Exception as exc:
         return (
             RetrievalResult(
@@ -64,6 +67,8 @@ async def _invoke_retriever_untraced(
             max_results=7,
             adapted_queries=adapted_queries,
         )
+    except BudgetError:
+        raise
     except Exception as exc:
         return await _contract_failure(name, exc), True
 
@@ -78,6 +83,8 @@ async def _invoke_retriever_untraced(
                 adapted_queries=adapted_queries,
             )
         )
+    except BudgetError:
+        raise
     except Exception as exc:
         return (
             RetrievalResult(
@@ -96,6 +103,8 @@ async def _invoke_retriever_untraced(
         ), is_stable
     try:
         return await pending, is_stable
+    except BudgetError:
+        raise
     except Exception as exc:
         return (
             RetrievalResult(
@@ -119,6 +128,8 @@ async def _invoke_retriever(
 ) -> tuple[object, bool]:
     """Record one independent retrieval call without retaining its query."""
 
+    from ..budget import BudgetAmount, BudgetResource, reserve_call, settle_call
+
     trace, node_attempt_id = current_trace_recorder()
     trace_call = None
     if trace is not None:
@@ -134,6 +145,26 @@ async def _invoke_retriever(
             },
         )
     try:
+        reservations = await reserve_call(
+            (BudgetAmount(resource=BudgetResource.RETRIEVAL_CALLS, amount=1),),
+            call_id=trace_call.call_id if trace_call is not None else None,
+            summary={"operation": "retrieval", "provider": name},
+        )
+    except BudgetError as budget_exc:
+        if trace is not None:
+            await trace.finish_external_call(
+                trace_call,
+                status=TraceStatus.FAILED,
+                result_summary={
+                    "failure_category": (
+                        "budget_exceeded"
+                        if getattr(budget_exc, "code", "") == "RUN_BUDGET_EXCEEDED"
+                        else "budget_gate_failed"
+                    )
+                },
+            )
+        raise
+    try:
         invocation = await _invoke_retriever_untraced(
             name,
             cls,
@@ -142,12 +173,18 @@ async def _invoke_retriever(
             adapted_queries=adapted_queries,
         )
     except asyncio.CancelledError:
+        await settle_call(
+            reservations, {BudgetResource.RETRIEVAL_CALLS: 1}
+        )
         if trace is not None:
             await trace.finish_external_call(
                 trace_call, status=classify_cancelled_trace_status()
             )
         raise
     except Exception as exc:
+        await settle_call(
+            reservations, {BudgetResource.RETRIEVAL_CALLS: 1}
+        )
         if trace is not None:
             await trace.finish_external_call(
                 trace_call,
@@ -155,6 +192,8 @@ async def _invoke_retriever(
                 result_summary={"error_type": type(exc).__name__},
             )
         raise
+
+    await settle_call(reservations, {BudgetResource.RETRIEVAL_CALLS: 1})
 
     raw_result, is_stable = invocation
     try:
@@ -236,6 +275,12 @@ class MultiRetrieverAgent:
             )
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Budget correctness failures must not be downgraded to ordinary
+        # per-source partial failures by the retriever's resilient fan-out.
+        for invocation in raw_results:
+            if isinstance(invocation, BudgetError):
+                raise invocation
 
         search_results = []
         partial_failures = []

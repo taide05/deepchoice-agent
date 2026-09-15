@@ -50,10 +50,16 @@ class _Trace:
 
 
 class _Budget:
+    run_id = "run-1"
+    execution_epoch = 1
+    async def reserve_bundle(self, **kwargs): raise NotImplementedError
     async def reserve(self, **kwargs): raise NotImplementedError
     async def settle(self, reservation_id, **kwargs): raise NotImplementedError
     async def release(self, reservation_id): raise NotImplementedError
     async def mark_unknown_spend(self, reservation_id, **kwargs): raise NotImplementedError
+    async def reconcile(self): return 0
+    async def raise_if_exhausted(self, *, partial_state=None): return None
+    async def record_active_milliseconds(self): return None
 
 
 def test_standard_policy_and_unknown_price_are_explicit() -> None:

@@ -23,7 +23,7 @@ from .errors import DeepChoiceError, ErrorCategory
 from ..agents.query_adapter import ADAPT_SYSTEM
 from ..agents.query_analyzer import DECOMPOSITION_SYSTEM
 from ..agents.self_reviewer import REVIEW_SYSTEM
-from ..utils.llm import TIERS
+from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS
 
 
 WORKFLOW_NODES = (
@@ -79,6 +79,10 @@ class LLMCallSnapshot(FrozenModel):
     tools_sha256: str | None = None
     max_iterations: int | None = None
     tool_timeout_s: float | None = None
+    # ``None`` is accepted only to deserialize pre-Phase-2-C manifests. New
+    # manifests always freeze an explicit value and compatibility rejects old
+    # snapshots before same-run resume.
+    max_output_tokens: int | None = None
 
 
 class RetrieverSnapshot(FrozenModel):
@@ -193,22 +197,26 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 tier="deepseek-flash",
                 prompt_id="query_analyzer.decomposition_system",
                 seed=0,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="query_adapter",
                 tier="deepseek-flash",
                 prompt_id="query_adapter.adapt_system",
                 seed=0,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="conflict_scan",
                 tier="deepseek-flash",
                 prompt_id="conflict_detector.contradiction_scan_system",
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="conflict_arbitration",
                 tier="deepseek-flash",
                 prompt_id="conflict_detector.arbitration_system",
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="conflict_evidence_gather",
@@ -219,12 +227,14 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 tools_sha256=_sha256(_canonical_json(SEARCH_TOOLS)),
                 max_iterations=EVIDENCE_GATHER_MAX_ITERATIONS,
                 tool_timeout_s=EVIDENCE_GATHER_TOOL_TIMEOUT_S,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="conflict_rearbitration",
                 tier="qwen-flash",
                 prompt_id="conflict_detector.arbitration_system",
                 timeout_s=300.0,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="conclusion_synthesizer",
@@ -233,11 +243,13 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 timeout_s=SYNTHESIS_CALL_TIMEOUT_S,
                 seed=0,
                 extra_body_json=_canonical_json(synthesis_extra_body),
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="self_reviewer",
                 tier="deepseek-flash",
                 prompt_id="self_reviewer.review_system",
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
         ),
         "retrievers": tuple(
@@ -276,6 +288,11 @@ def build_run_manifest(task: dict) -> RunManifest:
 
 def _expected_manifest_id(manifest: RunManifest) -> str:
     content = manifest.model_dump(mode="json", exclude={"manifest_id", "created_at"})
+    # Old v1 manifests predate this field; preserve their historical identity
+    # so they fail as incompatible, rather than appearing corrupt.
+    for call in content["llm_calls"]:
+        if call.get("max_output_tokens") is None:
+            call.pop("max_output_tokens", None)
     return _sha256(_canonical_json(content))
 
 

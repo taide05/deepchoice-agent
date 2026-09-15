@@ -2,6 +2,7 @@ import json
 import os
 import re
 
+from ..budget.errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -349,6 +350,8 @@ class ConclusionSynthesizerAgent:
                 timeout=timeout,
                 seed=seed,
             )
+        except BudgetError:
+            raise
         except Exception:
             print_agent_output("Synthesis failed", agent="CONCLUSION_SYNTHESIZER")
             result = {

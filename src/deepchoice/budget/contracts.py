@@ -194,7 +194,24 @@ class BudgetLedgerEntry(_FrozenContract):
 
 @runtime_checkable
 class BudgetManager(Protocol):
-    """Port for future atomic reservation and settlement implementations."""
+    """Port for atomic, fenced reservation and settlement implementations."""
+
+    @property
+    def run_id(self) -> str: ...
+
+    @property
+    def execution_epoch(self) -> int: ...
+
+    async def reserve_bundle(
+        self,
+        *,
+        run_id: str,
+        execution_epoch: int,
+        amounts: tuple[BudgetAmount, ...],
+        expires_at: datetime,
+        call_id: str | None = None,
+        summary: dict[str, JsonValue] | None = None,
+    ) -> tuple[BudgetReservation, ...]: ...
 
     async def reserve(
         self,
@@ -216,6 +233,15 @@ class BudgetManager(Protocol):
     async def mark_unknown_spend(
         self, reservation_id: str, *, actual: BudgetAmount
     ) -> BudgetReservation: ...
+
+    async def reconcile(self) -> int: ...
+
+    async def raise_if_exhausted(
+        self, *, partial_state: dict | None = None
+    ) -> None: ...
+
+    async def record_active_milliseconds(self) -> BudgetReservation | None: ...
+
 
 
 __all__ = [

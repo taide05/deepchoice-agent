@@ -7,6 +7,7 @@ from pathlib import Path
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from ..budget.errors import BudgetExceededError
 from ..contracts.manifest import (
     RunManifest,
     build_run_manifest,
@@ -111,6 +112,10 @@ class ChiefEditorAgent:
                     result = await fn(state)
                     if self.execution_guard is not None:
                         await self.execution_guard()
+                    if context is not None:
+                        await context.budget.raise_if_exhausted(
+                            partial_state={**state, **result}
+                        )
             except asyncio.CancelledError:
                 if trace is not None:
                     await trace.finish_node_attempt(
@@ -125,6 +130,19 @@ class ChiefEditorAgent:
                         attempt,
                         status=TraceStatus.TIMED_OUT,
                         summary={"elapsed_ms": round((time.monotonic() - t0) * 1000)},
+                    )
+                raise
+            except BudgetExceededError as exc:
+                exc.attach_partial_state(state)
+                if trace is not None:
+                    await trace.finish_node_attempt(
+                        attempt,
+                        status=TraceStatus.FAILED,
+                        summary={
+                            "elapsed_ms": round((time.monotonic() - t0) * 1000),
+                            "error_type": type(exc).__name__,
+                            "failure_category": "budget_exceeded",
+                        },
                     )
                 raise
             except Exception as exc:

@@ -11,7 +11,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from deepchoice.agents.orchestrator import ChiefEditorAgent
-from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY, DeferredBudgetManager
+from deepchoice.budget import (
+    DEFAULT_RUN_BUDGET_POLICY,
+    BudgetPersistenceError,
+    SQLiteBudgetStore,
+)
 from deepchoice.contracts.errors import normalize_error
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.records import (
@@ -38,6 +42,22 @@ def _execution_checkpoint_namespace(execution_epoch: int) -> str:
     """Return an internal namespace never exposed to the root StateGraph."""
 
     return f"deepchoice-execution-{execution_epoch}"
+
+
+class _NoopTraceSink:
+    """Keep budget context active when optional Trace persistence is absent."""
+
+    async def record_run(self, trace) -> None:
+        return None
+
+    async def record_node_attempt(self, attempt) -> None:
+        return None
+
+    async def record_external_call(self, call) -> None:
+        return None
+
+    async def record_event(self, event) -> None:
+        return None
 
 
 _PUBLIC_RESULT_FIELDS = frozenset(
@@ -229,6 +249,7 @@ class RunCoordinator:
         clock: Callable[[], datetime] = _utc_now,
         orchestrator_factory: Callable[..., ChiefEditorAgent] = ChiefEditorAgent,
         trace_store: SQLiteTraceStore | None = None,
+        budget_store: SQLiteBudgetStore | None = None,
     ) -> None:
         if min(lease_ttl, heartbeat_interval, run_timeout, recovery_interval) <= timedelta(0):
             raise ValueError("coordinator durations must be positive")
@@ -245,6 +266,9 @@ class RunCoordinator:
         self._clock = clock
         self._orchestrator_factory = orchestrator_factory
         self._trace_store = trace_store
+        self._budget_store = budget_store or SQLiteBudgetStore(
+            repository._connection, repository._lock, clock=clock
+        )
         self._active: dict[str, asyncio.Task[None]] = {}
         self._active_lock = asyncio.Lock()
         self._recovery_task: asyncio.Task[None] | None = None
@@ -256,6 +280,13 @@ class RunCoordinator:
         if self._active or self._recovery_task is not None:
             raise RuntimeError("trace store must be configured before coordinator start")
         self._trace_store = trace_store
+
+    def configure_budget_store(self, budget_store: SQLiteBudgetStore) -> None:
+        """Attach the correctness-path budget store before execution starts."""
+
+        if self._active or self._recovery_task is not None:
+            raise RuntimeError("budget store must be configured before coordinator start")
+        self._budget_store = budget_store
 
     @property
     def active_runs(self) -> tuple[str, ...]:
@@ -437,6 +468,7 @@ class RunCoordinator:
         acquisition: asyncio.Task[Any] | None = None
         context_binding = None
         trace: RuntimeTraceRecorder | None = None
+        budget = None
         trace_finished = False
 
         async def finish_trace(status: TraceStatus) -> None:
@@ -452,6 +484,21 @@ class RunCoordinator:
             heartbeat.cancel()
             await asyncio.gather(heartbeat, return_exceptions=True)
             heartbeat = None
+
+        async def record_active_budget() -> None:
+            if budget is None:
+                return
+            try:
+                await budget.record_active_milliseconds()
+            except asyncio.CancelledError:
+                # This terminal measurement is ancillary.  In particular, a
+                # second cancellation must not prevent the fenced lifecycle
+                # finalization below from clearing a committed running lease.
+                return
+            except Exception:
+                # Terminal measurement is best effort. Admission and settlement
+                # around external calls remain fail-closed correctness paths.
+                return
 
         try:
             acquisition = asyncio.create_task(
@@ -470,6 +517,10 @@ class RunCoordinator:
             if current is None or current.latest_run is None:
                 raise RunLeaseLostError(run_id)
             run = current.latest_run
+            if run.budget_policy is None:
+                raise BudgetPersistenceError(
+                    "durable execution requires a frozen budget policy"
+                )
 
             async def guard() -> None:
                 fenced = await self.repository.fence_run(
@@ -485,6 +536,19 @@ class RunCoordinator:
                 async def raise_if_cancelled(self) -> None:
                     await guard()
 
+            if self._budget_store is None:
+                raise BudgetPersistenceError("budget store is not configured")
+            budget = self._budget_store.bind(
+                run_id=run_id,
+                execution_epoch=grant.execution_epoch,
+                lease_owner=self.owner_id,
+                policy=run.budget_policy,
+                run_started_at=run.started_at or run.created_at,
+                execution_started_at=self._clock(),
+            )
+            await budget.reconcile()
+
+            trace_port = _NoopTraceSink()
             if self._trace_store is not None:
                 sink = self._trace_store.bind(
                     run_id=run_id,
@@ -492,14 +556,16 @@ class RunCoordinator:
                     lease_owner=self.owner_id,
                 )
                 trace = RuntimeTraceRecorder(sink, task_id=grant.task_id)
-                context = RunContext.from_run_record(
-                    run,
-                    cancellation=GuardCancellationPort(),
-                    trace=trace,
-                    budget=DeferredBudgetManager(),
-                )
-                context_binding = bind_run_context(context)
-                context_binding.__enter__()
+                trace_port = trace
+            context = RunContext.from_run_record(
+                run,
+                cancellation=GuardCancellationPort(),
+                trace=trace_port,
+                budget=budget,
+            )
+            context_binding = bind_run_context(context)
+            context_binding.__enter__()
+            if trace is not None:
                 await trace.start_run()
 
             checkpoint_id = None
@@ -618,6 +684,7 @@ class RunCoordinator:
             )
             await stop_heartbeat()
             await guard()
+            await record_active_budget()
             await finish_trace(TraceStatus.SUCCEEDED)
             await self._finalize(
                 run_id,
@@ -628,6 +695,7 @@ class RunCoordinator:
         except TimeoutError:
             await stop_heartbeat()
             if grant is not None:
+                await record_active_budget()
                 await finish_trace(TraceStatus.TIMED_OUT)
                 await self._finalize(run_id, grant.execution_epoch, RunStatus.TIMED_OUT)
         except asyncio.CancelledError:
@@ -640,6 +708,7 @@ class RunCoordinator:
                     # owner/epoch with which to perform a legitimate finalize.
                     grant = None
             if grant is not None:
+                await record_active_budget()
                 await finish_trace(TraceStatus.CANCELLED)
                 finalization = asyncio.create_task(
                     self._finalize(
@@ -660,6 +729,7 @@ class RunCoordinator:
         except Exception as exc:
             await stop_heartbeat()
             if grant is not None:
+                await record_active_budget()
                 await finish_trace(TraceStatus.FAILED)
                 detail = normalize_error(exc)
                 await self._finalize(

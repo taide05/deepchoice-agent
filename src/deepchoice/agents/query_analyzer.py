@@ -1,3 +1,4 @@
+from ..budget.errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -67,6 +68,8 @@ class QueryAnalyzerAgent:
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_analyzer",
                                       usage=local_usage, seed=0)
+        except BudgetError:
+            raise
         except Exception:
             print_agent_output("Query decomposition failed; using raw query", agent="QUERY_ANALYZER")
             result = {}

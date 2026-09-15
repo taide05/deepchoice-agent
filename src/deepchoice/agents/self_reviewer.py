@@ -1,3 +1,4 @@
+from ..budget.errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -145,6 +146,8 @@ Uncited: {cite_stats["uncited_fields"]}
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="self_reviewer",
                                       usage=local_usage)
+        except BudgetError:
+            raise
         except Exception:
             print_agent_output(
                 "Self-review failed; falling back to medium", agent="SELF_REVIEWER"

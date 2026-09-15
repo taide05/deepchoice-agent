@@ -10,7 +10,7 @@ from deepchoice.contracts.manifest import (
     build_run_manifest,
     ensure_run_manifest_compatible,
 )
-from deepchoice.utils.llm import TIERS
+from deepchoice.utils.llm import MAX_OUTPUT_TOKENS, TIERS
 
 
 def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
@@ -25,6 +25,9 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.state_schema_version == 1
     assert len(first.prompts) == 7
     assert len(first.llm_calls) == 8
+    assert all(
+        call.max_output_tokens == MAX_OUTPUT_TOKENS for call in first.llm_calls
+    )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v1"
     assert first.scoring_policy_version == "source-score-v1"
@@ -150,6 +153,22 @@ def test_saved_manifest_rejects_changed_runtime_model(monkeypatch):
     with pytest.raises(DeepChoiceError, match="incompatible") as caught:
         ensure_run_manifest_compatible(manifest, task)
 
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_pre_budget_manifest_is_identity_valid_but_runtime_incompatible():
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    old_calls = tuple(
+        call.model_copy(update={"max_output_tokens": None})
+        for call in current.llm_calls
+    )
+    old = current.model_copy(update={"llm_calls": old_calls})
+    from deepchoice.contracts.manifest import _expected_manifest_id
+
+    old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(old, task)
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 

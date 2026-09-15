@@ -45,6 +45,7 @@ from ..persistence.migrations import run_migrations
 from ..persistence.records import RunResultRecord, TaskWithRun
 from ..persistence.repository import SQLiteTaskRunRepository
 from ..observability import SQLiteTraceStore
+from ..budget import SQLiteBudgetStore
 from ..observability.query import SQLiteObservabilityQuery
 from ..runtime.coordinator import RunCoordinator
 from ..runtime.instance_guard import (
@@ -140,6 +141,9 @@ async def lifespan(application: FastAPI):
         configure_trace_store = getattr(coordinator, "configure_trace_store", None)
         if callable(configure_trace_store):
             configure_trace_store(SQLiteTraceStore(connection, connection_lock))
+        configure_budget_store = getattr(coordinator, "configure_budget_store", None)
+        if callable(configure_budget_store):
+            configure_budget_store(SQLiteBudgetStore(connection, connection_lock))
         application.state.product_database_connection = connection
         application.state.product_database_lock = connection_lock
         application.state.observability_query = SQLiteObservabilityQuery(

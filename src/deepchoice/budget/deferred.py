@@ -16,6 +16,10 @@ class BudgetExecutionDeferredError(RuntimeError):
 class DeferredBudgetManager:
     """A fail-closed marker adapter; Phase 2-C will replace this implementation."""
 
+    run_id = "deferred"
+    execution_epoch = 1
+    execution_enabled = False
+
     @staticmethod
     def _deferred() -> BudgetReservation:
         raise BudgetExecutionDeferredError(
@@ -34,6 +38,9 @@ class DeferredBudgetManager:
     ) -> BudgetReservation:
         return self._deferred()
 
+    async def reserve_bundle(self, **kwargs) -> tuple[BudgetReservation, ...]:
+        return self._deferred()
+
     async def settle(
         self, reservation_id: str, *, actual: BudgetAmount
     ) -> BudgetReservation:
@@ -46,6 +53,15 @@ class DeferredBudgetManager:
         self, reservation_id: str, *, actual: BudgetAmount
     ) -> BudgetReservation:
         return self._deferred()
+
+    async def reconcile(self) -> int:
+        return 0
+
+    async def raise_if_exhausted(self, *, partial_state: dict | None = None) -> None:
+        return None
+
+    async def record_active_milliseconds(self) -> BudgetReservation | None:
+        return None
 
 
 __all__ = ["BudgetExecutionDeferredError", "DeferredBudgetManager"]

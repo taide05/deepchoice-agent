@@ -3,6 +3,7 @@ import time
 
 from .contracts import RetrievalRequest, RetrievalResult
 from .. import outbound as _outbound
+from ..budget.errors import BudgetError
 from ..utils.views import print_agent_output
 
 
@@ -43,6 +44,8 @@ class BaseRetriever:
                 error=None,
                 latency_ms=round((time.monotonic() - t0) * 1000),
             )
+        except BudgetError:
+            raise
         except Exception as e:
             # A failed request may mean the routed channel died after probing
             # (proxy down, forward endpoint down, network blip). Tell the

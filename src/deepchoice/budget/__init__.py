@@ -1,4 +1,11 @@
-"""Budget policy, reservation, and price catalog contracts."""
+"""Budget policy, reservation, price catalog, and runtime adapters."""
+
+from .errors import (
+    BudgetError,
+    BudgetExceededError,
+    BudgetPersistenceError,
+    StaleBudgetAuthorityError,
+)
 
 from .contracts import (
     BudgetAmount,
@@ -20,6 +27,11 @@ from .pricing import (
     PriceStatus,
 )
 from .deferred import BudgetExecutionDeferredError, DeferredBudgetManager
+from .sqlite import (
+    SQLiteBudgetManager,
+    SQLiteBudgetStore,
+)
+from .runtime import current_budget_manager, reserve_call, settle_call, unknown_call
 
 
 DEFAULT_RUN_BUDGET_POLICY = RunBudgetPolicy(
@@ -31,6 +43,9 @@ __all__ = [
     "BudgetAmount",
     "BudgetEnforcementMode",
     "BudgetExecutionDeferredError",
+    "BudgetError",
+    "BudgetExceededError",
+    "BudgetPersistenceError",
     "BudgetHardLimits",
     "BudgetLedgerEntry",
     "BudgetManager",
@@ -46,4 +61,11 @@ __all__ = [
     "PriceStatus",
     "ReservationStatus",
     "RunBudgetPolicy",
+    "SQLiteBudgetManager",
+    "SQLiteBudgetStore",
+    "StaleBudgetAuthorityError",
+    "current_budget_manager",
+    "reserve_call",
+    "settle_call",
+    "unknown_call",
 ]

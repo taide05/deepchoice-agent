@@ -1,3 +1,4 @@
+from ..budget.errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -68,6 +69,8 @@ class QueryAdapterAgent:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_adapter",
                                       usage=local_usage, seed=0)
             adapted_items = result.get("adapted", [])
+        except BudgetError:
+            raise
         except Exception:
             print_agent_output(
                 "Query adaptation failed; using raw sub_questions", agent="QUERY_ADAPTER"
