@@ -44,6 +44,24 @@ T = {
         "confirm_scene": "场景: {scene}  |  复杂度: {complexity}",
         "start_research_btn": "开始深度研究",
         "researching": "研究中:",
+        "decision_title": "需要更多信息",
+        "decision_reason": "暂停原因",
+        "decision_gaps": "仍待补充的证据缺口",
+        "decision_expires": "决定有效期至 {expires_at}",
+        "decision_context_label": "补充背景信息（最多 4000 字符）",
+        "decision_context_placeholder": "补充与技术选型有关的约束或使用场景...",
+        "decision_provide_context": "补充信息并继续",
+        "decision_limited_report": "基于现有证据生成受限报告",
+        "decision_cancel": "取消任务",
+        "decision_expired": "此决策已过期，任务已停止。请重新开始研究。",
+        "decision_cancelled": "此任务已取消。",
+        "decision_conflict": "决策状态已变化。页面已刷新；如提交结果不确定，可安全重试相同选择。",
+        "decision_retry": "使用相同选择重试",
+        "decision_network_error": "暂时无法确认提交结果。可以安全重试相同选择；补充内容不会显示在事件或日志中。",
+        "decision_submit_error": "无法提交决策（HTTP {status}）。请刷新状态后重试。",
+        "decision_invalid_context": "请先填写补充信息。",
+        "decision_loading_error": "无法读取当前决策状态，请稍后重试。",
+        "decision_pending": "研究已暂停，等待你的选择。",
         "progress_init": "初始化...",
         "progress_phase": "阶段 {idx}/7: {name}",
         "progress_done": "研究完成",
@@ -72,6 +90,42 @@ T = {
         "new_research_btn": "开始新研究",
         "tab_observability": "  观测  ",
         "obs_timeline_title": "运行轨迹时间轴",
+        "obs_trace_fallback": "持久化运行追踪不可用（{reason}），以下显示现有快照观测数据。",
+        "obs_trace_request_failed": "持久化运行追踪查询失败，以下显示现有快照观测数据。",
+        "obs_durable_nodes": "持久化节点尝试",
+        "obs_durable_calls": "持久化外部调用",
+        "obs_durable_counts": "节点尝试 {attempts} · 节点重试 {retries} · 外部调用 {calls} · 失败调用 {failures}",
+        "obs_status_label": "状态",
+        "obs_call_node_label": "节点",
+        "obs_call_attempt_label": "节点尝试",
+        "obs_retry_no": "重试序号",
+        "obs_attempt_label": "尝试",
+        "obs_provider_label": "提供方",
+        "obs_operation_label": "操作",
+        "obs_duration_ms": "耗时（毫秒）",
+        "obs_usage_partial": "Token 总量仅汇总已知用量，记录不完整。",
+        "obs_usage_complete": "所有已记录 LLM 调用均包含 Token 用量。",
+        "obs_no_durable_calls": "没有已记录的外部调用。",
+        "budget_title": "运行预算",
+        "budget_mode": "策略 {policy} · {mode}",
+        "budget_usage": "用量 {used:,} / 上限 {limit:,}",
+        "budget_settled": "已结算 {value:,}",
+        "budget_reserved": "预留 {value:,}",
+        "budget_unknown_spend": "未知用量 {value:,}（按预留上限计入）",
+        "budget_soft_warning": "已达到软预算提醒阈值（80%）。",
+        "budget_exhausted": "已触及预算上限。",
+        "budget_admission_denied": "预算闸门拒绝了后续调用（资源：{resource}）；已消耗量仍按实际账本显示。",
+        "budget_unknown_resource": "未知",
+        "budget_unknown_cost": "成本金额未知，当前价格目录无法提供可靠估算。",
+        "budget_unavailable": "预算信息不可用。",
+        "budget_limited_report": "本报告受预算限制：{reason}",
+        "budget_cap_reason": "已达到{resource}预算上限",
+        "budget_total_tokens": "总 Token",
+        "budget_llm_calls": "LLM 调用",
+        "budget_retrieval_calls": "检索调用",
+        "budget_active_milliseconds": "运行时间（毫秒）",
+        "budget_resource_fallback": "预算资源 {resource}",
+        "obs_unavailable": "不可用",
         "obs_total_elapsed": "总耗时",
         "obs_no_timing": "暂无运行时间数据",
         "obs_running": "运行中",
@@ -106,7 +160,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "查询分析", "query_adapter": "查询适配", "multi_retriever": "多源检索",
             "source_evaluator": "来源评估", "conflict_detector": "矛盾检测", "evidence_chain": "证据链构建",
-            "conclusion_synthesizer": "结论合成", "report_generator": "报告生成", "self_reviewer": "自我审查",
+            "conclusion_synthesizer": "结论合成", "citation_validator": "引用验证", "report_generator": "报告生成", "self_reviewer": "自我审查",
         },
         "rv_toc_title": "目录",
         "rv_download_md": "下载 Markdown",
@@ -115,6 +169,12 @@ T = {
         "rv_download_failed": "下载失败",
         "rv_citations_empty": "本报告格式无引用标注",
         "rv_chain_anchor_note": "引用角标 [N] 对应下方证据链",
+        "rv_citation_reason_supported": "确定性检查发现了支持证据。",
+        "rv_citation_reason_missing": "未找到与该主张匹配的引用来源。",
+        "rv_citation_reason_unavailable": "核验期间无法访问该来源。",
+        "rv_citation_reason_inconclusive": "证据不足以判断；这不代表引用有误。",
+        "rv_citation_reason_mismatch": "确定性检查未能确认来源支持该主张。",
+        "rv_citation_reason_generic": "核验说明不可用，请人工复核。",
         "tech_map": {"candidate_techs": "候选技术", "scene": "使用场景", "complexity": "复杂度"},
     },
     "en": {
@@ -140,6 +200,24 @@ T = {
         "confirm_scene": "Scene: {scene}  |  Complexity: {complexity}",
         "start_research_btn": "Start Deep Research",
         "researching": "Researching:",
+        "decision_title": "More information is needed",
+        "decision_reason": "Why research paused",
+        "decision_gaps": "Evidence gaps to address",
+        "decision_expires": "Decision available until {expires_at}",
+        "decision_context_label": "Additional context (up to 4,000 characters)",
+        "decision_context_placeholder": "Add relevant constraints or usage context...",
+        "decision_provide_context": "Provide context and continue",
+        "decision_limited_report": "Generate a limited report from current evidence",
+        "decision_cancel": "Cancel task",
+        "decision_expired": "This decision expired and the task has stopped. Start a new research task.",
+        "decision_cancelled": "This task was cancelled.",
+        "decision_conflict": "The decision state changed. The page was refreshed; if the outcome is uncertain, retry the same choice safely.",
+        "decision_retry": "Retry the same choice",
+        "decision_network_error": "The submission outcome could not be confirmed. Retry the same choice safely; supplemental text is not shown in events or logs.",
+        "decision_submit_error": "Could not submit the decision (HTTP {status}). Refresh the state and retry.",
+        "decision_invalid_context": "Enter supplemental context first.",
+        "decision_loading_error": "Could not load the current decision. Please retry shortly.",
+        "decision_pending": "Research is paused and waiting for your choice.",
         "progress_init": "Initializing...",
         "progress_phase": "Phase {idx}/7: {name}",
         "progress_done": "Research complete",
@@ -168,6 +246,42 @@ T = {
         "new_research_btn": "Start New Research",
         "tab_observability": "  Observability  ",
         "obs_timeline_title": "Run Timeline",
+        "obs_trace_fallback": "Durable trace is unavailable ({reason}); showing snapshot observability panels.",
+        "obs_trace_request_failed": "Durable trace query failed; showing snapshot observability panels.",
+        "obs_durable_nodes": "Durable node attempts",
+        "obs_durable_calls": "Durable external calls",
+        "obs_durable_counts": "Node attempts {attempts} · Retries {retries} · External calls {calls} · Failed calls {failures}",
+        "obs_status_label": "Status",
+        "obs_call_node_label": "Node",
+        "obs_call_attempt_label": "Node attempt",
+        "obs_retry_no": "Retry number",
+        "obs_attempt_label": "Attempt",
+        "obs_provider_label": "Provider",
+        "obs_operation_label": "Operation",
+        "obs_duration_ms": "Duration (ms)",
+        "obs_usage_partial": "Token totals sum known usage only; records are incomplete.",
+        "obs_usage_complete": "Token usage is present for every recorded LLM call.",
+        "obs_no_durable_calls": "No external calls were recorded.",
+        "budget_title": "Run Budget",
+        "budget_mode": "Policy {policy} · {mode}",
+        "budget_usage": "Used {used:,} / limit {limit:,}",
+        "budget_settled": "Settled {value:,}",
+        "budget_reserved": "Reserved {value:,}",
+        "budget_unknown_spend": "Unknown spend {value:,} (charged at reservation ceiling)",
+        "budget_soft_warning": "The 80% soft budget warning threshold has been reached.",
+        "budget_exhausted": "The budget limit has been reached.",
+        "budget_admission_denied": "The budget gate denied a call (resource: {resource}); recorded consumption still reflects ledgered spend.",
+        "budget_unknown_resource": "unknown",
+        "budget_unknown_cost": "Cost is unknown; the current price catalog cannot provide a reliable estimate.",
+        "budget_unavailable": "Budget information is unavailable.",
+        "budget_limited_report": "This report is limited by the run budget: {reason}",
+        "budget_cap_reason": "The {resource} budget limit was reached",
+        "budget_total_tokens": "Total tokens",
+        "budget_llm_calls": "LLM calls",
+        "budget_retrieval_calls": "Retrieval calls",
+        "budget_active_milliseconds": "Active time (ms)",
+        "budget_resource_fallback": "Budget resource {resource}",
+        "obs_unavailable": "Unavailable",
         "obs_total_elapsed": "Total elapsed",
         "obs_no_timing": "No timing data available",
         "obs_running": "Running",
@@ -202,7 +316,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "Query Analysis", "query_adapter": "Query Adaptation", "multi_retriever": "Multi-Source Retrieval",
             "source_evaluator": "Source Evaluation", "conflict_detector": "Conflict Detection", "evidence_chain": "Evidence Chain",
-            "conclusion_synthesizer": "Conclusion Synthesis", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
+            "conclusion_synthesizer": "Conclusion Synthesis", "citation_validator": "Citation Verification", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
         },
         "rv_toc_title": "Contents",
         "rv_download_md": "Download Markdown",
@@ -211,6 +325,12 @@ T = {
         "rv_download_failed": "Download failed",
         "rv_citations_empty": "This report format has no citations",
         "rv_chain_anchor_note": "Citation badges [N] link to evidence chains below",
+        "rv_citation_reason_supported": "Deterministic checks found supporting evidence.",
+        "rv_citation_reason_missing": "No matching citation source was found for this claim.",
+        "rv_citation_reason_unavailable": "The source could not be reached during verification.",
+        "rv_citation_reason_inconclusive": "Evidence was inconclusive; this does not mean the citation is incorrect.",
+        "rv_citation_reason_mismatch": "Deterministic checks did not establish support for this claim.",
+        "rv_citation_reason_generic": "A safe verification explanation is unavailable; review manually.",
         "tech_map": {"candidate_techs": "Tech candidates", "scene": "Usage scene", "complexity": "Complexity"},
     },
     "ja": {
@@ -236,6 +356,24 @@ T = {
         "confirm_scene": "シーン: {scene}  |  複雑さ: {complexity}",
         "start_research_btn": "深層リサーチを開始",
         "researching": "研究中:",
+        "decision_title": "追加情報が必要です",
+        "decision_reason": "一時停止の理由",
+        "decision_gaps": "補足が必要な証拠の不足",
+        "decision_expires": "決定期限: {expires_at}",
+        "decision_context_label": "追加情報（最大 4000 文字）",
+        "decision_context_placeholder": "技術選定に関する制約や利用状況を入力してください...",
+        "decision_provide_context": "情報を補足して続行",
+        "decision_limited_report": "現在の証拠で制限付きレポートを作成",
+        "decision_cancel": "タスクをキャンセル",
+        "decision_expired": "この決定は期限切れとなり、タスクは停止しました。新しく研究を開始してください。",
+        "decision_cancelled": "このタスクはキャンセルされました。",
+        "decision_conflict": "決定状態が変更されました。画面を更新しました。結果が不明な場合は同じ選択を安全に再試行できます。",
+        "decision_retry": "同じ選択を再試行",
+        "decision_network_error": "送信結果を確認できません。同じ選択を安全に再試行できます。補足情報はイベントやログに表示されません。",
+        "decision_submit_error": "決定を送信できませんでした（HTTP {status}）。状態を更新して再試行してください。",
+        "decision_invalid_context": "先に追加情報を入力してください。",
+        "decision_loading_error": "現在の決定状態を読み込めません。しばらくしてから再試行してください。",
+        "decision_pending": "研究は一時停止中です。選択してください。",
         "progress_init": "初期化中...",
         "progress_phase": "フェーズ {idx}/7: {name}",
         "progress_done": "研究完了",
@@ -264,6 +402,42 @@ T = {
         "new_research_btn": "新しい研究を開始",
         "tab_observability": "  観測  ",
         "obs_timeline_title": "実行タイムライン",
+        "obs_trace_fallback": "永続トレースを利用できません（{reason}）。スナップショットの観測データを表示します。",
+        "obs_trace_request_failed": "永続トレースの取得に失敗しました。スナップショットの観測データを表示します。",
+        "obs_durable_nodes": "永続ノード試行",
+        "obs_durable_calls": "永続外部呼び出し",
+        "obs_durable_counts": "ノード試行 {attempts} · 再試行 {retries} · 外部呼び出し {calls} · 失敗 {failures}",
+        "obs_status_label": "状態",
+        "obs_call_node_label": "ノード",
+        "obs_call_attempt_label": "ノード試行",
+        "obs_retry_no": "再試行番号",
+        "obs_attempt_label": "試行",
+        "obs_provider_label": "プロバイダー",
+        "obs_operation_label": "操作",
+        "obs_duration_ms": "所要時間（ミリ秒）",
+        "obs_usage_partial": "既知のトークン使用量のみを合算しています。記録は不完全です。",
+        "obs_usage_complete": "記録されたすべての LLM 呼び出しにトークン使用量があります。",
+        "obs_no_durable_calls": "外部呼び出しは記録されていません。",
+        "budget_title": "実行予算",
+        "budget_mode": "ポリシー {policy} · {mode}",
+        "budget_usage": "使用量 {used:,} / 上限 {limit:,}",
+        "budget_settled": "確定 {value:,}",
+        "budget_reserved": "予約 {value:,}",
+        "budget_unknown_spend": "不明な使用量 {value:,}（予約上限で計上）",
+        "budget_soft_warning": "予算のソフト警告しきい値（80%）に達しました。",
+        "budget_exhausted": "予算上限に達しました。",
+        "budget_admission_denied": "予算ゲートが後続の呼び出しを拒否しました（リソース: {resource}）。消費量は記録済みの台帳に基づきます。",
+        "budget_unknown_resource": "不明",
+        "budget_unknown_cost": "費用は不明です。現在の価格カタログでは信頼できる推定を提供できません。",
+        "budget_unavailable": "予算情報を利用できません。",
+        "budget_limited_report": "このレポートは実行予算により制限されています: {reason}",
+        "budget_cap_reason": "{resource}の予算上限に達しました",
+        "budget_total_tokens": "合計トークン",
+        "budget_llm_calls": "LLM 呼び出し",
+        "budget_retrieval_calls": "検索呼び出し",
+        "budget_active_milliseconds": "実行時間（ミリ秒）",
+        "budget_resource_fallback": "予算リソース {resource}",
+        "obs_unavailable": "利用不可",
         "obs_total_elapsed": "合計時間",
         "obs_no_timing": "タイミングデータがありません",
         "obs_running": "実行中",
@@ -298,7 +472,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "クエリ分析", "query_adapter": "クエリ適応", "multi_retriever": "マルチソース検索",
             "source_evaluator": "情報源評価", "conflict_detector": "矛盾検出", "evidence_chain": "証拠チェーン",
-            "conclusion_synthesizer": "結論合成", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
+            "conclusion_synthesizer": "結論合成", "citation_validator": "引用検証", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
         },
         "rv_toc_title": "目次",
         "rv_download_md": "Markdown をダウンロード",
@@ -307,6 +481,12 @@ T = {
         "rv_download_failed": "ダウンロード失敗",
         "rv_citations_empty": "このレポート形式には引用がありません",
         "rv_chain_anchor_note": "引用バッジ [N] は以下の証拠チェーンに対応",
+        "rv_citation_reason_supported": "決定的な検査で裏付ける証拠が見つかりました。",
+        "rv_citation_reason_missing": "この主張に一致する引用元が見つかりませんでした。",
+        "rv_citation_reason_unavailable": "検証中に情報源へアクセスできませんでした。",
+        "rv_citation_reason_inconclusive": "証拠から判断できません。引用が誤りとは限りません。",
+        "rv_citation_reason_mismatch": "決定的な検査では主張の裏付けを確認できませんでした。",
+        "rv_citation_reason_generic": "安全な検証説明がありません。手動で確認してください。",
         "tech_map": {"candidate_techs": "候補技術", "scene": "利用シーン", "complexity": "複雑さ"},
     },
     "ko": {
@@ -332,6 +512,24 @@ T = {
         "confirm_scene": "장면: {scene}  |  복잡도: {complexity}",
         "start_research_btn": "심층 연구 시작",
         "researching": "연구 중:",
+        "decision_title": "추가 정보가 필요합니다",
+        "decision_reason": "일시 중지 이유",
+        "decision_gaps": "보완이 필요한 증거 공백",
+        "decision_expires": "결정 기한: {expires_at}",
+        "decision_context_label": "추가 맥락 (최대 4,000자)",
+        "decision_context_placeholder": "기술 선택과 관련된 제약이나 사용 맥락을 입력하세요...",
+        "decision_provide_context": "정보를 보완하고 계속",
+        "decision_limited_report": "현재 증거로 제한 보고서 생성",
+        "decision_cancel": "작업 취소",
+        "decision_expired": "결정이 만료되어 작업이 중지되었습니다. 새 연구를 시작하세요.",
+        "decision_cancelled": "작업이 취소되었습니다.",
+        "decision_conflict": "결정 상태가 변경되었습니다. 화면을 새로 고쳤습니다. 결과가 불확실하면 같은 선택을 안전하게 재시도할 수 있습니다.",
+        "decision_retry": "같은 선택으로 재시도",
+        "decision_network_error": "제출 결과를 확인할 수 없습니다. 같은 선택을 안전하게 재시도할 수 있습니다. 추가 내용은 이벤트나 로그에 표시되지 않습니다.",
+        "decision_submit_error": "결정을 제출할 수 없습니다 (HTTP {status}). 상태를 새로 고친 뒤 재시도하세요.",
+        "decision_invalid_context": "먼저 추가 맥락을 입력하세요.",
+        "decision_loading_error": "현재 결정 상태를 불러오지 못했습니다. 잠시 후 다시 시도하세요.",
+        "decision_pending": "연구가 일시 중지되었습니다. 선택해 주세요.",
         "progress_init": "초기화 중...",
         "progress_phase": "단계 {idx}/7: {name}",
         "progress_done": "연구 완료",
@@ -360,6 +558,42 @@ T = {
         "new_research_btn": "새 연구 시작",
         "tab_observability": "  관측  ",
         "obs_timeline_title": "실행 타임라인",
+        "obs_trace_fallback": "영구 추적을 사용할 수 없습니다({reason}). 스냅샷 관측 데이터를 표시합니다.",
+        "obs_trace_request_failed": "영구 추적 조회에 실패했습니다. 스냅샷 관측 데이터를 표시합니다.",
+        "obs_durable_nodes": "영구 노드 시도",
+        "obs_durable_calls": "영구 외부 호출",
+        "obs_durable_counts": "노드 시도 {attempts} · 재시도 {retries} · 외부 호출 {calls} · 실패 호출 {failures}",
+        "obs_status_label": "상태",
+        "obs_call_node_label": "노드",
+        "obs_call_attempt_label": "노드 시도",
+        "obs_retry_no": "재시도 번호",
+        "obs_attempt_label": "시도",
+        "obs_provider_label": "제공자",
+        "obs_operation_label": "작업",
+        "obs_duration_ms": "소요 시간(ms)",
+        "obs_usage_partial": "알려진 토큰 사용량만 합산했으며 기록은 불완전합니다.",
+        "obs_usage_complete": "기록된 모든 LLM 호출에 토큰 사용량이 있습니다.",
+        "obs_no_durable_calls": "기록된 외부 호출이 없습니다.",
+        "budget_title": "실행 예산",
+        "budget_mode": "정책 {policy} · {mode}",
+        "budget_usage": "사용량 {used:,} / 한도 {limit:,}",
+        "budget_settled": "정산 {value:,}",
+        "budget_reserved": "예약 {value:,}",
+        "budget_unknown_spend": "알 수 없는 사용량 {value:,} (예약 상한으로 계산)",
+        "budget_soft_warning": "예산 소프트 경고 임계값(80%)에 도달했습니다.",
+        "budget_exhausted": "예산 한도에 도달했습니다.",
+        "budget_admission_denied": "예산 게이트가 후속 호출을 거부했습니다(리소스: {resource}). 기록된 사용량은 원장 기준입니다.",
+        "budget_unknown_resource": "알 수 없음",
+        "budget_unknown_cost": "비용을 알 수 없습니다. 현재 가격표로는 신뢰할 수 있는 추정치를 제공할 수 없습니다.",
+        "budget_unavailable": "예산 정보를 사용할 수 없습니다.",
+        "budget_limited_report": "실행 예산으로 보고서가 제한되었습니다: {reason}",
+        "budget_cap_reason": "{resource} 예산 한도에 도달했습니다",
+        "budget_total_tokens": "총 토큰",
+        "budget_llm_calls": "LLM 호출",
+        "budget_retrieval_calls": "검색 호출",
+        "budget_active_milliseconds": "실행 시간(ms)",
+        "budget_resource_fallback": "예산 리소스 {resource}",
+        "obs_unavailable": "사용 불가",
         "obs_total_elapsed": "총 소요 시간",
         "obs_no_timing": "타이밍 데이터 없음",
         "obs_running": "실행 중",
@@ -394,7 +628,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "쿼리 분석", "query_adapter": "쿼리 어댑터", "multi_retriever": "다중 소스 검색",
             "source_evaluator": "출처 평가", "conflict_detector": "충돌 탐지", "evidence_chain": "증거 체인",
-            "conclusion_synthesizer": "결론 합성", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
+            "conclusion_synthesizer": "결론 합성", "citation_validator": "인용 검증", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
         },
         "rv_toc_title": "목차",
         "rv_download_md": "Markdown 다운로드",
@@ -403,6 +637,12 @@ T = {
         "rv_download_failed": "다운로드 실패",
         "rv_citations_empty": "이 보고서 형식에는 인용이 없습니다",
         "rv_chain_anchor_note": "인용 배지 [N]은 아래 증거 체인에 연결",
+        "rv_citation_reason_supported": "결정적 검사에서 근거를 뒷받침하는 증거를 찾았습니다.",
+        "rv_citation_reason_missing": "이 주장에 맞는 인용 출처를 찾지 못했습니다.",
+        "rv_citation_reason_unavailable": "검증 중 출처에 접근할 수 없었습니다.",
+        "rv_citation_reason_inconclusive": "증거만으로 판단할 수 없습니다. 인용이 틀렸다는 뜻은 아닙니다.",
+        "rv_citation_reason_mismatch": "결정적 검사에서 주장을 뒷받침하는 근거를 확인하지 못했습니다.",
+        "rv_citation_reason_generic": "안전한 검증 설명을 사용할 수 없습니다. 직접 확인해 주세요.",
         "tech_map": {"candidate_techs": "후보 기술", "scene": "사용 환경", "complexity": "복잡도"},
     },
 }
@@ -481,6 +721,10 @@ st.markdown("""<style>
     .badge-disputed { background: rgba(249, 115, 22, 0.12); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.25); }
     .badge-info { background: rgba(124, 58, 237, 0.12); color: #a78bfa; border: 1px solid rgba(124, 58, 237, 0.25); }
     .badge-success { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.25); }
+    .badge-verified { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.25); }
+    .badge-unsupported { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+    .badge-unreachable { background: rgba(249, 115, 22, 0.12); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.25); }
+    .badge-unknown { background: rgba(161, 161, 170, 0.12); color: #d4d4d8; border: 1px solid rgba(161, 161, 170, 0.25); }
 
     .clarity-panel { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 18px; padding: 28px; }
     .clarity-meter { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; }
@@ -568,6 +812,7 @@ NODE_TO_PHASE = {
     "conflict_detector": "conflict_detection",
     "evidence_chain": "evidence_chain",
     "conclusion_synthesizer": "evidence_chain",
+    "citation_validator": "report_generation",
     "report_generator": "report_generation",
     "self_reviewer": "self_review",
 }
@@ -578,6 +823,60 @@ NODE_TO_PHASE = {
 def _esc(text) -> str:
     """Escape source-provided text before injecting into HTML."""
     return _html.escape(str(text or ""), quote=True)
+
+
+def _safe_external_href(value) -> str | None:
+    """Return an escaped HTTP(S) link without credentials or unsafe ports."""
+    from urllib.parse import urlsplit
+
+    raw = str(value or "")
+    if not raw or len(raw) > 2048 or any(ord(char) < 32 for char in raw):
+        return None
+    try:
+        parsed = urlsplit(raw)
+        if parsed.scheme.lower() not in {"http", "https"}:
+            return None
+        if not parsed.hostname or parsed.username is not None or parsed.password is not None:
+            return None
+        if parsed.port is not None and parsed.port not in {80, 443}:
+            return None
+    except ValueError:
+        return None
+    return _esc(raw)
+
+
+_CITATION_REASON_TEXT = {
+    "lexical_support": "rv_citation_reason_supported",
+    "citation_missing": "rv_citation_reason_missing",
+    "source_not_found": "rv_citation_reason_missing",
+    "source_ambiguous": "rv_citation_reason_missing",
+    "not_cited": "rv_citation_reason_missing",
+    "url_invalid": "rv_citation_reason_unavailable",
+    "not_publicly_accessible": "rv_citation_reason_unavailable",
+    "network_uncertain": "rv_citation_reason_inconclusive",
+    "http_uncertain": "rv_citation_reason_inconclusive",
+    "source_limit": "rv_citation_reason_inconclusive",
+    "content_insufficient": "rv_citation_reason_inconclusive",
+    "cross_language": "rv_citation_reason_inconclusive",
+    "numeric_mismatch": "rv_citation_reason_mismatch",
+    "negation_conflict": "rv_citation_reason_mismatch",
+    "lexical_mismatch": "rv_citation_reason_mismatch",
+}
+
+
+def _citation_verification_display(status, reason, lang_code: str) -> tuple[str, str, str]:
+    """Map untrusted citation metadata to a closed status label, CSS class, and text."""
+    allowed = {"verified", "unsupported", "unreachable", "unknown"}
+    safe_status = status if isinstance(status, str) and status in allowed else "unknown"
+    reason_key = _CITATION_REASON_TEXT.get(reason) if isinstance(reason, str) else None
+    if reason_key is None:
+        reason_key = {
+            "verified": "rv_citation_reason_supported",
+            "unsupported": "rv_citation_reason_mismatch",
+            "unreachable": "rv_citation_reason_unavailable",
+            "unknown": "rv_citation_reason_inconclusive",
+        }[safe_status]
+    return safe_status.upper(), f"badge-{safe_status}", t(reason_key, lang_code)
 
 
 def _node_label(node: str, lang_code: str) -> str:
@@ -649,6 +948,18 @@ DEFAULTS = {
     "research_complete": False,
     "research_failed": False,
     "research_events": [],
+    "research_last_event_id": None,
+    "research_task_version": None,
+    "research_task_status": None,
+    "research_snapshot": None,
+    "research_report": None,
+    "research_terminal_status": None,
+    "research_connection_lost": False,
+    "research_waiting_for_input": False,
+    "research_decision": None,
+    "research_decision_error": None,
+    "research_decision_submission": None,
+    "research_decision_clear_context_key": None,
     "lang": "zh",
 }
 for k, v in DEFAULTS.items():
@@ -772,11 +1083,11 @@ def _render_clarity_panel():
         if filled:
             st.markdown(f"**{t('known', lang)}**")
             for item in filled:
-                st.markdown(f'<span class="badge badge-success">{tech_map.get(item, item)}</span>', unsafe_allow_html=True)
+                st.markdown(f'<span class="badge badge-success">{_esc(tech_map.get(item, item))}</span>', unsafe_allow_html=True)
         if missing:
             st.markdown(f"**{t('missing', lang)}**")
             for item in missing:
-                st.markdown(f'<span class="badge badge-weak">{tech_map.get(item, item)}</span>', unsafe_allow_html=True)
+                st.markdown(f'<span class="badge badge-weak">{_esc(tech_map.get(item, item))}</span>', unsafe_allow_html=True)
 
         rounds_left = 3 - last.get("clarify_rounds", 0)
         st.caption(t("rounds_left", lang, n=rounds_left))
@@ -868,6 +1179,11 @@ def _handle_finalize():
 # Research Phase
 # ═══════════════════════════════════════════════════════════════════════════
 def render_research_phase():
+    clear_context_key = st.session_state.get("research_decision_clear_context_key")
+    if clear_context_key:
+        st.session_state.pop(clear_context_key, None)
+        st.session_state.research_decision_clear_context_key = None
+
     data = st.session_state.clarified_data
     if not data:
         st.error(t("no_data_error", lang))
@@ -880,7 +1196,7 @@ def render_research_phase():
     task = data.get("clarified_task", {})
     st.markdown(f'<h1 class="app-title">{t("title", lang)}</h1>', unsafe_allow_html=True)
     st.markdown(
-        f'<p class="app-subtitle">{t("researching", lang)} <strong style="color:#a78bfa">{task.get("query", "Tech comparison")}</strong></p>',
+        f'<p class="app-subtitle">{t("researching", lang)} <strong style="color:#a78bfa">{_esc(task.get("query", "Tech comparison"))}</strong></p>',
         unsafe_allow_html=True,
     )
 
@@ -891,23 +1207,79 @@ def render_research_phase():
     if st.session_state.research_running:
         _render_research_progress()
 
+    current_decision = st.session_state.get("research_decision") or {}
+    if (
+        st.session_state.get("research_waiting_for_input")
+        or current_decision.get("status") == "expired"
+    ):
+        _render_decision_panel()
+
     if st.session_state.research_complete:
         _render_results()
 
+    if st.session_state.research_connection_lost:
+        st.warning(t("loss_connection", lang))
+        if st.button("重新连接", key="reconnect_durable_task"):
+            st.session_state.research_connection_lost = False
+            st.session_state.research_running = True
+            st.rerun()
+
     if st.session_state.research_failed:
         st.error(t("loss_connection", lang))
+        if (
+            st.session_state.get("research_task_id")
+            and st.session_state.get("research_terminal_status")
+            in {"failed", "timed_out", "interrupted"}
+            and st.button("恢复运行", key="resume_durable_task")
+        ):
+            try:
+                resp = httpx.post(
+                    f"{API_BASE}/api/v1/tasks/{st.session_state.research_task_id}/resume",
+                    headers={"If-Match": str(st.session_state.get("research_task_version", 0))},
+                    timeout=10,
+                )
+                if resp.status_code in (200, 202):
+                    body = resp.json()
+                    durable_task = body.get("task", {})
+                    st.session_state.research_task_version = durable_task.get(
+                        "version", st.session_state.research_task_version
+                    )
+                    st.session_state.research_failed = False
+                    st.session_state.research_running = True
+                    st.session_state.research_terminal_status = None
+                    st.session_state.research_connection_lost = False
+                    st.rerun()
+                else:
+                    st.error(f"恢复失败：HTTP {resp.status_code}")
+            except Exception as exc:
+                st.error(f"恢复失败：{exc}")
         if st.button(t("restart_btn", lang)):
+            for k in DEFAULTS:
+                st.session_state[k] = DEFAULTS[k]
+            st.rerun()
+
+    if (
+        st.session_state.get("research_terminal_status") == "cancelled"
+        and current_decision.get("status") != "expired"
+    ):
+        st.info(t("decision_cancelled", lang))
+        if st.button(t("restart_btn", lang), key="restart_cancelled_task"):
             for k in DEFAULTS:
                 st.session_state[k] = DEFAULTS[k]
             st.rerun()
 
 
 def _start_research(task: dict, sub_questions: list[str]):
-    task["sub_questions"] = sub_questions
+    payload = dict(task)
+    payload["sub_questions"] = sub_questions
     try:
-        resp = httpx.post(f"{API_BASE}/research", json=task, timeout=10)
-        if resp.status_code == 200:
-            st.session_state.research_task_id = resp.json()["task_id"]
+        resp = httpx.post(f"{API_BASE}/api/v1/tasks", json=payload, timeout=10)
+        if resp.status_code in (200, 201, 202):
+            body = resp.json()
+            durable_task = body["task"]
+            st.session_state.research_task_id = durable_task["task_id"]
+            st.session_state.research_task_version = durable_task.get("version", 0)
+            st.session_state.research_last_event_id = None
             st.session_state.research_running = True
         else:
             st.error(f"Failed to start research: HTTP {resp.status_code}")
@@ -917,18 +1289,394 @@ def _start_research(task: dict, sub_questions: list[str]):
         st.session_state.research_failed = True
 
 
+def _sse_frames(lines):
+    """Yield SSE frames and support multiline data fields."""
+    frame, data_lines = {}, []
+    for raw in lines:
+        line = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+        # Older compatibility streams emitted one data line per event without
+        # the SSE-required blank separator. Accept that form while keeping the
+        # normal framed parser below.
+        if line.startswith("data:") and data_lines and not frame.get("id") and not frame.get("event"):
+            frame["data"] = "\n".join(data_lines)
+            yield frame
+            frame, data_lines = {}, []
+        if not line:
+            if frame or data_lines:
+                if data_lines:
+                    frame["data"] = "\n".join(data_lines)
+                yield frame
+            frame, data_lines = {}, []
+            continue
+        if line.startswith(":"):
+            continue
+        field, sep, value = line.partition(":")
+        if not sep:
+            continue
+        value = value[1:] if value.startswith(" ") else value
+        if field == "data":
+            data_lines.append(value)
+        elif field in ("id", "event", "retry"):
+            frame[field] = value
+    if frame or data_lines:
+        if data_lines:
+            frame["data"] = "\n".join(data_lines)
+        yield frame
+
+
+def _task_detail(task_id: str):
+    try:
+        resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}", timeout=10)
+        return resp.json() if resp.status_code == 200 else {}
+    except Exception:
+        return {}
+
+
+def _decision_task_projection(detail: dict) -> dict:
+    task = detail.get("task", {}) if isinstance(detail, dict) else {}
+    return task if isinstance(task, dict) else {}
+
+
+def _remember_task_projection(detail: dict) -> dict:
+    task = _decision_task_projection(detail)
+    if task.get("version") is not None:
+        st.session_state.research_task_version = task["version"]
+    if task.get("status") is not None:
+        st.session_state.research_task_status = task["status"]
+    return task
+
+
+def _set_waiting_for_input(detail: dict | None = None) -> bool:
+    """Load authoritative task and pending-decision projections after an SSE pause."""
+    task_id = st.session_state.get("research_task_id")
+    if not task_id:
+        return False
+    if detail is None:
+        detail = _task_detail(task_id)
+    task = _remember_task_projection(detail)
+    if task.get("status") != "waiting_for_input":
+        return False
+
+    st.session_state.research_running = False
+    st.session_state.research_failed = False
+    st.session_state.research_complete = False
+    st.session_state.research_terminal_status = None
+    st.session_state.research_connection_lost = False
+    st.session_state.research_waiting_for_input = True
+    try:
+        response = httpx.get(
+            f"{API_BASE}/api/v1/tasks/{task_id}/decision", timeout=10
+        )
+        decision = response.json() if response.status_code == 200 else {}
+        if (
+            response.status_code == 200
+            and isinstance(decision, dict)
+            and decision.get("status") == "pending"
+        ):
+            st.session_state.research_decision = decision
+            st.session_state.research_decision_error = None
+            return True
+    except Exception:
+        pass
+    st.session_state.research_decision = None
+    st.session_state.research_decision_error = t("decision_loading_error", lang)
+    return True
+
+
+def _refresh_decision_authority(task_id: str) -> tuple[dict, dict]:
+    """Refresh both CAS version and public decision state before submitting."""
+    detail_response = httpx.get(
+        f"{API_BASE}/api/v1/tasks/{task_id}", timeout=10
+    )
+    detail = detail_response.json() if detail_response.status_code == 200 else {}
+    task = _remember_task_projection(detail)
+    decision_response = httpx.get(
+        f"{API_BASE}/api/v1/tasks/{task_id}/decision", timeout=10
+    )
+    decision = decision_response.json() if decision_response.status_code == 200 else {}
+    return task, decision
+
+
+def _clear_decision_submission() -> None:
+    submission = st.session_state.get("research_decision_submission") or {}
+    decision = st.session_state.get("research_decision") or {}
+    decision_id = submission.get("decision_id") or decision.get("decision_id")
+    if decision_id:
+        st.session_state.research_decision_clear_context_key = (
+            f"decision_context_{decision_id}"
+        )
+    st.session_state.research_decision_submission = None
+
+
+def _apply_authoritative_task_projection(task: dict) -> bool:
+    """Move the visible lifecycle controls to the server's current task status."""
+    status = task.get("status")
+    if status is None:
+        return False
+    st.session_state.research_task_status = status
+    if status in {
+        "completed", "complete", "completed_with_warnings", "failed",
+        "cancelled", "canceled", "timed_out", "timeout", "interrupted",
+    }:
+        st.session_state.research_waiting_for_input = False
+        return _set_terminal_status(status)
+    if status in {"queued", "running"}:
+        st.session_state.research_waiting_for_input = False
+        st.session_state.research_running = True
+        st.session_state.research_complete = False
+        st.session_state.research_failed = False
+        st.session_state.research_terminal_status = None
+        st.session_state.research_connection_lost = False
+        return True
+    if status == "waiting_for_input":
+        st.session_state.research_waiting_for_input = True
+        st.session_state.research_running = False
+        st.session_state.research_complete = False
+        st.session_state.research_failed = False
+        st.session_state.research_terminal_status = None
+        st.session_state.research_connection_lost = False
+    return False
+
+
+def _apply_decision_conflict(task: dict, decision: dict) -> bool:
+    """Discard sensitive submitted text and render the refreshed server state."""
+    _clear_decision_submission()
+    if isinstance(decision, dict) and decision:
+        st.session_state.research_decision = decision
+    status = decision.get("status") if isinstance(decision, dict) else None
+    if status == "expired":
+        st.session_state.research_decision_error = t("decision_expired", lang)
+    elif status == "cancelled":
+        st.session_state.research_decision_error = t("decision_cancelled", lang)
+    else:
+        st.session_state.research_decision_error = t("decision_conflict", lang)
+    _apply_authoritative_task_projection(task)
+    # Rerun so a still-pending decision reopens all three choices, or a newer
+    # task status returns to the stream/results/terminal view immediately.
+    return True
+
+
+def _apply_decision_resolution(payload: dict) -> bool:
+    task_container = payload.get("task", {}) if isinstance(payload, dict) else {}
+    task = _decision_task_projection(task_container)
+    _remember_task_projection(task_container)
+    _clear_decision_submission()
+    st.session_state.research_decision = payload.get("decision")
+    st.session_state.research_decision_error = None
+    return _apply_authoritative_task_projection(task)
+
+
+def _submit_decision(action: str, supplemental_input: str | None = None) -> bool:
+    """Resolve a decision using a freshly-read task version and retryable body."""
+    task_id = st.session_state.get("research_task_id")
+    decision = st.session_state.get("research_decision") or {}
+    if not task_id or not decision.get("decision_id"):
+        st.session_state.research_decision_error = t("decision_loading_error", lang)
+        return False
+    if action == "provide_context":
+        supplemental_input = str(supplemental_input or "").strip()
+        if not supplemental_input:
+            st.session_state.research_decision_error = t("decision_invalid_context", lang)
+            return False
+        body = {"action": action, "supplemental_input": supplemental_input}
+    else:
+        body = {"action": action}
+
+    # Keep the exact request in session state across network uncertainty. This
+    # lets the backend's body-hash idempotency make a retry safe without logging
+    # or putting supplemental text into public events.
+    submission = st.session_state.get("research_decision_submission")
+    if submission is None:
+        submission = {"decision_id": decision["decision_id"], "body": body}
+        st.session_state.research_decision_submission = submission
+    else:
+        body = submission["body"]
+        decision_id = submission["decision_id"]
+        if decision_id != decision.get("decision_id"):
+            st.session_state.research_decision_error = t("decision_conflict", lang)
+            return False
+
+    try:
+        task, current_decision = _refresh_decision_authority(task_id)
+        if task.get("version") is None:
+            st.session_state.research_decision_error = t(
+                "decision_loading_error", lang
+            )
+            return False
+        if current_decision.get("status") == "expired":
+            return _apply_decision_conflict(task, current_decision)
+        # The backend accepts an identical body as an idempotent replay even
+        # after queueing, so keep retrying it with the freshest task version.
+        if (
+            current_decision.get("status") == "pending"
+            and task.get("status") != "waiting_for_input"
+        ):
+            return _apply_decision_conflict(task, current_decision)
+        response = httpx.post(
+            f"{API_BASE}/api/v1/tasks/{task_id}/decisions/{submission['decision_id']}",
+            json=body,
+            headers={"If-Match": str(task.get("version", 0))},
+            timeout=15,
+        )
+        if response.status_code in (200, 202):
+            accepted = response.json()
+            if _apply_decision_resolution(accepted):
+                return True
+            st.session_state.research_decision_error = t("decision_conflict", lang)
+            return False
+        if response.status_code in (409, 410):
+            refreshed_task, refreshed_decision = _refresh_decision_authority(task_id)
+            return _apply_decision_conflict(refreshed_task, refreshed_decision)
+        st.session_state.research_decision_error = t(
+            "decision_submit_error", lang, status=response.status_code
+        )
+        return False
+    except Exception:
+        st.session_state.research_decision_error = t("decision_network_error", lang)
+        return False
+
+
+def _render_decision_panel():
+    decision = st.session_state.get("research_decision")
+    error = st.session_state.get("research_decision_error")
+    if decision and decision.get("status") == "expired":
+        st.info(t("decision_expired", lang))
+        if st.button(t("restart_btn", lang), key="restart_expired_decision"):
+            for key in DEFAULTS:
+                st.session_state[key] = DEFAULTS[key]
+            st.rerun()
+        return
+    if decision and decision.get("status") == "cancelled":
+        st.info(t("decision_cancelled", lang))
+        return
+    if st.session_state.get("research_task_status") != "waiting_for_input":
+        st.info(error or t("decision_conflict", lang))
+        if st.button(t("decision_retry", lang), key="decision_refresh_task_state"):
+            if not _set_waiting_for_input():
+                st.session_state.research_decision_error = t("decision_conflict", lang)
+            st.rerun()
+        return
+    if not decision or decision.get("status") != "pending":
+        st.info(error or t("decision_pending", lang))
+        if st.button(t("decision_retry", lang), key="decision_refresh_state"):
+            _set_waiting_for_input()
+            st.rerun()
+        return
+
+    st.subheader(t("decision_title", lang))
+    st.caption(t("decision_pending", lang))
+    st.markdown(f"**{t('decision_reason', lang)}**")
+    st.text(decision.get("reason", ""))
+    st.markdown(f"**{t('decision_gaps', lang)}**")
+    gaps = decision.get("gaps", [])
+    if gaps:
+        for gap in gaps:
+            st.text(f"• {gap}")
+    else:
+        st.write("—")
+    st.caption(t("decision_expires", lang, expires_at=decision.get("expires_at", "—")))
+
+    submission = st.session_state.get("research_decision_submission")
+    if submission:
+        body = submission["body"]
+        action = body.get("action")
+        st.info(error or t("decision_network_error", lang))
+        if st.button(t("decision_retry", lang), key="decision_retry_same_body"):
+            if _submit_decision(action, body.get("supplemental_input")):
+                st.rerun()
+        return
+
+    context = st.text_area(
+        t("decision_context_label", lang),
+        placeholder=t("decision_context_placeholder", lang),
+        max_chars=4000,
+        key=f"decision_context_{decision.get('decision_id', 'pending')}",
+    )
+    if error:
+        st.warning(error)
+    actions = set(decision.get("allowed_actions", []))
+    context_col, report_col, cancel_col = st.columns(3)
+    with context_col:
+        if "provide_context" in actions and st.button(
+            t("decision_provide_context", lang),
+            key="decision_provide_context",
+            type="primary",
+            use_container_width=True,
+        ):
+            if _submit_decision("provide_context", context):
+                st.rerun()
+    with report_col:
+        if "limited_report" in actions and st.button(
+            t("decision_limited_report", lang),
+            key="decision_limited_report",
+            use_container_width=True,
+        ):
+            if _submit_decision("limited_report"):
+                st.rerun()
+    with cancel_col:
+        if "cancel" in actions and st.button(
+            t("decision_cancel", lang),
+            key="decision_cancel",
+            use_container_width=True,
+        ):
+            if _submit_decision("cancel"):
+                st.rerun()
+
+
+def _set_terminal_status(status: str):
+    if status not in {"completed", "complete", "completed_with_warnings", "failed", "cancelled", "canceled", "timed_out", "timeout", "interrupted"}:
+        return False
+    normalized = "cancelled" if status == "canceled" else "timed_out" if status == "timeout" else status
+    st.session_state.research_running = False
+    st.session_state.research_complete = status in {"completed", "complete", "completed_with_warnings"}
+    st.session_state.research_failed = status not in {"completed", "complete", "completed_with_warnings", "cancelled", "canceled"}
+    st.session_state.research_terminal_status = normalized
+    st.session_state.research_task_status = normalized
+    st.session_state.research_connection_lost = False
+    return True
+
+
 def _render_research_progress():
     task_id = st.session_state.research_task_id
+    # A reconnect can begin after the decision.required event was already
+    # acknowledged by Last-Event-ID. Since waiting_for_input is nonterminal,
+    # that SSE stream would otherwise stay open without replaying the pause.
+    if st.session_state.get("research_last_event_id"):
+        current_detail = _task_detail(task_id)
+        current_task = _remember_task_projection(current_detail)
+        if current_task.get("status") == "waiting_for_input":
+            if not _set_waiting_for_input(current_detail):
+                st.session_state.research_running = False
+                st.session_state.research_connection_lost = True
+            return
+
     progress_bar = st.progress(0, text=t("progress_init", lang))
     live = st.empty()
+    cancel_col, _ = st.columns([1, 4])
+    with cancel_col:
+        if st.button("取消", key="cancel_durable_task"):
+            try:
+                resp = httpx.post(
+                    f"{API_BASE}/api/v1/tasks/{task_id}/cancel",
+                    headers={"If-Match": str(st.session_state.get("research_task_version", 0))},
+                    timeout=10,
+                )
+                if resp.status_code in (200, 202):
+                    body = resp.json()
+                    durable_task = body.get("task", {})
+                    st.session_state.research_task_version = durable_task.get(
+                        "version", st.session_state.research_task_version
+                    )
+                    if not _set_terminal_status(durable_task.get("status", "")):
+                        st.session_state.research_running = True
+                    st.rerun()
+                else:
+                    st.error(f"取消失败：HTTP {resp.status_code}")
+            except Exception as exc:
+                st.error(f"取消失败：{exc}")
     max_idx = 0
-    # Live waterfall state (local to this script run; the authoritative
-    # post-completion version renders from snapshot["agent_timing"]).
-    live_nodes: dict = {}      # node -> last completed segment {"start": ts, "end": ts}
-    live_order: list = []      # first-appearance order
-    live_running = None        # node inferred to be running right now
-    first_ts = None
-    last_ts = None
+    live_nodes, live_order = {}, []
+    first_ts = last_ts = None
 
     def _complete():
         progress_bar.progress(1.0, text=t("progress_done", lang))
@@ -936,90 +1684,124 @@ def _render_research_progress():
         st.session_state.research_complete = True
 
     try:
-        with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream",
-                          timeout=httpx.Timeout(None, connect=15.0)) as resp:
-            got_done = False
-            for line in resp.iter_lines():
-                if not line.startswith("data:"):
-                    continue
-                event = json.loads(line[5:])
-                node = event.get("node")
-
-                if node == "__done__":
-                    got_done = True
-                    _complete()
-                    break
-                elif node == "__error__":
-                    st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
-                    st.session_state.research_running = False
-                    st.session_state.research_failed = True
-                    return
-                else:
+        got_terminal = False
+        got_decision_pause = False
+        for _attempt in range(3):
+            headers = {}
+            if st.session_state.get("research_last_event_id"):
+                headers["Last-Event-ID"] = str(st.session_state.research_last_event_id)
+            with httpx.stream("GET", f"{API_BASE}/api/v1/tasks/{task_id}/events",
+                              headers=headers, timeout=httpx.Timeout(None, connect=15.0)) as resp:
+                for frame in _sse_frames(resp.iter_lines()):
+                    if frame.get("id"):
+                        st.session_state.research_last_event_id = frame["id"]
+                    try:
+                        event = json.loads(frame.get("data", "{}"))
+                    except json.JSONDecodeError:
+                        continue
+                    if frame.get("event") == "resync_required" or event.get("type") == "resync_required":
+                        detail = event.get("snapshot") or {}
+                        durable_task = _decision_task_projection(detail)
+                        if event.get("latest_event_id") is not None:
+                            st.session_state.research_last_event_id = str(
+                                event["latest_event_id"]
+                            )
+                        if durable_task.get("version") is not None:
+                            st.session_state.research_task_version = durable_task["version"]
+                        if durable_task.get("status") == "waiting_for_input":
+                            got_decision_pause = True
+                            break
+                        if _set_terminal_status(durable_task.get("status", "")):
+                            got_terminal = True
+                        if got_terminal:
+                            break
+                        continue
+                    status = event.get("status")
+                    if (
+                        frame.get("event") == "decision.required"
+                        or event.get("type") == "decision.required"
+                        or status == "waiting_for_input"
+                    ):
+                        # Stop consuming this response as soon as the durable
+                        # pause is observed. The task + decision GETs below are
+                        # authoritative and avoid acting on stale SSE payloads.
+                        got_decision_pause = True
+                        break
+                    if status in {
+                        "completed", "completed_with_warnings", "failed",
+                        "cancelled", "timed_out", "interrupted",
+                    }:
+                        # Replay may contain an old terminal run event followed
+                        # by auto-resume/retry events for the same task. The
+                        # current task projection is authoritative and refreshes
+                        # the CAS version used by Resume.
+                        detail = _task_detail(task_id)
+                        durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
+                        if durable_task.get("version") is not None:
+                            st.session_state.research_task_version = durable_task["version"]
+                        if _set_terminal_status(durable_task.get("status", "")):
+                            got_terminal = True
+                            break
+                        continue
+                    node = event.get("node")
+                    if node == "__done__":
+                        _complete(); got_terminal = True; break
+                    if node == "__error__":
+                        st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
+                        st.session_state.research_running = False
+                        st.session_state.research_failed = True
+                        return
                     phase = event.get("phase") or NODE_TO_PHASE.get(node, "")
                     if phase in PHASES:
                         idx = PHASES.index(phase)
-                        # Monotonic: self_reviewer retries revisit earlier nodes.
                         max_idx = max(max_idx, idx)
                         name = PHASE_NAME_MAP.get(phase, {}).get(lang, phase)
                         progress_bar.progress(max_idx / len(PHASES), text=t("progress_phase", lang, idx=idx+1, name=name))
-
-                    # Live waterfall: the stream emits updates-mode events, so an
-                    # event means node N just COMPLETED at ts. The next node in
-                    # workflow order is the one currently running.
                     if node:
-                        ts_val = float(event.get("ts") or 0)
-                        if ts_val <= 0:
-                            ts_val = time.time()
+                        ts_val = float(event.get("ts") or time.time())
                         seg_start = last_ts if last_ts is not None else ts_val
                         if node not in live_nodes:
                             live_order.append(node)
                         live_nodes[node] = {"start": seg_start, "end": ts_val}
-                        if first_ts is None:
-                            first_ts = seg_start
+                        if first_ts is None: first_ts = seg_start
                         last_ts = ts_val
-                        live_running = _next_node_in_order(node)
-
-                        total_elapsed = max(last_ts - first_ts, 0.001)
+                        running = _next_node_in_order(node)
                         entries = []
                         for name in live_order:
-                            if name == live_running:
-                                entries.append({"label": _node_label(name, lang), "running": True})
-                            else:
-                                seg = live_nodes[name]
-                                entries.append({
-                                    "label": _node_label(name, lang),
-                                    "seconds": max(seg["end"] - seg["start"], 0.0),
-                                    "running": False,
-                                })
-                        # live_running is the workflow-order successor, which has
-                        # not emitted a completion event yet, so it is never in
-                        # live_order on a normal forward run. Append its pulsing
-                        # running row explicitly (self_reviewer retries revisit
-                        # earlier nodes — those already match inside the loop).
-                        if live_running and live_running not in live_order:
-                            entries.append({"label": _node_label(live_running, lang), "running": True})
-                        live.markdown(
-                            _timeline_html(entries, total_elapsed, lang),
-                            unsafe_allow_html=True,
-                        )
-
-            # Stream ended (EOF) without __done__ — the server may have crashed
-            # mid-run. Ask /status once before declaring the connection lost.
-            if not got_done:
-                try:
-                    status = httpx.get(f"{API_BASE}/research/{task_id}/status", timeout=10).json()
-                except Exception:
-                    status = {}
-                if status.get("status") == "complete":
-                    _complete()
-                else:
-                    st.error(t("loss_connection", lang))
-                    st.session_state.research_running = False
-                    st.session_state.research_failed = True
+                            seg = live_nodes[name]
+                            entries.append({"label": _node_label(name, lang), "running": name == running,
+                                            "seconds": max(seg["end"] - seg["start"], 0.0)})
+                        if running and running not in live_order:
+                            entries.append({"label": _node_label(running, lang), "running": True})
+                        live.markdown(_timeline_html(entries, max(last_ts - first_ts, 0.001), lang), unsafe_allow_html=True)
+            if got_terminal:
+                break
+            if got_decision_pause:
+                break
+            detail = _task_detail(task_id)
+            durable_task = detail.get("task", {}) if isinstance(detail, dict) else {}
+            if durable_task.get("version") is not None:
+                st.session_state.research_task_version = durable_task["version"]
+            if durable_task.get("status") == "waiting_for_input":
+                got_decision_pause = True
+                break
+            if _set_terminal_status(durable_task.get("status", "")):
+                got_terminal = True; break
+            time.sleep(0.25 * (_attempt + 1))
+        if got_decision_pause:
+            if not _set_waiting_for_input():
+                st.session_state.research_running = False
+                st.session_state.research_connection_lost = True
+            return
+        if not got_terminal:
+            st.session_state.research_running = False
+            st.session_state.research_failed = False
+            st.session_state.research_connection_lost = True
     except Exception as e:
         st.error(f"{t('loss_connection', lang)} {e}")
         st.session_state.research_running = False
-        st.session_state.research_failed = True
+        st.session_state.research_failed = False
+        st.session_state.research_connection_lost = True
 
     # Keep Streamlit's rerun control flow outside the network exception
     # boundary. Newer Streamlit releases implement rerun with an internal
@@ -1029,17 +1811,293 @@ def _render_research_progress():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Observability Tab — four panels rendered from the research snapshot
+# Observability Tab — durable Trace plus snapshot-backed research details
 # ═══════════════════════════════════════════════════════════════════════════
-def _render_obs_panels(snapshot: dict):
+def _render_obs_panels(
+    snapshot: dict,
+    observability: dict | None = None,
+    *,
+    observability_error: bool = False,
+):
+    durable_available = (
+        isinstance(observability, dict)
+        and observability.get("availability") == "available"
+    )
+    if observability_error:
+        st.caption(t("obs_trace_request_failed", lang))
+    elif isinstance(observability, dict) and not durable_available:
+        st.caption(
+            t(
+                "obs_trace_fallback",
+                lang,
+                reason=observability.get("unavailable_reason")
+                or t("obs_unavailable", lang),
+            )
+            )
+
+    if isinstance(observability, dict):
+        _render_durable_budget(observability.get("budget"))
+
     st.markdown(f"### {t('obs_timeline_title', lang)}")
-    _render_timeline_panel(snapshot)
+    if durable_available:
+        _render_durable_nodes(observability)
+    else:
+        _render_timeline_panel(snapshot)
     st.markdown(f"### {t('obs_retrieval_title', lang)}")
     _render_retrieval_panel(snapshot)
     st.markdown(f"### {t('obs_conflict_title', lang)}")
     _render_conflict_panel(snapshot)
+    if durable_available:
+        _render_durable_calls(observability)
     st.markdown(f"### {t('obs_token_title', lang)}")
-    _render_token_panel(snapshot)
+    if durable_available:
+        _render_durable_tokens(observability)
+    else:
+        _render_token_panel(snapshot)
+
+
+def _render_durable_nodes(observability: dict):
+    nodes = observability.get("nodes") or []
+    totals = observability.get("totals") or {}
+    st.caption(
+        t(
+            "obs_durable_counts",
+            lang,
+            attempts=totals.get("node_attempts", 0),
+            retries=totals.get("node_retries", 0),
+            calls=totals.get("external_calls", 0),
+            failures=totals.get("failed_calls", 0),
+        )
+    )
+    if not nodes:
+        _render_timeline_panel({})
+        return
+
+    rows = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        duration = node.get("duration_ms")
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(_node_label(str(node.get('node_name') or ''), lang))}</td>"
+            f"<td>{_esc(node.get('attempt_no', '—'))}</td>"
+            f"<td>{_esc(node.get('status', '—'))}</td>"
+            f"<td>{_esc(f'{duration:,}' if isinstance(duration, int) else '—')}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        '<div class="report-container" style="padding:16px;"><table>'
+        f"<tr><th>{t('obs_durable_nodes', lang)}</th>"
+        f"<th>{t('obs_attempt_label', lang)}</th>"
+        f"<th>{t('obs_status_label', lang)}</th>"
+        f"<th>{t('obs_duration_ms', lang)}</th></tr>"
+        f"{''.join(rows)}</table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_durable_calls(observability: dict):
+    calls = observability.get("calls") or []
+    totals = observability.get("totals") or {}
+    st.markdown(f"### {t('obs_durable_calls', lang)}")
+    if not calls:
+        st.caption(t("obs_no_durable_calls", lang))
+        return
+    rows = []
+    for call in calls:
+        if not isinstance(call, dict):
+            continue
+        duration = call.get("duration_ms")
+        usage = call.get("usage") or {}
+        usage_text = ", ".join(
+            f"{_esc(label)}: {_esc(usage[field])}"
+            for field, label in (
+                ("input_tokens", "in"),
+                ("output_tokens", "out"),
+                ("total_tokens", "total"),
+            )
+            if field in usage
+        ) or "—"
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(call.get('kind', '—'))}</td>"
+            f"<td>{_esc(_node_label(str(call.get('node_name') or ''), lang))}</td>"
+            f"<td>{_esc(call.get('node_attempt_no', '—'))}</td>"
+            f"<td>{_esc(call.get('retry_no', '—'))}</td>"
+            f"<td>{_esc(call.get('provider', '—'))}</td>"
+            f"<td>{_esc(call.get('operation', '—'))}</td>"
+            f"<td>{_esc(call.get('call_no', '—'))}</td>"
+            f"<td>{_esc(call.get('status', '—'))}</td>"
+            f"<td>{_esc(f'{duration:,}' if isinstance(duration, int) else '—')}</td>"
+            f"<td>{usage_text}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        '<div class="report-container" style="padding:16px;"><table>'
+        f"<tr><th>Kind</th><th>{t('obs_call_node_label', lang)}</th>"
+        f"<th>{t('obs_call_attempt_label', lang)}</th><th>{t('obs_retry_no', lang)}</th>"
+        f"<th>{t('obs_provider_label', lang)}</th>"
+        f"<th>{t('obs_operation_label', lang)}</th><th>Call</th>"
+        f"<th>{t('obs_status_label', lang)}</th>"
+        f"<th>{t('obs_duration_ms', lang)}</th><th>Tokens</th></tr>"
+        f"{''.join(rows)}</table></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_durable_tokens(observability: dict):
+    totals = observability.get("totals") or {}
+    if not totals.get("llm_calls"):
+        st.caption(t("obs_no_token_data", lang))
+        return
+    values = (
+        (t("obs_token_prompt_label", lang), totals.get("input_tokens")),
+        (t("obs_token_completion_label", lang), totals.get("output_tokens")),
+        (t("obs_token_total_label", lang), totals.get("total_tokens")),
+    )
+    rendered = " · ".join(
+        f"{_esc(label)}: {_esc(f'{value:,}' if isinstance(value, int) else '—')}"
+        for label, value in values
+    )
+    st.markdown(
+        f'<div class="glass-card" style="padding:16px;">{rendered}</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        t(
+            "obs_usage_complete"
+            if totals.get("token_usage_complete")
+            else "obs_usage_partial",
+            lang,
+        )
+    )
+
+
+def _budget_resource_label(resource: str) -> str:
+    key = {
+        "total_tokens": "budget_total_tokens",
+        "llm_calls": "budget_llm_calls",
+        "retrieval_calls": "budget_retrieval_calls",
+        "active_milliseconds": "budget_active_milliseconds",
+    }.get(resource)
+    if key is not None:
+        return t(key, lang)
+    return t("budget_resource_fallback", lang, resource=str(resource)[:60])
+
+
+def _budget_resource_rows(budget: dict | None) -> list[dict]:
+    """Convert public budget DTO data into display-only rows."""
+
+    if not isinstance(budget, dict) or budget.get("availability") != "available":
+        return []
+    resources = budget.get("resources")
+    if not isinstance(resources, dict):
+        return []
+    rows = []
+    for resource, values in resources.items():
+        if not isinstance(values, dict):
+            continue
+        label = _budget_resource_label(str(resource))
+        if values.get("availability") != "available":
+            rows.append({"label": label, "unavailable": True})
+            continue
+        limit = values.get("hard_limit")
+        settled = values.get("settled")
+        unknown = values.get("unknown_spend")
+        reserved = values.get("reserved")
+        if any(type(value) is not int or value < 0 for value in (limit, settled, unknown, reserved)):
+            continue
+        rows.append(
+            {
+                "label": label,
+                "used": settled + unknown + reserved,
+                "limit": limit,
+                "settled": settled,
+                "unknown_spend": unknown,
+                "reserved": reserved,
+                "soft_limit_reached": values.get("soft_limit_reached") is True,
+                "exhausted": values.get("exhausted") is True,
+                "unavailable": False,
+            }
+        )
+    return rows
+
+
+def _render_durable_budget(budget: dict | None):
+    if not isinstance(budget, dict):
+        return
+    st.markdown(f"### {t('budget_title', lang)}")
+    if budget.get("availability") != "available":
+        st.caption(t("budget_unavailable", lang))
+        return
+    policy = budget.get("policy_version")
+    mode = budget.get("enforcement_mode")
+    if isinstance(policy, str) and isinstance(mode, str):
+        st.caption(t("budget_mode", lang, policy=policy, mode=mode))
+    if budget.get("admission_denied") is True:
+        denied_resource = budget.get("denied_resource")
+        resource_label = (
+            _budget_resource_label(denied_resource)
+            if isinstance(denied_resource, str)
+            else t("budget_unknown_resource", lang)
+        )
+        st.warning(
+            t("budget_admission_denied", lang, resource=resource_label),
+            icon="⚠️",
+        )
+    rows = _budget_resource_rows(budget)
+    if not rows:
+        st.caption(t("budget_unavailable", lang))
+        return
+    for row in rows:
+        if row["unavailable"]:
+            st.markdown(f"**{row['label']}**")
+            st.caption(t("budget_unknown_cost", lang))
+            continue
+        st.markdown(
+            f"**{row['label']}** · "
+            + t("budget_usage", lang, used=row["used"], limit=row["limit"])
+        )
+        if row["unknown_spend"]:
+            st.caption(
+                t("budget_unknown_spend", lang, value=row["unknown_spend"])
+            )
+        details = []
+        if row["settled"]:
+            details.append(t("budget_settled", lang, value=row["settled"]))
+        if row["reserved"]:
+            details.append(t("budget_reserved", lang, value=row["reserved"]))
+        if details:
+            st.caption(" · ".join(details))
+        if row["exhausted"]:
+            st.error(t("budget_exhausted", lang))
+        elif row["soft_limit_reached"]:
+            st.warning(t("budget_soft_warning", lang))
+
+
+def _render_budget_limited_notice(snapshot: dict):
+    limited = snapshot.get("budget_limited") if isinstance(snapshot, dict) else None
+    if limited is True:
+        reason = t("budget_unavailable", lang)
+    elif isinstance(limited, dict) and limited.get("limited") is not False:
+        reason_code = limited.get("reason")
+        resource = limited.get("exhausted_resource") or limited.get("resource")
+        if reason_code == "RUN_BUDGET_EXCEEDED" and isinstance(resource, str):
+            reason = t(
+                "budget_cap_reason",
+                lang,
+                resource=_budget_resource_label(resource),
+            )
+        elif isinstance(reason_code, str) and reason_code.strip():
+            reason = reason_code.strip()[:180]
+        elif isinstance(resource, str):
+            reason = _budget_resource_label(resource)
+        else:
+            reason = t("budget_unavailable", lang)
+    else:
+        return
+    st.warning(t("budget_limited_report", lang, reason=reason), icon="⚠️")
 
 
 def _render_timeline_panel(snapshot: dict):
@@ -1078,7 +2136,7 @@ def _render_retrieval_panel(snapshot: dict):
     if failures:
         st.markdown(
             f'<div class="glass-card" style="padding:14px; margin-bottom:10px; border-color:rgba(239,68,68,0.25);">'
-            f'<span class="badge badge-weak">{t("obs_partial_failures", lang, n=len(failures), list=", ".join(failures))}</span>'
+            f'<span class="badge badge-weak">{_esc(t("obs_partial_failures", lang, n=len(failures), list=", ".join(failures)))}</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1279,7 +2337,7 @@ def _render_token_panel(snapshot: dict):
 def _render_download_buttons(task_id: str, report_format: str):
     try:
         resp = httpx.get(
-            f"{API_BASE}/research/{task_id}/export",
+            f"{API_BASE}/api/v1/tasks/{task_id}/export",
             params={"format": "md", "report_format": report_format}, timeout=30,
         )
         if resp.status_code == 200:
@@ -1295,7 +2353,7 @@ def _render_download_buttons(task_id: str, report_format: str):
 
     try:
         resp = httpx.get(
-            f"{API_BASE}/research/{task_id}/export",
+            f"{API_BASE}/api/v1/tasks/{task_id}/export",
             params={"format": "pdf", "report_format": report_format}, timeout=60,
         )
         if resp.status_code == 200:
@@ -1314,12 +2372,36 @@ def _render_download_buttons(task_id: str, report_format: str):
 
 def _render_results():
     task_id = st.session_state.research_task_id
+    observability = None
+    observability_error = False
 
     try:
-        snap_resp = httpx.get(f"{API_BASE}/research/{task_id}/snapshot", timeout=10)
+        snap_resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/snapshot", timeout=10)
         snapshot = snap_resp.json() if snap_resp.status_code == 200 else {}
+        if isinstance(snapshot, dict) and "snapshot" in snapshot:
+            snapshot = snapshot["snapshot"]
+        st.session_state.research_snapshot = snapshot
     except Exception:
-        snapshot = {}
+        snapshot = st.session_state.get("research_snapshot") or {}
+
+    try:
+        trace_resp = httpx.get(
+            f"{API_BASE}/api/v1/tasks/{task_id}/observability", timeout=10
+        )
+        if trace_resp.status_code == 200:
+            trace_payload = trace_resp.json()
+            observability = trace_payload if isinstance(trace_payload, dict) else None
+        else:
+            observability_error = True
+    except Exception:
+        observability_error = True
+
+    try:
+        report_resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/report", timeout=10)
+        if report_resp.status_code == 200:
+            st.session_state.research_report = report_resp.json()
+    except Exception:
+        pass
 
     n_chains = len(snapshot.get("evidence_chains", []))
     n_conflicts = len(snapshot.get("conflicts", []))
@@ -1329,7 +2411,7 @@ def _render_results():
     <div class="stat-row">
         <div class="stat-card"><div class="stat-value">{n_chains}</div><div class="stat-label">{t("stats_chains", lang)}</div></div>
         <div class="stat-card"><div class="stat-value">{n_conflicts}</div><div class="stat-label">{t("stats_conflicts", lang)}</div></div>
-        <div class="stat-card"><div class="stat-value">{confidence.upper()}</div><div class="stat-label">{t("stats_confidence", lang)}</div></div>
+        <div class="stat-card"><div class="stat-value">{_esc(str(confidence).upper())}</div><div class="stat-label">{t("stats_confidence", lang)}</div></div>
         <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">{t("stats_formats", lang)}</div></div>
     </div>
     """, unsafe_allow_html=True)
@@ -1342,9 +2424,12 @@ def _render_results():
     ])
 
     with tab_obs:
-        _render_obs_panels(snapshot)
+        _render_obs_panels(
+            snapshot, observability, observability_error=observability_error
+        )
 
     with tab1:
+        _render_budget_limited_notice(snapshot)
         fmt = st.selectbox(
             t("format_label", lang),
             ["what_why_how", "evidence_first", "comparison_matrix"],
@@ -1352,7 +2437,7 @@ def _render_results():
             key="report_fmt",
         )
         try:
-            resp = httpx.get(f"{API_BASE}/research/{task_id}/annotated", params={"format": fmt}, timeout=10)
+            resp = httpx.get(f"{API_BASE}/api/v1/tasks/{task_id}/annotated", params={"format": fmt}, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 citations = data.get("citations", [])
@@ -1370,39 +2455,77 @@ def _render_results():
                     _render_download_buttons(task_id, fmt)
 
                 with report_col:
-                    st.markdown(f'<div class="report-container">{data["report"]}</div>', unsafe_allow_html=True)
+                    report_html = data.get("report_html")
+                    if isinstance(report_html, str):
+                        st.markdown(
+                            f'<div class="report-container">{report_html}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        # Compatibility with one-version-old servers: render
+                        # Markdown with raw HTML disabled.
+                        st.markdown(data.get("report", ""))
 
                 if citations:
                     st.markdown(f"### {t('evidence_chains_title', lang)}")
                     st.caption(t("rv_chain_anchor_note", lang))
                     chains = snapshot.get("evidence_chains", [])
-                    url_to_n = {c["url"]: c["n"] for c in citations}
                     for cit in citations:
-                        chain = chains[cit["chain_idx"]] if cit["chain_idx"] < len(chains) else {}
-                        strength = chain.get("evidence_strength", "weak")
+                        citation_n = cit.get("n")
+                        if type(citation_n) is not int or citation_n <= 0:
+                            continue
+                        chain_idx = cit.get("chain_idx")
+                        chain = chains[chain_idx] if isinstance(chain_idx, int) and 0 <= chain_idx < len(chains) else {}
+                        strength = str(chain.get("evidence_strength", "weak")).lower()
+                        if strength not in {"strong", "moderate", "weak"}:
+                            strength = "weak"
                         disputed = chain.get("disputed", False)
                         badge = "badge-disputed" if disputed else f"badge-{strength}"
-                        src_parts = []
-                        for src in chain.get("sources", []):
-                            url = str(src.get("url", ""))
-                            n = url_to_n.get(url, cit["n"])
-                            title = _esc(src.get("title", ""))
-                            if url.startswith(("http://", "https://")):
-                                link = (f'<a href="{_esc(url)}" target="_blank" '
-                                        f'style="color:#a78bfa; text-decoration:none;">{title}</a>')
-                            else:
-                                link = title
-                            src_parts.append(f'[{n}] {link} (score: {_esc(src.get("score", ""))})')
-                        src_lines = "".join(
-                            f'<div style="font-size:0.78rem; color:#71717a;">{p}</div>'
-                            for p in src_parts
+                        chain_sources = chain.get("sources", [])
+                        source_idx = cit.get("source_idx")
+                        source = None
+                        if (isinstance(chain_sources, list) and isinstance(source_idx, int)
+                                and 0 <= source_idx < len(chain_sources)):
+                            source = chain_sources[source_idx]
+                        if source is None and isinstance(chain_sources, list):
+                            citation_url = cit.get("url", "")
+                            citation_canonical = cit.get("canonical_url")
+                            source = next((candidate for candidate in chain_sources
+                                           if candidate.get("url") == citation_url
+                                           or (citation_canonical and candidate.get("canonical_url") == citation_canonical)), None)
+                        if not isinstance(source, dict):
+                            source = {
+                                "url": cit.get("url", ""),
+                                "title": cit.get("title", ""),
+                                "score": "",
+                            }
+                        url = str(cit.get("url") or source.get("url", ""))
+                        title = _esc(source.get("title") or cit.get("title", ""))
+                        safe_href = _safe_external_href(url)
+                        if safe_href is not None:
+                            link = (f'<a href="{safe_href}" target="_blank" '
+                                    f'rel="noopener noreferrer nofollow" '
+                                    f'style="color:#a78bfa; text-decoration:none;">{title}</a>')
+                        else:
+                            link = title
+                        source_line = (
+                            f'<div style="font-size:0.78rem; color:#71717a;">'
+                            f'[{citation_n}] {link} '
+                            f'(score: {_esc(source.get("score", ""))})</div>'
+                        )
+                        status_label, status_class, reason_text = _citation_verification_display(
+                            cit.get("verification_status", "unknown"),
+                            cit.get("verification_reason", "not_checked"),
+                            lang,
                         )
                         st.markdown(f"""
-                        <div class="glass-card evidence-anchor" id="ev-{cit["n"]}" style="padding:16px; margin-bottom:10px;">
+                        <div class="glass-card evidence-anchor" id="ev-{citation_n}" style="padding:16px; margin-bottom:10px;">
                             <strong style="color:#e4e4e7">{_esc(chain.get("conclusion", "Finding")[:150])}</strong><br>
                             <span class="badge {badge}">{strength.upper()}</span>
                             {'<span class="badge badge-disputed">DISPUTED</span>' if disputed else ''}
-                            {src_lines}
+                            <span class="badge {status_class}">{status_label}</span>
+                            {source_line}
+                            <div style="font-size:0.78rem; color:#a1a1aa;">{_esc(reason_text)}</div>
                         </div>
                         """, unsafe_allow_html=True)
                 else:

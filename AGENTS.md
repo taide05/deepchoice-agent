@@ -19,12 +19,15 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Do not push, force-push, merge to `main`, or create releases without explicit approval.
 - Keep implementation, tests, and directly affected documentation in the same change. Prefer focused commits with conventional prefixes such as `fix:`, `feat:`, `test:`, `docs:`, or `chore:`.
 - Every completed change must have a corresponding Git commit before handoff so it can be traced and rolled back. Do not leave completed work only in the working tree.
-- Every change must add or update the relevant automated tests. Before delivery, run the affected tests and the full validation suite; all tests and required checks must pass. If validation cannot pass, do not present the change as complete.
+- Every behavior change must add or update the relevant automated tests. Before delivery, run the affected tests and the full validation suite; all tests and required checks must pass. A passing full-suite result remains valid if only documentation, comments, or recorded test results change afterward. If production code, public contracts, migrations, tests, or runtime conditions change, rerun the affected tests and the full validation suite. If validation cannot pass, do not present the change as complete.
 
 ## Architecture map
 
 - API application and research routes: `src/deepchoice/server/app.py`
-- LangGraph orchestration and nine-node workflow: `src/deepchoice/agents/orchestrator.py`
+- Durable lifecycle service and coordinator: `src/deepchoice/services/tasks.py`, `src/deepchoice/runtime/`
+- Product SQLite schema, records, and repositories: `src/deepchoice/persistence/`
+- Phase 1 API/event contract and recovery runbook: `docs/phase1-runtime-contract.md`
+- LangGraph orchestration, research nodes, and deterministic citation validation: `src/deepchoice/agents/orchestrator.py`
 - Shared state contract: `src/deepchoice/state.py`
 - Agent nodes: `src/deepchoice/agents/`
 - Six-source retrieval and common result envelope: `src/deepchoice/retrievers/`
@@ -35,7 +38,7 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Offline evaluation: `benchmarks/`
 - Automated tests: `tests/`
 
-The normal research path is query analysis -> query adaptation -> multi-source retrieval -> source evaluation -> conflict detection -> evidence chains -> conclusion synthesis -> report generation -> self-review, with conditional retry routing in the orchestrator.
+The normal research path is query analysis -> query adaptation -> multi-source retrieval -> source evaluation -> conflict detection -> evidence chains -> conclusion synthesis -> deterministic citation validation -> report generation -> self-review, with conditional retry routing in the orchestrator.
 
 ## Setup and commands
 
@@ -55,7 +58,11 @@ Run the smallest relevant test first, then the full suite:
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-The verified clean-environment baseline on 2026-09-09 is 309 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
+During implementation, keep validation focused on the current change. Freeze production code,
+migrations, and tests before the final full-suite run; do not repeat an unchanged full suite merely
+because documentation, comments, or the recorded result changed afterward.
+
+The verified clean-environment baseline on 2026-09-15 is 1040 passed with no skips. Test counts are observations, not constants; update documentation only after collecting/running the current suite.
 
 Benchmarks call paid/external services and can take several minutes per case. Do not run a benchmark batch unless the task explicitly requires it and API/network prerequisites are confirmed. Start with the health check:
 
@@ -69,8 +76,10 @@ python -m benchmarks.run_baseline --health-check
 - DeepSeek tier: `DS_FLASH_API_KEY` or legacy `FLASH_API_KEY` / `DEEPSEEK_API_KEY`; optional model/base overrides use the corresponding `DS_FLASH_*`, `FLASH_*`, or `DEEPSEEK_BASE_URL` names.
 - Qwen tier: `QW_FLASH_API_KEY` or legacy `PRO_API_KEY` / `LLM_API_KEY`; optional model/base overrides use `QW_FLASH_*`, `PRO_*`, or `LLM_BASE_URL`.
 - Search services: `TAVILY_API_KEYS` (comma-separated) or `TAVILY_API_KEY`; optional `GITHUB_TOKEN` and `STACKEXCHANGE_API_KEY`.
-- Outbound routing: `OUTBOUND_CHANNELS`, `OUTBOUND_CHANNELS_COMMUNITY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
-- Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, and `TAVILY_REPROBE`.
+- Outbound routing: `OUTBOUND_CHANNELS`, `OUTBOUND_CHANNELS_COMMUNITY`,
+  `OUTBOUND_CHANNELS_TAVILY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
+  Tavily must exclude `self-forward` because that transport does not preserve POST bodies.
+- Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, `TAVILY_REPROBE`, and `RETRIEVAL_CACHE_ENABLED` (default `1`; set `0` to disable the retrieval cache).
 - Concurrency/behavior: `LLM_DS_CONCURRENCY`, `LLM_QW_CONCURRENCY`, and `DEEPCHOICE_SYNTH_THINKING`.
 - Frontend: `API_BASE`.
 
@@ -79,11 +88,221 @@ When adding a setting, update the code default, tests, README configuration sect
 ## Implementation contracts
 
 - Keep network access in retrievers routed through `deepchoice.outbound`; do not add ad-hoc direct clients that bypass channel selection and health reporting.
+- Tavily route probing is a credential-free static HEAD. Its keypool POSTs in retrieval, conflict
+  evidence, and benchmark health checks use the selected outbound client. The legacy artifact label
+  `tavily_direct` does not mean direct routing is forced.
 - Preserve the `BaseRetriever.search()` signature and the uniform source/status/results/error envelope.
 - Retrieval failure must remain visible as failed or partial failure; do not convert external errors into silent empty success.
 - Keep LLM calls in `utils/llm.py` or use its helpers so retry, deterministic settings, diagnostics, and token accounting remain consistent.
 - Update `ResearchState` deliberately when adding node outputs, and cover routing/state changes with tests.
 - Benchmark case and ground-truth changes affect reported metrics. Keep them separate from production refactors when practical and document the evaluation rationale.
+- Before changing a dependency-facing wrapper or public port, inventory both current and deprecated entry points and any upstream deprecations. Keep required compatibility adapters covered by tests; do not silently remove them or broadly suppress unrelated warnings.
+
+### Phase 3-2 retrieval cache
+
+- Cache only successful retrieval results that pass the `RetrievalResult` contract and provenance validation. Do not cache failed, invalid, or oversized results.
+- Use the product SQLite store with TTL. Cache keys are hashes over the normalized request, source, immutable run manifest identity, and cache-policy version; never persist plaintext requests in cache keys or cache metadata.
+- Coalesce same-key in-flight retrievals within a run using process-local single-flight. Cache hits and coalesced waiters do not reserve `retrieval_calls` and do not create external-call Trace rows; only an actual outbound retrieval does.
+- Bypass the cache for the deprecated `/research` compatibility path and any execution without a `RunContext`. Preserve both `BaseRetriever.retrieve()` and the legacy `search()` interface.
+- `RETRIEVAL_CACHE_ENABLED` defaults to `1`; setting it to `0` safely bypasses reads and writes. Pass it through Docker configuration. This cache is retrieval-only; do not add LLM response caching.
+
+### Phase 1 durable runtime
+
+- The Streamlit default path and full durable lifecycle contract use `/api/v1/tasks/*`. `POST /research` remains a deprecated, separate in-memory compatibility path for one compatibility version; do not add new consumers to it.
+- Change task/latest-run state and append the corresponding `task_events` record through one repository transaction. API handlers, coordinators, and agents must not write lifecycle tables or events directly.
+- Preserve CAS and fencing semantics: a losing task/run version check or stale `(lease_owner, execution_epoch)` must produce no state mutation, event, or checkpoint reference. Heartbeats renew ownership without user events.
+- Treat lease acquisition and terminal finalization as cancellation-sensitive authority changes. Shutdown must let an in-flight acquisition settle, then fence/finalize any committed grant before propagating cancellation; never leave a committed `running` row merely because the caller was cancelled before receiving the grant.
+- Keep task status aligned with its latest run. `interrupted` is recoverable and may resume the same compatible run; it is not an immutable terminal outcome. Failed/timed-out retries create a new run.
+- Treat `RunManifest` as immutable run identity. Same-run resume must verify manifest identity plus workflow/state schema compatibility and use only a product-accepted checkpoint reference.
+- Product task metadata and LangGraph checkpoint payloads stay in separate SQLite stores. Never infer product state by reading LangGraph private tables; back up and restore the two stores as a pair.
+- Every new coordinator success or successful legacy import must commit its allowlisted public result, task/run terminal state, and completion event in one product-database transaction. Never publish a new successful terminal state without its queryable `run_results` artifact, and never copy private checkpoint state into that artifact. Pre-v6 successful rows are a read-only historical exception and return `TASK_RESULT_UNAVAILABLE` because no result can be reconstructed safely.
+- The SQLite runtime is single-instance and single-worker. Keep the product-database instance lease and worker-count startup checks enabled; do not work around them to scale horizontally. Use an external queue/coordinator before adding workers or replicas.
+- Phase 1 is a single-user trusted-network deployment: the durable APIs do not yet authenticate callers or enforce task ownership. Do not expose port 8000 directly to the public internet; require an authenticated reverse proxy for remote access, and add authentication plus tenant ownership before multi-user deployment.
+- `task_events.event_id` is the global SSE cursor and `seq` is task-local. Public event data may contain status/node/reason and public identifiers/timestamps, but never lease owners, epochs, checkpoint IDs, manifest contents, raw exceptions, secrets, full state, or report bodies.
+- `Last-Event-ID` replay must resync foreign, missing, or future cursors with a public task snapshot. Durable SSE must not depend on optional trace/observability writes.
+- Migrations are append-only and forward-only. Never edit the name, SQL, or checksum of a committed migration; add a new migration, test upgrades from the previous schema, and rely on pre-deploy backups rather than destructive downgrade.
+- Legacy snapshot import stays read-only, direct-child scoped, path/hash idempotent, conflict-preserving, and bounded by candidate count, I/O time, and file size. It runs after readiness as a managed background task. Never copy `_error`, reports, or full snapshot state into product events.
+- Back up, verify, restore, and rehearse the product/checkpoint databases as one manifest-verified pair with `scripts/runtime_db.py`; restore requires a stopped service or maintenance mode and explicit confirmation.
+- Any lifecycle, migration, concurrency, checkpoint, SSE, or compatibility change requires focused fault/concurrency tests, the full suite, an update to `docs/phase1-runtime-contract.md`, and independent review.
+
+### Phase 2 observability and budget contracts
+
+- `RunContext`、Trace/Budget DTO/Protocol 和 schema v8 骨架表是契约层产出；骨架表包括
+  `run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、`budget_ledger`。
+- New durable runs/retries must atomically freeze `standard-enforced-v1` and `unpriced-v1`.
+  The standard hard limits are 60,000 total tokens, 96 LLM calls, 72 retrieval calls, and 900,000
+  active milliseconds, with an 80% soft warning. Existing `standard-observe-v1` runs retain their
+  frozen observe-only policy on same-run resume. Unknown prices remain unknown, never zero.
+  Historical runs are not backfilled; their internal policy projection remains unavailable and the
+  observability API must report that absence.
+- Phase 2-B records default durable node attempts and LLM/retrieval external calls in the existing
+  product-database Trace tables. Trace writes are best-effort and cannot change task state, results,
+  or durable SSE correctness; `task_events` remains the sole lifecycle/SSE correctness path.
+- `GET /api/v1/tasks/{task_id}/observability` returns only latest-run allowlisted node/call fields
+  and aggregates from one product-database read snapshot that resolves `tasks.latest_run_id`, run
+  status/epoch, policy, and Trace together. Calls include their safe node name and run-level node
+  attempt ordinal; `retry_no` may be exposed only as a validated non-negative integer extracted
+  from the request summary. Do not expose attempt/call IDs, epochs, lease owners, checkpoint
+  references, manifest contents, raw exceptions, other request/result summaries, or report bodies.
+  Read only the product SQLite database; never inspect LangGraph private checkpoint tables.
+- Missing latest run, absent Trace, historical policy absence, and incomplete token usage must be
+  explicit. Sum only known token fields, preserve unknown values as unknown (never zero), and report
+  whether LLM token usage is complete. The Streamlit view falls back to snapshot panels when the
+  endpoint errors or reports unavailable.
+- Trace rows left `started` by recovery are projected as `interrupted` when their epoch is stale or
+  the run itself is `interrupted`; current-epoch rows for other non-active runs are projected as
+  `unknown`. Do not present stale/inconsistent started rows as actively running.
+- Every default-path LLM retry, retriever source, and conflict evidence tool call must reserve its
+  budget before dispatch. Reservation is an atomic bundle, is valid only for the current running
+  lease owner/epoch, and must not oversubscribe under concurrency. Settlement and stale-reservation
+  reconciliation remain append-only; missing or uncertain usage is charged conservatively as
+  `unknown_spend`, never zero. Budget persistence failures fail closed and must not be swallowed by
+  agent fallback logic. Trace remains best-effort and independent from this correctness path.
+- The first enforced admission denial latches budget exhaustion for that run in serialized admission.
+  A queued request that crossed the fast check but has not committed must recheck the latch and fail;
+  reservations committed before the denial are not retroactively cancelled.
+- On `RUN_BUDGET_EXCEEDED`, no further external call is allowed. A deterministic minimum-evidence
+  gate may create a visibly restricted local report only with at least three undisputed usable
+  chains, two distinct valid HTTP(S) hostnames, and one moderate/strong chain. This is structural
+  sufficiency, not claim-level verification. The result, `completed_with_warnings` state, and event
+  commit atomically; otherwise finalize failed with `BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE`.
+- The observability API budget projection aggregates only the latest entry for each reservation and
+  exposes configured limits, settled/unknown/reserved usage, remaining capacity, and soft/hard
+  status. `admission_denied` is distinct from consumed spend reaching the limit: a next call may be
+  rejected while some unusable remainder is still displayed. Never expose reservation/call IDs,
+  execution epochs, summaries, or private errors.
+- `RunManifest` remains schema v1 but now freezes `max_output_tokens` for each LLM call. Older v1
+  manifests remain readable by historical identity and fail same-run compatibility safely.
+
+### Phase 6-A security boundaries
+
+- URL 外呼必须统一经过 `SafeUrlPolicy`/安全 fetch：只允许 HTTP(S)、端口仅 80/443、拒绝
+  userinfo；DNS 解析后必须拒绝 loopback、private、link-local、reserved 和 multicast 地址，
+  并在实际连接时固定到已验证的 direct IP（保留正确 Host/TLS SNI）。每一跳 redirect 都要
+  重新执行完整策略和端口检查，并限制响应体大小、content-type、重定向次数与总耗时。
+  无法证明安全的 proxy/forward 动态 URL 必须 fail closed。
+- forward allowlist 必须按完整 hostname 精确匹配，或按显式 `*.example.com` 子域规则匹配；
+  不能用字符串前缀代替 hostname 边界。
+- 请求 body 的 admission 上限为 128 KiB；query、候选项、澄清文本、字段长度、候选数量和
+  聚合输入必须分别受限。拒绝超限输入，不通过截断继续执行。
+- 日志、结构化错误、Trace 与 LLM diagnostics 统一走集中脱敏。LLM diagnostics 只保留
+  hash、length、usage 和 error type，不保存完整 prompt、响应、headers、URL 凭据或原始堆栈。
+- 报告必须保留 Markdown 兼容输出，并由服务端生成经过 allowlist sanitizer 的 `report_html`；
+  PDF 使用同一 sanitizer。前端不得把未清洗的报告正文放入 `unsafe_allow_html`。
+- Phase 6-A 不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全
+  fetch；这些能力不在当前实施路线，除非后续明确重新修订范围。
+
+### Phase 3-1 citation verification
+
+- New runs freeze workflow `research-v3`, state schema v3, citation policy
+  `deterministic-citation-v1`, and HITL policy `evidence-insufficient-v1`. Historical v1/v2 manifests
+  remain readable and identity-valid, but are incompatible with same-run resume on the v3 runtime
+  and must start a new run.
+- Citation verification is deterministic and runs after conclusion synthesis and before report
+  rendering; the sole evidence-insufficient HITL gate runs after citation verification and before
+  report rendering. Do not add an LLM judge to the default path or describe lexical verification as
+  semantic proof.
+- Public citation status is limited to `verified`, `unsupported`, `unreachable`, and `unknown`.
+  Temporary network, DNS, routing, proxy-safety, and cross-language uncertainty must remain
+  `unknown`; they are not evidence that a claim is false.
+- Dynamic citation URLs must use the bounded outbound safe-fetch path. Equivalent canonical URLs
+  are fetched at most once per validation pass, each logical fetch reserves `http_calls` first, and
+  no raw page body, exception, DNS/IP detail, or redirect trace may enter graph state or run results.
+- Phase 3-1 stores its bounded checks and per-source projection in the immutable public run snapshot;
+  it does not add a lifecycle table or treat verification warnings as task lifecycle events.
+
+### Phase 5-1 versioned assets and offline evaluation
+
+- The core asset registry is a small audit index, not a generalized prompt registry. Include only
+  prompt hashes/versions used by the default workflow, `research-v3`, state schema v3, workflow
+  nodes, citation/HITL policy versions, and the three report template versions. Never store prompt
+  text or credentials in the registry.
+- `smoke-v1` is a fixed 12-case fixture-replay suite: three cases each for query analysis, citation
+  verification, conclusion post-processing, and report rendering. It must not call an LLM, judge, or
+  network service. Its results validate deterministic code paths and fixture structure; they do not
+  measure real-model semantic quality or live source availability.
+- Evaluation artifacts must include the dataset ID/version/hash/freeze date, evaluation timestamp,
+  case denominators, current manifest ID, core asset registry ID, and explicit source-health
+  `not_run`/`degraded` status. Do not imply live sources were checked by fixture replay.
+- Keep the historical 300-case benchmark and its dated metrics unchanged. Smoke-v1 results are a
+  separate dataset and must not be merged with or compared as if they shared a denominator.
+- Phase 5-1 does not include test-growth/default-path consistency audits; those belong to Phase 5-2.
+  Real-case metric baselining and optimization, demonstrations, and the architecture/interview package
+  are outside Phase 5 entirely and require a separately approved roadmap after engineering acceptance.
+
+### Phase 5-2 engineering-foundation acceptance
+
+- Phase 5-2 is an engineering acceptance pass, not final product-quality or interview acceptance.
+  Review the durable default path across migrations, recovery, lifecycle, budget/Trace, citation
+  verification, retrieval cache, HITL, security, SSE, and compatibility boundaries.
+- Audit test-count growth, duplicate/low-value tests, dead code, deprecated upstream/public entry
+  points, and documentation drift. Preserve tests that still carry distinct regression value; do not
+  optimize for a smaller count.
+- Run the complete CI and focused fault/recovery acceptance, obtain independent review, and record a
+  concise engineering acceptance report plus residual-risk list.
+- Do not run paid benchmarks, claim real-report quality, select interview demo cases, optimize key
+  outcome metrics, or create interview/architecture presentation material in Phase 5-2.
+- Completion means the repository is a reproducible engineering baseline ready for later real-case
+  measurement and targeted optimization. It does not mean the product or interview package is final.
+
+### Phase 4-1 single durable HITL decision gate
+
+- Product schema v10 adds `hitl_decisions`. Migrations remain append-only and forward-only; never
+  edit committed migrations. Decision data stays in the product SQLite store, separate from
+  LangGraph checkpoint payloads.
+- Only the `evidence-insufficient` gate is in scope. It can pause only when evidence is structurally
+  insufficient and the recommendation is materially uncertain. It runs after citation verification
+  and before report rendering; the legacy `/research` path and executions without `RunContext` bypass
+  durable decisions.
+- Supported actions are `provide_context` (required bounded supplemental text), `limited_report`
+  (report from evidence already collected, clearly marked as restricted), and `cancel` (terminal,
+  without graph resume). Supplemental text is untrusted context and must never enter public events,
+  decision GET projections, or error details.
+- A pending decision is bound internally to task/run, the accepted checkpoint reference, state schema,
+  and pause fencing epoch. Public decision responses/events must not reveal checkpoint identity,
+  execution epoch, lease owner, or supplemental text.
+- Pausing atomically persists the decision and moves task/run to `waiting_for_input`, clears the lease
+  and active deadline, and releases the execution slot. The decision expires after seven days; expiry
+  atomically marks it expired and the waiting task/run cancelled. Startup/recovery must preserve
+  pending decisions and resume only a valid resolved decision from its bound checkpoint.
+- `GET /api/v1/tasks/{task_id}/decision` returns the latest public decision projection.
+  `POST /api/v1/tasks/{task_id}/decisions/{decision_id}` resolves it using `If-Match` task-version
+  CAS. Repeating the same resolution body is idempotent; a different body, stale task version,
+  mismatched run/checkpoint, or expired decision conflicts/fails without resuming stale execution.
+- Decision lifecycle events may expose only public status, decision ID/kind, reason, gaps, allowed
+  actions, expiry, and action; never checkpoint/fencing identity, supplemental content, or private
+  state.
+
+### Phase 4-2 decision UI and recovery acceptance
+
+- The Streamlit durable-task view displays only the public pending-decision projection: reason, evidence
+  gaps, allowed actions, and expiry. It offers `provide_context`, `limited_report`, and `cancel`; every
+  resolution sends the current task version in `If-Match`.
+- On `waiting_for_input` / `decision.required`, end the current durable SSE response so the client does
+  not hold a connection while awaiting the user. After resolution, reconnect from the last received
+  `Last-Event-ID`; if replay requests resync, refresh the public task/decision snapshot before resuming
+  the stream. Preserve the existing replay/resync behavior for all other task states.
+- A retry after an uncertain submission must repeat the same action body. On a version/body conflict,
+  refresh public state and require a new user action; do not silently rewrite or replay a different
+  choice. Supplemental text may remain only in the user's input widget and the private session retry
+  body while an outcome is uncertain; never copy it into public projections, events, logs, or errors.
+  Never expose checkpoint identity, execution epoch, lease owner, manifest contents, or private state.
+- Recovery acceptance must use separate real product and LangGraph checkpoint SQLite databases, a real
+  `StateGraph`, and its checkpoint saver. Cover restart with a pending decision, same-body idempotency,
+  conflicting resolution/version, seven-day expiry, cancellation without graph resume, and a valid
+  resolution resuming the bound run exactly once from its accepted checkpoint.
+
+### Current implementation scope
+
+- `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
+  design remains historical design space and must not be interpreted as authorized current scope.
+- Phase 3 and Phase 4 are complete. Phase 5-1 (bounded version assets and offline evaluation) and
+  Phase 5-2 (engineering-foundation acceptance) are complete. The currently authorized roadmap ends
+  here; real-case metrics, targeted optimization, and interview delivery require a separately
+  approved roadmap. See `docs/phase5-engineering-acceptance.md` for evidence and residual risks.
+- Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
+  external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
+  the roadmap is explicitly revised again.
 
 ## Local and generated data
 

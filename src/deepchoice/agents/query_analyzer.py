@@ -1,3 +1,4 @@
+from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -52,7 +53,9 @@ class QueryAnalyzerAgent:
 
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
-        print_agent_output(f"Analyzing query: {task['query']}", agent="QUERY_ANALYZER")
+        print_agent_output(
+            f"Analyzing query ({len(task['query'])} chars)", agent="QUERY_ANALYZER"
+        )
 
         scene = _detect_scene(task["query"], task.get("scene_context", "unspecified"))
 
@@ -65,8 +68,10 @@ class QueryAnalyzerAgent:
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_analyzer",
                                       usage=local_usage, seed=0)
-        except Exception as e:
-            print_agent_output(f"Query decomposition failed: {e}, using raw query", agent="QUERY_ANALYZER")
+        except BudgetError:
+            raise
+        except Exception:
+            print_agent_output("Query decomposition failed; using raw query", agent="QUERY_ANALYZER")
             result = {}
 
         sub_questions = result.get("sub_questions", [])

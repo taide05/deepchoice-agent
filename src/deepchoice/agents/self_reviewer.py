@@ -1,3 +1,4 @@
+from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -145,8 +146,12 @@ Uncited: {cite_stats["uncited_fields"]}
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="self_reviewer",
                                       usage=local_usage)
-        except Exception as e:
-            print_agent_output(f"Self-review failed: {e}, falling back to medium", agent="SELF_REVIEWER")
+        except BudgetError:
+            raise
+        except Exception:
+            print_agent_output(
+                "Self-review failed; falling back to medium", agent="SELF_REVIEWER"
+            )
             result = {}
 
         if not isinstance(result, dict):

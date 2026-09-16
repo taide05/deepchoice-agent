@@ -1,8 +1,9 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class ResearchState(TypedDict):
     task: dict
+    run_manifest: NotRequired[dict]
     sub_questions: list[str]
     adapted_queries: dict
     search_results: list[dict]
@@ -10,6 +11,7 @@ class ResearchState(TypedDict):
     conflicts: list[dict]
     evidence_chains: list[dict]
     final_recommendation: dict
+    citation_verification: NotRequired[dict]
     report: str
     confidence: str
     knowledge_gaps: list[str]
@@ -17,5 +19,10 @@ class ResearchState(TypedDict):
     partial_failures: list[str]
     quality_signals: list[dict]
     current_phase: str
+    data_source_note: NotRequired[str]
     agent_timing: dict
     token_usage: list[dict]
+    _evidence_decision_gate_seen: NotRequired[bool]
+    _evidence_decision_route: NotRequired[str]
+    _supplemental_input: NotRequired[str]
+    _hitl_limited_report: NotRequired[bool]

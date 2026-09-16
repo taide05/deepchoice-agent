@@ -1,6 +1,58 @@
 from ..utils.llm import call_model
 from ..utils.views import print_agent_output
+from ..contracts.api import ResearchRequest
+from ..security.input_limits import validate_safe_text
 from .session_manager import SessionState
+
+
+def _bounded_llm_text(value: object, *, maximum: int, fallback: str = "") -> str:
+    if not isinstance(value, str):
+        return fallback
+    value = value.strip()
+    if not value or len(value) > maximum:
+        return fallback
+    try:
+        return validate_safe_text(value)
+    except ValueError:
+        return fallback
+
+
+def _bounded_llm_text_list(
+    value: object,
+    *,
+    maximum_items: int,
+    maximum_item_length: int,
+    maximum_total_length: int,
+) -> list[str]:
+    if not isinstance(value, list) or len(value) > maximum_items:
+        return []
+    result: list[str] = []
+    for item in value:
+        normalized = _bounded_llm_text(item, maximum=maximum_item_length)
+        if not normalized:
+            return []
+        if normalized not in result:
+            result.append(normalized)
+    if sum(len(item) for item in result) > maximum_total_length:
+        return []
+    return result
+
+
+def _research_payload(
+    state: SessionState, *, sub_questions: list[str] | None = None
+) -> dict:
+    validated = ResearchRequest(
+        query=state.messages[0]["content"] if state.messages else "",
+        scene_context=state.scene,
+        constraints=list(state.constraints),
+        candidate_techs=list(state.candidate_techs),
+        complexity=state.complexity,
+        report_format="what_why_how",
+        sub_questions=list(sub_questions or []),
+    )
+    return validated.model_dump(
+        exclude={"schema_version", "gather_evidence", "language", "sub_questions"}
+    )
 
 TECH_RECOMMENDATION_MAP: dict[str, list[dict]] = {
     "fc14a2e9": [
@@ -159,8 +211,8 @@ class ClarificationAgent:
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
             return self._merge_and_build_response(state, result)
-        except Exception as e:
-            print_agent_output(f"Clarify ask failed: {e}, using fallback", agent="CLARIFICATION")
+        except Exception:
+            print_agent_output("Clarify ask failed; using fallback", agent="CLARIFICATION")
             return self._fallback_response(state)
 
     async def _handle_recommend(self, state: SessionState) -> dict:
@@ -174,8 +226,8 @@ class ClarificationAgent:
             response["action"] = "recommend"
             response["payload"] = {"candidates": candidates}
             return response
-        except Exception as e:
-            print_agent_output(f"Clarify recommend failed: {e}, using fallback", agent="CLARIFICATION")
+        except Exception:
+            print_agent_output("Clarify recommend failed; using fallback", agent="CLARIFICATION")
             return {
                 "action": "recommend",
                 "answer": "根据你的描述，以下技术可能适合你的场景。你想比较哪几个？可以多选。",
@@ -193,24 +245,23 @@ class ClarificationAgent:
 
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
-        except Exception as e:
-            print_agent_output(f"Clarify confirm failed: {e}, using fallback", agent="CLARIFICATION")
+        except Exception:
+            print_agent_output("Clarify confirm failed; using fallback", agent="CLARIFICATION")
             result = {"message": "需求已整理完毕，确认后开始研究。"}
 
-        state.clarified_task = {
-            "query": state.messages[0]["content"] if state.messages else "",
-            "scene_context": state.scene,
-            "constraints": state.constraints,
-            "candidate_techs": state.candidate_techs,
-            "complexity": state.complexity,
-            "report_format": "what_why_how",
-        }
+        summary = _bounded_llm_text(
+            result.get("message"),
+            maximum=4000,
+            fallback="需求已整理完毕，确认后开始研究。",
+        )
+
+        state.clarified_task = _research_payload(state)
 
         return {
             "action": "confirm",
-            "answer": result.get("message", "需求已整理完毕，确认后开始研究。"),
+            "answer": summary,
             "payload": {
-                "summary": result.get("message", ""),
+                "summary": summary,
                 "clarified_task": state.clarified_task,
                 "candidate_techs": state.candidate_techs,
                 "scene": state.scene,
@@ -229,7 +280,8 @@ class ClarificationAgent:
     async def _handle_finalize(self, state: SessionState) -> dict:
         sub_questions = await self._generate_sub_questions(state)
         state.sub_questions = sub_questions
-        techs_str = ", ".join(state.candidate_techs) if state.candidate_techs else "推荐技术"
+        state.clarified_task = _research_payload(state, sub_questions=sub_questions)
+        techs_str = self._technology_summary(state)
         return {
             "action": "finalize",
             "answer": "需求已确认，开始研究。",
@@ -273,7 +325,7 @@ class ClarificationAgent:
 返回JSON：{{"message": "你的需求摘要..."}}"""
 
     async def _generate_sub_questions(self, state: SessionState) -> list[str]:
-        techs = ", ".join(state.candidate_techs) if state.candidate_techs else "推荐技术"
+        techs = self._technology_summary(state)
         prompt_text = f"""你是技术研究分析师。基于以下已澄清的需求，生成5个研究子问题，覆盖5个维度：功能、性能、生态、开发体验、场景适配。
 
 需求：
@@ -286,51 +338,105 @@ class ClarificationAgent:
         prompt = [{"role": "user", "content": prompt_text}]
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
-            return result.get("sub_questions", [])
-        except Exception as e:
-            print_agent_output(f"Clarify sub-question generation failed: {e}, using fallback", agent="CLARIFICATION")
-            return [
-                f"{techs} 功能覆盖度对比",
-                f"{techs} 性能表现（吞吐量、延迟、资源消耗）",
-                f"{techs} 社区活跃度与文档质量",
-                f"{techs} 学习曲线与开发体验",
-                f"{techs} 在 {state.scene} 场景下的适用性与部署复杂度",
-            ]
+            questions = _bounded_llm_text_list(
+                result.get("sub_questions"),
+                maximum_items=20,
+                maximum_item_length=500,
+                maximum_total_length=10_000,
+            )
+            if questions:
+                return questions
+        except Exception:
+            print_agent_output(
+                "Clarify sub-question generation failed; using fallback",
+                agent="CLARIFICATION",
+            )
+        return [
+            f"{techs} 功能覆盖度对比",
+            f"{techs} 性能表现（吞吐量、延迟、资源消耗）",
+            f"{techs} 社区活跃度与文档质量",
+            f"{techs} 学习曲线与开发体验",
+            f"{techs} 在 {state.scene} 场景下的适用性与部署复杂度",
+        ]
+
+    @staticmethod
+    def _technology_summary(state: SessionState) -> str:
+        if not state.candidate_techs:
+            return "推荐技术"
+        joined = ", ".join(state.candidate_techs)
+        if len(joined) <= 300:
+            return joined
+        return f"{len(state.candidate_techs)} 个候选技术"
 
     def _merge_and_build_response(self, state: SessionState, llm_result: dict) -> dict:
-        if llm_result.get("scene") and not state.scene:
-            state.scene = llm_result["scene"]
-            if "scene" in state.missing_required:
-                state.missing_required.remove("scene")
-            if "scene" not in state.filled_required:
-                state.filled_required.append("scene")
+        draft = state.model_copy(deep=True)
+        if llm_result.get("scene") and not draft.scene:
+            draft.scene = llm_result["scene"]
+            if "scene" in draft.missing_required:
+                draft.missing_required.remove("scene")
+            if "scene" not in draft.filled_required:
+                draft.filled_required.append("scene")
 
-        if llm_result.get("complexity") and not state.complexity:
-            state.complexity = llm_result["complexity"]
-            if "complexity" in state.missing_required:
-                state.missing_required.remove("complexity")
-            if "complexity" not in state.filled_required:
-                state.filled_required.append("complexity")
+        if llm_result.get("complexity") and not draft.complexity:
+            draft.complexity = llm_result["complexity"]
+            if "complexity" in draft.missing_required:
+                draft.missing_required.remove("complexity")
+            if "complexity" not in draft.filled_required:
+                draft.filled_required.append("complexity")
 
-        if llm_result.get("candidate_techs") and not state.candidate_techs:
-            state.candidate_techs = llm_result["candidate_techs"]
-            if "candidate_techs" in state.missing_required:
-                state.missing_required.remove("candidate_techs")
-            if "candidate_techs" not in state.filled_required:
-                state.filled_required.append("candidate_techs")
+        candidates = _bounded_llm_text_list(
+            llm_result.get("candidate_techs"),
+            maximum_items=50,
+            maximum_item_length=500,
+            maximum_total_length=6000,
+        )
+        if candidates and not draft.candidate_techs:
+            draft.candidate_techs = candidates
+            if "candidate_techs" in draft.missing_required:
+                draft.missing_required.remove("candidate_techs")
+            if "candidate_techs" not in draft.filled_required:
+                draft.filled_required.append("candidate_techs")
 
-        if llm_result.get("unknown_techs") is not None:
-            state.unknown_techs = llm_result["unknown_techs"]
+        if isinstance(llm_result.get("unknown_techs"), bool):
+            draft.unknown_techs = llm_result["unknown_techs"]
 
-        if llm_result.get("constraints"):
-            for c in llm_result["constraints"]:
-                if c not in state.constraints:
-                    state.constraints.append(c)
+        constraints = _bounded_llm_text_list(
+            llm_result.get("constraints"),
+            maximum_items=50,
+            maximum_item_length=500,
+            maximum_total_length=6000,
+        )
+        if constraints:
+            merged_constraints = list(draft.constraints)
+            for constraint in constraints:
+                if constraint not in merged_constraints:
+                    merged_constraints.append(constraint)
+            if len(merged_constraints) <= 50:
+                draft.constraints = merged_constraints
 
-        state.clarity_score = self._compute_score(state)
+        draft.clarity_score = self._compute_score(draft)
+        action = llm_result.get("action")
+        if action not in {"ask", "recommend", "confirm"}:
+            action = "ask"
+        answer = _bounded_llm_text(
+            llm_result.get("message"),
+            maximum=4000,
+            fallback="抱歉，我刚才没理解清楚。能换个方式描述一下你的需求吗？",
+        )
+        for field in (
+            "scene",
+            "complexity",
+            "candidate_techs",
+            "unknown_techs",
+            "constraints",
+            "filled_required",
+            "missing_required",
+            "clarity_score",
+        ):
+            setattr(state, field, getattr(draft, field))
         return {
-            "action": llm_result.get("action", "ask"),
-            "answer": llm_result.get("message", ""),
+            "action": action,
+            "answer": answer,
             "clarity_score": state.clarity_score,
             "filled_required": state.filled_required,
             "missing_required": state.missing_required,

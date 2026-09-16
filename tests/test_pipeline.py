@@ -88,7 +88,7 @@ class TestFullPipeline:
         all_nodes = {
             "query_analyzer", "query_adapter", "multi_retriever", "source_evaluator",
             "conflict_detector", "evidence_chain", "conclusion_synthesizer",
-            "report_generator", "self_reviewer",
+            "citation_validator", "evidence_decision_gate", "report_generator", "self_reviewer",
         }
         assert all_nodes <= set(result["agent_timing"].keys())
 

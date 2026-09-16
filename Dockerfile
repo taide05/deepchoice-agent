@@ -1,5 +1,5 @@
 # ===== Stage 1: Builder =====
-FROM python:3.13-slim AS builder
+FROM python:3.12-slim AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc \
@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir \
 
 
 # ===== Stage 2: Runtime =====
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 # CJK font for PDF report export (xhtml2pdf). fonts-wqy-zenhei is TrueType-outlined
 # (reportlab can open it with subfontIndex=0); NotoSansCJK is CFF-based and cannot.
@@ -25,14 +25,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY chroma_kb/ /app/chroma_kb/
 
 WORKDIR /app
 
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    WEB_CONCURRENCY=1
 
 # BGE-M3 downloads on first use (~2GB) into the HF cache; mount a volume at
 # /root/.cache/huggingface to persist it across container restarts.
@@ -40,4 +41,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 ENTRYPOINT ["uvicorn", "deepchoice.server.app:app"]
-CMD ["--host", "0.0.0.0", "--port", "8000"]
+CMD ["--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

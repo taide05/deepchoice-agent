@@ -1,5 +1,6 @@
 """Outbound channel layer tests (batch 1: module-level, all mocked — no network)."""
 import asyncio
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -9,6 +10,7 @@ from deepchoice.outbound.channels import (
     SelfForwardChannel,
     build_channels,
 )
+from deepchoice.outbound.probe import PROBES, ok_for
 from deepchoice.outbound.resolver import ChannelResolver
 
 
@@ -28,12 +30,22 @@ def _probe_script(table: dict):
 
 class TestConfig:
     def test_from_env_defaults(self, monkeypatch):
-        for k in ("OUTBOUND_CHANNELS", "LOCAL_PROXY", "FWD_BASE", "FWD_KEY", "FWD_TARGETS"):
+        for k in (
+            "OUTBOUND_CHANNELS",
+            "OUTBOUND_CHANNELS_COMMUNITY",
+            "OUTBOUND_CHANNELS_TAVILY",
+            "LOCAL_PROXY",
+            "FWD_BASE",
+            "FWD_KEY",
+            "FWD_TARGETS",
+        ):
             monkeypatch.delenv(k, raising=False)
         cfg = OutboundConfig.from_env()
         assert cfg.channel_order == ("local-proxy", "self-forward", "direct", "direct-v6")
         assert cfg.fwd_base is None
         assert cfg.v6_enabled is True  # direct-v6 in default order
+        assert cfg.order_for("tavily") == ("local-proxy", "direct", "direct-v6")
+        assert "self-forward" not in cfg.order_for("tavily")
 
     def test_from_env_custom(self, monkeypatch):
         monkeypatch.setenv("OUTBOUND_CHANNELS", "direct,self-forward")
@@ -48,9 +60,67 @@ class TestConfig:
         # community override (endpoint -> proxy -> direct, per user decision)
         assert cfg.order_for("community") == ("self-forward", "local-proxy", "direct")
         assert cfg.order_for("github") == ("direct", "self-forward")
+        assert cfg.order_for("tavily") == ("local-proxy", "direct", "direct-v6")
+
+    def test_tavily_order_rejects_explicit_self_forward(self, monkeypatch):
+        monkeypatch.setenv("OUTBOUND_CHANNELS_TAVILY", "self-forward,direct")
+        cfg = OutboundConfig.from_env()
+        assert cfg.order_for("tavily") == ("direct",)
 
 
 class TestResolver:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "status_code, expected", [(101, False), (204, True), (401, True), (503, False)]
+    )
+    async def test_tavily_probe_is_static_head_without_credentials_or_body(
+        self, monkeypatch, status_code, expected
+    ):
+        monkeypatch.setenv("TAVILY_API_KEY", "tvly-must-not-leak")
+        client = type("ProbeClient", (), {})()
+        client.head = AsyncMock(return_value=httpx.Response(status_code))
+        client.get = AsyncMock(side_effect=AssertionError("GET must not be used"))
+        client.post = AsyncMock(side_effect=AssertionError("POST must not be used"))
+
+        assert await ok_for("tavily", client) is expected
+        client.head.assert_awaited_once_with("https://api.tavily.com/search")
+        client.get.assert_not_awaited()
+        client.post.assert_not_awaited()
+        assert "tvly-must-not-leak" not in repr(client.head.await_args)
+        assert PROBES["tavily"].params is None
+
+    @pytest.mark.asyncio
+    async def test_tavily_probe_network_failure_is_unreachable(self):
+        client = type("ProbeClient", (), {})()
+        client.head = AsyncMock(side_effect=httpx.ConnectError("route unavailable"))
+        assert await ok_for("tavily", client) is False
+
+    @pytest.mark.asyncio
+    async def test_tavily_route_probe_audit_contains_no_api_key(self, monkeypatch):
+        secret = "tvly-must-not-reach-audit"
+        monkeypatch.setenv("TAVILY_API_KEY", secret)
+        calls = []
+
+        class ProbeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def head(self, url, **kwargs):
+                calls.append((url, kwargs))
+                return httpx.Response(401)
+
+        resolver = ChannelResolver(cfg=_cfg(channel_order=("direct",)))
+        resolver._make_client = lambda _channel: ProbeClient()
+
+        channel = await resolver.resolve("tavily")
+
+        assert channel is not None and channel.name == "direct"
+        assert calls == [("https://api.tavily.com/search", {})]
+        assert secret not in repr(resolver.summary())
+
     @pytest.mark.asyncio
     async def test_route_after_probe_and_cached(self):
         probe = _probe_script({("github", "direct"): True})

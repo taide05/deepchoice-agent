@@ -46,7 +46,15 @@ def _patch_outbound(monkeypatch, fail_urls=()):
     async def make_client(source):
         return _FakeClient(fail_urls)
 
+    async def safe_fetch(source, url, **kwargs):
+        if url in fail_urls:
+            return type("R", (), {"status_code": 404, "headers": {}})()
+        return type(
+            "R", (), {"status_code": 200, "headers": {"content-type": "text/html"}}
+        )()
+
     monkeypatch.setattr(official_mod._outbound, "make_client", make_client)
+    monkeypatch.setattr(official_mod._outbound, "safe_fetch", safe_fetch)
 
 
 @pytest.fixture(autouse=True)

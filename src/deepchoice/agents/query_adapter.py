@@ -1,3 +1,4 @@
+from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -35,7 +36,6 @@ class QueryAdapterAgent:
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
         sub_questions = research_state.get("sub_questions", [])
-
         # On retry, knowledge_gaps are the new adaptation targets
         knowledge_gaps = research_state.get("knowledge_gaps", [])
         if knowledge_gaps and research_state.get("retry_count", 0) > 0:
@@ -44,6 +44,13 @@ class QueryAdapterAgent:
                 f"Retry adaptation: targeting {len(knowledge_gaps)} knowledge gaps",
                 agent="QUERY_ADAPTER",
             )
+
+        # A user's explicit answer must survive the retry targeting above.
+        supplemental_input = research_state.get("_supplemental_input")
+        if isinstance(supplemental_input, str) and supplemental_input.strip():
+            supplement = supplemental_input.strip()
+            if supplement not in sub_questions:
+                sub_questions = [*sub_questions, supplement]
 
         if not sub_questions:
             return {
@@ -68,8 +75,12 @@ class QueryAdapterAgent:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_adapter",
                                       usage=local_usage, seed=0)
             adapted_items = result.get("adapted", [])
-        except Exception as e:
-            print_agent_output(f"Query adaptation failed: {e}, using raw sub_questions", agent="QUERY_ADAPTER")
+        except BudgetError:
+            raise
+        except Exception:
+            print_agent_output(
+                "Query adaptation failed; using raw sub_questions", agent="QUERY_ADAPTER"
+            )
             adapted_items = []
 
         # Build adapted_queries dict: {retriever_name: [query_strings]}

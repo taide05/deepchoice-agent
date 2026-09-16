@@ -1,9 +1,9 @@
-# 前端只有 streamlit + httpx，没有 C 扩展需要编译，单阶段足够
-FROM python:3.13-slim
+# 前端只有 streamlit + httpx，使用项目已验证的 Python 版本即可单阶段构建
+FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir "streamlit>=1.38.0,<2" "httpx>=0.27.0,<1"
+RUN pip install --no-cache-dir "streamlit>=1.63.0,<2" "httpx>=0.27.0,<1"
 
 COPY frontend/ /app/
 

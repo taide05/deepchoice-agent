@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import os
 import random
 import time
@@ -9,6 +11,8 @@ from typing import Any
 import json_repair
 from langchain_core.utils.json import parse_json_markdown
 from openai import APIConnectionError, AsyncOpenAI
+
+from deepchoice.security.redaction import redact_text
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -34,6 +38,44 @@ async def _emit_record(entry: dict[str, Any]) -> None:
             await _record_callback(entry)
         except Exception:
             pass  # diagnostics must never break the pipeline
+
+
+def _content_metadata(value: Any, prefix: str) -> dict[str, Any]:
+    """Return reproducible diagnostics without retaining model content."""
+
+    if value is None:
+        return {f"{prefix}_sha256": None, f"{prefix}_chars": 0}
+    if isinstance(value, str):
+        encoded = value
+    else:
+        try:
+            encoded = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+        except (TypeError, ValueError):
+            encoded = str(type(value).__name__)
+    return {
+        f"{prefix}_sha256": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
+        f"{prefix}_chars": len(encoded),
+    }
+
+
+def _safe_error_metadata(exc: Exception) -> dict[str, Any]:
+    status = getattr(exc, "status_code", None)
+    if not isinstance(status, int) or isinstance(status, bool):
+        status = None
+    label = type(exc).__name__
+    if status is not None:
+        label = f"{label}: HTTP {status}"
+    return {
+        "error": label,
+        "error_type": type(exc).__name__,
+        "error_status": status,
+    }
 
 
 def _env(*names: str, default: str = "") -> str:
@@ -65,6 +107,7 @@ TIERS = {
 
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+MAX_OUTPUT_TOKENS = 4096
 
 
 async def _retry_sleep(delay: float) -> None:
@@ -125,13 +168,26 @@ async def call_model(
     extra_body: dict | None = None,
     seed: int | None = None,
 ) -> dict | str:
+    # Lazy to keep the historic agent/manifest import graph acyclic.
+    from deepchoice.observability import (
+        ExternalCallKind,
+        TraceStatus,
+        current_trace_recorder,
+    )
+    from deepchoice.runtime.context import classify_cancelled_trace_status
+
     tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
     model = cfg["model"]
     if isinstance(prompt, list):
         prompt = list(prompt)
     client = _get_client(timeout=timeout, tier=tier, max_retries=0)
-    kwargs = {"model": model, "messages": prompt, "temperature": 0}
+    kwargs = {
+        "model": model,
+        "messages": prompt,
+        "temperature": 0,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+    }
     if seed is not None:
         kwargs["seed"] = seed
     # Per-call extra_body overrides the tier default; otherwise the tier's
@@ -156,29 +212,156 @@ async def call_model(
     response = None
     try:
         for attempt in range(_MAX_RETRIES + 1):
+            from deepchoice.budget import (
+                BudgetAmount,
+                BudgetError,
+                BudgetExceededError,
+                BudgetResource,
+                reserve_call,
+                settle_call,
+                unknown_call,
+            )
+
+            trace, node_attempt_id = current_trace_recorder()
+            trace_call = None
+            if trace is not None:
+                trace_call = await trace.start_external_call(
+                    node_attempt_id=node_attempt_id,
+                    kind=ExternalCallKind.LLM,
+                    provider=tier,
+                    operation="chat.completions.create",
+                    request_summary={
+                        "model": model,
+                        "retry_no": attempt,
+                        "response_format": response_format or "text",
+                    },
+                )
+            sent_messages = kwargs["messages"]
+            message_bytes = len(
+                json.dumps(
+                    sent_messages,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode("utf-8")
+            )
+            reservations = ()
+            try:
+                reservations = await reserve_call(
+                    (
+                        BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=1),
+                        BudgetAmount(
+                            resource=BudgetResource.TOTAL_TOKENS,
+                            amount=message_bytes + MAX_OUTPUT_TOKENS,
+                        ),
+                    ),
+                    call_id=trace_call.call_id if trace_call is not None else None,
+                    summary={"operation": "llm", "retry_no": attempt},
+                )
+            except BudgetError as budget_exc:
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=TraceStatus.FAILED,
+                        result_summary={
+                            "failure_category": (
+                                "budget_exceeded"
+                                if isinstance(budget_exc, BudgetExceededError)
+                                else "budget_gate_failed"
+                            ),
+                            "retry_no": attempt,
+                        },
+                    )
+                raise
+            attempt_started = time.monotonic()
             try:
                 response = await client.chat.completions.create(**kwargs)
-                break
+            except asyncio.CancelledError:
+                await unknown_call(
+                    reservations,
+                    known_actuals={BudgetResource.LLM_CALLS: 1},
+                )
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=classify_cancelled_trace_status(),
+                        result_summary={"retry_no": attempt},
+                    )
+                raise
             except Exception as e:
+                await unknown_call(
+                    reservations,
+                    known_actuals={BudgetResource.LLM_CALLS: 1},
+                )
                 status = getattr(e, "status_code", None)
                 retryable = isinstance(e, APIConnectionError) or status in _RETRYABLE_STATUSES
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=(
+                            TraceStatus.TIMED_OUT
+                            if isinstance(e, TimeoutError)
+                            else TraceStatus.FAILED
+                        ),
+                        result_summary={
+                            "elapsed_ms": round(
+                                (time.monotonic() - attempt_started) * 1000
+                            ),
+                            "error_type": type(e).__name__,
+                            "error_status": status if isinstance(status, int) else None,
+                            "retry_no": attempt,
+                            "retryable": retryable,
+                        },
+                    )
                 if not retryable or attempt >= _MAX_RETRIES:
                     raise
                 delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
                 await _retry_sleep(delay)
+            else:
+                trace_usage = {}
+                if response.usage is not None:
+                    trace_usage = {
+                        "input_tokens": response.usage.prompt_tokens,
+                        "output_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens,
+                    }
+                await settle_call(
+                    reservations,
+                    {
+                        BudgetResource.LLM_CALLS: 1,
+                        BudgetResource.TOTAL_TOKENS: (
+                            response.usage.total_tokens
+                            if response.usage is not None
+                            else None
+                        ),
+                    },
+                )
+                if trace is not None:
+                    await trace.finish_external_call(
+                        trace_call,
+                        status=TraceStatus.SUCCEEDED,
+                        result_summary={
+                            "elapsed_ms": round(
+                                (time.monotonic() - attempt_started) * 1000
+                            ),
+                            "retry_no": attempt,
+                        },
+                        usage_summary=trace_usage,
+                    )
+                break
     except Exception as e:
-        await _emit_record({
+        record = {
             "case_id": _current_case.get(),
             "tag": tag or tier,
             "tier": tier,
             "model": model,
             "elapsed_ms": round((time.monotonic() - t0) * 1000),
-            "error": f"{type(e).__name__}: {str(e)[:300]}",
-            "prompt": prompt,
-            "raw_content": None,
-            "parsed": None,
             "usage": None,
-        })
+            **_safe_error_metadata(e),
+            **_content_metadata(prompt, "prompt"),
+            **_content_metadata(None, "response"),
+        }
+        await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         raise
 
     # Capture token usage before content parsing so calls whose JSON parsing
@@ -205,31 +388,37 @@ async def call_model(
         except Exception:
             parsed = {}
             parse_ok = False
-        await _emit_record({
+        record = {
             "case_id": _current_case.get(),
             "tag": tag or tier,
             "tier": tier,
             "model": model,
             "elapsed_ms": round((time.monotonic() - t0) * 1000),
             "error": None,
+            "error_type": None,
+            "error_status": None,
             "parse_ok": parse_ok,
-            "prompt": prompt,
-            "raw_content": content,
-            "parsed": parsed,
+            "parsed_type": type(parsed).__name__,
             "usage": usage_entry,
-        })
+            **_content_metadata(prompt, "prompt"),
+            **_content_metadata(content, "response"),
+        }
+        await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         return parsed
 
-    await _emit_record({
+    record = {
         "case_id": _current_case.get(),
         "tag": tag or tier,
         "tier": tier,
         "model": model,
         "elapsed_ms": round((time.monotonic() - t0) * 1000),
         "error": None,
-        "prompt": prompt,
-        "raw_content": content,
-        "parsed": None,
+        "error_type": None,
+        "error_status": None,
+        "parsed_type": None,
         "usage": usage_entry,
-    })
+        **_content_metadata(prompt, "prompt"),
+        **_content_metadata(content, "response"),
+    }
+    await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
     return content

@@ -1,0 +1,288 @@
+{
+  "dataset_id": "deepchoice-offline-smoke",
+  "version": "smoke-v1",
+  "freeze_date": "2026-09-15",
+  "description": "Twelve deterministic fixture-replay cases covering four core stages without network, credentials, or LLM judges.",
+  "fixtures": {
+    "standard-report-state": {
+      "task": {
+        "query": "FastAPI vs Flask for a reliable production API",
+        "scene_context": "team"
+      },
+      "evidence_chains": [
+        {
+          "conclusion": "FastAPI API features and typed validation improve developer experience",
+          "evidence_strength": "strong",
+          "disputed": false,
+          "sources": [
+            {
+              "title": "FastAPI Features",
+              "url": "https://example.com/fastapi-features",
+              "score": 92,
+              "snippet": "API feature coverage, documentation, and developer productivity."
+            }
+          ]
+        },
+        {
+          "conclusion": "FastAPI performance provides low latency and high throughput",
+          "evidence_strength": "strong",
+          "disputed": false,
+          "sources": [
+            {
+              "title": "FastAPI Benchmarks",
+              "url": "https://example.com/fastapi-performance",
+              "score": 90,
+              "snippet": "Performance benchmark latency and throughput results."
+            }
+          ]
+        },
+        {
+          "conclusion": "Flask has a mature ecosystem and broad community integration",
+          "evidence_strength": "moderate",
+          "disputed": false,
+          "sources": [
+            {
+              "title": "Flask Ecosystem",
+              "url": "https://example.com/flask-ecosystem",
+              "score": 84,
+              "snippet": "Mature ecosystem, community plugins, and production documentation."
+            }
+          ]
+        },
+        {
+          "conclusion": "Flask is simple to learn but scaling async workloads needs more integration",
+          "evidence_strength": "moderate",
+          "disputed": false,
+          "sources": [
+            {
+              "title": "Flask Deployment Guide",
+              "url": "https://example.com/flask-deployment",
+              "score": 81,
+              "snippet": "Simple learning curve with production scale and reliability trade-offs."
+            }
+          ]
+        }
+      ],
+      "conflicts": [],
+      "knowledge_gaps": [
+        "Team-specific maintenance cost needs a prototype measurement."
+      ],
+      "final_recommendation": {
+        "winner": "FastAPI",
+        "winner_rationale": "FastAPI has stronger typed API and performance evidence.",
+        "recommendation": "Choose FastAPI for this production API; however, Flask remains simpler for teams already invested in its mature ecosystem.",
+        "ranked_options": [
+          {
+            "name": "FastAPI",
+            "rank": 1,
+            "constraint_fit": "high",
+            "rationale": "Strong performance, reliability, documentation, and developer experience fit."
+          },
+          {
+            "name": "Flask",
+            "rank": 2,
+            "constraint_fit": "medium",
+            "rationale": "Mature ecosystem and simple learning curve, with async scalability trade-offs."
+          }
+        ],
+        "trade_offs": [
+          {
+            "dimension": "Performance vs ease of use",
+            "finding": "FastAPI improves latency and throughput, while Flask can be simpler to maintain initially.",
+            "impact": "The team should validate operational cost in a prototype."
+          }
+        ],
+        "confidence": "high",
+        "confidence_rationale": "Multiple independent sources cover API, performance, ecosystem, and production reliability.",
+        "scene_fit_note": "FastAPI fits a team building a scalable production service."
+      },
+      "confidence": "high"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "QA-001",
+      "stage": "query_analysis",
+      "query": "FastAPI vs Flask for my solo side project API",
+      "scene_context": "unspecified",
+      "expected_scene": "solo",
+      "expected_sub_question_count": 5,
+      "fixture_output": {
+        "sub_questions": [
+          "Which FastAPI and Flask API features cover typed request validation?",
+          "How do FastAPI and Flask latency benchmarks compare for small APIs?",
+          "How mature are the FastAPI and Flask plugin ecosystems?",
+          "Which has a shorter debugging and learning curve for one developer?",
+          "Which deployment model fits a solo side project with limited operations time?"
+        ],
+        "constraints": ["single developer", "limited operations time"]
+      }
+    },
+    {
+      "case_id": "QA-002",
+      "stage": "query_analysis",
+      "query": "Kafka vs RabbitMQ for an internal event platform",
+      "scene_context": "enterprise",
+      "expected_scene": "enterprise",
+      "expected_sub_question_count": 5,
+      "fixture_output": {
+        "sub_questions": [
+          "Which Kafka and RabbitMQ messaging capabilities fit replayable event streams?",
+          "How do Kafka and RabbitMQ throughput and tail latency compare?",
+          "How strong are Kafka and RabbitMQ client ecosystems and documentation?",
+          "What operational debugging burden does each broker create for the platform team?",
+          "Which option better fits enterprise compliance and scale constraints?"
+        ],
+        "constraints": ["enterprise compliance", "replayable streams"]
+      }
+    },
+    {
+      "case_id": "QA-003",
+      "stage": "query_analysis",
+      "query": "PostgreSQL vs MySQL for a new service",
+      "scene_context": "unspecified",
+      "expected_scene": "team",
+      "expected_sub_question_count": 5,
+      "fixture_output": {
+        "sub_questions": [
+          "Which PostgreSQL and MySQL features cover the required transaction semantics?",
+          "How do PostgreSQL and MySQL throughput and latency compare for mixed workloads?",
+          "How mature are PostgreSQL and MySQL tooling ecosystems and documentation?",
+          "Which database provides easier local debugging and schema migration workflows?",
+          "Which PostgreSQL or MySQL deployment model best fits a mid-size team?"
+        ],
+        "constraints": ["new service", "team deployment"]
+      }
+    },
+    {
+      "case_id": "CV-001",
+      "stage": "citation_verification",
+      "claim": "FastAPI supports WebSockets.",
+      "fixture_evidence_text": "The FastAPI documentation explains that FastAPI supports WebSockets for bidirectional application communication.",
+      "expected_status": "verified",
+      "expected_reason": "lexical_support"
+    },
+    {
+      "case_id": "CV-002",
+      "stage": "citation_verification",
+      "claim": "Python 3.12 is supported.",
+      "fixture_evidence_text": "This compatibility page states that Python 3.11 is supported in the current release and documents migration details for maintained environments.",
+      "expected_status": "unsupported",
+      "expected_reason": "numeric_mismatch"
+    },
+    {
+      "case_id": "CV-003",
+      "stage": "citation_verification",
+      "claim": "FastAPI 支持异步请求。",
+      "fixture_evidence_text": "FastAPI supports asynchronous requests and high concurrency for Python web applications.",
+      "expected_status": "unknown",
+      "expected_reason": "cross_language"
+    },
+    {
+      "case_id": "CS-001",
+      "stage": "conclusion",
+      "evidence_chains": [
+        {
+          "conclusion": "Alpha best fits the constraint",
+          "evidence_strength": "strong",
+          "sources": [{"title": "Alpha Docs", "url": "https://example.com/alpha", "score": 95}]
+        },
+        {
+          "conclusion": "Beta has broader adoption",
+          "evidence_strength": "moderate",
+          "sources": [{"title": "Beta Docs", "url": "https://example.com/beta", "score": 80}]
+        }
+      ],
+      "fixture_llm_output": {
+        "winner": "Beta",
+        "winner_rationale": "Alpha best fits the hard constraint [[1]]. [Source: Fabricated]",
+        "recommendation": "Adopt Alpha for the required workflow [[1]].",
+        "ranked_options": [
+          {"name": "Alpha", "rank": 1, "constraint_fit": "high", "rationale": "Best fit [[1]]."},
+          {"name": "Beta", "rank": 2, "constraint_fit": "medium", "rationale": "Broader adoption [[2]]."}
+        ],
+        "trade_offs": [],
+        "confidence": "high"
+      },
+      "expected_winner": "Alpha",
+      "required_markers": ["[Source: Alpha Docs]"],
+      "forbidden_markers": ["Fabricated", "[[1]]"]
+    },
+    {
+      "case_id": "CS-002",
+      "stage": "conclusion",
+      "evidence_chains": [
+        {
+          "conclusion": "Gamma is adoptable",
+          "evidence_strength": "strong",
+          "sources": [{"title": "Gamma Guide", "url": "https://example.com/gamma", "score": 90}]
+        }
+      ],
+      "fixture_llm_output": {
+        "winner": "tool",
+        "winner_rationale": "Gamma is an adoptable option [[1]].",
+        "recommendation": "Choose Gamma [[1]].",
+        "ranked_options": [
+          {"name": "Gamma", "rank": 1, "constraint_fit": "high", "rationale": "Matches the use case [[1]]."}
+        ],
+        "trade_offs": [],
+        "confidence": "medium"
+      },
+      "expected_winner": "Gamma",
+      "required_markers": ["[Source: Gamma Guide]"],
+      "forbidden_markers": ["[[1]]"]
+    },
+    {
+      "case_id": "CS-003",
+      "stage": "conclusion",
+      "evidence_chains": [
+        {
+          "conclusion": "Neither option fits",
+          "evidence_strength": "weak",
+          "sources": [{"title": "Constraint Study", "url": "https://example.com/study", "score": 60}]
+        }
+      ],
+      "fixture_llm_output": {
+        "winner": "context_dependent",
+        "winner_rationale": "Neither candidate meets the hard constraint [[1]].",
+        "recommendation": "Run a prototype before choosing [[1]].",
+        "ranked_options": [
+          {"name": "Delta", "rank": 1, "constraint_fit": "low", "rationale": "Fails one requirement [[1]]."},
+          {"name": "Epsilon", "rank": 2, "constraint_fit": "low", "rationale": "Fails another requirement [[1]]."}
+        ],
+        "trade_offs": [],
+        "confidence": "low"
+      },
+      "expected_winner": "context_dependent",
+      "required_markers": ["[Source: Constraint Study]"],
+      "forbidden_markers": ["[[1]]"]
+    },
+    {
+      "case_id": "RP-001",
+      "stage": "report",
+      "template": "what_why_how",
+      "fixture_ref": "standard-report-state",
+      "tech_a": "FastAPI",
+      "tech_b": "Flask",
+      "required_markers": ["## What:", "## Why:", "## How:", "### References"]
+    },
+    {
+      "case_id": "RP-002",
+      "stage": "report",
+      "template": "evidence_first",
+      "fixture_ref": "standard-report-state",
+      "tech_a": "FastAPI",
+      "tech_b": "Flask",
+      "required_markers": ["## Conclusion", "## Why Trust This Conclusion", "## Counter-Evidence", "## If You're Making a Decision"]
+    },
+    {
+      "case_id": "RP-003",
+      "stage": "report",
+      "template": "comparison_matrix",
+      "fixture_ref": "standard-report-state",
+      "tech_a": "FastAPI",
+      "tech_b": "Flask",
+      "required_markers": ["5-Dimension Comparison Matrix", "| Dimension | Criterion | Evidence Strength |", "## Recommendation", "### Next Steps"]
+    }
+  ]
+}

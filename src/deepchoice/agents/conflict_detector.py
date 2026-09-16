@@ -2,13 +2,13 @@ import asyncio
 import json
 import os
 
-import httpx
 import numpy as np
 
 from .. import outbound as _outbound
+from ..budget_errors import BudgetError
 from ..retrievers.tavily_keypool import post_with_failover
 from ..utils.embedding import get_embedding_model
-from ..utils.llm import call_model, summarize_usage
+from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 # ---------------------------------------------------------------------------
@@ -125,6 +125,21 @@ SEARCH_TOOLS = [
         },
     },
 ]
+EVIDENCE_GATHER_SYSTEM = (
+    "You gather evidence to resolve technical disagreements. "
+    "Search broadly across sources, then summarize the key finding "
+    "in 2-3 sentences that would help an arbitrator decide which claim is more credible."
+)
+EVIDENCE_GATHER_USER_TEMPLATE = (
+    "Topic: {topic}\n"
+    "Claim A: {claim_a}\n"
+    "Claim B: {claim_b}\n\n"
+    "Search for evidence using at least 1 different tool."
+)
+EVIDENCE_GATHER_MAX_ITERATIONS = 2
+EVIDENCE_GATHER_CLIENT_TIMEOUT_S = 60.0
+EVIDENCE_GATHER_CALL_TIMEOUT_S = 30.0
+EVIDENCE_GATHER_TOOL_TIMEOUT_S = 20.0
 
 
 async def _execute_search(tool_name: str, arguments: dict) -> str:
@@ -133,12 +148,12 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
     max_results = min(arguments.get("max_results", 3), 5)
 
     if tool_name == "search_web":
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            async with await _outbound.make_client("tavily") as client:
 
-            async def post(url, json=None, **kw):
-                return await client.post(url, json=json, **kw)
+                async def post(url, json=None, **kw):
+                    return await client.post(url, json=json, **kw)
 
-            try:
                 resp, _ = await post_with_failover(post, {
                     "query": query,
                     "search_depth": "basic",
@@ -153,8 +168,10 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                                     "content": r.get("content", "")[:300],
                                     "url": r.get("url", "")} for r in results],
                                   ensure_ascii=False)
-            except Exception as e:
-                return json.dumps({"error": str(e)})
+        except BudgetError:
+            raise
+        except Exception as exc:
+            return json.dumps({"error": type(exc).__name__})
 
     elif tool_name == "search_scholarly":
         import urllib.parse
@@ -178,8 +195,10 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                         "url": link.text.strip() if link is not None else "",
                     })
                 return json.dumps(results[:max_results], ensure_ascii=False)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
+        except BudgetError:
+            raise
+        except Exception as exc:
+            return json.dumps({"error": type(exc).__name__})
 
     elif tool_name == "search_kb":
         chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
@@ -202,15 +221,36 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
             return json.dumps(docs, ensure_ascii=False)
         except ImportError:
             return json.dumps({"error": "chromadb not installed in this process"})
-        except Exception as e:
-            return json.dumps({"error": str(e)})
+        except BudgetError:
+            raise
+        except Exception as exc:
+            return json.dumps({"error": type(exc).__name__})
 
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
 
+def _tool_failure_category(result: str) -> str | None:
+    """Map a structured tool error to a public-safe trace category."""
+
+    try:
+        payload = json.loads(result)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or "error" not in payload:
+        return None
+    error = str(payload.get("error", "")).lower()
+    if "unknown tool" in error:
+        return "unsupported_tool"
+    if "kb collection" in error:
+        return "knowledge_base_unavailable"
+    if "api key" in error or "provider" in error or "available" in error:
+        return "provider_unavailable"
+    return "provider_error"
+
+
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
-                           max_iterations: int = 2,
-                           per_call_timeout: float = 30.0,
+                           max_iterations: int = EVIDENCE_GATHER_MAX_ITERATIONS,
+                           per_call_timeout: float = EVIDENCE_GATHER_CALL_TIMEOUT_S,
                            usage: list | None = None) -> str:
     """Inline multi-turn evidence gathering via OpenAI-compatible tool calling.
 
@@ -218,26 +258,80 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     enriching claim descriptions in the arbitration prompt.
     """
     from ..utils.llm import TIERS, _get_client
+    from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
+    from ..runtime.context import classify_cancelled_trace_status
+    from ..budget import (
+        BudgetAmount,
+        BudgetError,
+        BudgetExceededError,
+        BudgetResource,
+        reserve_call,
+        settle_call,
+        unknown_call,
+    )
 
-    client = _get_client(timeout=60.0, tier="deepseek-flash")
+    client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash")
 
     messages = [
-        {"role": "system", "content": (
-            "You gather evidence to resolve technical disagreements. "
-            "Search broadly across sources, then summarize the key finding "
-            "in 2-3 sentences that would help an arbitrator decide which claim is more credible."
-        )},
-        {"role": "user", "content": (
-            f"Topic: {topic}\n"
-            f"Claim A: {claim_a}\n"
-            f"Claim B: {claim_b}\n\n"
-            f"Search for evidence using at least 1 different tool."
-        )},
+        {"role": "system", "content": EVIDENCE_GATHER_SYSTEM},
+        {
+            "role": "user",
+            "content": EVIDENCE_GATHER_USER_TEMPLATE.format(
+                topic=topic,
+                claim_a=claim_a,
+                claim_b=claim_b,
+            ),
+        },
     ]
 
     summaries = []
 
-    for _ in range(max_iterations):
+    for iteration in range(max_iterations):
+        trace, node_attempt_id = current_trace_recorder()
+        trace_call = None
+        if trace is not None:
+            trace_call = await trace.start_external_call(
+                node_attempt_id=node_attempt_id,
+                kind=ExternalCallKind.LLM,
+                provider="deepseek-flash",
+                operation="evidence_gather.chat",
+                request_summary={"iteration_no": iteration + 1},
+            )
+        llm_reservations = ()
+        try:
+            message_bytes = len(
+                json.dumps(
+                    messages,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode("utf-8")
+            )
+            llm_reservations = await reserve_call(
+                (
+                    BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=1),
+                    BudgetAmount(
+                        resource=BudgetResource.TOTAL_TOKENS,
+                        amount=message_bytes + MAX_OUTPUT_TOKENS,
+                    ),
+                ),
+                call_id=trace_call.call_id if trace_call is not None else None,
+                summary={"operation": "evidence_gather_llm", "iteration_no": iteration + 1},
+            )
+        except BudgetError as budget_exc:
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call,
+                    status=TraceStatus.FAILED,
+                    result_summary={
+                        "failure_category": (
+                            "budget_exceeded"
+                            if isinstance(budget_exc, BudgetExceededError)
+                            else "budget_gate_failed"
+                        )
+                    },
+                )
+            raise
         try:
             response = await asyncio.wait_for(
                 client.chat.completions.create(
@@ -245,15 +339,75 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     messages=messages,
                     tools=SEARCH_TOOLS,
                     temperature=0,
+                    max_tokens=MAX_OUTPUT_TOKENS,
                 ),
                 timeout=per_call_timeout,
             )
+        except asyncio.CancelledError:
+            await unknown_call(
+                llm_reservations,
+                known_actuals={BudgetResource.LLM_CALLS: 1},
+            )
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call, status=classify_cancelled_trace_status()
+                )
+            raise
         except TimeoutError:
+            await unknown_call(
+                llm_reservations,
+                known_actuals={BudgetResource.LLM_CALLS: 1},
+            )
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call, status=TraceStatus.TIMED_OUT
+                )
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
-        except Exception as e:
-            print_agent_output(f"Evidence gathering LLM error: {e}", agent="CONFLICT_DETECTOR")
+        except BudgetError:
+            await unknown_call(
+                llm_reservations,
+                known_actuals={BudgetResource.LLM_CALLS: 1},
+            )
+            raise
+        except Exception as exc:
+            await unknown_call(
+                llm_reservations,
+                known_actuals={BudgetResource.LLM_CALLS: 1},
+            )
+            if trace is not None:
+                await trace.finish_external_call(
+                    trace_call,
+                    status=TraceStatus.FAILED,
+                    result_summary={"error_type": type(exc).__name__},
+                )
+            print_agent_output("Evidence gathering LLM error", agent="CONFLICT_DETECTOR")
             break
+
+        trace_usage = {}
+        if getattr(response, "usage", None) is not None:
+            trace_usage = {
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            }
+        await settle_call(
+            llm_reservations,
+            {
+                BudgetResource.LLM_CALLS: 1,
+                BudgetResource.TOTAL_TOKENS: (
+                    response.usage.total_tokens
+                    if getattr(response, "usage", None) is not None
+                    else None
+                ),
+            },
+        )
+        if trace is not None:
+            await trace.finish_external_call(
+                trace_call,
+                status=TraceStatus.SUCCEEDED,
+                usage_summary=trace_usage,
+            )
 
         # Capture token usage (same 4-field shape as call_model) so the
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
@@ -276,6 +430,40 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         tool_calls = [tc for tc in msg.tool_calls if tc.type == "function"]
 
         async def _run_tool(tc):
+            tool_trace = None
+            if trace is not None:
+                tool_trace = await trace.start_external_call(
+                    node_attempt_id=node_attempt_id,
+                    kind=ExternalCallKind.RETRIEVAL,
+                    provider=tc.function.name,
+                    operation="evidence_gather.tool",
+                    request_summary={"iteration_no": iteration + 1},
+                )
+            try:
+                tool_reservations = await reserve_call(
+                    (
+                        BudgetAmount(
+                            resource=BudgetResource.RETRIEVAL_CALLS,
+                            amount=1,
+                        ),
+                    ),
+                    call_id=tool_trace.call_id if tool_trace is not None else None,
+                    summary={"operation": "evidence_gather_tool"},
+                )
+            except BudgetError as budget_exc:
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace,
+                        status=TraceStatus.FAILED,
+                        result_summary={
+                            "failure_category": (
+                                "budget_exceeded"
+                                if isinstance(budget_exc, BudgetExceededError)
+                                else "budget_gate_failed"
+                            )
+                        },
+                    )
+                raise
             try:
                 arguments = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
@@ -283,12 +471,66 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             try:
                 result = await asyncio.wait_for(
                     _execute_search(tc.function.name, arguments),
-                    timeout=20.0,
+                    timeout=EVIDENCE_GATHER_TOOL_TIMEOUT_S,
                 )
+            except asyncio.CancelledError:
+                await settle_call(
+                    tool_reservations,
+                    {BudgetResource.RETRIEVAL_CALLS: 1},
+                )
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace, status=classify_cancelled_trace_status()
+                    )
+                raise
             except TimeoutError:
+                await settle_call(
+                    tool_reservations,
+                    {BudgetResource.RETRIEVAL_CALLS: 1},
+                )
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
-            except Exception as e:
-                result = json.dumps({"error": str(e)})
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace, status=TraceStatus.TIMED_OUT
+                    )
+            except BudgetError:
+                await settle_call(
+                    tool_reservations,
+                    {BudgetResource.RETRIEVAL_CALLS: 1},
+                )
+                raise
+            except Exception as exc:
+                await settle_call(
+                    tool_reservations,
+                    {BudgetResource.RETRIEVAL_CALLS: 1},
+                )
+                result = json.dumps({"error": type(exc).__name__})
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace,
+                        status=TraceStatus.FAILED,
+                        result_summary={"error_type": type(exc).__name__},
+                    )
+            else:
+                await settle_call(
+                    tool_reservations,
+                    {BudgetResource.RETRIEVAL_CALLS: 1},
+                )
+                failure_category = _tool_failure_category(result)
+                if trace is not None:
+                    await trace.finish_external_call(
+                        tool_trace,
+                        status=(
+                            TraceStatus.FAILED
+                            if failure_category is not None
+                            else TraceStatus.SUCCEEDED
+                        ),
+                        result_summary=(
+                            {"failure_category": failure_category}
+                            if failure_category is not None
+                            else {"result_chars": len(result)}
+                        ),
+                    )
             return tc.id, result
 
         tool_results = await asyncio.gather(*[_run_tool(tc) for tc in tool_calls])
@@ -343,8 +585,10 @@ Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; 
         if isinstance(result, dict) and result.get("has_difference"):
             return result
         return None
-    except Exception as e:
-        print_agent_output(f"Conflict scan failed: {e}", agent="CONFLICT_DETECTOR")
+    except BudgetError:
+        raise
+    except Exception:
+        print_agent_output("Conflict scan failed", agent="CONFLICT_DETECTOR")
         return None
 
 
@@ -498,8 +742,10 @@ class ConflictDetectorAgent:
         conflicts = []
         low_confidence_pairs = []
         for pair, result in zip(pairs, raw_conflicts):
+            if isinstance(result, BudgetError):
+                raise result
             if isinstance(result, Exception):
-                print_agent_output(f"Flash arbitration failed: {result}", agent="CONFLICT_DETECTOR")
+                print_agent_output("Flash arbitration failed", agent="CONFLICT_DETECTOR")
                 continue
             conflicts.append(result)
             if result["confidence"] == "low":
@@ -528,8 +774,10 @@ class ConflictDetectorAgent:
                             claim_b=b.get("title", ""),
                             usage=local_usage,
                         )
-                    except Exception as e:
-                        print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+                    except BudgetError:
+                        raise
+                    except Exception:
+                        print_agent_output("Evidence gathering failed", agent="CONFLICT_DETECTOR")
 
                     enriched_claim_a = a.get("title", "")
                     enriched_claim_b = b.get("title", "")
@@ -555,8 +803,10 @@ class ConflictDetectorAgent:
                                 timeout=300.0,
                                 usage=local_usage,
                             )
-                    except Exception as e:
-                        print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                    except BudgetError:
+                        raise
+                    except Exception:
+                        print_agent_output("Pro re-arbitration failed", agent="CONFLICT_DETECTOR")
                         return None
 
                     qw_conflict = _build_conflict(pair, qw_result, model="qwen-flash+evidence")
@@ -568,6 +818,8 @@ class ConflictDetectorAgent:
                 return_exceptions=True,
             )
             for r in re_results:
+                if isinstance(r, BudgetError):
+                    raise r
                 if isinstance(r, Exception):
                     continue
                 if r is not None:

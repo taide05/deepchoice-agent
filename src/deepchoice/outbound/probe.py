@@ -24,6 +24,10 @@ class ProbeSpec:
 
 
 PROBES: dict[str, ProbeSpec] = {
+    "tavily": ProbeSpec(
+        source="tavily", method="HEAD",
+        url="https://api.tavily.com/search", ok_codes=(),
+    ),
     "github": ProbeSpec(
         source="github", method="GET",
         url="https://api.github.com/search/repositories",
@@ -60,11 +64,24 @@ async def ok_for(source: str, client: httpx.AsyncClient) -> bool:
         return False
     try:
         headers = _auth_headers() if source == "github" else {}
-        if spec.method == "POST":
-            resp = await client.post(spec.url, json={"query": "langgraph", "max_results": 1},
-                                     headers=headers)
+        if spec.method == "HEAD":
+            # Static route reachability only. In particular, Tavily probing
+            # must not carry an API key, query, or request body (and therefore
+            # cannot consume a search request).
+            resp = await client.head(spec.url)
+        elif spec.method == "POST":
+            resp = await client.post(
+                spec.url,
+                json={"query": "langgraph", "max_results": 1},
+                headers=headers,
+            )
         else:
             resp = await client.get(spec.url, params=spec.params, headers=headers)
+        if source == "tavily":
+            # Any completed 2xx-4xx HTTP response proves the route reached
+            # Tavily. Authentication/method 4xx responses are intentionally
+            # accepted; 1xx, network errors, and 5xx responses are not.
+            return 200 <= resp.status_code < 500
         if resp.status_code in spec.ok_codes:
             return True
         # Stack Exchange throttle (error_id 502) means the channel and auth are

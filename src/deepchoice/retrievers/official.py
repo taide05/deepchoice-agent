@@ -182,9 +182,14 @@ class OfficialSearch(BaseRetriever):
 
     async def _verify_reachable(self, url: str) -> bool:
         try:
-            async with await _outbound.make_client("official") as client:
-                resp = await client.get(url)
-            return resp.status_code == 200 and "text/html" in resp.headers.get("content-type", "")
+            resp = await _outbound.safe_fetch(
+                "official",
+                url,
+                method="HEAD",
+                allowed_content_types=("text/html", "application/xhtml+xml"),
+                head_fallback_to_range_get=True,
+            )
+            return resp.status_code == 200
         except Exception:
             return False
 

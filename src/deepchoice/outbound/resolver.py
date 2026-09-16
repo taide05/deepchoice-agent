@@ -9,12 +9,17 @@ Design points (2026-08-31 spec):
 from __future__ import annotations
 
 import asyncio
+import ssl
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urljoin
 
+import httpcore
 import httpx
+
+from ..security.urls import ResolvedUrl, SafeUrlPolicy, UnsafeUrlError
 
 from .channels import (
     BaseChannel,
@@ -22,6 +27,8 @@ from .channels import (
     build_channels,
 )
 from .probe import PROBES, probe_source
+
+SAFE_DEFAULT_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 
 BACKOFF_S = (30.0, 120.0, 300.0)
 
@@ -40,11 +47,15 @@ class ChannelResolver:
     def __init__(self, cfg: OutboundConfig | None = None,
                  channels: list[BaseChannel] | None = None,
                  probe_fn: Callable | None = None,
-                 now_fn: Callable[[], float] = time.monotonic):
+                 now_fn: Callable[[], float] = time.monotonic,
+                 safe_url_policy: SafeUrlPolicy | None = None,
+                 safe_transport_factory: Callable[[ResolvedUrl, str], httpx.AsyncBaseTransport] | None = None):
         self.cfg = cfg or OutboundConfig.from_env()
         self.channels = channels or build_channels(self.cfg)
         self._probe_fn = probe_fn or self._default_probe
         self._now = now_fn
+        self._safe_url_policy = safe_url_policy or SafeUrlPolicy()
+        self._safe_transport_factory = safe_transport_factory or _pinned_transport
         self._lock = asyncio.Lock()
         self._probe_locks: dict[str, asyncio.Lock] = {}
         # source -> {"channel": channel|None, "next_probe": float, "attempts": int}
@@ -145,6 +156,123 @@ class ChannelResolver:
             raise RuntimeError(f"no outbound channel available for source: {source}")
         return self._make_client(channel)
 
+    async def safe_fetch(
+        self,
+        source: str,
+        url: str,
+        *,
+        method: str = "GET",
+        allowed_content_types: tuple[str, ...] = SAFE_DEFAULT_CONTENT_TYPES,
+        max_response_bytes: int = 64 * 1024,
+        max_redirects: int = 3,
+        timeout_s: float = 15.0,
+        head_fallback_to_range_get: bool = False,
+    ) -> httpx.Response:
+        """Fetch a dynamic URL after DNS validation and connection pinning.
+
+        Proxy and forwarding channels cannot prove that their remote hop used
+        the locally validated address, so this operation intentionally fails
+        closed when either has been selected.
+        """
+        if method.upper() not in {"GET", "HEAD"}:
+            raise ValueError("safe_fetch only supports GET and HEAD")
+        if (
+            max_response_bytes <= 0
+            or max_redirects < 0
+            or timeout_s <= 0
+            or not allowed_content_types
+        ):
+            raise ValueError("safe_fetch limits are invalid")
+        channel = await self.resolve(source)
+        if channel is None:
+            raise UnsafeUrlError("No outbound channel is available")
+        if channel.kind != "direct":
+            raise UnsafeUrlError("Selected outbound channel cannot bind the validated target")
+
+        try:
+            return await asyncio.wait_for(
+                self._safe_fetch_direct(
+                    url,
+                    method=method.upper(),
+                    allowed_content_types=allowed_content_types,
+                    max_response_bytes=max_response_bytes,
+                    max_redirects=max_redirects,
+                    timeout_s=timeout_s,
+                    head_fallback_to_range_get=head_fallback_to_range_get,
+                ),
+                timeout=timeout_s,
+            )
+        except TimeoutError as exc:
+            raise UnsafeUrlError("Safe URL fetch exceeded the total timeout") from exc
+
+    async def _safe_fetch_direct(
+        self,
+        url: str,
+        *,
+        method: str,
+        allowed_content_types: tuple[str, ...],
+        max_response_bytes: int,
+        max_redirects: int,
+        timeout_s: float,
+        head_fallback_to_range_get: bool,
+    ) -> httpx.Response:
+        current_url = url
+        current_method = method
+        headers: dict[str, str] = {}
+        redirects = 0
+        while True:
+            resolved = await self._safe_url_policy.resolve(current_url)
+            # Pick only from the validated set. A fresh transport per hop keeps
+            # pool reuse from crossing hostname/address validation boundaries.
+            pinned_ip = resolved.addresses[0]
+            transport = self._safe_transport_factory(resolved, pinned_ip)
+            async with httpx.AsyncClient(
+                transport=transport,
+                timeout=timeout_s,
+                follow_redirects=False,
+                trust_env=False,
+            ) as client:
+                async with client.stream(current_method, resolved.url, headers=headers) as streamed:
+                    status = streamed.status_code
+                    response_headers = streamed.headers
+                    if status in {301, 302, 303, 307, 308}:
+                        location = streamed.headers.get("location")
+                        if not location:
+                            raise UnsafeUrlError("Redirect response has no location")
+                        if redirects >= max_redirects:
+                            raise UnsafeUrlError("Too many redirects")
+                        current_url = urljoin(resolved.url, location)
+                        redirects += 1
+                        if status == 303 and current_method != "HEAD":
+                            current_method = "GET"
+                        continue
+                    if (
+                        current_method == "HEAD"
+                        and head_fallback_to_range_get
+                        and status in {405, 501}
+                    ):
+                        current_method = "GET"
+                        headers = {"Range": f"bytes=0-{max_response_bytes - 1}"}
+                        # Re-resolve and repin even for the same logical URL.
+                        continue
+
+                    media_type = response_headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                    if not any(
+                        media_type == allowed.lower() for allowed in allowed_content_types
+                    ):
+                        raise UnsafeUrlError("Response content type is not allowed")
+                    body = bytearray()
+                    async for chunk in streamed.aiter_bytes():
+                        body.extend(chunk)
+                        if len(body) > max_response_bytes:
+                            raise UnsafeUrlError("Response body exceeds the allowed size")
+                    return httpx.Response(
+                        status_code=status,
+                        headers=response_headers,
+                        content=bytes(body),
+                        request=streamed.request,
+                    )
+
     async def invalidate(self, source: str) -> None:
         """Drop the current route for `source` (call after a channel failure).
 
@@ -187,3 +315,42 @@ class ChannelResolver:
             }
         degraded = [s for s, v in results.items() if not v["ok"]]
         return {"ok": not degraded, "degraded_sources": degraded, "sources": results}
+
+
+class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
+    """Connect TCP to one validated address while httpcore retains Host/SNI."""
+
+    def __init__(self, pinned_ip: str) -> None:
+        self.pinned_ip = pinned_ip
+        self._backend = httpcore.AnyIOBackend()
+
+    async def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+        return await self._backend.connect_tcp(
+            self.pinned_ip,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    async def connect_unix_socket(self, path, timeout=None, socket_options=None):
+        return await self._backend.connect_unix_socket(
+            path, timeout=timeout, socket_options=socket_options
+        )
+
+    async def sleep(self, seconds: float) -> None:
+        await self._backend.sleep(seconds)
+
+
+class _PinnedAsyncHTTPTransport(httpx.AsyncHTTPTransport):
+    def __init__(self, pinned_ip: str) -> None:
+        super().__init__(verify=True, trust_env=False, retries=0)
+        self._pool = httpcore.AsyncConnectionPool(
+            ssl_context=ssl.create_default_context(),
+            retries=0,
+            network_backend=_PinnedNetworkBackend(pinned_ip),
+        )
+
+
+def _pinned_transport(_resolved: ResolvedUrl, pinned_ip: str) -> httpx.AsyncBaseTransport:
+    return _PinnedAsyncHTTPTransport(pinned_ip)

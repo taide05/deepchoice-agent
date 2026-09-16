@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -55,9 +56,15 @@ class TestTavilySearch:
             }]
         }
         retriever = TavilySearch()
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_resp
+        client = _FakeClient(post_return=mock_resp)
+        with _patch_outbound(client) as make_client:
             result = await retriever.search("test query", [])
+        make_client.assert_awaited_once_with("tavily")
+        assert client.post.await_count == 2  # key probe + actual search
+        assert all(
+            call.args[0] == "https://api.tavily.com/search"
+            for call in client.post.await_args_list
+        )
         assert result["source"] == "tavily"
         assert result["status"] == "success"
         assert result["error"] is None
@@ -68,9 +75,10 @@ class TestTavilySearch:
     @pytest.mark.asyncio
     async def test_handles_api_error(self):
         retriever = TavilySearch()
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = Exception("API timeout")
+        client = _FakeClient(post_side=Exception("API timeout"))
+        with _patch_outbound(client) as make_client:
             result = await retriever.search("test query", [])
+        make_client.assert_awaited_once_with("tavily")
         assert result["status"] == "failed"
         assert result["error"] is not None
         assert result["results"] == []
@@ -82,10 +90,52 @@ class TestTavilySearch:
         mock_resp.json.return_value = {"results": []}
 
         retriever = TavilySearch()
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_resp
+        client = _FakeClient(post_return=mock_resp)
+        with _patch_outbound(client):
             await retriever.search("main query", ["sq1", "sq2", "sq3"])
-        assert mock_post.call_count >= 2  # main + at least 1 sub-question
+        assert client.post.await_count >= 3  # probe + main + sub-questions
+
+    @pytest.mark.asyncio
+    async def test_conflict_search_web_uses_tavily_outbound_client(self):
+        from deepchoice.agents.conflict_detector import _execute_search
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "results": [{
+                "url": "https://example.com/evidence",
+                "title": "Evidence",
+                "content": "bounded evidence content",
+            }]
+        }
+        client = _FakeClient(post_return=mock_resp)
+        with _patch_outbound(client) as make_client:
+            output = await _execute_search(
+                "search_web", {"query": "claim", "max_results": 2}
+            )
+
+        make_client.assert_awaited_once_with("tavily")
+        assert client.post.await_count == 2  # key probe + actual search
+        assert json.loads(output) == [{
+            "title": "Evidence",
+            "content": "bounded evidence content",
+            "url": "https://example.com/evidence",
+        }]
+
+    @pytest.mark.asyncio
+    async def test_conflict_search_web_route_unavailable_is_safe_error(self):
+        from deepchoice.agents.conflict_detector import _execute_search
+
+        with patch(
+            "deepchoice.outbound.make_client",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("private route detail"),
+        ) as make_client:
+            output = await _execute_search("search_web", {"query": "claim"})
+
+        make_client.assert_awaited_once_with("tavily")
+        assert json.loads(output) == {"error": "RuntimeError"}
+        assert "private route detail" not in output
 
 
 class TestGitHubSearch:
@@ -140,7 +190,7 @@ class TestGitHubSearch:
             result = await retriever.search("test framework", [])
         assert result["status"] == "failed"
         assert result["results"] == []
-        assert "ConnectError" in result["error"]
+        assert result["error"] == "RuntimeError"
 
     @pytest.mark.asyncio
     async def test_all_non_200_raises(self):
@@ -340,7 +390,7 @@ class TestErrorReporting:
     async def test_message_exception_keeps_type_prefix(self):
         retriever = self._RaisingRetriever(Exception("API timeout"))
         result = await retriever.search("test", [])
-        assert result["error"] == "Exception: API timeout"
+        assert result["error"] == "Exception"
 
     @pytest.mark.asyncio
     async def test_multi_retriever_gather_error_not_empty(self):

@@ -29,6 +29,7 @@ EXPECTED_EVENTS = [
     ("conflict_detector", "conflict_detection"),
     ("evidence_chain", "evidence_chain"),
     ("conclusion_synthesizer", "evidence_chain"),
+    ("citation_validator", "report_generation"),
     ("report_generator", "report_generation"),
     ("self_reviewer", "self_review"),
 ]
@@ -41,6 +42,7 @@ NODE_EVENTS = [
     {"conflict_detector": {"conflicts": []}},
     {"evidence_chain": {"evidence_chains": []}},
     {"conclusion_synthesizer": {"final_recommendation": {}}},
+    {"citation_validator": {"citation_verification": {}}},
     {"report_generator": {"report": "# R"}},
     {"self_reviewer": {"confidence": "high"}},
 ]
@@ -108,6 +110,53 @@ class TestStreamEventFormat:
 
         assert events[-1] == {"node": "__done__", "update": {}}
 
+    def test_legacy_stream_and_status_include_deprecation_headers(self):
+        _register(FakeOrchestrator(), status="complete", events=NODE_EVENTS)
+
+        stream_response = client.get(f"/research/{TASK_ID}/stream")
+        status_response = client.get(f"/research/{TASK_ID}/status")
+
+        for response in (stream_response, status_response):
+            assert response.headers["Deprecation"] == "true"
+            assert response.headers["Warning"].startswith("299 DeepChoice")
+            assert response.headers["Link"] == '</api/v1/tasks>; rel="successor-version"'
+
+    def test_legacy_post_research_includes_deprecation_headers(self, monkeypatch):
+        class FakeStartedOrchestrator:
+            task_id = "legacy_header_test"
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+        async def fake_research(*args, **kwargs):
+            return None
+
+        async def fake_checkpointer():
+            return object()
+
+        monkeypatch.setattr(app_module, "_get_sqlite_saver", fake_checkpointer)
+        monkeypatch.setattr(app_module, "ChiefEditorAgent", FakeStartedOrchestrator)
+        monkeypatch.setattr(app_module, "_run_research", fake_research)
+
+        response = client.post("/research", json={"query": "legacy endpoint"})
+
+        assert response.status_code == 200
+        assert response.headers["Deprecation"] == "true"
+        assert response.headers["Warning"].startswith("299 DeepChoice")
+        assert response.headers["Link"] == '</api/v1/tasks>; rel="successor-version"'
+        app_module._active_tasks.pop("legacy_header_test", None)
+
+    def test_legacy_history_includes_deprecation_headers(self, monkeypatch):
+        monkeypatch.setattr(app_module, "list_history", lambda: [])
+
+        response = client.get("/history")
+
+        assert response.status_code == 200
+        assert response.json() == {"tasks": []}
+        assert response.headers["Deprecation"] == "true"
+        assert response.headers["Warning"].startswith("299 DeepChoice")
+        assert response.headers["Link"] == '</api/v1/tasks>; rel="successor-version"'
+
     def test_stream_error_event_and_no_done_after_error(self):
         _register(FakeOrchestrator(), status="failed",
                   events=[{"__error__": {"detail": "boom"}}])
@@ -118,7 +167,8 @@ class TestStreamEventFormat:
 
         assert len(events) == 1
         assert events[0]["node"] == "__error__"
-        assert "boom" in events[0]["detail"]
+        assert events[0]["detail"] == "Research failed"
+        assert "boom" not in json.dumps(events[0])
         assert all(e["node"] != "__done__" for e in events)
 
     def test_stream_replays_only_events_never_executes(self):
@@ -166,11 +216,11 @@ class TestBackgroundRun:
 
         entry = app_module._active_tasks[TASK_ID]
         assert entry["status"] == "failed"
-        assert entry["error"] == "boom"
-        assert entry["events"][-1] == {"__error__": {"detail": "boom"}}
+        assert entry["error"] == "Research failed"
+        assert entry["events"][-1]["__error__"]["detail"] == "Research failed"
         partial_state, error = saved["partial"]
         assert partial_state["task"] == {"query": "x"}
-        assert error == "boom"
+        assert error == "Research failed"
 
     def test_run_closes_checkpointer_connection(self, monkeypatch):
         closed = []
