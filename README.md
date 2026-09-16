@@ -309,6 +309,8 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 已创建 36/48 个 run；串行第 1 组报告 1/12，并发第 1 组 0/12，第 2 并发组实例租约丢失作废。唯一完整成功 P04 为 14,778 token，非平均成本；详见[部分实测/运行修复卡](docs/o1-live-baseline.md)及[执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
 无 LLM/检索调用，不套用历史 Top-1 阈值。
 
+用户最新约束：单 case 稳定成功前，停止真实 12-case 并发和整组串行；先离线复现/最小修复，再逐次单 case 验证，不自动排队。恢复批次须重新确认，不能凭剩余额度自动启动。
+
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
 超时口径；冲突检测率为 28.8%，解释受当时 known_contradictions 标注覆盖影响。这些数据不代表
 统一 Flash 后的耗时或冲突质量；当前 active-time 预算见运行契约。Tavily 配额仍是外部运行条件。
