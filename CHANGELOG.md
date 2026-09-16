@@ -3,6 +3,7 @@
 ## [Unreleased] - 2026-09-15
 
 ### Added
+- Product-effectiveness strategy and evaluation protocol (2026-09-16): eight proposed real-case slots, repeated durable-path measurement, human scoring, paired optimization gates, and a two-PR delivery plan; paid runs and production optimization have not started
 - Nine-node research workflow, six-source retrieval, multilingual reports, observability, token accounting, and the outbound channel layer accumulated during the optimization cycle
 - 300-case mixed benchmark and deterministic metric/quality tooling
 - Project-level `AGENTS.md` with repository safety, architecture, configuration, testing, and documentation rules

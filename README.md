@@ -162,7 +162,8 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
 [`docs/current-roadmap.md`](docs/current-roadmap.md)：Phase 5-2 工程基础整体验收已经完成，结果见
 [`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。当前路线到此结束；
-下一阶段需依据真实 case 重新规划重点指标测量与优化。多租户认证、分布式基础设施及其他企业级
+下一阶段的案例、指标和运行步骤见[产品效果优化策略与评估协议](docs/product-effectiveness-optimization.md)
+（规划已建立，实测尚未执行）。多租户认证、分布式基础设施及其他企业级
 扩展不在当前实施范围。
 
 ### 测试
