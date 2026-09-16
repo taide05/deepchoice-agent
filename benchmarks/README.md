@@ -6,15 +6,44 @@
 | 入口 | 用途和边界 |
 |---|---|
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
+| `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例候选集，不调用 LLM/网络 |
+| `python -m benchmarks.product_baseline collect ...` | 经 durable API 采集 serial=1 或 concurrent=12 的真实结果；必须冻结案例和环境，并显式确认付费运行 |
+| `python -m benchmarks.product_baseline compare ...` | 对人工评分后的同 repetition 串并发结果执行质量门禁，无网络调用 |
 | `python -m benchmarks.run_baseline --health-check` | 检索路由与 Tavily 连通性，会消耗 Tavily 额度；不检查 LLM，也不证明研究完成 |
 | `/api/v1/tasks/*` | 当前产品路径；真实基线须经此入口采集任务、报告、HITL 和 observability |
 | `python -m benchmarks.run_baseline --legacy-direct ...` | 保留的历史直连实验，不经过 durable RunContext，不能用于新产品基线；会调用付费 LLM 与 judge |
 | `locust -f benchmarks/locustfile.py` | 只读 health/docs/durable 查询负载，不创建研究、不衡量报告质量或研究吞吐 |
 | `.github/workflows/benchmark.yml` | 手动离线 smoke；已移除旧付费 runner 和固定 Top-1 门槛 |
 
-本轮尚未实现 O1 的 durable API 批量采集器和冻结真实案例，不能宣布“真实基线已就绪”。
-下一步按协议实现采集、冻结案例/版本/评分依据并确认额度，再执行检索及 LLM 小额兼容检查。
-LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不代替此项。
+O1 已建立 durable API 批量采集器和 12 例候选集，但案例参考依据、环境快照及调用额度尚未
+冻结，不能宣布“真实基线已就绪”。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
+任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
+代替此项。
+
+隔离实验服务使用独立产品/检查点数据库；知识库与 learned-docs 快照必须显式指定，不能复用
+日常写入目录冒充冷启动：
+
+```powershell
+$env:DEEPCHOICE_EXPERIMENT_DIR = "outputs/product-baseline-v1/serial-r1-runtime"
+$env:CHROMA_PATH = "<只读知识库快照路径>"
+$env:LEARNED_DOCS_PATH = "<learned-docs 快照路径>"
+$env:LEARNED_DOCS_READONLY = "1"
+.\.venv\Scripts\python.exe -m uvicorn benchmarks.product_baseline_server:create_app --factory --workers 1
+```
+
+另一个终端先校验候选集。人工核验并将案例标为 `frozen`、填写私有环境 manifest 且两项健康
+检查为 `passed`、确认 48-run 上限后，才可添加最后一行的显式执行开关：
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline validate
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline collect --profile serial --concurrency 1 --repetition 1 --environment-file <环境清单.json> --output-dir outputs/product-baseline-v1/serial-r1 --execute-paid-runs
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline collect --profile concurrent --concurrency 12 --repetition 1 --environment-file <环境清单.json> --output-dir outputs/product-baseline-v1/concurrent-r1 --execute-paid-runs
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline compare --serial-dir outputs/product-baseline-v1/serial-r1 --concurrent-dir outputs/product-baseline-v1/concurrent-r1 --output outputs/product-baseline-v1/concurrency-r1.json
+```
+
+每次 profile 使用新的 `*-runtime` 数据库目录和单独的新采集输出目录。`scores.csv` 必须先完成
+人工盲评，比较命令才会运行。
+第二次 repetition 使用 `serial-r2` / `concurrent-r2`；两次均通过才算并发效果门禁通过。
 
 ## 有意使用历史直连工具
 

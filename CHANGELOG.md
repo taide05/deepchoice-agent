@@ -3,7 +3,8 @@
 ## [Unreleased] - 2026-09-15
 
 ### Added
-- Product-effectiveness strategy and evaluation protocol (2026-09-16): eight proposed real-case slots, repeated durable-path measurement, human scoring, paired optimization gates, and a two-PR delivery plan; paid runs and production optimization have not started
+- O1 product-baseline foundation (2026-09-16): a guarded 12-case candidate dataset, isolated dual-SQLite experiment server, durable API collector for whole-case serial=1/concurrent=12 profiles, public report/snapshot/observability artifacts, HITL and timeout handling, human score templates, and deterministic paired concurrency-quality gates; paid execution remains blocked until case/environment freeze and explicit approval
+- Product-effectiveness strategy and evaluation protocol (2026-09-16): 12 proposed real-case slots, repeated durable-path measurement, human scoring, paired optimization gates, and a two-PR delivery plan; paid runs and production optimization have not started
 - Nine-node research workflow, six-source retrieval, multilingual reports, observability, token accounting, and the outbound channel layer accumulated during the optimization cycle
 - 300-case mixed benchmark and deterministic metric/quality tooling
 - Project-level `AGENTS.md` with repository safety, architecture, configuration, testing, and documentation rules
@@ -35,6 +36,8 @@
 - Phase 5-2 engineering-foundation acceptance report with cross-module runtime, test-growth, compatibility, dependency, deployment, and residual-risk audits
 
 ### Changed
+- O1 collection-foundation validation (2026-09-16, Python 3.12): 8 new offline contracts, 45 focused tests and the full 1083-test suite passed with no skips; pyflakes and diff checks passed. No retrieval health check, live LLM compatibility probe or paid research run was executed
+- Product-effectiveness protocol v2 expands O1 from eight serial cases to 12 paired cases run under serial=1 and concurrent=12 twice (48-run ceiling). Concurrency acceptance now requires no lower completion, no new major errors, bounded mean quality deltas and bounded per-case decision regressions; this is separate from HTTP/Locust load testing
 - Baseline-readiness validation (2026-09-16, Python 3.12.4): 26 focused and 1075 full-suite tests passed with no skips; smoke-v1 12/12 and unchanged fingerprint; static/dependency/Compose/link checks and independent review passed. Windows Locust/gevent native-load compatibility remains unverified; no live research or paid probes were run
 - Baseline-readiness audit (2026-09-16): isolated legacy direct-graph CLI behind explicit selection and a fresh output directory; retired destructive/machine-specific batch scripts, import-time dataset generation and ambiguous merge CLIs; preserved historical datasets and results. Manual evaluation now runs offline smoke only, and the read-only load probe uses durable task GET. Fixed legacy diagnostic path traversal, raw exception exposure and Tavily multi-key readiness; documented the outstanding O1 durable collector/case-freeze gates
 - DeepSeek Flash migration validation (2026-09-16, Python 3.12): full suite 1061 passed with no skips; smoke-v1 fixture replay 12/12 with unchanged fingerprint; static/dependency/Compose checks and independent review passed. No live LLM or paid benchmark was run

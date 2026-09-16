@@ -1,0 +1,293 @@
+{
+  "dataset_id": "product-baseline-v1",
+  "version": "0.1.0-candidate",
+  "status": "candidate",
+  "freeze_date": null,
+  "case_policy": {
+    "development_cases": ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"],
+    "holdout_cases": ["P09", "P10", "P11", "P12"],
+    "note": "Reference evidence and acceptable outcomes require human approval before status can become frozen."
+  },
+  "cases": [
+    {
+      "id": "P01",
+      "split": "development",
+      "request": {
+        "query": "为个人维护、低写入量的 Web 应用选择 SQLite 还是 PostgreSQL？",
+        "scene_context": "单人开发和运维，预计 12 个月内日活低于 5000，读多写少，需要备份与基本全文检索。",
+        "constraints": ["优先降低运维复杂度", "必须说明未来迁移触发条件", "不能仅按理论性能下结论"],
+        "candidate_techs": ["SQLite", "PostgreSQL"],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": ["当前规模是否需要独立数据库服务？", "并发写入和备份分别有什么边界？", "何时应迁移？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["基于当前写入并发和运维能力给出条件性选择", "解释 SQLite 写并发和 PostgreSQL 运维成本", "给出可观察的迁移触发条件"],
+        "acceptable_outcomes": ["选择 SQLite 并给出迁移边界", "若识别到未陈述的强一致或扩展需求，可条件性选择 PostgreSQL"],
+        "major_errors": ["把低日活直接等同于没有并发写入", "声称 SQLite 不支持事务", "忽略备份和迁移路径"],
+        "conflict_points": ["简单部署收益与写并发能力之间的权衡"],
+        "reference_sources": ["https://www.sqlite.org/whentouse.html", "https://www.postgresql.org/docs/current/mvcc.html"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P02",
+      "split": "development",
+      "request": {
+        "query": "小团队内部知识库应该使用 PostgreSQL + pgvector，还是部署独立向量数据库 Qdrant？",
+        "scene_context": "5 人团队，约 100 万段文本，已有 PostgreSQL，更新频率低，目标是语义检索与权限过滤。",
+        "constraints": ["两名后端工程师兼任运维", "必须考虑过滤、备份和扩容", "首年基础设施预算有限"],
+        "candidate_techs": ["PostgreSQL + pgvector", "Qdrant"],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": ["现有 PostgreSQL 能否承载当前规模？", "独立向量库带来的能力是否值得新增运维面？", "什么指标触发迁移？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["比较过滤与索引能力而非只比较 QPS", "计入现有数据库与团队运维约束", "定义容量或延迟迁移门槛"],
+        "acceptable_outcomes": ["以 pgvector 起步并保留迁移路径", "若证据显示过滤或规模约束不满足，可选择 Qdrant"],
+        "major_errors": ["无基准条件地宣称一方必然更快", "忽略已有 PostgreSQL", "把向量数据库当作权限系统"],
+        "conflict_points": ["一体化运维与专用检索能力之间的权衡"],
+        "reference_sources": ["https://github.com/pgvector/pgvector", "https://qdrant.tech/documentation/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P03",
+      "split": "development",
+      "request": {
+        "query": "新建 Python 业务 API 时，团队应选择 FastAPI 还是 Django？",
+        "scene_context": "6 人团队，需要 REST API、后台管理、权限、审计和定时任务；团队有 Django 经验，交付周期 10 周。",
+        "constraints": ["首版必须有可用后台", "不能把单项吞吐当作唯一标准", "需要评估生态和培训成本"],
+        "candidate_techs": ["FastAPI", "Django"],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": ["后台和权限需求如何影响选择？", "异步能力是否为当前业务关键？", "团队经验的机会成本是什么？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["覆盖后台、权限和团队经验", "区分框架能力与第三方组件", "说明什么条件会反转结论"],
+        "acceptable_outcomes": ["倾向 Django 并说明 API 实现方式", "若明确拆分后台或异步 I/O 为核心，可条件性选择 FastAPI"],
+        "major_errors": ["以 hello-world 基准直接决定业务框架", "声称 Django 不支持异步", "遗漏交付周期"],
+        "conflict_points": ["开发完整性与轻量异步 API 体验之间的权衡"],
+        "reference_sources": ["https://docs.djangoproject.com/en/stable/", "https://fastapi.tiangolo.com/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P04",
+      "split": "development",
+      "request": {
+        "query": "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
+        "scene_context": "单实例 FastAPI 服务，每天约 200 个任务；任务结果不能因服务重启静默丢失，但团队不想过早引入复杂基础设施。",
+        "constraints": ["必须讨论重启恢复和至少一次执行语义", "允许先做阶段性方案", "不得把任务队列描述为天然 exactly-once"],
+        "candidate_techs": ["FastAPI BackgroundTasks", "Celery"],
+        "complexity": "high",
+        "report_format": "evidence_first",
+        "sub_questions": ["进程内任务在哪些故障下会丢失？", "Celery 引入哪些组件和运维责任？", "是否存在过渡方案？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["说明进程重启与任务持久性的关系", "解释 broker、worker 和幂等责任", "给出阶段性落地与迁移条件"],
+        "acceptable_outcomes": ["因不可静默丢失而选择持久队列", "提出先持久化任务状态再受控迁移的方案"],
+        "major_errors": ["声称 BackgroundTasks 可跨重启恢复", "声称 Celery 自动保证 exactly-once", "忽略任务幂等"],
+        "conflict_points": ["可靠性需求与新增基础设施成本之间的权衡"],
+        "reference_sources": ["https://fastapi.tiangolo.com/tutorial/background-tasks/", "https://docs.celeryq.dev/en/stable/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P05",
+      "split": "development",
+      "request": {
+        "query": "中文团队做高并发 Python HTTP 客户端时，应选 HTTPX 还是 aiohttp？请用可核验依据回答。",
+        "scene_context": "服务需要连接池、超时、HTTP/2 可选支持和异步流式响应，核心官方资料主要是英文。",
+        "constraints": ["关键中文声明必须能被引用支持", "区分内置能力与额外依赖", "不接受只引用中文转载"],
+        "candidate_techs": ["HTTPX", "aiohttp"],
+        "complexity": "medium",
+        "report_format": "evidence_first",
+        "sub_questions": ["两者的同步/异步接口差异是什么？", "HTTP/2 与连接池支持边界是什么？", "跨语言引用是否支持中文结论？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["准确说明同步与异步 API 范围", "核对 HTTP/2 支持及条件", "关键中文结论绑定英文原始资料"],
+        "acceptable_outcomes": ["按团队 API 偏好和协议需求做条件性推荐"],
+        "major_errors": ["把可选 HTTP/2 说成默认无条件支持", "引用内容与中文声明不对应", "把下载量当作技术证明"],
+        "conflict_points": ["统一同步/异步体验与专用异步生态之间的权衡"],
+        "reference_sources": ["https://www.python-httpx.org/", "https://docs.aiohttp.org/en/stable/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P06",
+      "split": "development",
+      "request": {
+        "query": "Bun 和 Node.js 的性能资料结论冲突时，2026 年新建 TypeScript API 应如何选择？",
+        "scene_context": "团队已有 Node.js 经验，服务以数据库 I/O 为主，要求生态稳定；网上存在不同版本和硬件上的相反 benchmark。",
+        "constraints": ["必须解释 benchmark 条件", "不能把运行时微基准外推为业务吞吐", "需要区分版本与兼容性"],
+        "candidate_techs": ["Bun", "Node.js"],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": ["冲突 benchmark 的测试条件有何不同？", "生态兼容和团队经验如何计权？", "怎样设计自己的验证？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["识别版本、硬件、负载差异", "避免把微基准直接等同业务收益", "给出面向实际工作负载的试验方案"],
+        "acceptable_outcomes": ["基于成熟度倾向 Node.js，同时建议限定 Bun 试验", "若兼容性已验证且收益可复现，可条件性选择 Bun"],
+        "major_errors": ["无条件宣称固定倍数性能优势", "混用不同版本数据", "忽略数据库 I/O 主导条件"],
+        "conflict_points": ["不同 benchmark 胜者与适用条件冲突"],
+        "reference_sources": ["https://bun.sh/docs", "https://nodejs.org/docs/latest/api/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P07",
+      "split": "development",
+      "request": {
+        "query": "一个两人 Python 团队是否应该把现有 Poetry 项目迁移到 uv？",
+        "scene_context": "项目约 30 个依赖，CI 安装较慢但稳定；uv 较新，团队看到了大量速度宣传，尚无自身迁移数据。",
+        "constraints": ["资料独立性不足时必须表达未知", "迁移必须可回滚", "不能只依赖供应方性能数字"],
+        "candidate_techs": ["继续使用 Poetry", "迁移到 uv"],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": ["哪些能力和锁文件行为需要验证？", "速度收益如何在本项目测量？", "迁移风险与回滚方案是什么？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["区分宣传指标与项目内实测", "列出兼容性和锁文件验证", "给出小范围试点与回滚条件"],
+        "acceptable_outcomes": ["建议先在 CI 分支试点而非直接全量迁移", "证据不足时保留未知"],
+        "major_errors": ["把供应方速度数字当作当前项目确定收益", "忽略锁文件和发布流程", "不给回滚方案"],
+        "conflict_points": ["新工具速度收益与成熟度证据不足之间的权衡"],
+        "reference_sources": ["https://docs.astral.sh/uv/", "https://python-poetry.org/docs/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P08",
+      "split": "development",
+      "request": {
+        "query": "帮我在 Redis 和 Memcached 之间选择缓存。",
+        "scene_context": "请求没有说明数据结构、持久化、淘汰策略、部署环境或团队能力。",
+        "constraints": ["缺少会改变选择的约束时应触发一次交互", "不得自行编造流量和一致性要求"],
+        "candidate_techs": ["Redis", "Memcached"],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": ["哪些未知约束会改变选择？", "补充信息后如何形成条件性结论？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["识别数据结构、持久化和运维等关键缺口", "不在信息不足时给出无条件胜者", "利用补充信息收敛结论"],
+        "acceptable_outcomes": ["触发 HITL 并基于补充信息给出条件性建议", "证据仍不足时生成明确受限报告"],
+        "major_errors": ["编造未提供的规模或 SLA", "仅以流行度选择", "忽略关键缺口仍给绝对结论"],
+        "conflict_points": ["功能丰富度与简单缓存需求之间的适配"],
+        "reference_sources": ["https://redis.io/docs/latest/", "https://docs.memcached.org/"]
+      },
+      "hitl": {
+        "action": "provide_context",
+        "repeat_action": "limited_report",
+        "supplemental_input": "缓存只存可重新生成的 JSON 对象，不需要持久化；峰值约每秒 3000 次读取、200 次写入，团队已有 Redis 运维经验。"
+      }
+    },
+    {
+      "id": "P09",
+      "split": "holdout",
+      "request": {
+        "query": "需要可恢复的多步骤 AI 工作流时，应选择 LangGraph 还是 Temporal？",
+        "scene_context": "4 人团队，Python 为主，工作流包含 LLM、人工审批和外部 API，运行可持续数小时并要求故障恢复。",
+        "constraints": ["必须区分 Agent 编排与通用持久执行", "考虑团队运维能力", "不得假设两者提供相同一致性语义"],
+        "candidate_techs": ["LangGraph", "Temporal"],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": ["两者的持久状态与恢复模型有什么区别？", "人工审批如何实现？", "运维与可观测成本如何比较？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["区分产品定位和持久化语义", "覆盖 HITL 与恢复", "把运维能力纳入选择"],
+        "acceptable_outcomes": ["按 AI 状态图复杂度和通用工作流可靠性需求做条件性选择"],
+        "major_errors": ["声称二者语义完全相同", "忽略 worker 或 checkpoint 运维", "用营销术语替代恢复边界"],
+        "conflict_points": ["AI 原生编排便利性与通用 durable execution 保证之间的权衡"],
+        "reference_sources": ["https://langchain-ai.github.io/langgraph/", "https://docs.temporal.io/"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P10",
+      "split": "holdout",
+      "request": {
+        "query": "移动端产品的新 API 应采用 REST 还是 GraphQL？",
+        "scene_context": "客户端页面组合多、网络质量波动，后端由 5 人维护；现有服务主要是 REST，需要细粒度授权和缓存。",
+        "constraints": ["考虑迁移成本和授权", "不能把减少请求数等同于一定更快", "必须讨论缓存和可观测性"],
+        "candidate_techs": ["REST", "GraphQL"],
+        "complexity": "medium",
+        "report_format": "evidence_first",
+        "sub_questions": ["客户端数据组合收益是否足够？", "授权和缓存复杂度如何变化？", "能否渐进引入？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["同时评估客户端和服务端成本", "说明授权、缓存与 N+1 风险", "提出渐进验证路径"],
+        "acceptable_outcomes": ["维持 REST 并优化聚合端点", "对特定复杂页面试点 GraphQL"],
+        "major_errors": ["声称 GraphQL 自动解决性能问题", "忽略字段级授权", "把协议选择当作数据库选择"],
+        "conflict_points": ["客户端取数灵活性与服务端治理成本之间的权衡"],
+        "reference_sources": ["https://graphql.org/learn/", "https://www.rfc-editor.org/rfc/rfc9110"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P11",
+      "split": "holdout",
+      "request": {
+        "query": "订单事件处理系统应选 Kafka 还是 RabbitMQ？",
+        "scene_context": "峰值每秒 5000 条消息，需要消费者重放部分历史事件、单消息重试和死信处理；团队只运维过 RabbitMQ。",
+        "constraints": ["区分事件日志与任务队列语义", "考虑重放和顺序要求", "计入运维经验"],
+        "candidate_techs": ["Apache Kafka", "RabbitMQ"],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": ["重放需求如何影响选择？", "路由、重试和死信能力如何比较？", "团队经验是否足以改变结论？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["解释日志保留与队列确认模型", "覆盖重放、顺序、重试和死信", "说明运维迁移成本"],
+        "acceptable_outcomes": ["按重放重要性倾向 Kafka", "若重放可另行实现且路由优先，可条件性保留 RabbitMQ"],
+        "major_errors": ["声称两者交付语义天然 exactly-once", "忽略分区对顺序的影响", "只按峰值数字选择"],
+        "conflict_points": ["历史重放与灵活队列路由能力之间的权衡"],
+        "reference_sources": ["https://kafka.apache.org/documentation/", "https://www.rabbitmq.com/docs"]
+      },
+      "hitl": {"action": "limited_report"}
+    },
+    {
+      "id": "P12",
+      "split": "holdout",
+      "request": {
+        "query": "突发流量明显的新 SaaS API 应部署为云函数还是长期运行的容器服务？",
+        "scene_context": "平时每秒 5 次请求，活动时可到每秒 800 次；请求需要访问数据库，P95 延迟目标 500ms，团队希望降低空闲成本。",
+        "constraints": ["云厂商尚未确定", "必须考虑冷启动和数据库连接", "价格未知时不能伪造成本结论"],
+        "candidate_techs": ["Serverless Functions", "Container Service"],
+        "complexity": "high",
+        "report_format": "what_why_how",
+        "sub_questions": ["突发扩缩容和冷启动如何影响延迟？", "数据库连接如何治理？", "怎样用负载试验决定？"],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": ["把冷启动、并发配额和连接池纳入分析", "成本未知时给出测量模型而非数字", "设计代表性负载测试"],
+        "acceptable_outcomes": ["按延迟与突发模式提出条件性架构", "建议先做两种部署的受控压测"],
+        "major_errors": ["假设云函数无冷启动", "忽略数据库连接风暴", "在无厂商和区域信息时给出精确成本"],
+        "conflict_points": ["低空闲成本与延迟可预测性之间的权衡"],
+        "reference_sources": ["https://docs.aws.amazon.com/lambda/latest/dg/welcome.html", "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"]
+      },
+      "hitl": {"action": "limited_report"}
+    }
+  ]
+}

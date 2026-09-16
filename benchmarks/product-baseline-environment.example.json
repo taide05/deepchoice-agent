@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "status": "candidate",
+  "model": {
+    "provider": "deepseek-flash",
+    "model_id": "replace-with-effective-model",
+    "thinking": "replace-with-effective-setting"
+  },
+  "dependency_snapshot_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "knowledge_snapshot_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "retrieval_health": "not_run",
+  "llm_compatibility": "not_run",
+  "notes": "Copy to the private experiment directory, fill only non-secret facts, and mark ready after both live checks pass."
+}

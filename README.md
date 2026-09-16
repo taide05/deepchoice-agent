@@ -176,7 +176,7 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 [`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。工程阶段已结束，
 后续已完成统一 Flash 和[基线准备检查](docs/baseline-readiness-audit.md)；
 下一阶段的案例、指标和运行步骤见[产品效果优化策略与评估协议](docs/product-effectiveness-optimization.md)
-（规划已建立，实测尚未执行）。多租户认证、分布式基础设施及其他企业级
+（O1 的 12-case 串并发候选集与 durable 采集工具已建立，案例/环境冻结及付费实测尚未执行）。多租户认证、分布式基础设施及其他企业级
 扩展不在当前实施范围。
 
 ### 测试
@@ -185,8 +185,8 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，基线准备检查后的
-全量验证结果为 **1075 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12，
+项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，O1 采集基础加入后的
+全量验证结果为 **1083 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12，
 已通过独立复审。未执行真实 LLM/付费基线，这些结果不证明报告质量提升。
 不要使用混装其他项目依赖的全局 Python 环境。
 
@@ -300,8 +300,9 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
-正式产品基线使用 durable API；采集器与真实案例冻结待 O1 完成。手动评估 workflow 当前仅运行
-smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
+正式产品基线使用 durable API；O1 已提供候选 12-case、serial=1 / concurrent=12 的采集与
+配对门禁，但案例/环境仍未冻结，也未运行付费实测。手动评估 workflow 当前仅运行 smoke-v1，
+无 LLM/检索调用，不套用历史 Top-1 阈值。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
 超时口径；冲突检测率为 28.8%，解释受当时 known_contradictions 标注覆盖影响。这些数据不代表
