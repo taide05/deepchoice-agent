@@ -105,6 +105,7 @@ T = {
         "obs_duration_ms": "耗时（毫秒）",
         "obs_usage_partial": "Token 总量仅汇总已知用量，记录不完整。",
         "obs_usage_complete": "所有已记录 LLM 调用均包含 Token 用量。",
+        "obs_cache_tokens": "模型输入缓存：已知命中 {hit} · 已知未命中 {miss} · 完整分项 {known}/{calls} 次调用（非检索缓存；不代表金额）。",
         "obs_no_durable_calls": "没有已记录的外部调用。",
         "budget_title": "运行预算",
         "budget_mode": "策略 {policy} · {mode}",
@@ -261,6 +262,7 @@ T = {
         "obs_duration_ms": "Duration (ms)",
         "obs_usage_partial": "Token totals sum known usage only; records are incomplete.",
         "obs_usage_complete": "Token usage is present for every recorded LLM call.",
+        "obs_cache_tokens": "Model input cache: known hit {hit} · known miss {miss} · breakdown present for {known}/{calls} calls (not retrieval cache or monetary cost).",
         "obs_no_durable_calls": "No external calls were recorded.",
         "budget_title": "Run Budget",
         "budget_mode": "Policy {policy} · {mode}",
@@ -417,6 +419,7 @@ T = {
         "obs_duration_ms": "所要時間（ミリ秒）",
         "obs_usage_partial": "既知のトークン使用量のみを合算しています。記録は不完全です。",
         "obs_usage_complete": "記録されたすべての LLM 呼び出しにトークン使用量があります。",
+        "obs_cache_tokens": "モデル入力キャッシュ：既知ヒット {hit} · 既知ミス {miss} · 内訳あり {known}/{calls} 回（検索キャッシュや料金ではありません）。",
         "obs_no_durable_calls": "外部呼び出しは記録されていません。",
         "budget_title": "実行予算",
         "budget_mode": "ポリシー {policy} · {mode}",
@@ -573,6 +576,7 @@ T = {
         "obs_duration_ms": "소요 시간(ms)",
         "obs_usage_partial": "알려진 토큰 사용량만 합산했으며 기록은 불완전합니다.",
         "obs_usage_complete": "기록된 모든 LLM 호출에 토큰 사용량이 있습니다.",
+        "obs_cache_tokens": "모델 입력 캐시: 알려진 적중 {hit} · 미적중 {miss} · 내역 {known}/{calls}회 (검색 캐시나 금액이 아님).",
         "obs_no_durable_calls": "기록된 외부 호출이 없습니다.",
         "budget_title": "실행 예산",
         "budget_mode": "정책 {policy} · {mode}",
@@ -1899,7 +1903,6 @@ def _render_durable_nodes(observability: dict):
 
 def _render_durable_calls(observability: dict):
     calls = observability.get("calls") or []
-    totals = observability.get("totals") or {}
     st.markdown(f"### {t('obs_durable_calls', lang)}")
     if not calls:
         st.caption(t("obs_no_durable_calls", lang))
@@ -1972,6 +1975,13 @@ def _render_durable_tokens(observability: dict):
             lang,
         )
     )
+
+
+    st.caption(t("obs_cache_tokens", lang).format(
+        hit=totals.get("prompt_cache_hit_tokens") if totals.get("prompt_cache_hit_tokens") is not None else "—",
+        miss=totals.get("prompt_cache_miss_tokens") if totals.get("prompt_cache_miss_tokens") is not None else "—",
+        known=totals.get("cache_usage_known_calls", 0), calls=totals["llm_calls"],
+    ))
 
 
 def _budget_resource_label(resource: str) -> str:

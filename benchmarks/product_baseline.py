@@ -550,6 +550,10 @@ def usage_projection(observability: dict[str, Any] | None) -> dict[str, Any]:
               "retrieval_calls", "external_calls", "failed_calls", "node_retries")
     projection = {field: totals.get(field) for field in fields}
     projection["token_usage_complete"] = totals.get("token_usage_complete", False)
+    for field in ("prompt_cache_hit_tokens", "prompt_cache_miss_tokens", "prompt_cache_hit_ratio"):
+        projection[field] = totals.get(field)
+    projection["cache_usage_known_calls"] = totals.get("cache_usage_known_calls", 0)
+    projection["cache_usage_complete"] = totals.get("cache_usage_complete", False)
     calls = observation.get("calls") or []
     available = observation.get("availability") == "available"
     projection["http_calls"] = sum(call.get("kind") == "http" for call in calls) if available else None
@@ -569,7 +573,46 @@ def record_usage_projection(record: dict[str, Any]) -> dict[str, Any]:
     projection["observed_at"] = record.get("observability_sampled_at")
     if not final:
         projection["token_usage_complete"] = False
+        projection["cache_usage_complete"] = False
+        projection["prompt_cache_hit_ratio"] = None
     return projection
+
+
+def node_usage_projection(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Group public LLM calls by node attempt, including failed retries."""
+    from deepchoice.utils.token_usage import TOKEN_FIELDS, cache_totals, public_usage
+
+    groups: dict[tuple[str, int], list[dict]] = {}
+    for call in (record.get("observability") or {}).get("calls") or []:
+        if call.get("kind") == "llm":
+            name = call.get("node_name")
+            attempt = call.get("node_attempt_no")
+            # Older collector fixtures/records may lack public attribution.
+            key = (name if isinstance(name, str) and name else "unattributed",
+                   attempt if type(attempt) is int and attempt > 0 else 0)
+            groups.setdefault(key, []).append(call)
+    final = record_usage_projection(record)["observation_final"]
+    rows = []
+    for (node_name, attempt_no), calls in sorted(groups.items()):
+        usages = [public_usage(call.get("usage")) for call in calls]
+        cache = cache_totals(usages)
+        if not final:
+            cache["cache_usage_complete"] = False
+            cache["prompt_cache_hit_ratio"] = None
+        rows.append({
+            "case_id": record["case_id"], "run_id": record.get("run_id"),
+            "node_name": node_name, "node_attempt_no": attempt_no,
+            "llm_calls": len(calls),
+            "llm_retries": sum(type(call.get("retry_no")) is int and call["retry_no"] > 0 for call in calls),
+            **{field: sum(usage[field] for usage in usages if field in usage)
+               if any(field in usage for usage in usages) else None for field in TOKEN_FIELDS},
+            "token_usage_complete": final and all(all(field in usage for field in TOKEN_FIELDS) for usage in usages),
+            **cache,
+            "observation_final": final,
+            "observed_at": record.get("observability_sampled_at"),
+            "price_availability": record_usage_projection(record)["price_availability"],
+        })
+    return rows
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -622,7 +665,9 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
     usage_fields = ["case_id", "status", "wall_time_ms", "input_tokens", "output_tokens",
                     "total_tokens", "token_usage_complete", "llm_calls", "retrieval_calls",
                     "http_calls", "llm_retries", "failed_calls", "price_availability",
-                    "observation_final", "observed_at"]
+                    "observation_final", "observed_at", "prompt_cache_hit_tokens",
+                    "prompt_cache_miss_tokens", "cache_usage_known_calls",
+                    "cache_usage_complete", "prompt_cache_hit_ratio"]
     with (output_dir / "usage.csv").open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=usage_fields)
         writer.writeheader()
@@ -631,6 +676,16 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
             writer.writerow({field: record.get(field) if field in record else usage.get(field)
                              for field in usage_fields})
     usages = [record.get("usage") or record_usage_projection(record) for record in records]
+    node_fields = ["case_id", "run_id", "node_name", "node_attempt_no", "llm_calls",
+                   "llm_retries", "input_tokens", "output_tokens", "total_tokens",
+                   "token_usage_complete", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens",
+                   "cache_usage_known_calls", "cache_usage_complete", "prompt_cache_hit_ratio",
+                   "observation_final", "observed_at", "price_availability"]
+    with (output_dir / "usage-by-node.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=node_fields)
+        writer.writeheader()
+        for record in sorted(records, key=lambda item: item["case_id"]):
+            writer.writerows(node_usage_projection(record))
     known = [usage["total_tokens"] for usage in usages]
     known = [value for value in known if isinstance(value, int)]
     complete = sum(usage["token_usage_complete"] is True for usage in usages)
@@ -642,6 +697,7 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
         f"- Collector timeouts: {timed_out}",
         f"- Sum of per-case wall time: {total_wall} ms",
         f"- Complete token usage: {complete}/{len(records)} runs",
+        f"- Complete context-cache usage: {sum(usage.get('cache_usage_complete') is True for usage in usages)}/{len(records)} runs",
         f"- Known total tokens (not necessarily full spend): {sum(known) if known else 'unknown'}",
         f"- Known per-run token median: {statistics.median(known) if known else 'unknown'}",
         f"- Known per-run token range: {str(min(known)) + '..' + str(max(known)) if known else 'unknown'}",

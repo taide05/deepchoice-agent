@@ -13,6 +13,7 @@ from langchain_core.utils.json import parse_json_markdown
 from openai import APIConnectionError, AsyncOpenAI
 
 from deepchoice.security.redaction import redact_text
+from deepchoice.utils.token_usage import cache_totals, provider_usage, trace_usage
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 
@@ -166,7 +167,7 @@ def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
     else:
         model = ",".join(m for m in unique if m)
 
-    return {
+    summary = {
         "agent": agent_name,
         "model": model,
         "calls": len(usage),
@@ -174,6 +175,10 @@ def summarize_usage(agent_name: str, usage: list[dict]) -> dict:
         "completion_tokens": sum(u.get("completion_tokens", 0) for u in usage),
         "total_tokens": sum(u.get("total_tokens", 0) for u in usage),
     }
+    cache = cache_totals(usage, input_field="prompt_tokens")
+    if cache["cache_usage_known_calls"]:
+        summary.update(cache)
+    return summary
 
 
 async def call_model(
@@ -331,13 +336,7 @@ async def call_model(
                 delay = (2 ** attempt) * 5.0 * (0.5 + random.random())
                 await _retry_sleep(delay)
             else:
-                trace_usage = {}
-                if response.usage is not None:
-                    trace_usage = {
-                        "input_tokens": response.usage.prompt_tokens,
-                        "output_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens,
-                    }
+                call_usage = trace_usage(response.usage)
                 await settle_call(
                     reservations,
                     {
@@ -359,7 +358,7 @@ async def call_model(
                             ),
                             "retry_no": attempt,
                         },
-                        usage_summary=trace_usage,
+                        usage_summary=call_usage,
                     )
                 break
     except Exception as e:
@@ -384,9 +383,7 @@ async def call_model(
     if response.usage is not None:
         usage_entry = {
             "model": getattr(response, "model", None) or model,
-            "prompt_tokens": response.usage.prompt_tokens,
-            "completion_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens,
+            **provider_usage(response.usage),
         }
         if usage is not None:
             usage.append(usage_entry)

@@ -22,6 +22,7 @@ def error_metadata(exc: Exception) -> dict:
 async def probe() -> dict:
     load_dotenv()
     from deepchoice.utils.llm import TIERS, _get_client, call_model, deepseek_extra_body
+    from deepchoice.utils.token_usage import provider_usage
 
     results = []
     usage: list[dict] = []
@@ -52,7 +53,7 @@ async def probe() -> dict:
             passed = bool(calls) and calls[0].function.name == "check" and json.loads(
                 calls[0].function.arguments).get("ok") is True
             results.append({"probe": "tools", "passed": passed, "response_model": response.model,
-                            "usage": response.usage.model_dump() if response.usage else None})
+                            "usage": provider_usage(response.usage) if response.usage else None})
         except Exception as exc:
             results.append({"probe": "tools", "passed": False, **error_metadata(exc)})
     return {"schema_version": 1, "model_id": TIERS["deepseek-flash"]["model"],

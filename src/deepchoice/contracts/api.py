@@ -189,6 +189,7 @@ class ObservabilityExternalCallResponse(BaseModel):
     ended_at: datetime | None = None
     duration_ms: int | None = None
     usage: dict[str, int] | None = None
+    cache_usage_complete: bool = False
 
 
 class ObservabilityTotalsResponse(BaseModel):
@@ -204,6 +205,11 @@ class ObservabilityTotalsResponse(BaseModel):
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
     token_usage_complete: bool
+    prompt_cache_hit_tokens: int | None = Field(default=None, ge=0)
+    prompt_cache_miss_tokens: int | None = Field(default=None, ge=0)
+    cache_usage_known_calls: int = Field(default=0, ge=0)
+    cache_usage_complete: bool = False
+    prompt_cache_hit_ratio: float | None = Field(default=None, ge=0, le=1)
 
 
 class ObservabilityBudgetResourceResponse(BaseModel):

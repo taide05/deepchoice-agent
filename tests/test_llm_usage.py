@@ -62,6 +62,20 @@ class _APIError(Exception):
         self.status_code = status_code
 
 
+@pytest.mark.asyncio
+async def test_direct_evidence_gather_preserves_cache_pair(monkeypatch):
+    from deepchoice.utils import llm
+    response = _gather_fake_response()
+    response.usage.prompt_cache_hit_tokens = 100
+    response.usage.prompt_cache_miss_tokens = 50
+    client = _fake_client(response)
+    monkeypatch.setattr(llm, "_get_client", lambda **_: client)
+    usage = []
+    assert await cd_module._gather_evidence("topic", "claim A", "claim B", usage=usage) == "evidence found"
+    assert usage[0]["prompt_cache_hit_tokens"] == 100
+    assert usage[0]["prompt_cache_miss_tokens"] == 50
+
+
 class TestCallModelRetry:
     @pytest.mark.asyncio
     async def test_retries_on_429_then_succeeds(self):

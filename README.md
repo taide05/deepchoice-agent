@@ -75,6 +75,8 @@ O1-R 固定 conflict_scan 输出上限为 512（其他共享 LLM 调用仍 4096�
 
 2026-09-16 的 O1-R 最新候选仅测三个开发 case 各两次：6/6 正常完成、Trace token 完整，总计 143,354 token，1/78 逻辑检索失败（来源 degraded）。这是隔离/预热环境的单 case 执行观察，不是 12-case 基线、语义质量、并发或硬件稳定验收；所有真实付费批次仍暂停，详见上述协议。
 
+O1 新观测增加模型输入缓存命中/未命中 token 已知小计、调用/运行完整性和 node-attempt CSV；Streamlit 与 observability 展示分项缺失，只有完整分项才计算命中率。它不是检索缓存，也不折扣 total-token 预算或伪造金额。旧六次 167 个 LLM 调用没有缓存分项，不能补算；输入 124,279、输出 19,075，冲突与合成占输入 87.8%，见 [拆账协议](docs/o1-cache-cost-accounting.md)。用户授权的 [开发报告助手核验](docs/o1-development-report-review.md)已发现来源错配、备份条件与性能适用性问题；非人工盲评，评分暂定，不宣布 O1/质量通过或进入 O2。
+
 Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
 `RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
 契约与来源校验的成功检索结果，不缓存失败结果或 LLM 响应，旧 `/research` 兼容路径继续绕过缓存。

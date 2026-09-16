@@ -268,6 +268,8 @@ SSE 规则：
 
 ## O1-R：单 case 可靠性边界（2026-09-16）
 
+O1 追加缓存用量观测只扩展 Trace usage/public observability：严格校验模型输入缓存 hit/miss，公开调用完整性、run 已知小计/完整调用数，完整分项才给命中率；不改 lifecycle/SSE、manifest/state schema、预算总 token 或 unpriced-v1。历史 Trace/immutable run_results 不回填；旧 graph usage 行保持可读。详见 [缓存拆账协议](o1-cache-cost-accounting.md)。
+
 - 实例获取在 BEGIN IMMEDIATE 写锁取得后采集 now/expiry，续期在共享连接锁内采集；等待前的时间不得缩短新 TTL 或复活过期租约。默认 30 秒 lease/10 秒 heartbeat、失权 fail-closed 与单 worker 不变。run heartbeat 的锁前时间及 SQLite busy/event-loop 延迟仍是残余风险，不能把此修复描述成完整 live 根因解决。
 - RunCoordinator.auto_recovery 默认 True，正常 startup/周期恢复、HITL 及七日过期语义不变。实验专用 app.state.auto_recovery_enabled=False 使 coordinator.start 跳过 recover_runs 且不创建周期扫描；显式新任务及已确认 HITL 恢复仍走原 fencing/预算契约。它不适合长期默认产品部署，不授权直接读取/恢复私有 checkpoint。
 - 短 conflict_scan 最大输出冻结为 512，其他 LLM call 仍 4096；请求和预算预留使用同一上限。schema v1 不变，历史 4096 scan manifest identity 可读但拒绝同 run 兼容。每 run 扫描/初次仲裁各四路，额外受全局门约束；预算 denial latch 不变，已派发调用在失败上抛前完成结算，不放宽标准硬预算。

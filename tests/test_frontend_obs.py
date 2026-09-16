@@ -478,7 +478,8 @@ def test_results_phase_renders_observability_panels(monkeypatch):
     assert "trace_not_recorded" in cap
 
 
-def test_results_phase_prefers_durable_nodes_calls_and_known_token_usage(monkeypatch):
+@pytest.mark.parametrize("cache", [None, (10, 5)])
+def test_results_phase_prefers_durable_nodes_calls_and_known_token_usage(monkeypatch, cache):
     backend = _FakeBackend(stream_events=[], status_complete=True)
     backend.observability = {
         "availability": "available",
@@ -523,6 +524,11 @@ def test_results_phase_prefers_durable_nodes_calls_and_known_token_usage(monkeyp
             "token_usage_complete": False,
         },
     }
+    if cache is not None:
+        backend.observability["totals"].update(
+            prompt_cache_hit_tokens=cache[0], prompt_cache_miss_tokens=cache[1],
+            cache_usage_known_calls=1, cache_usage_complete=True,
+        )
     monkeypatch.setattr(httpx, "get", backend.get)
     monkeypatch.setattr(httpx, "post", backend.post)
     monkeypatch.setattr(httpx, "stream", backend.stream)
@@ -552,6 +558,9 @@ def test_results_phase_prefers_durable_nodes_calls_and_known_token_usage(monkeyp
     assert " 1 " in md
     assert "记录不完整" in cap
     assert "195" not in md  # snapshot Token rows are replaced by durable usage.
+    assert "非检索缓存；不代表金额" in cap
+    assert ("已知命中 10 · 已知未命中 5 · 完整分项 1/1" if cache else
+            "已知命中 — · 已知未命中 — · 完整分项 0/1") in cap
 
 
 def test_results_phase_falls_back_to_snapshot_when_observability_request_fails(monkeypatch):

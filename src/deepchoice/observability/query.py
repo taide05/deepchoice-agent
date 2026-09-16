@@ -18,6 +18,7 @@ from deepchoice.contracts.api import (
     TaskObservabilityResponse,
 )
 from deepchoice.persistence.repository import TaskNotFoundError
+from deepchoice.utils.token_usage import CACHE_FIELDS, cache_totals, public_usage
 
 
 _TOKEN_FIELDS = ("input_tokens", "output_tokens", "total_tokens")
@@ -180,11 +181,7 @@ def _safe_usage(value: str) -> dict[str, int]:
         return {}
     if not isinstance(decoded, dict):
         return {}
-    return {
-        field: token_count
-        for field in _TOKEN_FIELDS
-        if type(token_count := decoded.get(field)) is int and token_count >= 0
-    }
+    return public_usage(decoded)
 
 
 def _safe_retry_no(value: str) -> int | None:
@@ -468,6 +465,7 @@ class SQLiteObservabilityQuery:
                     ended_at=_parse_datetime(str(row[6])) if row[6] is not None else None,
                     duration_ms=_duration_ms(str(row[5]), str(row[6]) if row[6] else None),
                     usage=usage or None,
+                    cache_usage_complete=kind == "llm" and all(field in usage for field in CACHE_FIELDS),
                 )
             )
 
@@ -513,6 +511,7 @@ class SQLiteObservabilityQuery:
                 retrieval_calls=retrieval_calls,
                 **known_tokens,
                 token_usage_complete=usage_complete,
+                **cache_totals([usage for _, usage in usages]),
             ),
         )
 

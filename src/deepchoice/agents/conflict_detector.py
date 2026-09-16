@@ -9,6 +9,7 @@ from ..budget_errors import BudgetError
 from ..retrievers.tavily_keypool import post_with_failover
 from ..utils.embedding import get_embedding_model
 from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, deepseek_extra_body, summarize_usage
+from ..utils.token_usage import provider_usage, trace_usage
 from ..utils.views import print_agent_output
 
 # ---------------------------------------------------------------------------
@@ -384,13 +385,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             print_agent_output("Evidence gathering LLM error", agent="CONFLICT_DETECTOR")
             break
 
-        trace_usage = {}
-        if getattr(response, "usage", None) is not None:
-            trace_usage = {
-                "input_tokens": response.usage.prompt_tokens,
-                "output_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
-            }
+        call_usage = trace_usage(getattr(response, "usage", None))
         await settle_call(
             llm_reservations,
             {
@@ -406,17 +401,15 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             await trace.finish_external_call(
                 trace_call,
                 status=TraceStatus.SUCCEEDED,
-                usage_summary=trace_usage,
+                usage_summary=call_usage,
             )
 
-        # Capture token usage (same 4-field shape as call_model) so the
+        # Capture allowlisted usage through the same helper as call_model so the
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
         if usage is not None and getattr(response, "usage", None) is not None:
             usage.append({
                 "model": getattr(response, "model", None) or TIERS["deepseek-flash"]["model"],
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
+                **provider_usage(response.usage),
             })
 
         msg = response.choices[0].message

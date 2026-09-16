@@ -130,12 +130,18 @@ def test_latest_run_observability_aggregates_and_exposes_only_allowlist(
         "output_tokens": None,
         "total_tokens": 17,
         "token_usage_complete": False,
+        "prompt_cache_hit_tokens": None,
+        "prompt_cache_miss_tokens": None,
+        "cache_usage_known_calls": 0,
+        "cache_usage_complete": False,
+        "prompt_cache_hit_ratio": None,
     }
     assert [node["attempt_no"] for node in body["nodes"]] == [1, 2]
     assert body["calls"][1]["node_name"] == "query_analyzer"
     assert body["calls"][1]["node_attempt_no"] == 2
     assert body["calls"][1]["retry_no"] == 1
     assert body["calls"][1]["usage"] == {"input_tokens": 15, "total_tokens": 17}
+    assert all(call["cache_usage_complete"] is False for call in body["calls"])
     encoded = response.text
     for private in (
         "node_attempt_id",
@@ -170,6 +176,53 @@ def test_new_run_without_trace_is_unavailable_but_policy_is_available(
     assert body["calls"] == []
     assert body["totals"]["input_tokens"] is None
     assert body["totals"]["token_usage_complete"] is False
+
+
+@pytest.mark.parametrize("usages,known,complete,hit,miss,ratio", [
+    ([{"input_tokens": 100, "output_tokens": 10, "total_tokens": 110,
+       "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20}], 1, True, 80, 20, 0.8),
+    ([{"input_tokens": 100, "prompt_tokens_details": {"cached_tokens": 0}}], 1, True, 0, 100, 0.0),
+    ([{"input_tokens": 100, "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 20},
+      {}], 1, False, 80, 20, None),
+    ([{"input_tokens": 1, "prompt_cache_hit_tokens": True, "prompt_cache_miss_tokens": 0}],
+      0, False, None, None, None),
+    ([{"input_tokens": 100, "prompt_cache_hit_tokens": 80, "prompt_cache_miss_tokens": 21}],
+      0, False, None, None, None),
+    ([{"input_tokens": 100}], 0, False, None, None, None),
+])
+def test_cache_accounting_revalidates_public_usage_and_preserves_unknown(
+    observability_client, usages, known, complete, hit, miss, ratio,
+):
+    client = observability_client
+    created = _create(client)
+    task_id, run_id = created["task"]["task_id"], created["latest_run"]["run_id"]
+    state = app_module.app.state
+    async def record():
+        grant = await state.task_repository.acquire_run_lease(run_id, lease_owner="cache-test",
+            lease_ttl=timedelta(seconds=30), run_timeout=timedelta(minutes=5))
+        sink = SQLiteTraceStore(state.product_database_connection, state.product_database_lock).bind(
+            run_id=run_id, execution_epoch=grant.execution_epoch, lease_owner="cache-test")
+        node = await sink.start_node_attempt("conclusion_synthesizer")
+        for retry, usage in enumerate(usages):
+            call = await sink.start_external_call(node_attempt_id=node.node_attempt_id,
+                kind=ExternalCallKind.LLM, provider="deepseek-flash", operation="chat.completions.create",
+                request_summary={"retry_no": retry})
+            await sink.finish_external_call(call, status=TraceStatus.SUCCEEDED,
+                usage_summary={**usage, "private": "must not project"})
+        await sink.finish_node_attempt(node, status=TraceStatus.SUCCEEDED)
+    client.portal.call(record)
+    response = client.get(f"/api/v1/tasks/{task_id}/observability")
+    assert response.status_code == 200
+    body = response.json()
+    totals = body["totals"]
+    assert totals["cache_usage_known_calls"] == known
+    assert totals["cache_usage_complete"] is complete
+    assert totals["prompt_cache_hit_tokens"] == hit
+    assert totals["prompt_cache_miss_tokens"] == miss
+    assert totals["prompt_cache_hit_ratio"] == ratio
+    assert sum(call["cache_usage_complete"] for call in body["calls"]) == known
+    assert "must not project" not in response.text
+    assert body["budget"]["price_availability"] == "unavailable"
 
 
 def test_historical_run_without_frozen_policy_is_reported_unavailable(
