@@ -3,6 +3,7 @@
 ## [Unreleased] - 2026-09-16
 
 ### Added
+- O1 user-approved case freeze 1.0.0 with dated official reference audit/hash, RabbitMQ Streams replay boundary, core asset and manifest identities, and isolated snapshot/embedding-warmed single-worker experiment entry; all four profiles freeze the same numeric resource settings without changing LLM policy or budget
 - O1 preparation follow-up (2026-09-16): bounded JSON/tool and credential-free route probes, immediately fsynced admission identity journal, per-case known-token/usage-completeness CSV and summary, deterministic case order, observed running overlap, split report directories, and experiment/run-bound scoring; missing paired reports cannot pass. The accepted 48 research runs remain unexecuted due to repeated host WHEA crashes; see docs/o1-execution-status.md
 - O1 product-baseline foundation (2026-09-16): a guarded 12-case candidate dataset, isolated dual-SQLite experiment server, durable API collector for whole-case serial=1/concurrent=12 profiles, public report/snapshot/observability artifacts, HITL and timeout handling, human score templates, and deterministic paired concurrency-quality gates; paid execution remains blocked until case/environment freeze and explicit approval
 - Product-effectiveness strategy and evaluation protocol (2026-09-16): 12 proposed real-case slots, repeated durable-path measurement, human scoring, paired optimization gates, and a two-PR delivery plan; paid runs and production optimization have not started

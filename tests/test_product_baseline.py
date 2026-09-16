@@ -22,15 +22,19 @@ from benchmarks.product_baseline_server import create_app
 DATASET = Path("benchmarks/product-baseline-v1.json")
 
 
-def test_candidate_dataset_has_twelve_valid_cases_and_paid_run_requires_freeze():
-    dataset, digest = load_dataset(DATASET)
+def test_frozen_dataset_has_twelve_valid_cases_and_candidate_cannot_run(tmp_path):
+    dataset, digest = load_dataset(DATASET, require_frozen=True)
     assert len(dataset["cases"]) == 12
     assert len(digest) == 64
     assert [case["id"] for case in dataset["cases"]] == [
         f"P{index:02d}" for index in range(1, 13)
     ]
+    assert dataset["version"] == "1.0.0"
+    candidate = tmp_path / "candidate.json"
+    dataset["status"] = "candidate"
+    candidate.write_text(json.dumps(dataset), encoding="utf-8")
     with pytest.raises(ValueError, match="requires a frozen dataset"):
-        load_dataset(DATASET, require_frozen=True)
+        load_dataset(candidate, require_frozen=True)
 
 
 def test_candidate_environment_manifest_blocks_paid_collection():

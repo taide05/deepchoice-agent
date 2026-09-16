@@ -101,6 +101,11 @@ def load_dataset(path: Path, *, require_frozen: bool = False) -> tuple[dict[str,
         if not isinstance(freeze_date, str):
             raise ValueError("frozen dataset requires a freeze date")
         datetime.strptime(freeze_date, "%Y-%m-%d")
+        policy = dataset.get("case_policy") or {}
+        reference = Path(__file__).resolve().parent.parent / "docs" / "o1-reference-audit.md"
+        if policy.get("approved_by") != "user-in-current-session" or policy.get(
+            "reference_audit_sha256") != hashlib.sha256(reference.read_bytes()).hexdigest():
+            raise ValueError("frozen dataset reference audit approval/hash is invalid")
     cases = dataset.get("cases")
     if not isinstance(cases, list) or len(cases) != EXPECTED_CASE_COUNT:
         raise ValueError(f"dataset must contain exactly {EXPECTED_CASE_COUNT} cases")
@@ -768,6 +773,8 @@ async def _collect(args: argparse.Namespace) -> int:
         "source_health": environment["retrieval_health"],
         "llm_compatibility": environment["llm_compatibility"],
     }
+    from deepchoice.contracts.manifest import build_core_asset_registry
+    metadata["core_asset_registry_id"] = build_core_asset_registry().registry_id
     seed = 20260916 + args.repetition
     cases = list(dataset["cases"])
     random.Random(seed).shuffle(cases)
@@ -799,6 +806,8 @@ async def _collect(args: argparse.Namespace) -> int:
     }
     metadata["peak_in_flight_cases"] = collector.peak_in_flight
     metadata["peak_observed_running_cases"] = collector.peak_observed_running
+    metadata["admitted_run_denominator"] = sum(bool(record.get("run_id")) for record in records)
+    metadata["manifest_ids"] = sorted({record["manifest_id"] for record in records if record.get("manifest_id")})
     (output_dir / "experiment.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

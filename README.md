@@ -305,8 +305,8 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
 正式产品基线使用 durable API；O1 已提供候选 12-case、serial=1 / concurrent=12 的采集与
-配对门禁，但案例/环境仍未冻结，也未运行付费研究。48-run 额度已获确认，JSON/tool 最小探测通过；
-重复蓝屏导致正式并发批次暂不启动，详见[O1 执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
+配对门禁，12-case 已获用户批准冻结为 1.0.0。48-run 额度已确认，JSON/tool 及完整检索健康通过；
+正式实验进度、知识快照与主机蓝屏风险见[O1 执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
 无 LLM/检索调用，不套用历史 Top-1 阈值。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s

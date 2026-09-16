@@ -15,8 +15,8 @@
 | `locust -f benchmarks/locustfile.py` | 只读 health/docs/durable 查询负载，不创建研究、不衡量报告质量或研究吞吐 |
 | `.github/workflows/benchmark.yml` | 手动离线 smoke；已移除旧付费 runner 和固定 Top-1 门槛 |
 
-O1 已建立 durable API 批量采集器和 12 例候选集，48-run 额度已确认，但案例参考依据、环境快照尚未
-冻结；重复主机蓝屏导致正式批次暂不启动，见[执行断点](../docs/o1-execution-status.md)。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
+O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已获用户批准冻结为 1.0.0，48-run 额度已确认。
+正式实验进度及主机风险见[执行断点](../docs/o1-execution-status.md)。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
 任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
 代替此项。
 
@@ -78,6 +78,11 @@ $env:LEARNED_DOCS_READONLY = "1"
 上述参数名保持兼容，但帮助文本已纠正。
 
 ## 停用但保留定位的旧入口
+
+已批准的 O1 私有实验可用 `product_baseline_experiment prepare --root <新实验目录> --llm-evidence <探测证据.json> --execute-paid-health-check`
+制作同一知识种子和四份初始副本；它保存依赖/健康/非敏感环境清单，不复制 `.env`。`serve --root <实验目录> --profile serial-r1`
+在生产模块导入前设置独立知识与数据库路径，离线预热已有 BGE-M3 缓存后启动单 worker。
+每个 profile 只能从空 runtime 启动；已有数据必须核对，不能直接重新 serve 冒充新实验。
 
 - `run_all_batches.ps1`：原先会删除批次结果，现仅说明停用并非零退出。
 - `run_batch_comparison.sh`：原先绑定个人 Python 路径、吞失败并复制 latest 文件，现同样停用。
