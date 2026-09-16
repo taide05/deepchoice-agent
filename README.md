@@ -180,7 +180,7 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 [`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。工程阶段已结束，
 后续已完成统一 Flash 和[基线准备检查](docs/baseline-readiness-audit.md)；
 下一阶段的案例、指标和运行步骤见[产品效果优化策略与评估协议](docs/product-effectiveness-optimization.md)
-（O1 的 12-case 串并发候选集与 durable 采集工具已建立，案例/环境冻结及付费实测尚未执行）。多租户认证、分布式基础设施及其他企业级
+（O1 的 12-case/环境已冻结，已创建 36/48 个 run，因运行阻塞暂停；[部分实测](docs/o1-live-baseline.md)不构成质量验收）。多租户认证、分布式基础设施及其他企业级
 扩展不在当前实施范围。
 
 ### 测试
@@ -189,9 +189,9 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，O1 采集基础加入后的
-全量验证结果为 **1083 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12，
-已通过独立复审。未执行真实 LLM/付费基线，这些结果不证明报告质量提升。
+项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，O1 冻结/隔离入口加入后的
+全量验证结果为 **1095 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12。
+此前工程基础验收已通过独立复审；当前付费实测部分完成且被运行阻塞，不能据离线测试声称报告质量提升。
 不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
@@ -306,7 +306,7 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
 正式产品基线使用 durable API；O1 已提供候选 12-case、serial=1 / concurrent=12 的采集与
 配对门禁，12-case 已获用户批准冻结为 1.0.0。48-run 额度已确认，JSON/tool 及完整检索健康通过；
-正式实验进度、知识快照与主机蓝屏风险见[O1 执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
+已创建 36/48 个 run；串行第 1 组报告 1/12，并发第 1 组 0/12，第 2 并发组实例租约丢失作废。唯一完整成功 P04 为 14,778 token，非平均成本；详见[部分实测/运行修复卡](docs/o1-live-baseline.md)及[执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
 无 LLM/检索调用，不套用历史 Top-1 阈值。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
@@ -315,7 +315,7 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 ## 技术栈
 
-O1 准备加固的本地验证（2026-09-16，Python 3.12）：42 个聚焦测试及完整套件 1092 passed、0 skipped；
+O1 冻结/隔离的本地验证（2026-09-16，Python 3.12）：18 个聚焦测试及完整套件 1095 passed、0 skipped；
 smoke-v1 12/12、fingerprint 匹配。以上是工程/fixture 验证，不是 12 个真实研究 case 的效果或成本。
 
 LangGraph（研究/生成节点 + 确定性引用验证与单一 HITL 决策门 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · DeepSeek Flash（全部 LLM 调用） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest

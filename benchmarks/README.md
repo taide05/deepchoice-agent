@@ -6,7 +6,7 @@
 | 入口 | 用途和边界 |
 |---|---|
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
-| `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例候选集，不调用 LLM/网络 |
+| `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例版本化案例集，不调用 LLM/网络 |
 | `python -m benchmarks.product_baseline collect ...` | 经 durable API 采集 serial=1 或 concurrent=12 的真实结果；必须冻结案例和环境，并显式确认付费运行 |
 | `python -m benchmarks.product_baseline compare ...` | 对人工评分后的同 repetition 串并发结果执行质量门禁，无网络调用 |
 | `python -m benchmarks.run_baseline --health-check` | 检索路由与 Tavily 连通性，会消耗 Tavily 额度；不检查 LLM，也不证明研究完成 |
@@ -16,6 +16,7 @@
 | `.github/workflows/benchmark.yml` | 手动离线 smoke；已移除旧付费 runner 和固定 Top-1 门槛 |
 
 O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已获用户批准冻结为 1.0.0，48-run 额度已确认。
+当前已创建 36/48 个 run，运行阻塞后已关闭服务；见[部分实测与恢复保护缺口](../docs/o1-live-baseline.md)。**不要续跑或重启这批已有数据库，不绕过租约，不自动补跑**；下述命令是操作说明，不授权当前作废组重测。
 正式实验进度及主机风险见[执行断点](../docs/o1-execution-status.md)。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
 任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
 代替此项。

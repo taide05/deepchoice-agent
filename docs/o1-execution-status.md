@@ -1,11 +1,11 @@
 # O1 执行断点
 
-日期：2026-09-16。状态：用户已批准案例冻结，正在完成正式实验启动，**O1/真实基线未完成**。
+日期：2026-09-16。状态：案例已冻结，已创建 36/48 个研究 run；因预算扇出及并发实例租约失效暂停，**O1/真实基线未完成**。[部分实测与 O1-R 修复卡](o1-live-baseline.md)。
 
 ## 已确认
 
 - 用户接受最多 48 个研究 run（12 case × serial/concurrent × 2 次），另含检索健康检查和最小 LLM 探测；失败不自动补跑。
-- 当前未提交研究任务，研究额度使用为 0/48；没有研究 case 的 token 成本可报告。
+- 已创建 36/48 个研究 run，未补跑；serial-r1 报告 1/12、concurrent-r1 报告 0/12，concurrent-r2 因实例权限丢失主动作废/停止，serial-r2 未提交。唯一成功 P04 的完整 Trace 用量为 14,778 token；[逐例安全观察](o1-token-observations.csv)不是完整账单。
 - DeepSeek 非 thinking JSON 和工具调用成功。成功探测的已知用量为输入 313、输出 36、总计 349 token。此数不是研究成本，也不是整个准备过程的账单。
 - 前两次探测因采集脚本误用共享 helper 的 prompt/response_format 契约而返回 HTTP 400；脚本已修正并补测试。这不构成模型效果差的证据，其缺失 usage 不填零。
 - 重启后 5 个 credential-free 路由探测通过；随后完整 health-check 的 routed Tavily POST 返回 HTTP 200。Tavily/GitHub/arXiv/official 使用 local-proxy，community 使用 self-forward；健康不是研究效果。
@@ -17,20 +17,22 @@
 
 ## 当前阻碍
 
+serial-r1 有 11 个 BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE；concurrent-r1 有 10 个 RESEARCH_FAILED 及 2 个预算证据不足。concurrent-r2 健康为 runtime_instance=lost，取消接口返回 RUNTIME_INSTANCE_LEASE_LOST；产品公共事件有 12 次自动恢复入队。无法把“采集器不调用 resume”当成整个服务不恢复。三个服务/采集器已关闭，数据库及提交日志保留；11 个 queued 非终态，**不要重启原目录或绕过租约写入**。第 1 次配对报告 0/12，质量门禁 unavailable/未通过，第 2 次无有效配对。根因诊断/最小修复及新复测分配需要用户方向，不能用剩余 12 个 run 自动补齐作废组。
+
 主机于 15:30、15:48 重启，System BugCheck 都为 `0x124`；WHEA-Logger 18 报告处理器核心的 Machine Check Exception / Bus-Interconnect Error。2026-09-14 还有 Cache Hierarchy Error 记录。
 
 该错误码表示系统报告致命硬件错误；不能据此确定具体部件或把根因归给项目代码。依据见[微软错误码说明](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-0x124---whea-uncorrectable-error)。未进行 BIOS、驱动、系统配置修改或压力测试。
 
-用户在看到蓝屏记录后再次要求继续 O1。四个 profile 一致冻结数值库/torch 线程为 1，并离线预热已有 BGE-M3 缓存；不改变 LLM 并发门、Prompt、预算或整 case 并发要求。这不是硬件修复或稳定证明；再次重启先核对提交日志，不补跑。先观察首个计分 case 的启动和用量，再按批准计划推进。
+用户在看到蓝屏记录后再次要求继续 O1。四个 profile 一致冻结数值库/torch 线程为 1，并离线预热已有 BGE-M3 缓存；未改变 LLM 并发门、Prompt、预算或整 case 并发要求。本轮最新 BugCheck 仍为 15:48，没有新增蓝屏；这不是硬件修复或稳定证明。
 
 ## 恢复顺序
 
 1. 用户已批准在本机继续；不修改系统配置，不复制 `.env` 到交付文档。
 2. 案例/参考依据冻结、完整检索健康和四组相同知识快照已完成。实验目录为 `outputs/product-baseline-live-20260916/`，知识 hash 为 `e55ddcac30d0e498c6e5ae02cb40d1bae95eb2831fda71e924ed9211b76466e4`。
-3. 完成隔离 durable 服务无研究启动验收。依赖、非敏感配置、模型参数/资产身份已冻结；已有 LLM 探测可作准备证据，若配置/模型漂移须先复核。
-4. 冻结干净代码提交后运行 serial-r1 / concurrent-r1、concurrent-r2 / serial-r2；每个 profile 12 新任务，同 repetition 使用相同已保存种子/顺序。首个正式 run 同时验证真实采集，不另增授权次数。
+3. 隔离服务空任务/健康启动验收已完成；正式执行代码为 7acb622，依赖、模型、环境/知识身份及时间在原件和实测报告中。
+4. 先确认 O1-R 的生产修复范围：预算感知扫描、租约续期/并发诊断及实验恢复保护；使用受控离线故障验证，相关契约、独立复审、全套验证和提交后才重测。不要直接续跑当前数据库。
 5. 中断时先查 `admissions.jsonl`、已创建 task/run 和服务状态。日志中的 `submission_started` 不代表已确认创建；不得重复 POST 或自动 resume/retry。先核对可能已扣费的任务，作废/补跑另经确认。
-6. 保存逐 case 已知 token、完整性、调用/重试、结果类型、预算结算/未知/预留；人工盲评及复核后才给并发门禁和首轮优化假设。保留集正文继续封存。
+6. 复测计划重新确认运行分配与额外额度；当前剩余原额度 12，不足完整补齐串行与作废并发组。已知 token/不完整边界已保存，语义质量仍待人工盲评及复核；保留集正文继续封存。
 
 ## 验证
 
