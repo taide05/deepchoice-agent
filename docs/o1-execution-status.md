@@ -1,13 +1,13 @@
 # O1 执行断点
 
-日期：2026-09-16。状态：案例已冻结，累计创建 37/48 个研究 run（原基线 36 + O1-R 单次 P06 1）；原串并发基线暂停，**O1/真实基线未完成**。[部分实测与 O1-R 修复卡](o1-live-baseline.md)。
+日期：2026-09-16。状态：案例已冻结，累计创建 43/48 个研究 run（原基线 36 + O1-R 7）；最新候选三开发例各两次 **6/6 正常完成**，本轮服务/采集器已关闭；原串并发基线暂停，**O1/真实基线未完成**。[部分实测](o1-live-baseline.md)、[O1-R 样本观察](o1r-single-case-reliability.md)。
 
 ## 已确认
 
-- 用户已确认 O1-R 实施，预算/恢复修复后单次 P06 正常完成，24,855 token 最终 Trace 完整；发现旧 KB 工具适配失败并补修。最新全套 1116 passed / 0 skipped（223.14 秒），独立复审无阻断项，见 [单 case 可靠性断点](o1r-single-case-reliability.md)。原始部分基线保持历史记录；剩余额度 11，不启动批次。
+- 用户已确认 O1-R 实施，预算/恢复/旧 KB 工具最小修复落地。最新候选 P01/P06/P07 各两次，6/6 正常完成、Trace 用量完整，共 143,354 token，1/78 scholarly 逻辑检索失败，来源 degraded；补修前 P06 24,855 token 另存、不计六次。最新全套 1116 passed / 0 skipped（223.14 秒），独立复审无阻断项，见 [可靠性观察及残余风险](o1r-single-case-reliability.md)。剩余额度 5，不启动批次，不宣称语义/严格 JSON/冷启动/并发或硬件稳定已验收。
 - 最新用户约束（2026-09-16）：单 case 稳定成功前，禁止 12-case 付费并发及整组串行。优先离线复现/最小修复，再逐次单 case 验证；不得自动排队多例。建议稳定门槛与已批准修复范围见 O1-R；通过单 case 验收后，恢复批次仍需用户确认。
 - 用户接受最多 48 个研究 run（12 case × serial/concurrent × 2 次），另含检索健康检查和最小 LLM 探测；失败不自动补跑。
-- 已创建 36/48 个研究 run，未补跑；serial-r1 报告 1/12、concurrent-r1 报告 0/12，concurrent-r2 因实例权限丢失主动作废/停止，serial-r2 未提交。唯一成功 P04 的完整 Trace 用量为 14,778 token；[逐例安全观察](o1-token-observations.csv)不是完整账单。
+- 原 12-case 基线已创建 36 个研究 run，未恢复旧任务；serial-r1 报告 1/12、concurrent-r1 报告 0/12，concurrent-r2 因实例权限丢失主动作废/停止，serial-r2 未提交。该原基线唯一成功 P04 的完整 Trace 用量为 14,778 token；[逐例安全观察](o1-token-observations.csv)不是完整账单，不与本轮三例六次合并分母。
 - DeepSeek 非 thinking JSON 和工具调用成功。成功探测的已知用量为输入 313、输出 36、总计 349 token。此数不是研究成本，也不是整个准备过程的账单。
 - 前两次探测因采集脚本误用共享 helper 的 prompt/response_format 契约而返回 HTTP 400；脚本已修正并补测试。这不构成模型效果差的证据，其缺失 usage 不填零。
 - 重启后 5 个 credential-free 路由探测通过；随后完整 health-check 的 routed Tavily POST 返回 HTTP 200。Tavily/GitHub/arXiv/official 使用 local-proxy，community 使用 self-forward；健康不是研究效果。
@@ -17,7 +17,7 @@
 
 本地探测原件：`outputs/product-baseline-v1-20260916/`。不提交密钥、`.env`、原始端点或报告正文。
 
-## 当前阻碍
+## 原串并发基线阻碍（历史证据保留）
 
 serial-r1 有 11 个 BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE；concurrent-r1 有 10 个 RESEARCH_FAILED 及 2 个预算证据不足。concurrent-r2 健康为 runtime_instance=lost，取消接口返回 RUNTIME_INSTANCE_LEASE_LOST；产品公共事件有 12 次自动恢复入队。无法把“采集器不调用 resume”当成整个服务不恢复。三个服务/采集器已关闭，数据库及提交日志保留；11 个 queued 非终态，**不要重启原目录或绕过租约写入**。第 1 次配对报告 0/12，质量门禁 unavailable/未通过，第 2 次无有效配对。根因诊断/最小修复及新复测分配需要用户方向，不能用剩余 12 个 run 自动补齐作废组。
 
@@ -34,9 +34,9 @@ serial-r1 有 11 个 BUDGET_EXCEEDED_INSUFFICIENT_EVIDENCE；concurrent-r1 有 1
 3. 隔离服务空任务/健康启动验收已完成；正式执行代码为 7acb622，依赖、模型、环境/知识身份及时间在原件和实测报告中。
 4. O1-R 的生产修复范围已确认：预算感知扫描、租约续期/并发诊断及实验恢复保护；使用受控离线故障验证，相关契约、独立复审、全套验证和提交后才重测。不要直接续跑当前数据库。
 5. 中断时先查 `admissions.jsonl`、已创建 task/run 和服务状态。日志中的 `submission_started` 不代表已确认创建；不得重复 POST 或自动 resume/retry。先核对可能已扣费的任务，作废/补跑另经确认。
-6. 不恢复批次：先确认单次开发案例验证分配，逐次检查；稳定成功验收且用户重新允许之后，才讨论完整串并发配对及额外额度。当前剩余原额度 12 不是批次许可。已知 token/不完整边界已保存，语义质量仍待人工盲评及复核；保留集正文继续封存。
+6. 不恢复批次：本轮逐次单例观察已完成，保留当前剩余 5 个原额度；后续严格结构/冷启/语义/并发风险仍需按范围验收，用户重新允许后才讨论完整配对及额外额度。原基线暂停时剩余 12 是历史分配，不是当前余额或批次许可；保留集正文继续封存。
 
-## 验证
+## 原 O1 冻结阶段验证（最新候选见顶部链接）
 
 2026-09-16，Python 3.12 项目虚拟环境：本次冻结/隔离聚焦测试 18 passed；代码/测试冻结后完整套件 1095 passed、0 skipped（206.27 秒）。pyflakes、vulture（100% confidence）、pip check、Compose 静默配置检查、frozen 结构/hash 校验、git diff --check 通过；smoke-v1 12/12，fingerprint 匹配。Compose 提示主 DeepSeek key 名未设置，当前使用已探测成功的兼容 key 名；未打印其值。
 

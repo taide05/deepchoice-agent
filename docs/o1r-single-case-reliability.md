@@ -1,6 +1,6 @@
 # O1-R：单 case 可靠性修复
 
-日期：2026-09-16。用户已确认实施 O1-R，暂停所有真实 12-case 并发及整组串行。预算/实验恢复修复后已单次验证 P06 正常成功；随后补修实测发现的旧 KB 适配，当前重新离线验证，不声称单 case 已稳定。原 36 个 run 与作废证据保留，不重启原实验数据库。累计 37/48 个已创建 run，原额度剩余 11。
+日期：2026-09-16。用户已确认实施 O1-R。本轮最小修复、离线验证和逐次单例观察已完成：最新候选 e25610b 的 P01/P06/P07 各两次，共 **6/6 正常完成、最终 Trace 用量完整**。这组开发样本支持单 case 执行可靠性，不是全产品稳定/语义质量验收；所有真实 12-case 并发及整组串行仍暂停。累计创建 43/48 个 run（原基线 36 + 本轮 7，其中补修前一次不计候选门槛），剩余 5；全部本轮服务/采集器关闭，原实验数据库不重启。
 
 ## 最小变更契约
 
@@ -23,6 +23,7 @@
 
 - run 级 heartbeat 的时间仍在仓库锁前冻结；SQLite busy 等待、事件循环延迟及高负载仍可能消耗 TTL。未完整复现并发 live 实例失效机制，不宣称租约问题全部解决。
 - 512 是短 JSON 的有界配置，不是语义质量/无截断保证；单次 live 必须检查结构是否完整，截断或 fallback 不算稳定成功。大输入或长期调用仍可能正常触发硬预算。
+- 当前诊断使用 json_repair 的 parse_ok，不是原文严格 JSON/schema 或 finish_reason 核验；只能说未观察到解析失败/输出触顶，不能证明不存在截断或 fallback。因此本轮通过的是执行完成观察门槛，严格结构与语义验收仍 pending。实验离线预热 BGE-M3、数值库线程 1；冷启动/default app 的真实外部执行未在这六次中测量。
 - 默认产品仍需自动恢复/七日 decision 过期扫描；仅实验关闭该扫描，需有界采集和受控停机，不作为长期部署配置。
 - 主机 WHEA 历史风险仍在。此轮不做 BIOS/驱动改动、硬件压力测试或网络/provider 改造。
 
@@ -45,3 +46,21 @@ P06-r1：completed，约 82.7 秒；输入 21,253 / 输出 3,602 / 总计 **24,8
 13 次 conflict_scan 的 helper 诊断均 parse_ok=True，输出最多 39 token；29 条共享 helper 脱敏诊断无 parse_ok=False 或 error_type，另两次工具式 LLM 用量由 Trace 记录。这是 helper 解析器观测，不声称严格原文 schema/语义验证。服务受控关闭，未重复 POST 或恢复旧 run。
 
 一条 evidence_gather.tool/search_kb failed 暴露旧 collection/embedding 适配，与预算修复无关；先补修/重跑验证再进行下一次单例。本次成功发生在 KB 补修之前，不作为最新候选的重复稳定门槛证明。保留集正文未查看，O1 串并发质量基线继续暂停。
+
+## 最新候选六次观察（独立逐次提交，不是串行组）
+
+执行提交 e25610b4cc013274ae45e5cd4184901a2f78f14a；dataset product-baseline-v1/1.0.0、2026-09-16 冻结、12-case hash 不变，实际只测 3 个开发 case、6 个 run。每次先验收上一例，再在一份空产品/checkpoint 数据库上提交一个新任务；未预排队、未恢复/重复原任务。请求并发、观测 running 峰值均 1，所有报告/快照可读，HITL/预算拒绝/重试均 0。只读产品元数据确认每库 task/run/run_results 各 1、completed 各 1，公开事件无 interrupted/auto_resumed/retry_queued；不读取 LangGraph 私有检查点。
+
+| case | 第一次 token / 秒 | 第二次 token / 秒 | 最终完整用量 |
+| --- | --- | --- | --- |
+| P01 | 25,377 / 89.7 | 29,832 / 77.1 | 2/2 |
+| P06 | 24,803 / 72.8 | 24,652 / 70.0 | 2/2 |
+| P07 | 18,321 / 68.2 | 20,369 / 64.7 | 2/2 |
+
+候选六次已知合计 **143,354 token**、167 LLM、78 逻辑检索/证据工具调用；1/78 为 P01-r1 的 scholarly 工具失败，运行仍正常完成，**live source health=degraded**，不声称所有来源正常。各 run token 预算 reserved/unknown_spend 均 0，剩余容量明确；货币价格 unavailable，不推算金额。上述范围/重复不是项目平均成本，不能与历史 300-case 或原 12-case 配对分母合并。
+
+所有候选 collection 引用同一冻结 environment hash 60d88cdb756b1e3e88f89c8aa88862e67ed5aa6c58cacfdce6bf115870f3d20c，knowledge/dependency/model/settings/registry 与同 case manifest 一致。第二空根目录的环境仅新增 retrieval-health evidence hash，与原配置身份分开；两份健康证据保留并按 root→run 绑定。初始知识一致，原知识库和 learned-docs hash 验证未变。
+
+[安全机器观察及逐 run 身份](o1r-single-case-observations.json)、[逐次 token CSV](o1r-token-observations.csv)保留七次（含补修前一例），不提交报告正文/诊断原件/密钥。本轮十个测试临时目录已清理，旧 ACL 拒绝访问的残留不动。独立复审无阻断项；live 数据由主执行者只读核对。
+
+后续：保留剩余 5 个额度，不自动派发；先按需要补冷启、严格结构、run-heartbeat/busy/loop-lag 的离线故障验收和报告人工盲评，再讨论完整 O1 配对及额度。恢复批次必须用户重新确认，六次完成不会自动触发它。O1 真实基线、并发效果与语义质量仍未完成。

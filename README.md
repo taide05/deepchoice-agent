@@ -73,6 +73,8 @@ Docker 传递同名设置；覆盖容器路径时需自行提供相应挂载。O
 
 O1-R 固定 conflict_scan 输出上限为 512（其他共享 LLM 调用仍 4096），请求/预算/manifest 一致；每 run 扫描和初次仲裁阶段各最多四路，并继续受全局 LLM 门约束。未增加环境变量或提高硬预算。仲裁 KB 工具复用默认 tech_kb/BGE 检索契约，不再访问旧 knowledge_base collection。实验服务单独关闭自动恢复，默认产品恢复不变；[修复与单次验证协议](docs/o1r-single-case-reliability.md)尚不构成稳定或质量验收。
 
+2026-09-16 的 O1-R 最新候选仅测三个开发 case 各两次：6/6 正常完成、Trace token 完整，总计 143,354 token，1/78 逻辑检索失败（来源 degraded）。这是隔离/预热环境的单 case 执行观察，不是 12-case 基线、语义质量、并发或硬件稳定验收；所有真实付费批次仍暂停，详见上述协议。
+
 Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
 `RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
 契约与来源校验的成功检索结果，不缓存失败结果或 LLM 响应，旧 `/research` 兼容路径继续绕过缓存。
