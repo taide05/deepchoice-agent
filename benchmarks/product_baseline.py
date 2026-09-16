@@ -233,6 +233,36 @@ class DurableBaselineCollector:
         self.peak_in_flight = 0
         self._running_cases: set[str] = set()
         self.peak_observed_running = 0
+        self._abort_reason: str | None = None
+
+    async def _healthy(self) -> bool:
+        if self._abort_reason:
+            return False
+        try:
+            response, payload = await self._request_json("GET", "/health")
+        except httpx.HTTPError:
+            self._abort_reason = "RUNTIME_HEALTH_UNAVAILABLE"
+            return False
+        if response.status_code != 200 or not payload or payload.get("runtime_instance") != "active":
+            self._abort_reason = "RUNTIME_HEALTH_UNAVAILABLE"
+            return False
+        return True
+
+    async def _sample_observability(self, record: dict[str, Any], *, final: bool = False) -> None:
+        record["observability_final"] = False
+        try:
+            response, observation = await self._request_json(
+                "GET", f"/api/v1/tasks/{record['task_id']}/observability")
+        except httpx.HTTPError:
+            return  # Preserve the last readable usage on transport loss.
+        if response.status_code == 200 and observation:
+            if observation.get("run_id", record["run_id"]) != record["run_id"]:
+                record["error_code"] = "OBSERVABILITY_RUN_MISMATCH"
+                self._abort_reason = record["error_code"]
+                return
+            record["observability"] = observation
+            record["observability_sampled_at"] = _utc_now()
+            record["observability_final"] = final and record["status"] in TERMINAL_STATUSES
 
     async def _cancel_and_settle(self, record: dict[str, Any]) -> None:
         task_id = record["task_id"]
@@ -346,15 +376,22 @@ class DurableBaselineCollector:
             "report_path": None,
             "snapshot_path": None,
             "observability": None,
+            "observability_final": False,
+            "observability_sampled_at": None,
             "error_code": None,
         }
         try:
+            if not await self._healthy():
+                record["status"] = "not_submitted"
+                record["error_code"] = self._abort_reason
+                return await self._finish(record, started)
             await self._journal(record, "submission_started")
             response, task = await self._request_json(
                 "POST", "/api/v1/tasks", json=case["request"]
             )
             if response.status_code != 202 or task is None:
                 record["error_code"] = _http_error_code(response)
+                self._abort_reason = record["error_code"]
                 return await self._finish(record, started)
             task_id = task["task"]["task_id"]
             record["task_id"] = task_id
@@ -363,8 +400,14 @@ class DurableBaselineCollector:
             record["manifest_id"] = latest_run.get("manifest_id")
             await self._journal(record, "admitted")
             resolved_decisions: set[str] = set()
+            saw_running = False
+            allowed_decision_requeue = False
+            last_sample = 0.0
 
             while True:
+                if not await self._healthy():
+                    record["error_code"] = self._abort_reason
+                    break
                 if time.monotonic() - started >= self.options.case_timeout_seconds:
                     record["collector_timeout"] = True
                     await self._cancel_and_settle(record)
@@ -374,6 +417,7 @@ class DurableBaselineCollector:
                 )
                 if response.status_code != 200 or task is None:
                     record["error_code"] = _http_error_code(response)
+                    self._abort_reason = record["error_code"]
                     break
                 status = task["task"]["status"]
                 record["status"] = status
@@ -381,14 +425,22 @@ class DurableBaselineCollector:
                 if latest_run.get("run_id") != record["run_id"] or latest_run.get(
                     "manifest_id") != record["manifest_id"]:
                     record["error_code"] = "RUN_IDENTITY_CHANGED"
+                    self._abort_reason = record["error_code"]
                     break
                 if status == "running":
+                    saw_running = True
+                    allowed_decision_requeue = False
                     self._running_cases.add(case_id)
                     self.peak_observed_running = max(self.peak_observed_running, len(self._running_cases))
                 else:
                     self._running_cases.discard(case_id)
+                if status == "queued" and saw_running and not allowed_decision_requeue:
+                    record["error_code"] = "UNEXPECTED_RUN_REQUEUE"
+                    self._abort_reason = record["error_code"]
+                    break
                 if status == "interrupted":
                     record["error_code"] = "RUN_INTERRUPTED_NO_AUTO_RESUME"
+                    self._abort_reason = record["error_code"]
                     break
                 if status in TERMINAL_STATUSES:
                     break
@@ -415,7 +467,13 @@ class DurableBaselineCollector:
                         record["error_code"] = error_code
                         break
                     resolved_decisions.add(decision_id)
+                    allowed_decision_requeue = True
                     record["hitl_resolutions"] += 1
+                if time.monotonic() - last_sample >= 5:
+                    await self._sample_observability(record)
+                    last_sample = time.monotonic()
+                    if self._abort_reason:
+                        break
                 await asyncio.sleep(self.options.poll_interval_seconds)
 
             await self._collect_artifacts(record)
@@ -423,20 +481,16 @@ class DurableBaselineCollector:
             raise
         except Exception as exc:
             record["error_code"] = type(exc).__name__
+            self._abort_reason = record["error_code"]
         return await self._finish(record, started)
 
     async def _collect_artifacts(self, record: dict[str, Any]) -> None:
         task_id = record.get("task_id")
         if not isinstance(task_id, str):
             return
-        response, observability = await self._request_json(
-            "GET", f"/api/v1/tasks/{task_id}/observability"
-        )
-        if response.status_code == 200:
-            if observability and observability.get("run_id", record["run_id"]) != record["run_id"]:
-                record["error_code"] = "OBSERVABILITY_RUN_MISMATCH"
-                return
-            record["observability"] = observability
+        await self._sample_observability(record, final=True)
+        if record.get("error_code") == "OBSERVABILITY_RUN_MISMATCH":
+            return
         if record["status"] not in SUCCESS_STATUSES:
             return
         response, snapshot = await self._request_json(
@@ -477,7 +531,7 @@ class DurableBaselineCollector:
     ) -> dict[str, Any]:
         record["ended_at"] = _utc_now()
         record["wall_time_ms"] = round((time.monotonic() - started) * 1000)
-        record["usage"] = usage_projection(record.get("observability"))
+        record["usage"] = record_usage_projection(record)
         async with self._write_lock:
             with (self.output_dir / "runs.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
@@ -505,6 +559,16 @@ def usage_projection(observability: dict[str, Any] | None) -> dict[str, Any]:
     projection["budget_resources"] = budget.get("resources") or {}
     projection["budget_admission_denied"] = budget.get("admission_denied")
     projection["price_availability"] = budget.get("price_availability", "unavailable")
+    return projection
+
+
+def record_usage_projection(record: dict[str, Any]) -> dict[str, Any]:
+    projection = usage_projection(record.get("observability"))
+    final = (record["status"] in TERMINAL_STATUSES and record.get("observability_final", True))
+    projection["observation_final"] = bool(final)
+    projection["observed_at"] = record.get("observability_sampled_at")
+    if not final:
+        projection["token_usage_complete"] = False
     return projection
 
 
@@ -557,18 +621,19 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
     total_wall = sum(int(record.get("wall_time_ms") or 0) for record in records)
     usage_fields = ["case_id", "status", "wall_time_ms", "input_tokens", "output_tokens",
                     "total_tokens", "token_usage_complete", "llm_calls", "retrieval_calls",
-                    "http_calls", "llm_retries", "failed_calls", "price_availability"]
+                    "http_calls", "llm_retries", "failed_calls", "price_availability",
+                    "observation_final", "observed_at"]
     with (output_dir / "usage.csv").open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=usage_fields)
         writer.writeheader()
         for record in sorted(records, key=lambda item: item["case_id"]):
-            usage = usage_projection(record.get("observability"))
+            usage = record.get("usage") or record_usage_projection(record)
             writer.writerow({field: record.get(field) if field in record else usage.get(field)
                              for field in usage_fields})
-    known = [usage_projection(record.get("observability"))["total_tokens"] for record in records]
+    usages = [record.get("usage") or record_usage_projection(record) for record in records]
+    known = [usage["total_tokens"] for usage in usages]
     known = [value for value in known if isinstance(value, int)]
-    complete = sum(usage_projection(record.get("observability"))["token_usage_complete"] is True
-                   for record in records)
+    complete = sum(usage["token_usage_complete"] is True for usage in usages)
     lines = [
         "# Product baseline collection",
         "",
@@ -777,6 +842,12 @@ async def _collect(args: argparse.Namespace) -> int:
     metadata["core_asset_registry_id"] = build_core_asset_registry().registry_id
     seed = 20260916 + args.repetition
     cases = list(dataset["cases"])
+    if args.command == "collect-single":
+        cases = [case for case in cases if case["id"] == args.case_id and case["split"] == "development"]
+        if len(cases) != 1:
+            raise ValueError("single-case validation requires one development case")
+    metadata["execution_mode"] = "single" if args.command == "collect-single" else "batch"
+    metadata["case_denominator"] = len(cases)
     random.Random(seed).shuffle(cases)
     metadata["order_seed"] = seed
     metadata["case_order"] = [case["id"] for case in cases]
@@ -800,10 +871,15 @@ async def _collect(args: argparse.Namespace) -> int:
     write_score_template(output_dir, records)
     write_collection_summary(output_dir, records)
     metadata["ended_at"] = _utc_now()
-    metadata["terminal_counts"] = {
+    metadata["observed_status_counts"] = {
         status: sum(record["status"] == status for record in records)
         for status in sorted({record["status"] for record in records})
     }
+    metadata["terminal_counts"] = {status: count for status, count in metadata["observed_status_counts"].items()
+                                   if status in TERMINAL_STATUSES}
+    metadata["collector_stop_reason"] = collector._abort_reason
+    if collector._abort_reason:
+        metadata["source_health"] = "degraded"
     metadata["peak_in_flight_cases"] = collector.peak_in_flight
     metadata["peak_observed_running_cases"] = collector.peak_observed_running
     metadata["admitted_run_denominator"] = sum(bool(record.get("run_id")) for record in records)
@@ -838,6 +914,18 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--case-timeout", type=float, default=2100.0)
     collect.add_argument("--execute-paid-runs", action="store_true")
 
+    single = subparsers.add_parser("collect-single", help="execute exactly one development case, never a batch")
+    single.add_argument("--case-id", choices=tuple(f"P{i:02d}" for i in range(1, 9)), required=True)
+    single.add_argument("--cases-file", default="benchmarks/product-baseline-v1.json")
+    single.add_argument("--environment-file", required=True)
+    single.add_argument("--output-dir", required=True)
+    single.add_argument("--api-base", default="http://127.0.0.1:8000")
+    single.add_argument("--repetition", type=int, choices=(1, 2), required=True)
+    single.add_argument("--poll-interval", type=float, default=2.0)
+    single.add_argument("--case-timeout", type=float, default=2100.0)
+    single.add_argument("--execute-paid-runs", action="store_true")
+    single.set_defaults(profile="serial", concurrency=1)
+
     compare = subparsers.add_parser("compare", help="compare scored profile artifacts")
     compare.add_argument("--serial-dir", required=True)
     compare.add_argument("--concurrent-dir", required=True)
@@ -866,7 +954,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if args.command == "collect":
+        if args.command in {"collect", "collect-single"}:
             return asyncio.run(_collect(args))
         result = compare_profiles(Path(args.serial_dir), Path(args.concurrent_dir))
         output = Path(args.output)

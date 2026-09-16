@@ -253,6 +253,7 @@ class RunCoordinator:
         checkpointer: Any,
         *,
         enabled: bool = True,
+        auto_recovery: bool = True,
         lease_ttl: timedelta = timedelta(seconds=30),
         heartbeat_interval: timedelta = timedelta(seconds=10),
         run_timeout: timedelta = timedelta(seconds=1800),
@@ -271,6 +272,7 @@ class RunCoordinator:
         self.repository = repository
         self.checkpointer = checkpointer
         self.enabled = enabled
+        self.auto_recovery = auto_recovery
         self.lease_ttl = lease_ttl
         self.heartbeat_interval = heartbeat_interval
         self.run_timeout = run_timeout
@@ -316,6 +318,8 @@ class RunCoordinator:
         return tuple(self._active)
 
     async def start(self) -> tuple[str, ...]:
+        if not self.auto_recovery:
+            return ()
         recovered = await self.repository.recover_runs(now=self._clock())
         if self.enabled:
             for item in recovered:

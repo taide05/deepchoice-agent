@@ -22,7 +22,7 @@ from .errors import DeepChoiceError, ErrorCategory
 from ..agents.query_adapter import ADAPT_SYSTEM
 from ..agents.query_analyzer import DECOMPOSITION_SYSTEM
 from ..agents.self_reviewer import REVIEW_SYSTEM
-from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS, synthesis_extra_body
+from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS, max_output_tokens_for, synthesis_extra_body
 
 
 CURRENT_WORKFLOW_VERSION = "research-v3"
@@ -264,7 +264,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 call_id="conflict_scan",
                 tier="deepseek-flash",
                 prompt_id="conflict_detector.contradiction_scan_system",
-                max_output_tokens=MAX_OUTPUT_TOKENS,
+                max_output_tokens=max_output_tokens_for("conflict_scan"),
             ),
             LLMCallSnapshot(
                 call_id="conflict_arbitration",

@@ -8,6 +8,7 @@
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
 | `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例版本化案例集，不调用 LLM/网络 |
 | `python -m benchmarks.product_baseline collect ...` | 经 durable API 采集 serial=1 或 concurrent=12 的真实结果；必须冻结案例和环境，并显式确认付费运行 |
+| `python -m benchmarks.product_baseline collect-single --case-id P06 ...` | 仅一个开发 case、concurrency=1、新输出目录及付费开关；运行可靠性验证，不是完整基线 |
 | `python -m benchmarks.product_baseline compare ...` | 对人工评分后的同 repetition 串并发结果执行质量门禁，无网络调用 |
 | `python -m benchmarks.run_baseline --health-check` | 检索路由与 Tavily 连通性，会消耗 Tavily 额度；不检查 LLM，也不证明研究完成 |
 | `/api/v1/tasks/*` | 当前产品路径；真实基线须经此入口采集任务、报告、HITL 和 observability |
@@ -84,6 +85,7 @@ $env:LEARNED_DOCS_READONLY = "1"
 制作同一知识种子和四份初始副本；它保存依赖/健康/非敏感环境清单，不复制 `.env`。`serve --root <实验目录> --profile serial-r1`
 在生产模块导入前设置独立知识与数据库路径，离线预热已有 BGE-M3 缓存后启动单 worker。
 每个 profile 只能从空 runtime 启动；已有数据必须核对，不能直接重新 serve 冒充新实验。
+实验 factory 禁止 coordinator 自动恢复（正常产品默认保留）；采集持续检查公开实例健康和重入队，停止时保留非最终用量下界。单次验证示例：`python -m benchmarks.product_baseline collect-single --case-id P06 --repetition 1 --environment-file <ready.json> --output-dir <新目录> --api-base http://127.0.0.1:8011 --execute-paid-runs`。每次检查结果后才决定下一次，不自动排队/循环多例；详见 [O1-R](../docs/o1r-single-case-reliability.md)。
 
 - `run_all_batches.ps1`：原先会删除批次结果，现仅说明停用并非零退出。
 - `run_batch_comparison.sh`：原先绑定个人 Python 路径、吞失败并复制 latest 文件，现同样停用。

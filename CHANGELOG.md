@@ -3,6 +3,7 @@
 ## [Unreleased] - 2026-09-16
 
 ### Added
+- Approved O1-R single-case reliability repair: guarded collect-single development-case entry, live runtime-health/requeue admission latch, last safe usage samples with nonfinal completeness downgrade, and experiment-only recovery disablement; normal product recovery remains enabled
 - User execution constraint (2026-09-16): no live 12-case concurrency or serial batches until representative single-case reliability acceptance; prioritize offline reproduction/minimal fixes and individually decided single-case checks. Batch resumption requires renewed confirmation, not merely remaining quota; repair implementation and paid allocation remain unapproved
 - O1 partial live observations (2026-09-16, frozen 12-case dataset): 36/48 research runs admitted, serial-r1 reports 1/12 versus concurrent-r1 0/12; concurrent-r2 invalidated/stopped after instance lease loss and auto-recovery queue events. P04's complete successful Trace usage was 14,778 tokens; paired semantic quality unavailable, not passed. Saved sanitized per-case token observations and an unapproved O1-R repair card; no automatic re-submission or serial-r2 admission
 - O1 user-approved case freeze 1.0.0 with dated official reference audit/hash, RabbitMQ Streams replay boundary, core asset and manifest identities, and isolated snapshot/embedding-warmed single-worker experiment entry; all four profiles freeze the same numeric resource settings without changing LLM policy or budget
@@ -71,6 +72,8 @@
 - Tavily retrieval, conflict evidence, and benchmark health checks now use the outbound-selected route; credential-free HEAD probing replaces direct-only route assumptions while preserving the legacy `tavily_direct` report label
 
 ### Fixed
+- Bound conflict scan output to 512 in dispatch/reservation/manifest, limit per-run scan/initial arbitration to four concurrent calls, and drain admitted scans before budget errors propagate; standard hard limits remain unchanged and historical 4096 scan manifests remain readable but cannot resume
+- Compute instance acquisition TTL after SQLite writer acquisition and renewal timestamps after local lock waiting; preserve expiry fencing/fail-closed, without claiming full live lease-loss diagnosis
 - Honor existing CHROMA_PATH in ChromaKB without changing its default path or collection; pass knowledge/learned-document settings through Docker so isolated O1 experiments cannot silently read the normal knowledge store
 - Budget exhaustion now latches inside serialized admission so a queued smaller request cannot commit after an earlier denial for the same run
 - Durable SSE now closes server-side after a `waiting_for_input` event is caught up and resumes from `Last-Event-ID` after the decision is resolved

@@ -16,6 +16,9 @@ from ..utils.views import print_agent_output
 # LLM_DS_CONCURRENCY bounds simultaneous calls here; it is not an RPM limit.
 # ---------------------------------------------------------------------------
 FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_DS_CONCURRENCY", "80")))
+# Run-local stages must not reserve fifteen worst-case outputs at once.
+# This fixed bound complements (and never replaces) the process-wide gate.
+CONFLICT_STAGE_CONCURRENCY = 4
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -627,19 +630,26 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     candidates = candidates[:15]
 
     # LLM scan in parallel
+    stage_gate = asyncio.Semaphore(CONFLICT_STAGE_CONCURRENCY)
     async def _scan(cand):
         i, j, sim = cand
-        info = await _scan_pair_contradiction(
-            high_score_sources[i], high_score_sources[j], query_topic,
-            usage=usage,
-        )
+        async with stage_gate:
+            info = await _scan_pair_contradiction(
+                high_score_sources[i], high_score_sources[j], query_topic,
+                usage=usage,
+            )
         return (i, j, sim, info) if info else None
 
     print_agent_output(
         f"LLM scanning {len(candidates)} candidate pairs for contradictions",
         agent="CONFLICT_DETECTOR",
     )
-    scan_results = await asyncio.gather(*[_scan(c) for c in candidates])
+    # A denial latches admission, but previously dispatched calls still own
+    # reservations. Drain them before propagating failure/finalizing the run.
+    scan_results = await asyncio.gather(*[_scan(c) for c in candidates], return_exceptions=True)
+    for result in scan_results:
+        if isinstance(result, BaseException):
+            raise result
 
     pairs = []
     for r in scan_results:
@@ -721,11 +731,12 @@ class ConflictDetectorAgent:
             }
 
         # --- Stage 1: Flash arbitration (parallel) ---
+        arbitration_gate = asyncio.Semaphore(CONFLICT_STAGE_CONCURRENCY)
         async def _arbitrate_one(pair: dict) -> dict:
             det = _deterministic_arbitration(pair["source_a"], pair["source_b"])
             if det is not None:
                 return _build_conflict(pair, det, model="deepseek-flash(rule)")
-            async with FLASH_SEM:
+            async with arbitration_gate, FLASH_SEM:
                 result = await call_model(
                     _make_prompt(pair["source_a"], pair["source_b"]),
                     model="deepseek-flash", tag="conflict_arbitration",

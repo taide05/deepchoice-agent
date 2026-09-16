@@ -99,10 +99,10 @@ class RuntimeInstanceGuard:
         return now, now + timedelta(seconds=self._lease_seconds)
 
     async def acquire(self) -> None:
-        now, expiry = self._now_and_expiry()
         async with self._lock:
             await self._connection.execute("BEGIN IMMEDIATE")
             try:
+                now, expiry = self._now_and_expiry()
                 cursor = await self._connection.execute(
                     """
                     INSERT INTO runtime_instance_leases(
@@ -137,8 +137,10 @@ class RuntimeInstanceGuard:
     async def renew_once(self) -> None:
         if not self._acquired:
             raise RuntimeInstanceLeaseLostError("runtime instance lease is not held")
-        now, expiry = self._now_and_expiry()
         async with self._lock:
+            # Lock wait consumes wall time. Never renew using a stale expiry or
+            # a pre-wait predicate that could revive an already expired lease.
+            now, expiry = self._now_and_expiry()
             cursor = await self._connection.execute(
                 """
                 UPDATE runtime_instance_leases

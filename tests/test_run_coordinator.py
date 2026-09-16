@@ -186,7 +186,8 @@ async def test_submit_deduplicates_and_records_checkpoint_on_success(repo):
 
 
 @pytest.mark.asyncio
-async def test_interrupt_pauses_and_resolved_command_resumes_same_run(repo):
+@pytest.mark.parametrize("auto_recovery", [True, False])
+async def test_interrupt_pauses_and_resolved_command_resumes_same_run(repo, auto_recovery):
     from deepchoice.hitl import DecisionResolution
 
     FakeOrchestrator.mode = "interrupt"
@@ -198,11 +199,14 @@ async def test_interrupt_pauses_and_resolved_command_resumes_same_run(repo):
         repo,
         object(),
         owner_id="worker",
+        auto_recovery=auto_recovery,
         lease_ttl=timedelta(minutes=1),
         heartbeat_interval=timedelta(seconds=1),
         run_timeout=timedelta(minutes=30),
         orchestrator_factory=FakeOrchestrator,
     )
+    if not auto_recovery:
+        assert await coordinator.start() == ()
     assert await coordinator.submit(run.run_id, resume=False)
     await _wait_done(coordinator, run.run_id)
     waiting = await repo.get_task(task.task_id)
@@ -484,6 +488,36 @@ async def test_start_recovers_stale_run_with_compatible_checkpoint(repo):
     assert (await repo.get_run(run.run_id)).status is RunStatus.COMPLETED
     assert FakeOrchestrator.seen_resumes == [True]
     await coordinator.stop()
+
+
+@pytest.mark.asyncio
+async def test_experiment_start_does_not_recover_or_mutate_stale_checkpoint_run(repo, monkeypatch):
+    from deepchoice.persistence.records import CheckpointReference
+    from unittest.mock import AsyncMock
+    task, run = _records()
+    await repo.create_task_with_run(task, run)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    grant = await repo.acquire_run_lease(run.run_id, lease_owner="old",
+        lease_ttl=timedelta(seconds=1), run_timeout=timedelta(minutes=1), now=now)
+    await repo.add_checkpoint_reference(CheckpointReference(run_id=run.run_id,
+        checkpoint_id="cp-old", state_schema_version=run.manifest.state_schema_version,
+        execution_epoch=grant.execution_epoch, created_at=now),
+        lease_owner="old", execution_epoch=grant.execution_epoch, now=now)
+    before = await repo.get_task(task.task_id)
+    events = await repo.get_task_event_cursor(task.task_id, cursor=0)
+    recover = AsyncMock(wraps=repo.recover_runs)
+    monkeypatch.setattr(repo, "recover_runs", recover)
+    coordinator = RunCoordinator(repo, object(), auto_recovery=False,
+        recovery_interval=timedelta(milliseconds=1))
+    try:
+        assert await coordinator.start() == ()
+        await asyncio.sleep(0.01)
+        assert await repo.get_task(task.task_id) == before
+        assert await repo.get_task_event_cursor(task.task_id, cursor=0) == events
+        recover.assert_not_called()
+        assert coordinator.active_runs == ()
+    finally:
+        await coordinator.stop()
 
 
 @pytest.mark.asyncio

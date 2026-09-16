@@ -58,20 +58,25 @@ def test_experiment_server_factory_isolates_runtime_databases(tmp_path, monkeypa
     monkeypatch.setattr(app_module.app.state, "product_database_path", None, raising=False)
     monkeypatch.setattr(app_module.app.state, "checkpoint_database_path", None, raising=False)
     monkeypatch.setattr(app_module.app.state, "legacy_snapshot_root", None, raising=False)
+    monkeypatch.setattr(app_module.app.state, "auto_recovery_enabled", True, raising=False)
     application = create_app()
     assert application.state.product_database_path == root / "product.db"
     assert application.state.checkpoint_database_path == root / "checkpoints.db"
     assert application.state.legacy_snapshot_root == root / "legacy-import-disabled"
+    assert application.state.auto_recovery_enabled is False
 
 
 @pytest.mark.asyncio
-async def test_collector_handles_hitl_and_preserves_unknown_observability(tmp_path):
+@pytest.mark.parametrize("requeue_after_resolution", [False, True])
+async def test_collector_handles_hitl_and_preserves_unknown_observability(tmp_path, requeue_after_resolution):
     case = load_dataset(DATASET)[0]["cases"][7]
     task_reads = 0
     decision_reads = 0
 
     async def handler(request: httpx.Request) -> httpx.Response:
         nonlocal task_reads, decision_reads
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         path = request.url.path
         if request.method == "POST" and path == "/api/v1/tasks":
             return httpx.Response(
@@ -86,7 +91,9 @@ async def test_collector_handles_hitl_and_preserves_unknown_observability(tmp_pa
             )
         if request.method == "GET" and path == "/api/v1/tasks/task-1":
             task_reads += 1
-            status = "waiting_for_input" if task_reads <= 2 else "completed"
+            statuses = (["running", "waiting_for_input", "queued", "running", "waiting_for_input", "completed"]
+                        if requeue_after_resolution else ["waiting_for_input", "waiting_for_input", "completed"])
+            status = statuses[min(task_reads - 1, len(statuses) - 1)]
             return httpx.Response(
                 200,
                 json={
@@ -168,6 +175,8 @@ async def test_collector_times_out_through_public_cancel_and_records_failure(tmp
     case = load_dataset(DATASET)[0]["cases"][0]
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         path = request.url.path
         if request.method == "POST" and path == "/api/v1/tasks":
             return httpx.Response(
@@ -224,6 +233,8 @@ async def test_collector_keeps_terminal_failure_and_unknown_usage(tmp_path):
     case = load_dataset(DATASET)[0]["cases"][1]
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         path = request.url.path
         if request.method == "POST" and path == "/api/v1/tasks":
             return httpx.Response(
@@ -284,6 +295,8 @@ async def test_collector_enforces_whole_case_concurrency_limit(tmp_path):
 
     async def handler(request: httpx.Request) -> httpx.Response:
         nonlocal active_posts, maximum_posts
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         path = request.url.path
         if request.method == "POST" and path == "/api/v1/tasks":
             payload = json.loads(request.content)
@@ -481,6 +494,8 @@ def test_comparison_rejects_environment_drift_and_stale_score_identity(tmp_path)
 async def test_collector_does_not_silently_follow_a_replaced_run(tmp_path):
     case = load_dataset(DATASET)[0]["cases"][0]
     async def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         if request.method == "POST":
             return httpx.Response(202, json={"task": {"task_id": "t", "status": "queued"},
                 "latest_run": {"run_id": "original", "manifest_id": "m"}})
@@ -504,6 +519,8 @@ async def test_timeout_observes_cancel_completion_without_new_research_run(tmp_p
     submissions = 0
     async def handler(request):
         nonlocal submissions
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         if request.method == "POST" and request.url.path == "/api/v1/tasks":
             submissions += 1
             status, code = "queued", 202

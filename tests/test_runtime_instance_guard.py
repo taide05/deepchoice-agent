@@ -21,6 +21,34 @@ from deepchoice.server.app import lifespan
 NOW = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delay", [20, 31])
+async def test_instance_renewal_samples_time_after_shared_lock_wait(tmp_path, delay):
+    current = NOW
+    connection = await connect_database(tmp_path / "delayed-guard.db")
+    await run_migrations(connection)
+    lock = asyncio.Lock()
+    guard = RuntimeInstanceGuard(connection, lock, clock=lambda: current)
+    try:
+        await guard.acquire()
+        await lock.acquire()
+        renewal = asyncio.create_task(guard.renew_once())
+        await asyncio.sleep(0)
+        current += timedelta(seconds=delay)
+        lock.release()
+        if delay > 30:
+            with pytest.raises(RuntimeInstanceLeaseLostError):
+                await renewal
+        else:
+            await renewal
+            row = await (await connection.execute(
+                "SELECT lease_expires_at FROM runtime_instance_leases")).fetchone()
+            assert datetime.fromisoformat(row[0]) == current + timedelta(seconds=30)
+    finally:
+        await guard.release()
+        await connection.close()
+
+
 def test_single_worker_configuration_rejects_known_multi_worker_settings():
     validate_single_worker_configuration({})
     validate_single_worker_configuration({"WEB_CONCURRENCY": "1", "UVICORN_CMD_ARGS": "--workers=1"})
@@ -52,6 +80,32 @@ async def test_only_one_live_instance_can_hold_database_lease(tmp_path):
         await second.release()
         await first_connection.close()
         await second_connection.close()
+
+
+@pytest.mark.asyncio
+async def test_instance_acquisition_ttl_starts_after_sqlite_writer_wait(tmp_path):
+    current = NOW
+    connection = await connect_database(tmp_path / "delayed-acquire.db")
+    await run_migrations(connection)
+    writer = await connect_database(tmp_path / "delayed-acquire.db")
+    guard = RuntimeInstanceGuard(connection, asyncio.Lock(), clock=lambda: current)
+    await writer.execute("BEGIN IMMEDIATE")
+    acquisition = asyncio.create_task(guard.acquire())
+    try:
+        await asyncio.sleep(0.02)
+        current += timedelta(seconds=20)
+        await writer.commit()
+        await acquisition
+        row = await (await connection.execute(
+            "SELECT started_at,lease_expires_at FROM runtime_instance_leases")).fetchone()
+        assert datetime.fromisoformat(row[0]) == current
+        assert datetime.fromisoformat(row[1]) == current + timedelta(seconds=30)
+    finally:
+        await writer.rollback()
+        await asyncio.gather(acquisition, return_exceptions=True)
+        await guard.release()
+        await writer.close()
+        await connection.close()
 
 
 @pytest.mark.asyncio

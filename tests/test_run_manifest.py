@@ -23,7 +23,7 @@ from deepchoice.contracts.manifest import (
     build_run_manifest,
     ensure_run_manifest_compatible,
 )
-from deepchoice.utils.llm import MAX_OUTPUT_TOKENS, TIERS
+from deepchoice.utils.llm import TIERS, max_output_tokens_for
 
 
 def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
@@ -39,7 +39,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert len(first.prompts) == 7
     assert len(first.llm_calls) == 8
     assert all(
-        call.max_output_tokens == MAX_OUTPUT_TOKENS for call in first.llm_calls
+        call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v1"
@@ -295,6 +295,21 @@ def test_new_manifest_has_only_deepseek_and_rejects_identity_valid_qwen_history(
         for call in current.llm_calls
     )
     historical = current.model_copy(update={"models": (deepseek, old_qwen), "llm_calls": old_calls})
+    historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
+    restored = type(current).model_validate_json(historical.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_old_4096_scan_manifest_remains_readable_but_cannot_resume():
+    from deepchoice.contracts.manifest import _expected_manifest_id
+    task = {"query": "fixture"}
+    current = build_run_manifest(task)
+    calls = tuple(call.model_copy(update={"max_output_tokens": 4096})
+                  if call.call_id == "conflict_scan" else call for call in current.llm_calls)
+    historical = current.model_copy(update={"llm_calls": calls})
     historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
     restored = type(current).model_validate_json(historical.model_dump_json())
     assert restored.manifest_id == _expected_manifest_id(restored)

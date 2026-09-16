@@ -30,6 +30,9 @@ def create_app():
     app.state.checkpoint_database_path = root / "checkpoints.db"
     app.state.legacy_snapshot_root = root / "legacy-import-disabled"
     app.state.execution_enabled = True
+    # Baseline attempts must not silently resume interrupted paid work.
+    # The normal application's recovery default remains enabled.
+    app.state.auto_recovery_enabled = False
     return app
 
 

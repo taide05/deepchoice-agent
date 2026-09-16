@@ -265,3 +265,10 @@ SSE 规则：
   前端不得把未清洗报告放入 `unsafe_allow_html`。
 - Phase 6-A 不包含认证/API key 或 rate limiting，也不声称所有静态 provider 已迁移到安全 fetch；
   这些仍是后续安全收口或独立适配任务。
+
+## O1-R：单 case 可靠性边界（2026-09-16）
+
+- 实例获取在 BEGIN IMMEDIATE 写锁取得后采集 now/expiry，续期在共享连接锁内采集；等待前的时间不得缩短新 TTL 或复活过期租约。默认 30 秒 lease/10 秒 heartbeat、失权 fail-closed 与单 worker 不变。run heartbeat 的锁前时间及 SQLite busy/event-loop 延迟仍是残余风险，不能把此修复描述成完整 live 根因解决。
+- RunCoordinator.auto_recovery 默认 True，正常 startup/周期恢复、HITL 及七日过期语义不变。实验专用 app.state.auto_recovery_enabled=False 使 coordinator.start 跳过 recover_runs 且不创建周期扫描；显式新任务及已确认 HITL 恢复仍走原 fencing/预算契约。它不适合长期默认产品部署，不授权直接读取/恢复私有 checkpoint。
+- 短 conflict_scan 最大输出冻结为 512，其他 LLM call 仍 4096；请求和预算预留使用同一上限。schema v1 不变，历史 4096 scan manifest identity 可读但拒绝同 run 兼容。每 run 扫描/初次仲裁各四路，额外受全局门约束；预算 denial latch 不变，已派发调用在失败上抛前完成结算，不放宽标准硬预算。
+- 评测单次消费者只用 durable API；健康/身份/生命周期漂移停止新准入，不自动恢复或重复 POST。运行中用量缓存保留数字但不得冒充最终完整使用，非终态或最终刷新失败必须标为 incomplete；不修改公共 lifecycle/SSE 投影来迎合评测。

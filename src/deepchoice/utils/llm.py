@@ -123,6 +123,11 @@ _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 MAX_OUTPUT_TOKENS = 4096
 
 
+def max_output_tokens_for(tag: str) -> int:
+    """One source of truth for dispatch, reservation, and manifest identity."""
+    return 512 if tag == "conflict_scan" else MAX_OUTPUT_TOKENS
+
+
 async def _retry_sleep(delay: float) -> None:
     await asyncio.sleep(delay)
 
@@ -195,11 +200,12 @@ async def call_model(
     if isinstance(prompt, list):
         prompt = list(prompt)
     client = _get_client(timeout=timeout, tier=tier, max_retries=0)
+    output_limit = max_output_tokens_for(tag)
     kwargs = {
         "model": model,
         "messages": prompt,
         "temperature": 0,
-        "max_tokens": MAX_OUTPUT_TOKENS,
+        "max_tokens": output_limit,
     }
     if seed is not None:
         kwargs["seed"] = seed
@@ -259,7 +265,7 @@ async def call_model(
                         BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=1),
                         BudgetAmount(
                             resource=BudgetResource.TOTAL_TOKENS,
-                            amount=message_bytes + MAX_OUTPUT_TOKENS,
+                            amount=message_bytes + output_limit,
                         ),
                     ),
                     call_id=trace_call.call_id if trace_call is not None else None,

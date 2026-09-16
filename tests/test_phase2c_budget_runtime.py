@@ -40,6 +40,59 @@ from deepchoice.utils import llm as llm_module
 NOW = datetime(2026, 9, 15, 4, 0, tzinfo=UTC)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("call_limit", [96, 2])
+async def test_scan_preserves_budget_and_drains_admitted_work(tmp_path, monkeypatch, call_limit):
+    import numpy as np
+    connection, _, manager, _, _ = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(total_tokens=60000, llm_calls=call_limit))
+    release = asyncio.Event()
+    four_started = asyncio.Event()
+    dispatched = 0
+    async def create(**kwargs):
+        nonlocal dispatched
+        assert kwargs["max_tokens"] == 512
+        dispatched += 1
+        if dispatched == min(4, call_limit):
+            four_started.set()
+        await release.wait()
+        return SimpleNamespace(model="fixture", usage=SimpleNamespace(
+            prompt_tokens=250, completion_tokens=50, total_tokens=300),
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"has_difference":false}'))])
+    monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setattr(conflict_module, "get_embedding_model", lambda: SimpleNamespace(
+        encode=lambda titles: np.ones((len(titles), 3))))
+    items = [{"title": f"source {i}", "snippet": "fixture " * 60,
+              "total_score": 6} for i in range(7)]
+    with bind_run_context(_context(manager)):
+        pending = asyncio.create_task(conflict_module.find_contradictions(items, "fixture"))
+    try:
+        await asyncio.wait_for(four_started.wait(), timeout=3)
+        await asyncio.sleep(0.05)
+        assert dispatched == min(4, call_limit) and not pending.done()
+        if call_limit == 2:
+            assert isinstance(manager._exhausted, BudgetExceededError)
+        else:
+            assert manager._exhausted is None
+        release.set()
+        if call_limit == 2:
+            with pytest.raises(BudgetExceededError):
+                await asyncio.wait_for(pending, timeout=5)
+            assert dispatched == 2  # All other queued requests stayed local.
+        else:
+            assert await asyncio.wait_for(pending, timeout=5) == []
+            assert dispatched == 15 and manager._exhausted is None
+        usage = await manager._usage()
+        assert usage[BudgetResource.TOTAL_TOKENS] == dispatched * 300
+        assert usage[BudgetResource.LLM_CALLS] == dispatched
+        assert await _count(connection, "WHERE status='unknown_spend'") == 0
+    finally:
+        release.set()
+        await asyncio.gather(pending, return_exceptions=True)
+        await connection.close()
+
+
 class MutableClock:
     def __init__(self, value: datetime = NOW) -> None:
         self.value = value

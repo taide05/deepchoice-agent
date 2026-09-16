@@ -146,6 +146,7 @@ async def lifespan(application: FastAPI):
             repository,
             checkpointer,
             enabled=execution_enabled,
+            auto_recovery=bool(getattr(application.state, "auto_recovery_enabled", True)),
         )
         configure_trace_store = getattr(coordinator, "configure_trace_store", None)
         if callable(configure_trace_store):

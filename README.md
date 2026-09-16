@@ -71,6 +71,8 @@ DeepSeek；历史 Qwen run 可读取，不能在新模型配置下续跑同一 r
 `LEARNED_DOCS_PATH` 默认 `./learned_docs.json`，`LEARNED_DOCS_READONLY=1` 禁止自学习写回。
 Docker 传递同名设置；覆盖容器路径时需自行提供相应挂载。O1 使用隔离知识快照，不改现有库。
 
+O1-R 固定 conflict_scan 输出上限为 512（其他共享 LLM 调用仍 4096），请求/预算/manifest 一致；每 run 扫描和初次仲裁阶段各最多四路，并继续受全局 LLM 门约束。未增加环境变量或提高硬预算。实验服务单独关闭自动恢复，默认产品恢复不变；[修复与单次验证协议](docs/o1r-single-case-reliability.md)尚不构成稳定或质量验收。
+
 Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
 `RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
 契约与来源校验的成功检索结果，不缓存失败结果或 LLM 响应，旧 `/research` 兼容路径继续绕过缓存。
