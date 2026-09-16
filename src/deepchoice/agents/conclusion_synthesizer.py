@@ -1,13 +1,11 @@
 import json
-import os
 import re
 
 from ..budget_errors import BudgetError
-from ..utils.llm import call_model, summarize_usage
+from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.views import print_agent_output
 
-# Thinking adds ~10x latency to synthesis (14s -> ~144s); give it a wide
-# single-call budget so the per-case timeout (900s) is the binding constraint.
+# Preserve the existing timeout while the optional thinking mode is measured.
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
 
 SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all evidence into a final, actionable recommendation.
@@ -339,13 +337,11 @@ class ConclusionSynthesizerAgent:
         if call_config is None:
             # Backward compatibility for states/checkpoints created before
             # RunManifest existed.
-            model = "qwen-flash"
+            model = "deepseek-flash"
             response_format = "json"
             timeout = SYNTHESIS_CALL_TIMEOUT_S
             seed = 0
-            extra_body = {
-                "enable_thinking": os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1",
-            }
+            extra_body = synthesis_extra_body()
         else:
             model = call_config["tier"]
             response_format = call_config["response_format"]

@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal
@@ -23,7 +22,7 @@ from .errors import DeepChoiceError, ErrorCategory
 from ..agents.query_adapter import ADAPT_SYSTEM
 from ..agents.query_analyzer import DECOMPOSITION_SYSTEM
 from ..agents.self_reviewer import REVIEW_SYSTEM
-from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS
+from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS, synthesis_extra_body
 
 
 CURRENT_WORKFLOW_VERSION = "research-v3"
@@ -220,9 +219,6 @@ def _manifest_content(task: dict) -> dict[str, Any]:
     report_format = task.get("report_format", "what_why_how")
     if report_format not in REPORT_TEMPLATE_VERSIONS:
         report_format = "what_why_how"
-    synthesis_extra_body = {
-        "enable_thinking": os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1",
-    }
 
     return {
         "manifest_schema_version": 1,
@@ -289,18 +285,18 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             ),
             LLMCallSnapshot(
                 call_id="conflict_rearbitration",
-                tier="qwen-flash",
+                tier="deepseek-flash",
                 prompt_id="conflict_detector.arbitration_system",
                 timeout_s=300.0,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
                 call_id="conclusion_synthesizer",
-                tier="qwen-flash",
+                tier="deepseek-flash",
                 prompt_id="conclusion_synthesizer.synthesis_prompt",
                 timeout_s=SYNTHESIS_CALL_TIMEOUT_S,
                 seed=0,
-                extra_body_json=_canonical_json(synthesis_extra_body),
+                extra_body_json=_canonical_json(synthesis_extra_body()),
                 max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(

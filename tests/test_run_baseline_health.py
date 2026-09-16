@@ -4,10 +4,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from benchmarks.run_baseline import (
+    _configured_api_status,
     health_check_report,
     probe_tavily_direct,
     run_health_check,
 )
+
+
+@pytest.mark.parametrize("resolved_key", ["", "deepseek-test-key"])
+def test_benchmark_llm_readiness_matches_resolved_deepseek_tier(monkeypatch, resolved_key):
+    monkeypatch.setenv("LLM_API_KEY", "wrong-provider-key")
+    monkeypatch.setattr("benchmarks.run_baseline.TIERS", {"deepseek-flash": {"key": resolved_key}})
+    assert _configured_api_status()["llm"] is bool(resolved_key)
 
 
 class TestProbeTavilyDirect:

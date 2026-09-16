@@ -43,7 +43,16 @@ from benchmarks.metrics import (
 )
 from benchmarks.report_quality import evaluate_batch
 from deepchoice.agents.orchestrator import ChiefEditorAgent
-from deepchoice.utils.llm import set_current_case, set_record_callback
+from deepchoice.utils.llm import TIERS, set_current_case, set_record_callback
+
+
+def _configured_api_status() -> dict[str, bool]:
+    """Presence only; use the same resolved LLM credentials as dispatch."""
+    return {
+        "llm": bool(TIERS["deepseek-flash"]["key"]),
+        "tavily": bool(os.getenv("TAVILY_API_KEY")),
+        "github": bool(os.getenv("GITHUB_TOKEN")),
+    }
 
 # ---------------------------------------------------------------------------
 # Outbound health-check helpers (batch 3)
@@ -344,11 +353,7 @@ async def run_baseline(
         cases = cases[:n_cases]
 
     # Validate API keys
-    api_status = {
-        "llm": bool(os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY")),
-        "tavily": bool(os.getenv("TAVILY_API_KEY")),
-        "github": bool(os.getenv("GITHUB_TOKEN")),
-    }
+    api_status = _configured_api_status()
     if verbose:
         missing = [k for k, v in api_status.items() if not v]
         if missing:

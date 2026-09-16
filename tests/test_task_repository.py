@@ -364,7 +364,8 @@ async def test_interrupted_resume_reuses_compatible_checkpoint(repository):
 
 
 @pytest.mark.asyncio
-async def test_interrupted_v1_checkpoint_retries_as_current_v3_run(repository):
+@pytest.mark.parametrize("historical_kind", ["v1", "qwen", "invalid_identity"])
+async def test_interrupted_checkpoint_checks_full_manifest_before_resume(repository, historical_kind):
     task, run = _records()
     old_manifest = run.manifest.model_copy(
         update={
@@ -382,6 +383,22 @@ async def test_interrupted_v1_checkpoint_retries_as_current_v3_run(repository):
     old_manifest = old_manifest.model_copy(
         update={"manifest_id": _expected_manifest_id(old_manifest)}
     )
+    if historical_kind == "qwen":
+        old_model = run.manifest.models[0].model_copy(update={
+            "tier": "qwen-flash", "model": "qwen3.8-flash", "provider": "dashscope",
+            "extra_body_json": '{"enable_thinking":false}',
+        })
+        old_manifest = run.manifest.model_copy(update={
+            "models": (run.manifest.models[0], old_model),
+            "llm_calls": tuple(
+                call.model_copy(update={"tier": "qwen-flash"})
+                if call.call_id in {"conclusion_synthesizer", "conflict_rearbitration"} else call
+                for call in run.manifest.llm_calls
+            ),
+        })
+        old_manifest = old_manifest.model_copy(update={"manifest_id": _expected_manifest_id(old_manifest)})
+    elif historical_kind == "invalid_identity":
+        old_manifest = run.manifest.model_copy(update={"manifest_id": "0" * 64})
     run = run.model_copy(update={"manifest": old_manifest})
     await repository.create_task_with_run(task, run)
     now = datetime(2026, 1, 1, tzinfo=UTC)
@@ -396,7 +413,7 @@ async def test_interrupted_v1_checkpoint_retries_as_current_v3_run(repository):
         CheckpointReference(
             run_id=run.run_id,
             checkpoint_id="cp-v1",
-            state_schema_version=1,
+            state_schema_version=old_manifest.state_schema_version,
             execution_epoch=grant.execution_epoch,
             created_at=now,
         ),
@@ -412,6 +429,17 @@ async def test_interrupted_v1_checkpoint_retries_as_current_v3_run(repository):
         now=now + timedelta(seconds=1),
     )
 
+    if historical_kind == "invalid_identity":
+        from deepchoice.contracts.errors import DeepChoiceError
+
+        events_before = await repository.list_task_events(task.task_id)
+        with pytest.raises(DeepChoiceError) as caught:
+            await TaskService(repository).resume(task.task_id, expected_task_version=interrupted.task.version)
+        assert caught.value.error_detail.code == "RUN_MANIFEST_ID_MISMATCH"
+        assert await repository.get_task(task.task_id) == interrupted
+        assert await repository.list_task_events(task.task_id) == events_before
+        return
+
     resumed = await TaskService(repository).resume(
         task.task_id, expected_task_version=interrupted.task.version
     )
@@ -423,6 +451,8 @@ async def test_interrupted_v1_checkpoint_retries_as_current_v3_run(repository):
         "deterministic-citation-v1"
     )
     assert resumed.latest_run.manifest.hitl_policy_version == "evidence-insufficient-v1"
+    assert {call.tier for call in resumed.latest_run.manifest.llm_calls} == {"deepseek-flash"}
+    assert {model.tier for model in resumed.latest_run.manifest.models} == {"deepseek-flash"}
     assert (await repository.get_run(run.run_id)).status is RunStatus.INTERRUPTED
 
 

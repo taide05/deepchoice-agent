@@ -35,6 +35,9 @@
 - Phase 5-2 engineering-foundation acceptance report with cross-module runtime, test-growth, compatibility, dependency, deployment, and residual-risk audits
 
 ### Changed
+- DeepSeek Flash migration validation (2026-09-16, Python 3.12): full suite 1061 passed with no skips; smoke-v1 fixture replay 12/12 with unchanged fingerprint; static/dependency/Compose checks and independent review passed. No live LLM or paid benchmark was run
+- All new LLM calls now use the existing DeepSeek Flash configuration, including synthesis and conflict re-arbitration; native thinking options, the shared conflict concurrency gate, Docker configuration and benchmark credential detection are aligned. Deprecated Qwen call selectors/arguments adapt to DeepSeek without reusing Qwen credentials. Interrupted resume checks the full manifest before reusing a run, creates a new run for incompatible configurations, and rejects invalid manifest identities (2026-09-16)
+- Product evaluation now starts after the DeepSeek Flash migration: affected tests on edits, development cases for measurable candidates, and reserved cases only after candidate freeze; no paid batch is required per edit
 - LLM routing uses DeepSeek flash for high-frequency work and Qwen flash for synthesis/re-arbitration, with deterministic controls and per-tier concurrency
 - Official-document coverage is 96 seeded entries plus 131 learned entries (227 total at this snapshot)
 - Supported Python range is 3.11/3.12; setup now uses a project-local virtual environment

@@ -31,6 +31,15 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
 
+2026-09-16 模型适配：新 manifest 只冻结 DeepSeek Flash，含原 Qwen 综合与再仲裁调用；默认
+thinking 显式关闭，综合开关使用 DeepSeek 原生格式并按 run 冻结。manifest schema 仍为 v1，
+workflow/state 仍为 research-v3/v3。历史双 provider manifest 身份和结果保持可读，但不能
+改写旧 manifest 后续跑。interrupted 的恢复入口先校验完整 manifest：配置不兼容时创建新 run，
+身份损坏则拒绝且不改变状态；failed/timed_out 仍按既有规则新建 run。其他旧任务可新建任务，
+HITL 绑定的旧 run 同样不能换模型恢复：未过期 pending decision 的非 cancel 新提交在落库前
+校验兼容性，不兼容则返回 409 并保留 pending，用户仍可取消。相同已提交 body 的幂等重试、
+到期和 CAS 冲突保持原语义。生命周期事务与 checkpoint fencing 保持原契约。
+
 主要 durable API：
 
 | API | 契约 |

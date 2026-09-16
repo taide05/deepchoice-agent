@@ -346,6 +346,9 @@ class TestGatherEvidenceUsageCapture:
             )
 
         assert evidence == "Benchmarks favor async under concurrent load"
+        assert client.chat.completions.create.await_args.kwargs["extra_body"] == {
+            "thinking": {"type": "disabled"},
+        }
         assert usage == [{
             "model": "deepseek-v4-flash",
             "prompt_tokens": 150,

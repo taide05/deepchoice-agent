@@ -35,3 +35,12 @@ def test_compose_persists_tavily_key_state_under_outputs_volume():
         root / ".github" / "workflows" / "benchmark.yml"
     ).read_text(encoding="utf-8")
     assert 'python-version: "3.12"' in benchmark_workflow
+
+
+def test_compose_passes_deepseek_settings_without_qwen_credentials():
+    compose = (Path(__file__).resolve().parents[1] / "docker-compose.yml").read_text(encoding="utf-8")
+    for name in ("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY", "DS_FLASH_MODEL",
+                 "DS_FLASH_BASE_URL", "LLM_DS_CONCURRENCY", "DEEPCHOICE_SYNTH_THINKING"):
+        assert f"- {name}=" in compose
+    for name in ("QW_FLASH_API_KEY", "PRO_API_KEY", "LLM_API_KEY", "LLM_QW_CONCURRENCY"):
+        assert f"- {name}=" not in compose

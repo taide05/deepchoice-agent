@@ -74,13 +74,19 @@ python -m benchmarks.run_baseline --health-check
 
 - Never print, commit, rewrite, or expose `.env` values.
 - DeepSeek tier: `DS_FLASH_API_KEY` or legacy `FLASH_API_KEY` / `DEEPSEEK_API_KEY`; optional model/base overrides use the corresponding `DS_FLASH_*`, `FLASH_*`, or `DEEPSEEK_BASE_URL` names.
-- Qwen tier: `QW_FLASH_API_KEY` or legacy `PRO_API_KEY` / `LLM_API_KEY`; optional model/base overrides use `QW_FLASH_*`, `PRO_*`, or `LLM_BASE_URL`.
+- All LLM calls use the DeepSeek Flash tier, including synthesis, re-arbitration, clarification and
+  benchmark judges. Qwen `QW_FLASH_*`, `PRO_*` and `LLM_*` model/base/key variables are retired and
+  must never supply fallback credentials to DeepSeek. The old `qwen-flash` call selector and
+  `enable_thinking` argument remain compatibility adapters to DeepSeek, not a second provider.
 - Search services: `TAVILY_API_KEYS` (comma-separated) or `TAVILY_API_KEY`; optional `GITHUB_TOKEN` and `STACKEXCHANGE_API_KEY`.
 - Outbound routing: `OUTBOUND_CHANNELS`, `OUTBOUND_CHANNELS_COMMUNITY`,
   `OUTBOUND_CHANNELS_TAVILY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
   Tavily must exclude `self-forward` because that transport does not preserve POST bodies.
 - Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, `TAVILY_REPROBE`, and `RETRIEVAL_CACHE_ENABLED` (default `1`; set `0` to disable the retrieval cache).
-- Concurrency/behavior: `LLM_DS_CONCURRENCY`, `LLM_QW_CONCURRENCY`, and `DEEPCHOICE_SYNTH_THINKING`.
+- Concurrency/behavior: `LLM_DS_CONCURRENCY` (conflict scan/arbitration/re-arbitration gate, default 80)
+  and `DEEPCHOICE_SYNTH_THINKING` (default 0). Requests explicitly disable DeepSeek thinking unless
+  the synthesis option enables it. `LLM_QW_CONCURRENCY` is retired. Freeze native thinking parameters
+  in new manifests; historical dual-provider runs remain readable but require a new compatible run.
 - Frontend: `API_BASE`.
 
 When adding a setting, update the code default, tests, README configuration section, and Docker configuration together.
@@ -303,6 +309,9 @@ When adding a setting, update the code default, tests, README configuration sect
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
   the roadmap is explicitly revised again.
+- The 2026-09-16 user-approved prerequisite is unifying all LLM calls on DeepSeek Flash before
+  measuring the product baseline. The evaluation protocol defines selective development checks and
+  a frozen-candidate full comparison; it does not require a paid case batch after every code edit.
 
 ## Local and generated data
 

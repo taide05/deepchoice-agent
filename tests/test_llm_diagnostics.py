@@ -105,7 +105,8 @@ class TestRecordCallback:
         with patch("deepchoice.utils.llm._get_client",
                    return_value=_Client(_resp("plain"))):
             await call_model([{"role": "user", "content": "hi"}], model="qwen-flash")
-        assert records[0]["tag"] == "qwen-flash"
+        assert records[0]["tag"] == "deepseek-flash"
+        assert records[0]["tier"] == "deepseek-flash"
 
 
 class _CaptureClient:
@@ -126,10 +127,10 @@ class TestExtraBody:
         with patch("deepchoice.utils.llm._get_client", return_value=c):
             await call_model(
                 [{"role": "user", "content": "json please"}],
-                model="qwen-flash", response_format="json",
-                extra_body={"enable_thinking": True},
+                model="deepseek-flash", response_format="json",
+                extra_body={"thinking": {"type": "enabled"}},
             )
-        assert c.kwargs["extra_body"] == {"enable_thinking": True}
+        assert c.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
 
     @pytest.mark.asyncio
     async def test_no_extra_body_uses_tier_default(self):
@@ -139,14 +140,31 @@ class TestExtraBody:
                 [{"role": "user", "content": "json please"}],
                 model="qwen-flash", response_format="json",
             )
-        assert c.kwargs["extra_body"] == {"enable_thinking": False}
+        assert c.kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
 
     @pytest.mark.asyncio
-    async def test_deepseek_flash_has_no_extra_body(self):
+    async def test_deepseek_flash_explicitly_disables_thinking(self):
         c = _CaptureClient(_resp('{"a": 1}'))
         with patch("deepchoice.utils.llm._get_client", return_value=c):
             await call_model(
                 [{"role": "user", "content": "json please"}],
                 model="deepseek-flash", response_format="json",
             )
-        assert "extra_body" not in c.kwargs
+        assert c.kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("enabled", [False, True])
+    async def test_retired_qwen_selector_and_thinking_keyword_use_deepseek(self, enabled):
+        c = _CaptureClient(_resp('{"a": 1}'))
+        legacy_options = {"enable_thinking": enabled}
+        with patch("deepchoice.utils.llm._get_client", return_value=c) as factory:
+            await call_model(
+                [{"role": "user", "content": "return an object"}],
+                model="qwen-flash", response_format="json", extra_body=legacy_options,
+            )
+        assert factory.call_args.kwargs["tier"] == "deepseek-flash"
+        from deepchoice.utils.llm import TIERS
+        assert c.kwargs["model"] == TIERS["deepseek-flash"]["model"]
+        assert c.kwargs["extra_body"] == {"thinking": {"type": "enabled" if enabled else "disabled"}}
+        assert "JSON" in c.kwargs["messages"][-1]["content"]
+        assert legacy_options == {"enable_thinking": enabled}

@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
-from deepchoice.contracts.manifest import CURRENT_WORKFLOW_VERSION, build_run_manifest
+from deepchoice.contracts.manifest import build_run_manifest, ensure_run_manifest_compatible
 from deepchoice.persistence.records import RunRecord, TaskRecord, TaskWithRun
 from deepchoice.hitl import DecisionRecord, DecisionResolution
 from deepchoice.persistence.records import DecisionResolutionResult
@@ -213,12 +213,33 @@ class TaskService:
         *,
         expected_task_version: int,
     ) -> DecisionResolutionResult:
+        now = self._clock()
+        if resolution.action != "cancel":
+            current = await self.get(task_id)
+            decision = await self._repository.get_latest_decision(task_id)
+            # Guard a new same-run resolution before consuming user input.
+            # Replays, expiry and conflicts retain repository-owned semantics;
+            # its transaction/CAS still arbitrates concurrent resolutions.
+            if (
+                decision is not None
+                and decision.decision_id == decision_id
+                and decision.status == "pending"
+                and decision.expires_at > now
+                and current.task.version == expected_task_version
+                and current.task.status is TaskStatus.WAITING_FOR_INPUT
+                and current.latest_run is not None
+                and current.latest_run.run_id == decision.run_id
+            ):
+                ensure_run_manifest_compatible(
+                    current.latest_run.manifest,
+                    current.task.request.model_dump(exclude_none=True),
+                )
         return await self._repository.resolve_decision(
             task_id,
             decision_id,
             resolution,
             expected_task_version=expected_task_version,
-            now=self._clock(),
+            now=now,
         )
 
     async def resume(
@@ -244,10 +265,18 @@ class TaskService:
                 state_schema_version=latest_run.manifest.state_schema_version,
                 checkpoint_ns=latest_run.checkpoint_ns,
             )
-            if (
-                checkpoint is not None
-                and latest_run.manifest.workflow_version == CURRENT_WORKFLOW_VERSION
-            ):
+            compatible = False
+            try:
+                ensure_run_manifest_compatible(
+                    latest_run.manifest,
+                    current.task.request.model_dump(exclude_none=True),
+                )
+            except DeepChoiceError as exc:
+                if exc.error_detail.code != "RUN_MANIFEST_INCOMPATIBLE":
+                    raise
+            else:
+                compatible = checkpoint is not None
+            if compatible:
                 try:
                     return await self._repository.resume_interrupted_run(
                         task_id,

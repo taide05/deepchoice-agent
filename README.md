@@ -13,7 +13,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑，单路挂了不炸全局
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
-- **两阶段冲突仲裁**：先让 flash 模型仲裁所有矛盾对（快），再挑出最模糊的一对交给 pro 模型深度重裁（准）。只给一对走 pro，费用可控
+- **两阶段冲突仲裁**：先用规则与 DeepSeek Flash 仲裁矛盾对，再对低置信度的一对补充取证，并用同一 DeepSeek Flash 重新裁决
 - **自审查 + 定向重试**：最后一环用 6 项清单审查报告质量，发现问题自动补搜知识缺口，区分小缺口（重走检索适配）和大缺口（重走全管道）
 - **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
 - **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
@@ -35,8 +35,7 @@ python -m venv .venv
 # Linux/macOS：./.venv/bin/python -m pip install -e ".[dev]"
 
 # 2. 配置 API Key（不要提交 .env）
-# DeepSeek 路径：DS_FLASH_API_KEY，或兼容名 DEEPSEEK_API_KEY
-# Qwen 路径：QW_FLASH_API_KEY，或兼容名 LLM_API_KEY
+# 所有 LLM：DS_FLASH_API_KEY，兼容 FLASH_API_KEY / DEEPSEEK_API_KEY
 # Tavily：TAVILY_API_KEYS（逗号分隔），或单个 TAVILY_API_KEY
 # 可选：GITHUB_TOKEN、STACKEXCHANGE_API_KEY
 
@@ -54,6 +53,19 @@ python -m venv .venv
 `TAVILY_KEY_STATE_PATH` 默认位于 `/app/outputs/tavily_key_state.json`，随 `outputs` volume
 持久化；可通过同名宿主机环境变量覆盖。完整配置约定见
 [`AGENTS.md`](AGENTS.md)。
+
+所有 LLM 调用（含结论综合、冲突再仲裁、澄清、官方来源补全和 benchmark 的在线 judge）统一使用
+DeepSeek Flash。默认沿用 `deepseek-v4-flash` 与 `https://api.deepseek.com/v1`；
+`DS_FLASH_MODEL` / `DS_FLASH_BASE_URL` 可覆盖，兼容 `FLASH_MODEL` / `FLASH_BASE_URL` 和
+`DEEPSEEK_BASE_URL`。Docker 传递同样设置。Qwen 的 `QW_FLASH_*`、`PRO_*`、`LLM_*`
+模型/端点/密钥变量不再用于 LLM 配置，不会将 Qwen 密钥作为 DeepSeek 后备凭据。
+
+默认请求显式发送 `thinking.type=disabled`；`DEEPCHOICE_SYNTH_THINKING=1` 仅启用综合节点的
+DeepSeek thinking，并在新 run manifest 中冻结。`LLM_DS_CONCURRENCY` 默认 `80`，控制冲突扫描、
+仲裁与再仲裁的共享并发门，不是每分钟请求限额；`LLM_QW_CONCURRENCY` 不再生效。
+旧 `call_model(model="qwen-flash")` 调用选择器及 `enable_thinking` 参数保留适配，但实际发往
+DeepSeek；历史 Qwen run 可读取，不能在新模型配置下续跑同一 run，需创建新 run/任务。
+本次是适配变更，报告效果需按[评估协议](docs/product-effectiveness-optimization.md)重新建立基线。
 
 Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
 `RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
@@ -172,8 +184,10 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-15 在项目隔离环境中验证结果为
-**1040 passed，0 skipped**。不要使用混装其他项目依赖的全局 Python 环境。
+项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，统一 DeepSeek Flash
+适配后的全量验证结果为 **1061 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12，
+已通过独立复审。未执行真实 LLM/付费基线，这些结果不证明报告质量提升。
+不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
@@ -296,7 +310,7 @@ python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --
 
 ## 技术栈
 
-LangGraph（研究/生成节点 + 确定性引用验证与单一 HITL 决策门 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
+LangGraph（研究/生成节点 + 确定性引用验证与单一 HITL 决策门 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · DeepSeek Flash（全部 LLM 调用） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
 
 ## 项目结构
 

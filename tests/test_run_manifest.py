@@ -217,10 +217,10 @@ def test_manifest_contains_effective_models_but_no_endpoint_or_api_key(monkeypat
 
 def test_manifest_model_parameters_are_deeply_immutable():
     manifest = build_run_manifest({"query": "A vs B"})
-    qwen = next(model for model in manifest.models if model.tier == "qwen-flash")
+    deepseek = next(model for model in manifest.models if model.tier == "deepseek-flash")
 
-    assert qwen.extra_body_json == '{"enable_thinking":false}'
-    assert isinstance(qwen.extra_body_json, str)
+    assert deepseek.extra_body_json == '{"thinking":{"type":"disabled"}}'
+    assert isinstance(deepseek.extra_body_json, str)
 
 
 def test_manifest_freezes_dynamic_synthesis_parameters(monkeypatch):
@@ -232,10 +232,10 @@ def test_manifest_freezes_dynamic_synthesis_parameters(monkeypatch):
 
     monkeypatch.setenv("DEEPCHOICE_SYNTH_THINKING", "0")
 
-    assert synthesis.tier == "qwen-flash"
+    assert synthesis.tier == "deepseek-flash"
     assert synthesis.timeout_s == 900.0
     assert synthesis.seed == 0
-    assert synthesis.extra_body_json == '{"enable_thinking":true}'
+    assert synthesis.extra_body_json == '{"thinking":{"type":"enabled"}}'
 
 
 @pytest.mark.asyncio
@@ -256,7 +256,7 @@ async def test_synthesizer_uses_frozen_call_parameters(monkeypatch):
         for call in state_manifest["llm_calls"]
         if call["call_id"] == "conclusion_synthesizer"
     )
-    synthesis["tier"] = "deepseek-flash"
+    synthesis["tier"] = "qwen-flash"
     synthesis["timeout_s"] = 1.0
     await cs_mod.ConclusionSynthesizerAgent(run_manifest=manifest).run(
         {
@@ -268,11 +268,39 @@ async def test_synthesizer_uses_frozen_call_parameters(monkeypatch):
         },
     )
 
-    assert captured["model"] == "qwen-flash"
+    assert captured["model"] == "deepseek-flash"
     assert captured["response_format"] == "json"
     assert captured["timeout"] == 900.0
     assert captured["seed"] == 0
-    assert captured["extra_body"] == {"enable_thinking": True}
+    assert captured["extra_body"] == {"thinking": {"type": "enabled"}}
+
+
+def test_new_manifest_has_only_deepseek_and_rejects_identity_valid_qwen_history():
+    from deepchoice.contracts.manifest import _expected_manifest_id
+
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    assert {model.tier for model in current.models} == {"deepseek-flash"}
+    assert {call.tier for call in current.llm_calls} == {"deepseek-flash"}
+    deepseek = current.models[0].model_copy(update={"extra_body_json": None})
+    old_qwen = deepseek.model_copy(update={
+        "tier": "qwen-flash", "provider": "dashscope", "model": "qwen3.8-flash",
+        "extra_body_json": '{"enable_thinking":false}',
+    })
+    old_calls = tuple(
+        call.model_copy(update={
+            "tier": "qwen-flash",
+            "extra_body_json": '{"enable_thinking":false}' if call.call_id == "conclusion_synthesizer" else None,
+        }) if call.call_id in {"conclusion_synthesizer", "conflict_rearbitration"} else call
+        for call in current.llm_calls
+    )
+    historical = current.model_copy(update={"models": (deepseek, old_qwen), "llm_calls": old_calls})
+    historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
+    restored = type(current).model_validate_json(historical.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
 def test_orchestrator_initial_state_carries_same_frozen_manifest():

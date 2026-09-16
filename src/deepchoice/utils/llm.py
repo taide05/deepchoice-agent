@@ -15,7 +15,6 @@ from openai import APIConnectionError, AsyncOpenAI
 from deepchoice.security.redaction import redact_text
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
-DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # Diagnostics (task 0.2): optional observer hook + current-case context.
 # Both default to inert so the production path is unchanged when disabled.
@@ -86,24 +85,38 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
-# Tier -> provider config (user decision 2026-09-01): two flash tiers —
-# deepseek-flash (the hot, high-frequency path) and qwen-flash (report
-# synthesis + conflict re-arbitration).
+# All new calls use the existing DeepSeek Flash deployment. Former Qwen
+# credentials are deliberately not fallbacks: they belong to another provider.
 TIERS = {
     "deepseek-flash": {
         "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
         "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
         "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),
-    },
-    "qwen-flash": {
-        "model": _env("QW_FLASH_MODEL", "PRO_MODEL", default="qwen3.8-flash"),
-        "base": _env("QW_FLASH_BASE_URL", "PRO_BASE_URL", "LLM_BASE_URL", default=DASHSCOPE_BASE),
-        "key": _env("QW_FLASH_API_KEY", "PRO_API_KEY", "LLM_API_KEY"),
-        # Qwen3* thinks by default — this doubles latency. Turn it off for
-        # deterministic JSON synthesis/re-arbitration (the timeout root cause).
-        "extra_body": {"enable_thinking": False},
+        "extra_body": {"thinking": {"type": "disabled"}},
     },
 }
+
+
+def synthesis_extra_body() -> dict:
+    """Resolve the synthesis option once when freezing a new run."""
+    return {"thinking": {
+        "type": "enabled" if os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1" else "disabled",
+    }}
+
+
+def deepseek_extra_body(extra_body: dict | None = None) -> dict:
+    """Apply native defaults and adapt the deprecated Qwen thinking keyword.
+
+    The legacy call_model(model="qwen-flash") selector still falls back to
+    DeepSeek, as other retired selectors do. It never creates a Qwen client.
+    Durable historical manifests are rejected by compatibility before dispatch.
+    """
+    extra = {**TIERS["deepseek-flash"]["extra_body"], **(extra_body or {})}
+    if "enable_thinking" in extra:
+        enabled = extra.pop("enable_thinking")
+        if "thinking" not in (extra_body or {}):
+            extra["thinking"] = {"type": "enabled" if enabled else "disabled"}
+    return extra
 
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
@@ -190,16 +203,10 @@ async def call_model(
     }
     if seed is not None:
         kwargs["seed"] = seed
-    # Per-call extra_body overrides the tier default; otherwise the tier's
-    # default (qwen-flash disables thinking) applies. This lets a single node
-    # opt back into thinking without forking the tier table.
-    extra = extra_body if extra_body is not None else cfg.get("extra_body")
-    if extra:
-        kwargs["extra_body"] = extra
+    kwargs["extra_body"] = deepseek_extra_body(extra_body)
     if response_format == "json":
         kwargs["response_format"] = {"type": "json_object"}
-        # DashScope/Qwen requires the prompt to mention "json" for json_object;
-        # append a guard sentence when absent (otherwise 400s across the board).
+        # DeepSeek JSON mode requires the prompt to mention JSON as well.
         joined = " ".join(
             str(m.get("content", "")) for m in prompt if isinstance(m.get("content"), str)
         )

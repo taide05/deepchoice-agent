@@ -38,7 +38,7 @@ async def repository(tmp_path: Path):
         await connection.close()
 
 
-async def _running_with_checkpoint(repository, *, task_id="task-1", run_id="run-1"):
+async def _running_with_checkpoint(repository, *, task_id="task-1", run_id="run-1", manifest=None):
     request = ResearchRequest(query="compare FastAPI and Flask")
     task = TaskRecord(
         task_id=task_id,
@@ -52,7 +52,7 @@ async def _running_with_checkpoint(repository, *, task_id="task-1", run_id="run-
         run_id=run_id,
         task_id=task_id,
         status=RunStatus.QUEUED,
-        manifest=build_run_manifest(request.model_dump()),
+        manifest=manifest or build_run_manifest(request.model_dump()),
         budget_policy=DEFAULT_RUN_BUDGET_POLICY,
         thread_id=run_id,
         created_at=NOW,
@@ -121,6 +121,68 @@ async def test_pause_is_fenced_checkpoint_bound_and_atomic(repository):
     assert event.type == "decision.required"
     assert "checkpoint" not in str(event.public_payload).lower()
     assert "epoch" not in str(event.public_payload).lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["provide_context", "limited_report"])
+@pytest.mark.parametrize("invalid_identity", [False, True])
+async def test_service_rejects_incompatible_decision_without_consuming_it(repository, action, invalid_identity):
+    from deepchoice.contracts.errors import DeepChoiceError
+    from deepchoice.contracts.manifest import _expected_manifest_id
+    from deepchoice.services.tasks import TaskService
+
+    historical = build_run_manifest({"query": "compare FastAPI and Flask"})
+    qwen = historical.models[0].model_copy(update={
+        "tier": "qwen-flash", "provider": "dashscope", "model": "qwen3.8-flash",
+        "extra_body_json": '{"enable_thinking":false}',
+    })
+    historical = historical.model_copy(update={"models": (*historical.models, qwen)})
+    historical = historical.model_copy(update={
+        "manifest_id": "0" * 64 if invalid_identity else _expected_manifest_id(historical),
+    })
+    _, _, grant, reference = await _running_with_checkpoint(repository, manifest=historical)
+    decision = await repository.pause_for_decision(
+        _pause(), reference, lease_owner="worker-a", execution_epoch=grant.execution_epoch,
+        now=NOW + timedelta(seconds=2),
+    )
+    before = await repository.get_task("task-1")
+    events = await repository.list_task_events("task-1")
+    service = TaskService(repository, clock=lambda: NOW + timedelta(minutes=1))
+    with pytest.raises(DeepChoiceError) as caught:
+        await service.resolve_decision(
+            "task-1", decision.decision_id,
+            DecisionResolution(action=action, supplemental_input="Private extra context" if action == "provide_context" else None),
+            expected_task_version=before.task.version,
+        )
+    assert caught.value.error_detail.code == (
+        "RUN_MANIFEST_ID_MISMATCH" if invalid_identity else "RUN_MANIFEST_INCOMPATIBLE"
+    )
+    assert await repository.get_task("task-1") == before
+    assert await repository.get_latest_decision("task-1") == decision
+    assert await repository.list_task_events("task-1") == events
+    cancelled = await service.resolve_decision(
+        "task-1", decision.decision_id, DecisionResolution(action="cancel"),
+        expected_task_version=before.task.version,
+    )
+    assert cancelled.task.task.status is TaskStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_service_resolution_replay_survives_runtime_change(repository, monkeypatch):
+    from deepchoice.services.tasks import TaskService
+
+    *_, decision = await _paused(repository)
+    service = TaskService(repository, clock=lambda: NOW + timedelta(minutes=1))
+    resolution = DecisionResolution(action="limited_report")
+    await service.resolve_decision("task-1", decision.decision_id, resolution, expected_task_version=2)
+
+    def forbidden(*args):
+        raise AssertionError("An idempotent replay must not revalidate the runtime")
+
+    monkeypatch.setattr("deepchoice.services.tasks.ensure_run_manifest_compatible", forbidden)
+    replay = await service.resolve_decision("task-1", decision.decision_id, resolution, expected_task_version=2)
+    assert replay.replayed
+    assert replay.task.task.status is TaskStatus.QUEUED
 
 
 @pytest.mark.asyncio

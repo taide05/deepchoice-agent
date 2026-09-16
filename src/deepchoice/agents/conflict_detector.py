@@ -8,16 +8,14 @@ from .. import outbound as _outbound
 from ..budget_errors import BudgetError
 from ..retrievers.tavily_keypool import post_with_failover
 from ..utils.embedding import get_embedding_model
-from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, summarize_usage
+from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, deepseek_extra_body, summarize_usage
 from ..utils.views import print_agent_output
 
 # ---------------------------------------------------------------------------
-# Concurrency limits. Two flash tiers: deepseek-flash (500/min) + qwen-flash.
-# Env-tunable — set LLM_DS_CONCURRENCY / LLM_QW_CONCURRENCY to the provider RPM.
-# QW_SEM is the separate re-arbitration-path gate (qwen-flash tier).
+# Conflict scan, arbitration and re-arbitration share the DeepSeek gate.
+# LLM_DS_CONCURRENCY bounds simultaneous calls here; it is not an RPM limit.
 # ---------------------------------------------------------------------------
 FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_DS_CONCURRENCY", "80")))
-QW_SEM = asyncio.Semaphore(int(os.environ.get("LLM_QW_CONCURRENCY", "10")))
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -340,6 +338,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     tools=SEARCH_TOOLS,
                     temperature=0,
                     max_tokens=MAX_OUTPUT_TOKENS,
+                    extra_body=deepseek_extra_body(),
                 ),
                 timeout=per_call_timeout,
             )
@@ -754,7 +753,7 @@ class ConflictDetectorAgent:
         # Cap evidence gathering at top-1 most ambiguous pair (sorted by confidence gap)
         low_confidence_pairs = low_confidence_pairs[:1]
 
-        # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
+        # --- Stage 2: Evidence gathering + re-arbitration (parallel) ---
         if low_confidence_pairs and self.gather_evidence:
             print_agent_output(
                 f"Evidence-gathering re-arbitration: {len(low_confidence_pairs)} pair(s)",
@@ -795,10 +794,10 @@ class ConflictDetectorAgent:
                     enriched_b = dict(b, title=enriched_claim_b)
 
                     try:
-                        async with QW_SEM:
-                            qw_result = await call_model(
+                        async with FLASH_SEM:
+                            revised_result = await call_model(
                                 _make_prompt(enriched_a, enriched_b),
-                                model="qwen-flash", tag="conflict_rearbitration",
+                                model="deepseek-flash", tag="conflict_rearbitration",
                                 response_format="json",
                                 timeout=300.0,
                                 usage=local_usage,
@@ -806,12 +805,12 @@ class ConflictDetectorAgent:
                     except BudgetError:
                         raise
                     except Exception:
-                        print_agent_output("Pro re-arbitration failed", agent="CONFLICT_DETECTOR")
+                        print_agent_output("Re-arbitration failed", agent="CONFLICT_DETECTOR")
                         return None
 
-                    qw_conflict = _build_conflict(pair, qw_result, model="qwen-flash+evidence")
-                    qw_conflict["evidence_collected"] = evidence[:500] if evidence else ""
-                    return idx, qw_conflict
+                    revised_conflict = _build_conflict(pair, revised_result, model="deepseek-flash+evidence")
+                    revised_conflict["evidence_collected"] = evidence[:500] if evidence else ""
+                    return idx, revised_conflict
 
             re_results = await asyncio.gather(
                 *[_re_arbitrate(i, p) for i, p in enumerate(low_confidence_pairs)],
@@ -823,9 +822,9 @@ class ConflictDetectorAgent:
                 if isinstance(r, Exception):
                     continue
                 if r is not None:
-                    idx, qw_conflict = r
+                    idx, revised_conflict = r
                     if idx < len(conflicts):
-                        conflicts[idx] = qw_conflict
+                        conflicts[idx] = revised_conflict
         elif low_confidence_pairs:
             print_agent_output(
                 f"Skipping evidence gathering (disabled): {len(low_confidence_pairs)} pair(s)",
