@@ -1,6 +1,6 @@
 # DeepChoice 下一会话交接摘要：产品效果优化
 
-更新日期：2026-09-15
+更新日期：2026-09-16
 
 用途：将本文作为新 Codex 对话的第一条上下文。它只交接已经验证的仓库事实、用户决策和下一阶段
 边界，不代替仓库中的 `AGENTS.md`、当前代码或测试。
@@ -11,8 +11,9 @@ DeepChoice 当前授权的工程基础路线已经完成。Phase 5-2 对默认 d
 最终结果为 **1040 passed、0 skipped**；离线 fixture-replay smoke 为 12/12，静态检查、依赖检查
 和 Compose 配置检查通过，独立 Review 没有遗留可操作问题。
 
-当前分支为 `codex/phase5-engineering-acceptance`，Phase 5-2 提交为
-`0a2ad10 fix: close phase 5 engineering foundation`。该提交尚未在本摘要中声称已推送或合并。
+工程基础已通过 GitHub PR #6 合并到 `main`。合并提交 `0afb6d4`、Phase 5-2 验收提交
+`0a2ad10` 和交接报告原始提交 `65242aa` 仅作为审计定位信息。旧的
+`codex/phase5-engineering-acceptance` 是已完成工作的来源分支，不应作为产品效果优化的工作分支。
 
 Phase 5-2 开始时有 1022 个收集项，本轮针对六项实际缺口增加 15 个 `test_*` 函数、参数化后
 增加 18 个收集项。历史上最大的增长来自 331 项生命周期状态矩阵参数化，并非 331 个重复手写
@@ -76,7 +77,9 @@ Prompt、模型或预算再补测量。
 
 ## 5. 下一会话开始时应做什么
 
-1. 先运行 `git status --short --branch`，确认分支和用户改动。
+1. 先运行 `git status --short --branch`，保留所有用户改动；工作区干净时执行 `git fetch origin`、
+   `git switch main` 和 `git pull --ff-only origin main`，确认从包含 PR #6 的最新 `main` 开始。
+   规划确定后，再为产品效果优化创建新的 `codex/*` 分支。
 2. 阅读 `AGENTS.md`、`docs/current-roadmap.md`、`docs/phase5-engineering-acceptance.md` 和
    `docs/phase5-offline-eval.md`，以当前代码和测试为事实源。
 3. 先给出产品效果优化阶段的适中 PR 拆分、case 选择原则和指标定义，等待范围确定后再运行真实
@@ -101,8 +104,9 @@ Prompt、模型或预算再补测量。
 ## 7. 可直接粘贴到新对话的开场指令
 
 ```text
-当前项目是 D:\deepchoice-agent。工程基础路线已经完成，Phase 5-2 验收提交为 0a2ad10，完整
-测试为 1040 passed、0 skipped。请先阅读根目录 AGENTS.md、docs/current-roadmap.md、
+当前项目是 D:\deepchoice-agent。工程基础路线已经通过 PR #6 合并到 main，合并提交 0afb6d4；
+Phase 5-2 的完整测试为 1040 passed、0 skipped。请先确认本地基于最新 main，并阅读根目录
+AGENTS.md、docs/current-roadmap.md、
 docs/phase5-engineering-acceptance.md、docs/phase5-offline-eval.md 和本交接摘要。
 
 下一阶段进入产品效果优化。项目定位是应届生面试用个人项目：保留已实现能力，但不继续扩张企业级
