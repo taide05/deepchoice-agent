@@ -1,6 +1,7 @@
 # DeepChoice 下一阶段轻量产品设计方案
 
-> 状态：Draft for implementation planning
+> 状态：历史产品设计（2026-09-09 快照）；不代表当前待实施范围。
+> 当前入口：[路线图](current-roadmap.md)、[产品效果协议](product-effectiveness-optimization.md)。
 >
 > 日期：2026-09-09
 >

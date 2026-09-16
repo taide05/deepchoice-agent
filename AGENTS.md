@@ -312,6 +312,10 @@ When adding a setting, update the code default, tests, README configuration sect
 - The 2026-09-16 user-approved prerequisite is unifying all LLM calls on DeepSeek Flash before
   measuring the product baseline. The evaluation protocol defines selective development checks and
   a frozen-candidate full comparison; it does not require a paid case batch after every code edit.
+- The baseline-readiness audit is recorded in `docs/baseline-readiness-audit.md`. Legacy batch/generator/
+  merge CLIs are retired; direct-graph experiments require an explicit CLI selector and fresh output
+  directory. New baseline consumers use durable APIs. O1 must still freeze cases and implement its
+  collector before live baseline claims; retrieval health checks do not validate LLM connectivity.
 
 ## Local and generated data
 

@@ -42,6 +42,9 @@ HITL 绑定的旧 run 同样不能换模型恢复：未过期 pending decision �
 
 主要 durable API：
 
+基线准备检查（2026-09-16）将仓库只读负载探针迁移到 durable GET；旧服务端接口和生命周期
+契约未删除。历史直连评估入口已隔离，不能用其结果代表 durable budget/cache/HITL 行为。
+
 | API | 契约 |
 |---|---|
 | `POST /api/v1/tasks` | 原子创建 queued task/run，返回 `202` |

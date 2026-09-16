@@ -1,22 +1,21 @@
-"""DeepChoice Baseline Benchmark Runner.
+"""Legacy direct-graph benchmark (not the durable product baseline).
 
 Runs the full DeepChoice pipeline against annotated test cases, collects
 all metrics, and saves timestamped results for trend tracking.
 
-Usage:
-    cd D:/deepchoice-agent
-    python -m benchmarks.run_baseline              # 50 annotated cases (serial)
-    python -m benchmarks.run_baseline --full        # 200 cases (serial)
-    python -m benchmarks.run_baseline --full --concurrency 10  # 200 cases (10 concurrent)
-    python -m benchmarks.run_baseline --cases 5     # first 5 cases (quick)
+Usage: python -m benchmarks.run_baseline --help
 
-Requires: .env with DEEPSEEK_API_KEY, TAVILY_API_KEY, GITHUB_TOKEN
+Research execution requires --legacy-direct --output-dir NEW_DIRECTORY.
+It invokes paid LLM judges and bypasses durable lifecycle/budget/cache/HITL.
+Historical numbers cannot be reproduced by running their case set on new code.
+See benchmarks/README.md. --health-check probes retrieval only, not LLM health.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
@@ -50,7 +49,7 @@ def _configured_api_status() -> dict[str, bool]:
     """Presence only; use the same resolved LLM credentials as dispatch."""
     return {
         "llm": bool(TIERS["deepseek-flash"]["key"]),
-        "tavily": bool(os.getenv("TAVILY_API_KEY")),
+        "tavily": bool(os.getenv("TAVILY_API_KEYS") or os.getenv("TAVILY_API_KEY")),
         "github": bool(os.getenv("GITHUB_TOKEN")),
     }
 
@@ -111,15 +110,16 @@ async def run_health_check() -> int:
 
 
 def _setup_debug_dump(dump_dir: Path) -> None:
-    """Dump every LLM call's raw response to {dump_dir}/{case_id}/{tag}-{seq}.json."""
+    """Write content-free diagnostic metadata to case/tag JSON files."""
     import json as _json
 
-    dump_dir.mkdir(parents=True, exist_ok=True)
+    dump_dir.mkdir(parents=True, exist_ok=False)
     seq: dict[tuple[str, str], int] = {}
 
     async def _dump(entry: dict[str, Any]) -> None:
-        cid = entry.get("case_id") or "unknown"
-        tag = entry.get("tag") or entry.get("tier") or "llm"
+        # Case IDs and diagnostic tags are data, never filesystem paths.
+        cid = hashlib.sha256(str(entry.get("case_id") or "unknown").encode()).hexdigest()
+        tag = hashlib.sha256(str(entry.get("tag") or entry.get("tier") or "llm").encode()).hexdigest()
         n = seq.get((cid, tag), 0)
         seq[(cid, tag)] = n + 1
         d = dump_dir / cid
@@ -137,6 +137,21 @@ def _setup_debug_dump(dump_dir: Path) -> None:
 
 BENCHMARKS_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BENCHMARKS_DIR / "runs"
+EXECUTION_PATH = "legacy-direct-graph"
+
+
+def _prepare_legacy_output(parser, args) -> Path:
+    if not args.legacy_direct or not args.output_dir:
+        parser.error(
+            "Legacy direct-graph execution requires --legacy-direct --output-dir NEW_DIRECTORY; "
+            "it is not a durable baseline and can call paid LLM judges. See benchmarks/README.md."
+        )
+    output = Path(args.output_dir).resolve()
+    try:
+        output.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        parser.error("Output directory already exists; choose a new directory to preserve earlier results.")
+    return output
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
 FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
 TIMEOUT_PER_CASE_S = 900  # 15 minutes per case (thinking synthesis adds latency)
@@ -185,6 +200,7 @@ def _strip_run(run: dict) -> dict:
     keeping the fields metrics recomputation needs (incl. final_recommendation)."""
     return {
         "case_id": run.get("case_id", ""),
+        "execution_path": EXECUTION_PATH,
         "query": run.get("query", ""),
         "report": run.get("report", ""),
         "error": run.get("error"),
@@ -210,6 +226,7 @@ async def run_single_case(case: dict, verbose: bool = False,
     Returns a dict with everything needed for metrics calculation.
     """
     case_id = case["id"]
+    case_label = hashlib.sha256(str(case_id).encode()).hexdigest()[:12]
     set_current_case(case_id)
     t0 = time.monotonic()
 
@@ -236,13 +253,13 @@ async def run_single_case(case: dict, verbose: bool = False,
                     task["sub_questions"] = sub_questions
                     clarify_used = True
                     if verbose:
-                        print(f"  [{case_id}] Clarify: generated {len(sub_questions)} sub_questions")
+                        print(f"  [{case_label}] Clarify: generated {len(sub_questions)} sub_questions")
         except Exception as exc:
             if verbose:
-                print(f"  [{case_id}] Clarify skipped: {exc}")
+                print(f"  [{case_label}] Clarify skipped: {type(exc).__name__}")
 
     if verbose:
-        print(f"  [{case_id}] Starting: {case['query'][:80]}...")
+        print(f"  [{case_label}] Starting: query_chars={len(case['query'])}")
 
     try:
         orchestrator = ChiefEditorAgent(task)
@@ -259,7 +276,7 @@ async def run_single_case(case: dict, verbose: bool = False,
             timing_str = ""
             if agent_timing:
                 timing_str = f" | agent_timing={ {k: f'{v}s' for k, v in agent_timing.items()} }"
-            print(f"  [{case_id}] Done in {elapsed}s | confidence={confidence} | "
+            print(f"  [{case_label}] Done in {elapsed}s | confidence={confidence} | "
                   f"sources={n_sources} | report={len(report)} chars{timing_str}")
 
         return {
@@ -284,7 +301,7 @@ async def run_single_case(case: dict, verbose: bool = False,
     except TimeoutError:
         elapsed = round(time.monotonic() - t0, 1)
         if verbose:
-            print(f"  [{case_id}] TIMEOUT after {elapsed}s")
+            print(f"  [{case_label}] TIMEOUT after {elapsed}s")
         return {
             "case_id": case_id,
             "query": case["query"],
@@ -299,13 +316,13 @@ async def run_single_case(case: dict, verbose: bool = False,
     except Exception as exc:
         elapsed = round(time.monotonic() - t0, 1)
         if verbose:
-            print(f"  [{case_id}] FAILED: {exc}")
+            print(f"  [{case_label}] FAILED: {type(exc).__name__}")
         return {
             "case_id": case_id,
             "query": case["query"],
             "state": None,
             "report": "",
-            "error": str(exc),
+            "error": type(exc).__name__,
             "elapsed_s": elapsed,
             "retry_count": 0,
             "confidence": "",
@@ -459,7 +476,7 @@ async def run_baseline(
 
         report["outbound"] = get_resolver().summary()
     except Exception as exc:
-        report["outbound"] = {"error": str(exc)}
+        report["outbound"] = {"error": type(exc).__name__}
 
     # Phase 3.6: Source recall by retriever type
     from benchmarks.metrics import compute_source_recall_by_source
@@ -510,6 +527,7 @@ async def run_baseline(
         print(f"  *** SOURCES DEGRADED: {s['degraded_sources']} — source_recall NOT comparable to healthy runs ***")
 
     # Phase 4: Save
+    report["execution_path"] = EXECUTION_PATH
     path = save_benchmark(report, RUNS_DIR, label=batch_label)
     print(f"\nBenchmark saved to: {path}")
 
@@ -614,8 +632,11 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     return report
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DeepChoice Baseline Benchmark")
+def main(argv=None):
+    global RUNS_DIR
+    parser = argparse.ArgumentParser(description="DeepChoice legacy direct-graph benchmark; not a durable baseline")
+    parser.add_argument("--legacy-direct", action="store_true", help="Explicitly select the legacy paid direct-graph experiment")
+    parser.add_argument("--output-dir", help="New, non-existing directory for this experiment's results")
     parser.add_argument(
         "--cases", type=int, default=0,
         help="Number of cases to run (default: all)",
@@ -658,15 +679,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--profile-agents", action="store_true",
-        help="Record per-agent timing in pipeline state (agent_timing dict)",
+        help="Deprecated compatibility flag; node timing is already recorded unconditionally",
     )
     parser.add_argument(
         "--debug-dump-dir", type=str, default=None,
-        help="Dump every LLM call's raw response per case into this dir (diagnostics)",
+        help="Write content-free LLM diagnostic hashes/lengths/usage (no prompts or raw responses)",
     )
     parser.add_argument(
         "--health-check", action="store_true",
-        help="Probe all retrieval sources/channels, print diagnostics, exit (no cases)",
+        help="Probe retrieval routes and Tavily, exit (no cases or LLM check; uses Tavily quota)",
     )
     parser.add_argument(
         "--skip-health-check", action="store_true",
@@ -676,17 +697,20 @@ if __name__ == "__main__":
         "--allow-degraded", action="store_true",
         help="Proceed even when the health check reports degraded sources",
     )
-    args = parser.parse_args()
-
-    if args.debug_dump_dir:
-        _setup_debug_dump(Path(args.debug_dump_dir))
+    args = parser.parse_args(argv)
 
     if args.health_check:
         sys.exit(asyncio.run(run_health_check()))
 
     if args.merge:
-        asyncio.run(merge_all_batches(verbose=args.verbose))
+        parser.error("Automatic directory-wide merge is retired: it mixes case sets and calls a judge. See benchmarks/README.md.")
     else:
+        RUNS_DIR = _prepare_legacy_output(parser, args)
+        if args.debug_dump_dir:
+            try:
+                _setup_debug_dump(Path(args.debug_dump_dir))
+            except FileExistsError:
+                parser.error("Diagnostic directory already exists; choose a new directory to preserve earlier records.")
         if not args.skip_health_check:
             hc = asyncio.run(health_check_report())
             _print_health_check(hc)
@@ -714,3 +738,7 @@ if __name__ == "__main__":
             )
         )
         print(f"\nDone. Report: {path}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,4 +1,4 @@
-"""Merge checkpoint runs from interrupted 200-case runs into one final benchmark.
+"""Historical 200-case merge implementation, retained for audit only.
 
 Sources (deduped by case_id, error-free run wins):
 - checkpoint-g1-*  : first run, 66 successful cases (50 TC + 16 TC)
@@ -7,7 +7,6 @@ Sources (deduped by case_id, error-free run wins):
 
 Usage: python -m benchmarks.merge_checkpoints
 """
-import asyncio
 import json
 import sys
 from collections import defaultdict
@@ -133,4 +132,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit("Retired historical merge: fixed case assumptions and paid judge. See benchmarks/README.md; no files were changed.")

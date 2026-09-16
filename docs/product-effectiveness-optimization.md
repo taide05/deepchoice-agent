@@ -6,6 +6,7 @@
 这项前置适配完成并验证后，再冻结真实基线。保存协议不代表已批准付费运行；首次运行前确认案例、
 运行次数与费用上限，基线完成后再确定优化对象。[当前路线图](current-roadmap.md)管理实施范围；
 本文管理产品效果评估口径。工程事实见[工程验收报告](phase5-engineering-acceptance.md)。
+旧入口的现状与 O1 前置清单见[基线准备检查](baseline-readiness-audit.md)。
 
 ## 1. 目标与策略
 
@@ -74,7 +75,9 @@ P07～P08 留作保留集，优化方案锁定前不查看其运行报告和分�
 2. 每轮确认最多 16 次研究运行，以及包含健康检查、重试和可能恢复调用的费用上限。价格未知
    则记录 unknown，并在执行前采用用户明确接受的调用额度或 provider 硬限额；未使用的次数不自动补跑。
 3. 确认服务配置齐备后，运行项目虚拟环境中的
-   `python -m benchmarks.run_baseline --health-check`。检查通过才启动研究；失败先修复环境。
+   `python -m benchmarks.run_baseline --health-check`（检索检查，会使用 Tavily 额度）。随后在
+   已确认额度内做最小 LLM JSON/tool/thinking 兼容探测；该 health-check 本身不检查 LLM。
+   检查通过才启动研究；失败先修复环境。
    中途来源降级则保留失败记录、暂停剩余运行，记录处理决定，不静默绕过健康检查。
 4. 使用单实例、单 worker 的 `/api/v1/tasks/*` 完整路径，读取公开 result/observability。
    现有 `benchmarks/run_baseline.py` 直接调用 `ChiefEditorAgent.run_research_task()`，不是本协议

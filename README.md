@@ -173,7 +173,8 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 
 后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
 [`docs/current-roadmap.md`](docs/current-roadmap.md)：Phase 5-2 工程基础整体验收已经完成，结果见
-[`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。当前路线到此结束；
+[`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。工程阶段已结束，
+后续已完成统一 Flash 和[基线准备检查](docs/baseline-readiness-audit.md)；
 下一阶段的案例、指标和运行步骤见[产品效果优化策略与评估协议](docs/product-effectiveness-optimization.md)
 （规划已建立，实测尚未执行）。多租户认证、分布式基础设施及其他企业级
 扩展不在当前实施范围。
@@ -184,8 +185,8 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，统一 DeepSeek Flash
-适配后的全量验证结果为 **1061 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12，
+项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，基线准备检查后的
+全量验证结果为 **1075 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12，
 已通过独立复审。未执行真实 LLM/付费基线，这些结果不证明报告质量提升。
 不要使用混装其他项目依赖的全局 Python 环境。
 
@@ -297,16 +298,14 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 > **数据来源**：以上数字来自 300 case 混合基准（`benchmarks/cases_eval_300.json` = 150 TC + 150 OS）。采集分 3 批（`--batch 1/2/3 --batch-size 100`），超时/变体集中补跑（`cases_retry_all.json`）后按 case_id 替换合并。评测覆盖经 3 轮审计修正（case 标注缺陷 T1/T2/T3 修正、OS acceptable 补齐托管维度、变体 query 双场景矛盾清除）。**诚实口径**：Top-1 92.0% 是修正评测覆盖后的真实值——剩余 miss 为真·两难（标注无共识，按设计保留）、模型主流偏差、以及模型真错（详见 case 审计记录）。2026-08-31 终测归档；当前代码测试基线见上方“测试”小节，不能用后续测试数量反推历史 benchmark 指标。
 
-```bash
-# 重现 300 case 混合基准（3 批 + 合并）
-cd D:\deepchoice-agent
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 1 --batch-size 100 --concurrency 12
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 2 --batch-size 100 --concurrency 12
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 3 --batch-size 100 --concurrency 12
-# 合并（自写脚本：runs-batch01/02/03 + 补跑 runs-full 按 case_id 替换，不用内置 merge）
-```
+上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
+重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
+正式产品基线使用 durable API；采集器与真实案例冻结待 O1 完成。手动评估 workflow 当前仅运行
+smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
 
-**已知局限**：端到端延迟较高（P50 342.1s/P95 445.3s），主要来自矛盾检测、仲裁和证据收集——这是深度研究的代价，480s 预算内。300 case 终测暴露一个信号：**冲突检测率 28.8%**——新增 case 的 known_contradictions 标注不足，预筛召回是杠杆。Tavily 月配额仍是外部约束，但密钥池（多 key 轮换 + 耗尽池持久化 + 28 天自动重探）已把单 key 耗尽从故障降级为吞吐波动。
+**历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
+超时口径；冲突检测率为 28.8%，解释受当时 known_contradictions 标注覆盖影响。这些数据不代表
+统一 Flash 后的耗时或冲突质量；当前 active-time 预算见运行契约。Tavily 配额仍是外部运行条件。
 
 ## 技术栈
 
@@ -329,13 +328,14 @@ src/deepchoice/
 
 benchmarks/
 ├── metrics.py             # 7 指标计算（GSM 框架）
-├── run_baseline.py        # 分批 + checkpoint + 趋势对比
-├── merge_checkpoints.py   # 中断跑批的 checkpoint 合并工具
+├── README.md             # 当前/历史评估入口及执行边界
+├── run_baseline.py        # 显式选择的历史直连实验，非 durable 基线
+├── merge_checkpoints.py   # 历史合并实现（CLI 停用）
 ├── report_quality.py      # 5 项确定性质检（A/B/C/D 评级）
 ├── cases_200.json         # 200 对比场景 case（50 标注 + 150 变体）
 ├── cases_eval_200.json    # 200 混合基准（100 TC + 100 OS）
-├── run_all_batches.ps1    # 分批运行脚本
-├── locustfile.py          # 基础并发负载测试
+├── run_all_batches.ps1    # 历史入口（已停用，不删除旧结果）
+├── locustfile.py          # durable 只读 HTTP 负载，不测研究吞吐
 └── annotated_cases.json   # 50 手标注 case
 ```
 

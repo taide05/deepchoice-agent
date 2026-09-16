@@ -200,6 +200,9 @@ artifact 含可追溯版本和数据集元信息，并明确标记 source health
 
 ### Phase 5 之后的规划边界
 
+2026-09-16 已按用户要求检查并处理影响基线的旧工具/说明，清单和正式实测前的剩余门槛见
+[基线准备检查](baseline-readiness-audit.md)。默认路径保持 durable；旧直连 benchmark 单独隔离。
+
 产品效果优化的下一阶段方案见
 [`product-effectiveness-optimization.md`](product-effectiveness-optimization.md)，其中定义案例、
 指标、运行协议和两个优化 PR 的交付顺序。2026-09-16 用户已明确要求先完成全部 LLM 的

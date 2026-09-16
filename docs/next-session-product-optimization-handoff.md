@@ -2,6 +2,10 @@
 
 更新日期：2026-09-16
 
+> 本文主体是工程验收结束时的历史交接。后续已统一 DeepSeek Flash，并完成旧入口梳理；
+> 开始新工作先看 [当前路线图](current-roadmap.md)、[基线准备检查](baseline-readiness-audit.md)
+> 和 [评估协议](product-effectiveness-optimization.md)。下文分支切换与开场指令不再作为当前操作指令。
+
 用途：将本文作为新 Codex 对话的第一条上下文。它只交接已经验证的仓库事实、用户决策和下一阶段
 边界，不代替仓库中的 `AGENTS.md`、当前代码或测试。
 

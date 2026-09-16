@@ -1,6 +1,7 @@
 # DeepChoice 工程化增强技术设计与分阶段实施方案
 
-> 状态：Draft for implementation planning
+> 状态：历史设计空间（2026-09-09 快照）；不代表当前待实施范围。
+> 当前入口：[路线图](current-roadmap.md)、[准备检查](baseline-readiness-audit.md)。下文旧实现描述保留历史语境。
 >
 > 日期：2026-09-09
 >
