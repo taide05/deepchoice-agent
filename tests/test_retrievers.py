@@ -455,15 +455,16 @@ class TestSearchKBChromaPath:
         import asyncio
 
         import chromadb
-        from chromadb.errors import NotFoundError
-
         from deepchoice.agents.conflict_detector import _execute_search
+        from deepchoice.retrievers.chroma_kb import ChromaKB
+        from deepchoice.retrievers.contracts import RetrievalResult
 
         captured = {}
 
         class FakeClient:
-            def get_collection(self, name):
-                raise NotFoundError("missing")
+            def get_or_create_collection(self, name):
+                captured["collection"] = name
+                return object()
 
         def fake_persistent(path, **_):
             captured["path"] = path
@@ -471,11 +472,15 @@ class TestSearchKBChromaPath:
 
         monkeypatch.setattr(chromadb, "PersistentClient", fake_persistent)
         monkeypatch.delenv("CHROMA_PATH", raising=False)
+        retrieve = AsyncMock(return_value=RetrievalResult(source="chroma", status="failed",
+            results=[], error="private provider detail", latency_ms=0))
+        monkeypatch.setattr(ChromaKB, "retrieve", retrieve)
 
         out = asyncio.run(_execute_search("search_kb", {"query": "x"}))
 
-        assert captured["path"] == "./chroma_kb/chroma_db"
-        assert "KB collection not found" in out
+        assert captured == {"path": "./chroma_kb/chroma_db", "collection": "tech_kb"}
+        assert retrieve.call_args.args[0].query == "x"
+        assert json.loads(out) == {"error": "KB collection unavailable", "results": []}
 
 
 class TestMultiRetriever:

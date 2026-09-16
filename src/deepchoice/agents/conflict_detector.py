@@ -202,24 +202,22 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
             return json.dumps({"error": type(exc).__name__})
 
     elif tool_name == "search_kb":
-        chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
         try:
-            import chromadb
-            from chromadb.errors import NotFoundError
-            client = chromadb.PersistentClient(
-                path=chroma_path,
-                settings=chromadb.Settings(anonymized_telemetry=False),
+            from ..retrievers.chroma_kb import ChromaKB
+            from ..retrievers.contracts import RetrievalRequest
+
+            # Use the default tech_kb/BGE embedding contract, not Chroma's
+            # unrelated default query_texts embedding or a retired collection.
+            result = await ChromaKB().retrieve(
+                RetrievalRequest(query=query, max_results=max_results)
             )
-            try:
-                collection = client.get_collection("knowledge_base")
-            except NotFoundError:
-                return json.dumps({"error": "KB collection not found", "results": []})
-            results = collection.query(query_texts=[query], n_results=max_results)
-            docs = []
-            for i, doc in enumerate(results.get("documents", [[]])[0]):
-                meta = results.get("metadatas", [[]])[0][i] if results.get("metadatas") else {}
-                docs.append({"content": doc[:300] if doc else "", "metadata": meta})
-            return json.dumps(docs, ensure_ascii=False)
+            if result.status != "success":
+                return json.dumps({"error": "KB collection unavailable", "results": []})
+            return json.dumps([
+                {"content": item.get("snippet", "")[:300],
+                 "metadata": {key: item.get(key, "") for key in ("url", "title", "date")}}
+                for item in result.results[:max_results]
+            ], ensure_ascii=False)
         except ImportError:
             return json.dumps({"error": "chromadb not installed in this process"})
         except BudgetError:

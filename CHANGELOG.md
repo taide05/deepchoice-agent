@@ -72,6 +72,8 @@
 - Tavily retrieval, conflict evidence, and benchmark health checks now use the outbound-selected route; credential-free HEAD probing replaces direct-only route assumptions while preserving the legacy `tavily_direct` report label
 
 ### Fixed
+
+- Align evidence-gathering search_kb with the default ChromaKB tech_kb/BGE query_embeddings contract; preserve one outer budget/Trace call, bounded content/provenance, visible safe failures and BudgetError propagation, without migrating the user's knowledge data
 - Bound conflict scan output to 512 in dispatch/reservation/manifest, limit per-run scan/initial arbitration to four concurrent calls, and drain admitted scans before budget errors propagate; standard hard limits remain unchanged and historical 4096 scan manifests remain readable but cannot resume
 - Compute instance acquisition TTL after SQLite writer acquisition and renewal timestamps after local lock waiting; preserve expiry fencing/fail-closed, without claiming full live lease-loss diagnosis
 - Honor existing CHROMA_PATH in ChromaKB without changing its default path or collection; pass knowledge/learned-document settings through Docker so isolated O1 experiments cannot silently read the normal knowledge store

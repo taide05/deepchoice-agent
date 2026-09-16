@@ -70,6 +70,53 @@ async def test_scan_bounds_fanout_and_drains_before_failure(monkeypatch, deny):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failed", [False, True])
+async def test_kb_evidence_tool_uses_default_collection_and_embeddings(monkeypatch, failed):
+    from deepchoice.retrievers import chroma_kb
+
+    captured = {}
+    def query(**kwargs):
+        captured["query"] = kwargs
+        if failed:
+            raise RuntimeError("private provider detail must not escape")
+        return {"ids": [["fixture"]], "documents": [["x" * 500]],
+                "metadatas": [[{"url": "https://example.com/kb", "title": "fixture", "date": "2026"}]]}
+    def collection(name):
+        captured["collection"] = name
+        return SimpleNamespace(query=query)
+    def client(**kwargs):
+        captured["path"] = kwargs["path"]
+        return SimpleNamespace(get_or_create_collection=collection)
+    monkeypatch.setenv("CHROMA_PATH", "fixture-isolated-kb")
+    monkeypatch.setattr(chroma_kb.chromadb, "PersistentClient", client)
+    monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: SimpleNamespace(
+        encode=lambda query: np.ones(1024)))
+    monkeypatch.setattr("deepchoice.retrievers.base._outbound.get_resolver", lambda: SimpleNamespace(
+        invalidate=AsyncMock()))
+    result = json.loads(await cd._execute_search("search_kb", {"query": "fixture", "max_results": 2}))
+    assert captured["path"] == "fixture-isolated-kb" and captured["collection"] == "tech_kb"
+    assert "query_texts" not in captured["query"]
+    assert len(captured["query"]["query_embeddings"][0]) == 1024
+    if failed:
+        assert result == {"error": "KB collection unavailable", "results": []}
+        assert cd._tool_failure_category(json.dumps(result)) == "knowledge_base_unavailable"
+    else:
+        assert result == [{"content": "x" * 300, "metadata": {
+            "url": "https://example.com/kb", "title": "fixture", "date": "2026"}}]
+
+
+@pytest.mark.asyncio
+async def test_kb_evidence_tool_does_not_swallow_budget_error(monkeypatch):
+    error = BudgetExceededError(BudgetResource.RETRIEVAL_CALLS,
+        limit=72, consumed=72, requested=1)
+    monkeypatch.setattr("deepchoice.retrievers.chroma_kb.ChromaKB.retrieve", AsyncMock(side_effect=error))
+    monkeypatch.setattr("deepchoice.retrievers.chroma_kb.ChromaKB.__init__", lambda self: None)
+    with pytest.raises(BudgetExceededError) as raised:
+        await cd._execute_search("search_kb", {"query": "fixture"})
+    assert raised.value is error
+
+
+@pytest.mark.asyncio
 async def test_arbitration_has_a_run_local_four_call_gate(monkeypatch):
     items = sources()
     pairs = [{"source_a": items[0], "source_b": items[1], "similarity": 1}

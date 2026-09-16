@@ -1,6 +1,6 @@
 # O1-R：单 case 可靠性修复
 
-日期：2026-09-16。用户已确认实施 O1-R，暂停所有真实 12-case 并发及整组串行。当前为离线验证阶段；尚未新增付费研究，不声称单 case 已稳定。原 36 个 run 与作废证据保留，不重启原实验数据库。
+日期：2026-09-16。用户已确认实施 O1-R，暂停所有真实 12-case 并发及整组串行。预算/实验恢复修复后已单次验证 P06 正常成功；随后补修实测发现的旧 KB 适配，当前重新离线验证，不声称单 case 已稳定。原 36 个 run 与作废证据保留，不重启原实验数据库。累计 37/48 个已创建 run，原额度剩余 11。
 
 ## 最小变更契约
 
@@ -11,6 +11,7 @@
 - collect-single 只能选择 P01～P08 的一个开发 case，并固定 concurrency=1；新目录、显式付费开关，metadata.case_denominator=1/execution_mode=single。它不是完整串并发基线，不能进入 12-case 配对门禁。
 - 采集在准入前及轮询中检查实例健康；失联、失去实例权限、非预期 running→queued 或 interrupted 时停止后续准入，不恢复/重复 POST。正常 HITL 决策后的 queued→running 除外。
 - 每 5 秒至多读取一次运行中公开用量，失败保留最后已知值/时间；只有最终终态成功刷新才可保留 Trace 完整标志。非最终/失联值是已知下界，完整性必须 false；runs/usage.csv/summary 用同一投影，queued/interrupted 不伪算终态。
+- 仲裁 search_kb 复用 ChromaKB.retrieve/RetrievalRequest，统一 tech_kb、CHROMA_PATH 与 BGE query_embeddings；不再查询旧 knowledge_base 或调用默认 query_texts embedding。沿用工具外层一次预算/Trace，失败返回固定安全标签并保持 failed/knowledge_base_unavailable，BudgetError 上抛；成功仅返回 300 字符 content 及 url/title/date metadata。不迁移/改写原知识库。
 
 ## 验证和复测顺序
 
@@ -31,4 +32,16 @@
 
 pyflakes、vulture（100% confidence）、pip check、Compose 静默配置、git diff --check 通过；smoke-v1 12/12，fingerprint 匹配。本机 Python 3.12，不冒充 Linux/Python 3.11 CI 矩阵。独立只读复审无阻断项；非最终用量完整性问题已修复并覆盖测试。
 
+旧 KB 补修冻结后：聚焦 **44 passed**；全套 **1116 passed、0 skipped（223.14 秒）**。pyflakes、vulture 100%、pip check、smoke-v1 12/12 fingerprint、git diff --check 再次通过；独立只读复审无阻断项。原 ChromaKB 默认/显式路径、tech_kb、1024 维 query_embeddings、失败分类/错误不反射及 BudgetError 上抛均有回归覆盖。
+
 单次实测将按实际收集后追加；真实报告语义质量仍需人工盲评/复核，不用未校准 judge。依据 ai-evals，运行稳定性与语义质量分别验收。
+
+## 首次单 case 观察（不是稳定验收）
+
+2026-09-16，执行提交 2af0781，新隔离根目录 outputs/o1r-single-20260916；准备脚本虽创建四个空 profile，实际仅启动一个服务、提交 P06 一个任务，collection execution_mode=single / denominator=1 / concurrency=1。检索健康通过，知识 hash 与原冻结身份一致，原知识库 hash 未变。
+
+P06-r1：completed，约 82.7 秒；输入 21,253 / 输出 3,602 / 总计 **24,855 token**，31 LLM / 13 retrieval，最终 Trace 用量完整，预算 reserved/unknown_spend 均 0，无 admission denial、LLM retry、HITL 决策或非预期恢复。报告 8,976 字符、快照可读。价格 unavailable，不推算金额；不是平均成本、语义质量或硬件稳定证明。
+
+13 次 conflict_scan 的 helper 诊断均 parse_ok=True，输出最多 39 token；29 条共享 helper 脱敏诊断无 parse_ok=False 或 error_type，另两次工具式 LLM 用量由 Trace 记录。这是 helper 解析器观测，不声称严格原文 schema/语义验证。服务受控关闭，未重复 POST 或恢复旧 run。
+
+一条 evidence_gather.tool/search_kb failed 暴露旧 collection/embedding 适配，与预算修复无关；先补修/重跑验证再进行下一次单例。本次成功发生在 KB 补修之前，不作为最新候选的重复稳定门槛证明。保留集正文未查看，O1 串并发质量基线继续暂停。

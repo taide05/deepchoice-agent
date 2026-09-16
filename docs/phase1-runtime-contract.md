@@ -272,3 +272,4 @@ SSE 规则：
 - RunCoordinator.auto_recovery 默认 True，正常 startup/周期恢复、HITL 及七日过期语义不变。实验专用 app.state.auto_recovery_enabled=False 使 coordinator.start 跳过 recover_runs 且不创建周期扫描；显式新任务及已确认 HITL 恢复仍走原 fencing/预算契约。它不适合长期默认产品部署，不授权直接读取/恢复私有 checkpoint。
 - 短 conflict_scan 最大输出冻结为 512，其他 LLM call 仍 4096；请求和预算预留使用同一上限。schema v1 不变，历史 4096 scan manifest identity 可读但拒绝同 run 兼容。每 run 扫描/初次仲裁各四路，额外受全局门约束；预算 denial latch 不变，已派发调用在失败上抛前完成结算，不放宽标准硬预算。
 - 评测单次消费者只用 durable API；健康/身份/生命周期漂移停止新准入，不自动恢复或重复 POST。运行中用量缓存保留数字但不得冒充最终完整使用，非终态或最终刷新失败必须标为 incomplete；不修改公共 lifecycle/SSE 投影来迎合评测。
+- 仲裁 KB 工具复用默认 ChromaKB.retrieve，使用 tech_kb/BGE 查询而非旧 knowledge_base/query_texts；保持工具外层一次预算和 Trace，失败明确、安全，BudgetError 仍传播，不增加预算/租约例外或修改原知识库。
