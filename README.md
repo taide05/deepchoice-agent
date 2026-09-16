@@ -67,6 +67,10 @@ DeepSeek thinking，并在新 run manifest 中冻结。`LLM_DS_CONCURRENCY` 默�
 DeepSeek；历史 Qwen run 可读取，不能在新模型配置下续跑同一 run，需创建新 run/任务。
 本次是适配变更，报告效果需按[评估协议](docs/product-effectiveness-optimization.md)重新建立基线。
 
+`CHROMA_PATH` 默认 `./chroma_kb/chroma_db`，同时约束 Chroma 检索与冲突工具的库路径；
+`LEARNED_DOCS_PATH` 默认 `./learned_docs.json`，`LEARNED_DOCS_READONLY=1` 禁止自学习写回。
+Docker 传递同名设置；覆盖容器路径时需自行提供相应挂载。O1 使用隔离知识快照，不改现有库。
+
 Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
 `RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
 契约与来源校验的成功检索结果，不缓存失败结果或 LLM 响应，旧 `/research` 兼容路径继续绕过缓存。
@@ -301,7 +305,8 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
 正式产品基线使用 durable API；O1 已提供候选 12-case、serial=1 / concurrent=12 的采集与
-配对门禁，但案例/环境仍未冻结，也未运行付费实测。手动评估 workflow 当前仅运行 smoke-v1，
+配对门禁，但案例/环境仍未冻结，也未运行付费研究。48-run 额度已获确认，JSON/tool 最小探测通过；
+重复蓝屏导致正式并发批次暂不启动，详见[O1 执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
 无 LLM/检索调用，不套用历史 Top-1 阈值。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
@@ -309,6 +314,9 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 统一 Flash 后的耗时或冲突质量；当前 active-time 预算见运行契约。Tavily 配额仍是外部运行条件。
 
 ## 技术栈
+
+O1 准备加固的本地验证（2026-09-16，Python 3.12）：42 个聚焦测试及完整套件 1092 passed、0 skipped；
+smoke-v1 12/12、fingerprint 匹配。以上是工程/fixture 验证，不是 12 个真实研究 case 的效果或成本。
 
 LangGraph（研究/生成节点 + 确定性引用验证与单一 HITL 决策门 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · DeepSeek Flash（全部 LLM 调用） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
 

@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased] - 2026-09-15
+## [Unreleased] - 2026-09-16
 
 ### Added
+- O1 preparation follow-up (2026-09-16): bounded JSON/tool and credential-free route probes, immediately fsynced admission identity journal, per-case known-token/usage-completeness CSV and summary, deterministic case order, observed running overlap, split report directories, and experiment/run-bound scoring; missing paired reports cannot pass. The accepted 48 research runs remain unexecuted due to repeated host WHEA crashes; see docs/o1-execution-status.md
 - O1 product-baseline foundation (2026-09-16): a guarded 12-case candidate dataset, isolated dual-SQLite experiment server, durable API collector for whole-case serial=1/concurrent=12 profiles, public report/snapshot/observability artifacts, HITL and timeout handling, human score templates, and deterministic paired concurrency-quality gates; paid execution remains blocked until case/environment freeze and explicit approval
 - Product-effectiveness strategy and evaluation protocol (2026-09-16): 12 proposed real-case slots, repeated durable-path measurement, human scoring, paired optimization gates, and a two-PR delivery plan; paid runs and production optimization have not started
 - Nine-node research workflow, six-source retrieval, multilingual reports, observability, token accounting, and the outbound channel layer accumulated during the optimization cycle
@@ -67,6 +68,7 @@
 - Tavily retrieval, conflict evidence, and benchmark health checks now use the outbound-selected route; credential-free HEAD probing replaces direct-only route assumptions while preserving the legacy `tavily_direct` report label
 
 ### Fixed
+- Honor existing CHROMA_PATH in ChromaKB without changing its default path or collection; pass knowledge/learned-document settings through Docker so isolated O1 experiments cannot silently read the normal knowledge store
 - Budget exhaustion now latches inside serialized admission so a queued smaller request cannot commit after an earlier denial for the same run
 - Durable SSE now closes server-side after a `waiting_for_input` event is caught up and resumes from `Last-Event-ID` after the decision is resolved
 - Legacy research creation, stream/status, and history compatibility paths now have regression coverage for their deprecation headers

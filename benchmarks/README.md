@@ -15,8 +15,8 @@
 | `locust -f benchmarks/locustfile.py` | 只读 health/docs/durable 查询负载，不创建研究、不衡量报告质量或研究吞吐 |
 | `.github/workflows/benchmark.yml` | 手动离线 smoke；已移除旧付费 runner 和固定 Top-1 门槛 |
 
-O1 已建立 durable API 批量采集器和 12 例候选集，但案例参考依据、环境快照及调用额度尚未
-冻结，不能宣布“真实基线已就绪”。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
+O1 已建立 durable API 批量采集器和 12 例候选集，48-run 额度已确认，但案例参考依据、环境快照尚未
+冻结；重复主机蓝屏导致正式批次暂不启动，见[执行断点](../docs/o1-execution-status.md)。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
 任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
 代替此项。
 
@@ -43,6 +43,19 @@ $env:LEARNED_DOCS_READONLY = "1"
 
 每次 profile 使用新的 `*-runtime` 数据库目录和单独的新采集输出目录。`scores.csv` 必须先完成
 人工盲评，比较命令才会运行。
+
+`admissions.jsonl` 在 POST 前及确认创建后立即保存并 fsync；重启先核对它，未写完的 run 不能
+自动重建。`usage.csv` 逐 case 导出已知 token/完整性与调用数；未知为空，不是零。报告和 snapshot
+分别存入 development / holdout 子目录；保留集在候选锁定前不查看。比较需同环境 hash、代码提交、
+数据集 hash 和配对 manifest，评分必须绑定实验/run 并有 reviewer/evidence_notes；缺报告不判通过。
+
+以下探测不创建研究任务，输出目录必须为新文件；routes 仅做 credential-free 路由检查，
+不能替代上述包含 Tavily POST 的完整检索 health-check：
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline_preflight --mode routes --output <路由检查.json>
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline_preflight --output <模型检查.json> --execute-paid-probes
+```
 第二次 repetition 使用 `serial-r2` / `concurrent-r2`；两次均通过才算并发效果门禁通过。
 
 ## 有意使用历史直连工具

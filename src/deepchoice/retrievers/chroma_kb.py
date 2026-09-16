@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import chromadb
 from chromadb.config import Settings
@@ -12,7 +13,7 @@ class ChromaKB(BaseRetriever):
 
     def __init__(self):
         self.client = chromadb.PersistentClient(
-            path="./chroma_kb/chroma_db",
+            path=os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db"),
             settings=Settings(anonymized_telemetry=False),
         )
         self.collection = self.client.get_or_create_collection("tech_kb")

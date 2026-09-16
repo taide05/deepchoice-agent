@@ -12,8 +12,11 @@ import asyncio
 import csv
 import hashlib
 import json
+import os
 import platform
+import random
 import re
+import statistics
 import subprocess
 import sys
 import time
@@ -93,6 +96,11 @@ def load_dataset(path: Path, *, require_frozen: bool = False) -> tuple[dict[str,
         raise ValueError("unexpected dataset_id")
     if require_frozen and dataset.get("status") != "frozen":
         raise ValueError("paid collection requires a frozen dataset")
+    if require_frozen:
+        freeze_date = dataset.get("freeze_date")
+        if not isinstance(freeze_date, str):
+            raise ValueError("frozen dataset requires a freeze date")
+        datetime.strptime(freeze_date, "%Y-%m-%d")
     cases = dataset.get("cases")
     if not isinstance(cases, list) or len(cases) != EXPECTED_CASE_COUNT:
         raise ValueError(f"dataset must contain exactly {EXPECTED_CASE_COUNT} cases")
@@ -126,6 +134,11 @@ def load_dataset(path: Path, *, require_frozen: bool = False) -> tuple[dict[str,
             raise ValueError(f"invalid repeated HITL policy for {case_id}")
         if repeat_action == "provide_context" and not hitl.get("supplemental_input"):
             raise ValueError(f"missing repeated HITL supplemental input for {case_id}")
+    if seen != {f"P{index:02d}" for index in range(1, 13)}:
+        raise ValueError("dataset must use fixed case identities P01..P12")
+    if any(case["split"] != ("development" if int(case["id"][1:]) <= 8 else "holdout")
+           for case in cases):
+        raise ValueError("dataset must preserve the fixed 8/4 split")
     return dataset, _sha256(dataset)
 
 
@@ -153,6 +166,8 @@ def load_environment(path: Path, *, require_ready: bool = False) -> tuple[dict[s
         value = environment.get(field)
         if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
             raise ValueError(f"environment manifest has invalid {field}")
+        if require_ready and value == "0" * 64:
+            raise ValueError("ready environment cannot contain placeholder hashes")
     model = environment.get("model")
     if not isinstance(model, dict):
         raise ValueError("environment manifest must identify the model configuration")
@@ -211,6 +226,43 @@ class DurableBaselineCollector:
         self._write_lock = asyncio.Lock()
         self._active_cases = 0
         self.peak_in_flight = 0
+        self._running_cases: set[str] = set()
+        self.peak_observed_running = 0
+
+    async def _cancel_and_settle(self, record: dict[str, Any]) -> None:
+        task_id = record["task_id"]
+        response, task = await self._request_json("POST", f"/api/v1/tasks/{task_id}/cancel")
+        if response.status_code != 200 or task is None:
+            record["error_code"] = _http_error_code(response)
+            return
+        cutoff = time.monotonic() + 30
+        while True:
+            record["status"] = task["task"]["status"]
+            if record["status"] in TERMINAL_STATUSES:
+                return
+            if time.monotonic() >= cutoff:
+                record["error_code"] = "CANCELLATION_UNSETTLED"
+                return
+            await asyncio.sleep(max(0.1, min(self.options.poll_interval_seconds, 2)))
+            response, task = await self._request_json("GET", f"/api/v1/tasks/{task_id}")
+            if response.status_code != 200 or task is None:
+                record["error_code"] = _http_error_code(response)
+                return
+            if (task.get("latest_run") or {}).get("run_id") != record["run_id"]:
+                record["error_code"] = "RUN_IDENTITY_CHANGED"
+                return
+
+    async def _journal(self, record: dict[str, Any], event: str) -> None:
+        """Persist submission identity immediately; never retry uncertain creation."""
+        entry = {key: record.get(key) for key in (
+            "experiment_id", "case_id", "task_id", "run_id", "manifest_id", "status"
+        )}
+        entry.update(event=event, observed_at=_utc_now())
+        async with self._write_lock:
+            with (self.output_dir / "admissions.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(entry, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
 
     async def collect(self, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
         semaphore = asyncio.Semaphore(self.options.concurrency)
@@ -223,6 +275,7 @@ class DurableBaselineCollector:
                     return await self._collect_case(case)
                 finally:
                     self._active_cases -= 1
+                    self._running_cases.discard(case["id"])
 
         results = await asyncio.gather(*(bounded(case) for case in cases))
         return list(results)
@@ -291,6 +344,7 @@ class DurableBaselineCollector:
             "error_code": None,
         }
         try:
+            await self._journal(record, "submission_started")
             response, task = await self._request_json(
                 "POST", "/api/v1/tasks", json=case["request"]
             )
@@ -302,18 +356,13 @@ class DurableBaselineCollector:
             latest_run = task.get("latest_run") or {}
             record["run_id"] = latest_run.get("run_id")
             record["manifest_id"] = latest_run.get("manifest_id")
+            await self._journal(record, "admitted")
             resolved_decisions: set[str] = set()
 
             while True:
                 if time.monotonic() - started >= self.options.case_timeout_seconds:
                     record["collector_timeout"] = True
-                    cancel, cancelled = await self._request_json(
-                        "POST", f"/api/v1/tasks/{task_id}/cancel"
-                    )
-                    if cancel.status_code == 200 and cancelled is not None:
-                        record["status"] = cancelled["task"]["status"]
-                    else:
-                        record["error_code"] = _http_error_code(cancel)
+                    await self._cancel_and_settle(record)
                     break
                 response, task = await self._request_json(
                     "GET", f"/api/v1/tasks/{task_id}"
@@ -324,10 +373,18 @@ class DurableBaselineCollector:
                 status = task["task"]["status"]
                 record["status"] = status
                 latest_run = task.get("latest_run") or {}
-                record["run_id"] = latest_run.get("run_id") or record["run_id"]
-                record["manifest_id"] = (
-                    latest_run.get("manifest_id") or record["manifest_id"]
-                )
+                if latest_run.get("run_id") != record["run_id"] or latest_run.get(
+                    "manifest_id") != record["manifest_id"]:
+                    record["error_code"] = "RUN_IDENTITY_CHANGED"
+                    break
+                if status == "running":
+                    self._running_cases.add(case_id)
+                    self.peak_observed_running = max(self.peak_observed_running, len(self._running_cases))
+                else:
+                    self._running_cases.discard(case_id)
+                if status == "interrupted":
+                    record["error_code"] = "RUN_INTERRUPTED_NO_AUTO_RESUME"
+                    break
                 if status in TERMINAL_STATUSES:
                     break
                 if status == "waiting_for_input":
@@ -371,6 +428,9 @@ class DurableBaselineCollector:
             "GET", f"/api/v1/tasks/{task_id}/observability"
         )
         if response.status_code == 200:
+            if observability and observability.get("run_id", record["run_id"]) != record["run_id"]:
+                record["error_code"] = "OBSERVABILITY_RUN_MISMATCH"
+                return
             record["observability"] = observability
         if record["status"] not in SUCCESS_STATUSES:
             return
@@ -380,7 +440,7 @@ class DurableBaselineCollector:
         if response.status_code != 200 or snapshot is None:
             record["error_code"] = _http_error_code(response)
             return
-        snapshot_relative = Path("snapshots") / f"{record['case_id']}.json"
+        snapshot_relative = Path(record["split"]) / "snapshots" / f"{record['case_id']}.json"
         snapshot_destination = self.output_dir / snapshot_relative
         snapshot_destination.parent.mkdir(parents=True, exist_ok=True)
         snapshot_destination.write_text(
@@ -395,10 +455,13 @@ class DurableBaselineCollector:
             record["error_code"] = _http_error_code(response)
             return
         text = report.get("report")
+        if report.get("run_id", record["run_id"]) != record["run_id"]:
+            record["error_code"] = "REPORT_RUN_MISMATCH"
+            return
         if not isinstance(text, str) or not text.strip():
             record["error_code"] = "EMPTY_REPORT"
             return
-        relative = Path("reports") / f"{record['case_id']}.md"
+        relative = Path(record["split"]) / "reports" / f"{record['case_id']}.md"
         destination = self.output_dir / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(text, encoding="utf-8")
@@ -409,10 +472,35 @@ class DurableBaselineCollector:
     ) -> dict[str, Any]:
         record["ended_at"] = _utc_now()
         record["wall_time_ms"] = round((time.monotonic() - started) * 1000)
+        record["usage"] = usage_projection(record.get("observability"))
         async with self._write_lock:
             with (self.output_dir / "runs.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+        print(json.dumps({"case_id": record["case_id"], "status": record["status"],
+                          "usage": record["usage"], "wall_time_ms": record["wall_time_ms"]}), flush=True)
         return record
+
+
+def usage_projection(observability: dict[str, Any] | None) -> dict[str, Any]:
+    """Known Trace usage is distinct from conservative budget charges."""
+    observation = observability or {}
+    totals = observation.get("totals") or {}
+    fields = ("input_tokens", "output_tokens", "total_tokens", "llm_calls",
+              "retrieval_calls", "external_calls", "failed_calls", "node_retries")
+    projection = {field: totals.get(field) for field in fields}
+    projection["token_usage_complete"] = totals.get("token_usage_complete", False)
+    calls = observation.get("calls") or []
+    available = observation.get("availability") == "available"
+    projection["http_calls"] = sum(call.get("kind") == "http" for call in calls) if available else None
+    projection["llm_retries"] = sum(call.get("kind") == "llm" and
+        isinstance(call.get("retry_no"), int) and call["retry_no"] > 0 for call in calls) if available else None
+    budget = observation.get("budget") or {}
+    projection["budget_resources"] = budget.get("resources") or {}
+    projection["budget_admission_denied"] = budget.get("admission_denied")
+    projection["price_availability"] = budget.get("price_availability", "unavailable")
+    return projection
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -462,6 +550,20 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
     succeeded = sum(bool(record.get("report_path")) for record in records)
     timed_out = sum(bool(record.get("collector_timeout")) for record in records)
     total_wall = sum(int(record.get("wall_time_ms") or 0) for record in records)
+    usage_fields = ["case_id", "status", "wall_time_ms", "input_tokens", "output_tokens",
+                    "total_tokens", "token_usage_complete", "llm_calls", "retrieval_calls",
+                    "http_calls", "llm_retries", "failed_calls", "price_availability"]
+    with (output_dir / "usage.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=usage_fields)
+        writer.writeheader()
+        for record in sorted(records, key=lambda item: item["case_id"]):
+            usage = usage_projection(record.get("observability"))
+            writer.writerow({field: record.get(field) if field in record else usage.get(field)
+                             for field in usage_fields})
+    known = [usage_projection(record.get("observability"))["total_tokens"] for record in records]
+    known = [value for value in known if isinstance(value, int)]
+    complete = sum(usage_projection(record.get("observability"))["token_usage_complete"] is True
+                   for record in records)
     lines = [
         "# Product baseline collection",
         "",
@@ -469,6 +571,11 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
         f"- Reports available: {succeeded}",
         f"- Collector timeouts: {timed_out}",
         f"- Sum of per-case wall time: {total_wall} ms",
+        f"- Complete token usage: {complete}/{len(records)} runs",
+        f"- Known total tokens (not necessarily full spend): {sum(known) if known else 'unknown'}",
+        f"- Known per-run token median: {statistics.median(known) if known else 'unknown'}",
+        f"- Known per-run token range: {str(min(known)) + '..' + str(max(known)) if known else 'unknown'}",
+        "- Monetary cost: unknown unless a separately verified price snapshot is supplied",
         "- Quality verdict: pending human scoring",
         "",
         "This summary is a collection record, not a product-quality claim.",
@@ -476,13 +583,19 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
     (output_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _read_scores(path: Path) -> dict[str, dict[str, float | int]]:
+def _read_scores(path: Path, runs: dict[str, dict[str, Any]]) -> dict[str, dict[str, float | int]]:
     scores: dict[str, dict[str, float | int]] = {}
     with path.open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
             case_id = row.get("case_id", "")
             if case_id in scores:
                 raise ValueError(f"duplicate score for {case_id}")
+            run = runs.get(case_id)
+            if run is None or row.get("run_id") != run.get("run_id") or row.get(
+                "experiment_id") != run.get("experiment_id"):
+                raise ValueError("score identity does not match collected run")
+            if not row.get("reviewer") or not row.get("evidence_notes"):
+                raise ValueError("scoring requires reviewer and evidence notes")
             parsed: dict[str, float | int] = {}
             for field in SCORE_FIELDS:
                 raw = (row.get(field) or "").strip()
@@ -496,6 +609,8 @@ def _read_scores(path: Path) -> dict[str, dict[str, float | int]]:
             if not raw_errors:
                 raise ValueError(f"missing major_errors for {case_id}")
             parsed["major_errors"] = int(raw_errors)
+            if parsed["major_errors"] < 0:
+                raise ValueError("major_errors cannot be negative")
             scores[case_id] = parsed
     return scores
 
@@ -527,8 +642,24 @@ def compare_profiles(serial_dir: Path, concurrent_dir: Path) -> dict[str, Any]:
     }
     if len(hashes) != 1:
         raise ValueError("profiles must use one identical dataset hash")
-    serial_scores = _read_scores(serial_dir / "scores.csv")
-    concurrent_scores = _read_scores(concurrent_dir / "scores.csv")
+    serial_metadata = json.loads((serial_dir / "experiment.json").read_text(encoding="utf-8"))
+    concurrent_metadata = json.loads((concurrent_dir / "experiment.json").read_text(encoding="utf-8"))
+    for field in ("environment_hash", "git_commit", "dataset_hash"):
+        if not serial_metadata.get(field) or serial_metadata[field] != concurrent_metadata.get(field):
+            raise ValueError("profiles must use identical verified experiment identities")
+    if serial_metadata["dataset_hash"] != next(iter(hashes)):
+        raise ValueError("experiment dataset identity differs from run records")
+    for case_id in serial_by_case:
+        if not serial_by_case[case_id].get("manifest_id") or serial_by_case[case_id]["manifest_id"] != concurrent_by_case[case_id].get("manifest_id"):
+            raise ValueError("paired runs must use one identical manifest identity")
+    missing = [case_id for case_id in sorted(serial_by_case) if not (
+        serial_by_case[case_id].get("report_path") and concurrent_by_case[case_id].get("report_path"))]
+    if missing:
+        return {"schema_version": 1, "dataset_hash": next(iter(hashes)), "case_count": 12,
+                "paired_report_count": 12 - len(missing), "quality_verdict": "unavailable",
+                "reason": "MISSING_PAIRED_REPORTS", "passed": False, "compared_at": _utc_now()}
+    serial_scores = _read_scores(serial_dir / "scores.csv", serial_by_case)
+    concurrent_scores = _read_scores(concurrent_dir / "scores.csv", concurrent_by_case)
     if set(serial_scores) != set(serial_by_case) or set(concurrent_scores) != set(
         serial_by_case
     ):
@@ -563,12 +694,14 @@ def compare_profiles(serial_dir: Path, concurrent_dir: Path) -> dict[str, Any]:
         int(score["major_errors"]) for score in concurrent_scores.values()
     )
     checks = {
+        "all_paired_reports_available": all(record.get("report_path") for record in serial_runs + concurrent_runs),
         "completion_not_lower": concurrent_completed >= serial_completed,
         "decision_mean_drop_at_most_5pp": metric_deltas["decision_correctness"] >= -0.05,
         "citation_mean_drop_at_most_5pp": metric_deltas["citation_support"] >= -0.05,
         "source_mean_drop_at_most_5pp": metric_deltas["source_quality"] >= -0.05,
         "conflict_mean_drop_at_most_10pp": metric_deltas["conflict_handling"] >= -0.10,
-        "no_new_major_errors": concurrent_errors <= serial_errors,
+        "no_new_major_errors": all(int(concurrent_scores[case]["major_errors"]) <=
+                                    int(serial_scores[case]["major_errors"]) for case in serial_by_case),
         "no_case_decision_drop_over_20pp": not severe_pair_drops,
         "at_most_two_case_drops_over_10pp": len(moderate_pair_drops) <= 2,
     }
@@ -635,6 +768,11 @@ async def _collect(args: argparse.Namespace) -> int:
         "source_health": environment["retrieval_health"],
         "llm_compatibility": environment["llm_compatibility"],
     }
+    seed = 20260916 + args.repetition
+    cases = list(dataset["cases"])
+    random.Random(seed).shuffle(cases)
+    metadata["order_seed"] = seed
+    metadata["case_order"] = [case["id"] for case in cases]
     (output_dir / "experiment.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -651,7 +789,7 @@ async def _collect(args: argparse.Namespace) -> int:
             dataset_hash=dataset_hash,
             options=options,
         )
-        records = await collector.collect(dataset["cases"])
+        records = await collector.collect(cases)
     write_score_template(output_dir, records)
     write_collection_summary(output_dir, records)
     metadata["ended_at"] = _utc_now()
@@ -660,6 +798,7 @@ async def _collect(args: argparse.Namespace) -> int:
         for status in sorted({record["status"] for record in records})
     }
     metadata["peak_in_flight_cases"] = collector.peak_in_flight
+    metadata["peak_observed_running_cases"] = collector.peak_observed_running
     (output_dir / "experiment.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -731,7 +870,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if result["passed"] else 1
     except (OSError, ValueError, RuntimeError, httpx.HTTPError) as exc:
-        print(f"product baseline stopped: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"product baseline stopped: {type(exc).__name__}", file=sys.stderr)
         return 2
 
 

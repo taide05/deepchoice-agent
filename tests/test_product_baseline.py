@@ -13,6 +13,8 @@ from benchmarks.product_baseline import (
     compare_profiles,
     load_dataset,
     load_environment,
+    usage_projection,
+    write_collection_summary,
 )
 from benchmarks.product_baseline_server import create_app
 
@@ -151,6 +153,10 @@ async def test_collector_handles_hitl_and_preserves_unknown_observability(tmp_pa
     persisted = json.loads((tmp_path / "runs.jsonl").read_text(encoding="utf-8"))
     assert persisted["run_id"] == "run-1"
     assert "supplemental_input" not in persisted
+    journal = [json.loads(line) for line in (tmp_path / "admissions.jsonl").read_text().splitlines()]
+    assert [entry["event"] for entry in journal] == ["submission_started", "admitted"]
+    assert journal[1]["run_id"] == "run-1"
+    assert "supplemental_input" not in json.dumps(journal)
 
 
 @pytest.mark.asyncio
@@ -344,12 +350,18 @@ def _write_profile(path: Path, *, profile: str, decision_delta: float = 0) -> No
                 "profile": profile,
                 "repetition": 1,
                 "requested_concurrency": 1 if profile == "serial" else 12,
+                "report_path": f"reports/P{index:02d}.md",
+                "run_id": f"run-{profile}-{index}",
+                "experiment_id": profile,
+                "manifest_id": "m",
             }
         )
     (path / "runs.jsonl").write_text(
         "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
     )
-    fields = ["case_id", *(
+    (path / "experiment.json").write_text(json.dumps({"environment_hash": "a" * 64,
+        "dataset_hash": "d" * 64, "git_commit": "b" * 40}))
+    fields = ["case_id", "run_id", "experiment_id", "reviewer", "evidence_notes", *(
         "decision_correctness",
         "citation_support",
         "source_quality",
@@ -367,6 +379,10 @@ def _write_profile(path: Path, *, profile: str, decision_delta: float = 0) -> No
                     "source_quality": 0.9,
                     "conflict_handling": 0.9,
                     "major_errors": 0,
+                    "run_id": record["run_id"],
+                    "experiment_id": record["experiment_id"],
+                    "reviewer": "fixture-reviewer",
+                    "evidence_notes": "fixture evidence",
                 }
             )
 
@@ -385,3 +401,135 @@ def test_serial_concurrent_comparison_applies_quality_tolerance(tmp_path):
     result = compare_profiles(serial, degraded)
     assert result["passed"] is False
     assert result["checks"]["decision_mean_drop_at_most_5pp"] is False
+
+
+def test_usage_export_preserves_unknown_and_separates_budget_charges(tmp_path):
+    observation = {"availability": "available", "totals": {
+        "input_tokens": 100, "output_tokens": 20, "total_tokens": 120,
+        "token_usage_complete": False, "llm_calls": 2},
+        "calls": [{"kind": "llm", "retry_no": 1}, {"kind": "http"}],
+        "budget": {"resources": {"total_tokens": {"unknown_spend": 4096}}}}
+    projected = usage_projection(observation)
+    assert projected["total_tokens"] == 120
+    assert projected["token_usage_complete"] is False
+    assert projected["llm_retries"] == 1
+    assert usage_projection(None)["total_tokens"] is None
+    write_collection_summary(tmp_path, [{"case_id": "P01", "status": "failed",
+        "wall_time_ms": 1, "observability": observation},
+        {"case_id": "P02", "status": "failed", "wall_time_ms": 2, "observability": None}])
+    with (tmp_path / "usage.csv").open(encoding="utf-8-sig") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["total_tokens"] == "120"
+    assert rows[1]["total_tokens"] == ""
+
+
+def test_missing_reports_cannot_pass_concurrency_gate(tmp_path):
+    serial, concurrent = tmp_path / "serial", tmp_path / "concurrent"
+    _write_profile(serial, profile="serial")
+    _write_profile(concurrent, profile="concurrent")
+    for folder in (serial, concurrent):
+        records = [json.loads(line) for line in (folder / "runs.jsonl").read_text().splitlines()]
+        for record in records:
+            record["report_path"] = None
+            record["status"] = "failed"
+        (folder / "runs.jsonl").write_text("".join(json.dumps(record) + "\n" for record in records))
+    assert compare_profiles(serial, concurrent)["passed"] is False
+
+
+@pytest.mark.asyncio
+async def test_preflight_uses_supported_shared_json_helper_contract(monkeypatch):
+    from benchmarks.product_baseline_preflight import probe
+    from deepchoice.utils import llm
+
+    async def fake_call(prompt, *, response_format, usage, **_):
+        assert isinstance(prompt, list)
+        assert response_format == "json"
+        usage.append({"total_tokens": 25})
+        return {"ok": False}
+
+    monkeypatch.setattr(llm, "call_model", fake_call)
+    result = await probe()
+    assert result["passed"] is False
+    assert result["research_runs_submitted"] == 0
+    assert result["results"][0]["usage"] == [{"total_tokens": 25}]
+
+
+def test_comparison_rejects_environment_drift_and_stale_score_identity(tmp_path):
+    serial, concurrent = tmp_path / "serial", tmp_path / "concurrent"
+    _write_profile(serial, profile="serial")
+    _write_profile(concurrent, profile="concurrent")
+    metadata_path = concurrent / "experiment.json"
+    original = metadata_path.read_text()
+    changed = json.loads(original)
+    changed["environment_hash"] = "f" * 64
+    metadata_path.write_text(json.dumps(changed))
+    with pytest.raises(ValueError, match="experiment identities"):
+        compare_profiles(serial, concurrent)
+    metadata_path.write_text(original)
+    score_path = concurrent / "scores.csv"
+    score_path.write_text(score_path.read_text(encoding="utf-8-sig").replace("run-concurrent-1,", "stale-run,"),
+                         encoding="utf-8-sig")
+    with pytest.raises(ValueError, match="score identity"):
+        compare_profiles(serial, concurrent)
+
+
+@pytest.mark.asyncio
+async def test_collector_does_not_silently_follow_a_replaced_run(tmp_path):
+    case = load_dataset(DATASET)[0]["cases"][0]
+    async def handler(request):
+        if request.method == "POST":
+            return httpx.Response(202, json={"task": {"task_id": "t", "status": "queued"},
+                "latest_run": {"run_id": "original", "manifest_id": "m"}})
+        if request.url.path.endswith("/observability"):
+            return httpx.Response(200, json={"availability": "available", "run_id": "replacement"})
+        return httpx.Response(200, json={"task": {"task_id": "t", "status": "running"},
+            "latest_run": {"run_id": "replacement", "manifest_id": "m"}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://test") as client:
+        collector = DurableBaselineCollector(client, tmp_path, experiment_id="e", dataset_hash="a" * 64,
+            options=CollectionOptions("serial", 1, 1, 0, 5))
+        record = (await collector.collect([case]))[0]
+    assert record["run_id"] == "original"
+    assert record["error_code"] in {"RUN_IDENTITY_CHANGED", "OBSERVABILITY_RUN_MISMATCH"}
+    assert record["report_path"] is None
+    assert record["observability"] is None
+
+
+@pytest.mark.asyncio
+async def test_timeout_observes_cancel_completion_without_new_research_run(tmp_path):
+    case = load_dataset(DATASET)[0]["cases"][0]
+    submissions = 0
+    async def handler(request):
+        nonlocal submissions
+        if request.method == "POST" and request.url.path == "/api/v1/tasks":
+            submissions += 1
+            status, code = "queued", 202
+        elif request.method == "POST":
+            status, code = "cancelling", 200
+        elif request.url.path.endswith("/observability"):
+            return httpx.Response(200, json={"availability": "unavailable"})
+        else:
+            status, code = "cancelled", 200
+        return httpx.Response(code, json={"task": {"task_id": "t", "status": status},
+            "latest_run": {"run_id": "r", "manifest_id": "m"}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://test") as client:
+        collector = DurableBaselineCollector(client, tmp_path, experiment_id="e", dataset_hash="a" * 64,
+            options=CollectionOptions("serial", 1, 1, 0, 0))
+        record = (await collector.collect([case]))[0]
+    assert submissions == 1
+    assert record["status"] == "cancelled"
+    assert record["collector_timeout"] is True
+
+
+@pytest.mark.asyncio
+async def test_route_preflight_retains_only_allowlisted_fields(monkeypatch):
+    from benchmarks.product_baseline_preflight import probe_routes
+    from deepchoice import outbound
+    class FakeResolver:
+        async def health_check(self):
+            return {"ok": True, "sources": {"tavily": {"ok": True, "channel": "direct",
+                "detail": "sensitive provider detail"}}}
+    monkeypatch.setattr(outbound, "get_resolver", lambda: FakeResolver())
+    result = await probe_routes()
+    assert result["sources"] == {"tavily": {"ok": True, "channel": "direct"}}
+    assert result["tavily_credential_probe"] == "not_run"
+    assert "sensitive" not in json.dumps(result)

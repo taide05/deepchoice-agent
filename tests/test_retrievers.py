@@ -427,6 +427,30 @@ class TestRetrieverRegistry:
 
 
 class TestSearchKBChromaPath:
+    @pytest.mark.parametrize("configured", [None, "experiment/knowledge/chroma"])
+    def test_retriever_honors_explicit_path_without_changing_collection(self, monkeypatch, configured):
+        import chromadb
+        from deepchoice.retrievers.chroma_kb import ChromaKB
+
+        captured = {}
+
+        class FakeClient:
+            def get_or_create_collection(self, name):
+                captured["collection"] = name
+                return object()
+
+        def fake_persistent(path, **_):
+            captured["path"] = path
+            return FakeClient()
+
+        monkeypatch.setattr(chromadb, "PersistentClient", fake_persistent)
+        if configured is None:
+            monkeypatch.delenv("CHROMA_PATH", raising=False)
+        else:
+            monkeypatch.setenv("CHROMA_PATH", configured)
+        ChromaKB()
+        assert captured == {"path": configured or "./chroma_kb/chroma_db", "collection": "tech_kb"}
+
     def test_default_path_matches_retriever(self, monkeypatch):
         import asyncio
 
