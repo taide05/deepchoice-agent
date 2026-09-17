@@ -327,3 +327,41 @@ When adding a setting, update the code default, tests, README configuration sect
 - Distinguish the 300-case 2026-08-31 benchmark from later small Qwen adaptation runs; their citation metrics are not directly comparable.
 - When architecture, environment variables, endpoint counts, test results, or benchmark behavior changes, update `README.md` and the top `CHANGELOG.md` section in the same change.
 - Use current commit IDs only as audit metadata, never as permanent prose that claims a branch has been pushed or merged.
+
+### Documentation commits and publication
+
+- Commit documentation for lasting project use: user/setup/configuration guides, maintained runtime
+  contracts and runbooks, the current roadmap, concise acceptance reports and residual risks, and
+  frozen evaluation protocols or minimal sanitized evidence needed to reproduce published claims.
+  A document being useful to the current assistant session is not sufficient reason to commit it.
+- Session handoffs, conversation-opening prompts, personal/interview planning, temporary task cards,
+  debugging diaries and repeated execution logs stay in an ignored local area by default. Do not
+  add them to `docs/`, stage them, or publish them unless the user explicitly requests repository
+  inclusion. Keep raw reports, traces and generated artifacts local; publish only necessary,
+  reviewed, sanitized summaries or fixtures under the applicable evaluation contracts.
+- Prefer updating the relevant maintained document over adding one file per session, failure or
+  implementation round. Record only the decisions, verified evidence and remaining risks needed by
+  future maintainers; avoid duplicating the same timeline across multiple documents.
+- Historical PRDs/designs may retain useful rationale. When archival is authorized, mark them as
+  historical, identify the current source of truth and keep them outside the active documentation
+  path where practical. Do not present excluded design space as approved implementation scope.
+- Before committing, inspect the staged file list and documentation diff. For each added/changed
+  document, check its intended reader, lasting maintenance/reproduction value, overlap with existing
+  sources, and public suitability. Use explicit paths when staging; do not sweep local session
+  material into a commit merely because it is under `docs/` or already tracked.
+- Before an explicitly authorized push/PR, review the entire outgoing commit range and its file
+  list, not only the latest commit or staged diff. Earlier local commits can contain unwanted
+  documents even when the final working tree is clean. Report questionable inclusions and resolve
+  them with the user before publishing; do not assume a later deletion prevents earlier contents
+  from being uploaded in Git history. If remote refs cannot be refreshed, state that limitation.
+- Public documents must not expose credentials, private endpoints, raw provider errors/payloads,
+  supplemental user input or unnecessary personal context. Retain required dataset/date/denominator
+  and identity metadata for evidence; sanitization alone does not make every artifact worth publishing.
+- This policy does not authorize deleting, moving, untracking or rewriting existing documents or
+  commits. Existing-document cleanup requires a separately scoped user request; prefer a normal
+  follow-up commit for authorized cleanup and never amend/rebase/force-push published history
+  without explicit approval. If sensitive material was published, stop and request a separately
+  approved remediation plan rather than treating an ordinary deletion as removal from history.
+- A local documentation commit is not permission to push. Documentation-only policy changes require
+  content/diff checks, not paid benchmarks or an unchanged full-suite rerun; preserve the existing
+  validation requirements whenever runtime behavior, tests or public contracts also change.
