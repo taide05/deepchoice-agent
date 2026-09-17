@@ -26,6 +26,29 @@ fingerprint 与下方历史记录一致；pyflakes/vulture/pip/diff 门禁通过
 `84cf6b52e2bb9f6076ce9e697f0972350e754f95530203ce2b3f75cc3f2c586e`。
 只补必要维护记录，原件投影/哈希和 diff 检查通过；产品/测试/配置不变，不重复未变更全套。
 
+## 后续网络与最小 LLM 前置
+
+用户随后恢复完整前置检查，完成时间 2026-09-17T12:39:59.820792+00:00（北京时间 20:39:59）。
+执行候选 `9c85568ca943c07e57187cedab74bb8b2899fd1a`（运行代码与 dddc036 相同）：
+本轮独立网络健康 **5/5 通过**；community 为 self-forward，其余四项为 local-proxy。
+routed Tavily 搜索 POST 通过，之后才执行 JSON/工具两项 DeepSeek Flash 探测；**2/2 通过**，
+严格 JSON、浅层结构 valid、truncated=false，output_qualification=passed。
+请求 model_id=deepseek-v4-flash，工具返回 response_model=deepseek-flash；保留两种 provider
+标识，不凭别名证明底层模型唯一身份。非 thinking 参数沿用已有 helper，失败模型尝试不重试。
+
+两项探测已知用量 **349 token = 输入 313 + 输出 36**，输入缓存 hit=128、miss=185；
+这是两个兼容性探测的分母，不是研究 case 成本、缓存优化证据或整轮准备账单。
+Tavily 沿用已有有界 keypool 启动探测/失效处理，state 文件隔离；健康 HTTP 总次数/金额未完整
+采集，保持 unknown，不把一轮检查当成一次 HTTP 或零费用。整轮不补跑，不提交研究。
+
+本地 Chroma 冷加载、研究心跳/租约、报告质量和真实并发效果均 not_run；
+即使这次五网络项通过，也不代表六源研究执行成功或并发限流已解决。新研究 run=0，43/48 不变；
+P01 一次新空数据库冷启单例须确认，不恢复批次/O2。产品/测试/配置未改，沿用既往离线验收。
+本地安全原件 `outputs/o1c-preflight-recheck-20260917/result.json` SHA256：
+`0b456fc1c9de311d5b8c913bba7ba157a7d77ed51561c446a3f11c05a3bd5a0a`；
+`llm-probe.json` SHA256：`9f93f1998f7dc13a634f3037ab34d0872510b4305e870ab54fc1cf975712b34a`。
+原件一致性、资格/用量复算及 diff 检查通过；不重复未变更全套、不提交生成原件。
+
 ## 缺口与修复入口
 
 | 来源 | 原缺口 | 修复后的本地策略与覆盖范围 |

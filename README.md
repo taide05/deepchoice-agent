@@ -67,6 +67,10 @@ HTTP 400 / API 502 throttle_violation，probe/key 资格不一致；离线断言
 community 健康项 1/1 通过、未见限流/冷却；其余来源、业务检索和研究未测，不能拼表宣称
 六源全绿。研究额度仍 43/48；后续单例另确认，详见 [限流审计](docs/o1-retrieval-throttle-audit.md)。
 
+2026-09-17 20:39 北京时间恢复授权的前置：本轮五网络项 5/5、routed Tavily POST 及
+JSON/工具输出资格 2/2 通过；两项 LLM 探测已知 349 token，不是研究成本或完整准备账单。
+本地冷加载/研究/真实并发仍未测，43/48 不变，不能据此宣布并发限流已解决；单例另确认。
+
 ## 快速开始
 
 ```powershell
