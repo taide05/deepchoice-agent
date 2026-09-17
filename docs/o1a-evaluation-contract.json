@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-09-17",
+  "policy": "key-claim-occurrence-v1",
+  "dataset_hash": "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f",
+  "bindings_sha256": "25ed972c16a208dcfadc2f2c33843ceb1269248953152e04c4066d63f0a90e00",
+  "evidence_scope": "original_public_snapshot_snippets_and_prior_bound_review; no new citation credit",
+  "review_mode": "assistant_review",
+  "blind": false,
+  "human_calibration": "not_run",
+  "holdout_accessed": false,
+  "bases": {
+    "TEXT": "原 snapshot 片段明确表达该事实或历史事件；不等于事实已经被证实。",
+    "TEMPLATE": "原本地选型模板表达该命题；模板不是官方事实证明或本项目实测。",
+    "SCOPE": "引用有近似陈述但缺版本/硬件/负载/限定词或把案例推广成普遍结论。",
+    "PROJECT": "存在工具/其他团队依据但没有本项目配对数据或完整约束；推论仅部分有据。",
+    "HOME": "原检索仅官网入口占位片段；未保存支持该细节的正文，无法判断。",
+    "MISMATCH": "原依据对象/测试/标准与声明不匹配或明确相反。",
+    "AMBIG": "同名来源或绑定/片段不足，无法确定原依据。",
+    "CONFLICT": "原来源自身前后限定不同，或未解释报告中的真实主张冲突。",
+    "NONE": "不存在可解析原引用；Sources 总表不能自动修复无效行内标签。"
+  },
+  "issues": {
+    "P01-backup": "无条件复制单个 DB 文件忽略在线/WAL 备份边界；重大性待复核。",
+    "P01-zero-maint": "零维护是绝对化表述，不等于低运维；事实/推论风险。",
+    "P06-native-addon": "原生 addon 一概不可用错误；Bun 支持 Node-API 的范围须区分。",
+    "P06-performance-transfer": "把其他版本/硬件/负载的比例推广成本项目或所有真实负载。",
+    "P06-compatibility": "兼容性统计无测试对象/版本；95% 缺口措辞歧义及 100% 无条件保证。",
+    "P07-unmeasured-benefit": "尚无本项目配对实测却断言 30 依赖小团队收益明显。",
+    "P07-lock-standard": "PEP 621 是 pyproject 元数据，不能因此称 uv.lock 符合 PEP 标准。"
+  },
+  "citations": {
+    "SQ": [
+      "sqlite-vs-postgresql"
+    ],
+    "TB": [
+      "Postgres vs SQLite - Tinybird"
+    ],
+    "WAL": [
+      "Write-Ahead Logging"
+    ],
+    "MIR": [
+      "预写日志 - SQLite 数据库",
+      "预写日志- SQLite 数据库"
+    ],
+    "SH": [
+      "SQLite — Official Documentation"
+    ],
+    "PH": [
+      "PostgreSQL — Official Documentation"
+    ],
+    "DJ": [
+      "Django 从SQLite迁移到PostgreSQL | Not determined yet"
+    ],
+    "NTF": [
+      "终极指南：如何从SQLite无缝迁移到PostgreSQL并提升ntfy性能_余鹤赛-腾讯云开发者社区"
+    ],
+    "CN": [
+      "SQLite vs MySQL vs PostgreSQL对比总结- wang_yb - 博客园"
+    ],
+    "PM": [
+      "postgresql-vs-mysql"
+    ],
+    "BN": [
+      "bun-vs-node.js"
+    ],
+    "STR": [
+      "Bun vs Node.js: Performance, Features & Migration 2026"
+    ],
+    "BT": [
+      "Bun vs Node.js [2026]: 4x Faster at 52K req/s - Tech Insider"
+    ],
+    "PROD": [
+      "Bun 1.x in Production: Real-World Performance & 2026 - PkgPulse"
+    ],
+    "SHOW": [
+      "Bun vs Node.js 2026: The Runtime Showdown — PkgPulse Guides"
+    ],
+    "REIN": [
+      "Bun vs Node.js Performance Benchmarks 2026: Complete Comparison"
+    ],
+    "NH": [
+      "Node.js — Official Documentation"
+    ],
+    "NG": [
+      "nodejs/node"
+    ],
+    "UT": [
+      "uv vs Poetry: 16x Faster Resolver, 89K Stars [2026] - Tech Insider"
+    ],
+    "RIP": [
+      "Rippling's Migration to uv from poetry: Python Dependency Management at Scale"
+    ],
+    "MED": [
+      "Medium"
+    ],
+    "CMP": [
+      "How do uv and Poetry compare? | pydevtools"
+    ],
+    "MIG": [
+      "How to migrate from Poetry to uv | pydevtools"
+    ],
+    "SO": [
+      "python - How can I migrate from Poetry to UV package manager? - Stack Overflow"
+    ],
+    "PRAT": [
+      "Migrating Poetry to UV Package Manager - Pratik Pathak"
+    ],
+    "PAN": [
+      "Migrating from poetry to uv: first impressions :: Barely Competent Dev — Barely Competent Dev"
+    ],
+    "DEV": [
+      "Migrating Poetry to UV Package Manager - DevDojo"
+    ]
+  },
+  "reports": {
+    "P01-r1": {
+      "run_id": "d80073f5-c5f5-4ff1-8c76-b48517c51c45",
+      "claim_lines": [
+        114,
+        117,
+        119,
+        122,
+        124,
+        128,
+        130,
+        132,
+        135
+      ],
+      "atom_counts": {
+        "114": 5,
+        "117": 3,
+        "119": 17,
+        "122": 7,
+        "124": 7,
+        "128": 4,
+        "130": 2,
+        "132": 2,
+        "135": 7
+      }
+    },
+    "P01-r2": {
+      "run_id": "298526d2-4dde-4c3e-8d39-005db3ae0160",
+      "claim_lines": [
+        149,
+        152,
+        154,
+        157,
+        159,
+        163,
+        165,
+        167,
+        170
+      ],
+      "atom_counts": {
+        "149": 4,
+        "152": 2,
+        "154": 18,
+        "157": 9,
+        "159": 10,
+        "163": 9,
+        "165": 3,
+        "167": 2,
+        "170": 6
+      }
+    },
+    "P06-r1": {
+      "run_id": "839ac952-fcf8-4f4f-a613-f668a5eb09c4",
+      "claim_lines": [
+        107,
+        109,
+        112,
+        113,
+        116,
+        117,
+        118,
+        120
+      ],
+      "atom_counts": {
+        "107": 4,
+        "109": 8,
+        "112": 6,
+        "113": 7,
+        "116": 3,
+        "117": 4,
+        "118": 2,
+        "120": 5
+      }
+    },
+    "P06-r2": {
+      "run_id": "04500a8d-12cb-4856-b54a-ffa4bc6704ce",
+      "claim_lines": [
+        124,
+        126,
+        129,
+        130,
+        133,
+        134,
+        136
+      ],
+      "atom_counts": {
+        "124": 3,
+        "126": 15,
+        "129": 7,
+        "130": 8,
+        "133": 4,
+        "134": 6,
+        "136": 6
+      }
+    },
+    "P07-r1": {
+      "run_id": "4337e268-12dd-45f8-848b-88405e7228d4",
+      "claim_lines": [
+        79,
+        82,
+        84,
+        87,
+        89,
+        93,
+        95,
+        98
+      ],
+      "atom_counts": {
+        "79": 3,
+        "82": 2,
+        "84": 11,
+        "87": 5,
+        "89": 6,
+        "93": 2,
+        "95": 4,
+        "98": 3
+      }
+    },
+    "P07-r2": {
+      "run_id": "20782fb7-4c64-42df-8177-9b50a78dbb09",
+      "claim_lines": [
+        93,
+        96,
+        98,
+        101,
+        103,
+        107,
+        109,
+        112
+      ],
+      "atom_counts": {
+        "93": 4,
+        "96": 2,
+        "98": 10,
+        "101": 7,
+        "103": 6,
+        "107": 4,
+        "109": 3,
+        "112": 2
+      }
+    }
+  },
+  "exclusions": "What 来源目录、Why 的引用标题/内部打分/强度标签、争议段的标题/分数裁决元数据、Winner/置信度字段、场景复述、无内嵌事实/风险的纯未来操作指令、Sources/参考总表和系统引用投影不作为独立技术事实；推荐正文/排名/权衡/场景适配中的事实和适用性推论逐处计数。操作句中明确提出的配置/兼容/哈希风险仍入账；标题宣传数字被正文采用时才入账；元数据/捏造冲突另由冲突 rubric 审核。",
+  "coverage_limit": "已逐行阅读六份完整报告。此台账完成声明出现次数分母，不证明捕获片段覆盖整个网页；片段不足保留 unknown。原始页的版本未保存时不得以当前页补分。",
+  "independent_review": {
+    "date": "2026-09-17",
+    "reviewer": "independent Codex assistant",
+    "mode": "read_only_assistant_review",
+    "blind": false,
+    "blockers": "none_after_recorded_corrections",
+    "coverage": "protocol differences; checker/tests; 49 included original lines and exclusion boundary; captured evidence for P01-backup/P06-native-addon/P07-lock-standard; original hashes and inline citation occurrences",
+    "full_atomic_rescoring": "not_run",
+    "major_error_final_count": "not_certified",
+    "human_calibration": "not_run",
+    "holdout_accessed": false
+  }
+}

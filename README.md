@@ -29,6 +29,13 @@ Tavily 按 key 控制，ChromaKB 不套网络限流。失败不伪装为成功�
 和离线验证边界见 [限流审计](docs/o1-retrieval-throttle-audit.md)。2026-09-17 本机 Python 3.12.4
 验收为 223 项聚焦、1176 项全套通过（无跳过），smoke-v1 12/12；这不代表真实 12-case 并发效果已通过，付费批次继续暂停。
 
+O1 评估协议已收口为 [v4](docs/product-effectiveness-optimization.md)：六份旧候选开发报告
+按逐处原子声明核验，重复与无引用/未知不从分母消失，历史运行不与未来新配对拼表。
+暂定助手统计/复核资格见 [O1-A](docs/o1a-evaluation-closure.md)，下一步见 [任务卡](docs/o1-next-steps.md)。
+这不是人工校准或 O1/并发通过；43/48 与剩余 5 不变，批次继续暂停。
+O1-A 最终本机验收（2026-09-17，Python 3.12.4）：20 聚焦、1196 全套通过且无跳过，
+smoke 12/12 baseline 匹配、静态/依赖门禁通过；测试只验证工程/台账统计，不替代真实质量。
+
 ## 快速开始
 
 ```powershell
@@ -191,7 +198,8 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 [`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。工程阶段已结束，
 后续已完成统一 Flash 和[基线准备检查](docs/baseline-readiness-audit.md)；
 下一阶段的案例、指标和运行步骤见[产品效果优化策略与评估协议](docs/product-effectiveness-optimization.md)
-（O1 的 12-case/环境已冻结，已创建 36/48 个 run，因运行阻塞暂停；[部分实测](docs/o1-live-baseline.md)不构成质量验收）。多租户认证、分布式基础设施及其他企业级
+（O1 的 12-case 已冻结；原部分基线 36 次加 O1-R 7 次，累计 43/48，剩余 5 未使用。
+[历史部分实测](docs/o1-live-baseline.md)与 [O1-A 收口记录](docs/o1a-evaluation-closure.md)均不构成质量或并发通过，批次暂停）。多租户认证、分布式基础设施及其他企业级
 扩展不在当前实施范围。
 
 ### 测试

@@ -1,0 +1,280 @@
+report,line,atom,claim,citations,support,quality,basis,issue
+P01-r1,114,1,SQLite 嵌入式,SQ,supported,ineligible,TEMPLATE,
+P01-r1,114,2,SQLite 零配置,SQ,supported,ineligible,TEMPLATE,
+P01-r1,114,3,SQLite 零维护,SQ,supported,ineligible,TEMPLATE,P01-zero-maint
+P01-r1,114,4,最契合单人开发运维,SQ,partial,ineligible,TEMPLATE,
+P01-r1,114,5,WAL 单写多读性能优异,TB,partial,ineligible,SCOPE,
+P01-r1,117,1,强证据支持单人低写入场景适合 SQLite,SQ;TB,partial,ineligible,PROJECT,
+P01-r1,117,2,存在并发写入争议,TB;WAL,partial,ineligible,CONFLICT,
+P01-r1,117,3,WAL 存在已知 bug 需注意,WAL,supported,eligible,TEXT,
+P01-r1,119,1,推荐该 Web 应用选择 SQLite,SQ,partial,ineligible,PROJECT,
+P01-r1,119,2,SQLite 嵌入式,SQ,supported,ineligible,TEMPLATE,
+P01-r1,119,3,SQLite 零配置,SQ,supported,ineligible,TEMPLATE,
+P01-r1,119,4,SQLite 零维护,SQ,supported,ineligible,TEMPLATE,P01-zero-maint
+P01-r1,119,5,上述特性显著降低本项目运维负担,SQ,partial,ineligible,TEMPLATE,
+P01-r1,119,6,WAL 支持一个并发写入者,TB,supported,ineligible,TEXT,
+P01-r1,119,7,WAL 支持多个并发读取者,TB,supported,ineligible,TEXT,
+P01-r1,119,8,本地读写没有数据库网络往返,TB,supported,ineligible,TEXT,
+P01-r1,119,9,本地 SQLite 不需数据库认证开销,TB,supported,ineligible,TEXT,
+P01-r1,119,10,本地 SQLite 不需远程连接管理开销,TB,supported,ineligible,TEXT,
+P01-r1,119,11,单客户端读写优于 PostgreSQL 未限定简单本地查询,TB,partial,ineligible,SCOPE,
+P01-r1,119,12,官方推荐大多数应用使用 WAL,MIR,unknown,unknown,HOME,
+P01-r1,119,13,备份只需复制单个文件,SH,unknown,unknown,HOME,P01-backup
+P01-r1,119,14,FTS5 扩展支持全文检索,SH,unknown,unknown,HOME,
+P01-r1,119,15,多连接并发写入即存在 WAL bug 未说明 checkpoint 条件,WAL,partial,ineligible,SCOPE,
+P01-r1,119,16,使用 3.51.3 及以上修复该 WAL bug,WAL,supported,eligible,TEXT,
+P01-r1,119,17,增长后迁移 PostgreSQL 也不迟,DJ,partial,ineligible,PROJECT,
+P01-r1,122,1,SQLite 零配置,SQ,supported,ineligible,TEMPLATE,
+P01-r1,122,2,SQLite 零维护,SQ,supported,ineligible,TEMPLATE,P01-zero-maint
+P01-r1,122,3,特性完美匹配本项目,SQ,partial,ineligible,TEMPLATE,
+P01-r1,122,4,WAL 单写多读性能优异,TB,partial,ineligible,SCOPE,
+P01-r1,122,5,本地 SQLite 无数据库网络开销,TB,supported,ineligible,TEXT,
+P01-r1,122,6,备份简单,SH,unknown,unknown,HOME,P01-backup
+P01-r1,122,7,FTS5 支持全文检索,SH,unknown,unknown,HOME,
+P01-r1,124,1,PostgreSQL 功能全面,,uncited,ineligible,NONE,
+P01-r1,124,2,PostgreSQL 适合复杂查询,,uncited,ineligible,NONE,
+P01-r1,124,3,PostgreSQL 适合高并发,,uncited,ineligible,NONE,
+P01-r1,124,4,PostgreSQL 需独立服务进程,SQ,supported,ineligible,TEMPLATE,
+P01-r1,124,5,PostgreSQL 需配置管理,SQ,supported,ineligible,TEMPLATE,
+P01-r1,124,6,PostgreSQL 对该低写入场景是过度设计,SQ,partial,ineligible,PROJECT,
+P01-r1,124,7,将来复杂分析或高并发可平滑迁移,DJ,partial,ineligible,SCOPE,
+P01-r1,128,1,SQLite 零配置,SQ,supported,ineligible,TEMPLATE,
+P01-r1,128,2,SQLite 零维护,SQ,supported,ineligible,TEMPLATE,P01-zero-maint
+P01-r1,128,3,PostgreSQL 需独立服务进程,,uncited,ineligible,NONE,
+P01-r1,128,4,PostgreSQL 需配置管理,,uncited,ineligible,NONE,
+P01-r1,130,1,WAL 仅支持一个并发写入者,TB,supported,ineligible,TEXT,
+P01-r1,130,2,PostgreSQL 支持多进程并发,,uncited,ineligible,NONE,
+P01-r1,132,1,FTS5 支持全文检索,SH,unknown,unknown,HOME,
+P01-r1,132,2,PostgreSQL 内置 tsvector,PH,unknown,unknown,HOME,
+P01-r1,135,1,SQLite 零配置,SQ,supported,ineligible,TEMPLATE,
+P01-r1,135,2,SQLite 零维护,SQ,supported,ineligible,TEMPLATE,P01-zero-maint
+P01-r1,135,3,SQLite 特性高度契合本项目,SQ,partial,ineligible,PROJECT,
+P01-r1,135,4,WAL 满足本项目单写多读需求 未确认写竞争,TB,partial,ineligible,PROJECT,
+P01-r1,135,5,备份简单,SH,unknown,unknown,HOME,P01-backup
+P01-r1,135,6,FTS5 满足基本全文检索,SH,unknown,unknown,HOME,
+P01-r1,135,7,3.51.3+ 可避免该 WAL bug,WAL,supported,eligible,TEXT,
+P01-r2,149,1,WAL 单写入者读多写少本地工作负载性能优异,TB,partial,ineligible,SCOPE,
+P01-r2,149,2,SQLite 零配置,TB;MIR,unknown,unknown,HOME,
+P01-r2,149,3,SQLite 零运维,TB;MIR,unknown,unknown,HOME,P01-zero-maint
+P01-r2,149,4,最契合单人维护场景,TB;MIR,partial,ineligible,PROJECT,
+P01-r2,152,1,多条强证据一致支持本项目 SQLite 优势,SQ;TB;MIR,partial,ineligible,PROJECT,
+P01-r2,152,2,争议多数是 SQLite 胜出或数据不足 所示裁决未核对相反主张,SQ;TB;MIR,partial,ineligible,CONFLICT,
+P01-r2,154,1,推荐 SQLite WAL 作该 Web 主数据库,TB;MIR,partial,ineligible,PROJECT,
+P01-r2,154,2,SQLite 嵌入式架构,TB;MIR,unknown,unknown,HOME,
+P01-r2,154,3,SQLite 零配置,TB;MIR,unknown,unknown,HOME,
+P01-r2,154,4,没有独立服务器进程的运维负担,TB;MIR,partial,ineligible,SCOPE,
+P01-r2,154,5,WAL 支持单写入者,TB,supported,ineligible,TEXT,
+P01-r2,154,6,WAL 支持多个读取者,TB,supported,ineligible,TEXT,
+P01-r2,154,7,本地读写无数据库网络往返,TB,supported,ineligible,TEXT,
+P01-r2,154,8,性能优于等效 PostgreSQL 查询 未限定简单单客户端,TB,partial,ineligible,SCOPE,
+P01-r2,154,9,备份只需复制数据库文件,NTF,partial,ineligible,SCOPE,P01-backup
+P01-r2,154,10,此复制备份简单可靠 未限定停写和 WAL,NTF,partial,ineligible,SCOPE,P01-backup
+P01-r2,154,11,FTS5 满足基本全文检索,SH,unknown,unknown,HOME,
+P01-r2,154,12,SQLite 仅支持单写入者,NTF,unknown,ineligible,SCOPE,
+P01-r2,154,13,写并发增长后可依 ntfy 路径平滑迁移,NTF,partial,ineligible,PROJECT,
+P01-r2,154,14,PostgreSQL 功能更强,SQ;CN,partial,ineligible,SCOPE,
+P01-r2,154,15,PostgreSQL 对本项目过度配置,SQ;CN,partial,ineligible,SCOPE,
+P01-r2,154,16,服务器进程增加单人运维成本,SQ;CN,partial,ineligible,SCOPE,
+P01-r2,154,17,连接管理增加单人运维成本,SQ;CN,partial,ineligible,SCOPE,
+P01-r2,154,18,调优增加单人运维成本,SQ;CN,partial,ineligible,SCOPE,
+P01-r2,157,1,SQLite 嵌入式,SQ,supported,ineligible,TEMPLATE,
+P01-r2,157,2,无需独立服务器进程,SQ,supported,ineligible,TEMPLATE,
+P01-r2,157,3,单人运维负担最小,SQ,partial,ineligible,PROJECT,
+P01-r2,157,4,WAL 单写入者,TB,supported,ineligible,TEXT,
+P01-r2,157,5,WAL 多读取者,TB,supported,ineligible,TEXT,
+P01-r2,157,6,本地读写无数据库网络开销,TB,supported,ineligible,TEXT,
+P01-r2,157,7,性能优于等效 PostgreSQL 查询,TB,partial,ineligible,SCOPE,
+P01-r2,157,8,备份仅需复制文件,NTF,partial,ineligible,SCOPE,P01-backup
+P01-r2,157,9,FTS5 满足基本全文检索,SH,unknown,unknown,HOME,
+P01-r2,159,1,PostgreSQL 比 SQLite 具备更强 ACID,PM;NTF,unsupported,ineligible,MISMATCH,
+P01-r2,159,2,PostgreSQL 支持丰富扩展,NTF,supported,ineligible,TEXT,
+P01-r2,159,3,PostgreSQL 支持复制,NTF,supported,ineligible,TEXT,
+P01-r2,159,4,PostgreSQL 支持复杂查询,NTF,supported,ineligible,TEXT,
+P01-r2,159,5,PostgreSQL 适合规模化,NTF,partial,ineligible,SCOPE,
+P01-r2,159,6,PostgreSQL 对该 Web 应用过度配置,SQ;CN,partial,ineligible,PROJECT,
+P01-r2,159,7,服务器进程增加运维成本,SQ;CN,partial,ineligible,PROJECT,
+P01-r2,159,8,连接管理增加运维成本,SQ;CN,partial,ineligible,PROJECT,
+P01-r2,159,9,默认配置调优增加运维成本,SQ;CN,partial,ineligible,PROJECT,
+P01-r2,159,10,成熟迁移路径能作本项目未来扩展备选,NTF,partial,ineligible,PROJECT,
+P01-r2,163,1,SQLite 零配置,SQ,supported,ineligible,TEMPLATE,
+P01-r2,163,2,SQLite 零维护,SQ,supported,ineligible,TEMPLATE,P01-zero-maint
+P01-r2,163,3,单文件备份 未限定在线和 WAL,NTF,partial,ineligible,SCOPE,P01-backup
+P01-r2,163,4,PostgreSQL 需独立服务器进程,SQ;NTF,partial,ineligible,SCOPE,
+P01-r2,163,5,PostgreSQL 需连接管理,SQ;NTF,partial,ineligible,SCOPE,
+P01-r2,163,6,PostgreSQL 需调优,SQ;NTF,partial,ineligible,SCOPE,
+P01-r2,163,7,PostgreSQL 支持读写分离,NTF,supported,ineligible,TEXT,
+P01-r2,163,8,PostgreSQL 支持分区,NTF,supported,ineligible,TEXT,
+P01-r2,163,9,PostgreSQL 支持复制,NTF,supported,ineligible,TEXT,
+P01-r2,165,1,WAL 仅支持单写入者,TB,supported,ineligible,TEXT,
+P01-r2,165,2,WAL 支持多读取者,TB,supported,ineligible,TEXT,
+P01-r2,165,3,PostgreSQL 支持高并发写入 未指定负载,NTF,partial,ineligible,SCOPE,
+P01-r2,167,1,FTS5 支持基本全文检索,SH,unknown,unknown,HOME,
+P01-r2,167,2,PostgreSQL 内置 tsvector 全文检索,PH,unknown,unknown,HOME,
+P01-r2,170,1,SQLite 零配置,TB;MIR,unknown,unknown,HOME,
+P01-r2,170,2,单文件备份 原绑定没有备份依据,TB;MIR,unsupported,ineligible,MISMATCH,P01-backup
+P01-r2,170,3,WAL 并发完全契合本项目,TB;MIR,partial,ineligible,PROJECT,
+P01-r2,170,4,SQLite 特性完全契合本项目,TB;MIR,partial,ineligible,PROJECT,
+P01-r2,170,5,服务器运维是单人额外负担,SQ;CN,partial,ineligible,PROJECT,
+P01-r2,170,6,调优是单人额外负担,SQ;CN,partial,ineligible,PROJECT,
+P06-r1,107,1,Node.js 生态成熟,BN,supported,ineligible,TEMPLATE,
+P06-r1,107,2,Node.js 稳定性久经考验,BN,supported,ineligible,TEMPLATE,
+P06-r1,107,3,Node.js 云支持通用,BN,supported,ineligible,TEMPLATE,
+P06-r1,107,4,2026 风险规避生产后端 Node.js 胜出,BN,partial,ineligible,PROJECT,
+P06-r1,109,1,选择 Node.js 作本项目运行时,BN,partial,ineligible,PROJECT,
+P06-r1,109,2,Bun 合成 HTTP 优势 3-4x 未对齐版本,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,109,3,加入数据库 JSON 业务逻辑差距约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,109,4,供应方 HTTP 宣传不匹配本项目负载,BT,partial,ineligible,PROJECT,
+P06-r1,109,5,Bun Node.js 兼容约 95% 无测试对象,PROD,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,109,6,剩余 5% 必然破坏真实包,PROD,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,109,7,Bun 原生 addon 不可用 来源内部又称部分,PROD,partial,ineligible,CONFLICT,P06-native-addon
+P06-r1,109,8,兼容性差异给本项目生态稳定造成风险,SHOW,partial,ineligible,PROJECT,
+P06-r1,112,1,Node.js 是参考实现,SHOW,supported,ineligible,TEXT,
+P06-r1,112,2,Node.js 100% 支持所有 npm 包,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,112,3,Node.js 生态成熟,BN,supported,ineligible,TEMPLATE,
+P06-r1,112,4,Node.js 云支持通用,BN,supported,ineligible,TEMPLATE,
+P06-r1,112,5,真实负载与 Bun 差距约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,112,6,风险规避团队应优先 Node.js,BN,partial,ineligible,PROJECT,
+P06-r1,113,1,Bun 合成 HTTP 快 3-4x,PROD,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,113,2,安装快 10-25x 未指明相对 npm,PROD,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,113,3,启动快 3x,PROD,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,113,4,真实数据库负载优势约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,113,5,95% 兼容性缺口会破坏包 措辞歧义,PROD,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,113,6,原生 addon 不可用,PROD,partial,ineligible,CONFLICT,P06-native-addon
+P06-r1,113,7,Bun 不适合风险规避型生产后端,BN,partial,ineligible,PROJECT,
+P06-r1,116,1,Bun 合成 HTTP 快 3-4x,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,116,2,数据库与路由使真实差距约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,116,3,合成基准只测 socket 接受与响应 忽略路由/测试差异,BT,partial,ineligible,SCOPE,
+P06-r1,117,1,Node.js 100% npm 包兼容,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,117,2,Bun 约 95% 兼容,PROD,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,117,3,5% 缺口破坏真实包,PROD,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,117,4,原生 addon 不可用,PROD,partial,ineligible,CONFLICT,P06-native-addon
+P06-r1,118,1,多份性能资料存在相同主张冲突 未对齐条件,STR,partial,ineligible,CONFLICT,
+P06-r1,118,2,冲突多为 insufficient_data 或 both_partial 引用非裁决记录,STR,unknown,ineligible,CONFLICT,
+P06-r1,120,1,Node.js 生态成熟,BN,supported,ineligible,TEMPLATE,
+P06-r1,120,2,Node.js 100% 包兼容,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r1,120,3,上述特性高度契合本项目,BN;SHOW,partial,ineligible,PROJECT,
+P06-r1,120,4,数据库负载 Bun 优势收窄至约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r1,120,5,该比例使 Bun 不构成本项目迁移理由,STR,partial,ineligible,PROJECT,P06-performance-transfer
+P06-r2,124,1,Node.js 生态成熟,BN,supported,ineligible,TEMPLATE,
+P06-r2,124,2,Node.js 稳定性强,BN,supported,ineligible,TEMPLATE,
+P06-r2,124,3,Node.js 最契合本项目,BN,partial,ineligible,PROJECT,
+P06-r2,126,1,本项目选 Node.js,BN,partial,ineligible,PROJECT,
+P06-r2,126,2,Bun HTTP 优势在真实数据库负载大幅收窄,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,126,3,真实数据库差距可能仅约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,126,4,供应方合成宣传不适用于本项目,BT,partial,ineligible,PROJECT,
+P06-r2,126,5,Node.js 生态成熟,BN,supported,ineligible,TEMPLATE,
+P06-r2,126,6,Node.js 稳定性久经考验,BN,supported,ineligible,TEMPLATE,
+P06-r2,126,7,Node.js 云支持通用,BN,supported,ineligible,TEMPLATE,
+P06-r2,126,8,Node.js 是风险规避团队稳妥选择,BN,partial,ineligible,PROJECT,
+P06-r2,126,9,Node.js 官方文档规模持续领先 未与 Bun 比较,NH;NG,unsupported,ineligible,MISMATCH,
+P06-r2,126,10,Node.js 社区规模持续领先 无历史配对比较,NH;NG,unsupported,ineligible,MISMATCH,
+P06-r2,126,11,Bun 冷启动确有优势 未限定测试,REIN;STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,126,12,Bun 包安装确有优势 未限定比较工具,REIN;STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,126,13,Bun 开发体验有优势,REIN;STR,partial,ineligible,SCOPE,
+P06-r2,126,14,约 95% npm 兼容性缺口 措辞歧义,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r2,126,15,该缺口对本项目生产服务造成风险,SHOW,partial,ineligible,PROJECT,
+P06-r2,129,1,Node.js 是参考实现,SHOW,supported,ineligible,TEXT,
+P06-r2,129,2,Node.js 100% 支持所有 npm 包,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r2,129,3,Node.js 生态成熟 来源缺直接测量,SHOW,partial,ineligible,SCOPE,
+P06-r2,129,4,Node.js 云支持通用,SHOW,partial,ineligible,SCOPE,
+P06-r2,129,5,数据库 I/O 真实负载 Bun 吞吐优势约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,129,6,稳定性是本项目决定因素,BN,partial,ineligible,PROJECT,
+P06-r2,129,7,团队熟悉度是本项目决定因素,BN,partial,ineligible,PROJECT,
+P06-r2,130,1,Bun 合成 HTTP 可达 4 倍 未给版本/负载,BT,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,130,2,Bun 冷启动快 3.7 倍 未给版本/硬件,REIN,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,130,3,Bun 内置 TypeScript 支持,STR,supported,ineligible,TEXT,
+P06-r2,130,4,Bun 内置打包器,STR,supported,ineligible,TEXT,
+P06-r2,130,5,Bun 内置测试运行器,STR,supported,ineligible,TEXT,
+P06-r2,130,6,真实数据库负载优势约 3%,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,130,7,约 95% npm 兼容性缺口 措辞歧义,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r2,130,8,缺口对本项目生产构成风险,SHOW,partial,ineligible,PROJECT,
+P06-r2,133,1,Bun 合成 HTTP 快 3-4 倍,BT;STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,133,2,真实数据库差距约 3%,BT;STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,133,3,Node.js 生态成熟,SHOW,partial,ineligible,SCOPE,
+P06-r2,133,4,Node.js 100% npm 兼容,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r2,134,1,Bun 内置 TypeScript 支持,STR,supported,ineligible,TEXT,
+P06-r2,134,2,Bun 内置打包器,STR,supported,ineligible,TEXT,
+P06-r2,134,3,Bun 内置测试运行器,STR,supported,ineligible,TEXT,
+P06-r2,134,4,Bun 冷启动快 3.7 倍,REIN,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,134,5,约 5% npm 包不兼容 无测试对象,SHOW,partial,ineligible,SCOPE,P06-compatibility
+P06-r2,134,6,Bun 生产验证较少,SHOW,partial,ineligible,SCOPE,
+P06-r2,136,1,Node.js 生态成熟 原此处绑定未保存该证明,STR,unknown,unknown,AMBIG,
+P06-r2,136,2,Node.js 稳定性强 原此处绑定未保存该证明,STR,unknown,unknown,AMBIG,
+P06-r2,136,3,Node.js 特性高度契合本项目,STR,partial,ineligible,PROJECT,
+P06-r2,136,4,真实数据库负载性能差距小,STR,partial,ineligible,SCOPE,P06-performance-transfer
+P06-r2,136,5,Bun 性能优势主要来自合成 HTTP,BT,partial,ineligible,SCOPE,
+P06-r2,136,6,其条件与本项目负载不同,BT,partial,ineligible,PROJECT,
+P07-r1,79,1,uv 解析更快 未限定版本/依赖集,UT,partial,ineligible,SCOPE,
+P07-r1,79,2,uv 安装更快 未限定版本/缓存,UT,partial,ineligible,SCOPE,
+P07-r1,79,3,已有团队 dual-run 迁移路径可参考,RIP,supported,eligible,TEXT,
+P07-r1,82,1,速度优势证据较强 本处来源未给速度基准,RIP;SO,unsupported,ineligible,MISMATCH,
+P07-r1,82,2,迁移冲突未解决 未展示同条件相反主张,RIP;SO,partial,ineligible,CONFLICT,
+P07-r1,84,1,建议本项目渐进 dual-run 迁移 uv,RIP,partial,ineligible,PROJECT,
+P07-r1,84,2,uv 使用 pyproject.toml,MED;CMP,supported,ineligible,TEXT,
+P07-r1,84,3,Poetry 使用 pyproject.toml,MED;CMP,supported,ineligible,TEXT,
+P07-r1,84,4,uv 使用 lockfile,MED;CMP,supported,ineligible,TEXT,
+P07-r1,84,5,Poetry 使用 lockfile,MED;CMP,supported,ineligible,TEXT,
+P07-r1,84,6,两者 lockfile 不互通,MED;CMP,supported,ineligible,TEXT,
+P07-r1,84,7,dual-run 验证解析一致再切 CI 有先例,RIP,supported,eligible,TEXT,
+P07-r1,84,8,Poetry 私有源凭据不会自动转换 未指定迁移器版本,MIG,partial,ineligible,SCOPE,
+P07-r1,84,9,私有源需环境变量重新配置 未限定方式,MIG,partial,ineligible,SCOPE,
+P07-r1,84,10,先非关键分支试点适合本项目,SO,partial,ineligible,PROJECT,
+P07-r1,84,11,Poetry 打包能力成熟,MED,partial,ineligible,SCOPE,
+P07-r1,87,1,uv 解析显著更快,UT,partial,ineligible,SCOPE,
+P07-r1,87,2,uv 支持 Python 版本管理,MIG,supported,ineligible,TEXT,
+P07-r1,87,3,小团队收益明显 无本项目数据,UT;MIG,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r1,87,4,存在 dual-run 迁移参考路径,RIP,supported,eligible,TEXT,
+P07-r1,87,5,存在 lockfile 兼容迁移路径 未保证解析一致,SO,partial,ineligible,SCOPE,
+P07-r1,89,1,Poetry 成熟稳定,MED,partial,ineligible,SCOPE,
+P07-r1,89,2,Poetry 打包配置更完善 未给版本,MED,partial,ineligible,SCOPE,
+P07-r1,89,3,Poetry 发布配置更完善 未给版本,MED,partial,ineligible,SCOPE,
+P07-r1,89,4,Poetry 适合库发布,MED,partial,ineligible,SCOPE,
+P07-r1,89,5,Poetry 解析较慢,UT,partial,ineligible,SCOPE,
+P07-r1,89,6,本项目持续受到解析速度痛点,UT,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r1,93,1,宣传解析速度为 16x 而非项目实测,UT,supported,ineligible,TEXT,
+P07-r1,93,2,lockfile 不互通,MED,supported,ineligible,TEXT,
+P07-r1,95,1,Poetry 打包配置更完善,MED,partial,ineligible,SCOPE,
+P07-r1,95,2,Poetry 发布配置更完善,MED,partial,ineligible,SCOPE,
+P07-r1,95,3,uv 更轻量,MED,partial,ineligible,SCOPE,
+P07-r1,95,4,uv 更快速,MED,partial,ineligible,SCOPE,
+P07-r1,98,1,uv 速度高度契合本项目,UT,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r1,98,2,uv 轻量配置高度契合本项目,UT,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r1,98,3,渐进迁移能够控制本项目风险,RIP,partial,ineligible,PROJECT,
+P07-r2,93,1,uv CI 安装明显优于 Poetry,UT,partial,ineligible,SCOPE,
+P07-r2,93,2,uv 依赖解析明显优于 Poetry,UT,partial,ineligible,SCOPE,
+P07-r2,93,3,迁移工具已成熟 原片段不证明成熟度,MED;CMP,unknown,unknown,AMBIG,
+P07-r2,93,4,锁文件机制已成熟 原片段不证明成熟度,MED;CMP,unknown,unknown,AMBIG,
+P07-r2,96,1,速度优势证据较强 未给测试适用边界,UT,partial,ineligible,SCOPE,
+P07-r2,96,2,结论需要本项目小范围验证,PAN,partial,ineligible,PROJECT,
+P07-r2,98,1,本项目宜独立分支试用而非全面迁移,PRAT,partial,ineligible,PROJECT,
+P07-r2,98,2,存在 uvx migrate-to-uv 命令,PRAT,supported,ineligible,TEXT,
+P07-r2,98,3,迁移器能够转换 pyproject.toml 未给版本/配置边界,PRAT;CMP,partial,ineligible,SCOPE,
+P07-r2,98,4,迁移器能够转换锁文件 未限定解析一致性,PRAT;CMP,partial,ineligible,SCOPE,
+P07-r2,98,5,uv sync 可验证依赖解析 未保证 30 依赖全成功,PRAT;CMP,partial,ineligible,SCOPE,
+P07-r2,98,6,原同名 Medium 引用支持 CI 双流水线对比策略,MED,unknown,unknown,AMBIG,
+P07-r2,98,7,存在迁移工具 panic 的历史报告 非现版本必然失败,PAN,supported,eligible,TEXT,
+P07-r2,98,8,小范围验证收益后再推广适合本项目,DEV,partial,ineligible,PROJECT,
+P07-r2,98,9,迁移需检查 tool.poetry 配置适用性风险,PAN;CMP,partial,ineligible,SCOPE,
+P07-r2,98,10,迁移需检查多平台哈希覆盖风险,PAN;CMP,partial,ineligible,SCOPE,
+P07-r2,101,1,uv 解析速度快,UT,partial,ineligible,SCOPE,
+P07-r2,101,2,uv 存在 CI 缓存机制,UT,supported,ineligible,TEXT,
+P07-r2,101,3,30 依赖项目收益明显,UT;MED,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r2,101,4,迁移工具可自动化转换 原绑定不明确,MED,unknown,unknown,AMBIG,
+P07-r2,101,5,uv.lock 是跨平台锁文件,CMP,supported,ineligible,TEXT,
+P07-r2,101,6,uv 锁文件符合 PEP 标准 原片段指元数据标准,CMP,unsupported,ineligible,MISMATCH,P07-lock-standard
+P07-r2,101,7,长期维护成本低 没有成本数据,CMP,unknown,unknown,AMBIG,
+P07-r2,103,1,Poetry 成熟稳定 同名来源难定位,MED,unknown,unknown,AMBIG,
+P07-r2,103,2,Poetry 支持高级打包配置 同名来源难定位,MED,unknown,unknown,AMBIG,
+P07-r2,103,3,Poetry 解析慢,MED,partial,ineligible,SCOPE,
+P07-r2,103,4,Poetry 内存占用高 原作者 50 依赖案例,MED,partial,ineligible,SCOPE,
+P07-r2,103,5,Poetry 对本项目 30 依赖 CI 不友好,MED,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r2,103,6,无速度痛点维持现状风险最低,DEV,partial,ineligible,PROJECT,
+P07-r2,107,1,uv 解析显著更快,UT,partial,ineligible,SCOPE,
+P07-r2,107,2,uv CI 安装显著更快,UT,partial,ineligible,SCOPE,
+P07-r2,107,3,迁移工具存在历史 panic 报告,PAN,supported,eligible,TEXT,
+P07-r2,107,4,迁移工具存在配置兼容问题 未限定工具版本,PAN,partial,ineligible,SCOPE,
+P07-r2,109,1,uv 遵循 PEP 621 元数据标准,MED;CMP,supported,ineligible,TEXT,
+P07-r2,109,2,uv 锁文件跨平台,CMP,supported,ineligible,TEXT,
+P07-r2,109,3,Poetry 库发布配置更高级 未给比较版本,MED,partial,ineligible,SCOPE,
+P07-r2,112,1,uv 速度收益直接匹配本项目痛点,UT,partial,ineligible,PROJECT,P07-unmeasured-benefit
+P07-r2,112,2,本项目宜先小范围验证迁移风险,PAN,partial,ineligible,PROJECT,

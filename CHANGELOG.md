@@ -4,6 +4,9 @@
 
 ### Added
 
+- O1-A evaluation closure: protocol v4 preserves frozen cases/rubric/budgets/concurrency thresholds while separating historical failures, six development reports and future new-candidate paired denominators. Identity-bound per-occurrence claim ledger and credential-free offline checker retain unknown/uncited claims; assistant, independent review and human-calibration qualifications remain explicit. No new paid research, holdout access, batch resumption or O2 authorization; quota stays 43/48
+- O1-A validation (2026-09-17, local Windows/Python 3.12.4): 20 focused and 1196 full-suite tests passed with no skips (192.12 seconds full suite), smoke-v1 12/12 baseline matched, static/dependency/diff checks passed. Six original report/snapshot hashes verified; independent assistant review resolved denominator omissions without claiming full rescoring or human calibration
+
 - O1 outbound validation (2026-09-17, local Windows/Python 3.12.4): 223 focused tests and all 1176 suite tests passed with no skips; smoke-v1 12/12 with matching baseline, pyflakes/vulture/pip check/diff checks passed, independent read-only review found no remaining blockers. Real source health not_run; paid quota remains 43/48 and batches paused
 
 - O1 offline six-source outbound admission repair: process-local bounded FIFO gates, paced retries/probes and shared provider cooldown; per-key Tavily pacing without startup bursts; rate-limit-aware health, safe-fetch feedback and optional forward quota headers. Covers scholarly evidence tools without increasing hard budgets; ChromaKB remains local. Validation and residual risks: docs/o1-retrieval-throttle-audit.md. No paid/live research or batch resumption
