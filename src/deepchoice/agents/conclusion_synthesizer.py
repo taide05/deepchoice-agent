@@ -2,6 +2,8 @@ import json
 import re
 
 from ..budget_errors import BudgetError
+from ..utils.citation_markers import citation_spans, marker_titles, title_key
+from ..utils.evidence import source_title
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.views import print_agent_output
 
@@ -96,7 +98,7 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
         lines.append(f"Chain {i + 1} [{strength}]{disputed}: {c.get('conclusion', 'Untitled')}")
         for src in c.get("sources", [])[:4]:
             n += 1
-            title = _prompt_data(src.get("title", "Unknown"), 300) or "Unknown"
+            title = source_title(src.get("title"), src.get("url"))
             mapping[n] = title
             lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
             snippet = _prompt_data(src.get("snippet", ""), 600)
@@ -190,8 +192,8 @@ def _validate_constraint_fit(result: dict) -> dict:
 
 
 def _norm_title(s: str) -> str:
-    """Lowercase + alphanumerics only — matches metrics._normalize_title."""
-    return "".join(c for c in s.lower() if c.isalnum())
+    """Preserve meaningful punctuation while folding case and whitespace."""
+    return title_key(s)
 
 
 def _is_real_title(norm: str, real: set[str]) -> bool:
@@ -210,17 +212,17 @@ def _sanitize_text(text: str, real: set[str]) -> str:
         return text
     out: list[str] = []
     last = 0
-    for m in re.finditer(r'\[Source:[^\]]*\]', text, re.IGNORECASE):
-        out.append(text[last:m.start()])
-        titles = re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]
+    for start, end, marker in citation_spans(text):
+        out.append(text[last:start])
+        titles = marker_titles(marker)
         kept = []
         for t in titles:
-            title = re.split(r'[,;\[\]]', t)[0].strip()
+            title = t.strip()
             if title and _is_real_title(_norm_title(title), real):
                 kept.append(title)
         if kept:
             out.append('[Source: ' + ', Source: '.join(kept) + ']')
-        last = m.end()
+        last = end
     out.append(text[last:])
     return ''.join(out)
 
@@ -237,7 +239,7 @@ def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
     real: set[str] = set()
     for c in evidence_chains:
         for src in c.get("sources", [])[:4]:
-            t = src.get("title", "")
+            t = source_title(src.get("title"), src.get("url"))
             if t:
                 real.add(_norm_title(t))
     for field in _CITATION_TEXT_FIELDS:

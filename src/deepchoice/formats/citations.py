@@ -3,6 +3,33 @@ import html
 import re
 
 from deepchoice.citations import canonicalize_source_url
+from deepchoice.utils.citation_markers import citation_spans, marker_titles, title_key
+
+
+def cited_source_links(text: str, chains: list[dict]) -> list[str]:
+    """Link only explicitly named, unique sources; never infer claim support."""
+    by_title: dict[str, dict[str, tuple[str, str]]] = {}
+    for chain in chains:
+        for source in chain.get("sources", []):
+            title, url = source.get("title"), source.get("url")
+            if not isinstance(title, str) or not isinstance(url, str) or not title or not url:
+                continue
+            normalized = title_key(title)
+            identity = canonicalize_source_url(url) or url
+            by_title.setdefault(normalized, {})[identity] = (title, url)
+    output = []
+    seen = set()
+    for _, _, marker in citation_spans(text):
+        for title in marker_titles(marker):
+            normalized = title_key(title)
+            matches = by_title.get(normalized, {})
+            if len(matches) != 1:
+                continue
+            identity, (real_title, url) = next(iter(matches.items()))
+            if identity not in seen:
+                seen.add(identity)
+                output.append(f"[{real_title}]({url})")
+    return output
 
 MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)", re.IGNORECASE)
 HEADING_RE = re.compile(r"^(#{1,3})[ \t]+(.*)$", re.MULTILINE)

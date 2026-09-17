@@ -328,3 +328,15 @@ concurrency 限制从准入至 slot 退出的许可数（包括调用者延迟�
 该测试时钟在每次模拟 sleep 时累计前进，不是并发墙钟模拟器；合成调度只验证准入不变量，
 不测吞吐、最短等待时长或多等待者的真实公平等待期限。这些仍须另做相应评测。
 本次不改变节拍算法、run/instance lease、lifecycle/SSE、schema/manifest 或硬预算。
+
+## O1-C：证据准入与报告绑定版本（2026-09-17）
+
+新 manifest 冻结 `source-score-v2` / `what-why-how-v2`：显式候选的标题/摘要词法准入，
+缺失题名标记、无依据互证删除，以及显式唯一标题引用才显示 Sources；不是语义相关性或
+claim agreement 判定。类别/无候选输入保持不应用准入词门，原检索 envelope/失败可见性不改。
+旧 source-score-v1 / what-why-how-v1 manifest 仍能按原内容读取并校验 identity，但
+`ensure_run_manifest_compatible` 对跨版本同 run 恢复返回 RUN_MANIFEST_INCOMPATIBLE，须新 run。
+不改 workflow/state/schema、生命周期、fencing、缓存/预算/安全获取或四种引用状态；
+本地 file:// 不赚取公开 HTTP 核验，proxy/forward 安全性不可证明仍 fail closed。
+不得回写历史报告、推断 unknown 为错误、跨句补引或用片段把 unknown 改 verified。
+真实复测和批次继续按独立授权处理，详见 [单例验真](o1c-single-case-verification.md)。

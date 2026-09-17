@@ -1,4 +1,34 @@
 from datetime import datetime
+import re
+
+from ..utils.evidence import source_title
+
+
+def _candidate_patterns(task: dict) -> list[re.Pattern]:
+    """Use only explicit candidates; do not guess technologies from prose."""
+    candidates = task.get("candidate_techs", [])
+    if not isinstance(candidates, (list, tuple)):
+        return []
+    patterns = []
+    for candidate in candidates:
+        if not isinstance(candidate, str) or not candidate.strip():
+            continue
+        words = candidate.casefold().split()
+        name = r"\s+".join(re.escape(word) for word in words)
+        # ASCII identifier boundaries retain Chinese/Latin mixed prose while
+        # rejecting e.g. 'React' inside 'reactor' or 'C++' inside 'C++++'.
+        patterns.append(re.compile(r"(?<![a-z0-9_+#])" + name + r"(?![a-z0-9_+#])"))
+    return patterns
+
+
+def _mentions_candidate(result: dict, patterns: list[re.Pattern]) -> bool:
+    if not patterns:
+        return True  # Legacy/category-only tasks have no explicit lexical gate.
+    text = " ".join(
+        value for key in ("title", "snippet")
+        if isinstance((value := result.get(key)), str)
+    ).casefold()
+    return any(pattern.search(text) for pattern in patterns)
 
 WEIGHTS = {
     "authority": 0.35,
@@ -110,10 +140,18 @@ class SourceEvaluatorAgent:
 
     async def run(self, research_state: dict) -> dict:
         all_results = []
+        patterns = _candidate_patterns(research_state.get("task", {}))
+        excluded = 0
         for channel in research_state.get("search_results", []):
             source = channel.get("source", "unknown")
             for r in channel.get("results", []):
-                all_results.append({**r, "_source": source})
+                if not _mentions_candidate(r, patterns):
+                    excluded += 1
+                    continue
+                all_results.append({
+                    **r, "_source": source,
+                    "title": source_title(r.get("title"), r.get("url")),
+                })
 
         source_scores = []
         for result in all_results:
@@ -125,7 +163,7 @@ class SourceEvaluatorAgent:
             scores = {
                 "authority": score_authority(source_type),
                 "timeliness": score_timeliness(result.get("date")),
-                "consistency": score_consistency([url]),
+                "consistency": score_consistency([]),
                 "verifiability": score_verifiability(evidence_type),
             }
             total = compute_total_score(scores)
@@ -141,14 +179,8 @@ class SourceEvaluatorAgent:
                 "supporting_sources": [],
             })
 
-        for s in source_scores:
-            similar = [
-                x["url"] for x in source_scores
-                if x["url"] != s["url"] and x["total_score"] >= 6.0
-            ]
-            s["supporting_sources"] = similar[:3]
-            s["scores"]["consistency"] = score_consistency(similar)
-            s["total_score"] = compute_total_score(s["scores"])
+        # Authority/recency or a shared candidate name does not establish
+        # claim agreement. No corroboration is inferred from another URL.
 
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)
         for i, s in enumerate(source_scores):
@@ -161,6 +193,8 @@ class SourceEvaluatorAgent:
             "quality_signals": [{
                 "agent": "source_evaluator",
                 "sources_scored": len(source_scores),
+                "candidate_gate": "lexical" if patterns else "not_applied",
+                "candidate_excluded_count": excluded,
                 "avg_score": avg_score,
                 "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),
                 "low_score_count": sum(1 for s in source_scores if s["total_score"] < 5.0),

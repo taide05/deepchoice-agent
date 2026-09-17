@@ -32,6 +32,7 @@ from .contracts import (
     CitationStatusCounts,
     CitationVerification,
 )
+from ..utils.citation_markers import citation_spans as _citation_spans, marker_titles
 
 
 MAX_UNIQUE_SOURCE_URLS = 12
@@ -45,7 +46,6 @@ MAX_FIELD_SENTENCES = 16
 MAX_RANKED_OPTIONS = 20
 MAX_TRADEOFFS = 20
 MAX_REGISTRY_SOURCES = 96
-_CITATION_PREFIX = "[source:"
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
 _LATIN_TOKEN_RE = re.compile(r"[a-z][a-z0-9_+.#/-]*", re.IGNORECASE)
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
@@ -177,35 +177,6 @@ def _bounded_plain_text(value: Any, *, limit: int) -> str:
     return clean[:limit].strip()
 
 
-def _citation_spans(value: str) -> list[tuple[int, int, str]]:
-    """Locate citation markers while allowing punctuation and nested brackets in titles."""
-
-    lowered = value.lower()
-    spans: list[tuple[int, int, str]] = []
-    cursor = 0
-    while True:
-        start = lowered.find(_CITATION_PREFIX, cursor)
-        if start < 0:
-            break
-        depth = 0
-        end = start
-        while end < len(value):
-            if value[end] == "[":
-                depth += 1
-            elif value[end] == "]":
-                depth -= 1
-                if depth == 0:
-                    end += 1
-                    break
-            end += 1
-        if depth != 0:
-            break
-        content_start = start + len(_CITATION_PREFIX)
-        spans.append((start, end, value[content_start:end - 1].strip()))
-        cursor = end
-    return spans
-
-
 def _strip_citations(value: str) -> str:
     parts: list[str] = []
     cursor = 0
@@ -316,8 +287,7 @@ def _extract_claims(recommendation: dict[str, Any]) -> tuple[list[_Claim], bool]
             raw_titles = [
                 title.strip()
                 for _, _, marker in _citation_spans(sentence)
-                for title in re.split(r",\s*Source:\s*|;\s*Source:\s*", marker, flags=re.IGNORECASE)
-                if title.strip()
+                for title in marker_titles(marker)
             ]
             if not raw_titles:
                 if len(claims) >= MAX_CITATION_CHECKS - 1:

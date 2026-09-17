@@ -42,7 +42,7 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v1",
+    "what_why_how": "what-why-how-v2",
     "evidence_first": "evidence-first-v1",
     "comparison_matrix": "comparison-matrix-v1",
 }
@@ -110,7 +110,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1"] = "source-score-v1"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2"] = "source-score-v2"
     security_policy_version: Literal["outbound-url-v1"] = "outbound-url-v1"
     citation_policy_version: Literal["deterministic-citation-v1"] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
@@ -310,7 +310,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             RetrieverSnapshot(retriever_id=retriever_id)
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v1",
+        "scoring_policy_version": "source-score-v2",
         "security_policy_version": "outbound-url-v1",
         "citation_policy_version": "deterministic-citation-v1",
         "hitl_policy_version": "evidence-insufficient-v1",
