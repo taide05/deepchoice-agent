@@ -3,6 +3,15 @@ from unittest.mock import AsyncMock
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_provider_admission():
+    from deepchoice.outbound import throttle
+
+    throttle.reset_for_tests()
+    yield
+    throttle.reset_for_tests()
+
+
 @pytest.fixture
 def sample_task():
     return {

@@ -268,6 +268,14 @@ SSE 规则：
 
 ## O1-R：单 case 可靠性边界（2026-09-16）
 
+O1 六源出站限流补充（2026-09-17）：单进程内跨 run/路由共享 provider FIFO 准入，最多 256
+等待者、每次排队 600 秒；重试/搜索探测同门，冷却不截短，取消不泄漏许可。补证工具的整个
+调用（含全部排队/重试）时限由 20 调到 630 秒，manifest v1 既有字段冻结新值，旧值保持历史
+可读但拒绝同 run 恢复。run 期限、900 秒 active 预算准入与 exhaustion latch 不变；预算不是
+已提交调用的自动 900 秒取消器。仍为单 worker，不新增外部队列或生命周期状态。安全 URL
+逻辑检查排队后网络总时限仍 15 秒，逐跳安全校验不变；失败显式，Trace/预算仍按逻辑调用计数。
+入口/策略与残余风险见 [限流审计](o1-retrieval-throttle-audit.md)，不构成真实并发效果验收。
+
 O1 追加缓存用量观测只扩展 Trace usage/public observability：严格校验模型输入缓存 hit/miss，公开调用完整性、run 已知小计/完整调用数，完整分项才给命中率；不改 lifecycle/SSE、manifest/state schema、预算总 token 或 unpriced-v1。历史 Trace/immutable run_results 不回填；旧 graph usage 行保持可读。详见 [缓存拆账协议](o1-cache-cost-accounting.md)。
 
 - 实例获取在 BEGIN IMMEDIATE 写锁取得后采集 now/expiry，续期在共享连接锁内采集；等待前的时间不得缩短新 TTL 或复活过期租约。默认 30 秒 lease/10 秒 heartbeat、失权 fail-closed 与单 worker 不变。run heartbeat 的锁前时间及 SQLite busy/event-loop 延迟仍是残余风险，不能把此修复描述成完整 live 根因解决。

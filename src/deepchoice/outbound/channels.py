@@ -277,8 +277,20 @@ class _ForwardTransport(httpx.AsyncBaseTransport):
             except json.JSONDecodeError:
                 data = {"status": r.status_code if r.status_code else 502,
                         "body": r.text}
+        # Newer relays may forward response headers. Restore only quota signals;
+        # never reflect authentication/cookie headers into the provider client.
+        forwarded_headers = data.get("headers", {})
+        rate_headers = {}
+        if isinstance(forwarded_headers, dict):
+            for name, value in forwarded_headers.items():
+                if (isinstance(name, str) and name.lower() in {
+                    "retry-after", "x-ratelimit-remaining", "x-ratelimit-reset"
+                } and isinstance(value, str) and len(value) <= 256
+                        and "\r" not in value and "\n" not in value):
+                    rate_headers[name] = value
         return httpx.Response(
             status_code=int(data.get("status", 502)),
+            headers=rate_headers,
             content=str(data.get("body", "")).encode("utf-8"),
             request=request,
         )

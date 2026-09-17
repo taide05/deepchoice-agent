@@ -293,7 +293,10 @@ class TestForwardChannel:
                 captured["url"] = url
                 captured["json"] = json
                 captured["headers"] = headers
-                return httpx.Response(200, json={"status": 200, "body": "<feed/>"})
+                return httpx.Response(200, json={"status": 200, "body": "<feed/>", "headers": {
+                    "Retry-After": "30", "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": "1234567", "Set-Cookie": "secret",
+                }})
 
         ch = SelfForwardChannel(
             _cfg(fwd_base="https://fwd.example.com", fwd_key="k123",
@@ -308,6 +311,10 @@ class TestForwardChannel:
         resp = await transport.handle_async_request(req)
         assert resp.status_code == 200
         assert b"<feed/>" in resp.content
+        assert resp.headers["retry-after"] == "30"
+        assert resp.headers["x-ratelimit-remaining"] == "0"
+        assert resp.headers["x-ratelimit-reset"] == "1234567"
+        assert "set-cookie" not in resp.headers
         assert captured["url"] == "https://fwd.example.com"
         assert captured["json"]["target"].startswith("https://export.arxiv.org")
         assert captured["headers"]["X-Fwd-Key"] == "k123"

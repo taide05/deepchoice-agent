@@ -378,8 +378,24 @@ def test_manifest_covers_direct_evidence_gathering_call():
     assert call.response_format is None
     assert call.timeout_s == 30.0
     assert call.max_iterations == 2
-    assert call.tool_timeout_s == 20.0
+    assert call.tool_timeout_s == 630.0
     assert call.tools_sha256
+
+
+def test_pre_throttle_tool_timeout_manifest_remains_readable_but_cannot_resume():
+    from deepchoice.contracts.manifest import _expected_manifest_id
+
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    calls = tuple(call.model_copy(update={"tool_timeout_s": 20.0})
+                  if call.call_id == "conflict_evidence_gather" else call
+                  for call in current.llm_calls)
+    old = current.model_copy(update={"llm_calls": calls})
+    old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
+    assert type(current).model_validate_json(old.model_dump_json()).manifest_id == old.manifest_id
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(old, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
 def test_manifest_identity_rejects_tampered_content():

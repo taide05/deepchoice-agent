@@ -13,9 +13,11 @@ import asyncio
 import hashlib
 import json
 import os
-import random
 import threading
 import time
+
+from ..budget_errors import BudgetError
+from ..outbound import throttle
 
 # Permanent dead codes: invalid key (401) or monthly usage exhausted (432).
 # 429 (rate limit) is TRANSIENT — blacklisting the only alive key on a 429
@@ -25,12 +27,10 @@ _RATE_LIMIT_BACKOFF_S = 10.0
 _EXHAUSTED_TTL_S = 28 * 86400
 _PROBE_PAYLOAD = {"query": "test", "search_depth": "basic", "max_results": 1}
 
-# Free tier: 5 requests/minute per key. A per-key token bucket (capacity 5,
-# one token every 12s) spaces requests so concurrent benchmark runs don't
-# burst into 429. Round-robin across keys multiplies total throughput (N keys
-# -> 5N/min).
-_BUCKET_CAPACITY = 5.0
-_BUCKET_REFILL_S = 12.0  # 5/min = one token per 12s
+# Preserve the existing conservative local 5/min policy, without an initial
+# five-request burst. Actual account quotas may differ; honor server feedback.
+_KEY_INTERVAL_S = 12.0
+_key_gates: dict[str, throttle.RequestGate] = {}
 
 _pool: list[str] = []
 _exhausted: dict[str, float] = {}  # sha256(key) -> epoch seconds when marked
@@ -48,7 +48,7 @@ def _state_path() -> str:
 
 def _load_keys() -> list[str]:
     raw = os.environ.get("TAVILY_API_KEYS", "") or os.environ.get("TAVILY_API_KEY", "")
-    return [k.strip() for k in raw.split(",") if k.strip()]
+    return list(dict.fromkeys(k.strip() for k in raw.split(",") if k.strip()))
 
 
 def _load_state() -> dict[str, float]:
@@ -74,20 +74,39 @@ def _is_fresh(ts: float) -> bool:
 
 
 def _reset_for_tests() -> None:
-    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last, _bucket_lock
+    global _pool, _exhausted, _probed, _rr_idx, _key_gates, _lock
     _pool, _exhausted, _probed = [], {}, False
     _rr_idx = -1
-    _bucket_tokens, _bucket_last = {}, {}
-    _bucket_lock = asyncio.Lock()
+    _key_gates = {}
+    _lock = asyncio.Lock()
+
+
+def _key_gate(key: str) -> throttle.RequestGate:
+    return _key_gates.setdefault(
+        _hash(key), throttle.RequestGate(interval=lambda: _KEY_INTERVAL_S, concurrency=1))
+
+
+async def _post_once(post, key: str, payload: dict, *, probing=False):
+    gate = _key_gate(key)
+    async with gate.slot():
+        # Another in-flight caller may have invalidated this selected key while
+        # we waited. Never dispatch it again or move a 429 to another key.
+        if not probing and key not in _pool:
+            return None
+        async with asyncio.timeout(30.0):
+            resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
+        throttle.observe("tavily", resp, gate, fallback=_RATE_LIMIT_BACKOFF_S)
+        if not probing and resp.status_code in _DEAD_CODES:
+            mark_dead(key)
+        return resp
 
 
 async def _probe_one(post, key: str) -> bool:
     try:
-        resp = await post(
-            "https://api.tavily.com/search",
-            json={**_PROBE_PAYLOAD, "api_key": key},
-        )
+        resp = await _post_once(post, key, _PROBE_PAYLOAD, probing=True)
         return resp.status_code not in _DEAD_CODES
+    except BudgetError:
+        raise
     except Exception:
         return True  # transient network errors do not blacklist a key
 
@@ -106,7 +125,10 @@ async def probe(post) -> None:
         reprobe_all = os.environ.get("TAVILY_REPROBE") == "1"
         candidates = [k for k in keys
                       if reprobe_all or not _is_fresh(saved.get(_hash(k), 0.0))]
-        results = await asyncio.gather(*[_probe_one(post, k) for k in candidates])
+        results = await asyncio.gather(*[_probe_one(post, k) for k in candidates], return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
         now = time.time()
         for k, alive in zip(candidates, results):
             h = _hash(k)
@@ -133,35 +155,11 @@ def mark_dead(key: str) -> None:
         _save_state(_exhausted)
 
 
-_bucket_tokens: dict[str, float] = {}
-_bucket_last: dict[str, float] = {}
-_bucket_lock = asyncio.Lock()
 _rr_idx = -1  # first current() call returns _pool[0]
 
 
-async def _acquire_token(key: str) -> None:
-    """Wait until `key` has a free-tier token (5 req/min per key).
-
-    The whole read-modify-write is guarded by _bucket_lock: without it, two
-    coroutines sleeping in the slow path would both wake and write stale counts
-    (lost update), over-issuing past the 5/min quota.
-    """
-    async with _bucket_lock:
-        tokens = _bucket_tokens.get(key, _BUCKET_CAPACITY)
-        last = _bucket_last.get(key, time.monotonic())
-        now = time.monotonic()
-        tokens = min(_BUCKET_CAPACITY, tokens + (now - last) / _BUCKET_REFILL_S)
-        if tokens < 1.0:
-            await asyncio.sleep((1.0 - tokens) * _BUCKET_REFILL_S)
-            now = time.monotonic()  # re-read AFTER sleeping, not before
-            tokens = 1.0
-        _bucket_tokens[key] = tokens - 1.0
-        _bucket_last[key] = now
-
-
 async def current() -> str | None:
-    """Round-robin across alive keys — spreads the 5/min per-key bucket so
-    concurrent runs use N keys at 5N/min instead of bursting one key."""
+    """Round-robin across configured alive keys; retries retain a limited key."""
     global _rr_idx
     if not _pool:
         return None
@@ -180,15 +178,16 @@ async def post_with_failover(post, payload: dict):
     key = await current()
     if key is None:
         return None, None
-    await _acquire_token(key)
-    resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
-    if resp.status_code in _DEAD_CODES:
-        mark_dead(key)
-        key = await current()
-        if key:
-            await _acquire_token(key)
-            resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
-    elif resp.status_code == 429:
-        await asyncio.sleep(_RATE_LIMIT_BACKOFF_S * (0.5 + random.random()))
-        resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
-    return resp, key
+    for attempt in range(2):
+        resp = await _post_once(post, key, payload)
+        if resp is not None and resp.status_code not in (*_DEAD_CODES, 429):
+            return resp, key
+        if attempt == 1:
+            if resp is not None and resp.status_code == 429:
+                raise throttle.ProviderRateLimitError("Tavily rate limited")
+            return resp, key
+        if resp is None or resp.status_code in _DEAD_CODES:
+            key = await current()
+            if key is None:
+                return resp, None
+        # A 429 retry uses the same key and the same admission as any new call.

@@ -189,26 +189,35 @@ class ChannelResolver:
         if channel.kind != "direct":
             raise UnsafeUrlError("Selected outbound channel cannot bind the validated target")
 
-        try:
-            return await asyncio.wait_for(
-                self._safe_fetch_direct(
-                    url,
-                    method=method.upper(),
-                    allowed_content_types=allowed_content_types,
-                    max_response_bytes=max_response_bytes,
-                    max_redirects=max_redirects,
-                    timeout_s=timeout_s,
-                    head_fallback_to_range_get=head_fallback_to_range_get,
-                ),
-                timeout=timeout_s,
-            )
-        except TimeoutError as exc:
-            raise UnsafeUrlError("Safe URL fetch exceeded the total timeout") from exc
+        async def fetch():
+            try:
+                return await asyncio.wait_for(
+                    self._safe_fetch_direct(
+                        url, source=source, method=method.upper(),
+                        allowed_content_types=allowed_content_types,
+                        max_response_bytes=max_response_bytes, max_redirects=max_redirects,
+                        timeout_s=timeout_s,
+                        head_fallback_to_range_get=head_fallback_to_range_get,
+                    ),
+                    timeout=timeout_s,
+                )
+            except TimeoutError as exc:
+                raise UnsafeUrlError("Safe URL fetch exceeded the total timeout") from exc
+
+        if source == "official":
+            from . import throttle
+
+            # The bounded logical URL check includes its safe redirects/HEAD
+            # fallback. Queue time is outside the original total network limit.
+            async with throttle.gate_for("official-web").slot():
+                return await fetch()
+        return await fetch()
 
     async def _safe_fetch_direct(
         self,
         url: str,
         *,
+        source: str = "",
         method: str,
         allowed_content_types: tuple[str, ...],
         max_response_bytes: int,
@@ -235,6 +244,14 @@ class ChannelResolver:
                 async with client.stream(current_method, resolved.url, headers=headers) as streamed:
                     status = streamed.status_code
                     response_headers = streamed.headers
+                    if source == "official":
+                        from . import throttle
+
+                        # A 429 may have a JSON/plain-text body. Publish only
+                        # its safe status/headers before content validation;
+                        # never read or expose the provider error body.
+                        if throttle.observe(source, streamed, throttle.gate_for("official-web")):
+                            raise throttle.ProviderRateLimitError("official URL rate limited")
                     if status in {301, 302, 303, 307, 308}:
                         location = streamed.headers.get("location")
                         if not location:
@@ -308,11 +325,23 @@ class ChannelResolver:
         sources = sources or list(PROBES.keys())
         results: dict[str, Any] = {}
         for source in sources:
-            channel = await self._probe_for(source)
+            from . import throttle
+
+            try:
+                channel = await self._probe_for(source)
+            except throttle.ProviderAdmissionError as exc:
+                status = "rate_limited" if isinstance(exc, throttle.ProviderRateLimitError) else "admission_blocked"
+                results[source] = {"channel": None, "ok": False, "status": status}
+                continue
+            limited = source != "tavily" and source in PROBES and throttle.gate_for(source).unavailable()
+            if source == "official":
+                limited = limited or throttle.gate_for("official-web").unavailable()
             results[source] = {
                 "channel": channel.name if channel else None,
-                "ok": channel is not None,
+                "ok": channel is not None and not limited,
             }
+            if limited:
+                results[source]["status"] = "rate_limited"
         degraded = [s for s, v in results.items() if not v["ok"]]
         return {"ok": not degraded, "degraded_sources": degraded, "sources": results}
 

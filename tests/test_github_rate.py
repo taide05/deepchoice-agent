@@ -5,20 +5,23 @@ import time
 import pytest
 
 from deepchoice.retrievers import github_rate as gr
+from deepchoice.outbound import throttle
 
 
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch):
     gr._reset_for_tests()
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    # Functional retry tests do not need real six-second provider intervals.
+    monkeypatch.setattr(gr, "interval_s", lambda: 0.0)
     yield
 
 
 def test_interval_auth_vs_anon(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    assert gr.interval_s() == pytest.approx(60.0 / 10)
+    assert throttle.github_interval() == pytest.approx(60.0 / 10)
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_test")
-    assert gr.interval_s() == pytest.approx(60.0 / 30)
+    assert throttle.github_interval() == pytest.approx(60.0 / 30)
 
 
 def test_retry_delay_prefers_retry_after_seconds():
@@ -30,17 +33,16 @@ def test_retry_delay_honors_x_ratelimit_reset():
     assert gr.retry_delay({"X-RateLimit-Reset": str(reset)}) == pytest.approx(15.0, abs=1.0)
 
 
-def test_retry_delay_clamps_huge_values():
-    assert gr.retry_delay({"Retry-After": "999999"}) == pytest.approx(gr._MAX_RETRY_WAIT_S)
+def test_retry_delay_preserves_huge_values():
+    assert gr.retry_delay({"Retry-After": "999999"}) == pytest.approx(999999)
 
 
 def test_retry_delay_falls_back_when_headers_missing():
-    assert gr.retry_delay({}) == pytest.approx(gr.interval_s())
+    assert gr.retry_delay({}) == pytest.approx(60.0)
 
 
 def test_retry_delay_handles_garbage_retry_after():
-    # Non-numeric Retry-After (GitHub never sends an HTTP date) → fall back, no crash.
-    assert gr.retry_delay({"Retry-After": "not-a-number"}) == pytest.approx(gr.interval_s())
+    assert gr.retry_delay({"Retry-After": "not-a-number"}) == pytest.approx(60.0)
 
 
 class _Resp:
@@ -93,10 +95,6 @@ def test_get_with_throttle_gives_up_after_max_retries(monkeypatch):
 
 
 def test_slot_caps_concurrency(monkeypatch):
-    async def _noop():
-        return None
-
-    monkeypatch.setattr(gr, "_pace", _noop)
     in_flight = {"n": 0, "max": 0}
 
     async def worker():
@@ -115,15 +113,16 @@ def test_slot_caps_concurrency(monkeypatch):
 
 def test_slot_paces_requests(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_test")
+    monkeypatch.setattr(gr, "interval_s", throttle.github_interval)
     t = {"now": 0.0}
-    monkeypatch.setattr(gr.time, "monotonic", lambda: t["now"])
+    monkeypatch.setattr(throttle, "_clock", lambda: t["now"])
     slept = []
 
     async def fake_sleep(d):
         slept.append(d)
         t["now"] += d
 
-    monkeypatch.setattr(gr.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(throttle, "_sleep", fake_sleep)
 
     async def run():
         async with gr.request_slot():

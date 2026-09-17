@@ -141,7 +141,9 @@ EVIDENCE_GATHER_USER_TEMPLATE = (
 EVIDENCE_GATHER_MAX_ITERATIONS = 2
 EVIDENCE_GATHER_CLIENT_TIMEOUT_S = 60.0
 EVIDENCE_GATHER_CALL_TIMEOUT_S = 30.0
-EVIDENCE_GATHER_TOOL_TIMEOUT_S = 20.0
+# Total tool bound, including provider admission and all retries. It does not
+# extend the run timeout or the 900s active-time budget admission policy.
+EVIDENCE_GATHER_TOOL_TIMEOUT_S = 630.0
 
 
 async def _execute_search(tool_name: str, arguments: dict) -> str:
@@ -177,11 +179,12 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
     elif tool_name == "search_scholarly":
         import urllib.parse
+        from ..outbound import throttle
         try:
             async with await _outbound.make_client("arxiv") as client:
                 q = urllib.parse.quote(f"all:{query}", safe="")
                 url = f"https://export.arxiv.org/api/query?search_query={q}&max_results={max_results}"
-                resp = await client.get(url)
+                resp = await throttle.get("arxiv", client, url, max_retries=3)
                 resp.raise_for_status()
                 import xml.etree.ElementTree as ET
                 root = ET.fromstring(resp.text)

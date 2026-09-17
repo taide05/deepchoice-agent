@@ -227,11 +227,15 @@ O1-R 本轮最小修复及执行样本观察完成：最新候选三开发例各
 代表性 case 与重点指标基线，再做针对性优化和回归验证，最后才整理可复现演示、架构讲解与面试
 材料。上述工作不自动启动，也不属于 PR 5-2 的验收内容。
 
+2026-09-17 继续用户已明确授权的 O1 六源限流离线诊断/修复：仅限检索 provider 出站共享准入、
+请求间隔、冷却和必要超时/兼容适配，见 [限流审计](o1-retrieval-throttle-audit.md)。这是本次
+授权的出站范围修订，不包含下面排除的企业级入口限流/分布式队列。不得因此恢复付费批次或进入 O2。
+
 ## 5. 不在当前实施范围
 
 以下内容不再安排当前 Phase，也不作为当前稳定版门禁：
 
-- 多用户认证、租户 ownership、RBAC/SSO、API key middleware 和 rate limiting。
+- 多用户认证、租户 ownership、RBAC/SSO、API key middleware 和企业级入口 rate limiting。
 - 多 worker、多实例、Redis/外部队列、PostgreSQL、Kubernetes 和分布式 Trace/OTel 平台。
 - 通用计费平台、动态价格服务、provider 账单级对账和全量 LLM response cache。
 - 四类 HITL gate、通用 Agent/plugin 平台和完整 Prompt 资产迁移。

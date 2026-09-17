@@ -1,8 +1,13 @@
 # Changelog
 
-## [Unreleased] - 2026-09-16
+## [Unreleased] - 2026-09-17
 
 ### Added
+
+- O1 outbound validation (2026-09-17, local Windows/Python 3.12.4): 223 focused tests and all 1176 suite tests passed with no skips; smoke-v1 12/12 with matching baseline, pyflakes/vulture/pip check/diff checks passed, independent read-only review found no remaining blockers. Real source health not_run; paid quota remains 43/48 and batches paused
+
+- O1 offline six-source outbound admission repair: process-local bounded FIFO gates, paced retries/probes and shared provider cooldown; per-key Tavily pacing without startup bursts; rate-limit-aware health, safe-fetch feedback and optional forward quota headers. Covers scholarly evidence tools without increasing hard budgets; ChromaKB remains local. Validation and residual risks: docs/o1-retrieval-throttle-audit.md. No paid/live research or batch resumption
+- Evidence tool total deadline now 630 seconds including all admission/retries (previously 20); existing manifest field safely rejects old same-run resume. GitHub partial-query failures remain visible, and Tavily/official fanout drains before reporting failure
 
 - O1 context-cache usage accounting: allowlisted DeepSeek native hit/miss fields and validated cached_tokens alias across shared LLM, conflict evidence tools and probes; public call/run completeness, known-only subtotals and complete-only hit ratio, node-attempt CSV and four-language UI. Total-token budgets and unpriced-v1 remain unchanged; historical missing breakdown is unknown, not backfilled
 - User-authorized assistant verification of six existing P01/P06/P07 development reports, identity/hash bindings, provisional frozen-rubric scores and primary-source-backed key-claim issues; not blind human scoring or calibrated final acceptance. No new paid research; 43/48 quota unchanged, batches paused. Existing input hotspots do not establish cache-miss or monetary savings

@@ -1,6 +1,8 @@
 import asyncio
 
 from .. import outbound as _outbound
+from ..outbound import throttle
+from ..budget_errors import BudgetError
 from ..utils.llm import call_model
 from .base import BaseRetriever
 from .learned_docs import (
@@ -189,7 +191,11 @@ class OfficialSearch(BaseRetriever):
                 allowed_content_types=("text/html", "application/xhtml+xml"),
                 head_fallback_to_range_get=True,
             )
+            if resp.status_code == 429:
+                raise throttle.ProviderRateLimitError("official documentation rate limited")
             return resp.status_code == 200
+        except (BudgetError, throttle.ProviderAdmissionError):
+            raise
         except Exception:
             return False
 
@@ -249,7 +255,14 @@ class OfficialSearch(BaseRetriever):
             return kw, url
 
         pending = unmapped[:_LLM_FALLBACK_MAX]
-        resolved = await asyncio.gather(*[_resolve_fallback(kw) for kw in pending])
+        resolved = await asyncio.gather(*[_resolve_fallback(kw) for kw in pending],
+                                        return_exceptions=True)
+        for item in resolved:
+            if isinstance(item, BudgetError):
+                raise item
+        for item in resolved:
+            if isinstance(item, BaseException):
+                raise item
         for item in resolved:
             if item is None:
                 continue
@@ -272,7 +285,9 @@ class OfficialSearch(BaseRetriever):
                 for kw in keywords[:3]:
                     if len(kw) < 3:
                         continue
-                    resp = await client.get(f"https://pypi.org/pypi/{kw}/json")
+                    resp = await throttle.get("official", client, f"https://pypi.org/pypi/{kw}/json")
+                    if resp.status_code not in (200, 404):
+                        raise RuntimeError(f"PyPI HTTP {resp.status_code}")
                     if resp.status_code != 200:
                         continue
                     info = resp.json().get("info", {})

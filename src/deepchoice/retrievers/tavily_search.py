@@ -2,6 +2,7 @@ import asyncio
 
 from .. import outbound as _outbound
 from .base import BaseRetriever
+from ..budget_errors import BudgetError
 from .tavily_keypool import post_with_failover
 
 
@@ -34,10 +35,15 @@ class TavilySearch(BaseRetriever):
                     "date": r.get("published_date", ""),
                 } for r in data.get("results", [])]
 
-            # Fan out concurrently: post_with_failover round-robins across the
-            # key pool (24 keys) and each key's token bucket spaces 5/min, so
-            # concurrent queries do not burst a single key into 429.
-            batches = await asyncio.gather(*[_one(q) for q in queries])
+            # Settle all sibling requests before the routed client closes on a
+            # source failure. Cancellation of the parent cancels the group.
+            batches = await asyncio.gather(*[_one(q) for q in queries], return_exceptions=True)
+            for batch in batches:
+                if isinstance(batch, BudgetError):
+                    raise batch
+            for batch in batches:
+                if isinstance(batch, BaseException):
+                    raise batch
             all_results = []
             seen_urls = set()
             for b in batches:

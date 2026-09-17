@@ -12,6 +12,7 @@ DUMMY = ["tvly-dev-aaaa", "tvly-dev-bbbb", "tvly-dev-cccc"]
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch, tmp_path):
     kp._reset_for_tests()
+    monkeypatch.setattr(kp, "_KEY_INTERVAL_S", 0.0)
     monkeypatch.setenv("TAVILY_KEY_STATE_PATH", str(tmp_path / "state.json"))
     yield
 

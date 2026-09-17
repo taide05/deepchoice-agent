@@ -24,6 +24,11 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 - **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
 
+O1 六源检索外呼现共用进程内有界队列、请求间隔与供应商冷却，覆盖检索、补证和搜索探测；
+Tavily 按 key 控制，ChromaKB 不套网络限流。失败不伪装为成功，预算不提高；策略、旧运行兼容
+和离线验证边界见 [限流审计](docs/o1-retrieval-throttle-audit.md)。2026-09-17 本机 Python 3.12.4
+验收为 223 项聚焦、1176 项全套通过（无跳过），smoke-v1 12/12；这不代表真实 12-case 并发效果已通过，付费批次继续暂停。
+
 ## 快速开始
 
 ```powershell

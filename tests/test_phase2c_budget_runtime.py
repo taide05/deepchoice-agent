@@ -93,6 +93,60 @@ async def test_scan_preserves_budget_and_drains_admitted_work(tmp_path, monkeypa
         await connection.close()
 
 
+@pytest.mark.asyncio
+async def test_committed_retrieval_waiter_survives_later_budget_denial(tmp_path, monkeypatch):
+    from contextlib import asynccontextmanager
+    import httpx
+    from deepchoice import outbound
+    from deepchoice.outbound import throttle
+    from deepchoice.agents.multi_retriever import _invoke_retriever_miss
+    from deepchoice.retrievers.arxiv_api import ArxivSearch
+
+    connection, _, manager, _, _ = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(retrieval_calls=1))
+    reserved = asyncio.Event()
+    get = AsyncMock(return_value=httpx.Response(
+        200, text='<feed xmlns="http://www.w3.org/2005/Atom"/>',
+        request=httpx.Request('GET', 'https://fixture.example')))
+
+    @asynccontextmanager
+    async def client():
+        reserved.set()  # make_client is reached only after reserve_call commits
+        yield SimpleNamespace(get=get)
+
+    monkeypatch.setattr(outbound, 'make_client', AsyncMock(side_effect=lambda _: client()))
+    gate = throttle.gate_for('arxiv')
+    gate.interval = 0
+    pending = None
+
+    async def invoke():
+        return await _invoke_retriever_miss(
+            'arxiv', ArxivSearch, query='fixture', sub_questions=[], adapted_queries=[])
+
+    try:
+        async with gate.slot():
+            with bind_run_context(_context(manager)):
+                pending = asyncio.create_task(invoke())
+                await asyncio.wait_for(reserved.wait(), timeout=3)
+                assert len(gate._queue) == 1
+                with pytest.raises(BudgetExceededError):
+                    await invoke()  # no second reservation / outbound call
+                assert isinstance(manager.exhausted, BudgetExceededError)
+                get.assert_not_awaited()
+        result, _ = await asyncio.wait_for(pending, timeout=3)
+        assert result.status == 'success'
+        get.assert_awaited_once()
+        assert (await manager._usage())[BudgetResource.RETRIEVAL_CALLS] == 1
+        assert await _count(connection, "WHERE status='settled'") == 1
+        assert not gate._queue and gate._active == 0
+    finally:
+        if pending is not None:
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+        await connection.close()
+
+
 class MutableClock:
     def __init__(self, value: datetime = NOW) -> None:
         self.value = value

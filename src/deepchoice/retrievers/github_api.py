@@ -3,6 +3,7 @@ import os
 import httpx
 
 from .. import outbound as _outbound
+from ..outbound.throttle import ProviderRateLimitError, is_limited
 from . import github_rate
 from .base import BaseRetriever
 
@@ -92,6 +93,8 @@ class GitHubSearch(BaseRetriever):
                         headers=headers,
                     )
                     if resp.status_code != 200:
+                        if is_limited("github", resp):
+                            raise ProviderRateLimitError("GitHub rate limited")
                         errors.append(f"{term}: HTTP {resp.status_code}")
                         continue
                     data = resp.json()
@@ -114,9 +117,8 @@ class GitHubSearch(BaseRetriever):
                 except httpx.HTTPError as exc:
                     errors.append(f"{term}: {exc.__class__.__name__}")
 
-        # Fail loudly instead of silently scoring a starved source: only stay
-        # quiet when we got results, or when queries legitimately matched
-        # nothing (HTTP 200 with zero items).
-        if not results and errors:
+        # The v1 envelope cannot represent partial source results. Keep any
+        # failed query visible; an HTTP 200 with zero items is still success.
+        if errors:
             raise RuntimeError("GitHub search failed: " + "; ".join(errors[:3]))
         return results[:max_results]

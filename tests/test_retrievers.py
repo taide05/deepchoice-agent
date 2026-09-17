@@ -12,6 +12,18 @@ from deepchoice.retrievers.community import CommunitySearch
 from deepchoice.retrievers.github_api import GitHubSearch
 from deepchoice.retrievers.official import OfficialSearch
 from deepchoice.retrievers.tavily_search import TavilySearch
+from deepchoice.outbound import throttle
+
+
+@pytest.fixture(autouse=True)
+def _fast_provider_pacing(monkeypatch):
+    # Envelope tests use immediate fake HTTP; dedicated throttle tests retain
+    # the real policies and a virtual clock.
+    for source in ("github", "arxiv", "community", "official", "official-web"):
+        throttle.gate_for(source).interval = 0.0
+    from deepchoice.retrievers import tavily_keypool
+
+    monkeypatch.setattr(tavily_keypool, "_KEY_INTERVAL_S", 0.0)
 
 
 class _FakeClient:
@@ -146,10 +158,7 @@ class TestGitHubSearch:
         from deepchoice.retrievers import github_rate
         github_rate._reset_for_tests()
 
-        async def _noop():
-            return None
-
-        monkeypatch.setattr(github_rate, "_pace", _noop)
+        monkeypatch.setattr(github_rate, "interval_s", lambda: 0.0)
         monkeypatch.setattr(github_rate, "retry_delay", lambda headers: 0.0)
         yield
 
@@ -204,8 +213,8 @@ class TestGitHubSearch:
         assert "HTTP 403" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_partial_failure_keeps_results(self):
-        """If at least one search succeeded, keep results (no raise)."""
+    async def test_partial_failure_is_not_reported_as_complete_success(self):
+        """The v1 envelope cannot express partial results; fail visibly."""
         ok = MagicMock()
         ok.status_code = 200
         ok.json.return_value = {
@@ -222,8 +231,8 @@ class TestGitHubSearch:
         retriever = GitHubSearch()
         with _patch_outbound(_FakeClient(get_side=[ok, bad, bad, bad])):
             result = await retriever.search("test framework", [])
-        assert result["status"] == "success"
-        assert len(result["results"]) == 1
+        assert result["status"] == "failed"
+        assert result["results"] == []
 
     @pytest.mark.asyncio
     async def test_failure_invalidates_outbound_route(self):
@@ -284,12 +293,6 @@ class TestCommunitySearch:
         overlap (the semaphore serializes them)."""
         import asyncio as _asyncio
 
-        from deepchoice.retrievers.community import _SEARCH_SEM
-
-        # drain any leftover permit from prior tests
-        while not _SEARCH_SEM.locked():
-            break
-        # ensure unlocked state deterministically
         events = []
 
         async def slow_get(url, params=None, headers=None, timeout=None):
@@ -330,6 +333,7 @@ class TestCommunitySearch:
         """Non-200 (rate limit/auth) must surface as failed, not empty success."""
         mock_se = MagicMock()
         mock_se.status_code = 429
+        mock_se.headers = {"Retry-After": "0"}
         mock_se.text = "quota exceeded"
         retriever = CommunitySearch()
         with _patch_outbound(_FakeClient(get_return=mock_se)):

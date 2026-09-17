@@ -91,6 +91,26 @@ async def test_safe_fetch_revalidates_redirects_and_pins_each_connection():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("content_type", ["application/json", "text/plain"])
+async def test_official_non_html_429_publishes_cooldown_without_exposing_body(content_type):
+    from deepchoice.outbound import throttle
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(lambda request: httpx.Response(
+            429, headers={"content-type": content_type, "Retry-After": "120"},
+            text="private provider diagnostic", request=request))
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(throttle.ProviderRateLimitError) as caught:
+        await resolver.safe_fetch("official", "https://one.example/")
+    assert throttle.gate_for("official-web").cooling_down()
+    assert "private" not in str(caught.value)
+
+
+@pytest.mark.asyncio
 async def test_safe_fetch_rejects_private_redirect_before_transport():
     async def dns(host, _port):
         return {"one.example": ["93.184.216.34"], "internal.example": ["192.168.1.3"]}[host]

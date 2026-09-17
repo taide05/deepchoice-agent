@@ -4,6 +4,7 @@ import time
 from .contracts import RetrievalRequest, RetrievalResult
 from .. import outbound as _outbound
 from ..budget_errors import BudgetError
+from ..outbound.throttle import ProviderAdmissionError
 from ..utils.views import print_agent_output
 
 
@@ -51,13 +52,14 @@ class BaseRetriever:
             # (proxy down, forward endpoint down, network blip). Tell the
             # channel layer so the next resolve() re-probes and re-routes;
             # harmless no-op for sources outside the channel layer (tavily).
-            try:
-                await _outbound.get_resolver().invalidate(self.source)
-            except Exception:
-                print_agent_output(
-                    f"Resolver invalidate failed for {self.source}",
-                    agent="RETRIEVER",
-                )
+            if not isinstance(e, ProviderAdmissionError):
+                try:
+                    await _outbound.get_resolver().invalidate(self.source)
+                except Exception:
+                    print_agent_output(
+                        f"Resolver invalidate failed for {self.source}",
+                        agent="RETRIEVER",
+                    )
             return RetrievalResult(
                 source=self.source,
                 status="failed",

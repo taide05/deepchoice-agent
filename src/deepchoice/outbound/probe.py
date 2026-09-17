@@ -12,6 +12,8 @@ from dataclasses import dataclass
 import httpx
 
 from .channels import BaseChannel
+from . import throttle
+from ..budget_errors import BudgetError
 
 
 @dataclass(frozen=True)
@@ -76,7 +78,14 @@ async def ok_for(source: str, client: httpx.AsyncClient) -> bool:
                 headers=headers,
             )
         else:
-            resp = await client.get(spec.url, params=spec.params, headers=headers)
+            # Probes consume real provider requests too. Route selection must
+            # share the business queue and publish backoff before releasing it.
+            async with throttle.gate_for(source).slot():
+                resp = await client.get(spec.url, params=spec.params, headers=headers)
+                limited = throttle.observe(source, resp, throttle.gate_for(source),
+                                           fallback=60.0 if source == "github" else 5.0)
+            if limited:
+                return True  # reachable route; health_check reports cooldown
         if source == "tavily":
             # Any completed 2xx-4xx HTTP response proves the route reached
             # Tavily. Authentication/method 4xx responses are intentionally
@@ -84,14 +93,9 @@ async def ok_for(source: str, client: httpx.AsyncClient) -> bool:
             return 200 <= resp.status_code < 500
         if resp.status_code in spec.ok_codes:
             return True
-        # Stack Exchange throttle (error_id 502) means the channel and auth are
-        # fine — it is a temporary per-IP rate limit, not unreachability.
-        # Treating it as "channel OK" keeps health checks truthful.
-        if source == "community" and resp.status_code == 400:
-            body = (resp.text or "")
-            if "throttle_violation" in body:
-                return True
         return False
+    except (BudgetError, throttle.ProviderAdmissionError):
+        raise
     except Exception:
         return False
 
@@ -125,5 +129,7 @@ async def probe_source(source: str, channel: BaseChannel,
     try:
         async with client_factory(source) as client:
             return await ok_for(source, client)
+    except (BudgetError, throttle.ProviderAdmissionError):
+        raise
     except Exception:
         return False
