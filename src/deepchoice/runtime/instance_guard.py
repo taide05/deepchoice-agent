@@ -7,6 +7,7 @@ import inspect
 import os
 import shlex
 import socket
+import time
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
@@ -93,6 +94,52 @@ class RuntimeInstanceGuard:
         self._clock = clock
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._acquired = False
+        self._expires_at: datetime | None = None
+        self._monotonic_expiry: float | None = None
+        self._last_success: float | None = None
+        self._renewal_ms: int | None = None
+        self._max_renewal_ms: int | None = None
+        self._max_heartbeat_gap_ms: int | None = None
+        self._renewals = 0
+
+    @property
+    def has_authority(self) -> bool:
+        valid = (
+            self._acquired and self._expires_at is not None
+            and self._monotonic_expiry is not None
+            and _utc(self._clock()) < self._expires_at
+            and time.monotonic() < self._monotonic_expiry
+        )
+        if not valid:
+            self._acquired = False
+        return valid
+
+    def observations(self) -> dict:
+        now = time.monotonic()
+        return {
+            "authority_valid": self.has_authority,
+            "heartbeat_success_age_ms": (
+                max(0, round((now - self._last_success) * 1000))
+                if self._last_success is not None else None
+            ),
+            "lease_remaining_ms": (
+                max(0, min(round((self._monotonic_expiry - now) * 1000),
+                           round((self._expires_at - _utc(self._clock())).total_seconds() * 1000)))
+                if self._expires_at is not None and self._monotonic_expiry is not None else None
+            ),
+            "renewal_ms": self._renewal_ms,
+            "max_renewal_ms": self._max_renewal_ms,
+            "max_heartbeat_gap_ms": self._max_heartbeat_gap_ms,
+            "renewals": self._renewals,
+        }
+
+    def _accepted(self, expiry: datetime, sampled: float) -> None:
+        if self._last_success is not None:
+            gap = max(0, round((sampled - self._last_success) * 1000))
+            self._max_heartbeat_gap_ms = max(self._max_heartbeat_gap_ms or 0, gap)
+        self._expires_at = expiry
+        self._monotonic_expiry = sampled + self._lease_seconds
+        self._last_success = sampled
 
     def _now_and_expiry(self) -> tuple[datetime, datetime]:
         now = _utc(self._clock())
@@ -103,6 +150,7 @@ class RuntimeInstanceGuard:
             await self._connection.execute("BEGIN IMMEDIATE")
             try:
                 now, expiry = self._now_and_expiry()
+                sampled = time.monotonic()
                 cursor = await self._connection.execute(
                     """
                     INSERT INTO runtime_instance_leases(
@@ -130,29 +178,42 @@ class RuntimeInstanceGuard:
                     )
                 await self._connection.commit()
                 self._acquired = True
+                self._accepted(expiry, sampled)
             except BaseException:
                 await self._connection.rollback()
                 raise
 
     async def renew_once(self) -> None:
-        if not self._acquired:
+        if not self.has_authority:
             raise RuntimeInstanceLeaseLostError("runtime instance lease is not held")
+        started = time.monotonic()
         async with self._lock:
-            # Lock wait consumes wall time. Never renew using a stale expiry or
-            # a pre-wait predicate that could revive an already expired lease.
-            now, expiry = self._now_and_expiry()
-            cursor = await self._connection.execute(
-                """
-                UPDATE runtime_instance_leases
-                SET lease_expires_at = ?
-                WHERE singleton = 1 AND owner_token = ? AND lease_expires_at > ?
-                """,
-                (expiry.isoformat(), self.owner_token, now.isoformat()),
-            )
-            if cursor.rowcount != 1:
+            try:
+                # Sampling must follow BOTH the shared lock and SQLite writer wait.
+                await self._connection.execute("BEGIN IMMEDIATE")
+                now, expiry = self._now_and_expiry()
+                sampled = time.monotonic()
+                if not self.has_authority:
+                    raise RuntimeInstanceLeaseLostError("runtime instance lease expired")
+                cursor = await self._connection.execute(
+                    """
+                    UPDATE runtime_instance_leases
+                    SET lease_expires_at = ?
+                    WHERE singleton = 1 AND owner_token = ? AND lease_expires_at > ?
+                    """,
+                    (expiry.isoformat(), self.owner_token, now.isoformat()),
+                )
+                if cursor.rowcount != 1:
+                    raise RuntimeInstanceLeaseLostError("runtime instance lease was lost")
+                await self._connection.commit()
+                self._accepted(expiry, sampled)
+                self._renewals += 1
+                self._renewal_ms = max(0, round((time.monotonic() - started) * 1000))
+                self._max_renewal_ms = max(self._max_renewal_ms or 0, self._renewal_ms)
+            except BaseException:
                 self._acquired = False
-                raise RuntimeInstanceLeaseLostError("runtime instance lease was lost")
-            await self._connection.commit()
+                await self._connection.rollback()
+                raise
 
     async def _heartbeat(
         self,
@@ -207,8 +268,9 @@ class RuntimeInstanceGuard:
                 # Lease-loss callbacks may include best-effort component
                 # shutdown. Always let release finish its own cleanup path.
                 pass
-        if not self._acquired:
-            return
+        # Cancellation may land after SQLite committed a renewal/acquisition
+        # but before its await returned. Cleanup is owner-scoped, not dependent
+        # on a local success flag; a replacement owner's row is never deleted.
         async with self._lock:
             await self._connection.execute(
                 "DELETE FROM runtime_instance_leases WHERE singleton = 1 AND owner_token = ?",

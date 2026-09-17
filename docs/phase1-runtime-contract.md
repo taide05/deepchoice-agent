@@ -283,3 +283,27 @@ O1 追加缓存用量观测只扩展 Trace usage/public observability：严格�
 - 短 conflict_scan 最大输出冻结为 512，其他 LLM call 仍 4096；请求和预算预留使用同一上限。schema v1 不变，历史 4096 scan manifest identity 可读但拒绝同 run 兼容。每 run 扫描/初次仲裁各四路，额外受全局门约束；预算 denial latch 不变，已派发调用在失败上抛前完成结算，不放宽标准硬预算。
 - 评测单次消费者只用 durable API；健康/身份/生命周期漂移停止新准入，不自动恢复或重复 POST。运行中用量缓存保留数字但不得冒充最终完整使用，非终态或最终刷新失败必须标为 incomplete；不修改公共 lifecycle/SSE 投影来迎合评测。
 - 仲裁 KB 工具复用默认 ChromaKB.retrieve，使用 tech_kb/BGE 查询而非旧 knowledge_base/query_texts；保持工具外层一次预算和 Trace，失败明确、安全，BudgetError 仍传播，不增加预算/租约例外或修改原知识库。
+
+## O1-B：批次前观测与最小可靠性补修（2026-09-17）
+
+用户批准的补修收口上节取时残余边界：默认 run acquire/heartbeat 传 clock，在共享锁与
+BEGIN IMMEDIATE writer 等待后取时；explicit now 保留旧调用/测试语义。实例续期同样显式
+写事务后取时，失败回滚/撤权；取消中 release 不依赖本地成功标志，按 owner 清理，不能删
+替代实例。实例本地已接受的 UTC/monotonic 有效窗口到期后 health 为 503，durable 写准入拒绝，
+不等失租回调才拒绝新请求。heartbeat 回调仍负责停止既有 coordinator；在途外部请求不可撤回，
+不能把 health 503 描述为瞬时停止所有 runner。
+
+同步 Chroma 构造、collection query 和默认/补证/冲突扫描模型获取移出事件循环，模型只初始化
+一次；线程取消不等于强制终止本地工作，后续产品写仍须原 fencing。单实例、30 秒/10 秒
+租约/心跳、恢复/取消/预算/lifecycle/event/checkpoint 语义及 schema 不变。
+
+health 增补进程内安全 runtime_observations 与 run_heartbeat，含成功年龄、剩余有效期、
+总续期/调度耗时与计数，不公开 owner/epoch/checkpoint 或原始错误，不是跨重启持久化日志。
+observability API 同一 latest-run 读快照增补 allowlisted failure_category、diagnostics 和
+run_failure_category；只公开 finish_reason、截断、严格/修复 JSON、实际 parser 次数及浅层
+结构状态，拒绝存储摘要中的任意其他字段。Trace 仍 best-effort，token/预算不改；成功传输可
+同时存在输出异常，不能单用 failed_calls 判结构可用。历史不回填，缺失保持 unknown。
+
+json_repair 兼容返回/重试不改，node-shape-v1 仅观测、不增加路由门；澄清多结构为 not_configured。
+评测逐调用与已知分母输出、旧探测资格、冷启动模式、离线故障与边界详见
+[O1-B 记录](o1b-prebatch-observability.md)。不因此批准真实 case 或批次、不证明蓝屏根因。

@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import sqlite3
+import time
 
 from dotenv import load_dotenv
 
@@ -148,10 +149,13 @@ def serve(root: Path, profile: str, port: int) -> None:
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
     from deepchoice.utils.embedding import get_embedding_model
+    warmup_started = time.monotonic()
     vector = get_embedding_model().encode("O1 embedding prerequisite")
     if len(vector) != 1024:
         raise ValueError("embedding dimension differs from frozen knowledge")
-    print(json.dumps({"embedding_warmed": True, "profile": profile}), flush=True)
+    print(json.dumps({"embedding_warmed": True, "embedding_startup_mode": "prewarmed",
+                      "embedding_warmup_ms": round((time.monotonic() - warmup_started) * 1000),
+                      "profile": profile}), flush=True)
     import uvicorn
     uvicorn.run("benchmarks.product_baseline_server:create_app", factory=True,
                 host="127.0.0.1", port=port, workers=1, log_level="warning")

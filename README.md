@@ -36,6 +36,14 @@ O1 评估协议已收口为 [v4](docs/product-effectiveness-optimization.md)：�
 O1-A 最终本机验收（2026-09-17，Python 3.12.4）：20 聚焦、1196 全套通过且无跳过，
 smoke 12/12 baseline 匹配、静态/依赖门禁通过；测试只验证工程/台账统计，不替代真实质量。
 
+O1-B 增补严格 JSON/浅层结构、修复 parser 实际次数、finish_reason/截断和安全失败分类，
+评测新增逐调用 diagnostics.csv / 已知分母摘要，历史缺失保持 unknown。
+run/实例租约等待后重新取时，冷本地工作移线程，health 对本地过期 lease 拒绝准入；
+观测、离线验证与停止线见 [O1-B 记录](docs/o1b-prebatch-observability.md)。
+不改 Prompt/冻结案例/硬预算，不跑真实 case；离线补修不证明真实冷启或并发效果。
+本机 O1-B 最终验收（2026-09-17，Python 3.12.4）：187 聚焦、1238 全套通过且无跳过，
+smoke-v1 12/12 baseline 匹配，静态/依赖门禁与独立复审无阻断；43/48 不变，批次继续暂停。
+
 ## 快速开始
 
 ```powershell

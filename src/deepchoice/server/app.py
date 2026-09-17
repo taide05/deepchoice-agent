@@ -96,6 +96,7 @@ async def lifespan(application: FastAPI):
             await run_migrations(connection)
         repository = SQLiteTaskRunRepository(connection, connection_lock)
         instance_guard = RuntimeInstanceGuard(connection, connection_lock)
+        application.state.runtime_instance_guard = instance_guard
         await instance_guard.acquire()
         application.state.runtime_instance_status = "active"
         application.state.legacy_import_status = "scheduled"
@@ -288,7 +289,9 @@ class RuntimeAuthorityUnavailableError(DeepChoiceError):
 
 
 def _require_runtime_authority(request: Request) -> None:
-    if getattr(request.app.state, "runtime_instance_status", None) == "lost":
+    guard = getattr(request.app.state, "runtime_instance_guard", None)
+    if (getattr(request.app.state, "runtime_instance_status", None) == "lost"
+            or guard is not None and not guard.has_authority):
         raise RuntimeAuthorityUnavailableError()
 
 
@@ -407,9 +410,16 @@ NODE_TO_PHASE = {
 @app.get("/health")
 async def health(request: Request):
     runtime_status = getattr(request.app.state, "runtime_instance_status", None)
+    guard = getattr(request.app.state, "runtime_instance_guard", None)
+    observations = guard.observations() if guard is not None else None
+    if observations is not None and not observations["authority_valid"]:
+        runtime_status = "lost"
+    coordinator = getattr(request.app.state, "run_coordinator", None)
     payload = {
         "status": "ok" if runtime_status == "active" else "unavailable",
         "runtime_instance": runtime_status,
+        "runtime_observations": observations,
+        "run_heartbeat": coordinator.heartbeat_observations() if coordinator is not None else None,
         "legacy_import": {
             "status": getattr(request.app.state, "legacy_import_status", None),
         },

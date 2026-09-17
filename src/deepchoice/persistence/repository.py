@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, runtime_checkable
 
@@ -286,6 +287,7 @@ class RunRepository(Protocol):
         lease_ttl: timedelta,
         run_timeout: timedelta,
         now: datetime | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> RunLeaseGrant: ...
 
     async def heartbeat_run_lease(
@@ -296,6 +298,7 @@ class RunRepository(Protocol):
         execution_epoch: int,
         lease_ttl: timedelta,
         now: datetime | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> RunLeaseGrant: ...
 
     async def fence_run(
@@ -792,21 +795,21 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         lease_ttl: timedelta,
         run_timeout: timedelta,
         now: datetime | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> RunLeaseGrant:
         if not lease_owner:
             raise ValueError("lease_owner must be non-empty")
         if lease_ttl <= timedelta(0) or run_timeout <= timedelta(0):
             raise ValueError("lease_ttl and run_timeout must be positive")
-        changed_at = now or datetime.now(UTC)
-        encoded_now = _datetime_to_db(changed_at)
-        lease_expires_at = changed_at + lease_ttl
-        deadline_at = changed_at + run_timeout
-
         async with self._lock:
             started = False
             try:
                 await self._begin()
                 started = True
+                changed_at = clock() if clock is not None else now or datetime.now(UTC)
+                encoded_now = _datetime_to_db(changed_at)
+                lease_expires_at = changed_at + lease_ttl
+                deadline_at = changed_at + run_timeout
                 run = await self._run_unlocked(run_id)
                 if run is None:
                     raise RunNotFoundError(run_id)
@@ -920,8 +923,8 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         execution_epoch: int,
         lease_ttl: timedelta,
         now: datetime | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> RunLeaseGrant:
-        changed_at = now or datetime.now(UTC)
         if not lease_owner or execution_epoch < 1 or lease_ttl <= timedelta(0):
             raise ValueError("invalid lease heartbeat")
         async with self._lock:
@@ -929,6 +932,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             try:
                 await self._begin()
                 started = True
+                changed_at = clock() if clock is not None else now or datetime.now(UTC)
                 run = await self._run_unlocked(run_id)
                 if (
                     run is None

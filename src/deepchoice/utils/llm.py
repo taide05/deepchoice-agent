@@ -13,6 +13,7 @@ from langchain_core.utils.json import parse_json_markdown
 from openai import APIConnectionError, AsyncOpenAI
 
 from deepchoice.security.redaction import redact_text
+from deepchoice.utils.call_diagnostics import exception_category, observe_output, output_failure
 from deepchoice.utils.token_usage import cache_totals, provider_usage, trace_usage
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
@@ -190,6 +191,7 @@ async def call_model(
     tag: str = "",
     extra_body: dict | None = None,
     seed: int | None = None,
+    diagnostics: list | None = None,
 ) -> dict | str:
     # Lazy to keep the historic agent/manifest import graph acyclic.
     from deepchoice.observability import (
@@ -300,10 +302,12 @@ async def call_model(
                     known_actuals={BudgetResource.LLM_CALLS: 1},
                 )
                 if trace is not None:
+                    cancelled_status = classify_cancelled_trace_status()
                     await trace.finish_external_call(
                         trace_call,
-                        status=classify_cancelled_trace_status(),
-                        result_summary={"retry_no": attempt},
+                        status=cancelled_status,
+                        result_summary={"retry_no": attempt, "failure_category":
+                                        "run_timeout" if cancelled_status == TraceStatus.TIMED_OUT else "cancelled"},
                     )
                 raise
             except Exception as e:
@@ -318,7 +322,7 @@ async def call_model(
                         trace_call,
                         status=(
                             TraceStatus.TIMED_OUT
-                            if isinstance(e, TimeoutError)
+                            if exception_category(e) == "provider_timeout"
                             else TraceStatus.FAILED
                         ),
                         result_summary={
@@ -329,6 +333,7 @@ async def call_model(
                             "error_status": status if isinstance(status, int) else None,
                             "retry_no": attempt,
                             "retryable": retryable,
+                            "failure_category": exception_category(e),
                         },
                     )
                 if not retryable or attempt >= _MAX_RETRIES:
@@ -348,6 +353,26 @@ async def call_model(
                         ),
                     },
                 )
+                content = response.choices[0].message.content
+                parsed, parse_ok = content, None
+                repair_attempts = 0
+                if response_format == "json":
+                    def repair_parser(value):
+                        nonlocal repair_attempts
+                        repair_attempts += 1
+                        return json_repair.loads(value)
+
+                    try:
+                        result = parse_json_markdown(content, parser=repair_parser)
+                        parsed = result if isinstance(result, dict) else {}
+                        parse_ok = isinstance(result, dict)
+                    except Exception:
+                        parsed, parse_ok = {}, False
+                observation = observe_output(
+                    response.choices[0], json_requested=response_format == "json",
+                    content=content, parsed=parsed, parse_ok=parse_ok,
+                    repair_attempts=repair_attempts, tag=tag,
+                )
                 if trace is not None:
                     await trace.finish_external_call(
                         trace_call,
@@ -357,6 +382,8 @@ async def call_model(
                                 (time.monotonic() - attempt_started) * 1000
                             ),
                             "retry_no": attempt,
+                            "diagnostics": observation,
+                            "failure_category": output_failure(observation),
                         },
                         usage_summary=call_usage,
                     )
@@ -370,9 +397,12 @@ async def call_model(
             "elapsed_ms": round((time.monotonic() - t0) * 1000),
             "usage": None,
             **_safe_error_metadata(e),
+            "failure_category": exception_category(e),
             **_content_metadata(prompt, "prompt"),
             **_content_metadata(None, "response"),
         }
+        if diagnostics is not None:
+            diagnostics.append({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         raise
 
@@ -391,13 +421,6 @@ async def call_model(
     content = response.choices[0].message.content
 
     if response_format == "json":
-        try:
-            result = parse_json_markdown(content, parser=json_repair.loads)
-            parsed: Any = result if isinstance(result, dict) else {}
-            parse_ok = isinstance(result, dict)
-        except Exception:
-            parsed = {}
-            parse_ok = False
         record = {
             "case_id": _current_case.get(),
             "tag": tag or tier,
@@ -410,9 +433,13 @@ async def call_model(
             "parse_ok": parse_ok,
             "parsed_type": type(parsed).__name__,
             "usage": usage_entry,
+            "diagnostics": observation,
+            "failure_category": output_failure(observation),
             **_content_metadata(prompt, "prompt"),
             **_content_metadata(content, "response"),
         }
+        if diagnostics is not None:
+            diagnostics.append({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
         return parsed
 
@@ -427,8 +454,12 @@ async def call_model(
         "error_status": None,
         "parsed_type": None,
         "usage": usage_entry,
+        "diagnostics": observation,
+        "failure_category": output_failure(observation),
         **_content_metadata(prompt, "prompt"),
         **_content_metadata(content, "response"),
     }
+    if diagnostics is not None:
+        diagnostics.append({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
     await _emit_record({key: redact_text(value) if key in {"case_id", "tag", "tier", "model"} else value for key, value in record.items()})
     return content

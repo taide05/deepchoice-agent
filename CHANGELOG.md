@@ -4,6 +4,10 @@
 
 ### Added
 
+- O1-B content-free prebatch observations: strict JSON vs repaired parsing, actual compatibility-parser invocation counts, observe-only node-shape-v1 checks, finish reason/truncation and safe call/run failure categories; additive public telemetry, diagnostic CSV/known-denominator summaries and explicit probe output qualification. Historical missing fields remain unknown; no prompt/case/budget changes or paid calls
+- User-approved O1-B reliability repairs: sample run acquisition/heartbeat clocks after shared/SQLite writer waits, transactional instance renewal, owner-scoped cleanup during cancellation, single-flight threaded embedding initialization and local Chroma work, expired-authority health/admission rejection. Offline faults and residual windows are documented in docs/o1b-prebatch-observability.md; O1-C/batches/O2 remain unauthorized
+- O1-B final validation (2026-09-17, Windows/Python 3.12.4): 187 focused / 1238 full-suite passed, zero skips, 211.83 seconds full suite; smoke-v1 12/12 baseline matched, pyflakes/vulture/pip/diff checks and independent read-only review passed. Real source/model/cold-case qualification not_run; no paid calls, quota unchanged at 43/48
+
 - O1-A evaluation closure: protocol v4 preserves frozen cases/rubric/budgets/concurrency thresholds while separating historical failures, six development reports and future new-candidate paired denominators. Identity-bound per-occurrence claim ledger and credential-free offline checker retain unknown/uncited claims; assistant, independent review and human-calibration qualifications remain explicit. No new paid research, holdout access, batch resumption or O2 authorization; quota stays 43/48
 - O1-A validation (2026-09-17, local Windows/Python 3.12.4): 20 focused and 1196 full-suite tests passed with no skips (192.12 seconds full suite), smoke-v1 12/12 baseline matched, static/dependency/diff checks passed. Six original report/snapshot hashes verified; independent assistant review resolved denominator omissions without claiming full rescoring or human calibration
 

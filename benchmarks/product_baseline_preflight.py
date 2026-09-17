@@ -23,17 +23,21 @@ async def probe() -> dict:
     load_dotenv()
     from deepchoice.utils.llm import TIERS, _get_client, call_model, deepseek_extra_body
     from deepchoice.utils.token_usage import provider_usage
+    from deepchoice.utils.call_diagnostics import observe_output, strict_json
 
     results = []
     usage: list[dict] = []
+    diagnostics: list[dict] = []
     try:
         content = await call_model(
             [{"role": "user", "content": 'Return JSON with the single boolean field "ok": true.'}],
             response_format="json", usage=usage,
             timeout=30, tag="o1-json-probe",
+            diagnostics=diagnostics,
         )
         results.append({"probe": "json", "passed": isinstance(content, dict) and content.get("ok") is True,
-                        "usage": usage})
+                        "usage": usage,
+                        "diagnostics": diagnostics[-1].get("diagnostics") if diagnostics else None})
     except Exception as exc:
         results.append({"probe": "json", "passed": False, **error_metadata(exc)})
     if results[-1]["passed"]:
@@ -50,14 +54,30 @@ async def probe() -> dict:
                     temperature=0, max_tokens=128, extra_body=deepseek_extra_body(),
                 )
             calls = response.choices[0].message.tool_calls or []
-            passed = bool(calls) and calls[0].function.name == "check" and json.loads(
-                calls[0].function.arguments).get("ok") is True
+            arguments = strict_json(calls[0].function.arguments) if calls else None
+            passed = bool(calls) and calls[0].function.name == "check" and isinstance(
+                arguments, dict) and arguments.get("ok") is True
+            tool_diagnostics = observe_output(
+                response.choices[0], json_requested=True,
+                content=calls[0].function.arguments if calls else None,
+                parsed=arguments, parse_ok=isinstance(arguments, dict), tag="check",
+            )
             results.append({"probe": "tools", "passed": passed, "response_model": response.model,
-                            "usage": provider_usage(response.usage) if response.usage else None})
+                            "usage": provider_usage(response.usage) if response.usage else None,
+                            "diagnostics": tool_diagnostics})
         except Exception as exc:
             results.append({"probe": "tools", "passed": False, **error_metadata(exc)})
+    qualification_known = len(results) == 2 and all(
+        isinstance(item.get("diagnostics"), dict)
+        and item["diagnostics"].get("truncated") is not None for item in results)
+    qualified = qualification_known and all(
+        (item.get("diagnostics") or {}).get("json_status") == "strict"
+        and (item.get("diagnostics") or {}).get("schema_status") == "valid"
+        and (item.get("diagnostics") or {}).get("truncated") is False for item in results
+    )
     return {"schema_version": 1, "model_id": TIERS["deepseek-flash"]["model"],
-            "passed": len(results) == 2 and all(item["passed"] for item in results),
+            "output_qualification": "passed" if qualified else "failed" if qualification_known else "unavailable",
+            "passed": qualified and all(item["passed"] for item in results),
             "results": results, "research_runs_submitted": 0}
 
 

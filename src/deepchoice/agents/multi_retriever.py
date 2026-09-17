@@ -10,6 +10,7 @@ from ..observability import ExternalCallKind, TraceStatus, current_trace_recorde
 from ..runtime.context import classify_cancelled_trace_status, get_run_context
 from ..budget_errors import BudgetError
 from ..utils.views import print_agent_output
+from ..utils.call_diagnostics import exception_category, retrieval_failure
 
 
 def _is_too_generic(sub_questions: list[str]) -> bool:
@@ -46,7 +47,7 @@ async def _invoke_retriever_untraced(
     request: RetrievalRequest | None = None,
 ) -> tuple[object, bool]:
     try:
-        retriever = cls()
+        retriever = await asyncio.to_thread(cls) if name == "chroma" else cls()
     except BudgetError:
         raise
     except Exception as exc:
@@ -180,8 +181,10 @@ async def _invoke_retriever_miss(
             reservations, {BudgetResource.RETRIEVAL_CALLS: 1}
         )
         if trace is not None:
+            cancelled_status = classify_cancelled_trace_status()
             await trace.finish_external_call(
-                trace_call, status=classify_cancelled_trace_status()
+                trace_call, status=cancelled_status,
+                result_summary={"failure_category": "run_timeout" if cancelled_status == TraceStatus.TIMED_OUT else "cancelled"},
             )
         raise
     except Exception as exc:
@@ -192,7 +195,7 @@ async def _invoke_retriever_miss(
             await trace.finish_external_call(
                 trace_call,
                 status=TraceStatus.FAILED,
-                result_summary={"error_type": type(exc).__name__},
+                result_summary={"error_type": type(exc).__name__, "failure_category": exception_category(exc)},
             )
         raise
 
@@ -203,11 +206,11 @@ async def _invoke_retriever_miss(
         result = RetrievalResult.model_validate(raw_result)
     except Exception:
         trace_status = TraceStatus.FAILED
-        summary = {"retrieval_status": "invalid_contract"}
+        summary = {"retrieval_status": "invalid_contract", "failure_category": "retrieval_contract_error"}
     else:
         if is_stable and result.source != name:
             trace_status = TraceStatus.FAILED
-            summary = {"retrieval_status": "invalid_contract"}
+            summary = {"retrieval_status": "invalid_contract", "failure_category": "retrieval_contract_error"}
         else:
             trace_status = (
                 TraceStatus.FAILED
@@ -218,6 +221,7 @@ async def _invoke_retriever_miss(
                 "retrieval_status": result.status,
                 "result_count": len(result.results),
                 "latency_ms": result.latency_ms,
+                "failure_category": retrieval_failure(result.error) if result.status == "failed" else None,
             }
     if trace is not None:
         await trace.finish_external_call(

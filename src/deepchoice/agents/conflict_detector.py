@@ -11,6 +11,17 @@ from ..utils.embedding import get_embedding_model
 from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, deepseek_extra_body, summarize_usage
 from ..utils.token_usage import provider_usage, trace_usage
 from ..utils.views import print_agent_output
+from ..utils.call_diagnostics import (
+    FAILURE_CATEGORIES, exception_category, observe_output, output_failure, safe_error_category,
+)
+
+
+def _tool_error(exc: Exception) -> str:
+    payload = {"error": type(exc).__name__}
+    category = exception_category(exc)
+    if category != "provider_error":
+        payload["failure_category"] = category
+    return json.dumps(payload)
 
 # ---------------------------------------------------------------------------
 # Conflict scan, arbitration and re-arbitration share the DeepSeek gate.
@@ -175,7 +186,7 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
         except BudgetError:
             raise
         except Exception as exc:
-            return json.dumps({"error": type(exc).__name__})
+            return _tool_error(exc)
 
     elif tool_name == "search_scholarly":
         import urllib.parse
@@ -203,7 +214,7 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
         except BudgetError:
             raise
         except Exception as exc:
-            return json.dumps({"error": type(exc).__name__})
+            return _tool_error(exc)
 
     elif tool_name == "search_kb":
         try:
@@ -212,7 +223,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
 
             # Use the default tech_kb/BGE embedding contract, not Chroma's
             # unrelated default query_texts embedding or a retired collection.
-            result = await ChromaKB().retrieve(
+            retriever = await asyncio.to_thread(ChromaKB)
+            result = await retriever.retrieve(
                 RetrievalRequest(query=query, max_results=max_results)
             )
             if result.status != "success":
@@ -227,7 +239,7 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
         except BudgetError:
             raise
         except Exception as exc:
-            return json.dumps({"error": type(exc).__name__})
+            return _tool_error(exc)
 
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -241,6 +253,12 @@ def _tool_failure_category(result: str) -> str | None:
         return None
     if not isinstance(payload, dict) or "error" not in payload:
         return None
+    category = payload.get("failure_category")
+    if isinstance(category, str) and category in FAILURE_CATEGORIES:
+        return category
+    category = safe_error_category(str(payload.get("error", "")))
+    if category != "provider_error":
+        return category
     error = str(payload.get("error", "")).lower()
     if "unknown tool" in error:
         return "unsupported_tool"
@@ -353,8 +371,10 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 known_actuals={BudgetResource.LLM_CALLS: 1},
             )
             if trace is not None:
+                cancelled_status = classify_cancelled_trace_status()
                 await trace.finish_external_call(
-                    trace_call, status=classify_cancelled_trace_status()
+                    trace_call, status=cancelled_status,
+                    result_summary={"failure_category": "run_timeout" if cancelled_status == TraceStatus.TIMED_OUT else "cancelled"},
                 )
             raise
         except TimeoutError:
@@ -364,7 +384,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             )
             if trace is not None:
                 await trace.finish_external_call(
-                    trace_call, status=TraceStatus.TIMED_OUT
+                    trace_call, status=TraceStatus.TIMED_OUT,
+                    result_summary={"failure_category": "provider_timeout"},
                 )
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
@@ -383,7 +404,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 await trace.finish_external_call(
                     trace_call,
                     status=TraceStatus.FAILED,
-                    result_summary={"error_type": type(exc).__name__},
+                    result_summary={"error_type": type(exc).__name__,
+                                    "failure_category": exception_category(exc)},
                 )
             print_agent_output("Evidence gathering LLM error", agent="CONFLICT_DETECTOR")
             break
@@ -405,6 +427,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 trace_call,
                 status=TraceStatus.SUCCEEDED,
                 usage_summary=call_usage,
+                result_summary={"diagnostics": observe_output(response.choices[0]),
+                                "failure_category": output_failure(observe_output(response.choices[0]))},
             )
 
         # Capture allowlisted usage through the same helper as call_model so the
@@ -462,8 +486,14 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 raise
             try:
                 arguments = json.loads(tc.function.arguments)
+                arguments_parse_ok = isinstance(arguments, dict)
             except json.JSONDecodeError:
                 arguments = {}
+                arguments_parse_ok = False
+            tool_diagnostics = observe_output(
+                None, json_requested=True, content=tc.function.arguments,
+                parsed=arguments, parse_ok=arguments_parse_ok, tag=tc.function.name,
+            )
             try:
                 result = await asyncio.wait_for(
                     _execute_search(tc.function.name, arguments),
@@ -475,8 +505,11 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     {BudgetResource.RETRIEVAL_CALLS: 1},
                 )
                 if trace is not None:
+                    cancelled_status = classify_cancelled_trace_status()
                     await trace.finish_external_call(
-                        tool_trace, status=classify_cancelled_trace_status()
+                        tool_trace, status=cancelled_status,
+                        result_summary={"failure_category": "run_timeout" if cancelled_status == TraceStatus.TIMED_OUT else "cancelled",
+                                        "diagnostics": tool_diagnostics},
                     )
                 raise
             except TimeoutError:
@@ -487,7 +520,8 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
                 if trace is not None:
                     await trace.finish_external_call(
-                        tool_trace, status=TraceStatus.TIMED_OUT
+                        tool_trace, status=TraceStatus.TIMED_OUT,
+                        result_summary={"failure_category": "provider_timeout", "diagnostics": tool_diagnostics},
                     )
             except BudgetError:
                 await settle_call(
@@ -505,7 +539,9 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     await trace.finish_external_call(
                         tool_trace,
                         status=TraceStatus.FAILED,
-                        result_summary={"error_type": type(exc).__name__},
+                        result_summary={"error_type": type(exc).__name__,
+                                        "failure_category": exception_category(exc),
+                                        "diagnostics": tool_diagnostics},
                     )
             else:
                 await settle_call(
@@ -521,11 +557,10 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                             if failure_category is not None
                             else TraceStatus.SUCCEEDED
                         ),
-                        result_summary=(
-                            {"failure_category": failure_category}
-                            if failure_category is not None
-                            else {"result_chars": len(result)}
-                        ),
+                        result_summary={
+                            "failure_category": failure_category or output_failure(tool_diagnostics),
+                            "diagnostics": tool_diagnostics,
+                        },
                     )
             return tc.id, result
 
@@ -596,7 +631,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     Pipeline: BGE similarity pre-filter → LLM contradiction scan
     (replaces old negation-word matching).
     """
-    model = get_embedding_model()
+    model = await asyncio.to_thread(get_embedding_model)
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
         return []

@@ -19,6 +19,7 @@ from deepchoice.contracts.api import (
 )
 from deepchoice.persistence.repository import TaskNotFoundError
 from deepchoice.utils.token_usage import CACHE_FIELDS, cache_totals, public_usage
+from deepchoice.utils.call_diagnostics import public_call_result, run_failure
 
 
 _TOKEN_FIELDS = ("input_tokens", "output_tokens", "total_tokens")
@@ -389,7 +390,8 @@ class SQLiteObservabilityQuery:
                     SELECT ec.kind, ec.provider, ec.operation, ec.call_no,
                            ec.status, ec.started_at, ec.ended_at,
                            ec.usage_summary_json, ec.request_summary_json,
-                           na.node_name, na.node_attempt_id, na.execution_epoch
+                           na.node_name, na.node_attempt_id, na.execution_epoch,
+                           ec.result_summary_json
                     FROM external_calls AS ec
                     JOIN node_attempts AS na
                       ON na.run_id = ec.run_id
@@ -466,6 +468,7 @@ class SQLiteObservabilityQuery:
                     duration_ms=_duration_ms(str(row[5]), str(row[6]) if row[6] else None),
                     usage=usage or None,
                     cache_usage_complete=kind == "llm" and all(field in usage for field in CACHE_FIELDS),
+                    **public_call_result(row[12]),
                 )
             )
 
@@ -486,6 +489,7 @@ class SQLiteObservabilityQuery:
         return TaskObservabilityResponse(
             task_id=task_id,
             run_id=run_id,
+            run_failure_category=run_failure(run_status, run_error_id),
             availability="available" if trace_available else "unavailable",
             unavailable_reason=None if trace_available else "trace_not_recorded",
             budget_policy_availability=(

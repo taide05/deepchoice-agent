@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 from typing_extensions import Annotated
 
 from deepchoice.hitl import DecisionResolution
+from deepchoice.utils.call_diagnostics import CallDiagnostics
 
 from ..security.input_limits import MAX_RESEARCH_TEXT_CHARS, validate_safe_text
 
@@ -190,6 +191,8 @@ class ObservabilityExternalCallResponse(BaseModel):
     duration_ms: int | None = None
     usage: dict[str, int] | None = None
     cache_usage_complete: bool = False
+    failure_category: str | None = None
+    diagnostics: CallDiagnostics | None = None
 
 
 class ObservabilityTotalsResponse(BaseModel):
@@ -261,6 +264,7 @@ class TaskObservabilityResponse(BaseModel):
     schema_version: Literal[1] = 1
     task_id: str
     run_id: str | None = None
+    run_failure_category: str | None = None
     availability: Literal["available", "unavailable"]
     unavailable_reason: Literal[
         "no_latest_run", "latest_run_missing", "trace_not_recorded"

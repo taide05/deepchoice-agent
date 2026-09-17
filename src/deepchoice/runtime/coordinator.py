@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import re
+import time
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -289,6 +290,25 @@ class RunCoordinator:
         self._active_lock = asyncio.Lock()
         self._recovery_task: asyncio.Task[None] | None = None
         self._stopping = False
+        self._heartbeat_successes = 0
+        self._heartbeat_failures = 0
+        self._heartbeat_lease_losses = 0
+        self._max_heartbeat_lag_ms: int | None = None
+        self._max_heartbeat_renewal_ms: int | None = None
+        self._heartbeat_last_success: dict[str, float] = {}
+
+    def heartbeat_observations(self) -> dict:
+        now = time.monotonic()
+        ages = [max(0, round((now - value) * 1000)) for run_id, value in
+                self._heartbeat_last_success.items() if run_id in self._active]
+        return {
+            "successes": self._heartbeat_successes,
+            "failures": self._heartbeat_failures,
+            "lease_losses": self._heartbeat_lease_losses,
+            "max_schedule_lag_ms": self._max_heartbeat_lag_ms,
+            "max_renewal_ms": self._max_heartbeat_renewal_ms,
+            "oldest_active_success_age_ms": max(ages) if ages else None,
+        }
 
     def configure_trace_store(self, trace_store: SQLiteTraceStore) -> None:
         """Attach the composition-root trace store before execution starts."""
@@ -403,23 +423,35 @@ class RunCoordinator:
     ) -> None:
         try:
             while True:
+                expected = time.monotonic() + self.heartbeat_interval.total_seconds()
                 await asyncio.sleep(self.heartbeat_interval.total_seconds())
+                started = time.monotonic()
+                lag = max(0, round((started - expected) * 1000))
+                self._max_heartbeat_lag_ms = max(self._max_heartbeat_lag_ms or 0, lag)
                 renewed = await self.repository.heartbeat_run_lease(
                     run_id,
                     lease_owner=self.owner_id,
                     execution_epoch=execution_epoch,
                     lease_ttl=self.lease_ttl,
-                    now=self._clock(),
+                    clock=self._clock,
                 )
+                elapsed = max(0, round((time.monotonic() - started) * 1000))
+                self._max_heartbeat_renewal_ms = max(self._max_heartbeat_renewal_ms or 0, elapsed)
+                self._heartbeat_successes += 1
+                self._heartbeat_last_success[run_id] = time.monotonic()
                 if renewed.status is RunStatus.CANCELLING:
                     if not runner.done():
                         runner.cancel()
                     return
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            self._heartbeat_failures += 1
+            self._heartbeat_lease_losses += isinstance(exc, RunLeaseLostError)
             if not runner.done():
                 runner.cancel()
+        finally:
+            self._heartbeat_last_success.pop(run_id, None)
 
     async def _finalize(
         self,
@@ -535,7 +567,7 @@ class RunCoordinator:
                     lease_owner=self.owner_id,
                     lease_ttl=self.lease_ttl,
                     run_timeout=self.run_timeout,
-                    now=self._clock(),
+                    clock=self._clock,
                 ),
                 name=f"deepchoice-lease-acquire-{run_id}",
             )

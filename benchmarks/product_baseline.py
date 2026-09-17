@@ -8,6 +8,7 @@ case can call paid LLM and retrieval services.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import asyncio
 import csv
 import hashlib
@@ -244,6 +245,11 @@ class DurableBaselineCollector:
             self._abort_reason = "RUNTIME_HEALTH_UNAVAILABLE"
             return False
         if response.status_code != 200 or not payload or payload.get("runtime_instance") != "active":
+            self._abort_reason = "RUNTIME_HEALTH_UNAVAILABLE"
+            return False
+        self._last_runtime_observations = payload.get("runtime_observations")
+        self._last_run_heartbeat = payload.get("run_heartbeat")
+        if isinstance(self._last_runtime_observations, dict) and self._last_runtime_observations.get("authority_valid") is False:
             self._abort_reason = "RUNTIME_HEALTH_UNAVAILABLE"
             return False
         return True
@@ -532,6 +538,9 @@ class DurableBaselineCollector:
         record["ended_at"] = _utc_now()
         record["wall_time_ms"] = round((time.monotonic() - started) * 1000)
         record["usage"] = record_usage_projection(record)
+        record["runtime_observations"] = getattr(self, "_last_runtime_observations", None)
+        record["run_heartbeat"] = getattr(self, "_last_run_heartbeat", None)
+        record["diagnostics"] = diagnostic_projection(record)
         async with self._write_lock:
             with (self.output_dir / "runs.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
@@ -540,6 +549,37 @@ class DurableBaselineCollector:
         print(json.dumps({"case_id": record["case_id"], "status": record["status"],
                           "usage": record["usage"], "wall_time_ms": record["wall_time_ms"]}), flush=True)
         return record
+
+
+def diagnostic_projection(record: dict[str, Any]) -> dict:
+    """Known-call denominators, never infer success from missing historical fields."""
+    observation = record.get("observability") or {}
+    calls = observation.get("calls") or []
+    llm = [call for call in calls if call.get("kind") == "llm"]
+    known = [call["diagnostics"] for call in llm if isinstance(call.get("diagnostics"), dict)]
+    json_calls = [item for item in known if item.get("json_status") not in {None, "not_requested"}]
+    repairs = [item["repair_attempts"] for item in json_calls if type(item.get("repair_attempts")) is int]
+    return {
+        "run_failure_category": observation.get("run_failure_category"),
+        "collector_error_code": record.get("error_code"),
+        "observed_llm_calls": len(llm) if observation.get("availability") == "available" else None,
+        "diagnostic_known_calls": len(known),
+        "diagnostic_missing_calls": len(llm) - len(known) if observation.get("availability") == "available" else None,
+        "finish_reason_known_calls": sum(item.get("finish_reason") is not None for item in known),
+        "truncated_calls": sum(item.get("truncated") is True for item in known),
+        "json_observed_calls": len(json_calls),
+        "strict_json_calls": sum(item.get("json_status") == "strict" for item in json_calls),
+        "strict_json_rate": sum(item.get("json_status") == "strict" for item in json_calls) / len(json_calls) if json_calls else None,
+        "repair_attempts_known_calls": sum(type(item.get("repair_attempts")) is int for item in json_calls),
+        "repair_attempts": sum(repairs) if repairs else None,
+        "schema_checked_calls": sum(item.get("schema_status") in {"valid", "invalid"} for item in json_calls),
+        "schema_valid_calls": sum(item.get("schema_status") == "valid" for item in json_calls),
+        "schema_invalid_calls": sum(item.get("schema_status") == "invalid" for item in json_calls),
+        "failure_categories": dict(Counter(
+            call["failure_category"] for call in calls if call.get("failure_category"))),
+        "observation_final": record.get("observability_final", False),
+        "qualification": "not_evaluated",
+    }
 
 
 def usage_projection(observability: dict[str, Any] | None) -> dict[str, Any]:
@@ -662,6 +702,23 @@ def write_collection_summary(output_dir: Path, records: list[dict[str, Any]]) ->
     succeeded = sum(bool(record.get("report_path")) for record in records)
     timed_out = sum(bool(record.get("collector_timeout")) for record in records)
     total_wall = sum(int(record.get("wall_time_ms") or 0) for record in records)
+    diagnostic_fields = ["case_id", "run_id", "kind", "node_name", "node_attempt_no",
+                         "provider", "call_no", "retry_no", "status", "failure_category",
+                         "policy", "finish_reason", "truncated", "json_status",
+                         "repair_attempts", "parse_ok", "schema_status"]
+    with (output_dir / "diagnostics.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=diagnostic_fields)
+        writer.writeheader()
+        for record in sorted(records, key=lambda item: item["case_id"]):
+            for call in (record.get("observability") or {}).get("calls") or []:
+                row = {**call, **(call.get("diagnostics") or {}),
+                       "case_id": record["case_id"], "run_id": record.get("run_id")}
+                writer.writerow({field: row.get(field) for field in diagnostic_fields})
+    (output_dir / "diagnostics-summary.json").write_text(json.dumps({
+        "policy": "node-shape-v1", "case_denominator": len(records),
+        "cases": [{"case_id": record["case_id"], **diagnostic_projection(record)} for record in records],
+        "live_qualification": "not_evaluated",
+    }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     usage_fields = ["case_id", "status", "wall_time_ms", "input_tokens", "output_tokens",
                     "total_tokens", "token_usage_complete", "llm_calls", "retrieval_calls",
                     "http_calls", "llm_retries", "failed_calls", "price_availability",

@@ -20,14 +20,15 @@ class ChromaKB(BaseRetriever):
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
-        model = get_embedding_model()
+        model = await asyncio.to_thread(get_embedding_model)
         queries = adapted_queries if adapted_queries else [query] + sub_questions[:2]
         all_results = []
         seen_urls = set()
 
         for q in queries:
             q_embedding = (await asyncio.to_thread(model.encode, q)).tolist()
-            results = self.collection.query(
+            results = await asyncio.to_thread(
+                self.collection.query,
                 query_embeddings=[q_embedding],
                 n_results=max(3, max_results // len(queries)),
             )
