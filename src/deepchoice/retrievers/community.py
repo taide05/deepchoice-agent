@@ -1,8 +1,8 @@
-import os
 from datetime import UTC, datetime
 
 from .. import outbound as _outbound
 from ..outbound import throttle
+from ..outbound.credentials import stackexchange_params
 from .base import BaseRetriever
 
 
@@ -12,10 +12,8 @@ class CommunitySearch(BaseRetriever):
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
         keywords = (adapted_queries[0] if adapted_queries else query).replace(" vs ", " ").replace(" versus ", " ")[:150]
-        params = {"intitle": keywords, "site": "stackoverflow",
-                  "pagesize": max(2, max_results), "order": "desc", "sort": "votes"}
-        if key := os.getenv("STACKEXCHANGE_API_KEY", ""):
-            params["key"] = key
+        params = stackexchange_params({"intitle": keywords, "site": "stackoverflow",
+                                      "pagesize": max(2, max_results), "order": "desc", "sort": "votes"})
         # Resolve/probe first; never hold the provider slot while its route
         # probe tries to enter the same shared queue.
         async with await _outbound.make_client("community") as client:

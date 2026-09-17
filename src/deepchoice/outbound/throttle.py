@@ -35,6 +35,13 @@ class RequestGate:
 
     Thread-owned state avoids asyncio primitives bound to a previous event loop.
     Waiting tasks own no in-flight permit; each retry joins the queue again.
+    The interval separates committed permit grants (sampled under the lock),
+    not client invocation timestamps or physical packets. Caller scheduling,
+    connection setup and a relay can delay/reorder those later observations.
+    The permit remains active until slot exit, including such caller delays.
+    Already granted callers are not revoked by subsequent cooldown feedback;
+    queued callers must observe it before their own grant. This local admission
+    policy cannot guarantee provider quota availability on a shared exit IP.
     """
 
     def __init__(self, *, interval=0.0, concurrency=1):

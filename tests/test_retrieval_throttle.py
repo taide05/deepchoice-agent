@@ -14,6 +14,7 @@ from deepchoice import outbound
 from deepchoice.retrievers import arxiv_api, github_rate, tavily_keypool
 from deepchoice.outbound import throttle
 from deepchoice.outbound.probe import ok_for
+from deepchoice.outbound.probe import PROBES
 from deepchoice.retrievers.community import CommunitySearch
 from deepchoice.budget_errors import BudgetExceededError
 
@@ -36,6 +37,110 @@ def response(status=200, *, headers=None, body=None, xml=False):
     return httpx.Response(status, headers=headers, json=body if not xml else None,
                           text='<feed xmlns="http://www.w3.org/2005/Atom"/>' if xml else None,
                           request=httpx.Request("GET", "https://provider.example/search"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", [None, "", "fixture-key-one", "fixture-key-two"])
+async def test_community_probe_and_search_share_request_local_credentials(key, virtual_clock, monkeypatch):
+    from deepchoice.outbound.channels import OutboundConfig
+    from deepchoice.outbound.resolver import ChannelResolver
+
+    if key is None:
+        monkeypatch.delenv("STACKEXCHANGE_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("STACKEXCHANGE_API_KEY", key)
+    static_params = dict(PROBES["community"].params)
+    calls = []
+
+    @asynccontextmanager
+    async def client():
+        async def get(url, **kwargs):
+            calls.append((url, dict(kwargs["params"])))
+            return response(body={"items": []})
+        yield SimpleNamespace(get=get)
+
+    resolver = ChannelResolver(
+        cfg=OutboundConfig(channel_order=("self-forward",)),
+        channels=[SimpleNamespace(name="self-forward", kind="self-forward")],
+    )
+    monkeypatch.setattr(resolver, "_make_client", lambda _: client())
+    health = await resolver.health_check(["community"])
+    monkeypatch.setattr(outbound, "make_client", AsyncMock(side_effect=lambda _: client()))
+    result = await CommunitySearch().search("fixture", [])
+
+    assert health["ok"] and result["status"] == "success"
+    assert len(calls) == 2
+    for _, params in calls:
+        assert params.get("key") == (key or None)
+        assert ("key" in params) is bool(key)
+    assert PROBES["community"].params == static_params and "key" not in static_params
+    if key:
+        assert key not in repr(resolver.summary()) + repr(health) + repr(result) + repr(PROBES)
+    # Re-read on every request: neither adding, rotating nor removing a key
+    # may leave credentials in the immutable, process-wide probe spec.
+    monkeypatch.setenv("STACKEXCHANGE_API_KEY", "fixture-rotated")
+    rotated_get = AsyncMock(return_value=response())
+    assert await ok_for("community", SimpleNamespace(get=rotated_get))
+    assert rotated_get.await_args.kwargs["params"]["key"] == "fixture-rotated"
+    monkeypatch.delenv("STACKEXCHANGE_API_KEY", raising=False)
+    get = AsyncMock(return_value=response())
+    assert await ok_for("community", SimpleNamespace(get=get))
+    assert "key" not in get.await_args.kwargs["params"]
+    assert PROBES["community"].params == static_params
+    monkeypatch.setenv("STACKEXCHANGE_API_KEY", "fixture-must-stay-community-only")
+    other_get = AsyncMock(return_value=response(xml=True))
+    assert await ok_for("arxiv", SimpleNamespace(get=other_get))
+    assert "key" not in other_get.await_args.kwargs["params"]
+
+
+@pytest.mark.asyncio
+async def test_admission_interval_does_not_promise_delayed_client_start_spacing(virtual_clock):
+    gate = throttle.RequestGate(interval=3.0, concurrency=1)
+    grants, client_starts = [], []
+    async with gate.slot():
+        grants.append(virtual_clock[0])
+        assert gate._active == 1
+        virtual_clock[0] = 4.0  # delay after grant, before entering the client
+        client_starts.append(virtual_clock[0])
+    async with gate.slot():
+        grants.append(virtual_clock[0])
+        client_starts.append(virtual_clock[0])
+    assert grants == [0.0, 4.0] and grants[1] - grants[0] >= gate.interval
+    assert client_starts == [4.0, 4.0]  # not evidence of a broken grant interval
+    assert gate._active == 0 and not gate._queue
+
+
+@pytest.mark.asyncio
+async def test_fifo_grants_and_concurrency_are_deterministic(virtual_clock):
+    gate = throttle.RequestGate(interval=2.0, concurrency=2)
+    grants = []
+    first_two = asyncio.Event()
+    release = asyncio.Event()
+
+    async def worker(index):
+        async with gate.slot():
+            grants.append((index, virtual_clock[0], gate._active))
+            if len(grants) == 2:
+                first_two.set()
+            if index < 2:
+                await release.wait()
+
+    jobs = [asyncio.create_task(worker(index)) for index in range(4)]
+    try:
+        await asyncio.wait_for(first_two.wait(), timeout=5.0)
+        assert [index for index, _, _ in grants] == [0, 1]
+        assert gate._active == 2 and len(gate._queue) == 2
+        release.set()
+        await asyncio.wait_for(asyncio.gather(*jobs), timeout=5.0)
+    finally:
+        for job in jobs:
+            if not job.done():
+                job.cancel()
+        await asyncio.gather(*jobs, return_exceptions=True)
+    assert [index for index, _, _ in grants] == list(range(4))
+    assert all(b[1] - a[1] >= 2.0 for a, b in zip(grants, grants[1:]))
+    assert max(active for _, _, active in grants) == 2
+    assert gate._active == 0 and not gate._queue
 
 
 @pytest.mark.asyncio
@@ -429,21 +534,18 @@ async def test_tavily_fanout_drains_siblings_before_client_closes(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mocked_twelve_cases_retain_six_source_results(monkeypatch):
+async def test_mocked_twelve_cases_retain_six_source_results(monkeypatch, virtual_clock):
     """Scheduling integration only: real adapters, synthetic HTTP and local KB.
 
-    Time is scaled, with all per-provider pacing/concurrency logic retained.
+    Virtual time retains unscaled admission intervals and concurrency logic.
+    Grant timestamps, not later client starts, validate the pacing contract.
     No real research queries, model, socket, embedding or local knowledge writes.
     """
     from deepchoice.agents import multi_retriever
     from deepchoice.retrievers import RETRIEVER_REGISTRY, chroma_kb, official
 
-    scale = 0.001
-    for source in ("arxiv", "community", "official", "official-web"):
-        throttle.gate_for(source).interval *= scale
-    monkeypatch.setattr(github_rate, "interval_s", lambda: 6 * scale)
+    monkeypatch.setattr(github_rate, "interval_s", lambda: 6.0)
     tavily_keypool._reset_for_tests()
-    monkeypatch.setattr(tavily_keypool, "_KEY_INTERVAL_S", 12 * scale)
     monkeypatch.setattr(tavily_keypool, "_pool", ["fixture-only"])
     monkeypatch.setattr(tavily_keypool, "_probed", True)
     monkeypatch.setattr(multi_retriever, "harvest", lambda *args, **kwargs: [])
@@ -460,6 +562,21 @@ async def test_mocked_twelve_cases_retain_six_source_results(monkeypatch):
 
     monkeypatch.setattr(chroma_kb.ChromaKB, "__init__", kb_init)
     starts = {source: [] for source in ("arxiv", "community", "github", "official", "tavily")}
+    grants = {source: [] for source in starts}
+    provider_gates = {throttle.gate_for(source): source for source in starts if source != "tavily"}
+    original_slot = throttle.RequestGate.slot
+
+    @asynccontextmanager
+    async def observed_slot(gate, **kwargs):
+        async with original_slot(gate, **kwargs):
+            source = provider_gates.get(gate)
+            if source is None and gate in tavily_keypool._key_gates.values():
+                source = "tavily"
+            if source in grants:
+                grants[source].append((virtual_clock[0], gate._active))
+            yield
+
+    monkeypatch.setattr(throttle.RequestGate, "slot", observed_slot)
 
     @asynccontextmanager
     async def client(source):
@@ -495,4 +612,8 @@ async def test_mocked_twelve_cases_retain_six_source_results(monkeypatch):
     assert all(normalized(result) == normalized(single) for result in concurrent)
     for source, interval in (("arxiv", 3), ("community", 1), ("github", 6), ("official", 0.5), ("tavily", 12)):
         assert len(starts[source]) >= 13
-        assert all(b - a >= interval * scale * 0.9 for a, b in zip(starts[source], starts[source][1:]))
+        assert len(grants[source]) == len(starts[source])
+        assert all(b[0] - a[0] >= interval for a, b in zip(grants[source], grants[source][1:]))
+        assert max(active for _, active in grants[source]) <= (2 if source in {"github", "official"} else 1)
+    assert all(gate._active == 0 and not gate._queue for gate in
+               [*provider_gates, *tavily_keypool._key_gates.values()])

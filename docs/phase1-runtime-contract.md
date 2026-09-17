@@ -307,3 +307,24 @@ run_failure_category；只公开 finish_reason、截断、严格/修复 JSON、�
 json_repair 兼容返回/重试不改，node-shape-v1 仅观测、不增加路由门；澄清多结构为 not_configured。
 评测逐调用与已知分母输出、旧探测资格、冷启动模式、离线故障与边界详见
 [O1-B 记录](o1b-prebatch-observability.md)。不因此批准真实 case 或批次、不证明蓝屏根因。
+
+## O1-C：社区凭据与节拍契约澄清（2026-09-17）
+
+社区 route probe 和业务检索共用请求局部的可选 `STACKEXCHANGE_API_KEY` 参数构造；
+每次构造参数时读取当前环境，复制非敏感 params，不修改静态 ProbeSpec，不在公共健康/审计
+中保留 key；已准备或排队中的请求不承诺自动切换到之后轮换的凭据。
+无 key 时均省略参数。probe 的 `/search/advanced` 与业务 `/search` 不变；同凭据不等于同方法
+配额充足，仍可能受出口 IP/上游限制，HTTP 400 / API 502 throttle_violation 仍必须显式降级。
+
+RequestGate 的 interval 是同门串行提交许可的最小间隔，取时/next_start 在锁内；
+concurrency 限制从准入至 slot 退出的许可数（包括调用者延迟），FIFO 约束未取消的排队者。
+等待者不持许可，每次重试重新排队；冷却反馈在后来准入时检查，不撤回已提交许可或预算预留。
+这不是任意进程调度延迟下客户端进入、HTTP 连接或实际发包时间的最小间隔承诺，也不协调
+转发出口的其他调用者。准入后的迟滞可使不同调用时间戳重合，不能据此单独判断准入门失效。
+若未来要改变物理调用节拍保证，须另行定义并审查派发契约，不靠放宽测试容差或绕过冷却。
+
+回归使用合成 HTTP/KB 与虚拟时间，保留原秒级间隔，分别测准入、FIFO/许可上限、取消/冷却、
+六源结果一致性和准入后延迟反例；不测 live provider 配额、LLM/报告语义或真实并发效果。
+该测试时钟在每次模拟 sleep 时累计前进，不是并发墙钟模拟器；合成调度只验证准入不变量，
+不测吞吐、最短等待时长或多等待者的真实公平等待期限。这些仍须另做相应评测。
+本次不改变节拍算法、run/instance lease、lifecycle/SSE、schema/manifest 或硬预算。

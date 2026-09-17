@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import httpx
 
 from .channels import BaseChannel
+from .credentials import stackexchange_params
 from . import throttle
 from ..budget_errors import BudgetError
 
@@ -81,7 +82,8 @@ async def ok_for(source: str, client: httpx.AsyncClient) -> bool:
             # Probes consume real provider requests too. Route selection must
             # share the business queue and publish backoff before releasing it.
             async with throttle.gate_for(source).slot():
-                resp = await client.get(spec.url, params=spec.params, headers=headers)
+                params = stackexchange_params(spec.params or {}) if source == "community" else spec.params
+                resp = await client.get(spec.url, params=params, headers=headers)
                 limited = throttle.observe(source, resp, throttle.gate_for(source),
                                            fallback=60.0 if source == "github" else 5.0)
             if limited:
