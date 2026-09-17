@@ -67,7 +67,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1"] = "v1"
+    version: Literal["v1", "v2"] = "v1"
     sha256: str
 
 
@@ -242,7 +242,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             for tier, config in sorted(TIERS.items())
         ),
         "prompts": tuple(
-            PromptSnapshot(prompt_id=prompt_id, sha256=_sha256(text))
+            PromptSnapshot(prompt_id=prompt_id, sha256=_sha256(text),
+                           version="v2" if prompt_id == "conclusion_synthesizer.synthesis_prompt" else "v1")
             for prompt_id, text in prompts
         ),
         "llm_calls": (

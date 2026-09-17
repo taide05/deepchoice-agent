@@ -6,6 +6,7 @@ import ipaddress
 import socket
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from urllib.parse import urlsplit, urlunsplit
 
 MAX_URL_LENGTH = 2048
@@ -13,8 +14,22 @@ ALLOWED_SCHEMES = frozenset({"http", "https"})
 ALLOWED_PORTS = frozenset({80, 443})
 
 
+class SafeFetchFailure(StrEnum):
+    SAFETY_REJECTED = "safety_rejected"
+    ROUTE_UNAVAILABLE = "route_unavailable"
+    ROUTE_UNSUPPORTED = "route_unsupported"
+    DNS_UNCERTAIN = "dns_uncertain"
+    TIMEOUT = "timeout"
+    RESPONSE_REJECTED = "response_rejected"
+
+
 class UnsafeUrlError(ValueError):
     """A URL cannot be fetched without crossing a private-network boundary."""
+
+    def __init__(self, *args: object, failure: SafeFetchFailure = SafeFetchFailure.SAFETY_REJECTED):
+        super().__init__(*args)
+        # Diagnostics accept only fixed codes, never caller-provided strings.
+        self.failure = failure if isinstance(failure, SafeFetchFailure) else SafeFetchFailure.SAFETY_REJECTED
 
 
 DnsResolver = Callable[[str, int], Awaitable[Sequence[str]]]
@@ -122,11 +137,11 @@ class SafeUrlPolicy:
                     self._resolver(hostname, port), timeout=self.dns_timeout_s
                 )
             except (TimeoutError, OSError, socket.gaierror) as exc:
-                raise UnsafeUrlError("URL hostname could not be resolved safely") from exc
+                raise UnsafeUrlError("URL hostname could not be resolved safely", failure=SafeFetchFailure.DNS_UNCERTAIN) from exc
         else:
             answers = [str(literal)]
         if not answers:
-            raise UnsafeUrlError("URL hostname has no addresses")
+            raise UnsafeUrlError("URL hostname has no addresses", failure=SafeFetchFailure.DNS_UNCERTAIN)
         addresses = tuple(dict.fromkeys(_require_public_address(item) for item in answers))
 
         host_for_url = f"[{hostname}]" if ":" in hostname else hostname
@@ -143,5 +158,6 @@ __all__ = [
     "DnsResolver",
     "ResolvedUrl",
     "SafeUrlPolicy",
+    "SafeFetchFailure",
     "UnsafeUrlError",
 ]

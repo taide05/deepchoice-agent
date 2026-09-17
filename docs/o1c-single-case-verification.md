@@ -1,6 +1,35 @@
 # O1-C 真实单例验真
 
-## 当前进展：确定性缺口离线修复，真实复测未授权
+## 当前进展：缺引用与 unknown 离线收口，安全适配/真实复测未授权
+
+用户进一步授权将缺引用与网络 unknown 纳入 O1-C 并离线处理，不调用真实服务。
+缺引用四处均在 P01 最终文本中真实不存在 marker：推荐末句与三个 finding 分号前子句；
+没有已存在引用被代码丢弃的证据，也不是 verifier 误判。合成提示 synthesis v2 明确
+每个独立分号子句、推荐首尾各自引用；无支撑断言应删去并记录证据缺口，不借附近引用。
+离线 mock 验证消息规则送达和绑定行为，仍保留真实缺引；不证明模型实际会遵守。
+
+安全获取补充固定内部失败分类：route_unavailable、route_unsupported、dns_uncertain、
+safety_rejected、response_rejected、timeout；验证器另区分限流、准入、传输及其他异常。
+只在日志中输出经集中脱敏的固定分类，不包含 URL、异常正文、页面、DNS/IP 或堆栈；
+每个逻辑 URL 一次异常分类，不把多个 claim 重复算多次 fetch。分类日志不是公共结果字段，
+也不是新增 Trace/lifecycle 事件或历史失败回填。所有 BudgetError 继续 fail closed，
+取消仍传播；HTTP 非成功响应保留原 http_uncertain/not_publicly_accessible 投影规则。
+公开四状态、reason/schema、词法支持策略不变；分类诊断不是网络修复。
+
+proxy/forward 被选中仍不能固定已验证 IP，继续拒绝，不自动切 direct。
+下一步先单独确认 C2 安全传输适配范围/契约；该扩大范围未获授权，不能直接声称复测准备就绪。
+再经离线验收，才另确认 C3 一例新 run。旧 synthesis v1 identity 可读，跨版本同 run 恢复拒绝；
+当前 manifest 与 registry 冻结 synthesis v2/hash。smoke fixture、指标、门槛、12 个输出不变，
+仅更新时间/manifest/registry/指纹 provenance，来源健康仍 not_run。
+本轮 Windows/Python 3.12.4 离线验收：175 聚焦通过（51.25 秒），1296 全套通过、
+0 skipped（196.59 秒）；smoke 12/12 基线匹配，pyflakes src/tests/benchmarks、vulture 100%、
+pip check 和 diff 检查通过。新 smoke 指纹
+`ef4b170d8e14af07cd3de2ef6e4ed7e37dd1b6bd563f5903f71c4270b7d2c4f0`。
+独立只读复审覆盖代码、兼容、测试与维护文档，构造兼容边界补回后无阻断；
+复审未重跑完整测试，不证明真实质量。P01 报告/快照 hash 与下方原观察一致。
+测试临时目录清理，原始实测输出保留；额度保持 44/48，D/E/O2 与批次仍暂停。
+
+### 前一轮确定性证据修复验收（历史候选）
 
 2026-09-17 用户授权离线定位及有回归测试的最小修复，不自动补跑。明确区分：
 

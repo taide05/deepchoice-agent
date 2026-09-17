@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import html
 import ipaddress
+import logging
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -13,15 +14,19 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+import httpx
+
 from deepchoice.budget import (
     BudgetAmount,
-    BudgetExceededError,
     BudgetResource,
     reserve_call,
     settle_call,
     unknown_call,
 )
 from deepchoice.outbound import safe_fetch
+from deepchoice.budget_errors import BudgetError
+from deepchoice.outbound.throttle import ProviderAdmissionError, ProviderRateLimitError
+from deepchoice.security.redaction import redact_text
 from deepchoice.security.urls import ALLOWED_PORTS, MAX_URL_LENGTH, UnsafeUrlError
 
 from .contracts import (
@@ -46,6 +51,7 @@ MAX_FIELD_SENTENCES = 16
 MAX_RANKED_OPTIONS = 20
 MAX_TRADEOFFS = 20
 MAX_REGISTRY_SOURCES = 96
+_LOGGER = logging.getLogger(__name__)
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
 _LATIN_TOKEN_RE = re.compile(r"[a-z][a-z0-9_+.#/-]*", re.IGNORECASE)
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
@@ -478,16 +484,34 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
             max_redirects=MAX_REDIRECTS,
             timeout_s=FETCH_TIMEOUT_S,
         )
-    except BudgetExceededError:
+    except BudgetError:
         raise
     except asyncio.CancelledError:
         await unknown_call(reservations)
         raise
-    except (UnsafeUrlError, TimeoutError, OSError):
+    except UnsafeUrlError as exc:
         await unknown_call(reservations)
+        _LOGGER.warning(redact_text(f"citation_fetch_unknown category={exc.failure.value}"))
+        return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
+    except (TimeoutError, httpx.TimeoutException):
+        await unknown_call(reservations)
+        _LOGGER.warning(redact_text("citation_fetch_unknown category=timeout"))
+        return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
+    except ProviderRateLimitError:
+        await unknown_call(reservations)
+        _LOGGER.warning(redact_text("citation_fetch_unknown category=rate_limited"))
+        return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
+    except ProviderAdmissionError:
+        await unknown_call(reservations)
+        _LOGGER.warning(redact_text("citation_fetch_unknown category=admission_denied"))
+        return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
+    except (OSError, httpx.TransportError):
+        await unknown_call(reservations)
+        _LOGGER.warning(redact_text("citation_fetch_unknown category=transport_uncertain"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except Exception:
         await unknown_call(reservations)
+        _LOGGER.warning(redact_text("citation_fetch_unknown category=unexpected_error"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
 
     await settle_call(reservations, {BudgetResource.HTTP_CALLS: 1})

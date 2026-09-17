@@ -19,7 +19,7 @@ from urllib.parse import urljoin
 import httpcore
 import httpx
 
-from ..security.urls import ResolvedUrl, SafeUrlPolicy, UnsafeUrlError
+from ..security.urls import ResolvedUrl, SafeFetchFailure, SafeUrlPolicy, UnsafeUrlError
 
 from .channels import (
     BaseChannel,
@@ -185,9 +185,9 @@ class ChannelResolver:
             raise ValueError("safe_fetch limits are invalid")
         channel = await self.resolve(source)
         if channel is None:
-            raise UnsafeUrlError("No outbound channel is available")
+            raise UnsafeUrlError("No outbound channel is available", failure=SafeFetchFailure.ROUTE_UNAVAILABLE)
         if channel.kind != "direct":
-            raise UnsafeUrlError("Selected outbound channel cannot bind the validated target")
+            raise UnsafeUrlError("Selected outbound channel cannot bind the validated target", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
 
         async def fetch():
             try:
@@ -202,7 +202,7 @@ class ChannelResolver:
                     timeout=timeout_s,
                 )
             except TimeoutError as exc:
-                raise UnsafeUrlError("Safe URL fetch exceeded the total timeout") from exc
+                raise UnsafeUrlError("Safe URL fetch exceeded the total timeout", failure=SafeFetchFailure.TIMEOUT) from exc
 
         if source == "official":
             from . import throttle
@@ -255,9 +255,9 @@ class ChannelResolver:
                     if status in {301, 302, 303, 307, 308}:
                         location = streamed.headers.get("location")
                         if not location:
-                            raise UnsafeUrlError("Redirect response has no location")
+                            raise UnsafeUrlError("Redirect response has no location", failure=SafeFetchFailure.RESPONSE_REJECTED)
                         if redirects >= max_redirects:
-                            raise UnsafeUrlError("Too many redirects")
+                            raise UnsafeUrlError("Too many redirects", failure=SafeFetchFailure.RESPONSE_REJECTED)
                         current_url = urljoin(resolved.url, location)
                         redirects += 1
                         if status == 303 and current_method != "HEAD":
@@ -277,12 +277,12 @@ class ChannelResolver:
                     if not any(
                         media_type == allowed.lower() for allowed in allowed_content_types
                     ):
-                        raise UnsafeUrlError("Response content type is not allowed")
+                        raise UnsafeUrlError("Response content type is not allowed", failure=SafeFetchFailure.RESPONSE_REJECTED)
                     body = bytearray()
                     async for chunk in streamed.aiter_bytes():
                         body.extend(chunk)
                         if len(body) > max_response_bytes:
-                            raise UnsafeUrlError("Response body exceeds the allowed size")
+                            raise UnsafeUrlError("Response body exceeds the allowed size", failure=SafeFetchFailure.RESPONSE_REJECTED)
                     return httpx.Response(
                         status_code=status,
                         headers=response_headers,

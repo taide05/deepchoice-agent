@@ -340,3 +340,14 @@ claim agreement 判定。类别/无候选输入保持不应用准入词门，原
 本地 file:// 不赚取公开 HTTP 核验，proxy/forward 安全性不可证明仍 fail closed。
 不得回写历史报告、推断 unknown 为错误、跨句补引或用片段把 unknown 改 verified。
 真实复测和批次继续按独立授权处理，详见 [单例验真](o1c-single-case-verification.md)。
+
+## O1-C：缺引用约束与内部安全失败分类（2026-09-17）
+
+当前 synthesis prompt 冻结 v2/hash：要求独立分号子句和推荐首尾逐句引用，缺证不借引文。
+PromptSnapshot 保留 v1/v2 可读；旧 v1 身份按旧内容校验，same-run compatibility 拒绝跨版本。
+不改变 public citation 四状态/reason/schema 或工作流/状态 schema，不自动跨句补链。
+UnsafeUrlError 保留 ValueError 零参/多位置参数构造，并增加固定内部 SafeFetchFailure 分类；
+resolver 的路由拒绝、DNS/地址固定、重定向/响应上限与 no fallback 均不变。
+verifier 日志只含集中脱敏后的固定分类，无 URL、异常文本/堆栈/页面；非 public result/Trace/event。
+预算错误 fail closed，取消传播；分类不能消除 unknown，proxy/forward 安全适配须另行批准。
+不回填旧报告，不改 lifecycle/lease/fencing/SSE、硬预算、重试或缓存契约。
