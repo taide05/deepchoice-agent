@@ -1,5 +1,14 @@
 # O1 执行断点
 
+2026-09-17 最新更新：用户授权 O1-C 真实单例验真，本次选 P01 一次提交上限。
+真实前置网络健康 4/5，community 选中 self-forward 但未通过（代码推断 provider gate 不可用，
+具体限流反馈未采集）；routed Tavily POST 通过。本轮按停止线停在前置阶段，
+LLM 探测/冷启/研究/报告均 not_run，新建 run 0、累计 43/48 不变。
+本轮额外离线回归 53 passed / 1 failed（模拟调度时间断言），单项复查 1 passed；
+首次失败保留、原因未确认，未修改代码/断言，不代表当前验证全绿。
+见 [O1-C 停止记录](o1c-single-case-verification.md)。不自动重查或补跑、不恢复批次、不进入 O2；
+O1 仍 incomplete。下文保留各轮当时状态。
+
 2026-09-17 后续更新：用户授权 O1-B 批次前观测，并批准租约/冷加载/过期 health 最小补修。
 [O1-B 记录](o1b-prebatch-observability.md)保存安全字段、离线故障、验收及残余边界。
 离线已完成：187 聚焦、1238 全套通过且无跳过（全套 211.83 秒），smoke-v1 12/12 baseline 匹配，

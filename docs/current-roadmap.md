@@ -241,7 +241,15 @@ A 收口 → B 离线单例资格 → C 另授权冷启单例 → D 另授权新
 冷加载移出事件循环及 health 对过期 lease fail closed。观测覆盖严格 JSON/结构/修复 parser
 次数/finish_reason 与失败分类，停服取消保持 owner-scoped 清理；详见
 [O1-B 记录](o1b-prebatch-observability.md)。不改 Prompt、冻结案例、single-worker/fencing 或硬预算。
-离线验收不等于真实冷启、主机稳定或批次资格；C～E 仍须相应新授权。
+离线验收不等于真实冷启、主机稳定或批次资格；当时 C～E 仍须相应新授权。
+
+2026-09-17 随后用户授权 O1-C 真实单例验真，本次 P01 一次提交上限。
+实际停在真实前置：网络健康 4/5，community gate 不可用（代码推断，具体反馈未知），
+routed Tavily POST 通过；LLM/冷启/研究/报告未执行。新 run 0、累计 43/48 不变。
+[停止记录](o1c-single-case-verification.md)保留失败与 unknown；下一步先确认 community 可用性，
+前置重查和单例继续须明确授权，不自动补跑，不启动 D/E/O2 或批次。
+本轮离线回归另有 53 passed / 1 failed（缩放调度间隔断言），单项复查通过；
+首次失败不抹除，时序不稳定未修复，当前不能宣称全绿。先定位后再讨论真实准入。
 
 ## 5. 不在当前实施范围
 
