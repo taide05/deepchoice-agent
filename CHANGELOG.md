@@ -4,6 +4,8 @@
 
 ### Added
 
+- O1-C bounded diagnosis: one routed community-only probe returned HTTP 400 / API error 502 throttle_violation; configured optional StackExchange key is absent from probe params but present in business requests. Exact upstream quota scope/reset remains unknown. Offline observed regression 54 passed; GetTickCount64 15.625-ms resolution and admission/client-start timestamp mismatch confirmed via an original-RequestGate virtual-clock counterexample. No production/test repair, LLM/Tavily/research calls or quota change; prior failure retained in docs/o1c-blocker-diagnosis.md
+
 - O1-C user-authorized single-case verification stopped at live preflight: network health 4/5, community selected self-forward but unavailable (provider-gate inference, exact feedback unknown), routed Tavily POST passed. No LLM probe, cold initialization or research submission; 0 new runs, quota 43/48 unchanged. Sanitized observation and stop record in docs/o1c-single-case-verification.md; no automatic recheck/replacement, batch resumption or O2 entry
 - O1-C additional offline outbound/throttle regression: 53 passed / 1 failed (scaled scheduling interval assertion); isolated recheck 1 passed. Original failure retained, cause not confirmed or repaired; no code/assertion changes, no live batch, no current all-green/completion claim. Sanitized evidence/hash checks passed; O1-B full-suite result remains historical candidate acceptance
 

@@ -1,5 +1,12 @@
 # O1 执行断点
 
+2026-09-17 最新诊断：用户要求先定位两项阻断；一次 community 单源反馈为 HTTP 400 /
+API 502 throttle_violation，probe 未带已配置的可选 key，限流范围/恢复期限未知。
+本轮带观察器离线回归 54 passed（27.35 秒），确认毫秒级断言低于本机时钟分辨率且
+混用了准入/调用起点；原 RequestGate 虚拟时钟反例复现同类断言失败。
+[定位记录](o1c-blocker-diagnosis.md)保留首次失败及未确认边界；未改产品/测试、未修复，
+LLM/Tavily/研究调用 0、43/48 不变，不恢复单例/批次或进入 O2。
+
 2026-09-17 最新更新：用户授权 O1-C 真实单例验真，本次选 P01 一次提交上限。
 真实前置网络健康 4/5，community 选中 self-forward 但未通过（代码推断 provider gate 不可用，
 具体限流反馈未采集）；routed Tavily POST 通过。本轮按停止线停在前置阶段，
