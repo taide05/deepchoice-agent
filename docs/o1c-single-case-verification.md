@@ -1,4 +1,70 @@
-# O1-C 真实单例验真：前置停止记录
+# O1-C 真实单例验真
+
+## 当前结论：P01 冷启完成，质量与批次资格未通过
+
+2026-09-17 用户重新授权前置并确认执行 P01 一次。仅创建 1 个 run，无重新提交、恢复、
+批次或保留集访问；累计 **44/48**，剩余 4。研究状态 completed、报告可取、无需 HITL，
+但报告仍有明显缺陷；本次不是 O1 闭环、稳定性保证或串并发门禁通过。
+
+### 冻结身份与执行条件
+
+- 代码审计身份 `d451b49138558f2c5ebd86f50772c1c70709c4a5`；最近生产改动
+  `dddc036781a3630b5b73971a08199e5e47284be2`。数据集 product-baseline-v1 / 1.0.0，
+  冻结日期 2026-09-16，hash 同下方历史记录；分母为 P01 × 单例 × 1 次。
+- manifest `ed3821f00026bb881df626e2e97c5c2706d0074ce9f0c50c22d41bf567da4b01`；
+  core registry `8918c0fd30e14ab9888b6e6472486d1da0c8a8601337c12e803e704b14d65d7c`；
+  environment `d6d843ec0145fe1aab3af9f49c5b571ce2aa6a9dbd3c7a004fae661539889fc5`。
+- Python 3.12.4、请求模型 deepseek-v4-flash、thinking disabled、线程上限 1、离线模型下载，
+  新空产品/检查点数据库对、只读知识副本、缓存开启；没有预热。冻结知识 hash
+  `e55ddcac30d0e498c6e5ae02cb40d1bae95eb2831fda71e924ed9211b76466e4`。
+- 准备时 SQLite backup 改变了知识库头部偏移 27/43/95，物理 hash 校验停止，尚未提交研究。
+  两份 DB 完整性通过；失败副本保留，将未使用的实验副本恢复为原冻结文件逐字节拷贝，
+  重新验证全部知识 hash 和空运行目录后冻结环境。原知识库与生产复制逻辑未修改。
+- 研究准入 12:52:11 UTC，采集结束 12:53:44 UTC；默认硬预算 60,000 token / 96 LLM /
+  72 retrieval / 900,000 active ms 不变，auto-recovery 仅在隔离服务关闭。
+
+### 已知结果与成本（2026-09-17，分母 1 run）
+
+- Wall 93,140 ms，预算 active 90,900 ms；27 LLM、13 retrieval，共 40 个逻辑外部调用，
+  failed calls / LLM retries / node retries 均 0。逻辑调用数不是实际 HTTP 尝试总量。
+- 六源状态 success 6/6，结果数 tavily 7 / chroma 4 / github 7 / arxiv 7 / community 0 /
+  official 2；partial_failures 空。community 零结果不等于提供了有效证据，也不证明并发限流已解决。
+- 输入 21,039、输出 3,159、合计 **24,198 token**；27/27 usage 和缓存拆账完整。
+  输入 cache hit 5,760 / miss 15,279，命中率 27.38%，未命中占输入 72.62%。
+  冲突检测 miss 7,399、结论合成 miss 5,812，合计占 miss 86.46%。价格 unavailable，
+  金额 unknown；这些数不含前置探测/健康检查，不是完整账单或节省证明。
+- 输出诊断覆盖 27/27、finish_reason 已知 27/27，无截断；JSON strict 25/25，浅层 schema
+  valid 22/22。repair_attempts 25 是兼容 parser 调用次数，不是 25 次坏 JSON；另 3 次 JSON
+  没有 schema 检查，采集器整体 qualification 仍 not_evaluated，不把这些分母合并。
+- Embedding 12:52:19 UTC 开始，冷加载 **4,906 ms**。78 个约 2 秒间隔的健康/内存样本均
+  HTTP 200、authority_valid；实例最大心跳间隔 19,766 ms，实例/运行最大续期
+  9,375 / 9,469 ms，运行最大 schedule lag 312 ms，运行 heartbeat failure / lease loss 均 0。
+  采样不是连续无故障证明。服务峰值 working set 1,801,977,856 bytes（约 1.68 GiB），
+  主机最低可用内存 497,569,792 bytes（约 475 MiB）；仍有内存余量风险，既往蓝屏/WHEA
+  根因未解决。本轮未观测到重启，不能宣称硬件稳定。
+
+### 报告核对与停止线
+
+报告读取核对发现：无关仓库/论文混入证据与引用列表、来源标题出现 `\N`、结论 high confidence。
+确定性引用检查共 53 处：verified 0 / unsupported 23 / unreachable 0 / unknown 30；
+这是系统词法/可达性投影，不是助手逐原子声明的语义评分，unknown 不等于错误。
+报告内容质量尚未正式按 v4 台账复核，本次不填最终 rubric 分数、不与旧候选六份报告拼表。
+
+隔离服务 12:54:18 UTC 正常退出，观测器退出，所属进程和端口均已关闭；全部本地原件保留。
+下一步仍在 O1：优先离线追踪本报告的无关来源、异常标题与声明/引用绑定，再决定最小修复；
+不自动改 Prompt、冻结案例或预算，不补跑 P01，不启动 D/E/O2 或整组串行/12-case 并发。
+
+原件位于 `outputs/o1c-single-20260917/` 与 `outputs/o1c-control-20260917/`，不提交 Git。
+SHA256：experiment.json `24b624ac0650e28c4c294379ff04217aa07a68e1f5147dc84fbda3345c2a05dd`；
+runs.jsonl `d1865efa93bc67a607ccd8661dfdad24b8cd4e9bf714b754bdd25f9fb064850f`；
+P01.md `2013306bb116a8349e17bd09096e7cb8fd508dd5c7472a5e128254fb9c112c3e`；
+P01.json `fea087e895e6b6a6cf76946487f110c8bc389608c7ed31e47b1cd50f43d824f0`；
+health-memory.jsonl `90e79dd2d09bc368e85dc5cc675783ca2c147e2778057f56a5e0078acdf98d09`；
+cold-start.jsonl `1cebe02d9c1441a097ab3433cbcb38a46347fd4e2aa589c6cca4236bfa1da174`。
+本轮未改生产代码或测试；既往同生产候选 1244 全套 / smoke 12/12 与静态验收仍有效，
+仅新增真实单例观察与文档核对，不重复未变更全套。以下保留先前失败，不倒填原件。
+
+## 历史：首次前置停止
 
 日期：2026-09-17。状态：**preflight_stopped，单例未执行，O1 仍 incomplete**。
 随后用户授权定位两项阻断，见 [诊断记录](o1c-blocker-diagnosis.md)：新社区单源反馈确认
