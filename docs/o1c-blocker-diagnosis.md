@@ -1,4 +1,37 @@
-# O1-C 两项阻断定位
+# O1-C 阻断诊断
+
+## 最新诊断：arxiv 当前单源通过，旧限流细因未确定
+
+2026-09-18 用户批准定位 C3 前置的 arxiv 降级；本轮仅一次相同 local-proxy 的静态
+arxiv GET，固定既有 probe URL/params，不重试、切出口或重跑整轮前置。
+代理通过严格 endpoint 校验及与前轮哈希匹配；`.env` 未改，不执行 durable 安全获取。
+执行代码审计身份 `5765079`，生产候选仍为 C2 `d567b26`，项目 .venv Python 3.12.4。
+
+02:15:38.365～02:15:40.286 UTC（北京时间 10:15:38～10:15:40），1922 ms：
+
+- provider GET 准入 **1**，HTTP **200**，probe 可达，单源健康 **1/1**。
+- Retry-After 未提供；gate 在本次请求前后均无 unavailable/cooling_down。
+- LLM / Tavily 付费 POST / 研究 run 均 **0**，服务未启动，研究额度仍 **44/48**。
+
+源码解释：`probe.ok_for()` 将 HTTP 429 保留为路由可达并发布冷却；
+`throttle.observe()` 对部分 5xx 也发布退避；`health_check()` 将 gate 不可用统一投影
+为 `rate_limited`。旧前置未记录响应码/headers，不能仅据投影确定限流机制或恢复期限，
+也不把本次 200 倒填到旧结果。当前没有复现；无法确认共享出口、上游配额或其他具体原因。
+不修改现有节拍/冷却/路由以消除未复现的问题，不与先前另四源拼成全绿。
+完整前置、真实 pinned CONNECT/TLS、研究冷启、报告质量与并发仍未在本轮验证；
+后续整轮前置及 P01 一次须重新确认具体调用边界。
+
+请求上限指 provider GET 准入层，不含代理可达性 TCP 或隐式 CONNECT 的 wire 请求计数。
+控制器固定 GET 和完整静态 URL、发送前 fsync、显式 25 秒总时限；只保存状态码、布尔值、
+解析后的 Retry-After 秒数，不保存原 headers/body、URL、代理端点或异常正文。
+纯 MockTransport 的 200/429 两项断言通过（真实请求 0），pyflakes 通过，精确临时目录已清理。
+仅维护文档进入 Git，生产代码/测试不变，不重复未变更候选的 C2 全套验收。
+
+本地原件 `outputs/o1c-arxiv-diagnosis-20260918/` 保留、不提交。
+observation.json SHA256 `d13fa3d8087b891faadf1061b25df08a0f0da9674725a428e67d4a45f22e8cf4`；
+admission.json `9411e7a46709ec4d33e4c97d7f7e042f9af1d2ffbdbff0984876ae3f9df1e2d1`。
+
+## 历史：2026-09-17 两项阻断
 
 日期：2026-09-17。仅诊断；产品/测试未修改，研究 run 新增 0，累计 43/48。
 工作树起点 `45017ef`，运行代码仍是 O1-B 候选 `51c7c21083da75e8411c1cb062df15a85c3f6322`。

@@ -7,6 +7,7 @@ C 的确定性证据/标题/绑定缺口离线修复；新模型报告效果尚�
 可信 loopback HTTP CONNECT 代理离线实现与验收，现已收口。随后批准 C3 一轮前置和 P01 一次；
 实际网络健康 4/5，arxiv gate rate_limited，前置即停。Tavily 付费/LLM/研究均未执行，
 44/48 不变；后续真实调用另确认，D～E 和批次解禁不自动发生。
+随后获批的 arxiv 同路由单探测 HTTP 200、当前无冷却；旧细因未确定，完整前置/P01 未重跑。
 
 | 卡 | 要做什么 | 验收 / 停止线 |
 |---|---|---|
@@ -22,7 +23,7 @@ C 的确定性证据/标题/绑定缺口离线修复；新模型报告效果尚�
 |---|---|---|
 | C1 缺引用 | P01 四处最终文本真实缺引，无代码丢引证据；synthesis v2 明确分号前后独立子句及推荐首尾逐句引用，缺证删断言/记录 unresolved_questions | 离线只验证规则送达、绑定不跨句补引、旧版本可读但不能续跑；真实遵从率尚未验证，不能宣布缺引解决 |
 | C2 网络 unknown（离线完成） | 已补固定失败分类/地址拒绝；默认关闭的固定可信 loopback HTTP CONNECT 适配已离线验收，仅 HTTPS:443；原件不能倒推细因，保持 unknown | [契约](phase1-runtime-contract.md)与[验收](o1c-single-case-verification.md)；显式 opt-in、IP CONNECT/原域名 TLS、逐跳验证、有界握手/取消清理、冻结身份；其他 proxy/forward 拒绝，无 direct fallback，不用 snippet 改绿；实施不替代真实验真 |
-| C3 新 run 单例复测 | 已批准一轮前置及 P01 一次；2026-09-18 健康 4/5、arxiv rate_limited 后停止，未提交研究；详见验真记录 | 不自动重查/补跑、不恢复一组串行/12 并发；后续真实调用另确认，未达标继续 C，不进入 D/O2 |
+| C3 新 run 单例复测 | 前置健康 4/5 后停止；随后获批 arxiv 单探测 HTTP 200、当前无冷却，旧细因未确定；完整前置/P01 未重跑 | 不拼旧四源全绿、不自动重查/补跑、不恢复批次；后续完整前置及 P01 调用边界重新确认，未达标继续 C，不进入 D/O2 |
 
 依赖依据：[评估协议 v4](product-effectiveness-optimization.md)、[O1-A 记录](o1a-evaluation-closure.md)、
 [单例观察](o1r-single-case-reliability.md)、[六源限流离线审计](o1-retrieval-throttle-audit.md)、

@@ -115,6 +115,10 @@ Tavily 付费 POST / LLM / 新研究 run 均 0，服务未启动，额度仍 44/
 转发 carrier POST 的原计数字段误标已另加审计说明，原件保留；详见
 [单例验真](docs/o1c-single-case-verification.md)。这不是代理互通、报告质量或批次资格通过。
 
+随后获批的 arxiv 单源诊断（2026-09-18）同路由一次 GET 返回 HTTP 200，当前无 gate 冷却。
+旧限流细因未复现/未确定；不与旧四源拼表。完整前置和 P01 未执行，研究额度仍 44/48；
+见 [阻断诊断](docs/o1c-blocker-diagnosis.md)，不代表完整准入或质量通过。
+
 ## 快速开始
 
 ```powershell

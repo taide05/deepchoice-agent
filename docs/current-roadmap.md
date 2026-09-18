@@ -6,6 +6,8 @@
 但 2026-09-18 网络健康 4/5、arxiv gate rate_limited 后即停。Tavily 付费/LLM/研究均未执行，
 累计 44/48 不变；后续真实调用另确认，不自动重查、补跑或进入 D/E/O2。
 依据与计数审计见 [单例验真](o1c-single-case-verification.md)。
+随后获批的同路由 arxiv 单探测 HTTP 200、当前无 gate 冷却；旧限流细因未确定，
+完整前置和 P01 未执行，44/48 不变，不与旧四源拼表；见 [阻断诊断](o1c-blocker-diagnosis.md)。
 
 本文档是 DeepChoice 后续实施范围的当前事实源。`technical-design-engineering-enhancement.md`
 保留完整设计空间和历史方案；若两者对“现在是否实现”存在冲突，以本文档为准。
