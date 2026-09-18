@@ -2,6 +2,59 @@
 
 ## O1-PR1 继续实施：资源修正与新候选资格
 
+最新尝试（2026-09-18，分母 P01 × 1）：候选 `35cbe48c13b74905ac2e63026ebc8b1cfb54e35f`
+completed，但内容独立复核不通过，不能冻结为资格候选。累计 45/48，剩余 3，PR2 未启动。
+模板 provenance、同题冲突、空 What 与运维条件的必要修正仍在 PR1，必须形成新提交并复验。
+
+- 新候选前置 04:15:37–04:15:54 UTC 五源 5/5，HTTP 保守 8 / Tavily 付费 POST 1 / LLM 2，
+  JSON/tool strict/schema valid/无截断；349 token（输入 313、输出 36、hit 128、miss 185），
+  仅本轮准备成本，不并入研究，金额 unavailable。原前置限流失败不覆盖。
+- P01 准入 04:22:43 UTC，task `5d71ae49-9ba9-449e-b2bb-c9e80fd69b71`，
+  run `424204b4-328e-43b5-bb37-b6adcdc29969`；manifest
+  `d447e8d42423af34d5e6c0e12cf90c737613fff4e893036a7a988d112d9dd50e`，registry
+  `d6e8fda7f89d371914c6c7a8c27f239a9175eba6c2cf6acc0afdf86c77e29f36`。
+  全新产品/检查点数据库对、同只读知识种子、离线下载/线程 1、标准硬预算与 HITL 即停不变。
+- Wall 160,188 ms、active 157,981 ms；输入 23,579 / 输出 3,487 / 合计 27,066 token，
+  36 LLM / 13 logical retrieval，Trace failed calls / LLM/node retries 0；36/36 usage/cache 完整，
+  cache hit 5,120 / miss 18,459（21.714%）。金额 unavailable。Trace 中 HTTP 0 不等于未 fetch，
+  不把 49 个逻辑 Trace 调用当实际 HTTP 总量。诊断 36/36 已知、无截断，JSON strict 34/34、
+  schema valid 31/31；repair_attempts 34 是兼容 parser 调用次数，不是坏 JSON 次数。
+- 六源 success 6/6、partial_failures 空；结果数 Tavily 6 / Chroma 5 / GitHub 7 / arxiv 7 /
+  community 0 / official 2，社区空结果不能当有效证据。系统投影 verified 0 / unsupported 14 /
+  unreachable 0 / unknown 25，和 v4 助手语义核对分开。
+- 真实 run 内 cold first getter 83,078 ms（包含延迟库导入，不能与旧 4.906 秒直接比较）。
+  同 run CONNECT/TLS 成功 7/7，证书必需/hostname check/原 hostname 匹配均 true，至少一次
+  safe-fetch 返回成功；另 5 次失败（response_rejected 2、未细分 OtherError 3）保持不确定性。
+  62 个健康/内存样本均 authority_valid，RSS 已知 62/62，最高 2,198,310,912 bytes，
+  可用内存最低 1,141,559,296 bytes；运行 heartbeat successes 14、failure/loss 0，
+  最大 gap 19,641 ms、schedule lag 2,188 ms。样本不是连续峰值/稳定性保证，WHEA 根因未解。
+- 内容独立助手复核建议必答 3/6、冲突 1/2。零维护反复用于决策，WAL/备份/迁移条件不足，
+  file 模板被误标官方/authority 10，异题比较产生裁决，What 因 strong=0 空白。
+  没有缺失题名或虚构多源 supporting_sources。非盲 assistant_review、人类校准 not_run；
+  unknown 不判错，无新绝对质量及格线。完整原子台账单列，不能拿 completed 代替内容资格。
+- 内存两次在 Popen 前拒绝，用户释放后恢复。experiment-2 的 Windows venv launcher 端口归属
+  检查导致启动后 0 准入，正常关闭，产品库 task/run/result 均 0；随后纠正真实子进程归属/RSS，
+  用 experiment-3 空库一次提交。完成后控制器把 public snapshot 的业务 task 误认生命周期 task，
+  汇总 KeyError；原 control-result 保留。只读 completion-audit 已验证 task/run completed、
+  immutable run_results 的 snapshot/report 与采集原件相等，正常服务 exit 0，未重放研究。
+  控制器修正只接受带 task_id/latest_run 的生命周期 DTO，离线归属检查及独立复审通过。
+
+原件仅本地 `outputs/o1-pr1-continuation-20260918/experiment-3/`；不修改原数据库/报告。
+新修正的 smoke-v1 对比确认 dataset、12 case output 和 metrics 完全未变，只更新
+评估时间及 manifest/registry/fingerprint provenance，指纹改为
+`8073732ca577499e358ee53a17678667579ef3ed8abb6ddb7d800193ee4a1f3d`，来源仍 not_run。
+独立复审发现并要求关闭混合规则/LLM补证索引和缺题名本地比较范围两个缺口；
+首次新全套在未通过时停止并保留日志，不能当通过结果。修正后需重新聚焦与完整验证。
+上述缺口及 malformed 本地 URL 单项拒绝均已闭环，独立只读代码复审无阻断项。
+最终冻结代码/测试后，本机 Python 3.12.4：228 聚焦 / 1478 全套通过、0 跳过
+（217.64 秒全套），smoke 12/12、pyflakes/vulture/pip check/diff 检查通过。
+HITL 超时回归仅替换采集器模块时钟，保证走到 decision GET 后超时，仍断言零决策/取消；
+此前受真实短时钟与磁盘耗时影响的聚焦失败不算通过。日志仅本地
+`outputs/o1-pr1-content-final-validation-20260918/full-suite.txt`。
+旧报告完整主审台账仍在独立分母/引用绑定复核，不能将暂定计数当已认证结果；
+这些离线验收不代替新提交的前置和 P01 资格。
+下面保留资源修正与更早失败事实。
+
 用户随后明确要求继续直到完成 PR1；必要最小修正和分轮前置/单例继续属于 PR1，
 原研究总额度 48、每 run 硬预算、每轮前置上限及 HITL 即停保持不变，PR2/发布未授权。
 此前各轮失败保留，不能循环复用身份或覆盖原件。

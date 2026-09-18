@@ -117,7 +117,16 @@ class TestClassifySourceType:
         assert classify_source_type("https://langchain.readthedocs.io/en/latest/", "unknown") == "official_doc"
 
     def test_chroma_source(self):
-        assert classify_source_type("some-internal-id", "chroma") == "official_doc"
+        assert classify_source_type("some-internal-id", "chroma") == "tech_blog"
+
+    @pytest.mark.parametrize("source", ["chroma", "official"])
+    def test_local_templates_cannot_inherit_official_authority(self, source):
+        source_type = classify_source_type("file:///knowledge/docs.sqlite.org/template.md", source)
+        assert source_type == "tech_blog"
+        assert score_authority(source_type) == 7
+
+    def test_chroma_preserves_known_http_official_document_classification(self):
+        assert classify_source_type("https://docs.python.org/3/", "chroma") == "official_doc"
 
 
 class TestClassifyEvidenceType:

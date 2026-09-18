@@ -42,9 +42,14 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v2",
+    "what_why_how": "what-why-how-v3",
     "evidence_first": "evidence-first-v1",
     "comparison_matrix": "comparison-matrix-v1",
+}
+PROMPT_VERSIONS = {
+    "conclusion_synthesizer.synthesis_prompt": "v3",
+    "conflict_detector.contradiction_scan_system": "v2",
+    "conflict_detector.arbitration_system": "v2",
 }
 try:
     APP_VERSION = version("deepchoice")
@@ -67,7 +72,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2"] = "v1"
+    version: Literal["v1", "v2", "v3"] = "v1"
     sha256: str
 
 
@@ -110,7 +115,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2"] = "source-score-v2"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3"] = "source-score-v3"
     security_policy_version: Literal["outbound-url-v1", "outbound-url-v2"] = "outbound-url-v2"
     safe_fetch_proxy_sha256: str | None = None
     citation_policy_version: Literal["deterministic-citation-v1"] | None = None
@@ -246,7 +251,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         ),
         "prompts": tuple(
             PromptSnapshot(prompt_id=prompt_id, sha256=_sha256(text),
-                           version="v2" if prompt_id == "conclusion_synthesizer.synthesis_prompt" else "v1")
+                           version=PROMPT_VERSIONS.get(prompt_id, "v1"))
             for prompt_id, text in prompts
         ),
         "llm_calls": (
@@ -314,7 +319,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             RetrieverSnapshot(retriever_id=retriever_id)
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v2",
+        "scoring_policy_version": "source-score-v3",
         "security_policy_version": "outbound-url-v2",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v1",

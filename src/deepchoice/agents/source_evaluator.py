@@ -1,5 +1,7 @@
 from datetime import datetime
+import posixpath
 import re
+from urllib.parse import unquote, urlsplit
 
 from ..utils.evidence import source_title
 
@@ -30,6 +32,41 @@ def _mentions_candidate(result: dict, patterns: list[re.Pattern]) -> bool:
     ).casefold()
     return any(pattern.search(text) for pattern in patterns)
 
+
+def _local_comparison_covers_candidates(result: dict, source: str,
+                                        patterns: list[re.Pattern]) -> bool | None:
+    """A local pair template must cover the whole explicit comparison.
+
+    This is only lexical scope admission, not proof of any template claim.
+    Ordinary single-candidate capability documents retain their admission.
+    """
+    if source != "chroma" or len(patterns) < 2:
+        return None
+    url = str(result.get("url", ""))
+    if not url.casefold().startswith("file:"):
+        return None
+    title = result.get("title", "")
+    if not isinstance(title, str):
+        return None
+    if title == source_title(None, url):
+        # A missing title remains an explicit identifier in scored output.
+        # Its local filename may still reveal an out-of-scope pair template;
+        # decode only for lexical scope, without accessing the filesystem.
+        try:
+            path = unquote(urlsplit(url.replace("\\", "/")).path).replace("\\", "/")
+        except ValueError:
+            return False
+        title = posixpath.splitext(posixpath.basename(path))[0]
+    title = title.casefold()
+    if not re.search(r"(?:[-_\s])vs(?:[-_\s])", title):
+        return None
+    # Preserve punctuation inside identifiers, and isolate only the pair
+    # separator before also accepting whitespace-normalized multiword slugs.
+    comparison_text = re.sub(r"[-_\s]+vs[-_\s]+", " vs ", title)
+    normalized = re.sub(r"[-_]", " ", comparison_text)
+    return all(pattern.search(title) or pattern.search(comparison_text)
+               or pattern.search(normalized) for pattern in patterns)
+
 WEIGHTS = {
     "authority": 0.35,
     "timeliness": 0.25,
@@ -57,6 +94,8 @@ VERIFIABILITY_MAP = {
 
 def classify_source_type(url: str, source: str) -> str:
     url_lower = url.lower()
+    if url_lower.startswith("file:"):
+        return "tech_blog"
     if "arxiv.org" in url_lower:
         return "arxiv_paper"
     if "github.com" in url_lower:
@@ -66,8 +105,6 @@ def classify_source_type(url: str, source: str) -> str:
     if "reddit.com" in url_lower:
         return "reddit"
     if source == "official" or "readthedocs" in url_lower or "docs." in url_lower:
-        return "official_doc"
-    if source == "chroma":
         return "official_doc"
     if "blog" in url_lower or "medium.com" in url_lower or "dev.to" in url_lower:
         return "tech_blog"
@@ -145,12 +182,14 @@ class SourceEvaluatorAgent:
         for channel in research_state.get("search_results", []):
             source = channel.get("source", "unknown")
             for r in channel.get("results", []):
-                if not _mentions_candidate(r, patterns):
+                normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
+                comparison_covers = _local_comparison_covers_candidates(normalized_result, source, patterns)
+                if (comparison_covers is False
+                        or (comparison_covers is None and not _mentions_candidate(normalized_result, patterns))):
                     excluded += 1
                     continue
                 all_results.append({
-                    **r, "_source": source,
-                    "title": source_title(r.get("title"), r.get("url")),
+                    **normalized_result, "_source": source,
                 })
 
         source_scores = []

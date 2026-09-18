@@ -15,7 +15,11 @@ def render(state: dict) -> str:
     query = task.get("query", "Technology Selection")
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
-    gaps = state.get("knowledge_gaps", [])
+    gaps = list(state.get("knowledge_gaps") or [])
+    rec = state.get("final_recommendation", {})
+    for question in rec.get("unresolved_questions") or []:
+        if isinstance(question, str) and question.strip() and question not in gaps:
+            gaps.append(question)
     lang = _lang(query)
 
     T = {
@@ -40,6 +44,8 @@ def render(state: dict) -> str:
         "starting_point": {"en": "### Starting Point", "zh": "### 起点"},
         "starting_hint": {"en": "Based on the evidence above, start with the highest-scored option that matches your scene context.", "zh": "基于以上证据，从匹配你场景上下文的最高分方案开始。"},
         "references": {"en": "### References", "zh": "### 参考来源"},
+        "candidates": {"en": "Candidates", "zh": "候选方案"},
+        "no_strong": {"en": "No strong evidence chain is available; review the evidence and limitations below.", "zh": "尚无强证据链，请结合下方证据与未决问题判断。"},
     }
 
     lines = [f"# {query}{T['title_suffix'][lang]}", ""]
@@ -51,6 +57,12 @@ def render(state: dict) -> str:
     lines.extend([T["what"][lang], ""])
 
     strong_chains = [c for c in chains if c.get("evidence_strength") == "strong"]
+    if not strong_chains:
+        candidates = task.get("candidate_techs", []) or [option.get("name", "") for option in (rec.get("ranked_options") or [])]
+        names = list(dict.fromkeys(name.strip() for name in candidates if isinstance(name, str) and name.strip()))
+        if names:
+            lines.append(f"**{T['candidates'][lang]}:** {', '.join(names)}")
+        lines.append(T["no_strong"][lang])
     for c in strong_chains[:5]:
         lines.append(f"- **{c.get('conclusion', '')}**")
         for src in c.get("sources", []):
@@ -86,7 +98,6 @@ def render(state: dict) -> str:
             lines.append(f"- {g}")
         lines.append("")
 
-    rec = state.get("final_recommendation", {})
     lines.extend([T["how"][lang], ""])
 
     winner = rec.get("winner", "")

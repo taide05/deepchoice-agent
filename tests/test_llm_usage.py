@@ -372,23 +372,23 @@ class TestGatherEvidenceUsageCapture:
 
 
 class TestDeterministicArbitration:
-    def test_decisive_gap_high_confidence(self):
+    def test_large_gap_cannot_establish_correctness(self):
         out = cd_module._deterministic_arbitration(
             {"total_score": 9.0}, {"total_score": 3.0})
-        assert out["resolution"] == "A_correct"
-        assert out["confidence"] == "high"
-        assert out["key_factor"] == "score_difference"
+        assert out["resolution"] == "insufficient_data"
+        assert out["confidence"] == "low"
+        assert out["key_factor"] == "comparable_evidence_required"
 
-    def test_moderate_gap_medium_confidence(self):
+    def test_moderate_gap_remains_insufficient(self):
         out = cd_module._deterministic_arbitration(
             {"total_score": 7.0}, {"total_score": 4.0})  # gap 3.0
-        assert out["resolution"] == "A_correct"
-        assert out["confidence"] == "medium"
+        assert out["resolution"] == "insufficient_data"
+        assert out["confidence"] == "low"
 
-    def test_b_wins_when_b_higher(self):
+    def test_reversing_score_order_does_not_create_a_winner(self):
         out = cd_module._deterministic_arbitration(
             {"total_score": 3.0}, {"total_score": 6.0})
-        assert out["resolution"] == "B_correct"
+        assert out["resolution"] == "insufficient_data"
 
     def test_close_gap_returns_none(self):
         out = cd_module._deterministic_arbitration(

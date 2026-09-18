@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -374,13 +375,16 @@ async def test_single_stop_at_hitl_keeps_source_health_and_metadata_identity(tmp
 
 
 @pytest.mark.asyncio
-async def test_stop_at_hitl_timeout_keeps_waiting_task_without_cancellation(tmp_path):
+async def test_stop_at_hitl_timeout_keeps_waiting_task_without_cancellation(tmp_path, monkeypatch):
     case = load_dataset(DATASET)[0]["cases"][7]
     decision_posts = 0
     cancel_posts = 0
+    decision_reads = 0
+    clock = [1000.0]
+    monkeypatch.setattr(baseline, "time", SimpleNamespace(monotonic=lambda: clock[0]))
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal decision_posts, cancel_posts
+        nonlocal decision_posts, cancel_posts, decision_reads
         if request.url.path == "/health":
             return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
         path = request.url.path
@@ -408,7 +412,9 @@ async def test_stop_at_hitl_timeout_keeps_waiting_task_without_cancellation(tmp_
                 },
             )
         if request.method == "GET" and path.endswith("/decision"):
-            await __import__("asyncio").sleep(0.3)
+            decision_reads += 1
+            # Advance only the collector clock after it observes the waiting task.
+            clock[0] += 1.0
             return httpx.Response(
                 200,
                 json={"decision_id": "decision-timeout-stop", "status": "pending"},
@@ -450,6 +456,7 @@ async def test_stop_at_hitl_timeout_keeps_waiting_task_without_cancellation(tmp_
         )
         result = (await collector.collect([case]))[0]
 
+    assert decision_reads == 1
     assert decision_posts == 0
     assert cancel_posts == 0
     assert result["status"] == "waiting_for_input"

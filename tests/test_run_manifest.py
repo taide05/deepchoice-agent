@@ -43,7 +43,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v1"
-    assert first.scoring_policy_version == "source-score-v2"
+    assert first.scoring_policy_version == "source-score-v3"
     assert first.security_policy_version == "outbound-url-v2"
     assert first.citation_policy_version == "deterministic-citation-v1"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
@@ -82,14 +82,17 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v1"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    assert all(prompt.version == ("v2" if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt" else "v1")
-               for prompt in registry.prompts)
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v3",
+                         "conflict_detector.contradiction_scan_system": "v2",
+                         "conflict_detector.arbitration_system": "v2"}
+    assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
+        prompt_id: expected_versions.get(prompt_id, "v1") for prompt_id in expected_prompt_ids}
     assert all(re.fullmatch(r"[0-9a-f]{64}", prompt.sha256) for prompt in registry.prompts)
     assert {
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v2",
+        "what_why_how": "what-why-how-v3",
         "evidence_first": "evidence-first-v1",
         "comparison_matrix": "comparison-matrix-v1",
     } == REPORT_TEMPLATE_VERSIONS

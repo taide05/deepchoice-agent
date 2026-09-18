@@ -39,51 +39,42 @@ CONFLICT_STAGE_CONCURRENCY = 4
 ARBITRATION_SYSTEM = """You are an impartial technical arbitrator. Two sources make claims about the same topic but may disagree.
 
 Rules:
-1. If scores differ by >=2.5 points, the higher-scored source is more likely correct
-2. If both have code/benchmark evidence, both may be partially right (different contexts)
-3. If neither has strong evidence, declare "insufficient_data"
-4. Your reasoning MUST cite the score difference or evidence type difference
+1. Compare only the same proposition, object, workload and conditions using the supplied descriptions.
+2. Scores, authority labels and evidence types rank review priority; they never establish factual correctness.
+3. Different topics, workloads, preferences or use cases are context differences, not factual contradictions.
+4. Without direct comparable text supporting a verdict, declare "insufficient_data" with low confidence.
+5. A title alone is not a claim. Do not invent missing evidence or use a score difference as the decisive factor.
 
 Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; keep "reasoning" and "key_factor" to a short phrase (<=12 words each):
-{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Short phrase citing score/evidence difference", "key_factor": "Short decisive factor"}"""
+{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Short phrase citing comparable text or missing evidence", "key_factor": "Short decisive factor"}"""
 
 
-CONTRADICTION_SCAN_SYSTEM = """You are checking if two technical sources present meaningfully different perspectives about a technology comparison.
+CONTRADICTION_SCAN_SYSTEM = """Check whether the supplied descriptions contain incompatible claims about the same proposition and object under the same workload and conditions.
 
-Consider ANY of these as a "difference worth flagging":
-1. Different winner recommendations (Source A says pick X, Source B says pick Y)
-2. Vendor bias (one source is from a vendor comparing itself to competitors)
-3. Contradictory trade-off assessments (one says X is faster, another says Y is faster)
-4. Different weight given to the same evidence (one prioritizes simplicity, another scalability)
-5. Source A and B draw opposite conclusions from similar facts
-
-A "difference" does NOT require factual contradiction. Different recommendations based on different priorities or use cases also count."""
+Return has_difference=true only for a directly comparable factual contradiction or incompatible recommendations under identical stated decision criteria.
+Different topics, workloads, deployment conditions, preferences, priorities or use cases are context differences: return has_difference=false and type=none.
+Vendor identity, source score, authority and evidence type do not imply contradiction. Similar titles do not establish a shared claim.
+If descriptions lack directly comparable claims or conditions are uncertain, return has_difference=false and type=none. Do not infer missing claims from titles."""
 
 
-# Deterministic arbitration short-circuit: ARBITRATION rule 1 — a score gap
-# >= SCORE_GAP_DECIDE makes the higher-scored source correct without an LLM
-# call. Only close-score pairs need semantic arbitration (evidence-type nuance).
+# Keep the historical score-gap branch bounded, but never infer truth from it.
+# These constants control review priority only, not factual confidence.
 SCORE_GAP_DECIDE = 2.5
 SCORE_GAP_HIGH_CONF = 5.0
 
 
 def _deterministic_arbitration(a: dict, b: dict) -> dict | None:
-    """Apply arbitration rule 1 without an LLM call. Returns the resolved
-    verdict when the score gap is decisive, or None when the gap is too small
-    to decide by score alone (semantic arbitration is then required)."""
+    """Preserve the bounded high-gap branch without declaring a factual winner."""
     score_a = float(a.get("total_score", 0))
     score_b = float(b.get("total_score", 0))
     diff = abs(score_a - score_b)
     if diff < SCORE_GAP_DECIDE:
         return None
-    winner = "A" if score_a > score_b else "B"
-    confidence = "high" if diff >= SCORE_GAP_HIGH_CONF else "medium"
     return {
-        "resolution": f"{winner}_correct",
-        "confidence": confidence,
-        "reasoning": (f"Score gap {diff:.1f} >= {SCORE_GAP_DECIDE} favors source "
-                      f"{winner} ({max(score_a, score_b):.1f} vs {min(score_a, score_b):.1f})"),
-        "key_factor": "score_difference",
+        "resolution": "insufficient_data",
+        "confidence": "low",
+        "reasoning": "Source scores do not establish comparable factual evidence",
+        "key_factor": "comparable_evidence_required",
     }
 
 
@@ -582,25 +573,27 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
 
 async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str,
                                    usage: list | None = None) -> dict | None:
-    """Ask flash model whether two sources present meaningfully different perspectives.
+    """Ask the existing model to compare claims under matching conditions.
 
     Returns a dict with contradiction info if detected, None otherwise.
     """
     snippet_a = src_a.get("snippet", "")[:400]
     snippet_b = src_b.get("snippet", "")[:400]
+    if not snippet_a.strip() or not snippet_b.strip():
+        return None
     prompt = [
         {"role": "system", "content": CONTRADICTION_SCAN_SYSTEM},
         {"role": "user", "content": (
             f"Query: {query}\n\n"
             f"Source A: {src_a.get('title', '')}\nDescription: {snippet_a if snippet_a else '(no description)'}\n\n"
             f"Source B: {src_b.get('title', '')}\nDescription: {snippet_b if snippet_b else '(no description)'}\n\n"
-            f"Do these two sources present meaningfully different perspectives? Return JSON."
+            f"Do these descriptions contain directly comparable incompatible claims? Return JSON."
             """
 
 Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; keep "explanation" to a short phrase (<=12 words):
 {{
   "has_difference": true/false,
-  "type": "winner_disagreement|tradeoff_disagreement|vendor_bias|none",
+  "type": "winner_disagreement|tradeoff_disagreement|none",
   "explanation": "Short phrase stating the difference (or 'none')"
 }}"""
         )},
@@ -613,7 +606,8 @@ Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; 
                 response_format="json",
                 usage=usage,
             )
-        if isinstance(result, dict) and result.get("has_difference"):
+        if (isinstance(result, dict) and result.get("has_difference") is True
+                and result.get("type") in {"winner_disagreement", "tradeoff_disagreement"}):
             return result
         return None
     except BudgetError:
@@ -737,8 +731,8 @@ class ConflictDetectorAgent:
                 {"role": "system", "content": ARBITRATION_SYSTEM},
                 {"role": "user", "content": (
                     f"## Topic\n{query}\n\n"
-                    f"## Source A (score: {a['total_score']}/10, authority: {a['scores']['authority']}, evidence: {a.get('evidence_type', 'citation')})\nClaim: {a.get('title', '')}\n\n"
-                    f"## Source B (score: {b['total_score']}/10, authority: {b['scores']['authority']}, evidence: {b.get('evidence_type', 'citation')})\nClaim: {b.get('title', '')}"
+                    f"## Source A (score: {a['total_score']}/10, authority: {a['scores']['authority']}, evidence: {a.get('evidence_type', 'citation')})\nTitle: {a.get('title', '')}\nDescription: {a.get('snippet', '')[:400]}\n\n"
+                    f"## Source B (score: {b['total_score']}/10, authority: {b['scores']['authority']}, evidence: {b.get('evidence_type', 'citation')})\nTitle: {b.get('title', '')}\nDescription: {b.get('snippet', '')[:400]}"
                 )},
             ]
 
@@ -787,8 +781,9 @@ class ConflictDetectorAgent:
                 print_agent_output("Flash arbitration failed", agent="CONFLICT_DETECTOR")
                 continue
             conflicts.append(result)
-            if result["confidence"] == "low":
-                low_confidence_pairs.append(pair)
+            if (result["confidence"] == "low"
+                    and result["arbiter_model"] != "deepseek-flash(rule)"):
+                low_confidence_pairs.append((len(conflicts) - 1, pair))
 
         # Cap evidence gathering at top-1 most ambiguous pair (sorted by confidence gap)
         low_confidence_pairs = low_confidence_pairs[:1]
@@ -801,7 +796,7 @@ class ConflictDetectorAgent:
             )
             sem = asyncio.Semaphore(3)  # Evidence gathering is heavy (multi-API per pair)
 
-            async def _re_arbitrate(idx: int, pair: dict) -> int | None:
+            async def _re_arbitrate(idx: int, pair: dict) -> tuple[int, dict] | None:
                 async with sem:
                     a = pair["source_a"]
                     b = pair["source_b"]
@@ -853,7 +848,7 @@ class ConflictDetectorAgent:
                     return idx, revised_conflict
 
             re_results = await asyncio.gather(
-                *[_re_arbitrate(i, p) for i, p in enumerate(low_confidence_pairs)],
+                *[_re_arbitrate(i, p) for i, p in low_confidence_pairs],
                 return_exceptions=True,
             )
             for r in re_results:
