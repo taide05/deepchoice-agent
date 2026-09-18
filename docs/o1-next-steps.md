@@ -13,10 +13,12 @@ rubric、质量/并发阈值、HITL 策略或预算，也不构成新的实施�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前断点：原研究额度累计 **44/48**，剩余 4 并未获自动使用许可。当前候选 P01 尚未复测；
-前次前置 4/5 后停止，随后 arxiv 同路由单探测 HTTP 200，只证明当次单源可用。
-旧限流细因未确定，不拼成五源全绿；证据见 [单例验真](o1c-single-case-verification.md)与
-[阻断诊断](o1c-blocker-diagnosis.md)。
+当前断点：PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
+2026-09-18 03:45 UTC 本轮唯一前置仍为 4/5，arxiv local-proxy 投影 rate_limited 后停止；
+HTTP 保守计数 6、付费 Tavily/LLM/新研究均 0，原额度 **44/48** 不变。
+P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定候选；不自动使用剩余额度。
+不与此前 arxiv 单探测 200 拼全绿，限流细因未确定；证据见
+[单例验真](o1c-single-case-verification.md)与 [阻断诊断](o1c-blocker-diagnosis.md)。
 
 | 剩余 PR | 对应旧任务 | 交付目标 | 完成证据与依赖 |
 |---|---|---|---|

@@ -4,6 +4,8 @@
 
 ### Added
 
+- O1-PR1's single authorized live prerequisite round on candidate ce4addf (2026-09-18 03:45 UTC): five-source health 4/5, arxiv local-proxy projected rate_limited; stopped after six conservatively counted non-LLM HTTP admissions (forward carrier POST correctly excluded from paid Tavily). Paid Tavily/LLM/new research all zero, quota 44/48 unchanged; no experiment preparation, service, P01 or retry. Specific limiting cause remains unknown; qualification unavailable, PR1 incomplete and no PR2 locked candidate. Attempt identities and sanitized local evidence hashes recorded in the existing single-case verification document
+
 - O1-PR1 bounded single-round prerequisite tool (20 non-LLM HTTP / one Tavily paid POST / four LLM dispatches; SDK retries disabled), offline same-candidate Git/dependency/model-endpoint/routing checks and byte-exact frozen no-WAL seed copying. Explicit cold-in-research service startup skips embedding prewarming; collect-single-only stop-at-hitl retains the pending task without resolution/cancellation. Existing prewarming and formal HITL defaults remain compatible; live qualification and batch entry are separate acceptance steps
 - O1-PR1 final local offline acceptance (2026-09-18, Windows/project Python 3.12.4): 59 focused / 1439 full passed, zero skips (328.91 seconds full); smoke-v1 12/12 with unchanged fingerprint and source health not_run; pyflakes src/tests/benchmarks/local controllers, vulture src 100%, pip check, diff and independent read-only review passed. Timeout cancellation and dataset/resource/manifest freeze gaps found in review were closed before paid execution; runtime interoperability and report quality require the separately recorded live attempt
 

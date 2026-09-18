@@ -1,6 +1,6 @@
 # O1-C 真实单例验真
 
-## O1-PR1：单例资格入口实施
+## O1-PR1：入口验收通过，真实资格被路由降级阻断
 
 2026-09-18 用户授权实施单例资格与候选冻结。工具新增单轮 prerequisite dispatch 上限、
 SDK 无重试 JSON/工具检查、相同 Git/依赖/模型端点/路由配置核对，以及冻结无 WAL 种子的
@@ -14,7 +14,38 @@ pyflakes src/tests/benchmarks/本地控制器、vulture src 100%、pip check、d
 入口实施本身不证明动态 TLS、报告质量或并发资格；真实尝试按一次边界另记。
 本地完整验证日志为 `outputs/o1-pr1-validation-20260918/full-suite.txt`，不发布原始日志。
 
-## 最新单源诊断：arxiv HTTP 200，完整前置/P01 未执行
+离线实施提交后，唯一前置于 **2026-09-18 03:45:15.431～03:45:23.828 UTC** 执行。
+候选审计身份 `ce4addfcf017018cd2abd570fc05623749896d90`，真实前置开始前与结束后工作树干净。
+五项健康 **4/5**：tavily/github/official 为 local-proxy、community 为 self-forward，均 ok；
+arxiv 选 local-proxy，但投影为 `rate_limited`，完整路由汇总降级后停止。
+具体 HTTP 状态、Retry-After 或冷却期限未采集，不能确定限流细因；不与此前单源 200 拼全绿。
+
+本轮准入 journal 为 **6 个非 LLM HTTP 条目**，其中 community 的逻辑 GET 和 forward
+carrier POST 保守分别计入；carrier POST 未计为 Tavily 付费调用。
+Tavily 付费 POST **0**、LLM 实际请求 **0**、新研究 **0**；累计 **44/48** 不变。
+未 prepare 新实验、启动服务、冷加载或提交 P01，没有重查、补跑或恢复。
+金额 unavailable，付费探测 usage not_run；无报告声明分母，v4 内容评审及报告独立复核 not_run。
+
+已留住该尝试的 Git/依赖/模型端点/路由和严格代理 hash。代理身份与前次已批准端点一致，
+配置 hash `4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474`，
+依赖文件 hash `c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b`。
+这只是失败尝试的输入身份，**单例资格 unavailable，尚未形成 PR2 锁定候选，PR1 未完成**。
+LLM JSON/工具、真实 pinned CONNECT/TLS、冷启/资源/租约、P01 报告质量仍未实测；
+后续新真实尝试需单独授权，本轮不自动重做或进入 PR2。
+
+安全原件仅留本地 `outputs/o1-pr1-20260918/prerequisites/`：
+
+| 原件 | SHA-256 |
+|---|---|
+| preflight-summary.json | `615b5df23f6d45926d015a960c5892e7fbc906554055b2118e1206866802bb51` |
+| retrieval-routes.json | `ec7f3500213a128569c64f7970ebb6e157c2aabb2cd9e62d06c8712a01bed742` |
+| request-admissions.jsonl | `4ad5d51c5a391d9decc9e1e9d30f05566cdd647fe89ba74f200d46fbabfa729a` |
+
+三份前置原件已由独立只读评审核对一致：6 条准入均属 routing，POST 为 forward carrier，
+停止/零付费与零研究结论一致，原件无秘密或原始响应正文。计数不是完整 wire 总数；
+该日志复核不替代尚未执行的 P01 内容评审、冷启或代理实测。
+
+## 前次单源诊断：arxiv HTTP 200，完整前置/P01 未执行
 
 2026-09-18 随后获批的 arxiv 同路由单探测仅发出一次 provider GET，02:15:38～02:15:40 UTC
 返回 HTTP 200，未提供 Retry-After，当前 gate 无限流/冷却。单源健康 1/1，旧限流细因

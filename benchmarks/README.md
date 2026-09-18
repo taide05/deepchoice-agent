@@ -78,7 +78,8 @@ carrier HTTP，但不会将 carrier POST 误计为 Tavily 付费 POST；隐式�
 .\.venv\Scripts\python.exe -m benchmarks.product_baseline collect-single --case-id P01 --repetition 1 --environment-file <新实验目录/environment.json> --output-dir <新采集目录> --api-base http://127.0.0.1:8011 --execute-paid-runs --stop-at-hitl
 ```
 
-serve 进程须继承相同的显式可信代理配置；启动检查该 hash 和冷启策略。默认 serve 仍预热，
+serve 与 collector 进程须显式继承相同的可信代理配置；一个 CLI 子进程的 opt-in 不会传回
+父 shell，可由经审核的本地控制器逐进程设置。启动检查该 hash 和冷启策略。默认 serve 仍预热，
 默认 collect-single/collect 仍执行冻结 HITL 策略。资格模式等待 HITL 即停，禁止自动动作、
 重试或恢复；原始报告、Trace 和资源/实际 CONNECT/TLS 观测留本地。
 前置与 completed 不能单独证明资格，完整报告声明核对和独立复核见
