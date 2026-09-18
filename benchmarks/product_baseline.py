@@ -212,6 +212,8 @@ class CollectionOptions:
     concurrency: int
     poll_interval_seconds: float
     case_timeout_seconds: float
+    stop_at_hitl: bool = False
+    expected_manifest_id: str | None = None
 
 
 class DurableBaselineCollector:
@@ -405,6 +407,17 @@ class DurableBaselineCollector:
             record["run_id"] = latest_run.get("run_id")
             record["manifest_id"] = latest_run.get("manifest_id")
             await self._journal(record, "admitted")
+            if (
+                self.options.expected_manifest_id is not None
+                and record["manifest_id"] != self.options.expected_manifest_id
+            ):
+                record["status"] = (task.get("task") or {}).get(
+                    "status", record["status"]
+                )
+                record["error_code"] = "FROZEN_MANIFEST_MISMATCH"
+                self._abort_reason = record["error_code"]
+                await self._collect_artifacts(record)
+                return await self._finish(record, started)
             resolved_decisions: set[str] = set()
             saw_running = False
             allowed_decision_requeue = False
@@ -416,6 +429,9 @@ class DurableBaselineCollector:
                     break
                 if time.monotonic() - started >= self.options.case_timeout_seconds:
                     record["collector_timeout"] = True
+                    if self.options.stop_at_hitl:
+                        record["error_code"] = "QUALIFICATION_TIMEOUT_NO_AUTO_CANCELLATION"
+                        break
                     await self._cancel_and_settle(record)
                     break
                 response, task = await self._request_json(
@@ -459,6 +475,16 @@ class DurableBaselineCollector:
                         decision_id, str
                     ):
                         record["error_code"] = _http_error_code(decision_response)
+                        break
+                    if (
+                        self.options.stop_at_hitl
+                        and time.monotonic() - started >= self.options.case_timeout_seconds
+                    ):
+                        record["collector_timeout"] = True
+                        record["error_code"] = "QUALIFICATION_TIMEOUT_NO_AUTO_CANCELLATION"
+                        break
+                    if self.options.stop_at_hitl:
+                        record["error_code"] = "HITL_REQUIRED_NO_AUTO_RESOLUTION"
                         break
                     if decision_id in resolved_decisions:
                         await asyncio.sleep(self.options.poll_interval_seconds)
@@ -911,6 +937,25 @@ async def _collect(args: argparse.Namespace) -> int:
     environment, environment_hash = load_environment(
         Path(args.environment_file), require_ready=True
     )
+    expected_manifest_id = None
+    if isinstance(environment.get("notes"), dict) and "qualification_mode" in environment["notes"]:
+        qualification_args_valid = (
+            args.command == "collect-single"
+            and args.case_id == "P01"
+            and bool(getattr(args, "stop_at_hitl", False))
+            and args.profile == "serial"
+            and args.concurrency == 1
+            and args.repetition == 1
+        )
+        if not qualification_args_valid:
+            raise ValueError(
+                "qualification environment requires the fixed single-case stop-at-hitl command"
+            )
+        if environment["notes"].get("dataset_hash") != dataset_hash:
+            raise ValueError("qualification environment dataset hash does not match the selected dataset")
+        from benchmarks.product_baseline_qualification import verify_frozen_environment
+
+        expected_manifest_id = verify_frozen_environment(environment)
     output_dir = Path(args.output_dir)
     if output_dir.exists():
         raise ValueError("output directory must not already exist")
@@ -930,6 +975,8 @@ async def _collect(args: argparse.Namespace) -> int:
         concurrency=args.concurrency,
         poll_interval_seconds=args.poll_interval,
         case_timeout_seconds=args.case_timeout,
+        stop_at_hitl=bool(getattr(args, "stop_at_hitl", False)),
+        expected_manifest_id=expected_manifest_id,
     )
     metadata = {
         "schema_version": 1,
@@ -1036,6 +1083,11 @@ def build_parser() -> argparse.ArgumentParser:
     single.add_argument("--repetition", type=int, choices=(1, 2), required=True)
     single.add_argument("--poll-interval", type=float, default=2.0)
     single.add_argument("--case-timeout", type=float, default=2100.0)
+    single.add_argument(
+        "--stop-at-hitl",
+        action="store_true",
+        help="stop after observing a public pending decision without resolving it",
+    )
     single.add_argument("--execute-paid-runs", action="store_true")
     single.set_defaults(profile="serial", concurrency=1)
 

@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 
 
 PROFILES = ("serial-r1", "concurrent-r1", "concurrent-r2", "serial-r2")
+EMBEDDING_STARTUP_MODES = ("prewarmed", "cold-in-research")
 RESOURCE_SETTINGS = {
     "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
     "NUMEXPR_NUM_THREADS": "1", "TOKENIZERS_PARALLELISM": "false",
@@ -75,8 +76,11 @@ async def prepare(root: Path, llm_evidence: Path) -> dict:
         raise ValueError("experiment root must be fresh")
     load_dotenv()
     os.environ.update(RESOURCE_SETTINGS)
+    from deepchoice.outbound.channels import OutboundConfig
     from benchmarks.run_baseline import health_check_report
     from deepchoice.utils.llm import TIERS
+
+    safe_fetch_proxy_sha256 = OutboundConfig.from_env().safe_fetch_proxy_sha256
 
     probe = json.loads(llm_evidence.read_text(encoding="utf-8"))
     if not probe.get("passed") or probe.get("model_id") != TIERS["deepseek-flash"]["model"]:
@@ -112,12 +116,34 @@ async def prepare(root: Path, llm_evidence: Path) -> dict:
             "retrieval_evidence_sha256": file_hash(root / "retrieval-health.json"),
             "endpoint_sha256": hashlib.sha256(model["base"].encode()).hexdigest(),
             "embedding_model": "BAAI/bge-m3", "embedding_revision": embedding_revision(),
+            "embedding_startup_mode": "prewarmed", "safe_fetch_proxy_sha256": safe_fetch_proxy_sha256,
             "price_availability": "unavailable", "source_original_sha256": tree_hash(chroma)}}
     (root / "environment.json").write_text(json.dumps(environment, indent=2) + "\n", encoding="utf-8")
     return {"prepared": True, "profiles": list(PROFILES), "knowledge_sha256": identity}
 
 
-def serve(root: Path, profile: str, port: int) -> None:
+def _verify_startup_notes(notes: dict, embedding_startup_mode: str) -> None:
+    if embedding_startup_mode not in EMBEDDING_STARTUP_MODES:
+        raise ValueError("unsupported embedding startup mode")
+    if notes.get("embedding_startup_mode", "prewarmed") != embedding_startup_mode:
+        raise ValueError("embedding startup mode differs from the frozen environment")
+    from deepchoice.outbound.channels import OutboundConfig
+
+    actual_proxy_hash = OutboundConfig.from_env().safe_fetch_proxy_sha256
+    if "safe_fetch_proxy_sha256" not in notes:
+        if actual_proxy_hash is not None:
+            raise ValueError("legacy environment cannot authorize trusted proxy startup")
+    else:
+        frozen_proxy_hash = notes["safe_fetch_proxy_sha256"]
+        if frozen_proxy_hash is not None and (
+            not isinstance(frozen_proxy_hash, str) or re.fullmatch(r"[0-9a-f]{64}", frozen_proxy_hash) is None
+        ):
+            raise ValueError("frozen safe-fetch proxy identity is invalid")
+        if frozen_proxy_hash != actual_proxy_hash:
+            raise ValueError("safe-fetch proxy configuration differs from the frozen environment")
+
+
+def serve(root: Path, profile: str, port: int, embedding_startup_mode: str = "prewarmed") -> None:
     load_dotenv()
     environment = json.loads((root / "environment.json").read_text(encoding="utf-8"))
     settings = environment["notes"]["settings"]
@@ -125,6 +151,7 @@ def serve(root: Path, profile: str, port: int) -> None:
         raise ValueError("runtime settings must use the fixed allowlist")
     if any(not isinstance(value, str) for value in settings.values()):
         raise ValueError("runtime settings must be strings")
+    _verify_startup_notes(environment["notes"], embedding_startup_mode)
     os.environ.update(settings)
     knowledge = (root / profile / "knowledge").resolve()
     if tree_hash(knowledge) != environment["knowledge_snapshot_sha256"]:
@@ -137,6 +164,9 @@ def serve(root: Path, profile: str, port: int) -> None:
     os.environ["DEEPCHOICE_EXPERIMENT_DIR"] = str(runtime)
     os.environ["WEB_CONCURRENCY"] = "1"
     # Paths must be set before importing contracts/server: they import learned_docs.
+    if 'qualification_mode' in environment['notes']:
+        from benchmarks.product_baseline_qualification import verify_frozen_environment
+        verify_frozen_environment(environment)
     from benchmarks.product_baseline import load_environment
     load_environment(root / "environment.json", require_ready=True)
     from deepchoice.utils.llm import TIERS
@@ -148,14 +178,17 @@ def serve(root: Path, profile: str, port: int) -> None:
     import torch
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    from deepchoice.utils.embedding import get_embedding_model
-    warmup_started = time.monotonic()
-    vector = get_embedding_model().encode("O1 embedding prerequisite")
-    if len(vector) != 1024:
-        raise ValueError("embedding dimension differs from frozen knowledge")
-    print(json.dumps({"embedding_warmed": True, "embedding_startup_mode": "prewarmed",
-                      "embedding_warmup_ms": round((time.monotonic() - warmup_started) * 1000),
-                      "profile": profile}), flush=True)
+    startup = {"embedding_warmed": False, "embedding_startup_mode": embedding_startup_mode,
+               "profile": profile}
+    if embedding_startup_mode == "prewarmed":
+        from deepchoice.utils.embedding import get_embedding_model
+        warmup_started = time.monotonic()
+        vector = get_embedding_model().encode("O1 embedding prerequisite")
+        if len(vector) != 1024:
+            raise ValueError("embedding dimension differs from frozen knowledge")
+        startup.update(embedding_warmed=True,
+                       embedding_warmup_ms=round((time.monotonic() - warmup_started) * 1000))
+    print(json.dumps(startup), flush=True)
     import uvicorn
     uvicorn.run("benchmarks.product_baseline_server:create_app", factory=True,
                 host="127.0.0.1", port=port, workers=1, log_level="warning")
@@ -169,6 +202,7 @@ def main() -> int:
     parser.add_argument("--execute-paid-health-check", action="store_true")
     parser.add_argument("--profile", choices=PROFILES)
     parser.add_argument("--port", type=int, default=8011)
+    parser.add_argument("--embedding-startup-mode", choices=EMBEDDING_STARTUP_MODES, default="prewarmed")
     args = parser.parse_args()
     try:
         root = Path(args.root).resolve()
@@ -179,7 +213,7 @@ def main() -> int:
         else:
             if not args.profile:
                 parser.error("serve requires a profile")
-            serve(root, args.profile, args.port)
+            serve(root, args.profile, args.port, args.embedding_startup_mode)
         return 0
     except Exception as exc:
         print(json.dumps({"error_type": type(exc).__name__, "research_runs_submitted": 0}), flush=True)

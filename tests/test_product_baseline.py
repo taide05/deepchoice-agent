@@ -7,9 +7,11 @@ from pathlib import Path
 import httpx
 import pytest
 
+from benchmarks import product_baseline as baseline
 from benchmarks.product_baseline import (
     CollectionOptions,
     DurableBaselineCollector,
+    build_parser,
     compare_profiles,
     load_dataset,
     load_environment,
@@ -168,6 +170,465 @@ async def test_collector_handles_hitl_and_preserves_unknown_observability(tmp_pa
     assert [entry["event"] for entry in journal] == ["submission_started", "admitted"]
     assert journal[1]["run_id"] == "run-1"
     assert "supplemental_input" not in json.dumps(journal)
+
+
+@pytest.mark.asyncio
+async def test_collector_can_stop_at_public_pending_hitl_without_resolution(tmp_path):
+    case = load_dataset(DATASET)[0]["cases"][7]
+    decision_posts = 0
+    cancel_posts = 0
+    task_reads = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal decision_posts, cancel_posts, task_reads
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
+        path = request.url.path
+        if request.method == "POST" and path == "/api/v1/tasks":
+            return httpx.Response(
+                202,
+                json={
+                    "task": {"task_id": "task-stop", "status": "queued", "version": 0},
+                    "latest_run": {"run_id": "run-stop", "manifest_id": "manifest-stop"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task-stop":
+            task_reads += 1
+            return httpx.Response(
+                200,
+                json={
+                    "task": {"task_id": "task-stop", "status": "waiting_for_input", "version": 7},
+                    "latest_run": {"run_id": "run-stop", "manifest_id": "manifest-stop"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task-stop/decision":
+            return httpx.Response(
+                200,
+                json={
+                    "decision_id": "decision-stop",
+                    "kind": "evidence-insufficient",
+                    "status": "pending",
+                    "reason": "insufficient evidence",
+                    "allowed_actions": ["provide_context", "limited_report", "cancel"],
+                },
+            )
+        if request.method == "GET" and path.endswith("/observability"):
+            return httpx.Response(
+                200,
+                json={
+                    "availability": "available",
+                    "run_id": "run-stop",
+                    "totals": {"total_tokens": None, "token_usage_complete": False},
+                },
+            )
+        if request.method == "POST" and "/decisions/" in path:
+            decision_posts += 1
+            raise AssertionError("stop-at-hitl must not submit a resolution")
+        if request.method == "POST" and path.endswith("/cancel"):
+            cancel_posts += 1
+            raise AssertionError("stop-at-hitl must not cancel the task")
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    options = CollectionOptions(
+        profile="serial",
+        repetition=1,
+        concurrency=1,
+        poll_interval_seconds=0,
+        case_timeout_seconds=5,
+        stop_at_hitl=True,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://test"
+    ) as client:
+        collector = DurableBaselineCollector(
+            client,
+            tmp_path,
+            experiment_id="experiment-stop",
+            dataset_hash="s" * 64,
+            options=options,
+        )
+        result = (await collector.collect([case]))[0]
+
+    assert task_reads == 1
+    assert decision_posts == 0
+    assert cancel_posts == 0
+    assert result["status"] == "waiting_for_input"
+    assert result["error_code"] == "HITL_REQUIRED_NO_AUTO_RESOLUTION"
+    assert result["hitl_resolutions"] == 0
+    assert result["task_id"] == "task-stop"
+    assert result["run_id"] == "run-stop"
+    assert result["manifest_id"] == "manifest-stop"
+    assert result["observability"]["run_id"] == "run-stop"
+    assert result["report_path"] is None
+
+
+@pytest.mark.asyncio
+async def test_single_stop_at_hitl_keeps_source_health_and_metadata_identity(tmp_path, monkeypatch):
+    environment = json.loads(
+        Path("benchmarks/product-baseline-environment.example.json").read_text(encoding="utf-8")
+    )
+    environment.update(
+        status="ready",
+        retrieval_health="passed",
+        llm_compatibility="passed",
+        dependency_snapshot_sha256="a" * 64,
+        knowledge_snapshot_sha256="b" * 64,
+    )
+    environment_path = tmp_path / "environment.json"
+    environment_path.write_text(json.dumps(environment), encoding="utf-8")
+    output = tmp_path / "single-stop"
+    args = baseline.build_parser().parse_args(
+        [
+            "collect-single",
+            "--case-id",
+            "P08",
+            "--environment-file",
+            str(environment_path),
+            "--output-dir",
+            str(output),
+            "--api-base",
+            "http://127.0.0.1:8011",
+            "--repetition",
+            "1",
+            "--execute-paid-runs",
+            "--stop-at-hitl",
+        ]
+    )
+    decision_posts = 0
+    cancel_posts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal decision_posts, cancel_posts
+        path = request.url.path
+        if path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
+        if request.method == "POST" and path == "/api/v1/tasks":
+            return httpx.Response(
+                202,
+                json={
+                    "task": {"task_id": "task-cli-stop", "status": "queued", "version": 0},
+                    "latest_run": {"run_id": "run-cli-stop", "manifest_id": "manifest-cli-stop"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task-cli-stop":
+            return httpx.Response(
+                200,
+                json={
+                    "task": {
+                        "task_id": "task-cli-stop",
+                        "status": "waiting_for_input",
+                        "version": 3,
+                    },
+                    "latest_run": {
+                        "run_id": "run-cli-stop",
+                        "manifest_id": "manifest-cli-stop",
+                    },
+                },
+            )
+        if request.method == "GET" and path.endswith("/decision"):
+            return httpx.Response(
+                200,
+                json={"decision_id": "decision-cli-stop", "status": "pending"},
+            )
+        if request.method == "GET" and path.endswith("/observability"):
+            return httpx.Response(
+                200,
+                json={
+                    "availability": "available",
+                    "run_id": "run-cli-stop",
+                    "totals": {"total_tokens": None, "token_usage_complete": False},
+                },
+            )
+        if request.method == "POST" and "/decisions/" in path:
+            decision_posts += 1
+            raise AssertionError("single stop-at-hitl must not resolve")
+        if request.method == "POST" and path.endswith("/cancel"):
+            cancel_posts += 1
+            raise AssertionError("single stop-at-hitl must not cancel")
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        baseline.httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+    monkeypatch.setattr(baseline, "_git_commit", lambda: "offline-fixture")
+
+    assert await baseline._collect(args) == 0
+    metadata = json.loads((output / "experiment.json").read_text(encoding="utf-8"))
+    records = [
+        json.loads(line)
+        for line in (output / "runs.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert decision_posts == 0
+    assert cancel_posts == 0
+    assert metadata["execution_mode"] == "single"
+    assert metadata["source_health"] == "passed"
+    assert metadata["collector_stop_reason"] is None
+    assert records[0]["error_code"] == "HITL_REQUIRED_NO_AUTO_RESOLUTION"
+    assert records[0]["hitl_resolutions"] == 0
+    assert records[0]["task_id"] == "task-cli-stop"
+    assert records[0]["run_id"] == "run-cli-stop"
+    assert records[0]["manifest_id"] == "manifest-cli-stop"
+
+
+@pytest.mark.asyncio
+async def test_stop_at_hitl_timeout_keeps_waiting_task_without_cancellation(tmp_path):
+    case = load_dataset(DATASET)[0]["cases"][7]
+    decision_posts = 0
+    cancel_posts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal decision_posts, cancel_posts
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
+        path = request.url.path
+        if request.method == "POST" and path == "/api/v1/tasks":
+            return httpx.Response(
+                202,
+                json={
+                    "task": {"task_id": "task-timeout-stop", "status": "queued", "version": 0},
+                    "latest_run": {"run_id": "run-timeout-stop", "manifest_id": "manifest-timeout-stop"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task-timeout-stop":
+            return httpx.Response(
+                200,
+                json={
+                    "task": {
+                        "task_id": "task-timeout-stop",
+                        "status": "waiting_for_input",
+                        "version": 4,
+                    },
+                    "latest_run": {
+                        "run_id": "run-timeout-stop",
+                        "manifest_id": "manifest-timeout-stop",
+                    },
+                },
+            )
+        if request.method == "GET" and path.endswith("/decision"):
+            await __import__("asyncio").sleep(0.3)
+            return httpx.Response(
+                200,
+                json={"decision_id": "decision-timeout-stop", "status": "pending"},
+            )
+        if request.method == "GET" and path.endswith("/observability"):
+            return httpx.Response(
+                200,
+                json={
+                    "availability": "available",
+                    "run_id": "run-timeout-stop",
+                    "totals": {"total_tokens": None, "token_usage_complete": False},
+                },
+            )
+        if request.method == "POST" and "/decisions/" in path:
+            decision_posts += 1
+            raise AssertionError("timeout stop-at-hitl must not resolve")
+        if request.method == "POST" and path.endswith("/cancel"):
+            cancel_posts += 1
+            raise AssertionError("timeout stop-at-hitl must not cancel")
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    options = CollectionOptions(
+        profile="serial",
+        repetition=1,
+        concurrency=1,
+        poll_interval_seconds=0,
+        case_timeout_seconds=0.2,
+        stop_at_hitl=True,
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://test"
+    ) as client:
+        collector = DurableBaselineCollector(
+            client,
+            tmp_path,
+            experiment_id="experiment-timeout-stop",
+            dataset_hash="t" * 64,
+            options=options,
+        )
+        result = (await collector.collect([case]))[0]
+
+    assert decision_posts == 0
+    assert cancel_posts == 0
+    assert result["status"] == "waiting_for_input"
+    assert result["collector_timeout"] is True
+    assert result["error_code"] == "QUALIFICATION_TIMEOUT_NO_AUTO_CANCELLATION"
+    assert result["hitl_resolutions"] == 0
+    assert result["run_id"] == "run-timeout-stop"
+    assert result["manifest_id"] == "manifest-timeout-stop"
+    assert result["observability"]["run_id"] == "run-timeout-stop"
+
+
+@pytest.mark.asyncio
+async def test_collector_rejects_frozen_manifest_after_admission_without_followup_reads(tmp_path):
+    case = load_dataset(DATASET)[0]["cases"][7]
+    task_reads = 0
+    decision_posts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal task_reads, decision_posts
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "runtime_instance": "active"})
+        path = request.url.path
+        if request.method == "POST" and path == "/api/v1/tasks":
+            return httpx.Response(
+                202,
+                json={
+                    "task": {"task_id": "task-manifest", "status": "queued", "version": 0},
+                    "latest_run": {"run_id": "run-manifest", "manifest_id": "actual-manifest"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task-manifest":
+            task_reads += 1
+            raise AssertionError("manifest mismatch must stop before task polling")
+        if request.method == "GET" and path.endswith("/observability"):
+            return httpx.Response(
+                200,
+                json={
+                    "availability": "available",
+                    "run_id": "run-manifest",
+                    "totals": {"total_tokens": None, "token_usage_complete": False},
+                },
+            )
+        if request.method == "POST" and "/decisions/" in path:
+            decision_posts += 1
+            raise AssertionError("manifest mismatch must not resolve HITL")
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    options = CollectionOptions(
+        profile="serial",
+        repetition=1,
+        concurrency=1,
+        poll_interval_seconds=0,
+        case_timeout_seconds=5,
+        stop_at_hitl=True,
+        expected_manifest_id="expected-manifest",
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://test"
+    ) as client:
+        collector = DurableBaselineCollector(
+            client,
+            tmp_path,
+            experiment_id="experiment-manifest",
+            dataset_hash="m" * 64,
+            options=options,
+        )
+        result = (await collector.collect([case]))[0]
+
+    assert task_reads == 0
+    assert decision_posts == 0
+    assert result["status"] == "queued"
+    assert result["error_code"] == "FROZEN_MANIFEST_MISMATCH"
+    assert result["hitl_resolutions"] == 0
+    assert result["task_id"] == "task-manifest"
+    assert result["run_id"] == "run-manifest"
+    assert result["manifest_id"] == "actual-manifest"
+    assert result["observability"]["run_id"] == "run-manifest"
+
+
+def test_qualification_environment_rejects_alternate_dataset_before_http_or_output(
+    tmp_path, monkeypatch
+):
+    environment = json.loads(
+        Path("benchmarks/product-baseline-environment.example.json").read_text(encoding="utf-8")
+    )
+    environment.update(
+        status="ready",
+        retrieval_health="passed",
+        llm_compatibility="passed",
+        dependency_snapshot_sha256="a" * 64,
+        knowledge_snapshot_sha256="b" * 64,
+        notes={
+            "qualification_mode": "single-admission-v1",
+            "dataset_hash": "f" * 64,
+        },
+    )
+    environment_path = tmp_path / "qualification-environment.json"
+    environment_path.write_text(json.dumps(environment), encoding="utf-8")
+    output = tmp_path / "qualification-output"
+    dataset = {
+        "dataset_id": "product-baseline-v1",
+        "version": "1.0.0",
+        "freeze_date": "2026-09-16",
+        "cases": [],
+    }
+    monkeypatch.setattr(baseline, "load_dataset", lambda *_args, **_kwargs: (dataset, "a" * 64))
+
+    args = baseline.build_parser().parse_args(
+        [
+            "collect-single",
+            "--case-id",
+            "P01",
+            "--environment-file",
+            str(environment_path),
+            "--output-dir",
+            str(output),
+            "--repetition",
+            "1",
+            "--execute-paid-runs",
+            "--stop-at-hitl",
+        ]
+    )
+    with pytest.raises(ValueError, match="dataset hash"):
+        __import__("asyncio").run(baseline._collect(args))
+    assert not output.exists()
+
+
+def test_qualification_environment_rejects_batch_or_non_stop_entrypoint_before_verify(
+    tmp_path, monkeypatch
+):
+    environment = json.loads(
+        Path("benchmarks/product-baseline-environment.example.json").read_text(encoding="utf-8")
+    )
+    environment.update(
+        status="ready",
+        retrieval_health="passed",
+        llm_compatibility="passed",
+        dependency_snapshot_sha256="a" * 64,
+        knowledge_snapshot_sha256="b" * 64,
+        notes={
+            "qualification_mode": "single-admission-v1",
+            "dataset_hash": "a" * 64,
+        },
+    )
+    environment_path = tmp_path / "qualification-environment.json"
+    environment_path.write_text(json.dumps(environment), encoding="utf-8")
+    output = tmp_path / "qualification-output"
+    dataset = {
+        "dataset_id": "product-baseline-v1",
+        "version": "1.0.0",
+        "freeze_date": "2026-09-16",
+        "cases": [],
+    }
+    monkeypatch.setattr(baseline, "load_dataset", lambda *_args, **_kwargs: (dataset, "a" * 64))
+    from benchmarks import product_baseline_qualification as qualification
+
+    def unexpected_verify(_environment):
+        raise AssertionError("invalid qualification entrypoint must reject before verify")
+
+    monkeypatch.setattr(qualification, "verify_frozen_environment", unexpected_verify)
+    args = baseline.build_parser().parse_args(
+        [
+            "collect",
+            "--environment-file",
+            str(environment_path),
+            "--output-dir",
+            str(output),
+            "--profile",
+            "serial",
+            "--repetition",
+            "1",
+            "--concurrency",
+            "1",
+            "--execute-paid-runs",
+        ]
+    )
+    with pytest.raises(ValueError, match="qualification environment"):
+        __import__("asyncio").run(baseline._collect(args))
+    assert not output.exists()
 
 
 @pytest.mark.asyncio
@@ -554,3 +1015,38 @@ async def test_route_preflight_retains_only_allowlisted_fields(monkeypatch):
     assert result["sources"] == {"tavily": {"ok": True, "channel": "direct"}}
     assert result["tavily_credential_probe"] == "not_run"
     assert "sensitive" not in json.dumps(result)
+
+
+def test_stop_at_hitl_is_exposed_only_by_single_case_cli():
+    parser = build_parser()
+    single = parser.parse_args(
+        [
+            "collect-single",
+            "--case-id",
+            "P08",
+            "--environment-file",
+            "fixture",
+            "--output-dir",
+            "fixture",
+            "--repetition",
+            "1",
+            "--stop-at-hitl",
+        ]
+    )
+    assert single.stop_at_hitl is True
+    batch = parser.parse_args(
+        [
+            "collect",
+            "--environment-file",
+            "fixture",
+            "--output-dir",
+            "fixture",
+            "--profile",
+            "serial",
+            "--repetition",
+            "1",
+            "--concurrency",
+            "1",
+        ]
+    )
+    assert not hasattr(batch, "stop_at_hitl")

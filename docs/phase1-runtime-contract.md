@@ -390,3 +390,17 @@ TLS 失败、断连、超时和取消均清理持有 stream，取消继续传播
 逻辑 `http_calls` reserve/settle/unknown。公开引用四状态/reason/schema、预算错误 fail
 closed 和 lifecycle/fencing/SSE 不变。self-forward、远程、SOCKS/HTTPS 代理、认证和
 经代理 HTTP 引用继续拒绝。本轮离线验收不证明真实代理可用性或模型报告质量。
+
+## O1-PR1：单例资格消费者（2026-09-18）
+
+仅 `collect-single --stop-at-hitl` 在读取 public pending decision 后停止采集，保留
+task/run/manifest、最后 observability 和 `HITL_REQUIRED_NO_AUTO_RESOLUTION`。
+该模式不调用决策 POST、cancel 或 resume，正常 HITL 停止也不伪造来源降级；正式采集
+默认策略不变。隔离实验 factory 仍禁用自动恢复，产品默认恢复保持原有契约。
+`serve --embedding-startup-mode cold-in-research` 使用同一资源限制，跳过启动预热，
+第一次实际研究调用才加载模型；旧环境缺少 startup mode 时只按原 prewarmed 解释。
+冻结启动策略或可信代理 hash 漂移在模型加载和服务启动前拒绝。
+资格前置独立于研究预算，dispatch 前限制非 LLM HTTP 20、Tavily POST 1、LLM 4；
+JSON/工具探测禁用 SDK 重试，失败停止，路由降级时不调用付费服务。`prepare` 不外呼，
+只接受同 Git/依赖/模型端点/路由的成功前置；无 WAL 种子按字节复制至新目录，原件不改。
+单例控制器限定一个任务准入，保留实例/运行租约与资源观测；该观察不证明并发或主机稳定。

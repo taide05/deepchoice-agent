@@ -125,6 +125,16 @@ O1 剩余工作现归为 [3 个 PR](docs/o1-next-steps.md)：当前候选单例�
 
 ## 快速开始
 
+O1-PR1 单例资格入口已补齐：`product_baseline_qualification preflight` 在实际 dispatch 前
+限制一轮非 LLM HTTP 20 / Tavily POST 1 / LLM 4，路由汇总降级后停止付费探测；`prepare` 离线核对同一
+Git、依赖、模型端点及路由配置，复制无 WAL 的冻结种子至全新隔离目录。
+`product_baseline_experiment serve --embedding-startup-mode cold-in-research` 跳过预热，
+`product_baseline collect-single --stop-at-hitl` 保留暂停状态，不提交决策。
+默认启动仍预热，正式采集默认 HITL 策略不变；操作边界见 [评估入口](benchmarks/README.md)。
+这些入口和离线验证本身不证明单例资格或批准批次。
+本机 O1-PR1 离线验收（2026-09-18，Python 3.12.4）：59 聚焦 / 1439 全套通过、0 跳过
+（全套 328.91 秒）；smoke 12/12、静态/依赖检查及独立复审通过。真实资格见单例验真记录。
+
 ```powershell
 # 1. 克隆
 git clone https://github.com/taide05/deepchoice-agent.git

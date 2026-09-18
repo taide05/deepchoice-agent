@@ -17,7 +17,9 @@
 | `.github/workflows/benchmark.yml` | 手动离线 smoke；已移除旧付费 runner 和固定 Top-1 门槛 |
 
 O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已获用户批准冻结为 1.0.0，48-run 额度已确认。
-当前已创建 36/48 个 run，运行阻塞后已关闭服务；见[部分实测与恢复保护缺口](../docs/o1-live-baseline.md)。**不要续跑或重启这批已有数据库，不绕过租约，不自动补跑**；下述命令是操作说明，不授权当前作废组重测。
+原串并发批次创建 36 个 run 后因运行阻塞关闭服务；见[部分实测与恢复保护缺口](../docs/o1-live-baseline.md)。
+后续独立单例使历史研究额度累计 44/48（2026-09-18），不是完整串并发分母。
+**不要续跑或重启这批已有数据库，不绕过租约，不自动补跑**；下述命令是操作说明，不授权当前作废组重测。
 正式实验进度及主机风险见[执行断点](../docs/o1-execution-status.md)。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
 任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
 代替此项。
@@ -59,6 +61,28 @@ $env:LEARNED_DOCS_READONLY = "1"
 .\.venv\Scripts\python.exe -m benchmarks.product_baseline_preflight --output <模型检查.json> --execute-paid-probes
 ```
 第二次 repetition 使用 `serial-r2` / `concurrent-r2`；两次均通过才算并发效果门禁通过。
+
+## O1-PR1 单例资格
+
+以下为已批准单轮的操作入口，不能循环使用。一轮路由汇总降级后停止付费探测；
+沿用既定 resolver 候选通道选择，禁止重新执行整轮。只有全部通过才能离线 prepare。
+输出目录必须不存在，工作树必须干净。前置 journal 在 dispatch 前 fsync，保守计入 forward
+carrier HTTP，但不会将 carrier POST 误计为 Tavily 付费 POST；隐式代理 CONNECT 不在该计数中。
+准备成本单列，JSON/工具各最多一次且禁用 SDK 重试，实际 LLM 总上限 4。
+`--trust-current-local-proxy` 只对当前实验进程选择严格固定本地代理，不修改 `.env`。
+
+```powershell
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline_qualification preflight --output-dir <新前置目录> --trust-current-local-proxy --execute-paid-probes
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline_qualification prepare --output-dir <新实验目录> --preflight-dir <本轮前置目录> --frozen-seed <已验证无WAL种子> --expected-knowledge-sha256 <冻结树hash> --trust-current-local-proxy
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline_experiment serve --root <新实验目录> --profile serial-r1 --embedding-startup-mode cold-in-research
+.\.venv\Scripts\python.exe -m benchmarks.product_baseline collect-single --case-id P01 --repetition 1 --environment-file <新实验目录/environment.json> --output-dir <新采集目录> --api-base http://127.0.0.1:8011 --execute-paid-runs --stop-at-hitl
+```
+
+serve 进程须继承相同的显式可信代理配置；启动检查该 hash 和冷启策略。默认 serve 仍预热，
+默认 collect-single/collect 仍执行冻结 HITL 策略。资格模式等待 HITL 即停，禁止自动动作、
+重试或恢复；原始报告、Trace 和资源/实际 CONNECT/TLS 观测留本地。
+前置与 completed 不能单独证明资格，完整报告声明核对和独立复核见
+[PR 划分](../docs/o1-next-steps.md)。未覆盖的实际动态 TLS 保持 unavailable；不额外外呼补测。
 
 ## 有意使用历史直连工具
 
