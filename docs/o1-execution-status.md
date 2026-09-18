@@ -1,8 +1,10 @@
 # O1 执行断点
 
-当前（2026-09-17）：P01 冷启 completed 后已授权 C 证据/题名/引用绑定离线修复，
-新运行冻结 source-score-v2 / what-why-how-v2，真实效果待另确认单例复测。累计 44/48；批次/O2 不恢复。当前事实以
-[单例验真](o1c-single-case-verification.md)与[剩余任务卡](o1-next-steps.md)为准；下文均为历史轮次。
+当前（2026-09-18）：A/B、C1/C2 离线完成，当前候选 P01 尚未复测；前次前置 4/5 停止后，
+arxiv 同路由单探测 HTTP 200，旧限流细因未确定。累计 44/48；完整前置/批次/O2 不自动恢复。
+用户要求将剩余交付重组为 3 个 PR，详见 [O1 PR 划分](o1-next-steps.md)；
+正式基线仍需 48 个新 run、按 24 + 另批 24 推进。
+当前执行事实以 [单例验真](o1c-single-case-verification.md)为准；下文均为历史轮次。
 
 2026-09-17 最新诊断：用户要求先定位两项阻断；一次 community 单源反馈为 HTTP 400 /
 API 502 throttle_violation，probe 未带已配置的可选 key，限流范围/恢复期限未知。

@@ -4,6 +4,8 @@
 
 ### Added
 
+- Reorganized remaining O1 delivery into three planned PRs: current-candidate single-case qualification/freeze; 48 fresh paired serial/concurrent runs with per-round review (24 then separately authorized 24); evaluation closure and one optimization hypothesis. Completed A/B and offline C1/C2 stay closed. Existing v4 dataset, thresholds, budgets, holdout isolation and human-calibration boundaries unchanged; this planning update does not authorize paid execution or O2
+
 - User-authorized arxiv-only diagnosis (2026-09-18, one provider GET, same local-proxy): HTTP 200 with no Retry-After or current gate cooldown. Previous degradation was not reproduced and its specific cause remains unknown; no mixed-time five-source pass, complete prerequisite round or P01 execution. Zero LLM/Tavily paid POST/research calls, quota 44/48 unchanged. Sanitized evidence remains local; MockTransport 200/429 checks and pyflakes passed, production code/tests unchanged
 
 - User-authorized O1-C C3 prerequisite round on candidate d567b26 (2026-09-18, five network health items): 4/5 passed; arxiv selected local-proxy but projected rate_limited, so stopped before Tavily paid POST, LLM, service startup or P01 submission. Zero new research runs, quota 44/48 unchanged; no automatic recheck/replacement or batch/O2 entry. Configuration opt-in stayed process-local, .env unchanged. Raw POST counter mistakenly included the community forward carrier; originals retained with a separate audited projection confirming zero paid Tavily attempts. Current engineering acceptance remains C2's offline evidence, not a live-quality pass
