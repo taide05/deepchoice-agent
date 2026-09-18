@@ -1,8 +1,14 @@
-from sentence_transformers import SentenceTransformer
 from threading import Lock
 
 _model = None
 _model_lock = Lock()
+
+
+def SentenceTransformer(*args, **kwargs):
+    """Load the native constructor only when an embedding model is requested."""
+    from sentence_transformers import SentenceTransformer as constructor
+
+    return constructor(*args, **kwargs)
 
 
 def get_embedding_model():

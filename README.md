@@ -129,13 +129,14 @@ O1-PR1 单例资格入口已补齐：`product_baseline_qualification preflight` 
 限制一轮非 LLM HTTP 20 / Tavily POST 1 / LLM 4，路由汇总降级后停止付费探测；`prepare` 离线核对同一
 Git、依赖、模型端点及路由配置，复制无 WAL 的冻结种子至全新隔离目录。
 `product_baseline_experiment serve --embedding-startup-mode cold-in-research` 跳过预热，
+嵌入依赖也延迟到首次模型调用导入，采集器读取契约不加载该原生库；单例锁与模型不变。
 `product_baseline collect-single --stop-at-hitl` 保留暂停状态，不提交决策。
 默认启动仍预热，正式采集默认 HITL 策略不变；操作边界见 [评估入口](benchmarks/README.md)。
 这些入口和离线验证本身不证明单例资格或批准批次。
-本机 O1-PR1 离线验收（2026-09-18，Python 3.12.4）：59 聚焦 / 1439 全套通过、0 跳过
-（全套 328.91 秒）；smoke 12/12、静态/依赖检查及独立复审通过。真实资格见单例验真记录。
-本轮唯一真实前置（2026-09-18 03:45 UTC）仍 4/5、arxiv rate_limited 后停止，付费/新研究均 0，
-44/48 不变。P01 未提交，PR1 单例资格仍 unavailable；见 [单例验真](docs/o1c-single-case-verification.md)。
+本机 O1-PR1 资源修正验收（2026-09-18，Python 3.12.4）：103 聚焦 / 1441 全套通过、0 跳过
+（全套 211.19 秒）；smoke 12/12、静态/依赖检查及独立复审通过。
+此前完整新前置 5/5、JSON/tool 通过（准备 349 token），随后在服务启动前内存线拒绝，
+P01 未提交、44/48 不变。新修正候选须取得新资格；见 [单例验真](docs/o1c-single-case-verification.md)。
 
 ```powershell
 # 1. 克隆

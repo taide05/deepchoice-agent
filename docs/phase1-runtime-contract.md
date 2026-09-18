@@ -399,6 +399,8 @@ task/run/manifest、最后 observability 和 `HITL_REQUIRED_NO_AUTO_RESOLUTION`�
 默认策略不变。隔离实验 factory 仍禁用自动恢复，产品默认恢复保持原有契约。
 `serve --embedding-startup-mode cold-in-research` 使用同一资源限制，跳过启动预热，
 第一次实际研究调用才加载模型；旧环境缺少 startup mode 时只按原 prewarmed 解释。
+嵌入工具延迟导入 sentence_transformers，契约/采集器导入不提前加载该库；首次调用
+仍在既有线程工作中构造真实原生模型，双检锁保持单例，导入/构造失败不缓存失败对象。
 冻结启动策略或可信代理 hash 漂移在模型加载和服务启动前拒绝。
 资格前置独立于研究预算，dispatch 前限制非 LLM HTTP 20、Tavily POST 1、LLM 4；
 JSON/工具探测禁用 SDK 重试，失败停止，路由降级时不调用付费服务。`prepare` 不外呼，
