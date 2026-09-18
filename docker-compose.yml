@@ -16,6 +16,7 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - STACKEXCHANGE_API_KEY=${STACKEXCHANGE_API_KEY}
       - LOCAL_PROXY=${LOCAL_PROXY}
+      - SAFE_FETCH_TRUSTED_LOCAL_PROXY=${SAFE_FETCH_TRUSTED_LOCAL_PROXY:-}
       - FWD_BASE=${FWD_BASE}
       - FWD_KEY=${FWD_KEY}
       - FWD_TARGETS=${FWD_TARGETS:-export.arxiv.org,api.github.com,api.stackexchange.com}

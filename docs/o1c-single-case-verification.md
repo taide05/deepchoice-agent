@@ -1,12 +1,36 @@
 # O1-C 真实单例验真
 
-## 当前进展：缺引用与 unknown 离线收口，安全适配/真实复测未授权
+## 当前进展：C2 最小可信代理离线验收完成，真实复测未授权
+
+2026-09-18 用户确认 C2 具体边界后批准离线实现与验收：默认关闭的
+`SAFE_FETCH_TRUSTED_LOCAL_PROXY` 仅信任固定 loopback HTTP CONNECT 端点，与选中通道
+精确匹配，无认证；动态目标仅 HTTPS:443。CONNECT 使用已验证公网 IP，内层原域名
+Host/SNI/证书校验保持开启，握手累计有界、每跳重验、异常/取消清理，不切 direct。
+新 manifest 冻结 outbound-url-v2/可信端点哈希，旧 v1 仍可读但不能跨策略同 run 恢复，
+运行 resolver 配置须与冻结信任配置一致。完整接口与信任限制见 [运行契约](phase1-runtime-contract.md)。
+本轮不启用配置、不做真实来源健康/LLM/API/研究，额度 44/48 不变，C3 一例另批准。
+最终离线验收（2026-09-18，Windows/项目 .venv Python 3.12.4）：11 个受影响文件
+270 passed（120.24 秒）；完整套件 1399 passed、0 skipped（210.02 秒），无警告。
+smoke-v1 固定 12-case fixture replay 12/12、原基线匹配，指纹仍为
+`ef4b170d8e14af07cd3de2ef6e4ed7e37dd1b6bd563f5903f71c4270b7d2c4f0`，来源健康 not_run；
+没有更改 fixtures、门槛或已记录 baseline。pyflakes src/tests/benchmarks、vulture src 100%、
+pip check 与 diff 检查通过，独立只读复审未发现阻断。
+本轮精确创建的测试临时目录已清理，原实测数据及本地交接文件保留。
+测试代理曾误用全局 Python 3.13，其输出不采纳；上述验收全部由根代理在受支持 .venv 重跑取得。
+合成协议验证 IP CONNECT/内层 Host/TLS 身份、握手累计限制、异常数据/响应脱敏、取消关闭；
+集成回归验证逐跳 DNS/repin、HEAD Range fallback、429 冷却、响应/总时限和配置漂移早拒绝。
+既有引用/预算、公开投影和恢复契约在同轮聚焦与全套中验证，不增加预算或重试。
+残余边界：真实代理互通及 TLS 证书交换未测，可信依赖代理遵守 CONNECT 目标；
+真实模型逐子句遵从、报告质量、并发资格及主机稳定性仍未验收。C3 配置启用和一例新 run
+需另授权调用/费用范围；不以该实现倒推旧 P01 的 30 个 unknown 均由代理导致。
+
+## 上一轮：既定地址拒绝契约补修（不含代理适配）
 
 2026-09-18 安全适配前的离线核对发现既定地址拒绝缺口：Python 将部分组播地址的
 is_global 标为 True，旧 guard 会接受；现补显式组播/保留等类别拒绝，覆盖字面地址、
 混合 DNS 与正常公网单播回归。这不是 proxy 适配；proxy/forward 仍拒绝。
 该缺口不证明旧 P01 的 unknown 由此引起，不修改或补写实测原件。
-代理最小范围仍待具体批准：用户明确可信的固定 loopback HTTP CONNECT 端点，
+该轮结束时代理最小范围仍待具体批准：用户明确可信的固定 loopback HTTP CONNECT 端点，
 仅 HTTPS、目标端口 443，CONNECT 目标/Host 使用已验证 IP:443，内层 Host/TLS 校验仍为原域名。
 须显式 opt-in 且默认关闭；当前只是待批准范围，没有启用配置或实现该能力。
 loopback 本身不是可信证明；不能保证恶意代理遵守目标。握手须累计有界、异常数据拒绝、
@@ -17,6 +41,8 @@ loopback 本身不是可信证明；不能保证恶意代理遵守目标。握�
 0 skipped（212.40 秒）；smoke 12/12 原基线匹配，pyflakes src/tests/benchmarks、
 vulture 100%、pip check 与 diff 检查通过。代码和维护文档独立只读复审无阻断，
 复审不重复全套、不证明代理能力或真实质量。测试临时目录清理，实测原件保留。
+
+## 前一轮：缺引用与网络 unknown 分类收口
 
 用户进一步授权将缺引用与网络 unknown 纳入 O1-C 并离线处理，不调用真实服务。
 缺引用四处均在 P01 最终文本中真实不存在 marker：推荐末句与三个 finding 分号前子句；
@@ -33,7 +59,7 @@ safety_rejected、response_rejected、timeout；验证器另区分限流、准�
 公开四状态、reason/schema、词法支持策略不变；分类诊断不是网络修复。
 
 proxy/forward 被选中仍不能固定已验证 IP，继续拒绝，不自动切 direct。
-下一步先单独确认 C2 安全传输适配范围/契约；该扩大范围未获授权，不能直接声称复测准备就绪。
+该轮结束时下一步是单独确认 C2 安全传输适配范围/契约；当时未获授权，不能声称复测准备就绪。
 再经离线验收，才另确认 C3 一例新 run。旧 synthesis v1 identity 可读，跨版本同 run 恢复拒绝；
 当前 manifest 与 registry 冻结 synthesis v2/hash。smoke fixture、指标、门槛、12 个输出不变，
 仅更新时间/manifest/registry/指纹 provenance，来源健康仍 not_run。

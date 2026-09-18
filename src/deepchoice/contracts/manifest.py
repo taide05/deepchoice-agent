@@ -111,7 +111,8 @@ class RunManifest(FrozenModel):
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
     scoring_policy_version: Literal["source-score-v1", "source-score-v2"] = "source-score-v2"
-    security_policy_version: Literal["outbound-url-v1"] = "outbound-url-v1"
+    security_policy_version: Literal["outbound-url-v1", "outbound-url-v2"] = "outbound-url-v2"
+    safe_fetch_proxy_sha256: str | None = None
     citation_policy_version: Literal["deterministic-citation-v1"] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     gather_evidence: bool
@@ -204,6 +205,8 @@ def _endpoint_identity(value: str) -> str:
 
 
 def _manifest_content(task: dict) -> dict[str, Any]:
+    from ..outbound.channels import OutboundConfig
+
     prompts = (
         ("query_analyzer.decomposition_system", DECOMPOSITION_SYSTEM),
         ("query_adapter.adapt_system", ADAPT_SYSTEM),
@@ -312,7 +315,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             for retriever_id in RETRIEVER_IDS
         ),
         "scoring_policy_version": "source-score-v2",
-        "security_policy_version": "outbound-url-v1",
+        "security_policy_version": "outbound-url-v2",
+        "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v1",
         "hitl_policy_version": "evidence-insufficient-v1",
         "gather_evidence": task.get("gather_evidence", True),
@@ -354,6 +358,8 @@ def _expected_manifest_id(manifest: RunManifest) -> str:
         content.pop("citation_policy_version", None)
     if content.get("hitl_policy_version") is None:
         content.pop("hitl_policy_version", None)
+    if content["security_policy_version"] == "outbound-url-v1" and content.get("safe_fetch_proxy_sha256") is None:
+        content.pop("safe_fetch_proxy_sha256", None)
     return _sha256(_canonical_json(content))
 
 

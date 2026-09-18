@@ -367,11 +367,13 @@ async def test_v8_schema_fences_trace_epochs_and_keeps_audit_rows_immutable(
         await connection.close()
 
 
-def test_run_context_identity_comes_from_running_record() -> None:
+def test_run_context_identity_comes_from_running_record(monkeypatch) -> None:
     from deepchoice.contracts.manifest import build_run_manifest
     from deepchoice.persistence.records import RunRecord
 
+    monkeypatch.setenv("SAFE_FETCH_TRUSTED_LOCAL_PROXY", "http://127.0.0.1:7897")
     manifest = build_run_manifest({"query": "context"})
+    monkeypatch.delenv("SAFE_FETCH_TRUSTED_LOCAL_PROXY")
     running = RunRecord(
         run_id="run-1", task_id="task-1", status=RunStatus.RUNNING,
         manifest=manifest, thread_id="run-1", execution_epoch=3,
@@ -380,6 +382,9 @@ def test_run_context_identity_comes_from_running_record() -> None:
     context = RunContext.from_run_record(
         running, cancellation=_Cancellation(), trace=_Trace(), budget=_Budget()
     )
+    assert context.security_policy_version == manifest.security_policy_version == "outbound-url-v2"
+    assert context.safe_fetch_proxy_sha256 == manifest.safe_fetch_proxy_sha256
+    assert context.safe_fetch_proxy_sha256 is not None
     assert (context.task_id, context.run_id, context.manifest_id, context.execution_epoch) == (
         "task-1", "run-1", manifest.manifest_id, 3
     )

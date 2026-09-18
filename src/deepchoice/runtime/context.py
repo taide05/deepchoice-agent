@@ -88,6 +88,8 @@ class RunContext(BaseModel):
     trace: TraceSink
     budget: BudgetManager
     retrieval_cache: RetrievalCachePort | None = None
+    security_policy_version: Literal["outbound-url-v1", "outbound-url-v2"] | None = None
+    safe_fetch_proxy_sha256: str | None = None
 
     @field_validator("deadline_at")
     @classmethod
@@ -118,6 +120,8 @@ class RunContext(BaseModel):
             task_id=run.task_id,
             run_id=run.run_id,
             manifest_id=run.manifest.manifest_id,
+            security_policy_version=run.manifest.security_policy_version,
+            safe_fetch_proxy_sha256=run.manifest.safe_fetch_proxy_sha256,
             execution_epoch=run.execution_epoch,
             deadline_at=run.deadline_at,
             cancellation=cancellation,

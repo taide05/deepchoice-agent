@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpcore
 import httpx
@@ -27,6 +27,7 @@ from .channels import (
     build_channels,
 )
 from .probe import PROBES, probe_source
+from .tunnel import PinnedProxyTransport, proxy_endpoint_identity
 
 SAFE_DEFAULT_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 
@@ -49,13 +50,15 @@ class ChannelResolver:
                  probe_fn: Callable | None = None,
                  now_fn: Callable[[], float] = time.monotonic,
                  safe_url_policy: SafeUrlPolicy | None = None,
-                 safe_transport_factory: Callable[[ResolvedUrl, str], httpx.AsyncBaseTransport] | None = None):
+                 safe_transport_factory: Callable[[ResolvedUrl, str], httpx.AsyncBaseTransport] | None = None,
+                 safe_proxy_transport_factory: Callable[[ResolvedUrl, str, str], httpx.AsyncBaseTransport] | None = None):
         self.cfg = cfg or OutboundConfig.from_env()
         self.channels = channels or build_channels(self.cfg)
         self._probe_fn = probe_fn or self._default_probe
         self._now = now_fn
         self._safe_url_policy = safe_url_policy or SafeUrlPolicy()
         self._safe_transport_factory = safe_transport_factory or _pinned_transport
+        self._safe_proxy_transport_factory = safe_proxy_transport_factory or PinnedProxyTransport
         self._lock = asyncio.Lock()
         self._probe_locks: dict[str, asyncio.Lock] = {}
         # source -> {"channel": channel|None, "next_probe": float, "attempts": int}
@@ -170,9 +173,9 @@ class ChannelResolver:
     ) -> httpx.Response:
         """Fetch a dynamic URL after DNS validation and connection pinning.
 
-        Proxy and forwarding channels cannot prove that their remote hop used
-        the locally validated address, so this operation intentionally fails
-        closed when either has been selected.
+        Direct connections are pinned locally. Only an explicitly trusted,
+        matching loopback HTTP proxy may tunnel a validated IP for HTTPS:443.
+        Forwarding and other proxy capabilities continue to fail closed.
         """
         if method.upper() not in {"GET", "HEAD"}:
             raise ValueError("safe_fetch only supports GET and HEAD")
@@ -183,10 +186,26 @@ class ChannelResolver:
             or not allowed_content_types
         ):
             raise ValueError("safe_fetch limits are invalid")
+        from ..runtime.context import get_run_context
+
+        context = get_run_context()
+        proxy_identity = self.cfg.safe_fetch_proxy_sha256
+        if context is not None and (
+            context.safe_fetch_proxy_sha256 != proxy_identity
+            or (proxy_identity is not None and context.security_policy_version != "outbound-url-v2")
+        ):
+            raise UnsafeUrlError("Safe fetch configuration differs from the frozen run", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
         channel = await self.resolve(source)
         if channel is None:
             raise UnsafeUrlError("No outbound channel is available", failure=SafeFetchFailure.ROUTE_UNAVAILABLE)
-        if channel.kind != "direct":
+        proxy_url = None
+        if channel.kind == "local-proxy" and self.cfg.safe_fetch_trusted_local_proxy is not None:
+            if context is None:
+                raise UnsafeUrlError("Trusted proxy requires a frozen durable run", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
+            proxy_url = self.cfg.safe_fetch_trusted_local_proxy
+            if proxy_endpoint_identity(channel.proxy_url) != proxy_url:
+                raise UnsafeUrlError("Selected proxy differs from the trusted endpoint", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
+        elif channel.kind != "direct":
             raise UnsafeUrlError("Selected outbound channel cannot bind the validated target", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
 
         async def fetch():
@@ -198,6 +217,7 @@ class ChannelResolver:
                         max_response_bytes=max_response_bytes, max_redirects=max_redirects,
                         timeout_s=timeout_s,
                         head_fallback_to_range_get=head_fallback_to_range_get,
+                        proxy_url=proxy_url,
                     ),
                     timeout=timeout_s,
                 )
@@ -224,17 +244,29 @@ class ChannelResolver:
         max_redirects: int,
         timeout_s: float,
         head_fallback_to_range_get: bool,
+        proxy_url: str | None = None,
     ) -> httpx.Response:
         current_url = url
         current_method = method
         headers: dict[str, str] = {}
         redirects = 0
         while True:
+            if proxy_url is not None:
+                try:
+                    target = urlsplit(current_url)
+                    https_target = target.scheme.lower() == "https" and target.port in {None, 443}
+                except ValueError:
+                    https_target = False
+                if not https_target:
+                    raise UnsafeUrlError("Trusted proxy supports only HTTPS on port 443", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
             resolved = await self._safe_url_policy.resolve(current_url)
             # Pick only from the validated set. A fresh transport per hop keeps
             # pool reuse from crossing hostname/address validation boundaries.
             pinned_ip = resolved.addresses[0]
-            transport = self._safe_transport_factory(resolved, pinned_ip)
+            transport = (
+                self._safe_proxy_transport_factory(resolved, pinned_ip, proxy_url)
+                if proxy_url is not None else self._safe_transport_factory(resolved, pinned_ip)
+            )
             async with httpx.AsyncClient(
                 transport=transport,
                 timeout=timeout_s,

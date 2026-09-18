@@ -7,6 +7,7 @@ Design (2026-08-31, D:\ai-career\DC-网络层-设计-2026-08-31.md):
   (Cloudflare Worker / n8n) so machines without any proxy client can still
   reach blocked hosts.
 """
+import hashlib
 import json
 import os
 from collections.abc import Callable
@@ -44,6 +45,19 @@ class OutboundConfig:
     fwd_key: str | None = None
     fwd_allowed: tuple[str, ...] = ()
     v6_enabled: bool = False
+    safe_fetch_trusted_local_proxy: str | None = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.safe_fetch_trusted_local_proxy is not None:
+            from .tunnel import proxy_endpoint_identity
+
+            object.__setattr__(self, "safe_fetch_trusted_local_proxy",
+                               proxy_endpoint_identity(self.safe_fetch_trusted_local_proxy))
+
+    @property
+    def safe_fetch_proxy_sha256(self) -> str | None:
+        value = self.safe_fetch_trusted_local_proxy
+        return hashlib.sha256(value.encode("ascii")).hexdigest() if value is not None else None
 
     def order_for(self, source: str) -> tuple[str, ...]:
         order = self.order_overrides.get(source, self.channel_order)
@@ -67,6 +81,7 @@ class OutboundConfig:
             channel_order=channels,
             order_overrides=overrides,
             local_proxy=env.get("LOCAL_PROXY") or None,
+            safe_fetch_trusted_local_proxy=env.get("SAFE_FETCH_TRUSTED_LOCAL_PROXY") or None,
             fwd_base=env.get("FWD_BASE") or None,
             fwd_key=env.get("FWD_KEY") or None,
             fwd_allowed=fwd_allowed,

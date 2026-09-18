@@ -99,6 +99,16 @@ O1-C 缺引用/unknown 继续收口：synthesis v2 明确独立分号子句和�
 本次 84 聚焦 / 1306 全套通过、0 跳过（212.40 秒），smoke 12/12 原基线匹配，
 静态/依赖门禁和独立只读复审通过；不是网络适配或真实质量验收。
 
+2026-09-18 用户批准 O1-C C2 最小可信本地代理离线适配：新运行冻结 `outbound-url-v2`
+与可信端点哈希，旧 v1 身份可读但不能跨策略 same-run resume。默认关闭；显式信任且与
+选中通道匹配的 loopback HTTP CONNECT 代理仅用于 HTTPS:443，CONNECT 指向已验证公网 IP，
+内层 Host/TLS SNI 和证书校验仍使用原域名。握手累计有界，逐跳重新验证，异常/取消清理，
+失败保持 unknown，无 direct fallback。该能力依赖代理遵守 CONNECT 目标；loopback 不构成可信证明。
+当前没有启用配置或新增真实 API/模型/case；C3 单例仍须单独批准，44/48 不变。
+最终离线验收（2026-09-18，Windows/Python 3.12.4）：270 聚焦 / 1399 全套通过、0 跳过，
+全套 210.02 秒，无警告；smoke-v1 12/12 原基线匹配、来源健康 not_run，静态/依赖门禁和
+独立只读复审通过。真实 CONNECT/TLS 证书交换、模型报告质量和主机稳定性尚未验证。
+
 ## 快速开始
 
 ```powershell
@@ -128,6 +138,17 @@ python -m venv .venv
 `TAVILY_KEY_STATE_PATH` 默认位于 `/app/outputs/tavily_key_state.json`，随 `outputs` volume
 持久化；可通过同名宿主机环境变量覆盖。完整配置约定见
 [`AGENTS.md`](AGENTS.md)。
+
+动态 safe-fetch 的代理信任独立使用 `SAFE_FETCH_TRUSTED_LOCAL_PROXY`，默认空值（关闭），
+单独设置 `LOCAL_PROXY` 不会放开动态目标。
+该新增能力仅用于具有冻结 manifest/RunContext 的 durable run；legacy `/research` 和无
+RunContext 的执行仍拒绝代理动态 URL。
+获批准后可将它设为与所选 `LOCAL_PROXY` 同一端点：仅
+`http://<loopback-literal-IP>:<explicit-port>`，IPv6 使用方括号；禁止认证、尾部 `/`、
+路径、query、fragment、scope ID 和空白。代理端口范围 1～65535，动态目标仅 HTTPS:443。
+不支持 self-forward、远程/SOCKS/HTTPS 代理、认证或 HTTP 引用；不自动改路由。
+Docker 传递同名设置，loopback 指容器自身；不得为容器便利而扩大信任为远程代理。
+端点只以哈希进入 manifest，运行配置漂移会 fail closed；当前离线实施不授权实际启用端点。
 
 所有 LLM 调用（含结论综合、冲突再仲裁、澄清、官方来源补全和 benchmark 的在线 judge）统一使用
 DeepSeek Flash。默认沿用 `deepseek-v4-flash` 与 `https://api.deepseek.com/v1`；

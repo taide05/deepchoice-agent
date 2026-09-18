@@ -359,3 +359,34 @@ verifier 日志只含集中脱敏后的固定分类，无 URL、异常文本/堆
 字面地址、DNS 及每跳 redirect 共用该规则；正常公网单播 IPv4/IPv6 不变。
 这是补齐既定 outbound-url-v1 拒绝契约，不新增通道、代理信任或 fallback；
 proxy/forward 仍拒绝，公开引用状态/reason、预算与节拍不变。
+
+## O1-C C2：可信 loopback CONNECT 代理（2026-09-18）
+
+用户批准的离线扩展采用 `outbound-url-v2`，`RunManifest` 仍为 schema v1；新 run 冻结
+`safe_fetch_proxy_sha256`（默认 null 表示关闭）。旧 `outbound-url-v1` 缺失该字段时按历史
+内容核对 identity，仍可读取，但跨策略 same-run resume 必须拒绝。恢复时配置哈希变化也
+拒绝；`RunContext` 内部携带持久化 manifest 的策略/哈希，safe-fetch 在探测/外呼前核对
+resolver 的固定配置，漂移 fail closed。内部配置不进入 public result/event/Trace。
+该新增代理能力只用于绑定 RunContext 的 durable 执行；legacy `/research` 和其他无 context
+执行仍拒绝代理动态 URL，原 direct 路径不因该兼容约束新增拒绝。
+
+`SAFE_FETCH_TRUSTED_LOCAL_PROXY` 默认空且独立于 `LOCAL_PROXY`；只有显式设为严格
+loopback 字面 IP 的 HTTP 端点，且与 selected local-proxy 的规范端点完全匹配才允许。
+端点必须有显式合法端口 1～65535，无认证、路径（包括尾部 `/`）、query、fragment、
+scope ID 或空白。该信任依赖用户认可的代理遵守指定 CONNECT 目标，loopback 本身不是
+可信证明，不能证明恶意代理实际连接哪个 IP。不将任意远程/forward 服务纳入这一模型。
+
+动态目标仅 HTTPS:443；本地 SafeUrlPolicy 验证全部 DNS 答案，CONNECT authority 和 Host
+均使用选中已验证字面 IP:443，IPv6 带方括号。内层 URL/HTTP Host、TLS SNI 和证书校验
+对象仍为原 hostname，SSL 默认校验开启。每跳 redirect 建新隧道并重新验证，HTTPS 降
+HTTP 拒绝；HEAD 的 405/501 Range GET fallback 也重新解析/固定。现有 direct/direct-v6
+路径与普通 make_client/probe 兼容入口保持原契约，拒绝后没有 direct fallback。
+
+CONNECT 使用 public h11 的有界协议握手：每隧道最多 16 KiB 接收字节及 16 个响应事件；
+1xx、分片合计在这些限制内，101、非 2xx、缺失/异常隧道和共包额外数据拒绝。正常完成、
+TLS 失败、断连、超时和取消均清理持有 stream，取消继续传播。握手失败抛固定脱敏安全
+错误，不把代理 404/407 当作目标 HTTP 状态，引用保持 unknown；不返回原始代理响应。
+保留 content-type/64 KiB、最多 3 redirects、15 秒总网络限制、官方节拍/429 冷却及引用
+逻辑 `http_calls` reserve/settle/unknown。公开引用四状态/reason/schema、预算错误 fail
+closed 和 lifecycle/fencing/SSE 不变。self-forward、远程、SOCKS/HTTPS 代理、认证和
+经代理 HTTP 引用继续拒绝。本轮离线验收不证明真实代理可用性或模型报告质量。
