@@ -1,10 +1,88 @@
 # O1-C 真实单例验真
 
+## O1-PR1 新候选单例：2026-09-18
+
+**O1-PR1 已完成：助手暂定单例测量资格通过，候选已冻结。**
+候选 `7d622fd4916dad950ca077924327647a1f8f12c0` 的 P01 单例、完整声明台账及独立复核闭环。
+原研究额度累计 **46/48**，剩余 2；PR2/PR3、批次、O2 和发布未启动。
+下面是本候选的独立测量，不能给旧结果换标签，也不能当正式串并发或人工产品验收。
+
+- 数据集 product-baseline-v1 / 1.0.0，冻结 2026-09-16，分母 **P01 × 1 run**，hash
+  `e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f`。
+  Python 3.12.4，依赖 hash `c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b`。
+- 前置 04:53:21–04:53:41 UTC，五源 5/5；非 LLM HTTP 8、Tavily 付费 POST 1、LLM 2。
+  原生 JSON/tool strict/schema valid、无截断；准备输入 313 / 输出 36 / 合计 349 token，
+  hit 128 / miss 185。准备和研究分账，金额 unavailable；旧限流及启动失败记录保留。
+- P01 准入 04:54:59 UTC，task `e4fe457c-f8b8-4fe8-9f43-064100ddd116`，
+  run `73d91c8a-5a93-4941-80ad-046d7b4e65f2`；manifest
+  `3a7cd59683104f31c9e43f2b52defdef2c3c2bdf3fe48e5853482d9b0dddcd4a`，registry
+  `15cb66f6602a7f36090c1337f983ecbdbb3c74e77d7c9ca52c6c3c5ba799c850`，environment
+  `fef298b4403b281d9639227eb1c8504c4f447bee33086d87cf8e7c4a5987c4f3`。
+- Wall 167,469 ms / active 166,223 ms；输入 11,877 / 输出 2,216 / 合计 14,093 token，
+  21 LLM / 6 logical retrieval / 27 Trace calls，failed / LLM retries / node retries 0。
+  usage/cache 完整 21/21，hit 768 / miss 11,109（6.466%）；金额 unavailable。
+  21/21 diagnostics/finish 已知、无截断，JSON strict 21/21、schema valid 18/18；
+  repair_attempts 21 是兼容 parser 次数。Trace HTTP 0 不能当实际 fetch 总数。
+- 六源 success 6/6、partial_failures 空；Tavily 7 / Chroma 5 / GitHub 7 / arxiv 7 /
+  community 0 / official 2。社区空结果不能当有效证据；评分准入 10、strong 0、conflicts 0。
+  系统 44 引用检查：verified 0 / unsupported 2 / unreachable 0 / unknown 42，
+  不替代逐原子语义支持。来源漂移、非配对单例不能据成本或质量比例宣称改善。
+- v4 完整分母 **53 原子**：supported 27 / partial 23 / unknown 3 / unsupported 0 / uncited 0，
+  完整支持 27/53；来源 eligible 0 / ineligible 31 / unknown 22，确认合格覆盖 0/53。
+  官方主页的一手片段不能补缺失细节，分类器标签不直接等于质量；缺证不判错误，
+  不新增绝对引用/质量及格线。主审与独立复核非盲 assistant_review，人类校准 not_run。
+  必答 6/6、冲突 2/2（实际三题/一冲突，各 0/1/2），不等于语义引用满分。
+  初稿 3/6、1/2 的分歧保留；按冻结“正确且说明条件”仲裁，不引入额外量化/项目实测门槛。
+  独立已复核完整分母、原引用、所有争议及声称闭环项，无未解决评审差异，
+  未发现重大事实错误；独立网络事实认证 not_run，不强填经认证重大错误数 0。
+  零维护、WAL 写入串行边界、备份一致性、可观察迁移、模板身份/异题争议、空 What 均闭环。
+  场景适用性、多源互证及部分操作边界仍 partial/unknown；具体备份恢复及迁移阈值待验证。
+- Cold first getter 103,094 ms，包含延迟依赖导入。真实 run 内 CONNECT/TLS 6/6 成功，
+  certificate/check_hostname/原 hostname match 均 true；safe-fetch success 1，失败 5
+  （response_rejected 4 / safety_rejected 1）保持 unknown，不判命题错误。
+  68 样本 RSS 已知 68/68、authority_valid 全 true；RSS 最高 2,167,734,272 bytes，
+  可用内存最低 753,782,784 bytes，高于 512 MiB 停止线。run heartbeat 15 success / 0 failure /
+  0 loss；实例最大 gap 20,329 ms。采样不是连续峰值、硬件稳定或 12-case 并发容量证明。
+- 控制器只准入一次，无 HITL 决策/取消/恢复，汇总正常；04:57:52 UTC 服务 exit 0，
+  所属服务进程关闭。独立只读产品库 quick_check ok，task/run completed，immutable
+  run_results 与采集 snapshot/report 相等；未读取 LangGraph 私有表或重放研究。
+
+冻结范围是原知识种子不可变、每次**初始字节相同的新副本**：种子 hash
+`e55ddcac30d0e498c6e5ae02cb40d1bae95eb2831fda71e924ed9211b76466e4`，BGE revision
+`5617a9f61b028005a4858fdac845db406aefb181`。运行副本并非 Chroma 物理只读：终态树
+`3f172a617d07e145292d585486ad76db2022ea941ec8b6725872900e5eed521c`，SQLite 仅 acquire_write
+行数 170→171，其余表逐行相同、embeddings 50→50、learned_docs 逐字节相同；HNSW 两个
+文件字节变化原因未认证。原种子未改、实验副本不能复用；独立复核判定不阻断初始同种子测量。
+
+PR2 锁定条件：上述候选 Git，deepseek-v4-flash / thinking disabled，immutable manifest 的
+输出上限与 standard-enforced-v1 / unpriced-v1，source-score-v3 / what-why-how-v3 / synthesis v3 /
+scan/arbitration v2；线程上限 1、离线模型下载、LEARNED_DOCS_READONLY=1、检索缓存开启、
+LLM_DS_CONCURRENCY=80、cold-in-research、每 profile/repetition 新空产品/检查点 DB 对。
+配置 hash `4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474`，严格可信代理 hash
+`813477bf51a0efb3b5926c3759f01d02cdf25cd70e6cfc7fa186d9d5e1e1d118`，模型 endpoint hash
+`12b8deaccc34b32757dbb1497e029da0c2e7b26ffa86b9c926c08cb4692f4508`；不发布原地址或密钥。
+单例 HITL 即停不冒充正式批次动作，PR2 仍沿用冻结协议并须另批额度/明确授权。
+后续验收文档提交只记录事实，不能把本候选 Git 换成文档 HEAD；正式比较需使用该锁定提交。
+原件仅本地 `outputs/o1-pr1-continuation-20260918/experiment-4/`，报告 hash
+`eb2a647c5e1d239d2772939fe177354f97f7670efad1efdfa41298588c95012f`，snapshot hash
+`f115d54922c7c528e9276d70b7a39a1da9f494491723b7791c7d6d33cee25fd5`。
+
+完整台账 hash `8d8e5f25eebc76f5c0c6065cade7ab3662e10f1973066a95b63e2fd2641ac405`；
+独立复核 hash `483633a24e6f2d2e44419bcb222d4cf1ea3788e8450771de601b723a1999cbe3`，
+本地 candidate-freeze hash `5b0b6f01e07a5ac87a56eeb1e06e43cb5c69ee540d4b88140a58aa9bbeb4636a`。
+复核时的主审 JSON 精确副本保留，最终主审仅更新资格状态，不改变评分/绑定。
+候选提交前 228 聚焦 / 1478 全套、0 跳过（217.64 秒）、smoke 12/12、静态/依赖检查及
+独立代码复审通过；后续仅本地评审和验收文档，不重跑未改变的生产验证。
+硬件/WHEA、并发、人类校准、真实金额及正式串并发成对门禁仍未验收；O1 整体尚未完成。
+
 ## O1-PR1 继续实施：资源修正与新候选资格
 
-最新尝试（2026-09-18，分母 P01 × 1）：候选 `35cbe48c13b74905ac2e63026ebc8b1cfb54e35f`
+此前尝试（2026-09-18，分母 P01 × 1）：候选 `35cbe48c13b74905ac2e63026ebc8b1cfb54e35f`
 completed，但内容独立复核不通过，不能冻结为资格候选。累计 45/48，剩余 3，PR2 未启动。
 模板 provenance、同题冲突、空 What 与运维条件的必要修正仍在 PR1，必须形成新提交并复验。
+该失败报告的最终 v4 分母为 55：supported 15 / partial 26 / unknown 14，
+来源 eligible 0 / ineligible 45 / unknown 10；原引用及完整分母已获独立复核，失败结论保留。
+这些旧计数不能与新候选拼成一个分母或据比例宣称改善。
 
 - 新候选前置 04:15:37–04:15:54 UTC 五源 5/5，HTTP 保守 8 / Tavily 付费 POST 1 / LLM 2，
   JSON/tool strict/schema valid/无截断；349 token（输入 313、输出 36、hit 128、miss 185），
@@ -51,7 +129,7 @@ completed，但内容独立复核不通过，不能冻结为资格候选。累�
 HITL 超时回归仅替换采集器模块时钟，保证走到 decision GET 后超时，仍断言零决策/取消；
 此前受真实短时钟与磁盘耗时影响的聚焦失败不算通过。日志仅本地
 `outputs/o1-pr1-content-final-validation-20260918/full-suite.txt`。
-旧报告完整主审台账仍在独立分母/引用绑定复核，不能将暂定计数当已认证结果；
+该代码提交时旧报告台账仍待独立分母/引用复核；随后已完成55原子独立闭环，
 这些离线验收不代替新提交的前置和 P01 资格。
 下面保留资源修正与更早失败事实。
 
