@@ -2,6 +2,22 @@
 
 ## 当前进展：缺引用与 unknown 离线收口，安全适配/真实复测未授权
 
+2026-09-18 安全适配前的离线核对发现既定地址拒绝缺口：Python 将部分组播地址的
+is_global 标为 True，旧 guard 会接受；现补显式组播/保留等类别拒绝，覆盖字面地址、
+混合 DNS 与正常公网单播回归。这不是 proxy 适配；proxy/forward 仍拒绝。
+该缺口不证明旧 P01 的 unknown 由此引起，不修改或补写实测原件。
+代理最小范围仍待具体批准：用户明确可信的固定 loopback HTTP CONNECT 端点，
+仅 HTTPS、目标端口 443，CONNECT 目标/Host 使用已验证 IP:443，内层 Host/TLS 校验仍为原域名。
+须显式 opt-in 且默认关闭；当前只是待批准范围，没有启用配置或实现该能力。
+loopback 本身不是可信证明；不能保证恶意代理遵守目标。握手须累计有界、异常数据拒绝、
+逐跳重新验证、取消清理且不 fallback；未经离线协议验证不冻结底层实现。
+本轮仅纯内存协议模拟及合成/字面地址回归，未调用系统 DNS 或真实网络/API/模型/case，
+额度保持 44/48；安全适配与复测不自动启动。
+本次 Windows/Python 3.12.4 离线验收：84 聚焦通过（152.03 秒），1306 全套通过、
+0 skipped（212.40 秒）；smoke 12/12 原基线匹配，pyflakes src/tests/benchmarks、
+vulture 100%、pip check 与 diff 检查通过。代码和维护文档独立只读复审无阻断，
+复审不重复全套、不证明代理能力或真实质量。测试临时目录清理，实测原件保留。
+
 用户进一步授权将缺引用与网络 unknown 纳入 O1-C 并离线处理，不调用真实服务。
 缺引用四处均在 P01 最终文本中真实不存在 marker：推荐末句与三个 finding 分号前子句；
 没有已存在引用被代码丢弃的证据，也不是 verifier 误判。合成提示 synthesis v2 明确
@@ -21,7 +37,7 @@ proxy/forward 被选中仍不能固定已验证 IP，继续拒绝，不自动切
 再经离线验收，才另确认 C3 一例新 run。旧 synthesis v1 identity 可读，跨版本同 run 恢复拒绝；
 当前 manifest 与 registry 冻结 synthesis v2/hash。smoke fixture、指标、门槛、12 个输出不变，
 仅更新时间/manifest/registry/指纹 provenance，来源健康仍 not_run。
-本轮 Windows/Python 3.12.4 离线验收：175 聚焦通过（51.25 秒），1296 全套通过、
+2026-09-17 候选 Windows/Python 3.12.4 离线验收：175 聚焦通过（51.25 秒），1296 全套通过、
 0 skipped（196.59 秒）；smoke 12/12 基线匹配，pyflakes src/tests/benchmarks、vulture 100%、
 pip check 和 diff 检查通过。新 smoke 指纹
 `ef4b170d8e14af07cd3de2ef6e4ed7e37dd1b6bd563f5903f71c4270b7d2c4f0`。

@@ -37,6 +37,40 @@ async def test_safe_url_rejects_private_and_link_local_literals(url):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("address", ["224.0.0.1", "239.255.255.255", "ff02::1", "ff0e::1", "4000::1"])
+async def test_global_classification_does_not_admit_multicast_or_reserved(address):
+    import ipaddress
+
+    parsed = ipaddress.ip_address(address)
+    assert parsed.is_multicast or parsed.is_reserved
+    authority = f"[{address}]" if parsed.version == 6 else address
+    with pytest.raises(UnsafeUrlError):
+        await SafeUrlPolicy().resolve(f"https://{authority}/")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("address", ["224.0.0.1", "ff02::1", "4000::1"])
+async def test_mixed_dns_with_multicast_or_reserved_is_rejected_before_transport(address):
+    async def dns(_host, _port):
+        return ["93.184.216.34", address]
+
+    def forbidden_transport(*_args):
+        pytest.fail("one invalid DNS answer must reject the entire target")
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), forbidden_transport)
+    with pytest.raises(UnsafeUrlError):
+        await resolver.safe_fetch("official", "https://docs.example/")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("address", ["93.184.216.34", "2606:4700:4700::1111"])
+async def test_public_unicast_addresses_still_pass_safety_policy(address):
+    authority = f"[{address}]" if ":" in address else address
+    resolved = await SafeUrlPolicy().resolve(f"https://{authority}/")
+    assert resolved.addresses == (address,)
+
+
+@pytest.mark.asyncio
 async def test_safe_url_rejects_mixed_dns_userinfo_and_nonstandard_port():
     policy = SafeUrlPolicy(resolver=lambda _host, _port: _resolve(["93.184.216.34", "10.0.0.7"]))
     with pytest.raises(UnsafeUrlError):

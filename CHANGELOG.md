@@ -1,8 +1,11 @@
 # Changelog
 
-## [Unreleased] - 2026-09-17
+## [Unreleased] - 2026-09-18
 
 ### Added
+
+- O1-C security prerequisite: explicitly reject multicast/reserved and other prohibited address classes instead of relying on Python is_global alone; reject an entire mixed DNS answer set, retain public unicast IPv4/IPv6. Ten offline regressions cover literals, mixed DNS before transport and valid unicast. This restores the existing outbound-url-v1 contract; proxy/forward remain unsupported, no route/status/budget/pacing change or paid call. Minimal trusted-local-proxy adaptation still requires specific approval
+- Offline acceptance for that address prerequisite (2026-09-18, Windows/Python 3.12.4): 84 focused / 1306 full passed, zero skips (212.40 seconds full), smoke 12/12 existing baseline matched, static/dependency/diff checks and independent read-only review passed. No proxy adaptation, live case or quota change; test temporary directories removed, original experiments retained
 
 - O1-C missing-citation/unknown closure: synthesis prompt v2 requires separate semicolon-clause and opening/closing citations, omits unsupported assertions instead of borrowing markers; historical prompt v1 remains readable but cannot resume across revisions. Safe-fetch failures have fixed internal classifications with centrally redacted category-only logs, no raw URLs/errors/bodies; public citation status/reason/schema and security/no-fallback rules unchanged. Budget errors fail closed. Classification does not fix proxy/forward unknown or prove model compliance; security transport adaptation and a single paid re-test require separate authorization, quota 44/48 unchanged
 - Final offline acceptance for that closure (Windows/Python 3.12.4): 175 focused / 1296 full passed, zero skips (196.59 seconds full), smoke 12/12 baseline matched, static/dependency/diff checks and independent review passed. Raw P01 report/snapshot hashes unchanged; generated outputs stay local

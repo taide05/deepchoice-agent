@@ -351,3 +351,11 @@ resolver 的路由拒绝、DNS/地址固定、重定向/响应上限与 no fallb
 verifier 日志只含集中脱敏后的固定分类，无 URL、异常文本/堆栈/页面；非 public result/Trace/event。
 预算错误 fail closed，取消传播；分类不能消除 unknown，proxy/forward 安全适配须另行批准。
 不回填旧报告，不改 lifecycle/lease/fencing/SSE、硬预算、重试或缓存契约。
+
+## O1-C：既定地址拒绝契约补修（2026-09-18）
+
+安全地址判断不再仅依赖 `is_global`：Python 会将部分组播和保留 IPv6 地址标为 global，
+因此显式拒绝 loopback/private/link-local/reserved/multicast，任一 DNS 答案违规就拒绝整组。
+字面地址、DNS 及每跳 redirect 共用该规则；正常公网单播 IPv4/IPv6 不变。
+这是补齐既定 outbound-url-v1 拒绝契约，不新增通道、代理信任或 fallback；
+proxy/forward 仍拒绝，公开引用状态/reason、预算与节拍不变。

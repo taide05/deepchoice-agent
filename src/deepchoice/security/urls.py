@@ -71,9 +71,16 @@ def _require_public_address(value: str) -> str:
         address = ipaddress.ip_address(value)
     except ValueError as exc:
         raise UnsafeUrlError("DNS returned an invalid address") from exc
-    # is_global excludes private, loopback, link-local, reserved, multicast,
-    # unspecified and shared-use ranges for both IPv4 and IPv6.
-    if not address.is_global:
+    # is_global alone is insufficient: Python also marks some multicast and
+    # reserved IPv6 ranges as global. These are never public HTTP targets.
+    if (
+        not address.is_global
+        or address.is_loopback
+        or address.is_private
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_multicast
+    ):
         raise UnsafeUrlError("URL resolves to a non-public address")
     return str(address)
 
