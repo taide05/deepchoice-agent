@@ -2,6 +2,11 @@
 
 更新日期：2026-09-18
 
+最新 O1-C 断点：C2 可信本地 CONNECT 离线验收完成；随后获批 C3 一轮前置及 P01 一次，
+但 2026-09-18 网络健康 4/5、arxiv gate rate_limited 后即停。Tavily 付费/LLM/研究均未执行，
+累计 44/48 不变；后续真实调用另确认，不自动重查、补跑或进入 D/E/O2。
+依据与计数审计见 [单例验真](o1c-single-case-verification.md)。
+
 本文档是 DeepChoice 后续实施范围的当前事实源。`technical-design-engineering-enhancement.md`
 保留完整设计空间和历史方案；若两者对“现在是否实现”存在冲突，以本文档为准。
 
@@ -285,7 +290,7 @@ O1-C 后续已获诊断授权，见 [两项阻断定位](o1c-blocker-diagnosis.m
 具体契约见 [运行契约](phase1-runtime-contract.md)，验收记录见 [C 维护记录](o1c-single-case-verification.md)。
 C2 已完成离线实现、完整验证和独立复审；这不证明真实代理互通或报告效果通过。
 本次不启用配置、不做真实健康/LLM/API/case，不恢复批次、不进入 O1-D/O2、不推送；
-C3 单例需另批准调用/费用边界，研究额度仍为 44/48。
+当时 C3 单例需另批准调用/费用边界，研究额度仍为 44/48；随后获批前置的停止事实见本文开头。
 
 ## 5. 不在当前实施范围
 

@@ -104,10 +104,16 @@ O1-C 缺引用/unknown 继续收口：synthesis v2 明确独立分号子句和�
 选中通道匹配的 loopback HTTP CONNECT 代理仅用于 HTTPS:443，CONNECT 指向已验证公网 IP，
 内层 Host/TLS SNI 和证书校验仍使用原域名。握手累计有界，逐跳重新验证，异常/取消清理，
 失败保持 unknown，无 direct fallback。该能力依赖代理遵守 CONNECT 目标；loopback 不构成可信证明。
-当前没有启用配置或新增真实 API/模型/case；C3 单例仍须单独批准，44/48 不变。
+C2 离线验收时没有启用配置或新增真实 API/模型/case；当时 C3 单例仍须单独批准。
 最终离线验收（2026-09-18，Windows/Python 3.12.4）：270 聚焦 / 1399 全套通过、0 跳过，
 全套 210.02 秒，无警告；smoke-v1 12/12 原基线匹配、来源健康 not_run，静态/依赖门禁和
 独立只读复审通过。真实 CONNECT/TLS 证书交换、模型报告质量和主机稳定性尚未验证。
+
+2026-09-18 随后用户批准 C3 一轮前置及 P01 一次；仅实验进程启用经严格校验的可信本地
+代理，`.env` 不变。实际网络健康 4/5，arxiv 路由可达但 gate 投影 rate_limited，前置即停。
+Tavily 付费 POST / LLM / 新研究 run 均 0，服务未启动，额度仍 44/48；不自动重查或补跑。
+转发 carrier POST 的原计数字段误标已另加审计说明，原件保留；详见
+[单例验真](docs/o1c-single-case-verification.md)。这不是代理互通、报告质量或批次资格通过。
 
 ## 快速开始
 

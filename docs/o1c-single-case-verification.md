@@ -1,6 +1,39 @@
 # O1-C 真实单例验真
 
-## 当前进展：C2 最小可信代理离线验收完成，真实复测未授权
+## 当前进展：C3 已授权，前置降级停止，P01 未提交
+
+2026-09-18 用户批准当前候选 P01 冷启一次及一轮必要前置：路由/健康 HTTP 上限 20，
+Tavily 付费 POST 上限 1，JSON/工具 LLM 实际请求上限 4；前置失败或等待 HITL 即停，
+不补跑、不恢复、不开批次。研究硬预算仍为 60,000 token / 96 LLM / 72 retrieval /
+900,000 active ms。仅实验进程信任经严格校验的当前固定本地代理，不修改 `.env`。
+
+执行代码审计身份 `d567b2632bd5548479ab8baefa8a5b07fa7cf206`，项目 .venv Python 3.12.4。
+前置启动于 02:05:14 UTC（北京时间 10:05:14），最后请求准入 02:05:23 UTC；
+网络健康 **4/5**：tavily/github/official 为 local-proxy、community 为 self-forward，均 ok；
+arxiv 选 local-proxy，但公开健康投影为 `rate_limited`，因此停止。
+具体 HTTP 状态、Retry-After 和冷却期限未记录，不能据此断言代理断线或确定恢复时刻。
+Tavily 付费探测、LLM 探测、隔离服务、冷模型加载、研究与报告均未执行；新 run 0，
+累计 **44/48** 不变。真实 pinned CONNECT/TLS 互通、模型逐子句遵从、报告质量、
+并发资格及主机稳定性仍未验收。本轮不自动重查或提交 P01，后续真实调用需另确认。
+
+计数审计：6 条 httpx 准入记录包含社区外层逻辑 GET 和转发 carrier POST，
+底层目标/carrier 准入为 5；不把它当包含隐式 CONNECT/转发远端请求的完整 wire 计数。
+原件 `tavily_post_attempts=1` 误将任意 POST 计入该字段；所有准入均在 routing 阶段，
+该 POST 是社区转发，实际 Tavily 付费 POST **0**。原件不改，另加审计投影。
+前置控制器应用层/SDK LLM 重试均关闭，计数先持久化再 dispatch；纯合成计数检查确认
+第 21 条 httpx 准入在发送前拒绝，临时目录已清理；独立只读核对确认停止事实。
+本轮控制器原件已冻结；随后仅离线修正 POST 分类，使转发 carrier 不占 Tavily 探测额度。
+纯合成验证 1 carrier POST + 1 Tavily POST + 2 mock LLM 请求通过，真实请求 0，
+pyflakes 通过，临时目录已清理；没有重查真实来源。本轮因 arxiv 提前停止，不影响原结论。
+仓库跟踪修改仅为维护文档，没有修改生产代码、测试或持久化配置；C2 离线验收仍是该代码候选的
+工程证据，不是本次真实前置全绿。金额 unavailable；不能把未执行付费探测推为完整零费用。
+
+本地原件在 `outputs/o1c-control-20260918-c3/`，不提交：
+preflight-summary.json SHA256 `0416d320eeedd5cf0fefc94a1da936554015db55581d75e7ae6df70abc1ba8bb`；
+request-admissions.jsonl `e6b5163ecbe3a94c51f1978aaac18bfc089d3bb1188978a37108fc15cd41518e`；
+audited-observation.json `1c441d051563b9b9123bdba70fd8f6f67f31f66c50a2fcc18b3bd46f75060bcc`。
+
+## 上一轮：C2 最小可信代理离线验收完成
 
 2026-09-18 用户确认 C2 具体边界后批准离线实现与验收：默认关闭的
 `SAFE_FETCH_TRUSTED_LOCAL_PROXY` 仅信任固定 loopback HTTP CONNECT 端点，与选中通道
