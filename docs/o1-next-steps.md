@@ -5,7 +5,8 @@
 HITL 策略或预算，且当时不构成新的实施、付费调用或发布授权。
 
 随后用户依次授权并完成 O1-PR1，又在 2026-09-19 明确授权 O1-PR2 的新 48-run 批次。
-PR2 已按停止线结束本次尝试；修复后的 PR2 重试、O1-PR3 和发布仍未授权。
+PR2 已按停止线结束本次尝试，并重新拆为离线控制面修复 O1-PR2A 与重新执行/评审
+O1-PR2B。PR2A 已完成；新的真实 PR2B 批次、O1-PR3 和发布仍未授权。
 
 | 已完成部分 | 已有交付 | 尚不能据此宣称 |
 |---|---|---|
@@ -13,7 +14,8 @@ PR2 已按停止线结束本次尝试；修复后的 PR2 重试、O1-PR3 和发�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**O1-PR1 已完成；O1-PR2 已获新 48-run 批次授权，但在第一轮首个 serial run 后按停止线阻断。**
+当前状态：**O1-PR1 与离线 O1-PR2A 已完成；原 O1-PR2 真实批次在第一轮首个
+serial run 后按停止线阻断，O1-PR2B 尚未授权。**
 PR1 冻结候选仍为 `7d622fd`；2026-09-18 的 P01 × 1 completed（167.469 秒、14,093 token），
 53 原子完整台账及独立复核闭环；228 聚焦 / 1478 全套通过、0 跳过。
 2026-09-19 的 PR2 受限前置通过，随后 serial-r1 仅准入 P06 × 1；该 run 已取消结算，
@@ -21,7 +23,8 @@ PR1 冻结候选仍为 `7d622fd`；2026-09-18 的 P01 × 1 completed（167.469 �
 因此 unavailable，不能声明 PR2 基线或并发门禁完成。PR1 的累计 **46/48** 与 PR2 新批次分母分开，
 不能拼接。候选、依赖/模型、逐 case manifest、registry、知识副本和工具身份保持冻结。
 
-此前断点：PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
+以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
+PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
 2026-09-18 03:45 UTC 本轮唯一前置仍为 4/5，arxiv local-proxy 投影 rate_limited 后停止；
 HTTP 保守计数 6、付费 Tavily/LLM/新研究均 0。继续实施后完整新前置 5/5、JSON/tool 通过，
 但在提交 P01 前内存启动线拒绝；正在形成延迟导入修正的新候选，原额度 **44/48** 不变。
@@ -32,7 +35,8 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 | 剩余 PR | 对应旧任务 | 交付目标 | 完成证据与依赖 |
 |---|---|---|---|
 | O1-PR1 当前候选单例资格与冻结 | C3，含必要的 C 问题收口 | 先用一次当前候选 P01 冷启核对执行、引用/报告与成本；处理实际阻断后形成可测量的锁定候选 | 完整前置、可追溯单例记录、v4 内容核对与独立复核、资格判定和冻结清单；只有资格通过才进入 PR2 |
-| O1-PR2 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 同一候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | 每轮 12 组成对报告、声明台账及独立复核；第一轮门禁合格且无阻断后再批准第二轮，两轮分别判定 |
+| O1-PR2A 控制面离线修复 | D 的执行前置 | 修复静态探测误报、停止态预算证据和冷初始化关闭阻断；不执行真实研究 | exact operation 单元测试、公开 API stop-final 证据测试、冷初始化收束/正常退出测试及全套验证；已完成 |
+| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | 重新冻结 PR2A 工具身份；每轮 12 组成对报告、声明台账及独立复核；需要新的真实批次授权 |
 | O1-PR3 O1 结项与优化假设 | E 的总体结论 | 汇总质量、运行/成本和残余风险，冻结一个最优先的 O2 假设 | 可复算结项报告、评审资格/校准状态、独立复核及假设卡；结论可不通过，O2 实施另授权 |
 
 ## O1-PR1：当前候选单例资格与冻结
@@ -104,6 +108,31 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
   Tavily 静态探测目标写入安全 operation enum，control 仅允许该 exact operation 的 2xx-4xx；
   Tavily POST 4xx、其他 HEAD 4xx、全部 5xx、连接失败和残缺遥测仍 fail closed。还须离线覆盖
   401 健康、429/5xx/失败停线、取消后 final 预算采集及正常退出。新的真实额度和批次须重新批准。
+
+### O1-PR2A 离线控制面修复
+
+- 新增 tracked successor 工具 `scripts/o1_pr2a_prepare.py`、`scripts/o1_pr2a_child.py` 和
+  `scripts/o1_pr2a_control.py`；2026-09-19 首次正式尝试使用的 `notes/o1-pr2-*` 工具及其
+  原始输出保持不变。successor 准备器只冻结这三个 PR2A 控制链文件；PR2B 的 preflight、
+  review-pack 与 round-gate 须在真实执行授权后基于当前维护契约另行组装和冻结。
+- child 以不保留 URL 的 operation enum 分类请求。只有 method/scheme/host/port/path/query
+  全部精确匹配的 `HEAD https://api.tavily.com/search` 是 `tavily_static_probe`，允许
+  2xx-4xx；Tavily 业务请求、其他 HEAD 和其他 operation 仍只允许 2xx-3xx，所有 5xx、
+  transport failure、缺字段和残缺 JSONL 均 fail closed。
+- 准入时绑定 task/case/run。cleanup 达终态后、停服务前，控制器通过公开 task detail 与
+  observability API 验证终态和 latest-run identity，并另写
+  `stop-final-observability.json`；`active-budget-metrics.json` 只从该停止态证据生成，
+  不改写原 `runs.jsonl`，也不读取私有 Trace/checkpoint 表补证。
+- shutdown 在触碰 stop flag 前等待已观测的首次冷 embedding 初始化 start/end 配平，
+  上限 180 秒；超时或结构异常保持阻断。最终成功还要求 `service_stopped`、
+  `asyncio_runner_returned`、进程自然退出码 0 和停止态证据完整，terminate/kill 不能通过。
+- 聚焦离线回归 27 项覆盖 exact 401 健康、Tavily POST 400/429、其他 HEAD 401、5xx、
+  transport failure、残缺遥测、run identity/终态、停止态 active ledger、冷初始化收束顺序
+  与事件循环返回。PR2A 没有网络、付费、LLM 或 research run；它修复测量控制面，
+  不把已取消 P06 改成有效基线，也不授权 PR2B。
+- 最终本机验收：27 项聚焦和 1505 项全套测试通过，0 skipped（全套 207.76 秒）；
+  smoke-v1 固定 12/12 与既有 baseline 匹配，pyflakes、vulture 100%、pip check 与 diff
+  检查通过。该结果验证离线控制逻辑，不替代 PR2B 的真实服务退出或串并发验收。
 
 | PR 内检查点 | 新研究 run 上限 | 该段交付与推进条件 |
 |---|---|---|

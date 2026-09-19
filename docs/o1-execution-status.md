@@ -1,14 +1,20 @@
 # O1 执行断点
 
-当前（2026-09-19）：O1-PR1 已完成并冻结候选 `7d622fd`；用户随后授权独立的 O1-PR2
+当前（2026-09-19）：O1-PR1 已完成并冻结产品候选 `7d622fd`；用户随后授权独立的 O1-PR2
 48-run 批次。受限 fresh 前置通过五类路由、Tavily POST 与 DeepSeek JSON/tool 后，
 serial-r1 仅准入随机顺序首例 P06。PR2 控制器把 Tavily 无凭据静态 HEAD 401 误判为
 `PR2_EXTERNAL_HTTP_STOP`；冻结候选契约及回归测试明确该 2xx-4xx 响应代表路由健康。
 P06 已取消结算，另外 11 例未准入，concurrent-r1/第二轮未启动，无补跑。控制器还遗漏了
 取消后的 stop-final 预算采集：本地指标写 active=0，产品库终态为 active 21,264 ms、LLM 4、
 retrieval 6、tokens 1,265；服务最终由已验证归属的 terminate 收口。两个 P1 与该关闭异常
-均须在新批次前处理或离线诊断。
-本轮配对报告、声明台账和轮次门禁 unavailable；详见 [O1 PR 划分](o1-next-steps.md)。
+已由 O1-PR2A 离线控制面修复收口：tracked successor 以 exact operation 识别静态探测，
+cleanup 后通过公开 API 采集终态 observability/active ledger，等待冷 embedding 初始化
+配平后才停服务，并要求 asyncio runner 返回和进程自然退出。聚焦回归 27 项通过；旧正式工具
+与原始输出保持不变。PR2A 没有网络、付费、LLM 或 research run。
+最终离线验收为 27 项聚焦、1505 项全套通过且 0 skipped（207.76 秒）；smoke-v1 12/12
+baseline 匹配，静态与依赖检查通过。
+本轮配对报告、声明台账和轮次门禁仍 unavailable；新的 fresh O1-PR2B 真实批次尚未授权，
+详见 [O1 PR 划分](o1-next-steps.md)。
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 
 2026-09-17 最新诊断：用户要求先定位两项阻断；一次 community 单源反馈为 HTTP 400 /
