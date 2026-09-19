@@ -1,12 +1,11 @@
 # O1 剩余交付与 PR 划分
 
-更新：2026-09-18。按用户要求，将剩余 C/D/E 工作组织为 **3 个 PR**，A/B 保留已完成状态。
-本次只调整交付组织，不改变 [评估协议 v4](product-effectiveness-optimization.md)的冻结案例、
-rubric、质量/并发阈值、HITL 策略或预算，也不构成新的实施、付费调用或发布授权。
+更新：2026-09-19。2026-09-18 原始重组将剩余 C/D/E 工作组织为 **3 个 PR**，A/B 保留已完成状态；
+该次规划不改变 [评估协议 v4](product-effectiveness-optimization.md)的冻结案例、rubric、质量/并发阈值、
+HITL 策略或预算，且当时不构成新的实施、付费调用或发布授权。
 
-随后用户授权实施 O1-PR1，并要求继续直到完成。必要最小修正及分轮新前置/单例属于 PR1，
-仍受原 48-run 总额度、每轮调用上限和异常停止线约束；先完成工具、回归、全套及
-独立复审再真实调用；PR2/PR3 和发布仍未授权。执行与资格结论记录在现有单例验真文档。
+随后用户依次授权并完成 O1-PR1，又在 2026-09-19 明确授权 O1-PR2 的新 48-run 批次。
+PR2 已按停止线结束本次尝试；修复后的 PR2 重试、O1-PR3 和发布仍未授权。
 
 | 已完成部分 | 已有交付 | 尚不能据此宣称 |
 |---|---|---|
@@ -14,12 +13,13 @@ rubric、质量/并发阈值、HITL 策略或预算，也不构成新的实施�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**O1-PR1 已完成**，候选 `7d622fd` 获助手暂定单例测量资格并冻结。
-2026-09-18，product-baseline-v1/1.0.0 的 P01 × 1 completed（167.469 秒、14,093 token），
+当前状态：**O1-PR1 已完成；O1-PR2 已获新 48-run 批次授权，但在第一轮首个 serial run 后按停止线阻断。**
+PR1 冻结候选仍为 `7d622fd`；2026-09-18 的 P01 × 1 completed（167.469 秒、14,093 token），
 53 原子完整台账及独立复核闭环；228 聚焦 / 1478 全套通过、0 跳过。
-累计 **46/48**，剩余 2。PR2 须明确批准新批次/额度后才能启动；本次不执行。
-锁定该测量代码提交、依赖/模型/manifest/registry/知识初始新副本及冷启策略；
-后续文档 HEAD 不替换候选身份。来源缺证、人类校准、硬件/并发风险仍保留。
+2026-09-19 的 PR2 受限前置通过，随后 serial-r1 仅准入 P06 × 1；该 run 已取消结算，
+其余 11 个 case 未准入，concurrent-r1 与第二轮均未启动。质量配对、逐报告台账和轮次门禁
+因此 unavailable，不能声明 PR2 基线或并发门禁完成。PR1 的累计 **46/48** 与 PR2 新批次分母分开，
+不能拼接。候选、依赖/模型、逐 case manifest、registry、知识副本和工具身份保持冻结。
 
 此前断点：PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
 2026-09-18 03:45 UTC 本轮唯一前置仍为 4/5，arxiv local-proxy 投影 rate_limited 后停止；
@@ -72,6 +72,39 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 缓存默认开启，自学习/只读设置一致；启动前确认资源条件与异常停止线，持续观测内存及
 实例/运行租约。PR1 一次单例正常不证明 12 并发容量，不另安排压力测试。
 
+### 2026-09-19 正式执行结果
+
+- 冻结候选 `7d622fd4916dad950ca077924327647a1f8f12c0`；数据集 hash
+  `e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f`；知识快照 hash
+  `e55ddcac30d0e498c6e5ae02cb40d1bae95eb2831fda71e924ed9211b76466e4`。12 个 case 的
+  manifest 映射、依赖、配置、端点、代理、embedding revision、asset registry 及六个执行工具
+  均在首个正式准入前冻结。正式根为本地 ignored 输出，不提交报告正文、Trace 或私密环境。
+- 首次前置因本地监控 wrapper 参数名不符合冻结候选的严格签名检查，在分派前停止：
+  0 HTTP、0 Tavily POST、0 LLM、0 research run。保留该失败证据；修复只改 wrapper 的
+  `self/request` 调用约定，经静态检查和独立复审后使用 fresh 路径重试。
+- fresh 前置通过：五类检索路由健康，Tavily POST 200，DeepSeek JSON/tool 2/2；外层观测
+  10 个 HTTP 请求，其中内置预算记录 8 个非 LLM、2 个 LLM、1 个 Tavily POST；金额
+  unavailable，research run 为 0。
+- serial-r1 仅准入随机顺序首例 P06。collector 在停线记录中观测 wall time 19.125 秒；
+  取消后的生命周期为 21.418 秒，active ledger 为 21.264 秒。控制器因 Tavily 无凭据静态
+  `HEAD /search` 返回 401 而锁定 `PR2_EXTERNAL_HTTP_STOP`。冻结候选的探测契约明确把
+  Tavily 任意 2xx-4xx 视为已到达路由，回归测试固定 401 为健康；其余已观测业务 GET/POST、
+  Tavily POST 与 LLM 请求均为 200，未见 external failure。因此这是 PR2 控制器把所有
+  `>=400` 一律当来源异常造成的 P1 误报，不是已证实的 provider 降级或限流。
+- 停线后没有第二次准入。产品数据库只有 1 个 task/run，公共事件为 queued、started、progress、
+  cancel_requested、cancelled；task/run 均已持久化为 cancelled。11 个记录为 not_submitted。
+  服务已发出 `service_stopped`，但子进程未在有界等待内自然退出，控制器对已验证归属的进程执行
+  terminate，退出码 15；未留下未解析进程。该关闭异常必须在新批次前离线诊断。
+- 控制器从取消前的 collector 快照生成 `active-budget-metrics.json`，因此错误记录 active settled=0
+  且标记不完整；取消结算后的产品库按每个 reservation 最新 ledger 行聚合为 active 21,264 ms、
+  LLM 4、retrieval 6、total tokens 1,265，均无未结 reservation。原 `runs.jsonl` 保留不改写；
+  新控制器须在 cleanup 达终态后通过 public observability API 另采 stop-final 预算/调用证据。
+- 正式根的工具身份已冻结，且协议禁止异常后补跑、跨候选拼表或修改工具后继续同轮；因此不修补
+  P06、不启动 concurrent-r1/round-2。下一次真实批次必须先形成新的控制器候选：child 对完整
+  Tavily 静态探测目标写入安全 operation enum，control 仅允许该 exact operation 的 2xx-4xx；
+  Tavily POST 4xx、其他 HEAD 4xx、全部 5xx、连接失败和残缺遥测仍 fail closed。还须离线覆盖
+  401 健康、429/5xx/失败停线、取消后 final 预算采集及正常退出。新的真实额度和批次须重新批准。
+
 | PR 内检查点 | 新研究 run 上限 | 该段交付与推进条件 |
 |---|---|---|
 | 第一轮 | 24：12 serial + 12 concurrent | 完整配对、盲评/复核与门禁判定；不只运行后看 CSV passed；存在异常停止后续准入 |
@@ -92,7 +125,7 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 - 严格沿用 v4 门禁；每轮缺完整 12 组成对可评分报告则质量 unavailable，
   两轮及复核均满足才可声明并发门禁通过，并注明助手评审/人类校准资格。
 
-原 44 个历史 run、PR1 单例与这 48 个新 run 是独立分母；原额度剩余 4 不能完成新基线。
+历史 run、PR1 单例与 PR2 新批次是独立分母；本次 PR2 只有 1 个已准入后取消的 run。
 提前停止时交付诊断证据，仍不标完整基线完成。用户若选择缩减 48-run 交付，
 须明确修订协议与对应结论范围，不能由 PR 分包暗中降低验收标准。
 
