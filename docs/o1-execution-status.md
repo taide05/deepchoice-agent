@@ -13,7 +13,9 @@ cleanup 后通过公开 API 采集终态 observability/active ledger，等待冷
 与原始输出保持不变。PR2A 没有网络、付费、LLM 或 research run。
 最终离线验收为 27 项聚焦、1505 项全套通过且 0 skipped（207.76 秒）；smoke-v1 12/12
 baseline 匹配，静态与依赖检查通过。
-本轮配对报告、声明台账和轮次门禁仍 unavailable；新的 fresh O1-PR2B 真实批次尚未授权，
+本轮配对报告、声明台账和轮次门禁仍 unavailable；用户已授权 fresh O1-PR2B 第一轮实施。
+tracked preflight、prepare、PR2A child/controller、blind review 与 round gate 六文件控制链
+已完成离线实现；第二轮仍须在第一轮完整门禁后单独批准，
 详见 [O1 PR 划分](o1-next-steps.md)。
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 
