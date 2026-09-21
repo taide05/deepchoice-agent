@@ -53,10 +53,11 @@ _SAFE_FETCH_FAILURES = frozenset({
 _HTTP_OPERATIONS = frozenset({
     "tavily_static_probe", "tavily_business", "llm", "github", "arxiv",
     "community", "official", "other", "safe_fetch_public",
+    "safe_fetch_official",
 })
 
-_SAFE_FETCH_ACTIVE: ContextVar[bool] = ContextVar(
-    "o1_pr2b_safe_fetch_active", default=False
+_SAFE_FETCH_SOURCE: ContextVar[str | None] = ContextVar(
+    "o1_pr2b_safe_fetch_source", default=None
 )
 
 
@@ -95,9 +96,22 @@ def _external_operation(request: httpx.Request, model_host: str | None) -> str:
 def _observed_operation(request: httpx.Request, model_host: str | None) -> str:
     """Keep dynamic safe-fetch traffic distinct without retaining its URL."""
 
-    if _SAFE_FETCH_ACTIVE.get():
+    safe_fetch_source = _SAFE_FETCH_SOURCE.get()
+    if safe_fetch_source == "official":
+        return "safe_fetch_official"
+    if safe_fetch_source is not None:
         return "safe_fetch_public"
     return _external_operation(request, model_host)
+
+
+def _observed_source(operation: str) -> str:
+    if operation == "safe_fetch_official":
+        return "official"
+    if operation == "safe_fetch_public":
+        return "safe_fetch"
+    if operation.startswith("tavily_"):
+        return "tavily"
+    return operation
 
 
 def _error_type(exc: BaseException) -> str:
@@ -222,7 +236,8 @@ def _install_observers(telemetry: Telemetry) -> None:
     async def observed_fetch(self, source, url, **kwargs):
         run_id = _run_id()
         started = time.monotonic_ns()
-        token = _SAFE_FETCH_ACTIVE.set(True)
+        safe_fetch_source = "official" if source == "official" else "public"
+        token = _SAFE_FETCH_SOURCE.set(safe_fetch_source)
         try:
             response = await original_fetch(self, source, url, **kwargs)
         except BaseException as exc:
@@ -231,7 +246,7 @@ def _install_observers(telemetry: Telemetry) -> None:
                            duration_ms=(time.monotonic_ns() - started) / 1_000_000)
             raise
         finally:
-            _SAFE_FETCH_ACTIVE.reset(token)
+            _SAFE_FETCH_SOURCE.reset(token)
         telemetry.emit("safe_fetch_success", run_id=run_id, status="success",
                        status_code=response.status_code,
                        duration_ms=(time.monotonic_ns() - started) / 1_000_000)
@@ -242,11 +257,7 @@ def _install_observers(telemetry: Telemetry) -> None:
         operation = _observed_operation(request, model_host)
         if operation not in _HTTP_OPERATIONS:
             raise RuntimeError("unclassified external HTTP operation")
-        source = (
-            "safe_fetch"
-            if operation == "safe_fetch_public"
-            else "tavily" if operation.startswith("tavily_") else operation
-        )
+        source = _observed_source(operation)
         try:
             response = await original_http(self, request)
         except BaseException as exc:

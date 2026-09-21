@@ -140,6 +140,7 @@ def tree_identity(root: Path) -> str:
 _HTTP_OPERATIONS = {
     "tavily_static_probe", "tavily_business", "llm", "github", "arxiv",
     "community", "official", "other", "safe_fetch_public",
+    "safe_fetch_official",
 }
 
 _SAFE_FETCH_FAILURES = {
@@ -191,15 +192,22 @@ def telemetry_state(
             elif kind == "external_http_failure":
                 operation = event.get("operation")
                 error_type = event.get("error_type")
-                if operation == "safe_fetch_public":
-                    if (event.get("source") != "safe_fetch"
-                            or event.get("method") != "GET"):
-                        anomaly_reason = "safe_fetch_public_failed"
+                if operation in {"safe_fetch_public", "safe_fetch_official"}:
+                    is_official = operation == "safe_fetch_official"
+                    expected_source = "official" if is_official else "safe_fetch"
+                    allowed_methods = {"GET", "HEAD"} if is_official else {"GET"}
+                    failure_reason = (
+                        "safe_fetch_official_failed"
+                        if is_official else "safe_fetch_public_failed"
+                    )
+                    if (event.get("source") != expected_source
+                            or event.get("method") not in allowed_methods):
+                        anomaly_reason = failure_reason
                     elif error_type == "CancelledError":
                         cancelled_http_failure = True
                     elif (error_type != "UnsafeUrlError"
                             or event.get("failure") not in _SAFE_FETCH_FAILURES):
-                        anomaly_reason = "safe_fetch_public_failed"
+                        anomaly_reason = failure_reason
                 elif operation not in _HTTP_OPERATIONS:
                     anomaly_reason = "external_http_operation_invalid"
                 elif error_type == "CancelledError":
@@ -216,10 +224,20 @@ def telemetry_state(
                 elif operation == "tavily_static_probe":
                     if source != "tavily" or method != "HEAD" or not 200 <= status_code < 500:
                         anomaly_reason = "tavily_static_probe_failed"
-                elif operation == "safe_fetch_public":
-                    if (source != "safe_fetch" or method != "GET"
-                            or not 200 <= status_code < 500):
-                        anomaly_reason = "safe_fetch_public_failed"
+                elif operation in {"safe_fetch_public", "safe_fetch_official"}:
+                    is_official = operation == "safe_fetch_official"
+                    expected_source = "official" if is_official else "safe_fetch"
+                    allowed_methods = {"GET", "HEAD"} if is_official else {"GET"}
+                    status_allowed = (
+                        200 <= status_code < 500
+                        or (is_official and method == "HEAD" and status_code == 501)
+                    )
+                    if (source != expected_source or method not in allowed_methods
+                            or not status_allowed):
+                        anomaly_reason = (
+                            "safe_fetch_official_failed"
+                            if is_official else "safe_fetch_public_failed"
+                        )
                 elif not 200 <= status_code < 400:
                     anomaly_reason = "external_http_status_failed"
         if state["embedding_ended"] > state["embedding_started"]:

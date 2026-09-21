@@ -231,18 +231,41 @@ def _write_telemetry(path: Path, *events: dict) -> None:
     )
 
 
-def test_pr2b_safe_fetch_context_marks_dynamic_public_requests():
-    request = httpx.Request("GET", "https://example.com/public-citation")
-    assert child._observed_operation(request, "api.deepseek.com") == "other"
+def test_pr2b_safe_fetch_context_marks_source_aware_dynamic_requests():
+    get_request = httpx.Request("GET", "https://example.com/public-citation")
+    head_request = httpx.Request("HEAD", "https://docs.example.com/")
+    assert child._observed_operation(get_request, "api.deepseek.com") == "other"
 
-    token = child._SAFE_FETCH_ACTIVE.set(True)
+    token = child._SAFE_FETCH_SOURCE.set("public")
     try:
         assert (
-            child._observed_operation(request, "api.deepseek.com")
+            child._observed_operation(get_request, "api.deepseek.com")
+            == "safe_fetch_public"
+        )
+        assert (
+            child._observed_operation(head_request, "api.deepseek.com")
             == "safe_fetch_public"
         )
     finally:
-        child._SAFE_FETCH_ACTIVE.reset(token)
+        child._SAFE_FETCH_SOURCE.reset(token)
+
+    token = child._SAFE_FETCH_SOURCE.set("official")
+    try:
+        assert (
+            child._observed_operation(get_request, "api.deepseek.com")
+            == "safe_fetch_official"
+        )
+        assert (
+            child._observed_operation(head_request, "api.deepseek.com")
+            == "safe_fetch_official"
+        )
+    finally:
+        child._SAFE_FETCH_SOURCE.reset(token)
+
+    assert child._observed_source("safe_fetch_official") == "official"
+    assert child._observed_source("safe_fetch_public") == "safe_fetch"
+    assert child._observed_source("tavily_business") == "tavily"
+    assert child._observed_source("github") == "github"
 
 
 def test_pr2b_child_exposes_only_known_safe_fetch_failure_values():
@@ -279,6 +302,26 @@ def test_pr2b_public_safe_fetch_accepts_bounded_policy_failures(tmp_path, failur
             "method": "GET",
             "error_type": "UnsafeUrlError",
             "failure": failure,
+        },
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD"])
+def test_pr2b_official_safe_fetch_accepts_bounded_policy_failures(
+        tmp_path, method):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "operation": "safe_fetch_official",
+            "source": "official",
+            "method": method,
+            "error_type": "UnsafeUrlError",
+            "failure": "route_unsupported",
         },
     )
 
@@ -357,6 +400,37 @@ def test_pr2b_public_safe_fetch_get_accepts_bounded_2xx_through_4xx(
 
 
 @pytest.mark.parametrize(
+    ("method", "status_code"),
+    [
+        ("HEAD", 200),
+        ("HEAD", 302),
+        ("HEAD", 405),
+        ("HEAD", 429),
+        ("HEAD", 501),
+        ("GET", 200),
+        ("GET", 206),
+        ("GET", 404),
+    ],
+)
+def test_pr2b_official_safe_fetch_accepts_product_contract(
+        tmp_path, method, status_code):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_response",
+            "operation": "safe_fetch_official",
+            "source": "official",
+            "method": method,
+            "status_code": status_code,
+        },
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+@pytest.mark.parametrize(
     "event",
     [
         {
@@ -390,6 +464,74 @@ def test_pr2b_safe_fetch_5xx_and_invalid_context_fail_closed(tmp_path, event):
     state = control.telemetry_state(telemetry)
     assert state["anomaly"] is True
     assert state["reason"] == "safe_fetch_public_failed"
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {
+            "source": "official",
+            "method": "HEAD",
+            "error_type": "ConnectError",
+            "failure": "route_unsupported",
+        },
+        {
+            "source": "official",
+            "method": "POST",
+            "error_type": "UnsafeUrlError",
+            "failure": "route_unsupported",
+        },
+        {
+            "source": "safe_fetch",
+            "method": "HEAD",
+            "error_type": "UnsafeUrlError",
+            "failure": "route_unsupported",
+        },
+    ],
+)
+def test_pr2b_official_safe_fetch_failure_context_remains_fail_closed(
+        tmp_path, event):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "operation": "safe_fetch_official",
+            **event,
+        },
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "safe_fetch_official_failed"
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"source": "official", "method": "HEAD", "status_code": 500},
+        {"source": "official", "method": "GET", "status_code": 501},
+        {"source": "official", "method": "POST", "status_code": 200},
+        {"source": "safe_fetch", "method": "HEAD", "status_code": 200},
+    ],
+)
+def test_pr2b_official_safe_fetch_response_context_remains_fail_closed(
+        tmp_path, event):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_response",
+            "operation": "safe_fetch_official",
+            **event,
+        },
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "safe_fetch_official_failed"
 
 
 def test_pr2b_health_loss_precedes_secondary_cancelled_http_failures(tmp_path):

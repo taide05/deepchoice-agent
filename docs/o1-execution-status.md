@@ -2,11 +2,13 @@
 
 2026-09-21 最新授权：用户给予候选 `15ca251` 的有界持续授权，覆盖一次 P01 单例资格、
 资格通过后的两轮正式测量（每轮 12 serial + 12 concurrent）及本地 O1-PR3 收口，研究 run
-总上限 49（1 + 48，失败/取消/limited 均计入）。沿用此前批准的查询、候选项、必要上下文、
+原总上限为 49（1 + 48，失败/取消/limited 均计入）。沿用此前批准的查询、候选项、必要上下文、
 DeepSeek/Tavily/GitHub API/StackExchange API/arXiv/PyPI/官方来源、当前 local-proxy/
 self-forward 路由及公共 HTTP(S) 引用安全抓取范围。正常阶段门禁通过后无需再次征求批准；
 资源、预算、租约、主机、身份或质量异常须自动停线。超额、扩展外传范围、改变冻结评测口径、
 冻结后生产代码变更所需的额外付费替代运行，以及 push/merge/release/发布仍须另行批准。
+在本页所述 HEAD 遥测误判停线后，用户已批准离线 source-aware 修正，并把总上限从 49
+调整为 59；供应商、外传范围、案例、rubric、预算、HITL 和质量阈值均不变。
 
 随后候选 `15ca251` 的 P01 单例资格完成并由独立只读复核确认助手暂定通过：前置五类路由、
 Tavily POST 和 DeepSeek JSON/tool 均通过；P01 completed，11 LLM / 6 retrieval，11,914 tokens，
@@ -28,9 +30,14 @@ authority 有效，heartbeat failure/lease loss 均 0。concurrent-r1 和第二�
 支持 GET/HEAD；子控制器用布尔上下文把该请求折叠成 `safe_fetch_public`，父控制器又只允许该
 operation 使用 GET，因而把成功的 HEAD 302→200 误判为异常。三个 GET
 `UnsafeUrlError(route_unsupported)` 均属于控制器已接受的冻结安全结果，provider 调用未见失败。
-停止根保持不变，不重启、不补跑、不与新根拼接。持续授权累计使用 11/49，未用 38；重新取得
-完整 48-run 配对需要 fresh 48 个 run，总上限须从 49 调整到 59，并先修正、测试和重新冻结
-source-aware safe-fetch 遥测。本次控制结果、遥测、stop-final 和 resource-health SHA-256 分别为
+停止根保持不变，不重启、不补跑、不与新根拼接。持续授权累计使用 11/59，未用 48；重新取得
+完整配对仍需从新根执行 48 个 run。source-aware 修正把 exact `official` 安全抓取投影为独立
+operation，只允许产品契约的 HEAD/GET（包括既有 HEAD 405/501 回退），公共引用继续仅允许 GET；
+错误来源/方法、普通 transport 异常和不允许的 5xx 均 fail closed。精确事件回放只改写旧根的
+两条合法官方 HEAD 事件后通过，注入 POST 仍停线；50 项聚焦、pyflakes、diff 检查和最终
+1557 项全套测试通过（198.52 秒）。首次全套中的 learned-docs Windows `PermissionError` 为独立
+瞬态：该单项随后连续 5 次通过，完整重跑也通过。本次控制结果、遥测、stop-final 和
+resource-health SHA-256 分别为
 `682129ee20291564832d55f126219d52482813fe1b67387e3f41bc2226618203`、
 `f49f232b4ebeb9b18a46b8811b029f1f13ab49c90b061edf2d4957ecc4ce2b47`、
 `73e00da001e258bc23ba007b2e8deb10c6878ced010ac3429a1c4a8f906d499c`、
