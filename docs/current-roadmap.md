@@ -17,11 +17,13 @@ O1 剩余交付按用户要求组织为 3 个 PR：单例资格与候选冻结 �
 该次授权和结果现为历史事实；实时结果及候选是否取得资格以
 [单例验真](o1c-single-case-verification.md)为准。
 
-最新 PR1 状态：**候选 `15ca251` 的助手暂定单例测量资格通过**。2026-09-21，
-product-baseline-v1/1.0.0，P01 × 1 completed（108.282 秒 / 11,914 token）；68 原子台账、
-独立复核、产品库/immutable result 核对及候选冻结闭环。资格使用持续授权的 1/49，正式
-两轮剩余 48；来源缺证、动态 pinned CONNECT/TLS、人类校准、硬件稳定和正式串并发门禁
-仍未完成。PR2B 控制链已重绑定该候选；O2 及 push/merge/release/发布未授权。
+最新 PR1/重新资格状态：**查询隔离候选 `09f9b66` 的助手暂定单例测量资格通过**。
+2026-09-21，product-baseline-v1/1.0.0，P01 × 1 completed；active 71,620 ms，
+15,285 tokens、21 LLM / 6 retrieval、0 failed/retry。独立复核后的 59 原子台账为
+support 34/14/8/3、quality 0/52/7，必答 5/6、冲突 2/2、重大错误与资格阻断均为 0。
+产品库/immutable result、知识隔离、source-aware telemetry 与正常 exit 0 已冻结。
+当前使用 36/84，正式两轮剩余 48；来源缺证、人类校准、硬件稳定和正式串并发门禁仍未完成。
+PR2B 控制链重绑定该候选；O2 及 push/merge/release/发布未授权。
 
 最新 PR2B 状态：source-aware 控制提交 `91d56cd` 使用 fresh 根执行 `15ca251`。serial-r1
 完成 12/12，形成 12 份报告（1 份 limited），146,801 tokens、179 LLM / 72 retrieval、0 failed。
@@ -32,7 +34,8 @@ heartbeat/lease loss 为 0、最低可用内存 1.292 GiB；没有先发 provide
 原因仍未确认。累计使用 35 个；该根不得重启、补跑或拼接，第一轮门禁、第二轮及
 O1-PR3 均未启动。后续批准现已给出：文件型运行时增加独立公开查询 WAL 连接，任务详情和
 observability 不再排在主连接 asyncio lock 队列之后；主连接 asyncio lock 积压回归、47 项最终聚焦和 1559 项全套测试通过。
-新生产候选尚待 P01 重新资格；通过后才冻结并从 fresh 根执行 48-run 配对。当前使用 35/84。
+新生产候选 `09f9b66` 已完成 P01 重新资格与冻结；下一步从 fresh 根执行完整
+48-run 配对。当前使用 36/84。
 
 2026-09-18 的旧候选 `7d622fd` 资格及其后续正式尝试保留为历史证据，不能与新候选拼接。
 更早的继续实施断点：独立新前置五源 5/5、JSON/tool 通过，但控制器启动前

@@ -1,6 +1,6 @@
 # DeepChoice 产品效果优化策略与评估协议
 
-日期：2026-09-21 · 协议版本：v4 · 状态：O1-A 已完成；source-aware fresh 第一轮因并发 API ReadTimeout 停线，门禁 unavailable。
+日期：2026-09-21 · 协议版本：v4 · 状态：查询隔离候选已重新资格；新的 48-run 配对待从 fresh 根执行，当前门禁 unavailable。
 
 v4 明确计数、评审与结项边界，不改变已批准的 12 例/官方参考、0/1/2 rubric、标准预算或串并发阈值。
 DeepSeek Flash 统一、采集器、缓存拆账与六源限流离线修复已完成；这些不证明真实质量或并发门禁通过。
@@ -16,9 +16,10 @@ DeepSeek Flash 统一、采集器、缓存拆账与六源限流离线修复已�
 10 个 run 后因控制器把合法官方 HEAD 误判为异常而停止。用户随后把总上限由 49 调整为 59，
 source-aware 控制遥测完成离线验证并从 fresh 根重跑。该根的 serial-r1 完成 12/12、12 份报告；
 concurrent-r1 12/12 running 后所有 collector 任务均发生 durable API `ReadTimeout`，0 报告，
-11 cancelled、1 interrupted，按停止线退出。累计已使用 35、未用 24；失败、取消及 limited
-均计入。停止根不能拼接，第一轮门禁、第二轮和 O1-PR3 unavailable；完整新配对仍需 fresh
-48 个 run，当前上限不足。
+11 cancelled、1 interrupted，按停止线退出。该停止根保留为 35-run 历史分母且不能拼接。
+用户随后把硬上限调整为 84，并批准查询隔离生产改动后的 P01 重新资格和完整新配对。
+候选 `09f9b66` 已用第 36 个 run 完成资格与冻结；第 37～84 个留给 fresh 48-run。
+第一轮门禁、第二轮和 O1-PR3 仍 unavailable。
 外传对象、案例、rubric、预算、HITL 和质量阈值不变，具体边界见[当前任务卡](o1-next-steps.md)。
 不查看用于调参的保留集逐例反馈。
 

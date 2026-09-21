@@ -36,12 +36,16 @@ multi_retriever 4 succeeded / 7 cancelled / 1 started，source_evaluator 1 cance
 因此当前只确认 durable API/事件循环响应中断，不能归因为来源、预算、内存或租约，内部原因仍
 unknown。stop-final 与 active budget 因 service_not_safe 不完整。
 
-该 fresh 根保持不变，不重启、不补跑、不与后续根拼接。累计研究 run 为 35/84；已批准
-的新生产候选资格将使用第 36 个，资格通过后的完整 fresh 配对使用第 37～84 个。第一轮配对
-评审/门禁、第二轮及本地 O1-PR3 尚未重新启动。文件型运行时已离线增加第三条公开查询 WAL
-连接：task/list/decision 与 observability 不再共享主写 asyncio lock，mutation/recovery/HITL
-预检仍走主仓库。主连接 asyncio lock 积压回归、47 项最终聚焦与 1559 项全套测试通过（193.36 秒）；
-新资格尚未执行。serial/concurrent 的 profile-control、telemetry、stop-final、resource-health hash
+该 fresh 根保持不变，不重启、不补跑、不与后续根拼接。文件型运行时已离线增加第三条
+公开查询 WAL 连接：task/list/decision 与 observability 不再共享主写 asyncio lock，
+mutation/recovery/HITL 预检仍走主仓库。主连接 asyncio lock 积压回归、47 项最终聚焦与
+1559 项全套测试通过（193.36 秒）。
+
+查询隔离生产候选 `09f9b66cf114953c09ebe928c1c081667647db16` 随后用第 36 个 run
+完成 fresh P01 重新资格：15,285 tokens、21 LLM / 6 retrieval、0 failed/retry，六源 success，
+租约/结果/关停完整。独立复核后的严格 59 原子为 support 34/14/8/3、quality 0/52/7；
+必答 5/6、冲突 2/2、重大错误与资格阻断均为 0。候选已冻结，当前使用 36/84；
+完整 fresh 配对使用第 37～84 个。第一轮配对评审/门禁、第二轮及本地 O1-PR3 尚未重新启动。serial/concurrent 的 profile-control、telemetry、stop-final、resource-health hash
 分别为 `b91776d1ee6b810ab5aee26377353f878ccd0eff2de4f4871b114b6a5ff01838` /
 `f904e3f834f07cd103f8975c47274e3a04bea10cb9e3886ba4eda23d59630e5d`、
 `08f5d616fa1f3ff0c0db71c6b2db5768123bb33b5d4bce452d9bce689f072af8` /

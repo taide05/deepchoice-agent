@@ -1,5 +1,42 @@
 # O1-C 真实单例验真
 
+## 查询隔离候选重新资格：2026-09-21
+
+**候选 `09f9b66cf114953c09ebe928c1c081667647db16` 的助手暂定单例测量资格通过。**
+这是并发 API 查询隔离生产改动后的新资格，使用 product-baseline-v1/1.0.0 的 P01 × 1、
+全新产品/检查点数据库、原冻结知识种子及 cold-in-research；不与 `15ca251` 或任何旧报告拼接。
+
+- 新前置五类路由 5/5、Tavily POST 200、DeepSeek JSON/tool 2/2；research run 0。
+  数据集、依赖、配置、端点、代理、embedding、manifest/registry 及知识种子身份与候选一致。
+- P01 completed；manifest
+  `3a7cd59683104f31c9e43f2b52defdef2c3c2bdf3fe48e5853482d9b0dddcd4a`。
+  active 71,620 ms；21 LLM / 6 retrieval / 27 Trace calls，全部 succeeded；
+  输入 12,568、输出 2,717、合计 15,285 tokens，usage/cache 完整，0 retry、0 budget denial。
+- 六源 envelope 全部 success，结果数 Tavily 7 / Chroma 4 / GitHub 7 / arXiv 7 /
+  community 0 / official 2，partial_failures 空。系统引用投影为 verified 0 /
+  unsupported 7 / unreachable 0 / unknown 49；unknown 不等于事实错误。
+- 独立复核后的完整分母为 **59 原子**：supported 34 / partial 14 / unsupported 8 /
+  uncited 3；来源 eligible 0 / ineligible 52 / unknown 7；逐原子系统投影
+  verified 0 / unsupported 6 / unknown 53。必答 5/6、冲突 2/2、重大错误 0，
+  qualification blocker 0；非盲 assistant_review，人类校准 not_run。
+- 主要非阻断缺陷是 `zero operations` 绝对化、10k DAU 与 100–1,000 RPS/90-10
+  单源示例，以及备份一致性、FTS、迁移触发缺合格绑定证据；不能写成高质量证据通过。
+- source-aware 遥测只允许官方 safe-fetch 使用产品契约的 HEAD/GET；一次官方 GET
+  `route_unsupported` 保持 typed failure 与引用 `unknown`，其他异常仍 fail closed。
+  31 个资源样本最低可用内存 1,217,785,856 bytes，heartbeat failure/lease loss 为 0；
+  服务正常退出码 0，产品/检查点库 quick_check ok，task/run/result 一致且租约清空。
+- 原知识种子 hash
+  `e55ddcac30d0e498c6e5ae02cb40d1bae95eb2831fda71e924ed9211b76466e4`
+  运行后未变；已使用的 profile 副本发生预期运行时变化且禁止复用。
+  主审 hash `3c0828e7ab734b7faca0349e572caeb26acd71c91a95db40ed00800d59234dcc`，
+  独立复核 `2961c0f2d137ad3d56dd7907fb9902e51aefc30154693e1cc65ae70f17ff3e0b`，
+  候选冻结 `d1f5b3d6209c5a7e16356588fe75331812a6feaa809904c68fb14b6d9d68af00`。
+
+本次资格是第 36/84 个 research run；剩余第 37～84 个已授权给新的完整
+12 serial + 12 concurrent × 2 配对。控制器重绑定验收为 50 项聚焦与 1559 项全套通过、
+0 failed（187.96 秒），py_compile、pyflakes 与 diff 检查通过。资格不证明并发容量、硬件稳定、
+最终报告质量或人工验收。原始报告、快照、Trace、telemetry 与审查包留在 ignored `outputs/`，不提交。
+
 ## O1-PR2B 修复候选重新资格：2026-09-21
 
 **候选 `15ca251a89ff996bc787435d8965a918a89437f6` 的助手暂定单例测量资格通过。**
