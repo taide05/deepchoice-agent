@@ -4,11 +4,12 @@
 该次规划不改变 [评估协议 v4](product-effectiveness-optimization.md)的冻结案例、rubric、质量/并发阈值、
 HITL 策略或预算，且当时不构成新的实施、付费调用或发布授权。
 
-随后用户依次授权并完成 O1-PR1 与 O1-PR2A，并明确批准 O1-PR2B 第一轮 24 个付费 run
-及所需外部数据传输。2026-09-21 的 fresh 第一轮在 serial-r1 首个 P06 后因 controller
-误判公共引用 GET 403 而停止；没有第二次准入或 concurrent profile。该停止轮不得自动补跑。
-PR2B successor 离线修复现已实现；新的 fresh 第一轮仍须重新批准。第二轮须在第一轮完整门禁
-与评审完成后单独批准；O1-PR3 和发布仍未授权。
+随后用户依次授权并完成 O1-PR1 与 O1-PR2A，并两次明确批准 O1-PR2B 第一轮付费执行
+及所需外部数据传输。首次执行在 P06 后因公共引用 GET 403 的控制器误判停止；修复并重新
+批准后，第二个 fresh serial-r1 完成 P06 和受限报告 P07，又因控制器把 HITL partial marker
+误归为来源降级而停止。两次停止轮都不得自动补跑；concurrent-r1 尚未启动。最新来源判定
+修复已完成离线验收，新的 fresh 第一轮仍须重新批准。第二轮须在第一轮完整门禁与评审完成后
+单独批准；O1-PR3 和发布仍未授权。
 
 | 已完成部分 | 已有交付 | 尚不能据此宣称 |
 |---|---|---|
@@ -16,15 +17,14 @@ PR2B successor 离线修复现已实现；新的 fresh 第一轮仍须重新批�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**O1-PR1、离线 O1-PR2A 与 PR2B successor 实现已完成；2026-09-21
-第一轮真实执行只准入 P06 × 1 后停止，新的 first-round fresh 执行待重新批准。**
-PR1 冻结候选仍为 `7d622fd`；2026-09-18 的 P01 × 1 completed（167.469 秒、14,093 token），
-53 原子完整台账及独立复核闭环；228 聚焦 / 1478 全套通过、0 跳过。
-最新 PR2B P06 的取消在旧 30 秒窗口内未收敛，产品库保留 `cancelling`；另外 11 个
-serial case 未准入，concurrent-r1 与第二轮均未启动。质量配对、逐报告台账和轮次门禁
-因此 unavailable，不能声明 PR2 基线或并发门禁完成。PR1 的累计 **46/48** 与 PR2 新批次分母
-分开，不能拼接。候选产品、依赖/模型、逐 case manifest、registry 和知识种子保持冻结；
-后继 PR2B 工具链使用新的 child/controller 身份。
+当前状态：**O1-PR1、离线 O1-PR2A 与最新 PR2B 控制面修复已完成；第二次
+2026-09-21 第一轮真实执行完成 P06/P07 后停止，新的 first-round fresh 执行待重新批准。**
+PR1 冻结候选仍为 `7d622fd`。最新 fresh serial-r1 中 P06 completed，P07
+completed_with_warnings/limited_report；两例六源 envelope 均 success，合计 17,467 tokens、
+21 LLM / 12 retrieval，0 failed calls。其余 10 个 serial case 未准入，concurrent-r1 和
+第二轮均未启动。质量配对、逐报告台账和轮次门禁 unavailable，不能声明 PR2 基线或并发门禁
+完成。各历史/停止根是独立分母，不得拼接。候选产品、依赖/模型、逐 case manifest、registry
+和知识种子保持冻结；下一次 fresh 根必须冻结修正后的新 controller hash。
 
 以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
 PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
@@ -160,6 +160,24 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 - 失败根和 PR2A 工具保持不变；协议禁止在已停止的同轮自动补跑。因此这次批准实际产生
   1 个已准入 run，未完成 24-run 第一轮。离线验收完成后，新的 fresh 第一轮须重新获得
   明确执行批准。
+
+### O1-PR2B 重新执行停止与来源判定修复
+
+- 重新批准的 fresh 前置通过五类路由、Tavily POST 200、DeepSeek JSON/tool 2/2；
+  prepare 冻结 `26185c5` 控制器、候选 `7d622fd`、知识种子和 12-case manifest。
+- serial-r1 先后完成 P06 与 P07。P06 为普通报告；P07 六源全部 success，但证据不足门禁按
+  冻结动作生成 limited_report。控制器把 `evidence_insufficient_user_limited` 视为来源
+  partial failure，锁定 `PR2_SOURCE_DEGRADATION_STOP`；其余 10 例未提交，未启动并发组。
+- 两个 run 的终态 observability/active budget 完整，服务自然退出。合计 17,467 tokens、
+  21 LLM / 12 retrieval、0 failed calls；峰值 RSS 约 2.029 GiB、最低可用内存约 843 MiB。
+  观测到 2 个 HTTP 4xx、0 个 5xx 和 0 transport failure，不支持来源降级结论。
+- 修复后来源门只接受六个 distinct source envelope 全部 success；非来源 HITL/budget 标记
+  不影响来源健康。缺失、重复、failed/partial envelope 仍 fail closed。
+- 离线验收：46 项聚焦与 1524 项全套通过、0 skipped（229.00 秒）；smoke-v1 12/12
+  baseline 匹配，pyflakes、vulture 100%、pip check 与 diff 检查通过。首次全套中的既有
+  coordinator 时序断言失败经单项 11/11 和完整重跑 1524/1524 通过。
+- 本次 fresh 根保持不变且不得补跑；第一轮仍缺完整 12+12 配对。再次真实执行须新建 fresh
+  根、冻结新 controller hash，并重新获得明确批准。
 
 | PR 内检查点 | 新研究 run 上限 | 该段交付与推进条件 |
 |---|---|---|

@@ -68,15 +68,27 @@ def signature(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+_EXPECTED_SOURCES = {
+    "tavily", "chroma", "github", "arxiv", "community", "official",
+}
+
+
 def source_anomaly(snapshot) -> bool:
+    """Require the six source envelopes; other partial failures have other meanings."""
+
     if not isinstance(snapshot, dict):
-        return False
-    if snapshot.get("partial_failures"):
         return True
     results = snapshot.get("search_results")
-    return isinstance(results, list) and any(
-        isinstance(item, dict) and item.get("status") != "success" for item in results
-    )
+    if not isinstance(results, list) or len(results) != len(_EXPECTED_SOURCES):
+        return True
+    sources = []
+    for item in results:
+        if (not isinstance(item, dict)
+                or item.get("status") != "success"
+                or not isinstance(item.get("source"), str)):
+            return True
+        sources.append(item["source"])
+    return len(set(sources)) != len(sources) or set(sources) != _EXPECTED_SOURCES
 
 
 def budget_anomaly(record: dict) -> bool:

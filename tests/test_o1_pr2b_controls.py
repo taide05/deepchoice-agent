@@ -412,3 +412,42 @@ async def test_pr2b_cleanup_cancels_all_tasks_before_polling(tmp_path, monkeypat
     assert result["attempted"] == 2
     assert result["settled"] == 2
     assert result["unresolved"] == []
+
+
+def _six_source_snapshot(*, failed_source: str | None = None,
+                         partial_failures: list[str] | None = None) -> dict:
+    return {
+        "partial_failures": partial_failures or [],
+        "search_results": [
+            {
+                "source": source,
+                "status": "failed" if source == failed_source else "success",
+            }
+            for source in sorted(control._EXPECTED_SOURCES)
+        ],
+    }
+
+
+def test_pr2b_source_health_allows_non_source_limited_report_marker():
+    snapshot = _six_source_snapshot(
+        partial_failures=["evidence_insufficient_user_limited"],
+    )
+
+    assert control.source_anomaly(snapshot) is False
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        _six_source_snapshot(failed_source="github"),
+        {"search_results": []},
+        {
+            "search_results": [
+                {"source": "tavily", "status": "success"},
+            ] * 6,
+        },
+        None,
+    ],
+)
+def test_pr2b_source_health_requires_six_distinct_success_envelopes(snapshot):
+    assert control.source_anomaly(snapshot) is True

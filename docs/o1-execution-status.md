@@ -1,30 +1,30 @@
 # O1 执行断点
 
-当前（2026-09-21）：O1-PR1 已完成并冻结产品候选 `7d622fd`。用户明确批准 O1-PR2B
-第一轮 24 个付费研究 run，以及冻结查询、候选项和必要上下文经当前 local-proxy/self-forward
-路由发送至 DeepSeek、Tavily、GitHub API、StackExchange API、arXiv、PyPI/官方来源，并允许
-安全抓取检索结果中的公共 HTTP(S) 引用 URL。fresh 前置通过五类路由、Tavily POST 与
-DeepSeek JSON/tool；serial-r1 随机顺序首例 P06 是唯一已准入 run。
+当前（2026-09-21）：O1-PR1 产品候选仍冻结为 `7d622fd`。用户重新批准使用提交
+`26185c5` 的控制器、fresh 输出根和原冻结候选执行 O1-PR2B 第一轮 12 serial +
+12 concurrent，并沿用已批准的外部数据传输范围。新的有界前置通过五类路由、Tavily POST
+200 和 DeepSeek JSON/tool 2/2；0 research run。fresh prepare 重新冻结候选、12 个 case
+manifest、知识种子和六文件 PR2B 工具链。
 
-该 run 约 190 秒后，公共引用 safe-fetch 的 GET 返回 403。产品引用契约把
-401/403/404/410 定义为 `unreachable/not_publicly_accessible`，但 PR2A controller 将所有
-非静态探测 4xx 都误判为 `PR2_EXTERNAL_HTTP_STOP`。控制器按协议锁住后续准入：P06
-请求取消，其余 11 个 serial case 为 not_submitted，concurrent-r1 未启动，因此没有
-24 例配对报告、声明台账或第一轮门禁。
+serial-r1 按随机顺序准入 P06 和 P07。P06 completed：143.671 秒、13,116 tokens、
+16 LLM / 6 retrieval、0 failed calls/retries。P07 completed_with_warnings：24.781 秒、
+4,351 tokens、5 LLM / 6 retrieval、0 failed calls、1 node retry；六个 source envelope
+全部 success，冻结 HITL 策略执行一次 limited_report。两例合计 17,467 tokens、21 LLM /
+12 retrieval；token/cache 和 stop-final budget 均完整。服务峰值 RSS 约 2.029 GiB，
+可用内存最低约 843 MiB，没有越过 512 MiB 停止线；服务正常退出码 0、无残留监听。
 
-本次停止还暴露取消收敛缺口：旧 controller 只等 30 秒，P06 在关闭服务时仍为
-`cancelling`，stop-final observability/active budget 不完整。服务自身正常发出
-`service_stopped` 和 `asyncio_runner_returned`，退出码 0、没有残留进程，但运行中服务
-RSS 峰值约 2.178 GiB，可用内存最低约 602 MiB，接近既定 512 MiB 停止线。失败根
-`outputs/o1-pr2b-20260919` 保留原样，不作为有效基线，也不在同轮补跑。
+控制器把 P07 的非来源标记 `evidence_insufficient_user_limited` 当作任意
+`partial_failures`，误报 `PR2_SOURCE_DEGRADATION_STOP`。真实来源状态无降级：
+79 个已观测 HTTP response 中 2 个 4xx、0 个 5xx、0 transport failure。停止锁生效后
+其余 10 个 serial case 未提交，concurrent-r1 未启动；本次 fresh 根保留原样，不补跑，
+24-report 配对、声明台账和第一轮门禁仍 unavailable。
 
-离线 successor 使用新的 `o1_pr2b_child.py` / `o1_pr2b_control.py` 工具身份：
-ContextVar 只标记安全抓取内部的动态公共请求，不记录 URL；该 operation 的 GET 2xx-4xx
-作为有界引用结果，5xx、transport failure、错误 method/source 仍 fail closed，其他
-provider 规则不放宽。取消收敛上限改为 180 秒，并在每次轮询保留 512 MiB 可用内存停止线。
-离线验收为 41 项聚焦与 1519 项全套测试通过、0 skipped（193.56 秒）；smoke-v1 12/12
-baseline 匹配，静态与依赖检查通过。PR2A 工具、本次失败根与候选产品代码均未改写。
-按“异常后不自动重试/补跑”协议，新的真实第一轮需要 fresh 根和新的明确执行批准。
+离线修复后的 `source_anomaly` 只依据完整的六个 distinct source envelope：
+缺失、重复或任一非 success 均停止；HITL/budget 等非来源 partial failure 不再误归类。
+最终验收为 46 项 PR2A/PR2B 聚焦回归与 1524 项全套测试通过、0 skipped（229.00 秒）；
+smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100%、pip check 和 diff 检查通过。
+首次全套观察到既有 coordinator 50 ms 时序断言失败 1 项；该单项随后独立 11/11 通过，
+完整重跑 1524/1524 通过。按异常后不自动重试协议，新的 fresh 第一轮仍需明确重新批准。
 
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 
