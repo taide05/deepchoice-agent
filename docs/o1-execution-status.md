@@ -10,6 +10,39 @@ self-forward 路由及公共 HTTP(S) 引用安全抓取范围。正常阶段门�
 在本页所述 HEAD 遥测误判停线后，用户已批准离线 source-aware 修正，并把总上限从 49
 调整为 59；供应商、外传范围、案例、rubric、预算、HITL 和质量阈值均不变。
 
+最新执行使用 source-aware 控制提交 `91d56cd7df7d9c95137ed8272083f19e11160523`、
+fresh 根 `o1-pr2b-round1-20260921-15ca251-source-aware-v2` 和冻结候选
+`15ca251a89ff996bc787435d8965a918a89437f6`。prepare 重新冻结候选、数据集、知识快照、
+12-case manifest 和六个控制工具 hash；执行前没有 profile 控制产物。
+
+serial-r1 完成 12/12，形成 12 份报告，其中 P07 为冻结 limited_report；终态 usage/cache
+完整，合计 146,801 tokens、179 LLM / 72 retrieval、0 failed calls，profile makespan
+594,336 ms。服务自然退出码 0，cleanup 12/12、stop-final 完整；251 个 health 样本均 200，
+最低可用内存 0.986 GiB、峰值 service RSS 2.238 GiB，heartbeat failure/lease loss 均 0。
+
+concurrent-r1 一次准入并观测 12/12 running；约 105～107 秒时，12 个 collector 记录全部以
+durable API `ReadTimeout` 返回，首个可见停止原因为 `PR2_CASE_OR_BUDGET_STOP`。控制器取消
+12 个任务，11 个 task/run settled cancelled，P04 interrupted，cleanup unresolved 1，0 并发
+报告；服务仍 graceful exit 0。停线前 97 个 health 样本均 200、authority 有效，
+heartbeat failure/lease loss 均 0；最低可用内存 1.292 GiB、峰值 RSS 2.070 GiB。遥测包含
+184 个已分类 HTTP 响应事件、一个产品允许的 `dns_uncertain`，没有停线前 provider failure；两个
+GitHub `CancelledError` 发生在取消之后。只读 Trace 显示 query_adapter 12 succeeded，
+multi_retriever 4 succeeded / 7 cancelled / 1 started，source_evaluator 1 cancelled / 1 started。
+因此当前只确认 durable API/事件循环响应中断，不能归因为来源、预算、内存或租约，内部原因仍
+unknown。stop-final 与 active budget 因 service_not_safe 不完整。
+
+该 fresh 根保持不变，不重启、不补跑、不与后续根拼接。累计研究 run 为 35/59，剩余 24；
+完整新配对仍需 fresh 48 个 run，当前上限不足。第一轮配对评审/门禁、第二轮及本地 O1-PR3
+均未启动。serial/concurrent 的 profile-control、telemetry、stop-final、resource-health hash
+分别为 `b91776d1ee6b810ab5aee26377353f878ccd0eff2de4f4871b114b6a5ff01838` /
+`f904e3f834f07cd103f8975c47274e3a04bea10cb9e3886ba4eda23d59630e5d`、
+`08f5d616fa1f3ff0c0db71c6b2db5768123bb33b5d4bce452d9bce689f072af8` /
+`c64ff3e9f6baa633833754b7a4a8bab4618c68eef58c6855b41ab317dfeb616d`、
+`a7c094c8c6ddabb2d14826afb99896975baf56568653c4e34c9cb457a1f63a05` /
+`11def02303d4d41f47ae3c24d21f625c82322b1bb4a898bb51ccfa95dadd26ca`、
+`687dd18205b049a7d13536b8b6ce2cefb8b4c3408c3b72621c06e690c5868560` /
+`efe74ac4bfc21a73e2c27210298771e6063686e8eff443933002227df1c5bded`。
+
 随后候选 `15ca251` 的 P01 单例资格完成并由独立只读复核确认助手暂定通过：前置五类路由、
 Tavily POST 和 DeepSeek JSON/tool 均通过；P01 completed，11 LLM / 6 retrieval，11,914 tokens，
 0 failed/retry/lease loss，usage/cache 完整。v4 台账为 68 原子，支持 31/22/1/2/12，来源质量

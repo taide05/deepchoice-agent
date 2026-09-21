@@ -21,13 +21,14 @@ product-baseline-v1/1.0.0，P01 × 1 completed（108.282 秒 / 11,914 token）�
 两轮剩余 48；来源缺证、动态 pinned CONNECT/TLS、人类校准、硬件稳定和正式串并发门禁
 仍未完成。PR2B 控制链已重绑定该候选；O2 及 push/merge/release/发布未授权。
 
-最新 PR2B 状态：`83185ad` 控制器使用 fresh 根执行 `15ca251` 的 serial-r1，准入 10/12 后
-停止；形成 9 份报告，P05 cancelled，P03/P10 未提交，concurrent-r1 未启动。停止根因是
-控制遥测把产品契约内的官方文档 HEAD 安全抓取误标成只允许 GET 的公共引用操作；资源、租约、
-provider 与持久化终态未见异常。用户已批准 source-aware 控制遥测修正和总上限 59；该修正
-仅允许官方来源按产品契约使用 HEAD/GET，公共引用保持 GET-only，其他异常继续 fail closed。
-精确事件回放、50 项聚焦回归及最终 1557 项全套测试通过；累计使用 11/59，剩余 48 个 fresh
-正式 run，下一步是冻结新控制器并从新输出根完整执行第一轮。
+最新 PR2B 状态：source-aware 控制提交 `91d56cd` 使用 fresh 根执行 `15ca251`。serial-r1
+完成 12/12，形成 12 份报告（1 份 limited），146,801 tokens、179 LLM / 72 retrieval、0 failed。
+concurrent-r1 一次准入并观测 12 路 running，但 12 个 durable API 轮询在约 105～107 秒全部
+`ReadTimeout`，控制器按 `PR2_CASE_OR_BUDGET_STOP` 停线；0 并发报告，11 cancelled、
+P04 interrupted，service graceful exit 0。停线前 97 个 health 样本均 200、authority 有效，
+heartbeat/lease loss 为 0、最低可用内存 1.292 GiB；没有先发 provider 异常，内部响应中断
+原因仍未确认。累计使用 35/59、剩余 24；该根不得重启、补跑或拼接，第一轮门禁、第二轮及
+O1-PR3 均未启动。进一步生产修复、重新资格和增加完整 fresh 配对额度需另行批准。
 
 2026-09-18 的旧候选 `7d622fd` 资格及其后续正式尝试保留为历史证据，不能与新候选拼接。
 更早的继续实施断点：独立新前置五源 5/5、JSON/tool 通过，但控制器启动前

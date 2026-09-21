@@ -16,22 +16,19 @@ heartbeat 失权，0 并发报告。该 fresh 根不得补跑或重启；第二�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**候选 `15ca251` 的第一轮 serial-r1 在 10/12 准入后按冻结停止线退出，
-O1-PR2B 仍未完成。** 8 completed、P07 limited_report、P05 cancelled，P03/P10 未提交，
-共 9 份报告；10 个已入场 run 的 stop-final 观测完整，合计 101,227 tokens、126 LLM /
-60 retrieval、0 failed calls。服务 graceful exit 0、清理完整；最低可用内存 0.898 GiB，
-heartbeat/lease loss 为 0。concurrent-r1、配对台账、第一轮门禁和第二轮均未启动。
+当前状态：**source-aware 控制提交 `91d56cd` 的 fresh 第一轮再次按冻结停止线退出，
+O1-PR2B 仍未完成。** serial-r1 完成 12/12，形成 12 份报告（P07 limited），合计
+146,801 tokens、179 LLM / 72 retrieval、0 failed；stop-final、清理与服务退出完整。
+concurrent-r1 一次准入并观测 12 路 running，但 12 个 durable API 轮询在约 105～107 秒全部
+`ReadTimeout`；控制器自动取消，11 个 run cancelled、P04 interrupted，0 并发报告。
+停线前 97 个 health 样本均 200、authority/heartbeat/lease 正常，最低可用内存 1.292 GiB，
+且没有先发 provider 异常；当前只确认服务响应中断，内部原因仍 unknown。
 
-`PR2_EXTERNAL_HTTP_STOP` 的离线根因是控制器契约遗漏，不是已证明的 provider/产品失败：
-官方文档检索按产品契约用统一 SafeUrlPolicy 发出 HEAD，子控制器却把所有安全抓取折叠为
-`safe_fetch_public`，父控制器只允许该 operation 的 GET，因而把成功 HEAD 302→200 误判为异常。
-停止根必须保持不变，不重启、不补跑、不与后续 fresh 根拼接。
-
-用户已把持续上限由 49 调整为 **59 个研究 run**；当前已使用 11（资格 1 + 停止轮 10），
-剩余 48，正好覆盖完整 fresh 两轮。source-aware safe-fetch 遥测已离线修正：只有 exact
-`official` 来源可按产品契约使用 HEAD/GET，公共引用保持 GET-only，其他异常继续 fail closed。
-精确事件回放、50 项聚焦回归及最终 1557 项全套测试通过。供应商、数据外传、案例、rubric、
-预算、HITL 与质量阈值均未改变；下一步冻结新控制器并用 fresh 根完整执行第一轮。
+该 fresh 根必须保持不变，不重启、不补跑、不与后续根拼接。总上限为 59，累计已使用
+**35 个研究 run**（资格 1 + 前一停止轮 10 + 本轮 24），剩余 24；完整新配对仍需 fresh
+48 个 run，当前上限不足。第一轮配对评审/门禁、第二轮和 O1-PR3 均未启动。进一步生产修复、
+重新资格与增加替代运行额度需新的明确批准；供应商、数据外传、案例、rubric、预算、HITL 与
+质量阈值保持不变。
 
 以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
 PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
@@ -46,8 +43,8 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 |---|---|---|---|
 | O1-PR1 当前候选单例资格与冻结 | C3，含必要的 C 问题收口 | 先用一次当前候选 P01 冷启核对执行、引用/报告与成本；处理实际阻断后形成可测量的锁定候选 | 候选 `15ca251` 已完成前置、P01、68 原子台账、独立复核与冻结；助手暂定资格通过 |
 | O1-PR2A 控制面离线修复 | D 的执行前置 | 修复静态探测误报、停止态预算证据和冷初始化关闭阻断；不执行真实研究 | exact operation 单元测试、公开 API stop-final 证据测试、冷初始化收束/正常退出测试及全套验证；已完成 |
-| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | `15ca251` 正式 serial-r1 在 10/12 准入后因控制器误判 HEAD 停止；9 报告、1 cancelled、2 未提交，各停止根不可拼接。source-aware 门禁和 59-run 总上限已批准且离线验证通过，待冻结新控制器后从 fresh 根重跑 |
-| O1-PR3 O1 结项与优化假设 | E 的总体结论 | 汇总质量、运行/成本和残余风险，冻结一个最优先的 O2 假设 | 本地收口原在持续授权内，但依赖完整 PR2 测量；当前配对 unavailable，暂不启动。O2 实施及发布另授权 |
+| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | `91d56cd` fresh serial 12/12 产出；concurrent 12/12 running 后因全体 API ReadTimeout 停线，0 并发报告。累计 35/59，根不可拼接，第一轮门禁 unavailable；修复、重新资格及完整替代额度另批准 |
+| O1-PR3 O1 结项与优化假设 | E 的总体结论 | 汇总质量、运行/成本和残余风险，冻结一个最优先的 O2 假设 | 本地收口依赖完整 PR2 测量；第一轮门禁 unavailable，未启动。O2 实施及发布另授权 |
 
 ## O1-PR1：当前候选单例资格与冻结
 

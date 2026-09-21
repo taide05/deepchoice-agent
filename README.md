@@ -44,15 +44,18 @@ run/实例租约等待后重新取时，冷本地工作移线程，health 对本
 本机 O1-B 最终验收（2026-09-17，Python 3.12.4）：187 聚焦、1238 全套通过且无跳过，
 smoke-v1 12/12 baseline 匹配，静态/依赖门禁与独立复审无阻断；43/48 不变，批次继续暂停。
 
-2026-09-21 候选 `15ca251` 完成 P01 重新资格后开始 fresh 正式第一轮。serial-r1 准入
-10/12 后自动停线：8 completed、P07 limited_report、P05 cancelled，P03/P10 未提交，形成
-9 份报告；stop-final 合计 101,227 tokens、126 LLM / 60 retrieval、0 failed calls。资源、
-租约和 service cleanup 均正常。离线核对确认控制器把产品契约允许的官方文档 HEAD 安全抓取
-误标为只允许 GET 的公共引用操作；concurrent-r1 未启动，配对门禁仍 unavailable。用户随后
-把持续上限由 49 调整为 59；累计已使用 11，新的完整两轮仍有 48 个 fresh run。source-aware
-遥测现仅允许官方来源按产品契约使用 HEAD/GET，公共引用仍仅允许 GET，其他异常继续
-fail closed；精确事件回放、50 项聚焦回归和 1557 项全套测试通过。停止根不可拼接。
-详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
+2026-09-21 候选 `15ca251` 的首个正式 serial-r1 在 10/12 准入后因控制器误判合法官方
+HEAD 而停线；用户随后把总上限由 49 调整为 59。source-aware 遥测修复提交 `91d56cd`
+仅允许官方来源按产品契约使用 HEAD/GET，公共引用仍仅允许 GET，其他异常继续 fail closed；
+精确事件回放、50 项聚焦回归和 1557 项全套测试通过。
+
+使用该控制器的新 fresh 根完成 serial-r1 12/12：12 份报告（1 份 limited）、146,801 tokens、
+179 LLM / 72 retrieval、0 failed calls。concurrent-r1 也一次准入并观测到 12 路 running，
+随后 12 个 durable API 轮询在约 105～107 秒均返回 `ReadTimeout`，控制器自动停止；0 并发
+报告，11 个 run cancelled、P04 interrupted，服务 graceful exit 0。停线前 97 个健康样本均
+HTTP 200，最低可用内存 1.292 GiB，heartbeat/lease loss 为 0；外呼未见先发异常，确切内部
+原因仍未确认。累计使用 35/59，剩余 24；停止根不可拼接，第一轮门禁、第二轮和 O1-PR3 均
+unavailable。详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
 
 2026-09-17 O1-C 已授权真实单例验真，但在前置网络健康 4/5（community 未通过）时停止；
 routed Tavily POST 通过，LLM/冷启/研究/报告未执行，新 run 0，累计 43/48 不变。
@@ -453,8 +456,9 @@ concurrent=12 采集与配对门禁。2026-09-21 第四次获批第一轮在候�
 12 份串行报告（149,654 tokens、185 LLM / 72 retrieval、终态用量完整），但 12 路并发在
 multi_retriever 阶段租约失权且无报告；各停止根与旧候选不得拼接。运行时离线修复后形成
 候选 `15ca251` 并完成 P01 重新资格；其 fresh serial-r1 又在 10/12 准入后因控制器误判合法
-官方 HEAD 停止，concurrent 未启动。总上限随后由 49 调整为 59，累计使用 11/59、剩余
-48；source-aware 控制遥测已离线验证，待冻结新身份后从 fresh 根完整执行两轮。详见
+官方 HEAD 停止，concurrent 未启动。总上限随后由 49 调整为 59，source-aware 控制器
+离线验证后从 fresh 根重跑：serial 12/12 产出，但 concurrent 的 12 个任务全部因 durable API
+`ReadTimeout` 停线，0 并发报告。累计使用 35/59、剩余 24；第一轮门禁仍 unavailable。详见
 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。手动评估 workflow
 当前仅运行 smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
 
