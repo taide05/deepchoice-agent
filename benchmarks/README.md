@@ -23,6 +23,14 @@ O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已冻结为 
 任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
 代替此项。
 
+S1 协议文件为
+[product-optimization-s1-constraint-aware-v1.json](product-optimization-s1-constraint-aware-v1.json)，
+冻结 SHA-256 为 1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391。
+使用 python -m benchmarks.product_optimization_s1 可纯离线检查当前 candidate 工作树；
+baseline 执行 ref 使用 --execution-arm baseline --execution-ref 814131f849f417fbcf4f00cfe071d95ccf2b3878。
+指定 ref 只检查已提交对象；实际运行仍须由环境清单记录干净工作树的完整 commit。
+校验不等于资格、health 或付费执行通过。
+
 隔离实验服务使用独立产品/检查点数据库；知识库与 learned-docs 快照必须显式指定，不能复用
 日常写入目录冒充冷启动：
 

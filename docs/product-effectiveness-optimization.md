@@ -11,14 +11,16 @@
 | [历史冻结 v4](archive/product-optimization-20260921/evaluation-protocol-v4.md) | 冻结判定依据，48-run 未完成 | 解释此前 O1 运行和原并发阈值；不能从其中“下一步/批准”启动新任务 |
 | key-claim-occurrence-v1 与 0/1/2 rubric | 保留 | 下文评审口径及 [结构契约](o1a-evaluation-contract.json)，不能按新结果更换分母 |
 | [S0 开发集诊断](product-optimization-s0-review.md) | 已完成 | serial-r1 的 P01–P08 锁分、360 行逐处原子关键声明、严重性和 S1 执行卡；不是产品通过 |
-| S1 小样本局部配对 | 执行卡已冻结，live 协议身份待落盘 | P04/P08 目标 + P01 回归，2 版本 × 2 重复，必要资格另计；仅支持局部改善 |
+| [S1 小样本局部配对](../benchmarks/product-optimization-s1-constraint-aware-v1.json) | 协议已冻结，尚未执行 | P04/P08 目标 + P01 回归，2 版本 × 2 重复，必要资格另计；仅支持局部改善 |
 | S3 完整候选串行验收 | 目标卡已冻结，执行协议待进入阶段后固化 | 12 例 × 2 重复；按地图的目标验收卡判断，不伪装成前后因果对照 |
 | C1 并发验收 | 保留为待完成目标 | S3 前决定是否整合完整 48-run；保留 v4 并发阈值，不跨停止根补齐 |
 
 S0 没有修改控制器停止规则、案例、rubric、预算、HITL 或供应商配置，也没有新研究/健康/LLM 外呼。
 当前助手评审结果为必答 32/48、冲突 16/16，P04/P06/P08 有 major；声明 micro 分母与逐例身份见
 [绑定](product-optimization-s0-bindings.json)和[台账](product-optimization-s0-claims.csv)。
-新协议须在新批次前固定身份、案例、主指标、严重性定义、顺序、盲评方式、资源/异常矩阵和预算。
+S1 协议已用 SHA-256 1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391
+固定身份、案例、主指标、顺序、盲评方式、资源/异常矩阵和预算；离线校验不替代资格或 health。
+后续新协议仍须在相应批次前冻结同类字段。
 改变既有付费范围或验收/停止边界时，由用户集中接受执行卡；普通测试和阶段衔接无需重复确认。
 
 数据集：`product-baseline-v1` / `1.0.0` / 冻结 2026-09-16，SHA256

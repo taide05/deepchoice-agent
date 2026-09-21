@@ -138,9 +138,12 @@ P07 的零证据 Winner 和 P08 的“缺口齐全但 100% Redis”是最直接�
 - 所有决定性句子若无适用证据，必须在句旁标记 unknown/condition 或省略；不得借其他引用编号。
 - 相关测试、完整 suite、smoke、静态检查和独立只读复审通过后，才有 live 资格。
 
-### 局部 live 方案（规划，不是执行授权）
+### 局部 live 方案（已冻结，尚未执行）
 
-协议 ID 拟为 product-optimization-s1-constraint-aware-v1，必须在运行前单独落成机器可读冻结文件。
+协议 ID 为 product-optimization-s1-constraint-aware-v1，机器可读文件位于
+[benchmarks/product-optimization-s1-constraint-aware-v1.json](../benchmarks/product-optimization-s1-constraint-aware-v1.json)，
+SHA-256 为 1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391。
+离线 validator 绑定数据集、两版产品源码对象、7d16d28 控制器文件对象和固定 12-cell 盲标签顺序。
 目标案例 **P04、P08**，回归案例 **P01**；P07 先作为 deterministic limited-report 离线回归。
 
 - 若产品 prompt/代码身份改变，最多 1 个新 P01 资格；
@@ -152,6 +155,13 @@ P07 的零证据 Winner 和 P08 的“缺口齐全但 100% Redis”是最直接�
 
 按当前账本，若执行满 13 则为 103/134，仍为 S3 的 24 个新 run 保留空间并余 7；这只是算术，
 不能从余额推导立即运行权限。
+
+2026-09-22 离线复算确认固定数据集 SHA-256、P01/P04/P08 development 身份、两版产品对象、
+控制器对象、预算算术及停止规则一致。产品/控制器可在包含后续纯协议或文档提交的工作树运行，
+但相应冻结源码对象必须逐项相同；执行时实际 Git commit 仍进入环境证据。普通 citation HTTP 5xx
+保持 stop-new-admission，未采用先前 warning 提案。资格、health、LLM 探测和研究均未启动。
+协议 16 项聚焦测试、candidate 当前工作树与 baseline 814131f 双臂身份复算、pyflakes/vulture/
+pip check、文档链接和完整 **1648 passed**（180.44 秒）均通过；这些仍是离线准备证据。
 
 ### 停止与分流
 
