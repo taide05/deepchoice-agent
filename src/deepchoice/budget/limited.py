@@ -8,6 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from deepchoice.agents.evidence_chain import build_evidence_chain
 from deepchoice.agents.report_generator import FORMAT_RENDERERS
+from deepchoice.utils.decision_contract import restrict_recommendation
 
 from .contracts import RunBudgetPolicy
 from .errors import BudgetExceededError
@@ -265,6 +266,9 @@ def build_budget_limited_state(
     state["partial_failures"] = public_failures
 
     query = str(request.get("query", ""))
+    state["final_recommendation"] = restrict_recommendation(
+        state.get("final_recommendation", {}), query
+    )
     is_zh = any("一" <= char <= "鿿" for char in query)
     note = (
         "预算已触顶；以下内容仅基于触顶前取得的最低结构性证据，不代表完整比较。"

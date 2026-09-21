@@ -1,10 +1,12 @@
 """Diagnostics observer hook tests: content-free LLM metadata capture."""
+import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
 from deepchoice.utils.llm import call_model, set_current_case, set_record_callback
+from deepchoice.utils.call_diagnostics import observe_output
 
 
 def _resp(content):
@@ -168,3 +170,78 @@ class TestExtraBody:
         assert c.kwargs["extra_body"] == {"thinking": {"type": "enabled" if enabled else "disabled"}}
         assert "JSON" in c.kwargs["messages"][-1]["content"]
         assert legacy_options == {"enable_thinking": enabled}
+
+
+def _constraint_aware_synthesis():
+    return {
+        "winner": "context_dependent",
+        "winner_rationale": "PRIVATE decision explanation",
+        "recommendation": "Pilot after the missing constraint is known.",
+        "decision_basis_version": "constraint-aware-v1",
+        "requirement_assessments": [{
+            "id": "constraint-1", "requirement": "Recovery requirement",
+            "status": "unknown", "decision_critical": True,
+            "explanation": "PRIVATE unresolved recovery details", "evidence_ids": [],
+        }],
+        "decision_branches": [{"option": "A", "condition": "If the pilot meets the SLO"}],
+        "action_plan": [{
+            "step": "Run a pilot", "verification": "Record recovery time",
+            "change_trigger": "Recovery exceeds SLO", "rollback": "Restore the prior service",
+        }],
+        "ranked_options": [],
+        "trade_offs": [],
+        "evidence_summary": "",
+        "confidence": "low",
+        "confidence_rationale": "Constraints need confirmation",
+        "unresolved_questions": ["Recovery requirement"],
+        "scene_fit_note": "",
+    }
+
+
+def _synthesis_diagnostics(payload):
+    return observe_output(
+        SimpleNamespace(finish_reason="stop"),
+        json_requested=True, content=json.dumps(payload), parsed=payload,
+        parse_ok=True, tag="conclusion_synthesizer",
+    )
+
+
+def test_constraint_aware_synthesis_shape_is_observed_without_recording_content():
+    diagnostics = _synthesis_diagnostics(_constraint_aware_synthesis())
+
+    assert diagnostics["schema_status"] == "valid"
+    assert diagnostics["json_status"] == "strict"
+    encoded = json.dumps(diagnostics)
+    assert "PRIVATE" not in encoded
+    assert "Recovery" not in encoded
+    assert "decision_branches" not in encoded
+
+
+@pytest.mark.parametrize("field", [
+    "decision_basis_version", "requirement_assessments", "decision_branches", "action_plan",
+])
+def test_synthesis_diagnostics_reject_missing_constraint_aware_contract(field):
+    payload = _constraint_aware_synthesis()
+    payload.pop(field)
+
+    assert _synthesis_diagnostics(payload)["schema_status"] == "invalid"
+
+
+@pytest.mark.parametrize(("field", "invalid_value"), [
+    ("decision_basis_version", "arbitrary-policy"),
+    ("requirement_assessments", [{
+        "id": "c1", "requirement": "Recovery", "status": "verified",
+        "decision_critical": True, "explanation": "x", "evidence_ids": [1],
+    }]),
+    ("requirement_assessments", [{
+        "id": "c1", "requirement": "Recovery", "status": "unknown",
+        "decision_critical": True, "explanation": "x", "evidence_ids": ["1"],
+    }]),
+    ("decision_branches", [{"option": "A"}]),
+    ("action_plan", [{"step": "Pilot", "verification": "Measure", "change_trigger": "Failure"}]),
+])
+def test_synthesis_diagnostics_reject_malformed_decision_structures(field, invalid_value):
+    payload = _constraint_aware_synthesis()
+    payload[field] = invalid_value
+
+    assert _synthesis_diagnostics(payload)["schema_status"] == "invalid"

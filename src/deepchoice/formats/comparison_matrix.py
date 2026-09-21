@@ -1,4 +1,5 @@
 from deepchoice.formats.citations import citation_verification_section
+from deepchoice.formats.decision import is_context_dependent, no_single_winner, render_decision_details
 
 
 def _lang(query: str) -> str:
@@ -48,6 +49,7 @@ def render(state: dict) -> str:
         "step1": {"en": "1. Independently verify the strongest evidence source", "zh": "1. 验证最强证据来源的独立性"},
         "step2": {"en": "2. Run targeted supplementary searches on disputed items", "zh": "2. 对争议点做针对性补充搜索"},
         "step3": {"en": "3. Build a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
+        "no_single_winner": {"en": no_single_winner("en"), "zh": no_single_winner("zh")},
     }
 
     dims = {
@@ -134,7 +136,8 @@ def render(state: dict) -> str:
     lines.append(f"{L['scene'][lang]}: **{scene_map.get(scene, scene)}**")
 
     if winner:
-        lines.append(f"\n**Winner: {winner}**")
+        winner_label = L["no_single_winner"][lang] if is_context_dependent(rec) else winner
+        lines.append(f"\n**Winner: {winner_label}**")
         if rec.get("winner_rationale"):
             lines.append(f"*{rec['winner_rationale']}*")
 
@@ -163,6 +166,7 @@ def render(state: dict) -> str:
                 strength = top_chain.get('evidence_strength', 'unknown')
                 lines.append(f"{L['best_available'][lang]}: {top_chain.get('conclusion', '')} (strength: {strength})")
 
+    lines.extend(render_decision_details(rec, lang))
     lines.extend([
         "",
         f"**{L['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}",
@@ -170,8 +174,9 @@ def render(state: dict) -> str:
         L["next_steps"][lang],
         L["step1"][lang],
         L["step2"][lang],
-        L["step3"][lang],
     ])
+    if not is_context_dependent(rec):
+        lines.append(L["step3"][lang])
 
     lines.extend(citation_verification_section(state, lang))
 

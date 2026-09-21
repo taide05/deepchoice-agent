@@ -6,13 +6,13 @@
     "freeze_date": "2026-09-15",
     "file_sha256": "e9cdbcc650e93eee38ed891a89ac8eaecc23b1b3419a431adcc8e7bead2113cd"
   },
-  "evaluated_at": "2026-09-18T04:38:16.349011+00:00",
+  "evaluated_at": "2026-09-21T15:37:34.929862+00:00",
   "case_count": 12,
   "evaluated_case_count": 12,
   "execution_mode": "fixture_replay",
   "judge": "none",
-  "current_manifest_id": "4bd012881d8b9cdc20d0e755798fd42657256581c02d2a4e989df43e0aa678f9",
-  "core_asset_registry_id": "15cb66f6602a7f36090c1337f983ecbdbb3c74e77d7c9ca52c6c3c5ba799c850",
+  "current_manifest_id": "29f6fd3e12c45f0098bb6e3ff3a0fb0fa4358fe8e673c4618605f3ea2b4ae665",
+  "core_asset_registry_id": "02da3164dc41f903220aa17142726130070c11322610cf69851c35dd84a0d3fa",
   "source_health": {
     "status": "not_run",
     "default_sources": {
@@ -167,7 +167,7 @@
       "deterministic": true,
       "output": {
         "winner": "context_dependent",
-        "result_sha256": "e87656e608c4e5629c0a07af241af5d465f3f1dcfc21ae13f3e16ea2a511243b"
+        "result_sha256": "83c7c6a76b7e98c1be69863d4f980d0174027ef5c5762087c35896f1a851c659"
       }
     },
     {
@@ -210,5 +210,5 @@
       }
     }
   ],
-  "artifact_fingerprint": "8073732ca577499e358ee53a17678667579ef3ed8abb6ddb7d800193ee4a1f3d"
+  "artifact_fingerprint": "7d4d03db5df4f89160e369991f68396d5db69b30bb0b5b3e8a0158303fe41a38"
 }

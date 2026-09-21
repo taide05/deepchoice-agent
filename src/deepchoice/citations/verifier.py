@@ -50,6 +50,11 @@ MAX_CITATION_CHECKS = 96
 MAX_FIELD_SENTENCES = 16
 MAX_RANKED_OPTIONS = 20
 MAX_TRADEOFFS = 20
+_DECISION_FIELDS = {
+    "requirement_assessments": (40, ("explanation",)),
+    "decision_branches": (20, ("condition",)),
+    "action_plan": (20, ("step", "verification", "change_trigger", "rollback")),
+}
 MAX_REGISTRY_SOURCES = 96
 _LOGGER = logging.getLogger(__name__)
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
@@ -243,6 +248,17 @@ def _split_sentences(value: str) -> list[str]:
 
 
 def _iter_claim_fields(recommendation: dict[str, Any]):
+    # Check the decision's premises before descriptive prose can fill the
+    # existing bounded check budget. Labels/status enums are not factual claims.
+    for collection, (limit, fields) in _DECISION_FIELDS.items():
+        rows = recommendation.get(collection)
+        if not isinstance(rows, list):
+            continue
+        for index, row in enumerate(rows[:limit]):
+            if not isinstance(row, dict):
+                continue
+            for field in fields:
+                yield f"final_recommendation.{collection}[{index}].{field}", row.get(field)
     for field in (
         "winner_rationale", "recommendation", "evidence_summary",
         "confidence_rationale", "scene_fit_note",
@@ -276,6 +292,11 @@ def _extract_claims(recommendation: dict[str, Any]) -> tuple[list[_Claim], bool]
         isinstance(ranked_options, list) and len(ranked_options) > MAX_RANKED_OPTIONS
     ) or (
         isinstance(trade_offs, list) and len(trade_offs) > MAX_TRADEOFFS
+    )
+    truncated = truncated or any(
+        isinstance(recommendation.get(collection), list)
+        and len(recommendation[collection]) > limit
+        for collection, (limit, _) in _DECISION_FIELDS.items()
     )
     for path, value in _iter_claim_fields(recommendation):
         if not isinstance(value, str) or not value.strip():

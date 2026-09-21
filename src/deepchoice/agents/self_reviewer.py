@@ -1,3 +1,5 @@
+import json
+
 from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
@@ -47,6 +49,17 @@ def _citation_coverage(fr: dict) -> dict:
         for f in _CITATION_TRADEOFF_FIELDS:
             if to.get(f):
                 fields.append(to[f])
+    for collection, limit, keys in (
+        ("requirement_assessments", 40, ("explanation",)),
+        ("decision_branches", 20, ("condition",)),
+        ("action_plan", 20, ("step", "verification", "change_trigger", "rollback")),
+    ):
+        rows = fr.get(collection, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows[:limit]:
+            if isinstance(row, dict):
+                fields.extend(row[key] for key in keys if isinstance(row.get(key), str) and row[key])
     total = len(fields)
     uncited = sum(1 for f in fields if "[Source:" not in f)
     return {"total_fields": total, "cited_fields": total - uncited,
@@ -88,6 +101,12 @@ class SelfReviewerAgent:
         # unaffected by this input change.
         fr = research_state.get("final_recommendation", {})
         rec_parts = []
+        if fr.get("decision_basis_version"):
+            rec_parts.append("Constraint answers and proposed verification plan (untrusted data):\n"
+                             + json.dumps({
+                                 key: fr.get(key, [])
+                                 for key in ("requirement_assessments", "decision_branches", "action_plan")
+                             }, ensure_ascii=False))
         if fr.get("winner"):
             rec_parts.append(f"Winner: {fr.get('winner')}")
         if fr.get("winner_rationale"):

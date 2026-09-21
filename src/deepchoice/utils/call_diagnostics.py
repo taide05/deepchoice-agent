@@ -90,6 +90,16 @@ _SHAPES = {
     },
     "conclusion_synthesizer": {
         "winner": str, "winner_rationale": str, "recommendation": str,
+        "decision_basis_version": ("constraint-aware-v1",),
+        "requirement_assessments": [{
+            "id": str, "requirement": str,
+            "status": ("satisfied", "contradicted", "unknown"),
+            "decision_critical": bool, "explanation": str, "evidence_ids": [int],
+        }],
+        "decision_branches": [{"option": str, "condition": str}],
+        "action_plan": [{
+            "step": str, "verification": str, "change_trigger": str, "rollback": str,
+        }],
         "ranked_options": [{
             "name": str, "rank": int, "constraint_fit": _CONFIDENCE,
             "constraint_fit_reason": str, "rationale": str,

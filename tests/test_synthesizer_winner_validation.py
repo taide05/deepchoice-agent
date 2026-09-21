@@ -38,9 +38,8 @@ def test_synthesis_failure_does_not_leak_exception_into_report(monkeypatch):
 
     assert secret not in str(output)
     assert secret not in report
-    assert output["final_recommendation"]["confidence_rationale"].startswith(
-        "Synthesis step failed"
-    )
+    assert output["final_recommendation"]["confidence"] == "low"
+    assert "unverified" in output["final_recommendation"]["confidence_rationale"]
 
 
 class TestPromptGuards:
@@ -49,9 +48,9 @@ class TestPromptGuards:
         and prototypes as winners — the code-side validator cannot detect them."""
         assert "NEVER recommend a research paper" in cs_mod.SYNTHESIS_PROMPT
 
-    def test_synthesis_prompt_has_three_step_anti_bias(self):
-        assert "three-step" in cs_mod.SYNTHESIS_PROMPT
-        assert "constraint-fit" in cs_mod.SYNTHESIS_PROMPT
+    def test_synthesis_prompt_requires_explicit_constraint_assessment(self):
+        assert "CONSTRAINT ASSESSMENT" in cs_mod.SYNTHESIS_PROMPT
+        assert "do not force a total order" in cs_mod.SYNTHESIS_PROMPT
 
     def test_synthesis_prompt_clarifies_established_not_mainstream(self):
         assert "established, adoptable" in cs_mod.SYNTHESIS_PROMPT
@@ -80,7 +79,7 @@ class TestPromptGuards:
 
 
 class TestWinnerValidation:
-    def test_repo_path_winner_falls_back_to_ranked_option(self, monkeypatch):
+    def test_repo_path_winner_abstains_after_live_fallback(self, monkeypatch):
         monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
             "winner": "aws-samples/serverless-ticket-sentiment",
             "winner_rationale": "pre-built sample",
@@ -91,9 +90,10 @@ class TestWinnerValidation:
         }))
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "n8n"
+        assert out["final_recommendation"]["winner"] == "context_dependent"
+        assert out["final_recommendation"]["ranked_options"] == []
 
-    def test_generic_word_winner_falls_back(self, monkeypatch):
+    def test_generic_word_winner_abstains_after_live_fallback(self, monkeypatch):
         monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
             "winner": "flag",
             "winner_rationale": "flag (PyPI) for feature flags",
@@ -103,7 +103,8 @@ class TestWinnerValidation:
         }))
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "Unleash"
+        assert out["final_recommendation"]["winner"] == "context_dependent"
+        assert out["final_recommendation"]["ranked_options"] == []
 
     def test_valid_winner_untouched(self, monkeypatch):
         monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
@@ -115,7 +116,7 @@ class TestWinnerValidation:
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
         assert out["final_recommendation"]["winner"] == "Unleash"
 
-    def test_all_ranked_invalid_keeps_winner(self, monkeypatch):
+    def test_all_ranked_invalid_abstains(self, monkeypatch):
         monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
             "winner": "org/repo",
             "winner_rationale": "x",
@@ -123,7 +124,8 @@ class TestWinnerValidation:
         }))
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "org/repo"
+        assert out["final_recommendation"]["winner"] == "context_dependent"
+        assert out["final_recommendation"]["ranked_options"] == []
 
     def test_context_dependent_winner_not_fallback(self):
         result = {"winner": "context_dependent",
@@ -133,7 +135,7 @@ class TestWinnerValidation:
 
 
 class TestConstraintFitValidation:
-    def test_lower_fit_winner_falls_back_to_highest_fit(self):
+    def test_lower_fit_helper_corrects_unique_highest_fit(self):
         result = {
             "winner": "Elasticsearch",
             "ranked_options": [
@@ -166,7 +168,7 @@ class TestConstraintFitValidation:
         cs_mod._validate_constraint_fit(result)
         assert result["winner"] == "Elasticsearch"
 
-    def test_tied_highest_fit_keeps_winner_if_among_tied(self):
+    def test_tied_highest_fit_abstains(self):
         result = {
             "winner": "Meilisearch",
             "ranked_options": [
@@ -175,9 +177,10 @@ class TestConstraintFitValidation:
             ],
         }
         cs_mod._validate_constraint_fit(result)
-        assert result["winner"] == "Meilisearch"
+        assert result["winner"] == "context_dependent"
+        assert result["ranked_options"] == []
 
-    def test_run_falls_back_to_highest_fit(self, monkeypatch):
+    def test_live_run_abstains_after_unique_fit_correction(self, monkeypatch):
         monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
             "winner": "Elasticsearch",
             "winner_rationale": "x",
@@ -188,7 +191,8 @@ class TestConstraintFitValidation:
         }))
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "Meilisearch"
+        assert out["final_recommendation"]["winner"] == "context_dependent"
+        assert out["final_recommendation"]["ranked_options"] == []
 
 
 class TestCitationSanitization:

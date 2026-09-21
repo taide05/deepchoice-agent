@@ -1,4 +1,5 @@
 from deepchoice.formats.citations import citation_verification_section
+from deepchoice.formats.decision import is_context_dependent, no_single_winner, render_decision_details
 
 
 def _lang(query: str) -> str:
@@ -36,6 +37,7 @@ def render(state: dict) -> str:
         "step1": {"en": "1. Verify the strongest evidence source independently", "zh": "1. 独立验证最强证据来源"},
         "step2": {"en": "2. Check if the disputed claims affect your use case", "zh": "2. 检查争议项是否影响你的使用场景"},
         "step3": {"en": "3. Run a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
+        "no_single_winner": {"en": no_single_winner("en"), "zh": no_single_winner("zh")},
     }
 
     strong = [c for c in chains if c.get("evidence_strength") == "strong"]
@@ -52,7 +54,8 @@ def render(state: dict) -> str:
         T["conclusion"][lang],
     ]
     if winner:
-        lines.append(f"**Winner: {winner}**")
+        winner_label = T["no_single_winner"][lang] if is_context_dependent(rec) else winner
+        lines.append(f"**Winner: {winner_label}**")
         if rec.get("winner_rationale"):
             lines.append(f"*{rec['winner_rationale']}*")
         lines.append("")
@@ -96,14 +99,16 @@ def render(state: dict) -> str:
     for g in state.get("knowledge_gaps", []):
         lines.append(f"- {g}")
 
+    lines.extend(render_decision_details(rec, lang))
     lines.extend([
         "",
         T["decision"][lang],
         "",
         T["step1"][lang],
         T["step2"][lang],
-        T["step3"][lang],
     ])
+    if not is_context_dependent(rec):
+        lines.append(T["step3"][lang])
 
     lines.extend(citation_verification_section(state, lang))
 

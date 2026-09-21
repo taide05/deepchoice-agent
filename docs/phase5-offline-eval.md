@@ -19,3 +19,8 @@
 Artifact 包含数据集 ID、版本、冻结日期和文件 SHA-256，评估时间、逐阶段分子/分母、manifest ID、core asset registry ID、逐例结果和 fingerprint。来源健康标记为 `not_run`，各默认来源显示 `degraded/unmeasured`，因为该评估刻意不做真实网络探测。
 
 这些分数只能说明固定 fixture 在当前确定性代码上是否通过、报告结构检查是否满足门槛。它们不衡量真实模型语义质量、真实查询表现或在线信源可用性，也不能与历史 300-case benchmark 的结果合并或直接比较。
+
+2026-09-21 S1 验收审阅并更新了记录基线：数据集文件、版本/hash、12-case 分母和各项指标不变，
+仍为 12/12 通过且 12/12 确定性一致。CS-003 的 context_dependent 结果有意清除排名，因此结果
+hash 改变；另外更新评估时间、manifest/core-asset 身份与总 fingerprint。随后
+`--check-baseline` 通过；来源健康仍为 `not_run`，不构成新 live 测量。

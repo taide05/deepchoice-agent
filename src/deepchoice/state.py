@@ -5,6 +5,7 @@ class ResearchState(TypedDict):
     task: dict
     run_manifest: NotRequired[dict]
     sub_questions: list[str]
+    constraints: NotRequired[list[str]]
     adapted_queries: dict
     search_results: list[dict]
     source_scores: list[dict]

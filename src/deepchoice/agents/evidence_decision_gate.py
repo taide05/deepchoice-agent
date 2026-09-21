@@ -12,6 +12,7 @@ from deepchoice.agents.report_generator import FORMAT_RENDERERS
 from deepchoice.budget.limited import minimum_evidence_is_met, usable_evidence_chains
 from deepchoice.hitl import ALLOWED_DECISION_ACTIONS, DECISION_TTL, DecisionResolution
 from deepchoice.runtime.context import get_run_context
+from deepchoice.utils.decision_contract import restrict_recommendation
 
 
 HITL_POLICY_VERSION = "evidence-insufficient-v1"
@@ -22,6 +23,12 @@ def _direction_is_materially_uncertain(state: dict[str, Any]) -> bool:
     recommendation = state.get("final_recommendation")
     if not isinstance(recommendation, dict):
         return False
+    if (
+        recommendation.get("decision_basis_version") == "constraint-aware-v1"
+        and recommendation.get("winner") == "context_dependent"
+    ):
+        # The new contract deliberately removes ordinal rankings on abstention.
+        return True
     ranked = recommendation.get("ranked_options")
     if not isinstance(ranked, list) or len(ranked) < 2:
         return False
@@ -94,6 +101,9 @@ def _build_limited_report(state: dict[str, Any]) -> dict[str, Any]:
         "证据不足；本报告仅基于暂停前取得的有限证据，结论需要谨慎使用。"
         if is_zh
         else "Evidence is insufficient. This restricted report uses only evidence collected before the pause and should be interpreted cautiously."
+    )
+    limited["final_recommendation"] = restrict_recommendation(
+        state.get("final_recommendation", {}), query
     )
     renderer = FORMAT_RENDERERS.get(
         task.get("report_format", "what_why_how"), FORMAT_RENDERERS["what_why_how"]

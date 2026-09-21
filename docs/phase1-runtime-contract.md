@@ -19,6 +19,29 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+S1 约束感知结论（2026-09-21）在 final_recommendation 内使用
+constraint-aware-v1：逐项 requirement_assessments、条件 decision_branches 和 action_plan
+记录验证、变更触发与回退。ResearchState 新增可选 constraints，保留需求分析器输出；
+冻结请求的 task.constraints 与分析约束分开传给合成，不允许分析结果覆盖请求。
+状态/schema 和生命周期表仍为原版本；新 synthesis prompt v4 与三个模板
+what-why-how-v4 / evidence-first-v2 / comparison-matrix-v2 冻结新身份。
+历史 manifest/结果可读，旧 prompt/template 的同 run 恢复按既有兼容检查拒绝。
+
+关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
+保留条件分支、待验证计划与明确未知。绑定到有内容的来源只证明结构完整，不是语义验证。
+引用节点优先检查新判断字段，继续使用原总检查/安全抓取上限；关键判断、胜者依据及
+决定性总结/排名/取舍/置信理由未通过检查，或检查被截断时，收回确定结论。
+关键判断降为 unknown，不能解释成事实被证伪；一个通过的胜者标题不能掩盖其余无依据结论。
+citation_verification 保留校准前声明的检查证据；校准只在本次 graph 结果内执行，不改历史结果。
+词法 verified 同样不证明语义正确或来源适用，真实效果仍需局部配对评审。
+
+单一 evidence-insufficient gate 继续同时要求结构证据不足与方向实质不确定；
+新契约的 context_dependent 不再依赖存在两条排名才识别不确定性。
+用户 limited_report 与预算触顶报告使用同一纯后处理清除具体胜者、排名及旧确定性总结，
+所有逐项判断改为待独立验证的 unknown 并清除其引用绑定，覆盖预算可能在引用节点前触顶的路径；
+保留可用的条件分支、验证计划和回退。三种格式展示一致，公开事件、决策动作、
+TTL、CAS、fencing、预算准入及四种引用状态不变。
+
 - `task_id` 标识一次用户研究意图；`run_id` 标识绑定一个 `RunManifest` 的执行尝试。
 - `tasks.latest_run_id` 指向当前尝试。当前 task 与 latest run 的状态必须一致。
 - task/run 的 `version` 是乐观并发控制字段。读取后再写的生命周期操作必须做 CAS；
