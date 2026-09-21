@@ -20,7 +20,8 @@ concurrent-r1 12/12 running 后所有 collector 任务均发生 durable API `Rea
 用户随后把硬上限调整为 84，并批准查询隔离生产改动后的 P01 重新资格和完整新配对。
 候选 `09f9b66` 用第 36 个 run 完成资格；其 formal serial-r1 使用 12 个 run 并完成 12 份报告，
 concurrent-r1 又准入 12 个 run，但 GitHub GET `RemoteProtocolError` 触发停止且 0 报告。
-累计因此达到 60。响应中断的生产修复要求重新资格；为完成 1 个资格和全新的 48-run 配对，
+累计因此达到 60。响应中断生产修复候选 `d23c9480b9f368f8ec75ec44ee7e25c64146d4be` 要求重新资格；
+为完成 1 个资格和全新的 48-run 配对，
 总上限按 60 + 1 + 48 重算为 109。第一轮门禁、第二轮和 O1-PR3 仍 unavailable。
 外传对象、案例、rubric、预算、HITL 和质量阈值不变，具体边界见[当前任务卡](o1-next-steps.md)。
 不查看用于调参的保留集逐例反馈。

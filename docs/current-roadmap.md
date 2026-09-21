@@ -37,9 +37,10 @@ observability 不再排在主连接 asyncio lock 队列之后；主连接 asynci
 查询隔离候选 `09f9b66` 的新 fresh serial-r1 完成 12/12，147,687 tokens、
 186 LLM / 72 retrieval、0 failed calls；concurrent-r1 准入 12/12 后，GitHub GET
 `RemoteProtocolError` 触发 `PR2_EXTERNAL_HTTP_STOP`，12 个任务均清理，0 报告，服务
-正常退出。该根保持只读。生产路径现仅对 GitHub 幂等 GET 的 `RemoteProtocolError` /
-`ReadError` 最多重试 2 次，并保留共享 provider gate；第三次和所有其他异常继续 fail closed。
-134 项聚焦与 1570 项全套测试通过。下一步是新生产候选的 P01 资格与冻结，再从 fresh 根执行
+正常退出。该根保持只读。生产候选 `d23c9480b9f368f8ec75ec44ee7e25c64146d4be` 仅对 GitHub 幂等 GET 的
+`RemoteProtocolError` / `ReadError` 最多重试 2 次，并保留共享 provider gate；第三次和
+所有其他异常继续 fail closed。134 项聚焦与 1570 项全套测试通过。下一步是该候选的 P01
+资格与冻结，再从 fresh 根执行
 完整 48-run 配对；当前使用 60/109。
 
 2026-09-18 的旧候选 `7d622fd` 资格及其后续正式尝试保留为历史证据，不能与新候选拼接。

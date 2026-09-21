@@ -184,7 +184,7 @@ def test_pr2b_control_chain_is_complete_and_current():
 
 
 def test_pr2b_candidate_binding_is_consistent():
-    expected = "09f9b66cf114953c09ebe928c1c081667647db16"
+    expected = "d23c9480b9f368f8ec75ec44ee7e25c64146d4be"
     assert {
         preflight.EXPECTED_COMMIT,
         prepare.EXPECTED_COMMIT,

@@ -55,8 +55,8 @@ profile makespan 543,861 ms。最低可用内存 1.114 GiB，峰值服务 RSS 2.
 profile makespan 159,749 ms，最低可用内存 1.143 GiB、峰值服务 RSS 2.240 GiB，服务 graceful
 exit 0。该根保持只读，不补跑或拼接。
 
-生产修复仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError` 最多重试 2 次并重新
-进入共享 provider gate。PR2B 控制器按 run/source/operation/method 关联这些物理中断，成功响应
+生产候选 `d23c9480b9f368f8ec75ec44ee7e25c64146d4be` 仅对 GitHub 幂等 GET 的
+`RemoteProtocolError` / `ReadError` 最多重试 2 次并重新进入共享 provider gate。PR2B 控制器按 run/source/operation/method 关联这些物理中断，成功响应
 才清零；第三次中断和其他 source/method/error 仍 fail closed。并发故障注入验证共享在途上限
 2 和 permit 清理；134 项聚焦、1570 项全套测试通过。生产代码变化使旧资格不再适用于新候选。
 累计使用 60；新资格 1 加 fresh 正式 48，因此总上限重算为 109。第一轮门禁、第二轮及本地

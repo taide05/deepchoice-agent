@@ -65,8 +65,8 @@ concurrent-r1 准入 12/12 后，GitHub GET 出现一次 `RemoteProtocolError`�
 `PR2_EXTERNAL_HTTP_STOP` 取消并清理全部任务，0 并发报告且服务正常退出。停止根只读，
 不能拼入下一轮。
 
-生产路径现仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError` 做最多 2 次有界
-重试，并重新进入既有共享 provider gate；控制器按 run 关联物理尝试，成功响应才清零，第三次
+新生产候选 `d23c948` 仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError`
+做最多 2 次有界重试，并重新进入既有共享 provider gate；控制器按 run 关联物理尝试，成功响应才清零，第三次
 中断及其他来源/方法/异常继续 fail closed。134 项聚焦与 1570 项全套测试通过（190.53 秒）。
 累计已使用 60 个 run；新生产提交仍需 1 次资格，再执行完整 fresh 48-run，因此总上限按
 60 + 1 + 48 重算为 **109**。供应商、外传范围、案例、rubric、每 run 预算、HITL、质量阈值
