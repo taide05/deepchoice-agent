@@ -117,7 +117,10 @@ Trace 与预算 ledger 分列；token 记录已知小计及完整性，缺 usage
 每 run 保持 60,000 total tokens、96 LLM、72 retrieval、900 秒 active，80% 软提示。
 不自动补跑、扩大预算或放宽 gate。首个来源降级/限流、预算/租约/恢复异常或主机异常停止后续准入，
 保留已提交 run 的结果/成本，依正式取消流程收尾；不能抹掉失败或取消已提交 reservation 的计费。
-无可靠截止/usage 或采集身份失配时标无效/unknown，说明原因；替代运行另计新授权。
+六源来源降级以 source envelope 与 provider telemetry 判定。动态引用安全抓取在精确
+`safe_fetch_public` / `safe_fetch` / GET 上产生的已知 `UnsafeUrlError` 安全类别，沿产品契约记为
+`unknown/network_uncertain`，本身不构成六源降级；未知类别、普通 transport failure、错误上下文和
+5xx 仍触发实验停线。无可靠截止/usage 或采集身份失配时标无效/unknown，说明原因；替代运行另计新授权。
 
 ## 6. 门禁与结项
 

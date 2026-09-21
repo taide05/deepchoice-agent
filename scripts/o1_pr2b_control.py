@@ -142,6 +142,11 @@ _HTTP_OPERATIONS = {
     "community", "official", "other", "safe_fetch_public",
 }
 
+_SAFE_FETCH_FAILURES = {
+    "safety_rejected", "route_unavailable", "route_unsupported",
+    "dns_uncertain", "timeout", "response_rejected",
+}
+
 
 def telemetry_state(
         path: Path, *, require_ready: bool = True,
@@ -184,9 +189,16 @@ def telemetry_state(
                 state["embedding_ended"] += 1
             elif kind == "external_http_failure":
                 operation = event.get("operation")
-                anomaly_reason = (
-                    "external_http_failure" if operation in _HTTP_OPERATIONS
-                    else "external_http_operation_invalid")
+                if operation == "safe_fetch_public":
+                    if (event.get("source") != "safe_fetch"
+                            or event.get("method") != "GET"
+                            or event.get("error_type") != "UnsafeUrlError"
+                            or event.get("failure") not in _SAFE_FETCH_FAILURES):
+                        anomaly_reason = "safe_fetch_public_failed"
+                else:
+                    anomaly_reason = (
+                        "external_http_failure" if operation in _HTTP_OPERATIONS
+                        else "external_http_operation_invalid")
             elif kind == "external_http_response":
                 operation = event.get("operation")
                 source = event.get("source")

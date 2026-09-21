@@ -4,12 +4,12 @@
 该次规划不改变 [评估协议 v4](product-effectiveness-optimization.md)的冻结案例、rubric、质量/并发阈值、
 HITL 策略或预算，且当时不构成新的实施、付费调用或发布授权。
 
-随后用户依次授权并完成 O1-PR1 与 O1-PR2A，并两次明确批准 O1-PR2B 第一轮付费执行
-及所需外部数据传输。首次执行在 P06 后因公共引用 GET 403 的控制器误判停止；修复并重新
-批准后，第二个 fresh serial-r1 完成 P06 和受限报告 P07，又因控制器把 HITL partial marker
-误归为来源降级而停止。两次停止轮都不得自动补跑；concurrent-r1 尚未启动。最新来源判定
-修复已完成离线验收，新的 fresh 第一轮仍须重新批准。第二轮须在第一轮完整门禁与评审完成后
-单独批准；O1-PR3 和发布仍未授权。
+随后用户依次授权并完成 O1-PR1 与 O1-PR2A，并三次明确批准 O1-PR2B 第一轮付费执行
+及所需外部数据传输。前两次分别因公共引用 GET 403 和 HITL partial marker 的控制器误判停止。
+第三个 fresh serial-r1 完成 P06/P07/P08/P09，并在 P11 引用验证期间把产品已处理为
+`unknown/network_uncertain` 的 `UnsafeUrlError(route_unsupported)` 误判为实验 transport anomaly
+后停止。三次停止轮都不得自动补跑；concurrent-r1 尚未启动。最新安全失败分类修复已完成离线验收，
+新的 fresh 第一轮仍须重新批准。第二轮须在第一轮完整门禁与评审完成后单独批准；O1-PR3 和发布仍未授权。
 
 | 已完成部分 | 已有交付 | 尚不能据此宣称 |
 |---|---|---|
@@ -17,14 +17,15 @@ HITL 策略或预算，且当时不构成新的实施、付费调用或发布授
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**O1-PR1、离线 O1-PR2A 与最新 PR2B 控制面修复已完成；第二次
-2026-09-21 第一轮真实执行完成 P06/P07 后停止，新的 first-round fresh 执行待重新批准。**
-PR1 冻结候选仍为 `7d622fd`。最新 fresh serial-r1 中 P06 completed，P07
-completed_with_warnings/limited_report；两例六源 envelope 均 success，合计 17,467 tokens、
-21 LLM / 12 retrieval，0 failed calls。其余 10 个 serial case 未准入，concurrent-r1 和
-第二轮均未启动。质量配对、逐报告台账和轮次门禁 unavailable，不能声明 PR2 基线或并发门禁
-完成。各历史/停止根是独立分母，不得拼接。候选产品、依赖/模型、逐 case manifest、registry
-和知识种子保持冻结；下一次 fresh 根必须冻结修正后的新 controller hash。
+当前状态：**O1-PR1、离线 O1-PR2A 与最新 PR2B 控制面修复已完成；第三次
+2026-09-21 第一轮真实执行完成四份报告并取消 P11 后停止，新的 first-round fresh 执行待重新批准。**
+PR1 冻结候选仍为 `7d622fd`。最新 fresh serial-r1 中 P06/P08/P09 completed，P07
+completed_with_warnings/limited_report；四份报告合计 52,867 tokens、67 LLM / 24 retrieval，
+0 failed calls。P11 六次 retrieval 均成功，在 citation validator 中停线后取消；停止态用量为
+13,569 tokens、20 LLM / 6 retrieval，0 failed calls，token/cache 完整。其余 7 个 serial case
+未准入，concurrent-r1 和第二轮均未启动。质量配对、逐报告台账和轮次门禁 unavailable，不能
+声明 PR2 基线或并发门禁完成。各历史/停止根是独立分母，不得拼接。候选产品、依赖/模型、逐
+case manifest、registry 和知识种子保持冻结；下一次 fresh 根必须冻结修正后的新 controller hash。
 
 以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
 PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
@@ -39,7 +40,7 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 |---|---|---|---|
 | O1-PR1 当前候选单例资格与冻结 | C3，含必要的 C 问题收口 | 先用一次当前候选 P01 冷启核对执行、引用/报告与成本；处理实际阻断后形成可测量的锁定候选 | 完整前置、可追溯单例记录、v4 内容核对与独立复核、资格判定和冻结清单；只有资格通过才进入 PR2 |
 | O1-PR2A 控制面离线修复 | D 的执行前置 | 修复静态探测误报、停止态预算证据和冷初始化关闭阻断；不执行真实研究 | exact operation 单元测试、公开 API stop-final 证据测试、冷初始化收束/正常退出测试及全套验证；已完成 |
-| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | 第一轮已授权；六文件控制链离线验收后冻结。每轮 12 组成对报告、声明台账及独立复核；第二轮仍须门禁后单独批准 |
+| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | 三次获批的第一轮均按异常停线且不可拼接；最新六文件控制链离线验收后须用 fresh 根重新批准。每轮 12 组成对报告、声明台账及独立复核；第二轮仍须门禁后单独批准 |
 | O1-PR3 O1 结项与优化假设 | E 的总体结论 | 汇总质量、运行/成本和残余风险，冻结一个最优先的 O2 假设 | 可复算结项报告、评审资格/校准状态、独立复核及假设卡；结论可不通过，O2 实施另授权 |
 
 ## O1-PR1：当前候选单例资格与冻结
@@ -178,6 +179,28 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
   coordinator 时序断言失败经单项 11/11 和完整重跑 1524/1524 通过。
 - 本次 fresh 根保持不变且不得补跑；第一轮仍缺完整 12+12 配对。再次真实执行须新建 fresh
   根、冻结新 controller hash，并重新获得明确批准。
+
+### O1-PR2B 第三次 fresh 执行停止与安全失败分类修复
+
+- fresh 前置再次通过五类路由、Tavily POST 200、DeepSeek JSON/tool 2/2；prepare 冻结
+  控制提交 `8a959a2`、候选 `7d622fd`、原知识种子和 12-case manifest。
+- serial-r1 依次完成 P06、P07、P08、P09。P07 按冻结动作生成 limited_report，其余三例为
+  普通报告；四份报告终态 token/cache 完整，合计 52,867 tokens、67 LLM / 24 retrieval、
+  0 failed calls。P11 已完成六次成功 retrieval 与后续 LLM 节点，在引用验证阶段尚未出报告。
+- P11 的动态引用通过精确 `safe_fetch_public` 路径时出现
+  `UnsafeUrlError(route_unsupported)`。产品引用契约将所有已知 `SafeFetchFailure` 安全类别
+  结算为 `unknown/network_uncertain`，控制器却把 httpx 层该异常统称为 transport failure，
+  锁定 `PR2_EXTERNAL_HTTP_STOP`。停止后的另一个 `CancelledError` 是取消造成的次生事件。
+- P11 最终 durably cancelled，停止态 observability 完整：13,569 tokens、20 LLM /
+  6 retrieval、0 failed calls，token/cache 完整。七例未提交，concurrent-r1 未启动；服务
+  自然退出码 0。最低可用内存约 1.07 GiB，峰值服务 RSS 约 2.15 GiB，没有越过 512 MiB 停止线。
+- 修复后 child 在 `external_http_failure` 中只公开 allowlist 的安全失败类别；controller
+  仅接受精确 `safe_fetch_public` / `safe_fetch` / GET、`UnsafeUrlError` 与六个已知类别的
+  组合。缺字段、未知类别、普通 transport error、错误 method/source、5xx 和 provider 失败
+  继续 fail closed；产品安全策略、引用状态、案例、Prompt、预算和 HITL 均未改变。
+- 离线验收：58 项 PR2A/PR2B 聚焦与 1536 项全套通过、0 skipped（191.19 秒）；smoke-v1
+  12/12 baseline 匹配，pyflakes、vulture 100%、pip check 和 diff 检查通过。本次停止根保持
+  原样且不得补跑；新的完整第一轮仍须 fresh 根和明确批准。
 
 | PR 内检查点 | 新研究 run 上限 | 该段交付与推进条件 |
 |---|---|---|

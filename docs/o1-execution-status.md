@@ -1,30 +1,31 @@
 # O1 执行断点
 
-当前（2026-09-21）：O1-PR1 产品候选仍冻结为 `7d622fd`。用户重新批准使用提交
-`26185c5` 的控制器、fresh 输出根和原冻结候选执行 O1-PR2B 第一轮 12 serial +
+当前（2026-09-21）：O1-PR1 产品候选仍冻结为 `7d622fd`。用户批准使用提交
+`8a959a2` 的控制器、fresh 输出根和原冻结候选重新执行 O1-PR2B 第一轮 12 serial +
 12 concurrent，并沿用已批准的外部数据传输范围。新的有界前置通过五类路由、Tavily POST
 200 和 DeepSeek JSON/tool 2/2；0 research run。fresh prepare 重新冻结候选、12 个 case
 manifest、知识种子和六文件 PR2B 工具链。
 
-serial-r1 按随机顺序准入 P06 和 P07。P06 completed：143.671 秒、13,116 tokens、
-16 LLM / 6 retrieval、0 failed calls/retries。P07 completed_with_warnings：24.781 秒、
-4,351 tokens、5 LLM / 6 retrieval、0 failed calls、1 node retry；六个 source envelope
-全部 success，冻结 HITL 策略执行一次 limited_report。两例合计 17,467 tokens、21 LLM /
-12 retrieval；token/cache 和 stop-final budget 均完整。服务峰值 RSS 约 2.029 GiB，
-可用内存最低约 843 MiB，没有越过 512 MiB 停止线；服务正常退出码 0、无残留监听。
+serial-r1 依次准入 P06、P07、P08、P09、P11。P06/P08/P09 completed，P07
+completed_with_warnings/limited_report；四份报告的最终 token/cache 完整，合计 52,867 tokens、
+67 LLM / 24 retrieval、0 failed calls。P11 已完成六次成功 retrieval 和后续 LLM 节点，
+在 citation validator 中仍未生成报告。
 
-控制器把 P07 的非来源标记 `evidence_insufficient_user_limited` 当作任意
-`partial_failures`，误报 `PR2_SOURCE_DEGRADATION_STOP`。真实来源状态无降级：
-79 个已观测 HTTP response 中 2 个 4xx、0 个 5xx、0 transport failure。停止锁生效后
-其余 10 个 serial case 未提交，concurrent-r1 未启动；本次 fresh 根保留原样，不补跑，
+P11 的一个动态引用在精确 `safe_fetch_public` 路径上产生
+`UnsafeUrlError(route_unsupported)`。产品引用契约会把已知 `SafeFetchFailure` 类别结算为
+`unknown/network_uncertain`，控制器却把 httpx 层异常误报为 `PR2_EXTERNAL_HTTP_STOP`；
+停止后出现的 `CancelledError` 是次生取消事件。P11 最终 cancelled，停止态 observability
+完整：13,569 tokens、20 LLM / 6 retrieval、0 failed calls，token/cache 完整。其余 7 个
+serial case 未提交，concurrent-r1 未启动。服务自然退出码 0，最低可用内存约 1.07 GiB，
+峰值服务 RSS 约 2.15 GiB，没有越过 512 MiB 停止线。本次 fresh 根保留原样，不补跑；
 24-report 配对、声明台账和第一轮门禁仍 unavailable。
 
-离线修复后的 `source_anomaly` 只依据完整的六个 distinct source envelope：
-缺失、重复或任一非 success 均停止；HITL/budget 等非来源 partial failure 不再误归类。
-最终验收为 46 项 PR2A/PR2B 聚焦回归与 1524 项全套测试通过、0 skipped（229.00 秒）；
-smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100%、pip check 和 diff 检查通过。
-首次全套观察到既有 coordinator 50 ms 时序断言失败 1 项；该单项随后独立 11/11 通过，
-完整重跑 1524/1524 通过。按异常后不自动重试协议，新的 fresh 第一轮仍需明确重新批准。
+离线修复后，child 在 `external_http_failure` 中只附带 allowlist 的安全失败类别；
+controller 仅接受精确 `safe_fetch_public` / `safe_fetch` / GET、`UnsafeUrlError` 和六个
+已知类别的组合。未知/缺失类别、普通 transport error、错误 method/source、5xx 与 provider
+失败仍 fail closed。最终验收为 58 项 PR2A/PR2B 聚焦回归与 1536 项全套测试通过、0 skipped
+（191.19 秒）；smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100%、pip check 和 diff
+检查通过。按异常后不自动重试协议，新的 fresh 第一轮仍需明确重新批准。
 
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 

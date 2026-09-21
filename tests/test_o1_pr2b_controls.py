@@ -233,6 +233,98 @@ def test_pr2b_safe_fetch_context_marks_dynamic_public_requests():
         child._SAFE_FETCH_ACTIVE.reset(token)
 
 
+def test_pr2b_child_exposes_only_known_safe_fetch_failure_values():
+    known = RuntimeError("redacted")
+    known.failure = SimpleNamespace(value="route_unsupported")
+    assert child._safe_fetch_failure(known) == "route_unsupported"
+
+    unknown = RuntimeError("redacted")
+    unknown.failure = SimpleNamespace(value="unexpected")
+    assert child._safe_fetch_failure(unknown) is None
+    assert child._safe_fetch_failure(RuntimeError("redacted")) is None
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "safety_rejected",
+        "route_unavailable",
+        "route_unsupported",
+        "dns_uncertain",
+        "timeout",
+        "response_rejected",
+    ],
+)
+def test_pr2b_public_safe_fetch_accepts_bounded_policy_failures(tmp_path, failure):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "operation": "safe_fetch_public",
+            "source": "safe_fetch",
+            "method": "GET",
+            "error_type": "UnsafeUrlError",
+            "failure": failure,
+        },
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {
+            "source": "safe_fetch",
+            "method": "GET",
+            "error_type": "UnsafeUrlError",
+        },
+        {
+            "source": "safe_fetch",
+            "method": "GET",
+            "error_type": "UnsafeUrlError",
+            "failure": "unknown_failure",
+        },
+        {
+            "source": "safe_fetch",
+            "method": "GET",
+            "error_type": "ConnectError",
+            "failure": "route_unsupported",
+        },
+        {
+            "source": "other",
+            "method": "GET",
+            "error_type": "UnsafeUrlError",
+            "failure": "route_unsupported",
+        },
+        {
+            "source": "safe_fetch",
+            "method": "HEAD",
+            "error_type": "UnsafeUrlError",
+            "failure": "route_unsupported",
+        },
+    ],
+)
+def test_pr2b_public_safe_fetch_failure_requires_exact_bounded_context(
+        tmp_path, event):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "operation": "safe_fetch_public",
+            **event,
+        },
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "safe_fetch_public_failed"
+
+
 @pytest.mark.parametrize("status_code", [200, 302, 403, 404, 429])
 def test_pr2b_public_safe_fetch_get_accepts_bounded_2xx_through_4xx(
         tmp_path, status_code):

@@ -43,6 +43,11 @@ _ERROR_TYPES = frozenset({
     "ModuleNotFoundError", "PermissionError", "FileNotFoundError",
 })
 
+_SAFE_FETCH_FAILURES = frozenset({
+    "safety_rejected", "route_unavailable", "route_unsupported",
+    "dns_uncertain", "timeout", "response_rejected",
+})
+
 
 
 _HTTP_OPERATIONS = frozenset({
@@ -100,6 +105,14 @@ def _error_type(exc: BaseException) -> str:
     return name if name in _ERROR_TYPES else "OtherError"
 
 
+def _safe_fetch_failure(exc: BaseException) -> str | None:
+    try:
+        value = getattr(getattr(exc, "failure", None), "value", None)
+    except Exception:
+        return None
+    return value if value in _SAFE_FETCH_FAILURES else None
+
+
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -148,7 +161,6 @@ def _install_observers(telemetry: Telemetry) -> None:
     # Importing the embedding module adds no getter/model invocation.
     from deepchoice.utils import embedding
     from deepchoice.outbound import resolver, tunnel
-    from deepchoice.security.urls import SafeFetchFailure
     from deepchoice.utils.llm import TIERS
 
     original_embedding = embedding.get_embedding_model
@@ -214,13 +226,8 @@ def _install_observers(telemetry: Telemetry) -> None:
         try:
             response = await original_fetch(self, source, url, **kwargs)
         except BaseException as exc:
-            try:
-                failure = getattr(exc, "failure", None)
-                failure = failure.value if isinstance(failure, SafeFetchFailure) else None
-            except Exception:
-                failure = None
             telemetry.emit("safe_fetch_failure", run_id=run_id, status="failure",
-                           failure=failure, error_type=_error_type(exc),
+                           failure=_safe_fetch_failure(exc), error_type=_error_type(exc),
                            duration_ms=(time.monotonic_ns() - started) / 1_000_000)
             raise
         finally:
@@ -246,7 +253,8 @@ def _install_observers(telemetry: Telemetry) -> None:
             telemetry.emit("external_http_failure", run_id=_run_id(),
                            status="failure", source=source,
                            operation=operation, method=request.method,
-                           error_type=_error_type(exc))
+                           error_type=_error_type(exc),
+                           failure=_safe_fetch_failure(exc))
             raise
         telemetry.emit("external_http_response", run_id=_run_id(),
                        status="success", source=source, operation=operation,
