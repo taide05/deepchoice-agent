@@ -59,8 +59,13 @@ exit 0。该根保持只读，不补跑或拼接。
 `RemoteProtocolError` / `ReadError` 最多重试 2 次并重新进入共享 provider gate。PR2B 控制器按 run/source/operation/method 关联这些物理中断，成功响应
 才清零；第三次中断和其他 source/method/error 仍 fail closed。并发故障注入验证共享在途上限
 2 和 permit 清理；134 项聚焦、1570 项全套测试通过。生产代码变化使旧资格不再适用于新候选。
-累计使用 60；新资格 1 加 fresh 正式 48，因此总上限重算为 109。第一轮门禁、第二轮及本地
-O1-PR3 均 unavailable。最新 serial/concurrent 的 profile-control、telemetry、stop-final、
+新候选的第一次资格 runner 已准入任务，随后因一次 5 秒 health 连接异常停线，计为第 61 个
+run 且该根不复用。fresh v3 P01 随后完成，为第 62 个 run：11,050 tokens、10 LLM / 6 retrieval、
+0 failed/retry，六源 success，产品/检查点 quick_check ok，服务自然退出 0。独立复核校正后的
+严格 43 原子为 support 19/15/9、quality 0/34/9、system 0/36/7；必答 5/6、冲突 2/2、
+重大错误与资格阻断均为 0。候选已冻结；为保留 fresh 正式 48，总上限重算为 110，当前
+62/110。第一轮门禁、第二轮及本地 O1-PR3 均 unavailable。最新 serial/concurrent 的
+profile-control、telemetry、stop-final、
 resource-health hash 分别为
 `2fd41d4fa857d00c026fe4ad2ef5d09fff9690e56beb91bbe830221cfae6b087` /
 `152a6e52e6a1552375f040923cf7b30806d91d5832d95854c3eb41c1597218f2`、
