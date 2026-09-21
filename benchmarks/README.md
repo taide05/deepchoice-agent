@@ -1,6 +1,6 @@
 # 评估入口与历史工具
 
-更新：2026-09-16。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
+更新：2026-09-21。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
 准备检查结果见 [基线准备检查](../docs/baseline-readiness-audit.md)。
 
 | 入口 | 用途和边界 |
@@ -16,10 +16,9 @@
 | `locust -f benchmarks/locustfile.py` | 只读 health/docs/durable 查询负载，不创建研究、不衡量报告质量或研究吞吐 |
 | `.github/workflows/benchmark.yml` | 手动离线 smoke；已移除旧付费 runner 和固定 Top-1 门槛 |
 
-O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已获用户批准冻结为 1.0.0，48-run 额度已确认。
-原串并发批次创建 36 个 run 后因运行阻塞关闭服务；见[部分实测与恢复保护缺口](../docs/o1-live-baseline.md)。
-后续独立单例使历史研究额度累计 44/48（2026-09-18），不是完整串并发分母。
-**不要续跑或重启这批已有数据库，不绕过租约，不自动补跑**；下述命令是操作说明，不授权当前作废组重测。
+O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已冻结为 1.0.0。
+当前候选/研究计数以 [执行状态](../docs/o1-execution-status.md)为准；任务与新的验证范围以
+[整体地图](../docs/current-roadmap.md)为准。以下命令仅在相应冻结执行卡覆盖时使用，不能从历史 48-run 批准推定新批次授权。
 正式实验进度及主机风险见[执行断点](../docs/o1-execution-status.md)。候选状态、未通过检索健康或 LLM 兼容检查时，采集器会在
 任何研究调用前停止。LLM 检查需覆盖 JSON、工具调用与实际使用的 thinking 配置；全量测试不
 代替此项。
@@ -36,7 +35,7 @@ $env:LEARNED_DOCS_READONLY = "1"
 ```
 
 另一个终端先校验候选集。人工核验并将案例标为 `frozen`、填写私有环境 manifest 且两项健康
-检查为 `passed`、确认 48-run 上限后，才可添加最后一行的显式执行开关：
+检查为 `passed`、确认对应实验的剩余额度和运行矩阵后，才可添加显式执行开关：
 
 ```powershell
 .\.venv\Scripts\python.exe -m benchmarks.product_baseline validate
@@ -64,7 +63,7 @@ $env:LEARNED_DOCS_READONLY = "1"
 
 ## O1-PR1 单例资格
 
-以下为已批准单轮的操作入口，不能循环使用。一轮路由汇总降级后停止付费探测；
+以下为单轮资格工具的操作入口；只有该轮已在执行卡范围内才可调用，不能循环使用。一轮路由汇总降级后停止付费探测；
 沿用既定 resolver 候选通道选择，禁止重新执行整轮。只有全部通过才能离线 prepare。
 输出目录必须不存在，工作树必须干净。前置 journal 在 dispatch 前 fsync，保守计入 forward
 carrier HTTP，但不会将 carrier POST 误计为 Tavily 付费 POST；隐式代理 CONNECT 不在该计数中。
@@ -83,7 +82,7 @@ serve 与 collector 进程须显式继承相同的可信代理配置；一个 CL
 默认 collect-single/collect 仍执行冻结 HITL 策略。资格模式等待 HITL 即停，禁止自动动作、
 重试或恢复；原始报告、Trace 和资源/实际 CONNECT/TLS 观测留本地。
 前置与 completed 不能单独证明资格，完整报告声明核对和独立复核见
-[PR 划分](../docs/o1-next-steps.md)。未覆盖的实际动态 TLS 保持 unavailable；不额外外呼补测。
+[资格证据](../docs/o1c-single-case-verification.md)。未覆盖的实际动态 TLS 保持 unavailable；不额外外呼补测。
 
 ## 有意使用历史直连工具
 
@@ -110,7 +109,7 @@ serve 与 collector 进程须显式继承相同的可信代理配置；一个 CL
 制作同一知识种子和四份初始副本；它保存依赖/健康/非敏感环境清单，不复制 `.env`。`serve --root <实验目录> --profile serial-r1`
 在生产模块导入前设置独立知识与数据库路径，离线预热已有 BGE-M3 缓存后启动单 worker。
 每个 profile 只能从空 runtime 启动；已有数据必须核对，不能直接重新 serve 冒充新实验。
-实验 factory 禁止 coordinator 自动恢复（正常产品默认保留）；采集持续检查公开实例健康和重入队，停止时保留非最终用量下界。单次验证示例：`python -m benchmarks.product_baseline collect-single --case-id P06 --repetition 1 --environment-file <ready.json> --output-dir <新目录> --api-base http://127.0.0.1:8011 --execute-paid-runs`。每次检查结果后才决定下一次，不自动排队/循环多例；详见 [O1-R](../docs/o1r-single-case-reliability.md)。
+实验 factory 禁止 coordinator 自动恢复（正常产品默认保留）；采集持续检查公开实例健康和重入队，停止时保留非最终用量下界。单次验证示例：`python -m benchmarks.product_baseline collect-single --case-id P06 --repetition 1 --environment-file <ready.json> --output-dir <新目录> --api-base http://127.0.0.1:8011 --execute-paid-runs`。单次工具不应自行循环提交；批量顺序及是否衔接由冻结执行卡控制，已授权的正常衔接无需再次询问。历史观察见 [O1-R](../docs/o1r-single-case-reliability.md)。
 
 - `run_all_batches.ps1`：原先会删除批次结果，现仅说明停用并非零退出。
 - `run_batch_comparison.sh`：原先绑定个人 Python 路径、吞失败并复制 latest 文件，现同样停用。

@@ -302,10 +302,18 @@ When adding a setting, update the code default, tests, README configuration sect
 
 - `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
   design remains historical design space and must not be interpreted as authorized current scope.
-- Phase 3 and Phase 4 are complete. Phase 5-1 (bounded version assets and offline evaluation) and
-  Phase 5-2 (engineering-foundation acceptance) are complete. The currently authorized roadmap ends
-  here; real-case metrics, targeted optimization, and interview delivery require a separately
-  approved roadmap. See `docs/phase5-engineering-acceptance.md` for evidence and residual risks.
+- Phase 3, Phase 4, Phase 5-1/5-2 and the approved Phase 6-A engineering scope are complete.
+  Product optimization now follows `docs/current-roadmap.md`; engineering completion is not product
+  quality acceptance. See `docs/phase5-engineering-acceptance.md` for engineering evidence.
+- Read `docs/README.md` first for document roles, then the current map, execution rules and latest
+  status. `docs/optimization-execution.md` defines outcome-based work and deviation handling: carry
+  authorized work through verification and local commit without asking to continue at every PR.
+  Respect genuine budget, data-transfer, security, acceptance and publication boundaries.
+- Do not bulk-load `docs/archive/` or prior session handoffs. Archived instructions and approval
+  wording are historical evidence, not current scope. Open a specific historical file only when
+  needed; maintain one source for each fact. Current user instructions override archived limits.
+- `notes/` holds local handoffs and detailed session evidence. End-of-session handoffs point to
+  maintained documents and record the next outcome, not a replay of the conversation.
 - Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
   external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
   the roadmap is explicitly revised again.
@@ -314,8 +322,9 @@ When adding a setting, update the code default, tests, README configuration sect
   a frozen-candidate full comparison; it does not require a paid case batch after every code edit.
 - The baseline-readiness audit is recorded in `docs/baseline-readiness-audit.md`. Legacy batch/generator/
   merge CLIs are retired; direct-graph experiments require an explicit CLI selector and fresh output
-  directory. New baseline consumers use durable APIs. O1 must still freeze cases and implement its
-  collector before live baseline claims; retrieval health checks do not validate LLM connectivity.
+  directory. New baseline consumers use durable APIs. The 12-case set and collector are implemented;
+  current qualification, study usage and remaining acceptance are in `docs/o1-execution-status.md`.
+  Retrieval health checks do not validate LLM connectivity; prior implementation is not live quality proof.
 
 ## Local and generated data
 

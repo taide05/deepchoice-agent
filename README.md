@@ -4,15 +4,16 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 
 ## 当前产品优化状态
 
-截至 2026-09-21：工程基础、评估工具及当前候选 `d23c948` 的 P01 单例资格已完成；
-正式 48-run 配对、两轮 12 路并发门禁和完整产品质量验收仍未完成。
-最新持续授权账本为 **90/134**；HTTP 521 停线已正常收尾，尚未启动新批次。
-最新控制改动的验证是 93 项聚焦 / 1579 项全量通过；自动化测试不代表报告质量通过。
+工程基础和当前候选的单例测量资格已完成，完整产品内容验收及 12 路并发资格尚未完成。
+后续按“全面诊断 → 首个方向验证 → 剩余缺口处理 → 最终候选验收 → 交付”推进，
+每轮一个主要变量，全部优化方向都有处理状态和退出条件；不以一个方向代表整个产品完成。
 
-当前重规划建议为：**现有 8 份开发报告诊断 → 一个产品改进 → 最多 13 个新 run 的小样本验证与阶段结项**。
-并发认证后置、小样本结论范围及停止分类调整需先被接受，本次没有改动正式评测规则或启动新运行。
-当前范围见[实施路线](docs/current-roadmap.md)，任务与完成标准见[后续规划](docs/o1-next-steps.md)，
-实际计数见[执行记录](docs/o1-execution-status.md)。下方旧 O1 日志均保留为历史观察。
+- [整体任务地图](docs/current-roadmap.md)：目标、全部方向、完成标准和预算规划。
+- [执行与协作规则](docs/optimization-execution.md)：复盘、偏离处理及连续执行方式。
+- [实际执行状态](docs/o1-execution-status.md)：当前候选、用量和最近停止结果。
+- [文档索引](docs/README.md)：当前说明、维护契约与历史证据的阅读边界。
+
+本次只完成规划与归档，未启动新付费运行。新测量方案在执行前另行冻结，不追溯改变历史结果。
 
 ## 为什么值得关注
 
@@ -36,162 +37,12 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 - **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
 - **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
 
-<details>
-<summary>O1 既往实施与验收记录（历史额度和待办不代表当前状态）</summary>
-
-O1 六源检索外呼现共用进程内有界队列、请求间隔与供应商冷却，覆盖检索、补证和搜索探测；
-Tavily 按 key 控制，ChromaKB 不套网络限流。失败不伪装为成功，预算不提高；策略、旧运行兼容
-和离线验证边界见 [限流审计](docs/o1-retrieval-throttle-audit.md)。2026-09-17 本机 Python 3.12.4
-验收为 223 项聚焦、1176 项全套通过（无跳过），smoke-v1 12/12；这不代表真实 12-case 并发效果已通过，付费批次继续暂停。
-
-O1 评估协议已收口为 [v4](docs/product-effectiveness-optimization.md)：六份旧候选开发报告
-按逐处原子声明核验，重复与无引用/未知不从分母消失，历史运行不与未来新配对拼表。
-暂定助手统计/复核资格见 [O1-A](docs/o1a-evaluation-closure.md)，下一步见 [任务卡](docs/o1-next-steps.md)。
-这不是人工校准或 O1/并发通过；当时 43/48 与剩余 5 不变，批次继续暂停。
-O1-A 最终本机验收（2026-09-17，Python 3.12.4）：20 聚焦、1196 全套通过且无跳过，
-smoke 12/12 baseline 匹配、静态/依赖门禁通过；测试只验证工程/台账统计，不替代真实质量。
-
-O1-B 增补严格 JSON/浅层结构、修复 parser 实际次数、finish_reason/截断和安全失败分类，
-评测新增逐调用 diagnostics.csv / 已知分母摘要，历史缺失保持 unknown。
-run/实例租约等待后重新取时，冷本地工作移线程，health 对本地过期 lease 拒绝准入；
-观测、离线验证与停止线见 [O1-B 记录](docs/o1b-prebatch-observability.md)。
-不改 Prompt/冻结案例/硬预算，不跑真实 case；离线补修不证明真实冷启或并发效果。
-本机 O1-B 最终验收（2026-09-17，Python 3.12.4）：187 聚焦、1238 全套通过且无跳过，
-smoke-v1 12/12 baseline 匹配，静态/依赖门禁与独立复审无阻断；43/48 不变，批次继续暂停。
-
-2026-09-21 候选 `15ca251` 的首个正式 serial-r1 在 10/12 准入后因控制器误判合法官方
-HEAD 而停线；用户随后把总上限由 49 调整为 59。source-aware 遥测修复提交 `91d56cd`
-仅允许官方来源按产品契约使用 HEAD/GET，公共引用仍仅允许 GET，其他异常继续 fail closed；
-精确事件回放、50 项聚焦回归和 1557 项全套测试通过。
-
-使用该控制器的新 fresh 根完成 serial-r1 12/12：12 份报告（1 份 limited）、146,801 tokens、
-179 LLM / 72 retrieval、0 failed calls。concurrent-r1 也一次准入并观测到 12 路 running，
-随后 12 个 durable API 轮询在约 105～107 秒均返回 `ReadTimeout`，控制器自动停止；0 并发
-报告，11 个 run cancelled、P04 interrupted，服务 graceful exit 0。停线前 97 个健康样本均
-HTTP 200，最低可用内存 1.292 GiB，heartbeat/lease loss 为 0；外呼未见先发异常，确切内部
-原因仍未确认。累计使用 35/59，剩余 24；停止根不可拼接，第一轮门禁、第二轮和 O1-PR3 均
-unavailable。详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
-
-用户随后批准离线修复并发 API 响应中断、生产改动后的重新资格与冻结，以及新的完整
-48-run 配对。文件型运行时已把公开 task/list/decision 与 observability 快照读取放到独立 WAL
-连接，查询隔离候选 `09f9b66` 完成 P01 资格与冻结。其正式 fresh serial-r1 随后完成
-12/12：11 份普通报告、1 份 limited，147,687 tokens、186 LLM / 72 retrieval、0 failed calls；
-concurrent-r1 准入 12/12 后，GitHub GET 出现一次 `RemoteProtocolError`，控制器按
-`PR2_EXTERNAL_HTTP_STOP` 取消并清理全部任务，0 并发报告且服务正常退出。停止根只读，
-不能拼入下一轮。
-
-新生产候选 `d23c948` 仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError`
-做最多 2 次有界重试，并重新进入既有共享 provider gate；控制器按 run 关联物理尝试，成功响应才清零，第三次
-中断及其他来源/方法/异常继续 fail closed。134 项聚焦与 1570 项全套测试通过（190.53 秒）。
-累计已使用 60 个 run；新生产提交仍需 1 次资格，再执行完整 fresh 48-run，因此总上限按
-60 + 1 + 48 重算为 **109**。供应商、外传范围、案例、rubric、每 run 预算、HITL、质量阈值
-与停止线不变。
-
-2026-09-17 O1-C 已授权真实单例验真，但在前置网络健康 4/5（community 未通过）时停止；
-routed Tavily POST 通过，LLM/冷启/研究/报告未执行，新 run 0，累计 43/48 不变。
-具体来源限流反馈未知，不能据此认定转发断线；见 [停止记录](docs/o1c-single-case-verification.md)。
-当时离线回归另有 53 通过/1 失败（调度时间断言，单项复查通过），该首次观察保留。
-不自动重查/补跑，批次继续暂停，O1 未完成。
-
-O1-C 两项阻断已做 [只读/有界诊断](docs/o1c-blocker-diagnosis.md)：社区单源返回
-HTTP 400 / API 502 throttle_violation，probe/key 资格不一致；离线断言混用准入与调用时间，
-且缩放间隔低于本机时钟分辨率。诊断当时未修复或继续研究，旧失败记录保留。
-
-随后授权的最小修复：社区探测与业务共用请求局部的 `STACKEXCHANGE_API_KEY` helper，
-未配置时都不带 key，静态规格/审计不保存 key；探测与业务方法仍不同，key 不保证解除限流。
-六源合成回归使用虚拟时间、原秒级间隔，分别验证准入间隔、FIFO、在途上限与清理，
-覆盖准入后延迟反例。门约束的是许可提交点，不承诺客户端调用或实际发包的严格最小间隔；
-在途许可包含调用者延迟，后续冷却不撤销已准入调用。预算/通道/重试策略不变，补修当时未做真实重查。
-相关契约见 [运行契约](docs/phase1-runtime-contract.md)。本机 Windows/Python 3.12.4 离线验收
-（2026-09-17）：128 聚焦 / 1244 全套通过、0 跳过（全套 219.50 秒），smoke-v1 12/12 baseline
-匹配，pyflakes/vulture/pip/diff 门禁通过，独立只读复审无阻断；不代表真实来源已恢复。
-
-2026-09-17 20:31 北京时间随后授权的社区重查：self-forward 一次探测 HTTP 200，已带 key，
-community 健康项 1/1 通过、未见限流/冷却；其余来源、业务检索和研究未测，不能拼表宣称
-六源全绿。研究额度仍 43/48；后续单例另确认，详见 [限流审计](docs/o1-retrieval-throttle-audit.md)。
-
-2026-09-17 20:39 北京时间恢复授权的前置：本轮五网络项 5/5、routed Tavily POST 及
-JSON/工具输出资格 2/2 通过；两项 LLM 探测已知 349 token，不是研究成本或完整准备账单。
-当时本地冷加载/研究/真实并发仍未测，43/48 不变，不能据此宣布并发限流已解决。
-
-2026-09-17 20:52～20:53 北京时间随后授权的 P01 单次冷启已完成：93.14 秒、24,198 token
-（21,039 输入 / 3,159 输出；输入缓存 hit 5,760 / miss 15,279），27 LLM / 13 检索逻辑调用，
-无记录的外部失败或重试；六源状态成功但 community 0 结果。模型冷加载 4.91 秒，无观测租约丢失。
-报告仍混入无关来源和异常引用标题，系统引用检查 0 verified / 23 unsupported / 30 unknown；
-不代表语义质量通过。服务已正常停止；累计 **44/48**，不补跑、不自动解禁批次或进入 O2。
-身份、资源风险及本地原件 hash 见 [单例验真](docs/o1c-single-case-verification.md)。
-
-O1-C 前一轮最小离线修复：显式候选的标题/摘要词法准入、缺失题名标记、删除无依据的高分互证，
-What/Why/How 不再凭标题通用词补 Sources，只展示明确唯一引用；合成清洗保留标题标点/括号。
-新运行使用 source-score-v2 / what-why-how-v2；旧身份可读但不能跨版本续跑。
-该轮不是语义相关性过滤或实时引用获取修复，当时不改安全 fetch、Prompt、预算和案例；真实单例复测须另确认。
-2026-09-17 Python 3.12.4 离线验收：167 聚焦 / 1271 全套通过、0 跳过（全套 212.38 秒），
-smoke 12/12 新基线匹配、静态/依赖门禁通过，独立只读复审闭环；44/48 不变，批次暂停。
-
-O1-C 缺引用/unknown 继续收口：synthesis v2 明确独立分号子句和推荐首尾各自引用，
-无证据不借邻近引用；离线只证明规则送达，不证明模型遵从。安全获取新增脱敏固定失败分类日志，
-公开四状态/reason/schema 不变，proxy/forward 仍安全拒绝、不切 direct；诊断不是网络修复。
-旧提示身份可读但不能跨版本续跑；下一步先确认安全适配范围，再另确认单例复测。
-详见 [O1-C 任务卡](docs/o1-next-steps.md)，无新增真实调用，44/48 不变。
-2026-09-17 离线验收：175 聚焦 / 1296 全套通过、0 跳过（196.59 秒），smoke 12/12 基线匹配，
-静态/依赖门禁与独立复审通过；不代表真实模型质量或网络修复已验收。
-
-2026-09-18 O1-C 安全前置补修：不能仅凭 is_global 判断公网地址，现显式拒绝组播、
-保留等地址及包含它们的混合 DNS；公网单播 IPv4/IPv6 仍可用。
-代理通道没有放开，不改变引用状态/预算/节拍，无新增真实调用；最小代理适配仍待批准。
-本次 84 聚焦 / 1306 全套通过、0 跳过（212.40 秒），smoke 12/12 原基线匹配，
-静态/依赖门禁和独立只读复审通过；不是网络适配或真实质量验收。
-
-2026-09-18 用户批准 O1-C C2 最小可信本地代理离线适配：新运行冻结 `outbound-url-v2`
-与可信端点哈希，旧 v1 身份可读但不能跨策略 same-run resume。默认关闭；显式信任且与
-选中通道匹配的 loopback HTTP CONNECT 代理仅用于 HTTPS:443，CONNECT 指向已验证公网 IP，
-内层 Host/TLS SNI 和证书校验仍使用原域名。握手累计有界，逐跳重新验证，异常/取消清理，
-失败保持 unknown，无 direct fallback。该能力依赖代理遵守 CONNECT 目标；loopback 不构成可信证明。
-C2 离线验收时没有启用配置或新增真实 API/模型/case；当时 C3 单例仍须单独批准。
-最终离线验收（2026-09-18，Windows/Python 3.12.4）：270 聚焦 / 1399 全套通过、0 跳过，
-全套 210.02 秒，无警告；smoke-v1 12/12 原基线匹配、来源健康 not_run，静态/依赖门禁和
-独立只读复审通过。真实 CONNECT/TLS 证书交换、模型报告质量和主机稳定性尚未验证。
-
-2026-09-18 随后用户批准 C3 一轮前置及 P01 一次；仅实验进程启用经严格校验的可信本地
-代理，`.env` 不变。实际网络健康 4/5，arxiv 路由可达但 gate 投影 rate_limited，前置即停。
-Tavily 付费 POST / LLM / 新研究 run 均 0，服务未启动，额度仍 44/48；不自动重查或补跑。
-转发 carrier POST 的原计数字段误标已另加审计说明，原件保留；详见
-[单例验真](docs/o1c-single-case-verification.md)。这不是代理互通、报告质量或批次资格通过。
-
-随后获批的 arxiv 单源诊断（2026-09-18）同路由一次 GET 返回 HTTP 200，当前无 gate 冷却。
-旧限流细因未复现/未确定；不与旧四源拼表。完整前置和 P01 未执行，研究额度仍 44/48；
-见 [阻断诊断](docs/o1c-blocker-diagnosis.md)，不代表完整准入或质量通过。
-
-O1 剩余工作仍按 [3 个 PR](docs/o1-next-steps.md)管理。查询隔离候选 `09f9b66` 的
-单例资格与冻结已完成，但首个正式配对在 concurrent-r1 的 GitHub 响应中断停止；停止前
-serial-r1 12/12 完成，concurrent-r1 12/12 已准入且 0 报告。累计 60 个 run；响应中断修复形成
-新生产候选后需重新做 P01 资格，再从 fresh 根执行 48-run 配对。为覆盖 60 + 1 + 48，总上限
-重算为 109。评估案例、rubric、每 run 预算、HITL、逐轮质量门禁和异常停止线保持不变。
-
-</details>
+历史实施和验收记录见 [归档索引](docs/archive/README.md)，其中当时额度和待办不代表当前状态。
 
 ## 快速开始
 
-O1-PR1 单例资格入口已补齐：`product_baseline_qualification preflight` 在实际 dispatch 前
-限制一轮非 LLM HTTP 20 / Tavily POST 1 / LLM 4，路由汇总降级后停止付费探测；`prepare` 离线核对同一
-Git、依赖、模型端点及路由配置，复制无 WAL 的冻结种子至全新隔离目录。
-`product_baseline_experiment serve --embedding-startup-mode cold-in-research` 跳过预热，
-嵌入依赖也延迟到首次模型调用导入，采集器读取契约不加载该原生库；单例锁与模型不变。
-`product_baseline collect-single --stop-at-hitl` 保留暂停状态，不提交决策。
-默认启动仍预热，正式采集默认 HITL 策略不变；操作边界见 [评估入口](benchmarks/README.md)。
-这些入口和离线验证本身不证明单例资格或批准批次。
-本机 O1-PR1 资源修正验收（2026-09-18，Python 3.12.4）：103 聚焦 / 1441 全套通过、0 跳过
-（全套 211.19 秒）；smoke 12/12、静态/依赖检查及独立复审通过。
-O1-PR1 历史资格记录：2026-09-21，product-baseline-v1/1.0.0 的 P01 × 1，候选
-`15ca251`。新前置 5/5、Tavily POST 和 DeepSeek JSON/tool 通过；P01 冷启 completed，
-108.282 秒 / 11,914 token。68 原子台账及独立复核闭环，助手暂定单例测量资格通过；
-资格结束时使用 1/49；随后正式 serial-r1 的停线与 11/49 累计见上文。此前 `7d622fd` 的 2026-09-18 资格和后续失败批次保留为
-历史证据，不能跨候选拼接。冻结清单和残余风险见 [单例验真](docs/o1c-single-case-verification.md)。
-
-并发 API 查询隔离生产提交 `09f9b66` 的 P01 历史资格为：active 71,620 ms，
-15,285 tokens、21 LLM / 6 retrieval、六源 success、0 failed/retry，59 原子独立复核为
-5/6、2/2、重大错误 0；使用第 36/84 个 run。后续 GitHub 响应中断生产修复已使该资格失效，
-但不改写旧候选历史结果；当前资格状态以 [任务卡](docs/o1-next-steps.md) 为准。
+正常产品启动使用下列命令。评估与单例资格工具的操作说明见 [评估入口](benchmarks/README.md)，
+命令存在不代表本轮已获付费执行授权；当前候选资格见 [资格记录](docs/o1c-single-case-verification.md)。
 
 ```powershell
 # 1. 克隆
@@ -359,14 +210,9 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 当前 Phase 5。
 运行命令、baseline 检查和指标解释见[Phase 5-1 离线评估说明](docs/phase5-offline-eval.md)。
 
-后续实施已按个人项目和面试展示目标重新收敛，当前事实源见
-[`docs/current-roadmap.md`](docs/current-roadmap.md)：Phase 5-2 工程基础整体验收已经完成，结果见
-[`docs/phase5-engineering-acceptance.md`](docs/phase5-engineering-acceptance.md)。工程阶段已结束，
-后续已完成统一 Flash 和[基线准备检查](docs/baseline-readiness-audit.md)；
-下一阶段的案例、指标和运行步骤见[产品效果优化策略与评估协议](docs/product-effectiveness-optimization.md)
-（O1 的 12-case 已冻结；原部分基线 36 次加 O1-R 7 次，累计 43/48，剩余 5 未使用。
-[历史部分实测](docs/o1-live-baseline.md)与 [O1-A 收口记录](docs/o1a-evaluation-closure.md)均不构成质量或并发通过，批次暂停）。多租户认证、分布式基础设施及其他企业级
-扩展不在当前实施范围。
+工程基础整体验收已完成，证据见 [工程验收](docs/phase5-engineering-acceptance.md)。
+产品优化的当前范围见 [任务地图](docs/current-roadmap.md)，评测口径见
+[评估协议入口](docs/product-effectiveness-optimization.md)。企业级扩展不在当前范围。
 
 ### 测试
 
@@ -374,9 +220,9 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。2026-09-16 在项目 Python 3.12 隔离环境中，O1 冻结/隔离入口加入后的
-全量验证结果为 **1095 passed，0 skipped**；固定 `smoke-v1` 离线回放为 12/12。
-此前工程基础验收已通过独立复审；当前付费实测部分完成且被运行阻塞，不能据离线测试声称报告质量提升。
+项目支持 Python 3.11/3.12。最近代码验收为 2026-09-21 的 **1579 passed**，
+93 项 PR2 聚焦测试通过；随后只有文档变更，本次未重复运行相同全套。
+smoke-v1 是离线 fixture 验证；自动化测试不证明报告语义质量或并发效果。
 不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
@@ -468,7 +314,7 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 **信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
 
-**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。300 case 终测冲突检测率 28.8%——其中 keyword 预筛部分（确定性）低于 200 case 的 56.4%，主因是新增 case 的 known_contradictions 标注不足（检测靶子少），下一步优化方向是预筛召回而非仲裁质量。
+**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。300 case 终测冲突检测率 28.8%——其中 keyword 预筛部分（确定性）低于 200 case 的 56.4%，当时归因为新增 case 的 known_contradictions 标注不足（检测靶子少）；这只是历史解释，当前优化方向须由新诊断确定。
 
 ## 量化指标（300 case 混合基准，2026-08-31 终测）
 
@@ -489,16 +335,9 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
-正式产品基线使用 durable API；O1 已提供冻结的 12-case 1.0.0、serial=1 /
-concurrent=12 采集与配对门禁。2026-09-21 第四次获批第一轮在候选 `7d622fd` 上完成
-12 份串行报告（149,654 tokens、185 LLM / 72 retrieval、终态用量完整），但 12 路并发在
-multi_retriever 阶段租约失权且无报告；各停止根与旧候选不得拼接。运行时离线修复后形成
-候选 `15ca251` 并完成 P01 重新资格；其 fresh serial-r1 又在 10/12 准入后因控制器误判合法
-官方 HEAD 停止，concurrent 未启动。总上限随后由 49 调整为 59，source-aware 控制器
-离线验证后从 fresh 根重跑：serial 12/12 产出，但 concurrent 的 12 个任务全部因 durable API
-`ReadTimeout` 停线，0 并发报告。该停止点当时累计使用 35/59、剩余 24；第一轮门禁仍 unavailable。此处为历史断点；当前额度和重规划以本文顶部及执行记录为准。详见
-[执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。手动评估 workflow
-当前仅运行 smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
+正式产品测量使用 durable API 和独立 product-baseline-v1 12-case 数据集；当前状态见
+[执行记录](docs/o1-execution-status.md)，不得混入上述 300-case 分母。历史停止和修复经过见
+[归档索引](docs/archive/README.md)。手动评估 workflow 仅运行 smoke-v1，不调用 LLM/检索服务。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
 超时口径；冲突检测率为 28.8%，解释受当时 known_contradictions 标注覆盖影响。这些数据不代表
