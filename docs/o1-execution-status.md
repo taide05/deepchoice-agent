@@ -1,5 +1,13 @@
 # O1 执行断点
 
+2026-09-21 最新授权：用户给予候选 `15ca251` 的有界持续授权，覆盖一次 P01 单例资格、
+资格通过后的两轮正式测量（每轮 12 serial + 12 concurrent）及本地 O1-PR3 收口，研究 run
+总上限 49（1 + 48，失败/取消/limited 均计入）。沿用此前批准的查询、候选项、必要上下文、
+DeepSeek/Tavily/GitHub API/StackExchange API/arXiv/PyPI/官方来源、当前 local-proxy/
+self-forward 路由及公共 HTTP(S) 引用安全抓取范围。正常阶段门禁通过后无需再次征求批准；
+资源、预算、租约、主机、身份或质量异常须自动停线。超额、扩展外传范围、改变冻结评测口径、
+冻结后生产代码变更所需的额外付费替代运行，以及 push/merge/release/发布仍须另行批准。
+
 当前（2026-09-21）：用户批准使用控制提交 `30c63f9`、新的 fresh 输出根、原冻结
 候选 `7d622fd` 和原知识种子，执行 O1-PR2B 完整第一轮 12 serial + 12 concurrent。
 有界前置再次通过五类路由、Tavily POST 200 与 DeepSeek JSON/tool 2/2；0 research run。
