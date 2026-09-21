@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from argparse import Namespace
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import httpx
@@ -115,10 +118,51 @@ def test_prepared_binding_rejects_environment_or_tool_drift(tmp_path, monkeypatc
                "prerequisite_hashes": {"summary": "c" * 64}}
     path = root / "s1-execution-binding.json"
     path.write_text(json.dumps(binding), encoding="utf-8")
-    assert s1.verify_prepared(root, s1.protocol.ROOT, {}, None) == binding
+    assert s1.verify_prepared(root, s1.ROOT, {}, None) == binding
     expected["tool_hashes"] = {"runner": "d" * 64}
     with pytest.raises(ValueError, match="binding changed"):
-        s1.verify_prepared(root, s1.protocol.ROOT, {}, None)
+        s1.verify_prepared(root, s1.ROOT, {}, None)
+
+
+def test_fresh_cli_imports_llm_only_after_explicit_private_environment(tmp_path):
+    env_file = tmp_path / "offline.env"
+    env_file.write_text("DS_FLASH_API_KEY=offline-test-key\nDS_FLASH_MODEL=offline-test-model\n", encoding="utf-8")
+    code = '''
+import asyncio, sys
+from argparse import Namespace
+from pathlib import Path
+from scripts import s1_qualification as runner
+assert 'deepchoice.utils.llm' not in sys.modules
+def check(cfg):
+    from benchmarks import product_optimization_s1
+    from deepchoice.utils.llm import TIERS
+    assert TIERS['deepseek-flash']['key'] == 'offline-test-key'
+    assert TIERS['deepseek-flash']['model'] == 'offline-test-model'
+    assert runner.llm_credentials_match(TIERS['deepseek-flash'])
+    return {}
+runner.check_candidate = check
+runner.qualification.trusted_configuration = lambda: None
+asyncio.run(runner.run_command(Namespace(command='audit', env_file=Path(sys.argv[1]))))
+'''
+    environment = dict(os.environ)
+    for name in ("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY", "DS_FLASH_MODEL"):
+        environment.pop(name, None)
+    result = subprocess.run([sys.executable, "-c", code, str(env_file)],
+                            cwd=s1.ROOT, env=environment, capture_output=True,
+                            text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("cached,effective,expected", [
+    ("", "offline-key", False), ("stale", "offline-key", False),
+    ("", "", False), ("offline-key", "offline-key", True),
+])
+def test_missing_or_stale_credentials_fail_offline(monkeypatch, cached, effective, expected):
+    for name in ("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DS_FLASH_API_KEY", effective)
+    assert s1.llm_credentials_match({"key": cached}) is expected
 
 
 def test_cli_sanitizes_private_errors(monkeypatch, tmp_path, capsys):

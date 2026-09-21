@@ -15,18 +15,23 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from benchmarks import product_baseline_qualification as qualification
-from benchmarks import product_optimization_s1 as protocol
 from benchmarks.product_baseline_experiment import embedding_revision
 from scripts import o1_pr2b_control as control
 
 
 PROTOCOL_SHA256 = "1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391"
+ROOT = Path(__file__).resolve().parent.parent
 TOOL_NAMES = ("s1_qualification.py", "o1_pr2b_control.py", "o1_pr2b_child.py")
 PREREQUISITE_FILES = ("preflight-summary.json", "llm-preflight.json", "dependencies.json")
 
 
 def check_candidate(cfg) -> dict:
     """Bind product, actual imported source, shared environment and clean runner."""
+    # The protocol imports public contracts, whose package imports manifest and
+    # LLM assets. TIERS snapshots process configuration at import time. Keep this
+    # import after run_command loads the explicitly selected private environment.
+    from benchmarks import product_optimization_s1 as protocol
+
     _, digest = protocol.load_protocol()
     if digest != PROTOCOL_SHA256:
         raise ValueError("S1 frozen protocol digest changed")
@@ -34,11 +39,12 @@ def check_candidate(cfg) -> dict:
     from deepchoice import state
     from deepchoice.utils.llm import TIERS
 
-    if Path(state.__file__).resolve() != protocol.ROOT / "src/deepchoice/state.py":
+    if Path(state.__file__).resolve() != ROOT / "src/deepchoice/state.py":
         raise ValueError("imported product is not the checked candidate")
     dependencies = hashlib.sha256((json.dumps(
         qualification.dependency_records(), ensure_ascii=False, indent=2) + "\n").encode()).hexdigest()
     checks = {
+        "credential_initialization": llm_credentials_match(TIERS["deepseek-flash"]),
         "dependencies": dependencies == control.EXPECTED_DEPENDENCIES,
         "configuration": qualification.configuration_sha256(cfg) == control.EXPECTED_CONFIGURATION,
         "proxy": cfg.safe_fetch_proxy_sha256 == control.EXPECTED_PROXY,
@@ -60,13 +66,20 @@ def check_candidate(cfg) -> dict:
     }
 
 
+def llm_credentials_match(tier: dict) -> bool:
+    """Check presence/initialization only; never reveal keys or their hashes."""
+    effective = next((os.environ[name] for name in (
+        "DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY") if os.environ.get(name)), None)
+    return bool(effective) and tier.get("key") == effective
+
+
 def prerequisite_hashes(root: Path) -> dict:
     directory = root.parent / "preflight"
     return {name: qualification.file_hash(directory / name) for name in PREREQUISITE_FILES}
 
 
 def verify_prepared(root: Path, frozen_root: Path, environment: dict, cfg) -> dict:
-    if frozen_root.resolve() != protocol.ROOT:
+    if frozen_root.resolve() != ROOT:
         raise ValueError("S1 qualification must execute the checked candidate root")
     expected = check_candidate(cfg)
     qualification.verify_frozen_environment(environment, cfg)
@@ -94,7 +107,7 @@ async def run_command(args) -> dict:
     if not args.env_file.is_file():
         raise ValueError("private environment is unavailable")
     load_dotenv(args.env_file, override=False)
-    os.chdir(protocol.ROOT)
+    os.chdir(ROOT)
     cfg = qualification.trusted_configuration()
     binding = check_candidate(cfg)
     if args.command == "audit":
@@ -117,7 +130,7 @@ async def run_command(args) -> dict:
         return prepare(candidate_root, args.frozen_seed, cfg)
     if not args.execute_paid_run:
         raise ValueError("explicit single research admission flag required")
-    succeeded = await control.execute(candidate_root, protocol.ROOT,
+    succeeded = await control.execute(candidate_root, ROOT,
                                       args.env_file.resolve(), "serial-r1",
                                       s1_qualification=True)
     return {"execution_succeeded": succeeded,
