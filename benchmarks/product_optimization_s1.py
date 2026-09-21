@@ -466,8 +466,8 @@ def main(argv: list[str] | None = None) -> int:
                     "max_research_runs"
                 ],
                 "paid_execution_started": False,
-                "execution_arm_checked": args.execution_arm,
-                "execution_ref_checked": args.execution_ref,
+                "execution_arm_checked": None if args.skip_repository_checks else args.execution_arm,
+                "execution_ref_checked": None if args.skip_repository_checks else args.execution_ref,
             },
             sort_keys=True,
         )

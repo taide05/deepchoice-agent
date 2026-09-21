@@ -31,6 +31,22 @@ baseline 执行 ref 使用 --execution-arm baseline --execution-ref 814131f849f4
 指定 ref 只检查已提交对象；实际运行仍须由环境清单记录干净工作树的完整 commit。
 校验不等于资格、health 或付费执行通过。
 
+S1 单例资格使用 python -m scripts.s1_qualification，按 audit → preflight → prepare → run
+顺序执行，同一 --root 指向全新的本地研究目录，--env-file 指向私有配置；audit 只核对身份、
+依赖、路由和模型，无网络调用。preflight 需要 --execute-paid-probes，至多一轮冻结前置；
+prepare 需要 --frozen-seed，按原知识哈希复制至隔离目录；run 需要 --execute-paid-run，
+只允许 P01/serial/一次准入，遇 HITL 不自动回答、取消或恢复。前置或控制器身份变化、旧根
+重跑、来源/HTTP/authority/预算异常均关闭后续准入，不自动补跑。
+
+原协议的 controller source_objects 绑定五个采集/资格基础模块，不是整个可运行控制链。
+此入口另用本地 preflight-binding.json 和 s1-execution-binding.json 绑定干净完整 Git 身份、
+三个运行脚本、环境文件及前置证据哈希；协议、产品候选与停止阈值不变。执行成功仅表示可供
+内容资格评审，formal_measurement_gate 仍为 closed。本入口不执行十二格局部配对；旧 PR2B
+整批命令也不能代替双产品配对执行器。所有原始运行记录留在 outputs/。
+其中 git_commit 表示实际执行 checkout（包含工具和文档），不是另一个产品候选；产品身份
+由严格固定的 protocol_sha256 引用 candidate.anchor_commit=bcb4c87 及 source_objects，
+并在执行前将 HEAD 产品对象逐一与其比较。只改工具/文档不能绕过该产品字节校验。
+
 隔离实验服务使用独立产品/检查点数据库；知识库与 learned-docs 快照必须显式指定，不能复用
 日常写入目录冒充冷启动：
 

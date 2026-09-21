@@ -226,7 +226,8 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 ```
 
 项目支持 Python 3.11/3.12。最近代码验收为 2026-09-22、Windows/Python 3.12 的
-**1648 passed**（180.44 秒）；S1 协议 16 项聚焦回归、双臂身份复算和静态检查通过。
+**1664 passed**（190.92 秒）；S1 资格控制链/协议与旧控制器 98 项聚焦回归、smoke-v1 12/12、
+真实协议身份复算、静态/依赖检查及独立复审通过。单例执行入口与边界见 [评估工具](benchmarks/README.md)。
 详细证据见 [S1 离线验收](docs/product-optimization-s0-review.md#7-s1-离线实现与证据边界)。
 smoke-v1 是离线 fixture 验证；自动化测试不证明报告语义质量或并发效果。
 不要使用混装其他项目依赖的全局 Python 环境。

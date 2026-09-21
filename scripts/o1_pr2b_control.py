@@ -585,6 +585,7 @@ async def shutdown_child(
 
 async def settle(
         api_base: str, task_ids: list[str], journal: Path, safe: bool, *,
+        cancel_active: bool = True,
         timeout_seconds: float = CANCEL_SETTLE_TIMEOUT_SECONDS,
         poll_interval_seconds: float = CANCEL_POLL_INTERVAL_SECONDS) -> dict:
     result = {
@@ -609,6 +610,11 @@ async def settle(
                 status = ((payload or {}).get("task") or {}).get("status")
                 if status in TERMINAL:
                     result["settled"] += 1
+                    continue
+                if not cancel_active:
+                    # Qualification preserves pending/interrupted work; never
+                    # answer HITL, cancel, or resume it as an implicit cleanup.
+                    result["unresolved"].append(task_id)
                     continue
                 result["attempted"] += 1
                 append(journal, {"event": "cleanup_cancel_attempt", "task_id": task_id,
@@ -912,7 +918,8 @@ def lifecycle_metrics(database: Path, task_cases: dict[str, str]) -> dict:
         "runs": sorted(rows, key=lambda row: row["case_id"]),
     }
 
-async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -> bool:
+async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str,
+                  *, s1_qualification: bool = False) -> bool:
     if not env_file.is_file():
         raise ValueError("private environment is unavailable")
     load_dotenv(env_file, override=False)
@@ -929,7 +936,24 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
     cfg = qualification.trusted_configuration()
     environment = json.loads((root / "environment.json").read_text(encoding="utf-8"))
     notes = environment["notes"]
-    if qualification.git_identity() != EXPECTED_COMMIT or notes.get("git_commit") != EXPECTED_COMMIT:
+    expected_commit = EXPECTED_COMMIT
+    expected_manifests = EXPECTED_MANIFEST_BY_CASE
+    expected_registry = EXPECTED_ASSET_REGISTRY
+    expected_cases = {f"P{ordinal:02d}" for ordinal in range(1, 13)}
+    frozen_tool_hashes = notes.get("pr2_tool_hashes")
+    if s1_qualification:
+        from scripts.s1_qualification import verify_prepared
+
+        if profile != "serial-r1":
+            raise ValueError("S1 qualification requires serial-r1")
+        binding = verify_prepared(root, frozen_root, environment, cfg)
+        expected_commit = binding["git_commit"]
+        expected_manifests = {"P01": notes["expected_manifest_id"]}
+        expected_registry = notes["core_asset_registry_id"]
+        expected_cases = {"P01"}
+        frozen_tool_hashes = binding["tool_hashes"]
+    admission_limit = len(expected_cases)
+    if qualification.git_identity() != expected_commit or notes.get("git_commit") != expected_commit:
         raise ValueError("candidate changed before admission")
     expected_settings = {**RESOURCE_SETTINGS,
                          "LLM_DS_CONCURRENCY": os.getenv("LLM_DS_CONCURRENCY", "80"),
@@ -947,9 +971,10 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
             or cfg.safe_fetch_proxy_sha256 != EXPECTED_PROXY
             or notes.get("embedding_revision") != EXPECTED_EMBEDDING_REVISION
             or embedding_revision() != EXPECTED_EMBEDDING_REVISION
-            or notes.get("expected_manifest_by_case") != EXPECTED_MANIFEST_BY_CASE
-            or notes.get("core_asset_registry_id") != EXPECTED_ASSET_REGISTRY
-            or build_core_asset_registry().registry_id != EXPECTED_ASSET_REGISTRY
+            or (not s1_qualification and
+                notes.get("expected_manifest_by_case") != expected_manifests)
+            or notes.get("core_asset_registry_id") != expected_registry
+            or build_core_asset_registry().registry_id != expected_registry
             or notes.get("settings") != expected_settings
             or environment.get("model") != {"provider": "deepseek-flash",
                                              "model_id": "deepseek-v4-flash",
@@ -972,9 +997,9 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         frozen_root / "benchmarks/product-baseline-v1.json", require_frozen=True)
     if dataset_hash != EXPECTED_DATASET:
         raise ValueError("frozen dataset hash changed")
-    cases = {signature(case["request"]): case for case in dataset["cases"]}
+    cases = {signature(case["request"]): case for case in dataset["cases"]
+             if case["id"] in expected_cases}
     tool_directory = Path(__file__).resolve().parent
-    frozen_tool_hashes = notes.get("pr2_tool_hashes")
     if (not isinstance(frozen_tool_hashes, dict) or not frozen_tool_hashes
             or any(qualification.file_hash(tool_directory / name) != digest
                    for name, digest in frozen_tool_hashes.items())):
@@ -987,7 +1012,7 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         "controller_sha256": qualification.file_hash(Path(__file__)),
         "child_sha256": qualification.file_hash(child_path),
         "pr2_tool_hashes": frozen_tool_hashes,
-        "git_commit": EXPECTED_COMMIT,
+        "git_commit": expected_commit,
         "dataset_hash": EXPECTED_DATASET,
         "profile": profile,
         "repetition": repetition,
@@ -995,6 +1020,8 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         "startup_minimum_available_bytes": 2 * 1024 ** 3,
         "stop_minimum_available_bytes": STOP_MINIMUM_AVAILABLE_BYTES,
         "auto_recovery": False,
+        "qualification_mode": s1_qualification,
+        "task_admission_limit": admission_limit,
         "started_at": stamp(),
     })
 
@@ -1079,11 +1106,15 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
     async def guarded(collector, method, path, **kwargs):
         nonlocal cancellation_count, latest_health_safe
         case_id = None
+        if s1_qualification and method != "GET" and not (
+                method == "POST" and path == "/api/v1/tasks"):
+            stop(collector, "S1_QUALIFICATION_MUTATION_STOP")
+            raise RuntimeError("qualification forbids decision/cancel/resume mutations")
         if mutation_blocked(first_stop, collector._abort_reason, method, path):
             raise RuntimeError("profile stop latch forbids further mutation")
         if method == "POST" and path == "/api/v1/tasks":
             case = cases.get(signature(kwargs.get("json")))
-            if case is None or case["id"] in admission_cases or len(admission_cases) >= 12:
+            if case is None or case["id"] in admission_cases or len(admission_cases) >= admission_limit:
                 stop(collector, "PR2_ADMISSION_CONTRACT_STOP")
                 raise RuntimeError("invalid or duplicate profile admission")
             if owned_server() is None:
@@ -1136,7 +1167,7 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
                 if (not isinstance(task_id, str)
                         or not isinstance(run_id, str)
                         or run.get("manifest_id") !=
-                            notes["expected_manifest_by_case"].get(case_id)):
+                            expected_manifests.get(case_id)):
                     stop(collector, "PR2_FROZEN_MANIFEST_STOP")
                     raise RuntimeError("admitted task differs from the frozen manifest")
                 task_cases[task_id] = case_id
@@ -1195,7 +1226,16 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         return response, payload
 
     async def observed_case(collector, case):
+        nonlocal first_stop
         record = await original_case(collector, case)
+        if (s1_qualification and record.get("status") == "waiting_for_input"
+                and record.get("error_code") == "HITL_REQUIRED_NO_AUTO_RESOLUTION"):
+            if first_stop is None:
+                first_stop = "S1_QUALIFICATION_HITL_STOP"
+                append(events, {"event": "profile_stop", "reason": first_stop, "at": stamp()})
+            # This is a qualification stop, not failed retrieval/source health.
+            # Only one case is selectable and all later mutations remain fenced.
+            return record
         usage = record.get("usage") or {}
         diagnostics = record.get("diagnostics") or {}
         if (record.get("status") not in SUCCESS or record.get("error_code")
@@ -1232,7 +1272,7 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         baseline.DurableBaselineCollector._request_json = guarded
         baseline.DurableBaselineCollector._collect_case = observed_case
         args = argparse.Namespace(
-            command="collect",
+            command="collect-single" if s1_qualification else "collect",
             cases_file=str(frozen_root / "benchmarks/product-baseline-v1.json"),
             environment_file=str(root / "environment.json"),
             output_dir=str(collection),
@@ -1242,8 +1282,8 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
             repetition=repetition,
             poll_interval=2,
             case_timeout=2100,
-            stop_at_hitl=False,
-            case_id=None,
+            stop_at_hitl=s1_qualification,
+            case_id="P01" if s1_qualification else None,
             api_base=api_base,
         )
         exit_code = await baseline._collect(args)
@@ -1262,7 +1302,8 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         try:
             cleanup = await settle(
                 api_base, list(task_cases), journal,
-                owned_server() is not None and latest_health_safe)
+                owned_server() is not None and latest_health_safe,
+                cancel_active=not s1_qualification)
             cleanup["error_type"] = None
         except Exception as exc:
             cleanup["error_type"] = type(exc).__name__
@@ -1319,18 +1360,18 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
             experiment_path = collection / "experiment.json"
             metadata = json.loads(experiment_path.read_text(encoding="utf-8"))
             metadata_valid = bool(
-                metadata.get("git_commit") == EXPECTED_COMMIT
+                metadata.get("git_commit") == expected_commit
                 and metadata.get("dataset_hash") == EXPECTED_DATASET
                 and metadata.get("profile") == profile_kind
                 and metadata.get("repetition") == repetition
                 and metadata.get("requested_concurrency") == concurrency
-                and metadata.get("case_denominator") == 12
+                and metadata.get("case_denominator") == admission_limit
                 and metadata.get("order_seed") == 20260916 + repetition
                 and set(metadata.get("case_order") or []) ==
-                    {f"P{ordinal:02d}" for ordinal in range(1, 13)}
-                and metadata.get("admitted_run_denominator") == 12
+                    expected_cases
+                and metadata.get("admitted_run_denominator") == admission_limit
                 and metadata.get("manifest_ids") ==
-                    sorted(set(EXPECTED_MANIFEST_BY_CASE.values()))
+                    sorted(set(expected_manifests.values()))
                 and metadata.get("collector_stop_reason") is None
                 and metadata.get("source_health") == "passed"
                 and metadata.get("peak_in_flight_cases") == concurrency
@@ -1394,8 +1435,8 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
         )
         result["execution_succeeded"] = bool(
             result["collection_finished"] and first_stop is None
-            and len(admission_cases) == 12 and len(task_cases) == 12
-            and len(records) == 12 and successful == 12 and reports == 12
+            and len(admission_cases) == admission_limit and len(task_cases) == admission_limit
+            and len(records) == admission_limit and successful == admission_limit and reports == admission_limit
             and metadata_valid
             and not telemetry_http_anomaly(
                 control / "telemetry.jsonl", require_stopped=True,

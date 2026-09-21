@@ -8,6 +8,31 @@ import pytest
 from benchmarks import product_optimization_s1 as s1
 
 
+@pytest.fixture(autouse=True)
+def frozen_repository(monkeypatch):
+    """Exercise identity checks without requiring historical objects in shallow CI.
+
+    The operational CLI still checks real Git. Unit tests model both historical
+    arms so unrelated future product changes do not break this frozen fixture.
+    """
+    frozen = json.loads(s1.PROTOCOL_PATH.read_text(encoding="utf-8"))
+    identities = frozen["identities"]
+    refs = {item["anchor_commit"]: item for item in identities.values()}
+    refs["HEAD"] = identities["candidate"]
+    refs["814131f849f417fbcf4f00cfe071d95ccf2b3878"] = identities["baseline"]
+
+    def git(*args):
+        if args[0] == "status":
+            return ""
+        assert args[0] == "rev-parse"
+        ref, path = args[1].split(":", 1)
+        objects = [*refs[ref]["source_objects"],
+                   *identities["controller"]["source_objects"]]
+        return next(item["git_object"] for item in objects if item["path"] == path)
+
+    monkeypatch.setattr(s1, "_git", git)
+
+
 def _write_protocol(tmp_path, protocol):
     path = tmp_path / "protocol.json"
     path.write_text(json.dumps(protocol, ensure_ascii=False), encoding="utf-8")
@@ -132,3 +157,10 @@ def test_cli_is_offline_and_reports_no_paid_execution(capsys):
     assert output["formal_research_runs"] == 12
     assert output["execution_arm_checked"] == "candidate"
     assert output["execution_ref_checked"] == "HEAD"
+
+
+def test_structure_only_cli_does_not_claim_repository_verification(capsys):
+    assert s1.main(["--skip-repository-checks"]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["execution_arm_checked"] is None
+    assert output["execution_ref_checked"] is None
