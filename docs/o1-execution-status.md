@@ -10,6 +10,11 @@ self-forward 路由及公共 HTTP(S) 引用安全抓取范围。正常阶段门�
 在本页所述 HEAD 遥测误判停线后，用户已批准离线 source-aware 修正，并把总上限从 49
 调整为 59；供应商、外传范围、案例、rubric、预算、HITL 和质量阈值均不变。
 
+在随后 concurrent-r1 的 durable API 全体 `ReadTimeout` 停线后，用户进一步批准离线生产修复、
+生产改动后的一次新 P01 资格与冻结，以及新的完整 48-run 配对。35 个既有研究 run 全部计入，
+新资格计 1、正式配对计 48，因此“至少 83”的当前硬上限按完整算术设为 **84**。供应商、
+外传范围、案例、rubric、预算、HITL、质量阈值与异常停止线保持不变；旧停止根继续只读。
+
 最新执行使用 source-aware 控制提交 `91d56cd7df7d9c95137ed8272083f19e11160523`、
 fresh 根 `o1-pr2b-round1-20260921-15ca251-source-aware-v2` 和冻结候选
 `15ca251a89ff996bc787435d8965a918a89437f6`。prepare 重新冻结候选、数据集、知识快照、
@@ -31,9 +36,12 @@ multi_retriever 4 succeeded / 7 cancelled / 1 started，source_evaluator 1 cance
 因此当前只确认 durable API/事件循环响应中断，不能归因为来源、预算、内存或租约，内部原因仍
 unknown。stop-final 与 active budget 因 service_not_safe 不完整。
 
-该 fresh 根保持不变，不重启、不补跑、不与后续根拼接。累计研究 run 为 35/59，剩余 24；
-完整新配对仍需 fresh 48 个 run，当前上限不足。第一轮配对评审/门禁、第二轮及本地 O1-PR3
-均未启动。serial/concurrent 的 profile-control、telemetry、stop-final、resource-health hash
+该 fresh 根保持不变，不重启、不补跑、不与后续根拼接。累计研究 run 为 35/84；已批准
+的新生产候选资格将使用第 36 个，资格通过后的完整 fresh 配对使用第 37～84 个。第一轮配对
+评审/门禁、第二轮及本地 O1-PR3 尚未重新启动。文件型运行时已离线增加第三条公开查询 WAL
+连接：task/list/decision 与 observability 不再共享主写 asyncio lock，mutation/recovery/HITL
+预检仍走主仓库。主连接 asyncio lock 积压回归、47 项最终聚焦与 1559 项全套测试通过（193.36 秒）；
+新资格尚未执行。serial/concurrent 的 profile-control、telemetry、stop-final、resource-health hash
 分别为 `b91776d1ee6b810ab5aee26377353f878ccd0eff2de4f4871b114b6a5ff01838` /
 `f904e3f834f07cd103f8975c47274e3a04bea10cb9e3886ba4eda23d59630e5d`、
 `08f5d616fa1f3ff0c0db71c6b2db5768123bb33b5d4bce452d9bce689f072af8` /

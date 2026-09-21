@@ -57,6 +57,13 @@ HTTP 200，最低可用内存 1.292 GiB，heartbeat/lease loss 为 0；外呼未
 原因仍未确认。累计使用 35/59，剩余 24；停止根不可拼接，第一轮门禁、第二轮和 O1-PR3 均
 unavailable。详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
 
+用户随后批准离线修复并发 API 响应中断、生产改动后的重新资格与冻结，以及新的完整
+48-run 配对。按 35 个已计入 run + 1 个新资格 + 48 个正式 run 计算，硬上限设为 **84**。
+文件型运行时现将公开 task/list/decision 与 observability 快照读取放到独立 WAL 连接；主写
+连接继续承担 lifecycle/Trace/预算/缓存与 mutation，租约连接保持独立。主连接 asyncio lock 积压故障回归、
+47 项最终聚焦测试及 1559 项全套测试通过（193.36 秒）。新资格和 48-run fresh 配对尚未执行；
+供应商、外传范围、案例、rubric、预算、HITL、质量阈值与停止线不变。
+
 2026-09-17 O1-C 已授权真实单例验真，但在前置网络健康 4/5（community 未通过）时停止；
 routed Tavily POST 通过，LLM/冷启/研究/报告未执行，新 run 0，累计 43/48 不变。
 具体来源限流反馈未知，不能据此认定转发断线；见 [停止记录](docs/o1c-single-case-verification.md)。
@@ -458,7 +465,7 @@ multi_retriever 阶段租约失权且无报告；各停止根与旧候选不得�
 候选 `15ca251` 并完成 P01 重新资格；其 fresh serial-r1 又在 10/12 准入后因控制器误判合法
 官方 HEAD 停止，concurrent 未启动。总上限随后由 49 调整为 59，source-aware 控制器
 离线验证后从 fresh 根重跑：serial 12/12 产出，但 concurrent 的 12 个任务全部因 durable API
-`ReadTimeout` 停线，0 并发报告。累计使用 35/59、剩余 24；第一轮门禁仍 unavailable。详见
+`ReadTimeout` 停线，0 并发报告。该停止点当时累计使用 35/59、剩余 24；第一轮门禁仍 unavailable。后续当前上限 84、生产修复与新执行授权见上文。详见
 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。手动评估 workflow
 当前仅运行 smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
 

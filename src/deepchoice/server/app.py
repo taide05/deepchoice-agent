@@ -80,6 +80,7 @@ async def lifespan(application: FastAPI):
     """Own the product database connections for this app lifespan."""
 
     connection = None
+    query_connection = None
     lease_connection = None
     checkpoint_connection = None
     coordinator = None
@@ -103,10 +104,15 @@ async def lifespan(application: FastAPI):
             # filesystem database and receive the isolated lease connection.
             lease_connection = connection
             lease_lock = connection_lock
+            query_connection = connection
+            query_lock = connection_lock
         else:
             lease_connection = await connect_database(resolved_database_path)
             lease_lock = asyncio.Lock()
+            query_connection = await connect_database(resolved_database_path)
+            query_lock = asyncio.Lock()
         lease_repository = SQLiteTaskRunRepository(lease_connection, lease_lock)
+        query_repository = SQLiteTaskRunRepository(query_connection, query_lock)
         instance_guard = RuntimeInstanceGuard(lease_connection, lease_lock)
         application.state.runtime_instance_guard = instance_guard
         await instance_guard.acquire()
@@ -181,11 +187,16 @@ async def lifespan(application: FastAPI):
             )
         application.state.product_database_connection = connection
         application.state.product_database_lock = connection_lock
+        application.state.product_database_query_connection = query_connection
+        application.state.product_database_query_lock = query_lock
         application.state.observability_query = SQLiteObservabilityQuery(
-            connection, connection_lock
+            query_connection, query_lock
         )
         application.state.task_repository = repository
-        application.state.task_service = TaskService(repository)
+        application.state.task_query_repository = query_repository
+        application.state.task_service = TaskService(
+            repository, query_repository=query_repository
+        )
         application.state.run_coordinator = coordinator
         application.state.execution_enabled = execution_enabled
         await coordinator.start()
@@ -234,12 +245,17 @@ async def lifespan(application: FastAPI):
         application.state.run_coordinator = None
         application.state.task_service = None
         application.state.task_repository = None
+        application.state.task_query_repository = None
         application.state.legacy_import_summary = None
         application.state.legacy_import_task = None
         application.state.legacy_import_status = None
         application.state.runtime_instance_status = None
         application.state.product_database_lock = None
         application.state.product_database_connection = None
+        application.state.product_database_query_lock = None
+        application.state.product_database_query_connection = None
+        if query_connection is not None and query_connection is not connection:
+            await _await_cleanup(query_connection.close())
         if connection is not None:
             await _await_cleanup(connection.close())
         if lease_connection is not None and lease_connection is not connection:

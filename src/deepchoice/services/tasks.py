@@ -114,12 +114,24 @@ class TaskService:
         self,
         repository: TaskRepository,
         *,
+        query_repository: TaskRepository | None = None,
         uuid_factory: Callable[[], uuid.UUID] = uuid.uuid4,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
+        self._query_repository = (
+            query_repository if query_repository is not None else repository
+        )
         self._uuid_factory = uuid_factory
         self._clock = clock or (lambda: datetime.now(UTC))
+
+    async def _get_from_repository(
+        self, repository: TaskRepository, task_id: str
+    ) -> TaskWithRun:
+        result = await repository.get_task(task_id)
+        if result is None:
+            raise TaskNotFoundError(task_id)
+        return result
 
     async def create(self, request: ResearchRequest) -> TaskWithRun:
         task_id = str(self._uuid_factory())
@@ -150,10 +162,7 @@ class TaskService:
         return await self._repository.create_task_with_run(task, run)
 
     async def get(self, task_id: str) -> TaskWithRun:
-        result = await self._repository.get_task(task_id)
-        if result is None:
-            raise TaskNotFoundError(task_id)
-        return result
+        return await self._get_from_repository(self._query_repository, task_id)
 
     async def list(
         self,
@@ -167,7 +176,7 @@ class TaskService:
         if status is not None and type(status) is not TaskStatus:
             raise TypeError("status must be TaskStatus or None")
         before = _decode_cursor(cursor) if cursor is not None else None
-        records = await self._repository.list_tasks(
+        records = await self._query_repository.list_tasks(
             status=status,
             before=before,
             limit=limit + 1,
@@ -200,7 +209,7 @@ class TaskService:
         return await self._repository.cancel_task(task_id, updated_at=self._clock())
 
     async def get_decision(self, task_id: str) -> DecisionRecord:
-        decision = await self._repository.get_latest_decision(task_id)
+        decision = await self._query_repository.get_latest_decision(task_id)
         if decision is None:
             raise DecisionNotFoundError(task_id)
         return decision
@@ -215,7 +224,7 @@ class TaskService:
     ) -> DecisionResolutionResult:
         now = self._clock()
         if resolution.action != "cancel":
-            current = await self.get(task_id)
+            current = await self._get_from_repository(self._repository, task_id)
             decision = await self._repository.get_latest_decision(task_id)
             # Guard a new same-run resolution before consuming user input.
             # Replays, expiry and conflicts retain repository-owned semantics;
@@ -247,7 +256,7 @@ class TaskService:
     ) -> TaskWithRun:
         if type(expected_task_version) is not int or expected_task_version < 0:
             raise ValueError("expected_task_version must be a non-negative integer")
-        current = await self.get(task_id)
+        current = await self._get_from_repository(self._repository, task_id)
         if current.task.version != expected_task_version:
             raise TaskVersionConflictError(
                 task_id,

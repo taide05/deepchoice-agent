@@ -310,18 +310,21 @@ json_repair 兼容返回/重试不改，node-shape-v1 仅观测、不增加路�
 
 ## O1-PR2B：并发租约队列隔离（2026-09-21）
 
-filesystem 产品数据库在同一 SQLite/WAL 文件上使用两条应用连接：主连接继续承载 lifecycle、
-Trace、预算、检索缓存和 API 读写；专用租约连接只供 runtime instance guard 与
-RunCoordinator 的 run heartbeat 使用，并由独立 asyncio lock 串行化。这样 heartbeat 不会
-排在主连接的高流量协程队列之后。它不是第二个产品库，不改变备份对、schema、事务事实源、
-lease owner/epoch、30 秒 TTL、10 秒节拍、单实例或单 worker 约束。`:memory:` 兼容路径因
-第二连接会得到不同数据库，继续共用原连接；durable 部署使用 filesystem 数据库。
+filesystem 产品数据库在同一 SQLite/WAL 文件上使用三条应用连接：主写连接继续承载
+lifecycle、Trace、预算、检索缓存与所有状态变更；专用租约连接只供 runtime instance guard
+和 RunCoordinator 的 run heartbeat 使用；专用查询连接承载公开 task/list/decision 快照与
+latest-run observability 读事务。三条连接各有独立 asyncio lock，使租约续期和公开读取不会
+排在主写连接的高流量协程队列之后。它们仍指向同一个产品库，不改变备份对、schema、事务
+事实源、lease owner/epoch、30 秒 TTL、10 秒节拍、单实例或单 worker 约束。恢复、HITL
+resolution 与其他 mutation 的预检继续使用主写仓库并由原事务/CAS 复核。`:memory:` 兼容路径
+因第二连接会得到不同数据库，继续共用原连接；durable 部署使用 filesystem 数据库。
 
-专用连接仍通过同一 SQLite writer lock 与有界 busy timeout；真正的长写事务、磁盘停顿或
-event-loop stall 仍会使续期 fail closed，不能声称租约永不丢失。失权后的 coordinator 取消、
-fencing 拒绝与 health 503 不变。离线故障回归在主连接 lock 阻塞超过一个完整测试租约窗口时，
-同时运行实例 guard 与 12 个 run heartbeat，确认专用队列持续续期；另保留 writer wait 超时、
-过期不可复活、旧 owner 不得清理替代 owner 等既有回归。
+专用连接仍通过同一 SQLite WAL/writer lock 与有界 busy timeout；真正的长写事务、磁盘停顿、
+query 自身过载或 event-loop stall 仍可能使操作失败，不能声称 API 或租约永不失效。失权后的
+coordinator 取消、fencing 拒绝与 health 503 不变。离线故障回归在主连接 asyncio lock 阻塞超过一个
+完整测试租约窗口时，同时运行实例 guard 与 12 个 run heartbeat，确认专用租约队列持续续期；
+另验证主连接 asyncio lock 积压时 task detail 与 observability 仍返回，并保留 writer wait 超时、过期不可复活、
+旧 owner 不得清理替代 owner 等既有回归。
 
 2026-09-21 的 O1-PR2B concurrent-r1 一次观察到 12 路 running 后在 multi_retriever 阶段
 发生实例与 run heartbeat 失权；内存没有越过实验停止线。该 live 事实支持修复共享应用锁

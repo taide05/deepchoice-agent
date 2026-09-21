@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -16,6 +17,7 @@ from deepchoice.runtime.instance_guard import (
     validate_single_worker_configuration,
 )
 from deepchoice.server.app import lifespan
+from deepchoice.server import app as app_module
 
 
 NOW = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
@@ -206,9 +208,91 @@ def test_lifespan_isolates_lease_traffic_from_primary_connection(tmp_path):
         guard = application.state.runtime_instance_guard
         coordinator = application.state.run_coordinator
         primary = application.state.product_database_connection
+        query = application.state.product_database_query_connection
         assert guard._connection is not primary
+        assert query is not primary
+        assert query is not guard._connection
         assert coordinator._heartbeat_repository._connection is guard._connection
         assert coordinator._heartbeat_repository._lock is guard._lock
+
+
+def test_public_task_reads_survive_primary_connection_lock_backlog(tmp_path):
+    state = app_module.app.state
+    missing = object()
+    names = (
+        "execution_enabled",
+        "auto_recovery_enabled",
+        "checkpoint_database_path",
+        "product_database_path",
+        "legacy_snapshot_root",
+    )
+    old = {name: getattr(state, name, missing) for name in names}
+    state.execution_enabled = False
+    state.auto_recovery_enabled = False
+    state.checkpoint_database_path = tmp_path / "checkpoints.db"
+    state.product_database_path = tmp_path / "product.db"
+    state.legacy_snapshot_root = tmp_path / "legacy"
+    try:
+        with TestClient(app_module.app) as client:
+            created = client.post(
+                "/api/v1/tasks", json={"query": "compare FastAPI and Flask"}
+            )
+            assert created.status_code == 202
+            task_id = created.json()["task"]["task_id"]
+            primary_lock = state.product_database_lock
+
+            async def acquire_primary_lock() -> None:
+                await primary_lock.acquire()
+
+            client.portal.call(acquire_primary_lock)
+            try:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    responses = executor.submit(
+                        lambda: (
+                            client.get(f"/api/v1/tasks/{task_id}"),
+                            client.get(f"/api/v1/tasks/{task_id}/observability"),
+                        )
+                    )
+                    try:
+                        task_response, observability_response = responses.result(
+                            timeout=2
+                        )
+                    except FutureTimeoutError:
+                        client.portal.call(primary_lock.release)
+                        responses.result(timeout=5)
+                        pytest.fail(
+                            "public task reads waited behind the primary connection lock"
+                        )
+                assert task_response.status_code == 200
+                assert observability_response.status_code == 200
+            finally:
+                if primary_lock.locked():
+                    client.portal.call(primary_lock.release)
+    finally:
+        for name, value in old.items():
+            if value is missing:
+                delattr(state, name)
+            else:
+                setattr(state, name, value)
+
+
+def test_memory_lifespan_reuses_primary_connection_for_queries(tmp_path):
+    application = FastAPI(lifespan=lifespan)
+    application.state.execution_enabled = False
+    application.state.auto_recovery_enabled = False
+    application.state.product_database_path = ":memory:"
+    application.state.checkpoint_database_path = tmp_path / "checkpoints.db"
+    application.state.legacy_snapshot_root = tmp_path / "legacy"
+
+    with TestClient(application):
+        assert (
+            application.state.product_database_query_connection
+            is application.state.product_database_connection
+        )
+        assert (
+            application.state.product_database_query_lock
+            is application.state.product_database_lock
+        )
 
 
 def test_second_application_cannot_start_coordinator_on_same_product_database(tmp_path):
