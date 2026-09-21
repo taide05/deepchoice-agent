@@ -32,7 +32,7 @@ def load_module(name: str, path: Path):
 def main(root: Path, frozen_root: Path, round_no: int) -> dict:
     tools = Path(__file__).resolve().parent
     control_module = load_module("o1_pr2_control_gate",
-                                  tools / "o1_pr2a_control.py")
+                                  tools / "o1_pr2b_control.py")
     review_module = load_module("o1_pr2_review_gate",
                                  tools / "o1_pr2b_review_pack.py")
     sys.path.insert(0, str(frozen_root))

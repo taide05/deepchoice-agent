@@ -1,13 +1,14 @@
 # O1 剩余交付与 PR 划分
 
-更新：2026-09-19。2026-09-18 原始重组将剩余 C/D/E 工作组织为 **3 个 PR**，A/B 保留已完成状态；
+更新：2026-09-21。2026-09-18 原始重组将剩余 C/D/E 工作组织为 **3 个 PR**，A/B 保留已完成状态；
 该次规划不改变 [评估协议 v4](product-effectiveness-optimization.md)的冻结案例、rubric、质量/并发阈值、
 HITL 策略或预算，且当时不构成新的实施、付费调用或发布授权。
 
-随后用户依次授权并完成 O1-PR1，又在 2026-09-19 明确授权 O1-PR2 的新 48-run 批次。
-PR2 已按停止线结束本次尝试，并重新拆为离线控制面修复 O1-PR2A 与重新执行/评审
-O1-PR2B。PR2A 已完成；用户已在 2026-09-19 授权实施 PR2B，按既定轮次边界先执行
-第一轮 24 个 run。第二轮须在第一轮完整门禁与评审完成后单独批准；O1-PR3 和发布仍未授权。
+随后用户依次授权并完成 O1-PR1 与 O1-PR2A，并明确批准 O1-PR2B 第一轮 24 个付费 run
+及所需外部数据传输。2026-09-21 的 fresh 第一轮在 serial-r1 首个 P06 后因 controller
+误判公共引用 GET 403 而停止；没有第二次准入或 concurrent profile。该停止轮不得自动补跑。
+PR2B successor 离线修复现已实现；新的 fresh 第一轮仍须重新批准。第二轮须在第一轮完整门禁
+与评审完成后单独批准；O1-PR3 和发布仍未授权。
 
 | 已完成部分 | 已有交付 | 尚不能据此宣称 |
 |---|---|---|
@@ -15,14 +16,15 @@ O1-PR2B。PR2A 已完成；用户已在 2026-09-19 授权实施 PR2B，按既定
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**O1-PR1 与离线 O1-PR2A 已完成；原 O1-PR2 真实批次在第一轮首个
-serial run 后按停止线阻断；O1-PR2B 第一轮已授权并处于 fresh 执行准备。**
+当前状态：**O1-PR1、离线 O1-PR2A 与 PR2B successor 实现已完成；2026-09-21
+第一轮真实执行只准入 P06 × 1 后停止，新的 first-round fresh 执行待重新批准。**
 PR1 冻结候选仍为 `7d622fd`；2026-09-18 的 P01 × 1 completed（167.469 秒、14,093 token），
 53 原子完整台账及独立复核闭环；228 聚焦 / 1478 全套通过、0 跳过。
-2026-09-19 的 PR2 受限前置通过，随后 serial-r1 仅准入 P06 × 1；该 run 已取消结算，
-其余 11 个 case 未准入，concurrent-r1 与第二轮均未启动。质量配对、逐报告台账和轮次门禁
-因此 unavailable，不能声明 PR2 基线或并发门禁完成。PR1 的累计 **46/48** 与 PR2 新批次分母分开，
-不能拼接。候选、依赖/模型、逐 case manifest、registry、知识副本和工具身份保持冻结。
+最新 PR2B P06 的取消在旧 30 秒窗口内未收敛，产品库保留 `cancelling`；另外 11 个
+serial case 未准入，concurrent-r1 与第二轮均未启动。质量配对、逐报告台账和轮次门禁
+因此 unavailable，不能声明 PR2 基线或并发门禁完成。PR1 的累计 **46/48** 与 PR2 新批次分母
+分开，不能拼接。候选产品、依赖/模型、逐 case manifest、registry 和知识种子保持冻结；
+后继 PR2B 工具链使用新的 child/controller 身份。
 
 以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
 PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
@@ -134,6 +136,30 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 - 最终本机验收：27 项聚焦和 1505 项全套测试通过，0 skipped（全套 207.76 秒）；
   smoke-v1 固定 12/12 与既有 baseline 匹配，pyflakes、vulture 100%、pip check 与 diff
   检查通过。该结果验证离线控制逻辑，不替代 PR2B 的真实服务退出或串并发验收。
+
+### O1-PR2B 第一轮首次执行与后继控制器
+
+- 2026-09-21 fresh 前置通过后，serial-r1 仅准入 P06。约 190 秒时，一个公共引用
+  safe-fetch GET 返回 403；产品引用校验把该状态解释为
+  `unreachable/not_publicly_accessible`，PR2A controller 却误报
+  `PR2_EXTERNAL_HTTP_STOP`。停止锁生效后没有第二次准入，另外 11 个 serial case
+  为 not_submitted，concurrent-r1 未启动，第一轮门禁 unavailable。
+- P06 取消请求已提交，但 30 秒 cleanup 窗口结束时 task/run 仍为 `cancelling`；
+  stop-final observability 与 active budget 因此不完整。服务随后正常发出停止和 asyncio
+  runner 返回事件，退出码 0、无残留进程。服务 RSS 峰值约 2.178 GiB，可用内存最低约
+  602 MiB，主机资源风险仍是下一次执行的显式观察项。
+- 新增 `scripts/o1_pr2b_child.py` 和 `scripts/o1_pr2b_control.py`，并让 PR2B prepare
+  与 round gate 冻结/验证这组新身份。child 通过任务本地 ContextVar 把 safe-fetch 内部
+  请求标为 `safe_fetch_public`，不保存 URL；仅该 operation 的 GET 2xx-4xx 被视为有界
+  引用结果。5xx、transport failure、非 GET 或错误 source 继续 fail closed；Tavily POST、
+  其他 HEAD 和所有 provider 规则保持既定停线。
+- cleanup 最多等待 180 秒，并在轮询期间持续执行 512 MiB 可用内存停止线。超过时限或跌破
+  停止线仍保持 unresolved，不生成成功 profile。
+- 离线验收为 41 项 PR2A/PR2B 聚焦回归与 1519 项全套测试通过、0 skipped（193.56 秒）；
+  smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100%、pip check 与 diff 检查通过。
+- 失败根和 PR2A 工具保持不变；协议禁止在已停止的同轮自动补跑。因此这次批准实际产生
+  1 个已准入 run，未完成 24-run 第一轮。离线验收完成后，新的 fresh 第一轮须重新获得
+  明确执行批准。
 
 | PR 内检查点 | 新研究 run 上限 | 该段交付与推进条件 |
 |---|---|---|

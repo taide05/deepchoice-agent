@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 from argparse import Namespace
 from pathlib import Path
+from types import SimpleNamespace
 
+import httpx
 import pytest
 
-from scripts import o1_pr2a_control as control
+from scripts import o1_pr2b_child as child
+from scripts import o1_pr2b_control as control
 from scripts import o1_pr2b_prepare as prepare
 from scripts import o1_pr2b_review_pack as review
 from scripts import o1_pr2b_round_gate as gate
@@ -163,7 +166,7 @@ def _write_control_evidence(root: Path, profile: str, tool_hashes: dict) -> None
         "controller_sha256": control.file_hash(
             Path(control.__file__).resolve()),
         "child_sha256": control.file_hash(
-            Path(control.__file__).with_name("o1_pr2a_child.py")),
+            Path(control.__file__).with_name("o1_pr2b_child.py")),
         "pr2_tool_hashes": tool_hashes,
     }), encoding="utf-8")
 
@@ -172,8 +175,8 @@ def test_pr2b_control_chain_is_complete_and_current():
     assert prepare.PR2B_CONTROL_CHAIN == (
         "o1_pr2b_preflight.py",
         "o1_pr2b_prepare.py",
-        "o1_pr2a_child.py",
-        "o1_pr2a_control.py",
+        "o1_pr2b_child.py",
+        "o1_pr2b_control.py",
         "o1_pr2b_review_pack.py",
         "o1_pr2b_round_gate.py",
     )
@@ -204,3 +207,208 @@ def test_pr2b_blind_review_and_round_gate_reject_tampering(tmp_path):
     report.write_text("tampered report\n", encoding="utf-8")
     with pytest.raises(ValueError, match="private mapping no longer matches"):
         gate.main(tmp_path, repository, 1)
+
+
+def _write_telemetry(path: Path, *events: dict) -> None:
+    path.write_text(
+        "".join(json.dumps({
+            "schema_version": 1,
+            **event,
+        }) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+
+def test_pr2b_safe_fetch_context_marks_dynamic_public_requests():
+    request = httpx.Request("GET", "https://example.com/public-citation")
+    assert child._observed_operation(request, "api.deepseek.com") == "other"
+
+    token = child._SAFE_FETCH_ACTIVE.set(True)
+    try:
+        assert (
+            child._observed_operation(request, "api.deepseek.com")
+            == "safe_fetch_public"
+        )
+    finally:
+        child._SAFE_FETCH_ACTIVE.reset(token)
+
+
+@pytest.mark.parametrize("status_code", [200, 302, 403, 404, 429])
+def test_pr2b_public_safe_fetch_get_accepts_bounded_2xx_through_4xx(
+        tmp_path, status_code):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_response",
+            "operation": "safe_fetch_public",
+            "source": "safe_fetch",
+            "method": "GET",
+            "status_code": status_code,
+        },
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {
+            "operation": "safe_fetch_public",
+            "source": "safe_fetch",
+            "method": "GET",
+            "status_code": 500,
+        },
+        {
+            "operation": "safe_fetch_public",
+            "source": "safe_fetch",
+            "method": "HEAD",
+            "status_code": 403,
+        },
+        {
+            "operation": "safe_fetch_public",
+            "source": "other",
+            "method": "GET",
+            "status_code": 403,
+        },
+    ],
+)
+def test_pr2b_safe_fetch_5xx_and_invalid_context_fail_closed(tmp_path, event):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {"event": "external_http_response", **event},
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "safe_fetch_public_failed"
+
+
+@pytest.mark.asyncio
+async def test_pr2b_cleanup_waits_beyond_old_30_second_poll_count(
+        tmp_path, monkeypatch):
+    state = {"get_count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"task": {"status": "cancelling"}})
+        state["get_count"] += 1
+        status = "cancelled" if state["get_count"] > 36 else "cancelling"
+        if state["get_count"] == 1:
+            status = "running"
+        return httpx.Response(200, json={"task": {"status": status}})
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://local.test",
+    )
+    monkeypatch.setattr(control.httpx, "AsyncClient", lambda **_kwargs: client)
+    monkeypatch.setattr(
+        control.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(
+            available=control.STOP_MINIMUM_AVAILABLE_BYTES + 1
+        ),
+    )
+
+    result = await control.settle(
+        "http://unused",
+        ["task-1"],
+        tmp_path / "journal.jsonl",
+        True,
+        timeout_seconds=5,
+        poll_interval_seconds=0.0001,
+    )
+
+    assert state["get_count"] > 30
+    assert result["attempted"] == 1
+    assert result["settled"] == 1
+    assert result["unresolved"] == []
+    assert result["resource_stop"] is False
+
+
+@pytest.mark.asyncio
+async def test_pr2b_cleanup_keeps_memory_stop_line(tmp_path, monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        status = "cancelling" if request.method == "POST" else "running"
+        return httpx.Response(200, json={"task": {"status": status}})
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://local.test",
+    )
+    monkeypatch.setattr(control.httpx, "AsyncClient", lambda **_kwargs: client)
+    monkeypatch.setattr(
+        control.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(
+            available=control.STOP_MINIMUM_AVAILABLE_BYTES - 1
+        ),
+    )
+
+    result = await control.settle(
+        "http://unused",
+        ["task-1"],
+        tmp_path / "journal.jsonl",
+        True,
+        timeout_seconds=5,
+        poll_interval_seconds=0.0001,
+    )
+
+    assert result["settled"] == 0
+    assert result["unresolved"] == ["task-1"]
+    assert result["resource_stop"] is True
+
+
+@pytest.mark.asyncio
+async def test_pr2b_cleanup_cancels_all_tasks_before_polling(tmp_path, monkeypatch):
+    sequence = []
+    initial_gets = set()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        task_id = request.url.path.split("/")[-1]
+        if task_id == "cancel":
+            task_id = request.url.path.split("/")[-2]
+        sequence.append((request.method, task_id))
+        if request.method == "POST":
+            return httpx.Response(200, json={"task": {"status": "cancelling"}})
+        if task_id not in initial_gets:
+            initial_gets.add(task_id)
+            return httpx.Response(200, json={"task": {"status": "running"}})
+        return httpx.Response(200, json={"task": {"status": "cancelled"}})
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="http://local.test",
+    )
+    monkeypatch.setattr(control.httpx, "AsyncClient", lambda **_kwargs: client)
+    monkeypatch.setattr(
+        control.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(
+            available=control.STOP_MINIMUM_AVAILABLE_BYTES + 1
+        ),
+    )
+
+    result = await control.settle(
+        "http://unused",
+        ["task-1", "task-2"],
+        tmp_path / "journal.jsonl",
+        True,
+        timeout_seconds=5,
+        poll_interval_seconds=0.0001,
+    )
+
+    assert sequence[:4] == [
+        ("GET", "task-1"),
+        ("POST", "task-1"),
+        ("GET", "task-2"),
+        ("POST", "task-2"),
+    ]
+    assert result["attempted"] == 2
+    assert result["settled"] == 2
+    assert result["unresolved"] == []

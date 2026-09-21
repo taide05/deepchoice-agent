@@ -23,8 +23,8 @@ PROFILES = ("serial-r1", "concurrent-r1", "concurrent-r2", "serial-r2")
 PR2B_CONTROL_CHAIN = (
     "o1_pr2b_preflight.py",
     "o1_pr2b_prepare.py",
-    "o1_pr2a_child.py",
-    "o1_pr2a_control.py",
+    "o1_pr2b_child.py",
+    "o1_pr2b_control.py",
     "o1_pr2b_review_pack.py",
     "o1_pr2b_round_gate.py",
 )

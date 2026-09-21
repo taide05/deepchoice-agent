@@ -1,22 +1,31 @@
 # O1 执行断点
 
-当前（2026-09-19）：O1-PR1 已完成并冻结产品候选 `7d622fd`；用户随后授权独立的 O1-PR2
-48-run 批次。受限 fresh 前置通过五类路由、Tavily POST 与 DeepSeek JSON/tool 后，
-serial-r1 仅准入随机顺序首例 P06。PR2 控制器把 Tavily 无凭据静态 HEAD 401 误判为
-`PR2_EXTERNAL_HTTP_STOP`；冻结候选契约及回归测试明确该 2xx-4xx 响应代表路由健康。
-P06 已取消结算，另外 11 例未准入，concurrent-r1/第二轮未启动，无补跑。控制器还遗漏了
-取消后的 stop-final 预算采集：本地指标写 active=0，产品库终态为 active 21,264 ms、LLM 4、
-retrieval 6、tokens 1,265；服务最终由已验证归属的 terminate 收口。两个 P1 与该关闭异常
-已由 O1-PR2A 离线控制面修复收口：tracked successor 以 exact operation 识别静态探测，
-cleanup 后通过公开 API 采集终态 observability/active ledger，等待冷 embedding 初始化
-配平后才停服务，并要求 asyncio runner 返回和进程自然退出。聚焦回归 27 项通过；旧正式工具
-与原始输出保持不变。PR2A 没有网络、付费、LLM 或 research run。
-最终离线验收为 27 项聚焦、1505 项全套通过且 0 skipped（207.76 秒）；smoke-v1 12/12
-baseline 匹配，静态与依赖检查通过。
-本轮配对报告、声明台账和轮次门禁仍 unavailable；用户已授权 fresh O1-PR2B 第一轮实施。
-tracked preflight、prepare、PR2A child/controller、blind review 与 round gate 六文件控制链
-已完成离线实现；第二轮仍须在第一轮完整门禁后单独批准，
-详见 [O1 PR 划分](o1-next-steps.md)。
+当前（2026-09-21）：O1-PR1 已完成并冻结产品候选 `7d622fd`。用户明确批准 O1-PR2B
+第一轮 24 个付费研究 run，以及冻结查询、候选项和必要上下文经当前 local-proxy/self-forward
+路由发送至 DeepSeek、Tavily、GitHub API、StackExchange API、arXiv、PyPI/官方来源，并允许
+安全抓取检索结果中的公共 HTTP(S) 引用 URL。fresh 前置通过五类路由、Tavily POST 与
+DeepSeek JSON/tool；serial-r1 随机顺序首例 P06 是唯一已准入 run。
+
+该 run 约 190 秒后，公共引用 safe-fetch 的 GET 返回 403。产品引用契约把
+401/403/404/410 定义为 `unreachable/not_publicly_accessible`，但 PR2A controller 将所有
+非静态探测 4xx 都误判为 `PR2_EXTERNAL_HTTP_STOP`。控制器按协议锁住后续准入：P06
+请求取消，其余 11 个 serial case 为 not_submitted，concurrent-r1 未启动，因此没有
+24 例配对报告、声明台账或第一轮门禁。
+
+本次停止还暴露取消收敛缺口：旧 controller 只等 30 秒，P06 在关闭服务时仍为
+`cancelling`，stop-final observability/active budget 不完整。服务自身正常发出
+`service_stopped` 和 `asyncio_runner_returned`，退出码 0、没有残留进程，但运行中服务
+RSS 峰值约 2.178 GiB，可用内存最低约 602 MiB，接近既定 512 MiB 停止线。失败根
+`outputs/o1-pr2b-20260919` 保留原样，不作为有效基线，也不在同轮补跑。
+
+离线 successor 使用新的 `o1_pr2b_child.py` / `o1_pr2b_control.py` 工具身份：
+ContextVar 只标记安全抓取内部的动态公共请求，不记录 URL；该 operation 的 GET 2xx-4xx
+作为有界引用结果，5xx、transport failure、错误 method/source 仍 fail closed，其他
+provider 规则不放宽。取消收敛上限改为 180 秒，并在每次轮询保留 512 MiB 可用内存停止线。
+离线验收为 41 项聚焦与 1519 项全套测试通过、0 skipped（193.56 秒）；smoke-v1 12/12
+baseline 匹配，静态与依赖检查通过。PR2A 工具、本次失败根与候选产品代码均未改写。
+按“异常后不自动重试/补跑”协议，新的真实第一轮需要 fresh 根和新的明确执行批准。
+
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 
 2026-09-17 最新诊断：用户要求先定位两项阻断；一次 community 单源反馈为 HTTP 400 /
