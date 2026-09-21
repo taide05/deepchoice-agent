@@ -44,13 +44,12 @@ run/实例租约等待后重新取时，冷本地工作移线程，health 对本
 本机 O1-B 最终验收（2026-09-17，Python 3.12.4）：187 聚焦、1238 全套通过且无跳过，
 smoke-v1 12/12 baseline 匹配，静态/依赖门禁与独立复审无阻断；43/48 不变，批次继续暂停。
 
-2026-09-21 第四次 O1-PR2B fresh 第一轮完成 12/12 串行报告，但 12 路并发在多源检索阶段
-发生实例与 run heartbeat 失权，0 并发报告，因此配对门禁仍 unavailable。运行时现把实例 guard
-和 run heartbeat 放到同一产品 SQLite 文件的专用连接/锁，避免排在主连接的 Trace、预算、
-缓存和 API 队列后；fencing、TTL、schema 与单实例/单 worker 不变。103 项聚焦、1539 项全套
-测试、smoke 12/12 及静态/依赖门禁通过。修复候选 `15ca251` 随后完成 P01 重新资格：
-11,914 tokens、11 LLM / 6 retrieval、68 原子台账、独立复核，助手暂定通过；正式 48-run
-两轮已获有界持续授权，但尚未形成新的串并发结果。
+2026-09-21 候选 `15ca251` 完成 P01 重新资格后开始 fresh 正式第一轮。serial-r1 准入
+10/12 后自动停线：8 completed、P07 limited_report、P05 cancelled，P03/P10 未提交，形成
+9 份报告；stop-final 合计 101,227 tokens、126 LLM / 60 retrieval、0 failed calls。资源、
+租约和 service cleanup 均正常。离线核对确认控制器把产品契约允许的官方文档 HEAD 安全抓取
+误标为只允许 GET 的公共引用操作；concurrent-r1 未启动，配对门禁仍 unavailable。持续上限
+49 已使用 11，剩余 38；停止根不可拼接，完整替代两轮需要另批 10 个 run 并重新冻结控制器。
 详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
 
 2026-09-17 O1-C 已授权真实单例验真，但在前置网络健康 4/5（community 未通过）时停止；
@@ -129,8 +128,9 @@ Tavily 付费 POST / LLM / 新研究 run 均 0，服务未启动，额度仍 44/
 见 [阻断诊断](docs/o1c-blocker-diagnosis.md)，不代表完整准入或质量通过。
 
 O1 剩余工作现归为 [3 个 PR](docs/o1-next-steps.md)：当前候选单例资格与冻结、正式串并发
-基线和逐轮评审、结项与单一优化假设。2026-09-21 的有界持续授权覆盖候选 `15ca251`
-的一次资格、资格通过后的 48 个正式 run 及本地结项；评估协议、预算和逐轮门禁保持不变。
+基线和逐轮评审、结项与单一优化假设。2026-09-21 持续授权的 49-run 上限已使用 11；
+首个正式 serial-r1 停止后只剩 38，不能覆盖仍需的 fresh 48-run 配对。评估案例、rubric、
+预算、HITL 和逐轮质量门禁保持不变；控制器修正与新增 10 个替代 run 待明确批准。
 
 ## 快速开始
 
@@ -147,7 +147,7 @@ Git、依赖、模型端点及路由配置，复制无 WAL 的冻结种子至全
 O1-PR1 当前重新资格已完成：2026-09-21，product-baseline-v1/1.0.0 的 P01 × 1，冻结候选
 `15ca251`。新前置 5/5、Tavily POST 和 DeepSeek JSON/tool 通过；P01 冷启 completed，
 108.282 秒 / 11,914 token。68 原子台账及独立复核闭环，助手暂定单例测量资格通过；
-资格使用 1/49，正式两轮剩余 48。此前 `7d622fd` 的 2026-09-18 资格和后续失败批次保留为
+资格结束时使用 1/49；随后正式 serial-r1 的停线与 11/49 累计见上文。此前 `7d622fd` 的 2026-09-18 资格和后续失败批次保留为
 历史证据，不能跨候选拼接。冻结清单和残余风险见 [单例验真](docs/o1c-single-case-verification.md)。
 
 ```powershell
@@ -449,9 +449,10 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 正式产品基线使用 durable API；O1 已提供冻结的 12-case 1.0.0、serial=1 /
 concurrent=12 采集与配对门禁。2026-09-21 第四次获批第一轮在候选 `7d622fd` 上完成
 12 份串行报告（149,654 tokens、185 LLM / 72 retrieval、终态用量完整），但 12 路并发在
-multi_retriever 阶段租约失权且无报告；各停止根与旧候选不得拼接。运行时离线修复后须形成
-新候选。候选 `15ca251` 已完成 P01 重新资格并暂定通过，fresh 第一轮、门禁通过后的第二轮和
-本地结项已纳入 2026-09-21 的有界持续授权；异常仍自动停线。详见
+multi_retriever 阶段租约失权且无报告；各停止根与旧候选不得拼接。运行时离线修复后形成
+候选 `15ca251` 并完成 P01 重新资格；其 fresh serial-r1 又在 10/12 准入后因控制器误判合法
+官方 HEAD 停止，concurrent 未启动。总计已使用 11/49 个 run，完整替代两轮需要新增 10 个
+run 上限并修正、重新冻结控制门禁。详见
 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。手动评估 workflow
 当前仅运行 smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
 

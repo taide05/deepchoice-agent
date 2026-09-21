@@ -13,9 +13,28 @@ Tavily POST 和 DeepSeek JSON/tool 均通过；P01 completed，11 LLM / 6 retrie
 0 failed/retry/lease loss，usage/cache 完整。v4 台账为 68 原子，支持 31/22/1/2/12，来源质量
 7/52/9；必答 5/6、冲突 2/2、冻结重大错误 0。“零运维”五次绝对化为重要非阻断缺陷；动态
 pinned CONNECT/TLS 仍 unavailable。产品库及 immutable result 一致，停后 PID/端口无残留，
-exit code unavailable。资格使用 1/49，正式两轮剩余 48。PR2B 五个执行工具已重绑定新候选，
-33 项聚焦与 1540 项全套、0 skipped（184.26 秒）通过；待提交并冻结六文件 hash 后使用 fresh 根
-进入第一轮，不复用任何旧候选/失败根。
+exit code unavailable。资格使用 1/49，正式两轮当时剩余 48。PR2B 五个执行工具已重绑定
+新候选，33 项聚焦与 1540 项全套、0 skipped（184.26 秒）通过；控制冻结提交为 `83185ad`。
+
+随后 `83185ad` 控制器在 fresh 根 `o1-pr2b-round1-20260921-15ca251-standing-v1` 启动正式
+serial-r1，准入 10/12 后按停止线退出：8 completed、P07 completed_with_warnings/limited_report、
+P05 cancelled，P03/P10 未提交，共 9 份报告。停止后 10 个已入场 run 的公开观测完整，合计
+101,227 tokens、126 LLM / 60 retrieval、0 failed calls；服务 graceful exit 0，cleanup unresolved 0。
+最低可用内存 0.898 GiB、高于 512 MiB 线，峰值服务 RSS 2.191 GiB；172 个 health 样本均 200、
+authority 有效，heartbeat failure/lease loss 均 0。concurrent-r1 和第二轮均未启动。
+
+停止原因为 `PR2_EXTERNAL_HTTP_STOP`，但离线核对确认是控制器契约遗漏：产品官方文档
+`OfficialRetriever._verify_reachable()` 通过统一安全抓取明确发出 `HEAD`，且 `SafeUrlPolicy`
+支持 GET/HEAD；子控制器用布尔上下文把该请求折叠成 `safe_fetch_public`，父控制器又只允许该
+operation 使用 GET，因而把成功的 HEAD 302→200 误判为异常。三个 GET
+`UnsafeUrlError(route_unsupported)` 均属于控制器已接受的冻结安全结果，provider 调用未见失败。
+停止根保持不变，不重启、不补跑、不与新根拼接。持续授权累计使用 11/49，未用 38；重新取得
+完整 48-run 配对需要 fresh 48 个 run，总上限须从 49 调整到 59，并先修正、测试和重新冻结
+source-aware safe-fetch 遥测。本次控制结果、遥测、stop-final 和 resource-health SHA-256 分别为
+`682129ee20291564832d55f126219d52482813fe1b67387e3f41bc2226618203`、
+`f49f232b4ebeb9b18a46b8811b029f1f13ab49c90b061edf2d4957ecc4ce2b47`、
+`73e00da001e258bc23ba007b2e8deb10c6878ced010ac3429a1c4a8f906d499c`、
+`db91058a992267384c9ab49e36f3b559f42102fe8c38ee94cb47ee34076bc8f5`。
 
 较早的第四次正式第一轮尝试（2026-09-21，已由上文新候选状态取代）：用户批准使用控制提交
 `30c63f9`、新的 fresh 输出根、原冻结
