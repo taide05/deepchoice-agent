@@ -1,9 +1,34 @@
 # O1 执行断点
 
-2026-09-21 当前授权更新：用户已明确批准总硬上限 **110 → 134**，在累计 **86** 个 run
-之后执行 fresh 48-run 完整配对。候选 `d23c948` 与其现有资格保持有效；控制器修复为
-`7d16d28`。先运行第一轮 12 serial + 12 concurrent 并锁定评审/门禁，门禁通过后执行
-第二轮 12 concurrent + 12 serial，再完成本地 O1-PR3。下文较低额度和待批准均为历史记录。
+2026-09-21 最新执行：用户批准总上限 110 → 134 后，从累计 86 个 run 启动 fresh 根
+`outputs/o1-pr2b-pair-20260921-7d16d28-cap134/`。产品候选 `d23c948`、控制器 `7d16d28`，
+五类路由、Tavily POST、DeepSeek JSON/tool 前置通过。serial-r1 准入 4/12 后停止：
+2 completed、1 completed_with_warnings、1 cancelled，3 份报告，cleanup/stop-final 4/4 完整，
+服务 graceful exit 0、无控制服务残留；其他三个 profile 的 control/runtime 均仍为空。
+
+停止原因是 2026-09-21 12:00:02.278050 UTC 的 `safe_fetch_official / official / GET / 521`；
+12:00:04.542391 UTC 锁定 `PR2_EXTERNAL_HTTP_STOP`。离线重放 521 前缀前为通过，包含该响应
+后为 `safe_fetch_official_failed`，排除上次 typed timeout 误判。85 个 health 样本均 200，
+authority 有效，heartbeat failure/lease loss 为 0；最低可用内存 1,286,881,280 bytes，
+峰值服务 RSS 2,263,379,968 bytes，makespan 189,332 ms。
+
+4 个 run 的 ledger 为 49,610 settled tokens + 9,402 unknown_spend = 59,012 保守计入 tokens；
+62 LLM、24 retrieval，全部 reserved 为 0；Trace 86 external calls、0 failed_calls、1 node retry。
+取消 run 的 token/cache usage 不完整，Trace failed_calls 为 0 不能否定 HTTP 遥测中的 521。
+累计 **90/134**、剩余 44；本根只读，不补跑或拼接。第一轮门禁、第二轮及 O1-PR3 unavailable；
+若另行批准完整 fresh 48-run 替代，最低总上限为 138。
+
+独立只读复核确认上述停止与收尾，无阻断。521 后没有新准入，只有一次清理取消；全文件没有
+external_http_failure/CancelledError。collector 的清理前 runs/experiment 仍把取消任务记为
+running，最终态以 lifecycle-metrics/stop-final 为准；521 的外部成因仍未确定。
+
+本根 serial-r1 的 profile-control / telemetry / stop-final / resource-health SHA256：
+`05061c3e6bb3128a8f939d14216359f5427a672794fa4261e2f6ba204c46fc76`、
+`8ae075f6f1a9d4a493c8b8f13403e01d229657562f99952e7fa9a4962a2c60a4`、
+`4361a6a346a1e46ed5adbb9d3968163804a621532a3c89f36f98f8564ae8e4e3`、
+`73ac962f2d8375f1ebbfc31e6b5b6a74fcfd143706fa94d3d07a11619a95f1c9`。
+
+以下为早期授权和执行历史，较低额度/待批准描述不代表当前状态。
 
 2026-09-21 最新授权：用户给予候选 `15ca251` 的有界持续授权，覆盖一次 P01 单例资格、
 资格通过后的两轮正式测量（每轮 12 serial + 12 concurrent）及本地 O1-PR3 收口，研究 run
