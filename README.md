@@ -10,7 +10,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 
 ## 核心特性
 
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑，单路挂了不炸全局
+- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先用规则与 DeepSeek Flash 仲裁矛盾对，再对低置信度的一对补充取证，并用同一 DeepSeek Flash 重新裁决
@@ -58,14 +58,19 @@ HTTP 200，最低可用内存 1.292 GiB，heartbeat/lease loss 为 0；外呼未
 unavailable。详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
 
 用户随后批准离线修复并发 API 响应中断、生产改动后的重新资格与冻结，以及新的完整
-48-run 配对。按 35 个已计入 run + 1 个新资格 + 48 个正式 run 计算，硬上限设为 **84**。
-文件型运行时现将公开 task/list/decision 与 observability 快照读取放到独立 WAL 连接；主写
-连接继续承担 lifecycle/Trace/预算/缓存与 mutation，租约连接保持独立。主连接 asyncio lock 积压故障回归、
-47 项最终聚焦测试及 1559 项全套测试通过（193.36 秒）。新候选 `09f9b66` 随后完成
-P01 × 1 重新资格：15,285 tokens、21 LLM / 6 retrieval、0 failed/retry，六源 success；
-59 原子台账与独立复核确认 5/6、2/2、重大错误和资格阻断均为 0。当前使用 36/84，
-剩余 48 个正式 run 将从 fresh 根执行；供应商、外传范围、案例、rubric、预算、HITL、
-质量阈值与停止线不变。
+48-run 配对。文件型运行时已把公开 task/list/decision 与 observability 快照读取放到独立 WAL
+连接，查询隔离候选 `09f9b66` 完成 P01 资格与冻结。其正式 fresh serial-r1 随后完成
+12/12：11 份普通报告、1 份 limited，147,687 tokens、186 LLM / 72 retrieval、0 failed calls；
+concurrent-r1 准入 12/12 后，GitHub GET 出现一次 `RemoteProtocolError`，控制器按
+`PR2_EXTERNAL_HTTP_STOP` 取消并清理全部任务，0 并发报告且服务正常退出。停止根只读，
+不能拼入下一轮。
+
+生产路径现仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError` 做最多 2 次有界
+重试，并重新进入既有共享 provider gate；控制器按 run 关联物理尝试，成功响应才清零，第三次
+中断及其他来源/方法/异常继续 fail closed。134 项聚焦与 1570 项全套测试通过（190.53 秒）。
+累计已使用 60 个 run；新生产提交仍需 1 次资格，再执行完整 fresh 48-run，因此总上限按
+60 + 1 + 48 重算为 **109**。供应商、外传范围、案例、rubric、每 run 预算、HITL、质量阈值
+与停止线不变。
 
 2026-09-17 O1-C 已授权真实单例验真，但在前置网络健康 4/5（community 未通过）时停止；
 routed Tavily POST 通过，LLM/冷启/研究/报告未执行，新 run 0，累计 43/48 不变。
@@ -143,9 +148,10 @@ Tavily 付费 POST / LLM / 新研究 run 均 0，服务未启动，额度仍 44/
 见 [阻断诊断](docs/o1c-blocker-diagnosis.md)，不代表完整准入或质量通过。
 
 O1 剩余工作仍按 [3 个 PR](docs/o1-next-steps.md)管理。查询隔离候选 `09f9b66` 的
-单例资格与冻结已完成；当前进入正式串并发基线和逐轮评审，之后才做本地 O1-PR3。
-硬上限 84 已使用 36，剩余 48 恰好覆盖 fresh 的两轮 12 serial + 12 concurrent。
-评估案例、rubric、预算、HITL、逐轮质量门禁和异常停止线保持不变。
+单例资格与冻结已完成，但首个正式配对在 concurrent-r1 的 GitHub 响应中断停止；停止前
+serial-r1 12/12 完成，concurrent-r1 12/12 已准入且 0 报告。累计 60 个 run；响应中断修复形成
+新生产候选后需重新做 P01 资格，再从 fresh 根执行 48-run 配对。为覆盖 60 + 1 + 48，总上限
+重算为 109。评估案例、rubric、每 run 预算、HITL、逐轮质量门禁和异常停止线保持不变。
 
 ## 快速开始
 
@@ -159,16 +165,16 @@ Git、依赖、模型端点及路由配置，复制无 WAL 的冻结种子至全
 这些入口和离线验证本身不证明单例资格或批准批次。
 本机 O1-PR1 资源修正验收（2026-09-18，Python 3.12.4）：103 聚焦 / 1441 全套通过、0 跳过
 （全套 211.19 秒）；smoke 12/12、静态/依赖检查及独立复审通过。
-O1-PR1 当前重新资格已完成：2026-09-21，product-baseline-v1/1.0.0 的 P01 × 1，冻结候选
+O1-PR1 历史资格记录：2026-09-21，product-baseline-v1/1.0.0 的 P01 × 1，候选
 `15ca251`。新前置 5/5、Tavily POST 和 DeepSeek JSON/tool 通过；P01 冷启 completed，
 108.282 秒 / 11,914 token。68 原子台账及独立复核闭环，助手暂定单例测量资格通过；
 资格结束时使用 1/49；随后正式 serial-r1 的停线与 11/49 累计见上文。此前 `7d622fd` 的 2026-09-18 资格和后续失败批次保留为
 历史证据，不能跨候选拼接。冻结清单和残余风险见 [单例验真](docs/o1c-single-case-verification.md)。
 
-并发 API 查询隔离生产提交 `09f9b66` 的新 P01 资格也已完成：active 71,620 ms，
+并发 API 查询隔离生产提交 `09f9b66` 的 P01 历史资格为：active 71,620 ms，
 15,285 tokens、21 LLM / 6 retrieval、六源 success、0 failed/retry，59 原子独立复核为
-5/6、2/2、重大错误 0。该结果使用第 36/84 个 run；它取代 `15ca251` 作为下一次
-48-run 配对的冻结产品候选，但不改写旧候选历史结果。
+5/6、2/2、重大错误 0；使用第 36/84 个 run。后续 GitHub 响应中断生产修复已使该资格失效，
+但不改写旧候选历史结果；当前资格状态以 [任务卡](docs/o1-next-steps.md) 为准。
 
 ```powershell
 # 1. 克隆

@@ -44,8 +44,34 @@ mutation/recovery/HITL 预检仍走主仓库。主连接 asyncio lock 积压回�
 查询隔离生产候选 `09f9b66cf114953c09ebe928c1c081667647db16` 随后用第 36 个 run
 完成 fresh P01 重新资格：15,285 tokens、21 LLM / 6 retrieval、0 failed/retry，六源 success，
 租约/结果/关停完整。独立复核后的严格 59 原子为 support 34/14/8/3、quality 0/52/7；
-必答 5/6、冲突 2/2、重大错误与资格阻断均为 0。候选已冻结，当前使用 36/84；
-完整 fresh 配对使用第 37～84 个。第一轮配对评审/门禁、第二轮及本地 O1-PR3 尚未重新启动。serial/concurrent 的 profile-control、telemetry、stop-final、resource-health hash
+必答 5/6、冲突 2/2、重大错误与资格阻断均为 0。
+
+其 formal fresh 根 `o1-pr2b-round1-20260921-d2dcd41-query-isolation-pair` 的 serial-r1
+完成 12/12：11 completed、P07 completed_with_warnings/limited，147,687 tokens、
+186 LLM / 72 retrieval、258 external calls、0 failed calls、1 node retry；usage/cache 完整，
+profile makespan 543,861 ms。最低可用内存 1.114 GiB，峰值服务 RSS 2.267 GiB，cleanup 12/12，
+服务 graceful exit 0。concurrent-r1 准入并观测 12/12 running，随后 GitHub GET 发生
+`RemoteProtocolError`；控制器按 `PR2_EXTERNAL_HTTP_STOP` 取消并 settled 12/12，0 报告，
+profile makespan 159,749 ms，最低可用内存 1.143 GiB、峰值服务 RSS 2.240 GiB，服务 graceful
+exit 0。该根保持只读，不补跑或拼接。
+
+生产修复仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError` 最多重试 2 次并重新
+进入共享 provider gate。PR2B 控制器按 run/source/operation/method 关联这些物理中断，成功响应
+才清零；第三次中断和其他 source/method/error 仍 fail closed。并发故障注入验证共享在途上限
+2 和 permit 清理；134 项聚焦、1570 项全套测试通过。生产代码变化使旧资格不再适用于新候选。
+累计使用 60；新资格 1 加 fresh 正式 48，因此总上限重算为 109。第一轮门禁、第二轮及本地
+O1-PR3 均 unavailable。最新 serial/concurrent 的 profile-control、telemetry、stop-final、
+resource-health hash 分别为
+`2fd41d4fa857d00c026fe4ad2ef5d09fff9690e56beb91bbe830221cfae6b087` /
+`152a6e52e6a1552375f040923cf7b30806d91d5832d95854c3eb41c1597218f2`、
+`494710ace99863e467a05c9c40e6f1a5047f7601371c33789368a375a2d04162` /
+`8b5ff5b428d1bb3582ab8d24135b42b395c3cb2291bdf69be01d9d5c0e9432d5`、
+`4bb8fc12d5302385867e3537bca69055e4bbd088031d5e2e5c3ccc5db0682ecb` /
+`4c76c24d39aa77c56017df30e290682d254567fef3ba9a99a81a36237f2b6c2a`、
+`ac7502e373bddfdbf04cf0a8e629e722074137bb3b09c4d4fe45d9cd17331e5e` /
+`f151da6ffbee0a1042332145f8b21aeba0baa7fa4904195a7fa9f46825d795e1`。
+
+上一停止根的 serial/concurrent profile-control、telemetry、stop-final、resource-health hash
 分别为 `b91776d1ee6b810ab5aee26377353f878ccd0eff2de4f4871b114b6a5ff01838` /
 `f904e3f834f07cd103f8975c47274e3a04bea10cb9e3886ba4eda23d59630e5d`、
 `08f5d616fa1f3ff0c0db71c6b2db5768123bb33b5d4bce452d9bce689f072af8` /

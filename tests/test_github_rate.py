@@ -2,6 +2,7 @@
 import asyncio
 import time
 
+import httpx
 import pytest
 
 from deepchoice.retrievers import github_rate as gr
@@ -92,6 +93,74 @@ def test_get_with_throttle_gives_up_after_max_retries(monkeypatch):
     resp = asyncio.run(gr.get_with_throttle(client, "https://x"))
     assert resp.status_code == 429
     assert calls["n"] == gr._MAX_RETRIES + 1
+
+
+@pytest.mark.parametrize(
+    "error_type", [httpx.RemoteProtocolError, httpx.ReadError])
+def test_get_with_throttle_retries_bounded_response_interruption(error_type):
+    calls = {"n": 0}
+
+    async def get(url, params=None, headers=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise error_type("response interrupted")
+        return _Resp(200)
+
+    client = type("Client", (), {"get": staticmethod(get)})()
+    response = asyncio.run(gr.get_with_throttle(client, "https://x"))
+
+    assert response.status_code == 200
+    assert calls["n"] == 2
+    gate = throttle.gate_for("github")
+    assert gate._active == 0 and not gate._queue
+
+
+def test_get_with_throttle_exposes_exhausted_response_interruptions():
+    calls = {"n": 0}
+
+    async def get(url, params=None, headers=None):
+        calls["n"] += 1
+        raise httpx.RemoteProtocolError("response interrupted")
+
+    client = type("Client", (), {"get": staticmethod(get)})()
+    with pytest.raises(httpx.RemoteProtocolError):
+        asyncio.run(gr.get_with_throttle(client, "https://x"))
+
+    assert calls["n"] == gr._MAX_RETRIES + 1
+    gate = throttle.gate_for("github")
+    assert gate._active == 0 and not gate._queue
+
+
+def test_concurrent_response_interruptions_retry_within_shared_cap():
+    attempts = {}
+    in_flight = {"n": 0, "max": 0}
+
+    async def get(url, params=None, headers=None):
+        attempts[url] = attempts.get(url, 0) + 1
+        in_flight["n"] += 1
+        in_flight["max"] = max(in_flight["max"], in_flight["n"])
+        try:
+            await asyncio.sleep(0)
+            if attempts[url] == 1:
+                raise httpx.RemoteProtocolError("response interrupted")
+            return _Resp(200)
+        finally:
+            in_flight["n"] -= 1
+
+    client = type("Client", (), {"get": staticmethod(get)})()
+
+    async def run():
+        return await asyncio.gather(*(
+            gr.get_with_throttle(client, f"https://x/{index}")
+            for index in range(8)
+        ))
+
+    responses = asyncio.run(run())
+    assert all(response.status_code == 200 for response in responses)
+    assert set(attempts.values()) == {2}
+    assert in_flight["max"] <= gr._MAX_IN_FLIGHT
+    gate = throttle.gate_for("github")
+    assert gate._active == 0 and not gate._queue
 
 
 def test_slot_caps_concurrency(monkeypatch):

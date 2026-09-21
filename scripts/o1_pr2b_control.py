@@ -148,6 +148,9 @@ _SAFE_FETCH_FAILURES = {
     "dns_uncertain", "timeout", "response_rejected",
 }
 
+_GITHUB_RETRYABLE_RESPONSE_ERRORS = {"RemoteProtocolError", "ReadError"}
+_GITHUB_MAX_RESPONSE_INTERRUPTION_RETRIES = 2
+
 
 def telemetry_state(
         path: Path, *, require_ready: bool = True,
@@ -168,6 +171,7 @@ def telemetry_state(
             return state
         anomaly_reason = None
         cancelled_http_failure = False
+        github_response_interruptions: dict[tuple[str, str, str, str], int] = {}
         for line in payload.splitlines():
             if not line:
                 state["reason"] = "telemetry_empty_line"
@@ -212,6 +216,21 @@ def telemetry_state(
                     anomaly_reason = "external_http_operation_invalid"
                 elif error_type == "CancelledError":
                     cancelled_http_failure = True
+                elif (operation == "github"
+                      and event.get("source") == "github"
+                      and event.get("method") == "GET"
+                      and isinstance(event.get("run_id"), str)
+                      and event["run_id"]
+                      and error_type in _GITHUB_RETRYABLE_RESPONSE_ERRORS):
+                    key = (
+                        event["run_id"], operation, event["source"],
+                        event["method"],
+                    )
+                    interruption_count = (
+                        github_response_interruptions.get(key, 0) + 1)
+                    github_response_interruptions[key] = interruption_count
+                    if interruption_count > _GITHUB_MAX_RESPONSE_INTERRUPTION_RETRIES:
+                        anomaly_reason = "external_http_failure"
                 else:
                     anomaly_reason = "external_http_failure"
             elif kind == "external_http_response":
@@ -219,6 +238,13 @@ def telemetry_state(
                 source = event.get("source")
                 method = event.get("method")
                 status_code = event.get("status_code")
+                run_id = event.get("run_id")
+                if (operation == "github" and source == "github"
+                        and method == "GET" and isinstance(run_id, str)
+                        and run_id and isinstance(status_code, int)
+                        and 200 <= status_code < 400):
+                    github_response_interruptions.pop(
+                        (run_id, operation, source, method), None)
                 if operation not in _HTTP_OPERATIONS or not isinstance(status_code, int):
                     anomaly_reason = "external_http_response_invalid"
                 elif operation == "tavily_static_probe":

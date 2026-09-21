@@ -1,6 +1,6 @@
 # DeepChoice 产品效果优化策略与评估协议
 
-日期：2026-09-21 · 协议版本：v4 · 状态：查询隔离候选已重新资格；新的 48-run 配对待从 fresh 根执行，当前门禁 unavailable。
+日期：2026-09-21 · 协议版本：v4 · 状态：GitHub 响应中断修复已离线验收；新候选重新资格与 fresh 48-run 配对待执行，当前门禁 unavailable。
 
 v4 明确计数、评审与结项边界，不改变已批准的 12 例/官方参考、0/1/2 rubric、标准预算或串并发阈值。
 DeepSeek Flash 统一、采集器、缓存拆账与六源限流离线修复已完成；这些不证明真实质量或并发门禁通过。
@@ -18,8 +18,10 @@ source-aware 控制遥测完成离线验证并从 fresh 根重跑。该根的 se
 concurrent-r1 12/12 running 后所有 collector 任务均发生 durable API `ReadTimeout`，0 报告，
 11 cancelled、1 interrupted，按停止线退出。该停止根保留为 35-run 历史分母且不能拼接。
 用户随后把硬上限调整为 84，并批准查询隔离生产改动后的 P01 重新资格和完整新配对。
-候选 `09f9b66` 已用第 36 个 run 完成资格与冻结；第 37～84 个留给 fresh 48-run。
-第一轮门禁、第二轮和 O1-PR3 仍 unavailable。
+候选 `09f9b66` 用第 36 个 run 完成资格；其 formal serial-r1 使用 12 个 run 并完成 12 份报告，
+concurrent-r1 又准入 12 个 run，但 GitHub GET `RemoteProtocolError` 触发停止且 0 报告。
+累计因此达到 60。响应中断的生产修复要求重新资格；为完成 1 个资格和全新的 48-run 配对，
+总上限按 60 + 1 + 48 重算为 109。第一轮门禁、第二轮和 O1-PR3 仍 unavailable。
 外传对象、案例、rubric、预算、HITL 和质量阈值不变，具体边界见[当前任务卡](o1-next-steps.md)。
 不查看用于调参的保留集逐例反馈。
 
@@ -38,7 +40,8 @@ P01～P08 是开发集，P09～P12 为保留集；合理条件性选择不预设
 | O1-C 冷启单例 | 2026-09-17 P01 × 单例 × 1 次，代码 d451b49；独立成本/执行观察，质量待复核 | 与旧六份拼表、完整基线、稳定性或并发通过 |
 | `15ca251` 首个正式尝试 | serial-r1 准入 10：9 报告、1 cancelled；控制器 HEAD 误判停止，concurrent 未启动 | 完整第一轮、配对门禁或质量结论 |
 | `91d56cd` source-aware fresh 第一轮 | serial-r1 12 报告；concurrent 12 个 run 因 API ReadTimeout 停止、0 报告 | 完整第一轮、并发质量或配对门禁 |
-| 未来完整配对 | 停止根不可拼接，仍需 fresh 12 例 × serial/concurrent × 2 = 48 run；59 上限在累计 35 后只余 24 | 与任何停止根拼凑或在完整门禁前声称完成 |
+| `d2dcd41` / `09f9b66` formal 第一轮 | serial 12 报告；concurrent 12 个 run 因 GitHub 响应中断停止、0 报告 | 完整第一轮、并发质量或配对门禁 |
+| 未来完整配对 | 新生产候选资格后，停止根不可拼接，仍需 fresh 12 例 × serial/concurrent × 2 = 48 run；当前累计 60/109 | 与任何停止根拼凑或在完整门禁前声称完成 |
 | smoke-v1 / 历史 benchmark | 各自原 dataset、日期与分母 | 真实产品质量或同一对照集 |
 
 最新六份实测代码为 `e25610b4cc013274ae45e5cd4184901a2f78f14a`；

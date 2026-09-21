@@ -579,6 +579,100 @@ def test_pr2b_health_loss_precedes_secondary_cancelled_http_failures(tmp_path):
     ) == "PR2_EXTERNAL_HTTP_STOP"
 
 
+@pytest.mark.parametrize("error_type", ["RemoteProtocolError", "ReadError"])
+def test_pr2b_github_response_interruption_waits_for_bounded_retry(
+        tmp_path, error_type):
+    telemetry = tmp_path / "telemetry.jsonl"
+    interrupted = {
+        "event": "external_http_failure",
+        "run_id": "run-1",
+        "operation": "github",
+        "source": "github",
+        "method": "GET",
+        "error_type": error_type,
+    }
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        interrupted,
+        interrupted,
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        interrupted,
+        interrupted,
+        {
+            "event": "external_http_response",
+            "run_id": "run-1",
+            "operation": "github",
+            "source": "github",
+            "method": "GET",
+            "status_code": 200,
+        },
+        interrupted,
+        interrupted,
+    )
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+def test_pr2b_github_response_interruption_exhaustion_fails_closed(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    interrupted = {
+        "event": "external_http_failure",
+        "run_id": "run-1",
+        "operation": "github",
+        "source": "github",
+        "method": "GET",
+        "error_type": "RemoteProtocolError",
+    }
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        interrupted,
+        interrupted,
+        interrupted,
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "external_http_failure"
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"run_id": "", "source": "github", "method": "GET"},
+        {"run_id": "run-1", "source": "github", "method": "POST"},
+        {"run_id": "run-1", "source": "arxiv", "method": "GET"},
+        {"run_id": "run-1", "source": "github", "method": "GET",
+         "error_type": "ConnectError"},
+    ],
+)
+def test_pr2b_nonqualified_github_failure_remains_fail_closed(tmp_path, event):
+    telemetry = tmp_path / "telemetry.jsonl"
+    payload = {
+        "event": "external_http_failure",
+        "operation": "github",
+        "source": "github",
+        "method": "GET",
+        "error_type": "RemoteProtocolError",
+        **event,
+    }
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        payload,
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "external_http_failure"
+
+
 @pytest.mark.asyncio
 async def test_pr2b_cleanup_waits_beyond_old_30_second_poll_count(
         tmp_path, monkeypatch):

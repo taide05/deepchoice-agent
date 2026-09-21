@@ -16,20 +16,19 @@ heartbeat 失权，0 并发报告。该 fresh 根不得补跑或重启；第二�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**source-aware 控制提交 `91d56cd` 的 fresh 第一轮再次按冻结停止线退出，
-O1-PR2B 仍未完成。** serial-r1 完成 12/12，形成 12 份报告（P07 limited），合计
-146,801 tokens、179 LLM / 72 retrieval、0 failed；stop-final、清理与服务退出完整。
-concurrent-r1 一次准入并观测 12 路 running，但 12 个 durable API 轮询在约 105～107 秒全部
-`ReadTimeout`；控制器自动取消，11 个 run cancelled、P04 interrupted，0 并发报告。
-停线前 97 个 health 样本均 200、authority/heartbeat/lease 正常，最低可用内存 1.292 GiB，
-且没有先发 provider 异常；当前只确认服务响应中断，内部原因仍 unknown。
+当前状态：**查询隔离候选 `09f9b66` 的 formal fresh 第一轮再次按冻结停止线退出，
+O1-PR2B 仍未完成。** serial-r1 完成 12/12，形成 12 份报告（1 份 limited），合计
+147,687 tokens、186 LLM / 72 retrieval、0 failed calls；stop-final、清理与服务退出完整。
+concurrent-r1 准入 12/12 后，GitHub GET 出现 `RemoteProtocolError`，控制器按
+`PR2_EXTERNAL_HTTP_STOP` 取消并清理 12 个任务，0 报告且服务正常退出。该 fresh 根必须
+保持不变，不重启、不补跑、不与后续根拼接。
 
-该 fresh 根必须保持不变，不重启、不补跑、不与后续根拼接。文件型运行时的公开 task 与
-observability 读取已迁到独立 WAL 连接，主连接 asyncio lock 积压故障回归和 1559 项全套测试通过。
-查询隔离候选 `09f9b66` 已用第 36 个 run 完成 fresh P01 资格与冻结：15,285 tokens、
-21 LLM / 6 retrieval、六源 success、0 failed/retry；59 原子独立复核为 5/6、2/2，
-重大错误与资格阻断为 0。当前使用 **36/84**，剩余第 37～84 个用于完整 fresh 48-run 配对。
-供应商、数据外传、案例、rubric、预算、HITL、质量阈值和异常停止线保持不变。
+生产路径现仅对 GitHub 幂等 GET 的 `RemoteProtocolError` / `ReadError` 最多重试 2 次，
+每次重新进入共享 provider gate；PR2B 遥测按 run 关联物理重试，成功响应才清零。第三次中断、
+其他 source/method/异常、非允许状态与 safe-fetch 异常继续 fail closed。并发故障注入、
+134 项聚焦和 1570 项全套测试通过。生产代码已再次变化，因此 `09f9b66` 的资格转为历史；
+新候选须重新完成 P01、台账和独立复核。当前使用 **60/109**，其中 1 个留给新资格、48 个留给
+完整 fresh 配对。供应商、数据外传、案例、rubric、每 run 预算、HITL、质量阈值和停止线不变。
 
 以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
 PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
@@ -42,9 +41,9 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 
 | 剩余 PR | 对应旧任务 | 交付目标 | 完成证据与依赖 |
 |---|---|---|---|
-| O1-PR1 当前候选单例资格与冻结 | C3，含必要的 C 问题收口 | 生产改动后用一次新候选 P01 核对执行、引用/报告与成本并冻结 | 查询隔离候选 `09f9b66` 已完成前置、P01、59 原子台账、独立复核与冻结；助手暂定资格通过，36/84 |
+| O1-PR1 当前候选单例资格与冻结 | C3，含必要的 C 问题收口 | 生产改动后用一次新候选 P01 核对执行、引用/报告与成本并冻结 | GitHub 响应中断生产修复已通过 1570 项全套；新候选 P01、台账与独立复核待执行，当前 60/109 |
 | O1-PR2A 控制面离线修复 | D 的执行前置 | 修复静态探测误报、停止态预算证据和冷初始化关闭阻断；不执行真实研究 | exact operation 单元测试、公开 API stop-final 证据测试、冷初始化收束/正常退出测试及全套验证；已完成 |
-| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | 旧 `91d56cd` 根因 API ReadTimeout 停线并保留；查询隔离候选 `09f9b66` 已资格冻结，当前 36/84；控制器重绑定完成后从 fresh 根执行第 37～84 个，门禁仍待测 |
+| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | `09f9b66` 根的 serial 12/12 完成、concurrent 因 GitHub 响应中断停线并保留；新候选资格后从 fresh 根执行 48 个，当前 60/109，门禁仍待测 |
 | O1-PR3 O1 结项与优化假设 | E 的总体结论 | 汇总质量、运行/成本和残余风险，冻结一个最优先的 O2 假设 | 本地收口依赖完整 PR2 测量；第一轮门禁 unavailable，未启动。O2 实施及发布另授权 |
 
 ## O1-PR1：当前候选单例资格与冻结
