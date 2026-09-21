@@ -64,8 +64,19 @@ run 且该根不复用。fresh v3 P01 随后完成，为第 62 个 run：11,050 
 0 failed/retry，六源 success，产品/检查点 quick_check ok，服务自然退出 0。独立复核校正后的
 严格 43 原子为 support 19/15/9、quality 0/34/9、system 0/36/7；必答 5/6、冲突 2/2、
 重大错误与资格阻断均为 0。候选已冻结；为保留 fresh 正式 48，总上限重算为 110，当前
-62/110。第一轮门禁、第二轮及本地 O1-PR3 均 unavailable。最新 serial/concurrent 的
-profile-control、telemetry、stop-final、
+62/110。随后 formal fresh 根的 serial-r1 完成 12/12，11 completed + 1 limited，
+149,190 tokens、184 LLM / 72 retrieval、0 failed calls，cleanup/stop-final 完整，服务退出 0，
+makespan 574,821 ms。concurrent-r1 准入 12/12、形成 11 份报告后停止，P03 最终 cancelled；
+停止态合计 155,110 tokens（其中 9,307 unknown spend）、177 LLM / 78 retrieval、0 failed calls，
+cleanup 12/12、服务退出 0。触发事件是 P03 official safe-fetch 的底层 `CancelledError`；同一 run
+0.505 ms 后记录 `UnsafeUrlError(timeout)`，citation validator 成功，故为控制器误判而非已证实
+外部失败。停止根保持不变，累计 86/110。
+
+控制器现仅把同 run、known typed safe-fetch failure、250 ms 内的双事件配对，并给未决原始取消
+最多 2.5 秒等待，最终化时任何仍未配对的取消立即 fail closed；错 run、缺字段、未知/迟到结果和真实取消仍 fail closed。真实停线前缀重放、
+93 项 PR2 聚焦、py_compile/pyflakes/diff 和 1579 项全套测试通过（181.94 秒）。完整替代 48-run
+需要把上限扩至 134，尚未启动。第一轮门禁、第二轮及本地 O1-PR3 均 unavailable。上一停止根的
+serial/concurrent profile-control、telemetry、stop-final、
 resource-health hash 分别为
 `2fd41d4fa857d00c026fe4ad2ef5d09fff9690e56beb91bbe830221cfae6b087` /
 `152a6e52e6a1552375f040923cf7b30806d91d5832d95854c3eb41c1597218f2`、

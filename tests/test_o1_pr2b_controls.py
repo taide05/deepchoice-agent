@@ -534,6 +534,167 @@ def test_pr2b_official_safe_fetch_response_context_remains_fail_closed(
     assert state["reason"] == "safe_fetch_official_failed"
 
 
+@pytest.mark.parametrize(
+    ("operation", "source", "method"),
+    [
+        ("safe_fetch_public", "safe_fetch", "GET"),
+        ("safe_fetch_official", "official", "GET"),
+        ("safe_fetch_official", "official", "HEAD"),
+    ],
+)
+def test_pr2b_safe_fetch_transport_cancel_pairs_with_typed_timeout(
+        tmp_path, operation, source, method):
+    telemetry = tmp_path / "telemetry.jsonl"
+    observed_at = "2026-09-21T11:13:25.881335+00:00"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "timestamp": observed_at,
+            "run_id": "run-1",
+            "operation": operation,
+            "source": source,
+            "method": method,
+            "error_type": "CancelledError",
+        },
+        {
+            "event": "safe_fetch_failure",
+            "timestamp": "2026-09-21T11:13:25.881840+00:00",
+            "run_id": "run-1",
+            "status": "failure",
+            "error_type": "UnsafeUrlError",
+            "failure": "timeout",
+        },
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+def test_pr2b_safe_fetch_cancel_rejects_late_typed_timeout(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "timestamp": "2026-09-21T11:13:25+00:00",
+            "run_id": "run-1",
+            "operation": "safe_fetch_official",
+            "source": "official",
+            "method": "GET",
+            "error_type": "CancelledError",
+        },
+        {
+            "event": "safe_fetch_failure",
+            "timestamp": "2026-09-21T11:13:26+00:00",
+            "run_id": "run-1",
+            "status": "failure",
+            "error_type": "UnsafeUrlError",
+            "failure": "timeout",
+        },
+    )
+
+    state = control.telemetry_state(telemetry)
+    assert state["anomaly"] is True
+    assert state["reason"] == "external_http_cancelled"
+
+
+def test_pr2b_safe_fetch_cancel_waits_for_immediate_typed_outcome(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "timestamp": control.stamp(),
+            "run_id": "run-1",
+            "operation": "safe_fetch_official",
+            "source": "official",
+            "method": "GET",
+            "error_type": "CancelledError",
+        },
+    )
+
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+def test_pr2b_final_state_rejects_recent_unpaired_safe_fetch_cancel(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "timestamp": control.stamp(),
+            "run_id": "run-1",
+            "operation": "safe_fetch_official",
+            "source": "official",
+            "method": "GET",
+            "error_type": "CancelledError",
+        },
+        {"event": "service_stopped"},
+        {"event": "asyncio_runner_returned"},
+    )
+
+    state = control.telemetry_state(
+        telemetry, require_stopped=True, require_runner_returned=True
+    )
+    assert state["anomaly"] is True
+    assert state["reason"] == "external_http_cancelled"
+
+
+@pytest.mark.parametrize(
+    "typed_event",
+    [
+        {
+            "run_id": "run-2",
+            "status": "failure",
+            "error_type": "UnsafeUrlError",
+            "failure": "timeout",
+        },
+        {
+            "run_id": "run-1",
+            "status": "failure",
+            "error_type": "CancelledError",
+            "failure": None,
+        },
+        {
+            "run_id": "run-1",
+            "status": "failure",
+            "error_type": "UnsafeUrlError",
+            "failure": "unknown_failure",
+        },
+    ],
+)
+def test_pr2b_unpaired_safe_fetch_cancel_remains_fail_closed(
+        tmp_path, typed_event):
+    telemetry = tmp_path / "telemetry.jsonl"
+    timestamp = control.stamp()
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "timestamp": timestamp,
+            "run_id": "run-1",
+            "operation": "safe_fetch_official",
+            "source": "official",
+            "method": "GET",
+            "error_type": "CancelledError",
+        },
+        {"event": "safe_fetch_failure", "timestamp": timestamp, **typed_event},
+        {"event": "service_stopped"},
+        {"event": "asyncio_runner_returned"},
+    )
+
+    state = control.telemetry_state(
+        telemetry, require_stopped=True, require_runner_returned=True
+    )
+    assert state["anomaly"] is True
+    assert state["reason"] == "external_http_cancelled"
+
+
 def test_pr2b_health_loss_precedes_secondary_cancelled_http_failures(tmp_path):
     telemetry = tmp_path / "telemetry.jsonl"
     _write_telemetry(

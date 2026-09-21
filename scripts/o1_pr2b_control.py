@@ -150,6 +150,8 @@ _SAFE_FETCH_FAILURES = {
 
 _GITHUB_RETRYABLE_RESPONSE_ERRORS = {"RemoteProtocolError", "ReadError"}
 _GITHUB_MAX_RESPONSE_INTERRUPTION_RETRIES = 2
+_SAFE_FETCH_CANCEL_PAIR_MAX_SECONDS = 0.25
+_SAFE_FETCH_CANCEL_CORRELATION_GRACE_SECONDS = 2.5
 
 
 def telemetry_state(
@@ -171,6 +173,7 @@ def telemetry_state(
             return state
         anomaly_reason = None
         cancelled_http_failure = False
+        pending_safe_fetch_cancellations: dict[str, list[datetime | None]] = {}
         github_response_interruptions: dict[tuple[str, str, str, str], int] = {}
         for line in payload.splitlines():
             if not line:
@@ -208,7 +211,22 @@ def telemetry_state(
                             or event.get("method") not in allowed_methods):
                         anomaly_reason = failure_reason
                     elif error_type == "CancelledError":
-                        cancelled_http_failure = True
+                        run_id = event.get("run_id")
+                        if not isinstance(run_id, str) or not run_id:
+                            anomaly_reason = failure_reason
+                        else:
+                            try:
+                                cancelled_at = datetime.fromisoformat(
+                                    event.get("timestamp", "")
+                                )
+                                if cancelled_at.tzinfo is None:
+                                    raise ValueError("timestamp has no timezone")
+                                cancelled_at = cancelled_at.astimezone(timezone.utc)
+                            except (TypeError, ValueError):
+                                cancelled_at = None
+                            pending_safe_fetch_cancellations.setdefault(
+                                run_id, []
+                            ).append(cancelled_at)
                     elif (error_type != "UnsafeUrlError"
                             or event.get("failure") not in _SAFE_FETCH_FAILURES):
                         anomaly_reason = failure_reason
@@ -233,6 +251,33 @@ def telemetry_state(
                         anomaly_reason = "external_http_failure"
                 else:
                     anomaly_reason = "external_http_failure"
+            elif kind == "safe_fetch_failure":
+                run_id = event.get("run_id")
+                pending = (
+                    pending_safe_fetch_cancellations.get(run_id, [])
+                    if isinstance(run_id, str) and run_id else []
+                )
+                try:
+                    failure_at = datetime.fromisoformat(event.get("timestamp", ""))
+                    if failure_at.tzinfo is None:
+                        raise ValueError("timestamp has no timezone")
+                    failure_at = failure_at.astimezone(timezone.utc)
+                except (TypeError, ValueError):
+                    failure_at = None
+                if (pending and failure_at is not None
+                        and event.get("status") == "failure"
+                        and event.get("error_type") == "UnsafeUrlError"
+                        and event.get("failure") in _SAFE_FETCH_FAILURES):
+                    paired_index = next((
+                        index for index, cancelled_at in enumerate(pending)
+                        if cancelled_at is not None
+                        and 0 <= (failure_at - cancelled_at).total_seconds()
+                        <= _SAFE_FETCH_CANCEL_PAIR_MAX_SECONDS
+                    ), None)
+                    if paired_index is not None:
+                        pending.pop(paired_index)
+                        if not pending:
+                            pending_safe_fetch_cancellations.pop(run_id, None)
             elif kind == "external_http_response":
                 operation = event.get("operation")
                 source = event.get("source")
@@ -274,6 +319,23 @@ def telemetry_state(
         if anomaly_reason is not None:
             state["reason"] = anomaly_reason
             return state
+        if pending_safe_fetch_cancellations:
+            now = datetime.now(timezone.utc)
+            pending_times = [
+                observed_at
+                for observations in pending_safe_fetch_cancellations.values()
+                for observed_at in observations
+            ]
+            if (require_stopped or require_runner_returned
+                    or not pending_times
+                    or any(observed_at is None for observed_at in pending_times)
+                    or any(
+                        not 0 <= (now - observed_at).total_seconds()
+                        <= _SAFE_FETCH_CANCEL_CORRELATION_GRACE_SECONDS
+                        for observed_at in pending_times
+                        if observed_at is not None
+                    )):
+                cancelled_http_failure = True
         if cancelled_http_failure:
             state["reason"] = "external_http_cancelled"
             return state

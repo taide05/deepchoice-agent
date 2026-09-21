@@ -16,8 +16,8 @@ heartbeat 失权，0 并发报告。该 fresh 根不得补跑或重启；第二�
 | O1-B 观测与运行补修 | JSON/结构/截断/parser 次数、token/cache 拆账、失败分类、冷加载与租约/health 离线补修 | 当前候选的真实冷启、整 case 并发或硬件稳定 |
 | O1-C 的 C1/C2 离线部分 | 候选准入/题名/互证/明确引用展示，逐子句引用提示，unknown 分类与地址拒绝，可信本地 CONNECT 适配及冻结身份 | 模型实际遵从、语义支持或真实 pinned CONNECT/TLS 互通 |
 
-当前状态：**查询隔离候选 `09f9b66` 的 formal fresh 第一轮按冻结停止线退出，
-GitHub 响应中断修复候选 `d23c948` 已重新资格并冻结，O1-PR2B 仍未完成。**
+当前状态：**GitHub 响应中断修复候选 `d23c948` 已重新资格并冻结，但其 formal fresh
+第一轮因 safe-fetch timeout 遥测误判停止，O1-PR2B 仍未完成。** 查询隔离候选 `09f9b66` 的
 历史 serial-r1 完成 12/12，形成 12 份报告（1 份 limited），合计
 147,687 tokens、186 LLM / 72 retrieval、0 failed calls；stop-final、清理与服务退出完整。
 concurrent-r1 准入 12/12 后，GitHub GET 出现 `RemoteProtocolError`，控制器按
@@ -30,8 +30,12 @@ concurrent-r1 准入 12/12 后，GitHub GET 出现 `RemoteProtocolError`，控�
 134 项聚焦和 1570 项全套测试通过。生产代码已再次变化，因此 `09f9b66` 的资格转为历史。新候选的首次资格 runner 在准入后因
 瞬时 health-stop 退出，fresh v3 P01 随后完成；独立复核把严格分母从 44 校正为 43，最终
 support 19/15/9、quality 0/34/9、must-answer 5/6、conflict 2/2、major/blocker 0。
-当前使用 **62/110**，48 个完整 fresh 配对 run 仍全部保留。供应商、数据外传、案例、rubric、
-每 run 预算、HITL、质量阈值和停止线不变。
+其后的 `d23c948` fresh serial-r1 完成 12/12；concurrent-r1 准入 12/12 并形成 11 份报告，
+P03 因控制器把底层取消误判为异常而 cancelled。产品在 0.505 ms 后已把同一事件归类为允许的
+`UnsafeUrlError(timeout)` 并完成 citation validator，因此这是控制器误停。停止根计入 24 个 run，
+当前使用 **86/110**。相关修复只接受同 run、known failure、250 ms 内配对，并在 2.5 秒后或最终化时对
+未配对取消 fail closed；93 项 PR2 聚焦和 1579 项全套通过。完整 fresh 48-run 替代需要上限
+134，尚未启动。供应商、数据外传、案例、rubric、每 run 预算、HITL、质量阈值和停止线不变。
 
 以下为 2026-09-18 的 PR1 历史断点，只用于解释资格形成过程，不代表当前状态：
 PR1 入口通过 59 聚焦 / 1439 全套及独立复审，候选实施提交为 `ce4addf`。
@@ -46,7 +50,7 @@ P01 未提交、单例资格 unavailable、PR1 未完成且未形成 PR2 锁定�
 |---|---|---|---|
 | O1-PR1 当前候选单例资格与冻结 | C3，含必要的 C 问题收口 | 生产改动后用一次新候选 P01 核对执行、引用/报告与成本并冻结 | 候选 `d23c948` 已通过离线验收和校正后的 P01/台账/独立复核，当前 62/110 |
 | O1-PR2A 控制面离线修复 | D 的执行前置 | 修复静态探测误报、停止态预算证据和冷初始化关闭阻断；不执行真实研究 | exact operation 单元测试、公开 API stop-final 证据测试、冷初始化收束/正常退出测试及全套验证；已完成 |
-| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | `d23c948` 已资格冻结；从 fresh 根执行 48 个，当前 62/110，门禁仍待测 |
+| O1-PR2B 正式串并发基线与逐轮评审 | D，含 E 的逐报告评审 | 用新的 fresh 根、同一冻结产品候选完成 12-case × serial/concurrent × 2 重复，共 48 个新 run；采集和质量核验一起交付 | `d23c948` 资格有效；新停止根为 serial 12 报告、concurrent 11 报告，控制器已离线修复；当前 86/110，完整替代需 134，门禁仍待测 |
 | O1-PR3 O1 结项与优化假设 | E 的总体结论 | 汇总质量、运行/成本和残余风险，冻结一个最优先的 O2 假设 | 本地收口依赖完整 PR2 测量；第一轮门禁 unavailable，未启动。O2 实施及发布另授权 |
 
 ## O1-PR1：当前候选单例资格与冻结

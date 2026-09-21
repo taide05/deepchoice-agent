@@ -1,6 +1,6 @@
 # DeepChoice 产品效果优化策略与评估协议
 
-日期：2026-09-21 · 协议版本：v4 · 状态：GitHub 响应中断修复候选已重新资格并冻结；fresh 48-run 配对待执行，当前门禁 unavailable。
+日期：2026-09-21 · 协议版本：v4 · 状态：新候选已资格冻结；formal fresh 第一轮因 safe-fetch timeout 遥测误判停止，控制器已离线修复，当前门禁 unavailable。
 
 v4 明确计数、评审与结项边界，不改变已批准的 12 例/官方参考、0/1/2 rubric、标准预算或串并发阈值。
 DeepSeek Flash 统一、采集器、缓存拆账与六源限流离线修复已完成；这些不证明真实质量或并发门禁通过。
@@ -23,7 +23,13 @@ concurrent-r1 又准入 12 个 run，但 GitHub GET `RemoteProtocolError` 触发
 累计因此达到 60。响应中断生产修复候选 `d23c9480b9f368f8ec75ec44ee7e25c64146d4be`
 的一次资格 runner 在准入后因瞬时 health-stop 退出，计为第 61 个 run；fresh v3 P01 随后完成并经
 独立复核校正后冻结，为第 62 个 run。为保留完整的 48-run 配对，总上限按 62 + 48 重算为
-110。第一轮门禁、第二轮和 O1-PR3 仍 unavailable。
+110。随后 formal fresh serial-r1 完成 12/12，concurrent-r1 准入 12/12 并形成 11 份报告；
+P03 的 official safe-fetch 在产品 20 秒总时限内先产生底层 `CancelledError`，0.505 ms 后产生允许的
+`UnsafeUrlError(timeout)`，旧控制器在相关 typed 结果到达前误停。该根计入 24 个 run 且保持不变，
+累计为 86/110。控制器已离线改为同 run、known failure、250 ms 内精确配对，并只给予 2.5 秒
+有界等待；最终化时任何未决取消立即 fail closed。93 项 PR2 聚焦和 1579 项全套通过。新的完整
+48-run 配对需要把上限扩至 134，尚未启动。
+第一轮门禁、第二轮和 O1-PR3 仍 unavailable。
 外传对象、案例、rubric、预算、HITL 和质量阈值不变，具体边界见[当前任务卡](o1-next-steps.md)。
 不查看用于调参的保留集逐例反馈。
 
@@ -43,7 +49,8 @@ P01～P08 是开发集，P09～P12 为保留集；合理条件性选择不预设
 | `15ca251` 首个正式尝试 | serial-r1 准入 10：9 报告、1 cancelled；控制器 HEAD 误判停止，concurrent 未启动 | 完整第一轮、配对门禁或质量结论 |
 | `91d56cd` source-aware fresh 第一轮 | serial-r1 12 报告；concurrent 12 个 run 因 API ReadTimeout 停止、0 报告 | 完整第一轮、并发质量或配对门禁 |
 | `d2dcd41` / `09f9b66` formal 第一轮 | serial 12 报告；concurrent 12 个 run 因 GitHub 响应中断停止、0 报告 | 完整第一轮、并发质量或配对门禁 |
-| 未来完整配对 | `d23c948` 已资格冻结；停止根不可拼接，仍需 fresh 12 例 × serial/concurrent × 2 = 48 run；当前累计 62/110 | 与任何停止根拼凑或在完整门禁前声称完成 |
+| `d23c948` formal 第一轮 | serial 12 报告；concurrent 11 报告、P03 cancelled；safe-fetch timeout 双事件误判停止，根只读 | 完整第一轮、并发质量或配对门禁 |
+| 未来完整配对 | `d23c948` 资格仍有效，控制器已离线修复；仍需 fresh 12 例 × serial/concurrent × 2 = 48 run；当前累计 86/110，完整替代需上限 134 | 与任何停止根拼凑或在完整门禁前声称完成 |
 | smoke-v1 / 历史 benchmark | 各自原 dataset、日期与分母 | 真实产品质量或同一对照集 |
 
 最新六份实测代码为 `e25610b4cc013274ae45e5cd4184901a2f78f14a`；
