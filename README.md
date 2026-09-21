@@ -44,6 +44,13 @@ run/实例租约等待后重新取时，冷本地工作移线程，health 对本
 本机 O1-B 最终验收（2026-09-17，Python 3.12.4）：187 聚焦、1238 全套通过且无跳过，
 smoke-v1 12/12 baseline 匹配，静态/依赖门禁与独立复审无阻断；43/48 不变，批次继续暂停。
 
+2026-09-21 最新 O1-PR2B fresh 第一轮完成 12/12 串行报告，但 12 路并发在多源检索阶段
+发生实例与 run heartbeat 失权，0 并发报告，因此配对门禁仍 unavailable。运行时现把实例 guard
+和 run heartbeat 放到同一产品 SQLite 文件的专用连接/锁，避免排在主连接的 Trace、预算、
+缓存和 API 队列后；fencing、TTL、schema 与单实例/单 worker 不变。103 项聚焦、1539 项全套
+测试、smoke 12/12 及静态/依赖门禁通过；修复后 live 并发尚未执行，须先重新冻结并单例资格。
+详见 [执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。
+
 2026-09-17 O1-C 已授权真实单例验真，但在前置网络健康 4/5（community 未通过）时停止；
 routed Tavily POST 通过，LLM/冷启/研究/报告未执行，新 run 0，累计 43/48 不变。
 具体来源限流反馈未知，不能据此认定转发断线；见 [停止记录](docs/o1c-single-case-verification.md)。
@@ -437,12 +444,13 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
-正式产品基线使用 durable API；O1 已提供候选 12-case、serial=1 / concurrent=12 的采集与
-配对门禁，12-case 已获用户批准冻结为 1.0.0。48-run 额度已确认，JSON/tool 及完整检索健康通过；
-已创建 36/48 个 run；串行第 1 组报告 1/12，并发第 1 组 0/12，第 2 并发组实例租约丢失作废。唯一完整成功 P04 为 14,778 token，非平均成本；详见[部分实测/运行修复卡](docs/o1-live-baseline.md)及[执行断点](docs/o1-execution-status.md)。手动评估 workflow 当前仅运行 smoke-v1，
-无 LLM/检索调用，不套用历史 Top-1 阈值。
-
-用户最新约束：单 case 稳定成功前，停止真实 12-case 并发和整组串行；先离线复现/最小修复，再逐次单 case 验证，不自动排队。恢复批次须重新确认，不能凭剩余额度自动启动。
+正式产品基线使用 durable API；O1 已提供冻结的 12-case 1.0.0、serial=1 /
+concurrent=12 采集与配对门禁。2026-09-21 第四次获批第一轮在候选 `7d622fd` 上完成
+12 份串行报告（149,654 tokens、185 LLM / 72 retrieval、终态用量完整），但 12 路并发在
+multi_retriever 阶段租约失权且无报告；各停止根与旧候选不得拼接。运行时离线修复后须形成
+新候选，先重新单例资格，再分别批准 fresh 第一轮和门禁后的第二轮。详见
+[执行断点](docs/o1-execution-status.md)与[任务卡](docs/o1-next-steps.md)。手动评估 workflow
+当前仅运行 smoke-v1，无 LLM/检索调用，不套用历史 Top-1 阈值。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
 超时口径；冲突检测率为 28.8%，解释受当时 known_contradictions 标注覆盖影响。这些数据不代表

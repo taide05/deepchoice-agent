@@ -194,6 +194,23 @@ async def test_lease_loss_callback_failure_does_not_break_release(tmp_path):
         await connection.close()
 
 
+def test_lifespan_isolates_lease_traffic_from_primary_connection(tmp_path):
+    application = FastAPI(lifespan=lifespan)
+    application.state.execution_enabled = False
+    application.state.auto_recovery_enabled = False
+    application.state.product_database_path = tmp_path / "product.db"
+    application.state.checkpoint_database_path = tmp_path / "checkpoints.db"
+    application.state.legacy_snapshot_root = tmp_path / "legacy"
+
+    with TestClient(application):
+        guard = application.state.runtime_instance_guard
+        coordinator = application.state.run_coordinator
+        primary = application.state.product_database_connection
+        assert guard._connection is not primary
+        assert coordinator._heartbeat_repository._connection is guard._connection
+        assert coordinator._heartbeat_repository._lock is guard._lock
+
+
 def test_second_application_cannot_start_coordinator_on_same_product_database(tmp_path):
     first_app = FastAPI(lifespan=lifespan)
     second_app = FastAPI(lifespan=lifespan)

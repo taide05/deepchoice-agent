@@ -149,9 +149,10 @@ def test_create_submits_to_lifespan_coordinator_without_running_provider(
     submitted: list[tuple[str, bool | None]] = []
 
     class FakeCoordinator:
-        def __init__(self, _repository, _checkpointer, *, enabled=True, auto_recovery=True):
+        def __init__(self, _repository, _checkpointer, *, enabled=True, auto_recovery=True, heartbeat_repository=None):
             self.enabled = enabled
             assert auto_recovery is True
+            assert heartbeat_repository is not None
 
         async def start(self):
             return ()
@@ -179,9 +180,10 @@ def test_resume_returns_accepted_when_post_commit_wakeup_fails(
     class FakeCoordinator:
         fail = False
 
-        def __init__(self, _repository, _checkpointer, *, enabled=True, auto_recovery=True):
+        def __init__(self, _repository, _checkpointer, *, enabled=True, auto_recovery=True, heartbeat_repository=None):
             self.enabled = enabled
             assert auto_recovery is True
+            assert heartbeat_repository is not None
 
         async def start(self):
             return ()

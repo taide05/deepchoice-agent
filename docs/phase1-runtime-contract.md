@@ -308,6 +308,26 @@ json_repair 兼容返回/重试不改，node-shape-v1 仅观测、不增加路�
 评测逐调用与已知分母输出、旧探测资格、冷启动模式、离线故障与边界详见
 [O1-B 记录](o1b-prebatch-observability.md)。不因此批准真实 case 或批次、不证明蓝屏根因。
 
+## O1-PR2B：并发租约队列隔离（2026-09-21）
+
+filesystem 产品数据库在同一 SQLite/WAL 文件上使用两条应用连接：主连接继续承载 lifecycle、
+Trace、预算、检索缓存和 API 读写；专用租约连接只供 runtime instance guard 与
+RunCoordinator 的 run heartbeat 使用，并由独立 asyncio lock 串行化。这样 heartbeat 不会
+排在主连接的高流量协程队列之后。它不是第二个产品库，不改变备份对、schema、事务事实源、
+lease owner/epoch、30 秒 TTL、10 秒节拍、单实例或单 worker 约束。`:memory:` 兼容路径因
+第二连接会得到不同数据库，继续共用原连接；durable 部署使用 filesystem 数据库。
+
+专用连接仍通过同一 SQLite writer lock 与有界 busy timeout；真正的长写事务、磁盘停顿或
+event-loop stall 仍会使续期 fail closed，不能声称租约永不丢失。失权后的 coordinator 取消、
+fencing 拒绝与 health 503 不变。离线故障回归在主连接 lock 阻塞超过一个完整测试租约窗口时，
+同时运行实例 guard 与 12 个 run heartbeat，确认专用队列持续续期；另保留 writer wait 超时、
+过期不可复活、旧 owner 不得清理替代 owner 等既有回归。
+
+2026-09-21 的 O1-PR2B concurrent-r1 一次观察到 12 路 running 后在 multi_retriever 阶段
+发生实例与 run heartbeat 失权；内存没有越过实验停止线。该 live 事实支持修复共享应用锁
+排队边界，但不能排除主机/磁盘/事件循环的其他风险，也不构成修复后 live 并发验收。
+失败实验根保持关闭，生产变更形成新候选后须重新资格与另行授权。
+
 ## O1-C：社区凭据与节拍契约澄清（2026-09-17）
 
 社区 route probe 和业务检索共用请求局部的可选 `STACKEXCHANGE_API_KEY` 参数构造；

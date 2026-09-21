@@ -77,9 +77,10 @@ from .task_event_stream import iter_task_event_sse, parse_last_event_id
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Own the product database's one connection for this app lifespan."""
+    """Own the product database connections for this app lifespan."""
 
     connection = None
+    lease_connection = None
     checkpoint_connection = None
     coordinator = None
     instance_guard = None
@@ -90,12 +91,23 @@ async def lifespan(application: FastAPI):
         )
         validate_single_worker_configuration()
         database_path = getattr(application.state, "product_database_path", None)
-        connection = await connect_database(database_path or DEFAULT_DB_PATH)
+        resolved_database_path = database_path or DEFAULT_DB_PATH
+        connection = await connect_database(resolved_database_path)
         connection_lock = asyncio.Lock()
         async with connection_lock:
             await run_migrations(connection)
         repository = SQLiteTaskRunRepository(connection, connection_lock)
-        instance_guard = RuntimeInstanceGuard(connection, connection_lock)
+        if str(resolved_database_path) == ":memory:":
+            # A second SQLite :memory: connection is a different database.
+            # Keep the compatibility path usable; durable deployments use a
+            # filesystem database and receive the isolated lease connection.
+            lease_connection = connection
+            lease_lock = connection_lock
+        else:
+            lease_connection = await connect_database(resolved_database_path)
+            lease_lock = asyncio.Lock()
+        lease_repository = SQLiteTaskRunRepository(lease_connection, lease_lock)
+        instance_guard = RuntimeInstanceGuard(lease_connection, lease_lock)
         application.state.runtime_instance_guard = instance_guard
         await instance_guard.acquire()
         application.state.runtime_instance_status = "active"
@@ -148,6 +160,7 @@ async def lifespan(application: FastAPI):
             checkpointer,
             enabled=execution_enabled,
             auto_recovery=bool(getattr(application.state, "auto_recovery_enabled", True)),
+            heartbeat_repository=lease_repository,
         )
         configure_trace_store = getattr(coordinator, "configure_trace_store", None)
         if callable(configure_trace_store):
@@ -229,6 +242,8 @@ async def lifespan(application: FastAPI):
         application.state.product_database_connection = None
         if connection is not None:
             await _await_cleanup(connection.close())
+        if lease_connection is not None and lease_connection is not connection:
+            await _await_cleanup(lease_connection.close())
         if checkpoint_connection is not None:
             await _await_cleanup(checkpoint_connection.close())
 

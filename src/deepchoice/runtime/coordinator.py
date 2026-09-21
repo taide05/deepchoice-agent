@@ -262,6 +262,7 @@ class RunCoordinator:
         owner_id: str | None = None,
         clock: Callable[[], datetime] = _utc_now,
         orchestrator_factory: Callable[..., ChiefEditorAgent] = ChiefEditorAgent,
+        heartbeat_repository: SQLiteTaskRunRepository | None = None,
         trace_store: SQLiteTraceStore | None = None,
         budget_store: SQLiteBudgetStore | None = None,
         retrieval_cache: SQLiteRetrievalCache | None = None,
@@ -281,6 +282,12 @@ class RunCoordinator:
         self.owner_id = owner_id or str(uuid.uuid4())
         self._clock = clock
         self._orchestrator_factory = orchestrator_factory
+        # Lease renewal has a bounded deadline and must not queue behind the
+        # high-volume Trace, budget, cache, and API work on the primary
+        # connection. The composition root supplies a repository backed by a
+        # dedicated connection; direct/test construction keeps the historical
+        # single-repository behavior.
+        self._heartbeat_repository = heartbeat_repository or repository
         self._trace_store = trace_store
         self._budget_store = budget_store or SQLiteBudgetStore(
             repository._connection, repository._lock, clock=clock
@@ -428,7 +435,7 @@ class RunCoordinator:
                 started = time.monotonic()
                 lag = max(0, round((started - expected) * 1000))
                 self._max_heartbeat_lag_ms = max(self._max_heartbeat_lag_ms or 0, lag)
-                renewed = await self.repository.heartbeat_run_lease(
+                renewed = await self._heartbeat_repository.heartbeat_run_lease(
                     run_id,
                     lease_owner=self.owner_id,
                     execution_epoch=execution_epoch,

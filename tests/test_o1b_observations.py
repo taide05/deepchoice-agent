@@ -429,6 +429,117 @@ async def test_cold_model_and_chroma_initialization_do_not_block_instance_heartb
 
 
 @pytest.mark.asyncio
+async def test_twelve_dedicated_lease_heartbeats_survive_primary_lock_backlog(tmp_path):
+    from deepchoice.runtime.coordinator import RunCoordinator
+
+    connection, lock, repo, first_run = await queued(tmp_path)
+    lease_connection = await connect_database(tmp_path / "product.db")
+    lease_lock = asyncio.Lock()
+    lease_repo = SQLiteTaskRunRepository(lease_connection, lease_lock)
+    guard = RuntimeInstanceGuard(
+        lease_connection,
+        lease_lock,
+        lease_seconds=3,
+        heartbeat_seconds=0.1,
+    )
+    runs = [first_run]
+    request = ResearchRequest(query="compare two options")
+    for index in range(1, 12):
+        task_id, run_id = f"task-{index}", f"run-{index}"
+        task = TaskRecord(
+            task_id=task_id,
+            status=TaskStatus.QUEUED,
+            request=request,
+            latest_run_id=run_id,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        run = RunRecord(
+            run_id=run_id,
+            task_id=task_id,
+            status=RunStatus.QUEUED,
+            manifest=build_run_manifest(request.model_dump()),
+            budget_policy=DEFAULT_RUN_BUDGET_POLICY,
+            thread_id=run_id,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        await repo.create_task_with_run(task, run)
+        runs.append(run)
+
+    grants = {}
+    for run in runs:
+        grants[run.run_id] = await repo.acquire_run_lease(
+            run.run_id,
+            lease_owner="worker",
+            lease_ttl=timedelta(seconds=30),
+            run_timeout=timedelta(minutes=5),
+        )
+    coordinator = RunCoordinator(
+        repo,
+        None,
+        owner_id="worker",
+        lease_ttl=timedelta(seconds=3),
+        heartbeat_interval=timedelta(seconds=0.1),
+        heartbeat_repository=lease_repo,
+    )
+    lost = asyncio.Event()
+    runners = {
+        run.run_id: asyncio.create_task(asyncio.Event().wait())
+        for run in runs
+    }
+    heartbeats = []
+    try:
+        await guard.acquire()
+        guard.start_heartbeat(lost.set)
+        heartbeats = [
+            asyncio.create_task(
+                coordinator._heartbeat(
+                    run.run_id,
+                    grants[run.run_id].execution_epoch,
+                    runners[run.run_id],
+                )
+            )
+            for run in runs
+        ]
+        await lock.acquire()
+        for _ in range(200):
+            if (
+                guard.observations()["renewals"] >= 2
+                and coordinator.heartbeat_observations()["successes"] >= 12
+            ):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError(f"dedicated lease renewals did not start: {guard.observations()} {coordinator.heartbeat_observations()} {[runner.done() for runner in runners.values()]}")
+
+        # Exceed the accepted lease window while ordinary product work is
+        # unable to acquire the primary application lock.
+        await asyncio.sleep(3.2)
+        assert guard.has_authority and not lost.is_set()
+        assert all(not runner.done() for runner in runners.values())
+        assert guard.observations()["renewals"] >= 3
+        assert coordinator.heartbeat_observations()["successes"] >= 24
+        for run in runs:
+            renewed = await lease_repo.get_run(run.run_id)
+            assert renewed is not None and renewed.status is RunStatus.RUNNING
+            assert renewed.lease_expires_at > datetime.now(UTC)
+    finally:
+        if lock.locked():
+            lock.release()
+        for runner in runners.values():
+            runner.cancel()
+        for heartbeat in heartbeats:
+            heartbeat.cancel()
+        await asyncio.gather(
+            *runners.values(), *heartbeats, return_exceptions=True
+        )
+        await guard.release()
+        await lease_connection.close()
+        await connection.close()
+
+
+@pytest.mark.asyncio
 async def test_run_heartbeat_uses_deferred_clock_and_stops_runner_after_expiry(tmp_path):
     from deepchoice.runtime.coordinator import RunCoordinator
 

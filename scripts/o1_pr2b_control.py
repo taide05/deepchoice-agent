@@ -166,6 +166,7 @@ def telemetry_state(
             state["reason"] = "telemetry_truncated"
             return state
         anomaly_reason = None
+        cancelled_http_failure = False
         for line in payload.splitlines():
             if not line:
                 state["reason"] = "telemetry_empty_line"
@@ -189,16 +190,22 @@ def telemetry_state(
                 state["embedding_ended"] += 1
             elif kind == "external_http_failure":
                 operation = event.get("operation")
+                error_type = event.get("error_type")
                 if operation == "safe_fetch_public":
                     if (event.get("source") != "safe_fetch"
-                            or event.get("method") != "GET"
-                            or event.get("error_type") != "UnsafeUrlError"
+                            or event.get("method") != "GET"):
+                        anomaly_reason = "safe_fetch_public_failed"
+                    elif error_type == "CancelledError":
+                        cancelled_http_failure = True
+                    elif (error_type != "UnsafeUrlError"
                             or event.get("failure") not in _SAFE_FETCH_FAILURES):
                         anomaly_reason = "safe_fetch_public_failed"
+                elif operation not in _HTTP_OPERATIONS:
+                    anomaly_reason = "external_http_operation_invalid"
+                elif error_type == "CancelledError":
+                    cancelled_http_failure = True
                 else:
-                    anomaly_reason = (
-                        "external_http_failure" if operation in _HTTP_OPERATIONS
-                        else "external_http_operation_invalid")
+                    anomaly_reason = "external_http_failure"
             elif kind == "external_http_response":
                 operation = event.get("operation")
                 source = event.get("source")
@@ -222,6 +229,9 @@ def telemetry_state(
             state["embedding_started"] - state["embedding_ended"])
         if anomaly_reason is not None:
             state["reason"] = anomaly_reason
+            return state
+        if cancelled_http_failure:
+            state["reason"] = "external_http_cancelled"
             return state
         if require_ready and not state["ready"]:
             state["reason"] = "telemetry_ready_missing"
@@ -248,6 +258,20 @@ def telemetry_http_anomaly(
         path, require_ready=require_ready,
         require_stopped=require_stopped,
         require_runner_returned=require_runner_returned)["anomaly"])
+
+
+def polling_stop_reason(*, health_safe: bool, telemetry_path: Path) -> str | None:
+    """Attribute authority loss before cancellation-only HTTP fallout."""
+
+    telemetry = telemetry_state(telemetry_path)
+    if telemetry["anomaly"] and telemetry["reason"] != "external_http_cancelled":
+        return "PR2_EXTERNAL_HTTP_STOP"
+    if not health_safe:
+        return "PR2_RESOURCE_OR_LEASE_STOP"
+    if telemetry["anomaly"]:
+        return "PR2_EXTERNAL_HTTP_STOP"
+    return None
+
 
 def call_anomaly(record: dict) -> bool:
     observation = record.get("observability")
@@ -1053,11 +1077,12 @@ async def execute(root: Path, frozen_root: Path, env_file: Path, profile: str) -
                 and memory >= STOP_MINIMUM_AVAILABLE_BYTES
                 and (not running_authority_required or authority_complete)
             )
-            if telemetry_http_anomaly(control / "telemetry.jsonl"):
-                stop(collector, "PR2_EXTERNAL_HTTP_STOP")
-                return httpx.Response(503), None
-            if not latest_health_safe:
-                stop(collector, "PR2_RESOURCE_OR_LEASE_STOP")
+            poll_stop = polling_stop_reason(
+                health_safe=latest_health_safe,
+                telemetry_path=control / "telemetry.jsonl",
+            )
+            if poll_stop is not None:
+                stop(collector, poll_stop)
                 return httpx.Response(503), None
             if first_stop is not None:
                 return httpx.Response(503), None

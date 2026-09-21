@@ -380,6 +380,51 @@ def test_pr2b_safe_fetch_5xx_and_invalid_context_fail_closed(tmp_path, event):
     assert state["reason"] == "safe_fetch_public_failed"
 
 
+def test_pr2b_health_loss_precedes_secondary_cancelled_http_failures(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "operation": "github",
+            "source": "github",
+            "method": "GET",
+            "error_type": "CancelledError",
+        },
+    )
+
+    assert control.polling_stop_reason(
+        health_safe=False, telemetry_path=telemetry
+    ) == "PR2_RESOURCE_OR_LEASE_STOP"
+    assert control.telemetry_state(telemetry)["reason"] == "external_http_cancelled"
+    assert control.polling_stop_reason(
+        health_safe=True, telemetry_path=telemetry
+    ) == "PR2_EXTERNAL_HTTP_STOP"
+
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {
+            "event": "external_http_failure",
+            "operation": "github",
+            "source": "github",
+            "method": "GET",
+            "error_type": "CancelledError",
+        },
+        {
+            "event": "external_http_response",
+            "operation": "tavily_business",
+            "source": "tavily",
+            "method": "POST",
+            "status_code": 500,
+        },
+    )
+    assert control.polling_stop_reason(
+        health_safe=False, telemetry_path=telemetry
+    ) == "PR2_EXTERNAL_HTTP_STOP"
+
+
 @pytest.mark.asyncio
 async def test_pr2b_cleanup_waits_beyond_old_30_second_poll_count(
         tmp_path, monkeypatch):

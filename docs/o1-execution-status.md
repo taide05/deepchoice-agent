@@ -1,31 +1,37 @@
 # O1 执行断点
 
-当前（2026-09-21）：O1-PR1 产品候选仍冻结为 `7d622fd`。用户批准使用提交
-`8a959a2` 的控制器、fresh 输出根和原冻结候选重新执行 O1-PR2B 第一轮 12 serial +
-12 concurrent，并沿用已批准的外部数据传输范围。新的有界前置通过五类路由、Tavily POST
-200 和 DeepSeek JSON/tool 2/2；0 research run。fresh prepare 重新冻结候选、12 个 case
-manifest、知识种子和六文件 PR2B 工具链。
+当前（2026-09-21）：用户批准使用控制提交 `30c63f9`、新的 fresh 输出根、原冻结
+候选 `7d622fd` 和原知识种子，执行 O1-PR2B 完整第一轮 12 serial + 12 concurrent。
+有界前置再次通过五类路由、Tavily POST 200 与 DeepSeek JSON/tool 2/2；0 research run。
+fresh prepare 冻结候选、12 个 case manifest、知识种子及六文件 PR2B 控制链。
 
-serial-r1 依次准入 P06、P07、P08、P09、P11。P06/P08/P09 completed，P07
-completed_with_warnings/limited_report；四份报告的最终 token/cache 完整，合计 52,867 tokens、
-67 LLM / 24 retrieval、0 failed calls。P11 已完成六次成功 retrieval 和后续 LLM 节点，
-在 citation validator 中仍未生成报告。
+serial-r1 完成 12/12：10 份普通报告，P07/P12 为冻结动作下的
+completed_with_warnings/limited_report；所有终态 token/cache 完整，合计 **149,654 tokens、
+185 LLM / 72 retrieval、0 failed calls**，profile makespan 552,000 ms。该串行结果只属于
+本次候选/轮次，尚无可配对并发报告，不能单独判质量或并发门禁。
 
-P11 的一个动态引用在精确 `safe_fetch_public` 路径上产生
-`UnsafeUrlError(route_unsupported)`。产品引用契约会把已知 `SafeFetchFailure` 类别结算为
-`unknown/network_uncertain`，控制器却把 httpx 层异常误报为 `PR2_EXTERNAL_HTTP_STOP`；
-停止后出现的 `CancelledError` 是次生取消事件。P11 最终 cancelled，停止态 observability
-完整：13,569 tokens、20 LLM / 6 retrieval、0 failed calls，token/cache 完整。其余 7 个
-serial case 未提交，concurrent-r1 未启动。服务自然退出码 0，最低可用内存约 1.07 GiB，
-峰值服务 RSS 约 2.15 GiB，没有越过 512 MiB 停止线。本次 fresh 根保留原样，不补跑；
-24-report 配对、声明台账和第一轮门禁仍 unavailable。
+concurrent-r1 一次准入 12/12，并观测到 12 个 run 同时 running；进入多源检索后，实例
+heartbeat 与 11 个 run heartbeat 在约 31 秒无成功续期后失权。控制器立即停止，未生成报告，
+未启动第二轮。最低可用内存约 1.16 GiB，高于 512 MiB 停止线；峰值服务 RSS 约 2.05 GiB。
+服务自然退出码 0、无残留进程/监听。停止后的只读产品库核对显示 12 个 task/run 仍为 running；
+WAL 为空。该根不得重启，避免自动恢复改变现场。Trace 只显示 query_adapter 12 succeeded，
+multi_retriever 1 succeeded/11 started，各六源 1 succeeded/11 started；这定位到并发检索阶段，
+不构成语义质量结果。
 
-离线修复后，child 在 `external_http_failure` 中只附带 allowlist 的安全失败类别；
-controller 仅接受精确 `safe_fetch_public` / `safe_fetch` / GET、`UnsafeUrlError` 和六个
-已知类别的组合。未知/缺失类别、普通 transport error、错误 method/source、5xx 与 provider
-失败仍 fail closed。最终验收为 58 项 PR2A/PR2B 聚焦回归与 1536 项全套测试通过、0 skipped
-（191.19 秒）；smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100%、pip check 和 diff
-检查通过。按异常后不自动重试协议，新的 fresh 第一轮仍需明确重新批准。
+四条 `external_http_failure/CancelledError` 均发生在实例/run 失权后的任务取消阶段；
+成功 provider 响应先于它们。旧控制器先检查 HTTP telemetry，因而误写
+`PR2_EXTERNAL_HTTP_STOP`；真实首因是资源/租约停止。离线修复让 filesystem 产品库使用一条
+专用 SQLite 连接和锁承载实例 guard 与 run heartbeat，避免在主连接的 Trace、预算、缓存与 API
+高流量队列后等待；仍使用同一数据库、同一 fencing/TTL，SQLite 写锁超时或事件循环停顿继续
+fail closed。控制器只在 HTTP 遥测全部为 `CancelledError` 且 health 不安全时记录资源/租约
+停止；真实 5xx/transport failure 仍优先外部停止。真实 SQLite 回归同时运行
+12 个 run heartbeat 与实例 guard，在主连接锁阻塞超过完整租约窗口时仍保持续期。
+
+本轮修复通过 103 项聚焦回归与 **1539 项全套测试、0 skipped（189.64 秒）**；
+smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100% 与 pip check 通过；独立只读复审无阻断项。
+本轮没有为修复再次联网、提交研究或重启失败根。由于生产 runtime 已改变，`7d622fd` 只保留为本次已测证据身份，
+不能作为下一次 live 的当前候选；须先从新提交形成候选并重新完成单例资格/冻结，再另行批准
+fresh 第一轮。24-report 配对、声明台账、第一轮门禁和第二轮仍 unavailable。
 
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 
