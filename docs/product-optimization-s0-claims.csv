@@ -1,0 +1,361 @@
+report,line,atom,claim,citations,support,quality,basis,issue
+P01,60,1,"SQLite 零配置","P01-SQLITE;P01-WAL;P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,60,2,"WAL 提供读并发","P01-SQLITE;P01-WAL;P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,60,3,"零配置和 WAL 使 SQLite 最适合当前场景","P01-SQLITE;P01-WAL;P01-TRAPS",partial,ineligible,INFERENCE,S0-Q4-01
+P01,65,1,"采用 SQLite","P01-WAL",partial,ineligible,INFERENCE,S0-Q4-01
+P01,65,2,"WAL 提升读并发","P01-WAL",supported,ineligible,SAVED_SNIPPET,
+P01,65,3,"WAL 提升写入速度","P01-WAL",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P01,65,4,"SQLite 零配置","P01-SQLITE;P01-SQLPG",supported,ineligible,SAVED_SNIPPET,
+P01,65,5,"SQLite 无独立服务进程","P01-SQLITE;P01-SQLPG",supported,ineligible,SAVED_SNIPPET,
+P01,65,6,"单人低写入场景下 SQLite 运维负担最小","P01-SQLITE;P01-SQLPG",partial,ineligible,INFERENCE,S0-Q2-01
+P01,65,7,"WAL 下仍同时只有一个 writer","P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,65,8,"一个写入会阻塞其他写入","P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,65,9,"应保持写事务短小","P01-MIGRATION",partial,ineligible,INFERENCE,S0-Q5-01
+P01,65,10,"应监控锁等待","P01-MIGRATION",partial,ineligible,INFERENCE,S0-Q5-01
+P01,65,11,"备份需使用一致性感知流程并验证恢复","",uncited,unknown,UNSOURCED,S0-Q4-01
+P01,65,12,"SQLite 可使用 FTS 扩展","P01-SQLITE",unknown,unknown,SAVED_SNIPPET,S0-Q2-01
+P01,65,13,"FTS 具体配置尚未被当前证据覆盖","P01-SQLITE",unknown,unknown,SAVED_SNIPPET,S0-Q4-01
+P01,65,14,"持续锁错误、写并发或复杂查询/复制需求触发 PostgreSQL 评估","P01-MIGRATION;P01-SQLPG",partial,ineligible,INFERENCE,S0-Q5-01
+P01,65,15,"迁移前应设置可观察的锁等待或延迟指标","P01-MIGRATION",partial,ineligible,INFERENCE,S0-Q5-01
+P01,65,16,"SQLite 到 PostgreSQL 不保证无缝迁移","P01-MIGRATION",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P01,68,1,"WAL 下 reader 不阻塞 writer","P01-WAL",supported,ineligible,SAVED_SNIPPET,
+P01,68,2,"WAL 下 writer 不阻塞 reader","P01-WAL",supported,ineligible,SAVED_SNIPPET,
+P01,68,3,"WAL 使磁盘 I/O 更顺序","P01-WAL",supported,ineligible,SAVED_SNIPPET,
+P01,68,4,"WAL 减少 fsync","P01-WAL",supported,ineligible,SAVED_SNIPPET,
+P01,68,5,"SQLite 在单机低写入场景吞吐足够","P01-TRAPS",partial,ineligible,INFERENCE,S0-Q2-01
+P01,68,6,"SQLite 写入仍串行且需要短事务","P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,70,1,"PostgreSQL 支持表锁","P01-COMPARE;P01-TRAPS",partial,ineligible,SAVED_SNIPPET,
+P01,70,2,"PostgreSQL 支持行级锁","P01-COMPARE;P01-TRAPS",partial,ineligible,SAVED_SNIPPET,
+P01,70,3,"PostgreSQL 支持复杂查询","P01-COMPARE;P01-TRAPS",partial,ineligible,SAVED_SNIPPET,
+P01,70,4,"PostgreSQL 适合高并发写","P01-COMPARE;P01-TRAPS",partial,ineligible,INFERENCE,S0-Q2-01
+P01,70,5,"PostgreSQL 适合复杂分析","P01-COMPARE;P01-TRAPS",partial,ineligible,INFERENCE,S0-Q2-01
+P01,70,6,"PostgreSQL 需要独立服务进程","P01-SQLPG",partial,ineligible,SAVED_SNIPPET,
+P01,70,7,"独立服务进程增加单人运维成本","P01-SQLPG",partial,ineligible,INFERENCE,S0-Q2-01
+P01,70,8,"PostgreSQL 对简单设置可能过度","P01-SQLPG",partial,ineligible,INFERENCE,S0-Q2-01
+P01,74,1,"SQLite 零配置且无独立进程","P01-SQLITE;P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,74,2,"SQLite 写入串行","P01-SQLITE;P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,74,3,"PostgreSQL 的独立进程带来更重运维","P01-SQLPG;P01-TRAPS",partial,ineligible,INFERENCE,S0-Q2-01
+P01,74,4,"PostgreSQL 行级锁增强并发写能力","P01-SQLPG;P01-TRAPS",partial,ineligible,INFERENCE,S0-Q2-01
+P01,74,5,"PostgreSQL 写并发能力高于 SQLite","P01-SQLPG;P01-TRAPS",partial,ineligible,INFERENCE,S0-Q2-01
+P01,76,1,"WAL 使 SQLite 读并发良好","P01-WAL",supported,ineligible,SAVED_SNIPPET,
+P01,76,2,"PostgreSQL 更适合复杂分析","P01-COMPARE;P01-SQLPG",partial,ineligible,INFERENCE,S0-Q2-01
+P01,76,3,"PostgreSQL 事务完整性更强","P01-COMPARE;P01-SQLPG",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P01,76,4,"PostgreSQL 复制能力更强","P01-COMPARE;P01-SQLPG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P01,79,1,"单人、低日活、读多写少使 SQLite 高度契合","P01-SQLITE;P01-WAL",partial,ineligible,INFERENCE,S0-Q4-01
+P01,79,2,"SQLite 写入串行","P01-TRAPS",supported,ineligible,SAVED_SNIPPET,
+P01,79,3,"SQLite 使用者承担备份责任","P01-TRAPS",partial,ineligible,INFERENCE,S0-Q4-01
+P01,79,4,"写并发需求出现时 PostgreSQL 更合适","P01-MIGRATION;P01-SQLPG",partial,ineligible,INFERENCE,S0-Q5-01
+P01,79,5,"复杂查询需求出现时 PostgreSQL 更合适","P01-MIGRATION;P01-SQLPG",partial,ineligible,INFERENCE,S0-Q5-01
+P02,37,1,"pgvector 与已有 PostgreSQL 集成使团队摩擦最低","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,37,2,"pgvectorscale 在 50M 向量上达到 471 QPS","P02-DB26",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P02,37,3,"50M/471 QPS 远超当前 100 万文本需求","P02-COMPARE26;P02-DB26",unsupported,ineligible,INFERENCE,S0-Q2-02
+P02,39,1,"推荐 PostgreSQL + pgvector","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q4-01
+P02,39,2,"团队已有 PostgreSQL","P02-VECTORCHOICE",partial,ineligible,PROJECT_CONTEXT,
+P02,39,3,"pgvector 可复用现有数据库","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q2-01
+P02,39,4,"pgvector 可复用 PostgreSQL 权限体系","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q2-01
+P02,39,5,"pgvector 对 3–5 人团队运维摩擦最低","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,39,6,"当前数据量约 100 万段文本","",uncited,unknown,PROJECT_CONTEXT,
+P02,39,7,"pgvector 可处理 10–100 million 向量","P02-PGVCHROMA",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P02,39,8,"100 万规模低于所引 pgvector 范围","P02-PGVCHROMA",supported,ineligible,INFERENCE,S0-Q2-02
+P02,39,9,"pgvectorscale 在 50M 向量上达到 471 QPS","P02-DB26",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P02,39,10,"pgvectorscale 的外部结果足以证明当前普通 pgvector 性能充足","P02-DB26;P02-PGVCHROMA",unsupported,ineligible,INFERENCE,S0-Q2-02
+P02,39,11,"当前更新频率低","",uncited,unknown,PROJECT_CONTEXT,
+P02,39,12,"低更新频率意味着无需专用向量数据库写入优化","",uncited,unknown,INFERENCE,S0-Q4-01
+P02,39,13,"权限过滤可直接使用 PostgreSQL RLS","",uncited,unknown,UNSOURCED,S0-Q4-01
+P02,39,14,"权限过滤可直接使用 PostgreSQL WHERE","",uncited,unknown,UNSOURCED,S0-Q4-01
+P02,39,15,"在 PostgreSQL 内过滤可避免跨系统同步","",uncited,unknown,INFERENCE,S0-Q4-01
+P02,39,16,"Qdrant 可用 docker run 部署","P02-COMPARE26",supported,ineligible,SAVED_SNIPPET,
+P02,39,17,"Qdrant 会引入额外服务","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,39,18,"Qdrant 会增加备份负担","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,39,19,"Qdrant 会增加升级负担","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,39,20,"应先使用 pgvector HNSW 索引","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q4-01
+P02,39,21,"应监控查询延迟与召回率并在规模或延迟不达标时评估 Qdrant","",uncited,unknown,INFERENCE,S0-Q5-01
+P02,39,22,"迁移前应验证备份恢复与锁等待","",uncited,unknown,INFERENCE,S0-Q5-01
+P02,42,1,"pgvector 对 3–5 人团队摩擦最低","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,42,2,"pgvector 可处理 10–100 million 向量","P02-PGVCHROMA",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P02,42,3,"当前场景只有约 100 万向量","P02-PGVCHROMA",partial,ineligible,PROJECT_CONTEXT,
+P02,42,4,"pgvectorscale 达到 471 QPS","P02-DB26",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P02,42,5,"pgvector 权限过滤与 PostgreSQL 集成","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q2-01
+P02,42,6,"pgvector 与 PostgreSQL 事务一致性集成","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q2-01
+P02,42,7,"上述规模与外部数字足以支持 pgvector 排名第一","P02-COMPARE26;P02-PGVCHROMA;P02-DB26;P02-VECTORCHOICE",unsupported,ineligible,INFERENCE,S0-Q2-02
+P02,43,1,"Qdrant 是专用向量数据库","P02-QDRANT",supported,ineligible,SAVED_SNIPPET,
+P02,43,2,"Qdrant 性能与功能强","P02-QDRANT",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P02,43,3,"100 万规模无需 Qdrant 且其额外运维不划算","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q4-01
+P02,46,1,"pgvector 对小团队运维摩擦较低","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,46,2,"Qdrant 需要独立部署","P02-COMPARE26",supported,ineligible,SAVED_SNIPPET,
+P02,46,3,"Qdrant 在更大规模下可能更优","P02-COMPARE26;P02-QDRANT",partial,ineligible,INFERENCE,S0-Q2-02
+P02,47,1,"pgvector 可使用 PostgreSQL 权限体系","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q2-01
+P02,47,2,"Qdrant 需要额外过滤逻辑","P02-QDRANTDOC",unknown,unknown,SAVED_SNIPPET,S0-Q2-01
+P02,49,1,"现有 PostgreSQL 降低 pgvector 接入成本","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q2-01
+P02,49,2,"pgvector 对小团队摩擦最低","P02-COMPARE26",partial,ineligible,INFERENCE,S0-Q2-01
+P02,49,3,"100 万规模位于所引能力范围","P02-PGVCHROMA",supported,ineligible,INFERENCE,S0-Q2-02
+P02,49,4,"权限过滤需求使 pgvector 更契合","P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q4-01
+P02,49,5,"综合约束下 pgvector 契合度高","P02-COMPARE26;P02-PGVCHROMA;P02-VECTORCHOICE",partial,ineligible,INFERENCE,S0-Q4-01
+P03,59,1,"Django 自带 admin","P03-STANZA;P03-COMPARE;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,59,2,"Django 自带 ORM","P03-STANZA;P03-COMPARE;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,59,3,"Django 自带认证","P03-STANZA;P03-COMPARE;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,59,4,"Django 自带安全机制","P03-STANZA;P03-COMPARE;P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,59,5,"Django 内置能力覆盖后台管理","P03-STANZA;P03-COMPARE;P03-2025",partial,ineligible,INFERENCE,S0-Q1-01
+P03,59,6,"Django 内置能力覆盖权限","P03-STANZA;P03-COMPARE;P03-2025",partial,ineligible,INFERENCE,S0-Q1-01
+P03,59,7,"Django 内置能力覆盖审计","P03-STANZA;P03-COMPARE;P03-2025",partial,ineligible,INFERENCE,S0-Q1-01
+P03,59,8,"团队已有 Django 经验","P03-STANZA;P03-COMPARE;P03-2025",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,64,1,"采用 Django + Django REST Framework","P03-MG",partial,ineligible,INFERENCE,S0-Q4-01
+P03,64,2,"Django 是 batteries-included 框架","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,64,3,"Django 开箱提供 ORM","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,64,4,"Django 开箱提供 admin 后台","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,64,5,"Django 开箱提供认证","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,64,6,"Django 开箱提供表单处理","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,64,7,"Django 内置能力覆盖后台管理需求","P03-STANZA",partial,ineligible,INFERENCE,S0-Q1-01
+P03,64,8,"Django 内置能力覆盖权限需求","P03-STANZA",partial,ineligible,INFERENCE,S0-Q1-01
+P03,64,9,"Django 内置能力覆盖审计需求","P03-STANZA",partial,ineligible,INFERENCE,S0-Q1-01
+P03,64,10,"Django 内置安全机制开箱表现较强","P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,64,11,"团队已有 Django 经验","P03-COMPARE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,64,12,"交付周期为 10 周","P03-COMPARE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,64,13,"已有经验可降低学习成本","P03-COMPARE",partial,ineligible,INFERENCE,S0-Q1-01
+P03,64,14,"已有经验可降低集成成本","P03-COMPARE",partial,ineligible,INFERENCE,S0-Q1-01
+P03,64,15,"Celery 可与 Django 配合实现定时任务","P03-STANZA",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,64,16,"Celery 属于成熟方案","P03-STANZA",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,64,17,"使用 Celery 无需自建基础设施","P03-STANZA",unsupported,ineligible,INFERENCE,S0-Q1-01
+P03,64,18,"FastAPI 异步性能占优","P03-COMPARE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,64,19,"FastAPI 自动 OpenAPI 文档占优","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,64,20,"FastAPI 没有内置 admin","P03-STANZA;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,64,21,"FastAPI 没有内置 ORM","P03-STANZA;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,64,22,"FastAPI 没有内置认证","P03-STANZA;P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,64,23,"FastAPI 需要自行选型并集成 SQLAlchemy 或 Tortoise ORM","P03-STANZA;P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,64,24,"上述集成会消耗交付时间","P03-STANZA;P03-2025",partial,ineligible,INFERENCE,S0-Q1-01
+P03,64,25,"高并发 I/O 瓶颈是反转当前结论的条件","P03-MULTI;P03-NINJA",partial,ineligible,INFERENCE,S0-Q5-01
+P03,64,26,"Django Ninja 可作为渐进式过渡","P03-MULTI;P03-NINJA",partial,ineligible,INFERENCE,S0-Q5-01
+P03,64,27,"出现瓶颈也不必立即整体迁移","P03-MULTI;P03-NINJA",partial,ineligible,INFERENCE,S0-Q5-01
+P03,67,1,"Django 开箱覆盖 REST API 之外的大部分业务需求","P03-STANZA",partial,ineligible,INFERENCE,S0-Q1-01
+P03,67,2,"Django 覆盖后台管理","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,67,3,"Django 覆盖权限","P03-STANZA",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,67,4,"Django 覆盖审计","P03-STANZA",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,67,5,"Django 可配合定时任务","P03-STANZA",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,67,6,"团队经验使 Django 的 10 周交付风险最低","P03-COMPARE",partial,ineligible,INFERENCE,S0-Q1-01
+P03,67,7,"DRF 提供 serializers","P03-MG",supported,ineligible,SAVED_SNIPPET,
+P03,67,8,"DRF 提供 viewsets","P03-MG",supported,ineligible,SAVED_SNIPPET,
+P03,67,9,"DRF 提供可浏览 API","P03-MG",supported,ineligible,SAVED_SNIPPET,
+P03,67,10,"DRF 的能力改善 API 开发体验","P03-MG",partial,ineligible,INFERENCE,S0-Q2-01
+P03,69,1,"FastAPI 是 API-first 框架","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,69,2,"FastAPI 原生异步","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,69,3,"FastAPI 自动生成 OpenAPI 文档","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,69,4,"FastAPI 类型提示体验好","P03-COMPARE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,69,5,"FastAPI 没有内置 admin","P03-STANZA;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,69,6,"FastAPI 没有内置 ORM","P03-STANZA;P03-2025",supported,ineligible,SAVED_SNIPPET,
+P03,69,7,"FastAPI 没有内置认证","P03-STANZA;P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,69,8,"FastAPI 需要自行集成 SQLAlchemy 或 Tortoise ORM","P03-STANZA;P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,69,9,"自行集成增加 10 周交付风险","P03-STANZA;P03-2025",partial,ineligible,INFERENCE,S0-Q1-01
+P03,69,10,"团队无 FastAPI 经验","P03-COMPARE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,69,11,"无 FastAPI 经验意味着更高学习成本","P03-COMPARE",partial,ineligible,INFERENCE,S0-Q1-01
+P03,73,1,"FastAPI 异步原生","P03-COMPARE;P03-MG",supported,ineligible,SAVED_SNIPPET,
+P03,73,2,"FastAPI API 请求性能显著优于 Django","P03-COMPARE;P03-MG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,73,3,"Django 内置 admin、ORM 和认证","P03-STANZA",supported,ineligible,SAVED_SNIPPET,
+P03,73,4,"Django 内置能力减少集成工作","P03-STANZA",partial,ineligible,INFERENCE,S0-Q1-01
+P03,75,1,"Django 有 20+ 年历史","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,75,2,"Django 稳定性较高","P03-COMPARE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,75,3,"Django 下载量更大","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,75,4,"FastAPI 提供现代类型提示和自动 OpenAPI 文档","P03-COMPARE",supported,ineligible,SAVED_SNIPPET,
+P03,77,1,"从 Django 迁移到 FastAPI 会失去 Django ORM","P03-MULTI",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,77,2,"从 Django 迁移到 FastAPI 会失去 admin 与 auth 层","P03-MULTI",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P03,77,3,"上述迁移成本高","P03-MULTI",partial,ineligible,INFERENCE,S0-Q5-01
+P03,77,4,"Django Ninja 可作为中间过渡","P03-MULTI;P03-NINJA",partial,ineligible,INFERENCE,S0-Q5-01
+P03,80,1,"团队规模为 6 人且交付周期为 10 周","P03-STANZA;P03-COMPARE;P03-2025",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,80,2,"需求包括 REST API 与后台管理","P03-STANZA;P03-COMPARE;P03-2025",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,80,3,"需求包括权限、审计与定时任务","P03-STANZA;P03-COMPARE;P03-2025",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,80,4,"团队已有 Django 经验","P03-STANZA;P03-COMPARE;P03-2025",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P03,80,5,"Django 的 batteries-included 特性与经验匹配度最高","P03-STANZA;P03-COMPARE;P03-2025",partial,ineligible,INFERENCE,S0-Q4-01
+P03,80,6,"FastAPI 需要自行集成 admin、ORM 与认证","P03-STANZA;P03-2025",partial,ineligible,SAVED_SNIPPET,S0-Q1-01
+P03,80,7,"上述 FastAPI 集成会带来更高交付风险","P03-STANZA;P03-2025",partial,ineligible,INFERENCE,S0-Q1-01
+P04,5,1,"Celery 是持久化分布式任务队列","P04-DEEPNOTE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,5,2,"Celery 是当前唯一有证据覆盖的候选","P04-DEEPNOTE",unknown,ineligible,INFERENCE,S0-Q2-01
+P04,5,3,"Celery broker 与 result backend 构成持久性架构","P04-DEEPNOTE",partial,ineligible,SAVED_SNIPPET,S0-Q4-03
+P04,5,4,"该架构满足任务结果不因服务重启丢失的硬性要求","P04-DEEPNOTE",unsupported,ineligible,INFERENCE,S0-Q4-03
+P04,7,1,"应引入 Celery 而非继续进程内后台任务","",uncited,unknown,INFERENCE,S0-Q4-03
+P04,7,2,"Celery 使用 producer-consumer 模型","P04-DEEPNOTE",supported,ineligible,SAVED_SNIPPET,
+P04,7,3,"Celery broker 可持久化任务消息","P04-DEEPNOTE",partial,ineligible,SAVED_SNIPPET,S0-Q4-03
+P04,7,4,"Celery broker 对任务消息排队","P04-DEEPNOTE",supported,ineligible,SAVED_SNIPPET,
+P04,7,5,"Celery worker 进程独立执行任务","P04-DEEPNOTE",supported,ineligible,SAVED_SNIPPET,
+P04,7,6,"Celery result backend 可保存任务结果","P04-DEEPNOTE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,7,"broker 持久化与 result backend 意味着服务重启不会静默丢任务结果","P04-DEEPNOTE",unsupported,ineligible,INFERENCE,S0-Q4-03
+P04,7,8,"Celery 支持 RabbitMQ broker","P04-PKG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,9,"Celery 支持 Redis broker","P04-PKG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,10,"Celery 支持 SQS broker","P04-PKG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,11,"Celery 支持分布式 worker","P04-PKG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,12,"Celery 适合每天约 200 个、每个 5–30 分钟的任务负载","P04-PKG",unsupported,ineligible,INFERENCE,S0-Q2-01
+P04,7,13,"Flower 可监控队列深度","P04-FLOWER;P04-MICRO",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,14,"Flower 可监控 worker 状态","P04-FLOWER;P04-MICRO",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,15,"Flower 可远程撤销或终止运行中任务","P04-FLOWER;P04-MICRO",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,16,"采用 Celery 需要额外运维 broker","P04-DEEPNOTE",partial,ineligible,INFERENCE,S0-Q5-01
+P04,7,17,"采用 Celery 需要额外运维 worker","P04-DEEPNOTE",partial,ineligible,INFERENCE,S0-Q5-01
+P04,7,18,"Celery broker 应启用认证","P04-DEEPNOTE",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P04,7,19,"RQ 可作为较轻量替代","P04-PKG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,20,"Dramatiq 可作为较轻量替代","P04-PKG",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P04,7,21,"迁移前应验证 broker 持久化配置","",uncited,unknown,INFERENCE,S0-Q5-01
+P04,7,22,"迁移前应验证 result backend 保留策略","",uncited,unknown,INFERENCE,S0-Q5-01
+P04,7,23,"迁移前应验证重启恢复流程","",uncited,unknown,INFERENCE,S0-Q5-01
+P05,5,1,"HTTPX 支持可选 HTTP/2","P05-2026",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,5,2,"HTTPX 支持异步流式响应","P05-2026",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,5,3,"HTTPX 是唯一同时满足上述两项硬约束的候选","P05-2026",partial,ineligible,INFERENCE,S0-Q4-01
+P05,7,1,"中文高并发团队应优先采用 HTTPX","P05-2026",partial,ineligible,INFERENCE,S0-Q4-01
+P05,7,2,"HTTPX 同时提供同步客户端","P05-2026",supported,ineligible,SAVED_SNIPPET,
+P05,7,3,"HTTPX 同时提供异步客户端","P05-2026",supported,ineligible,SAVED_SNIPPET,
+P05,7,4,"HTTPX 支持 HTTP/2","P05-2026",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,7,5,"aiohttp 不支持 HTTP/2","P05-COMPARE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,7,6,"OpenAI Python SDK 采用 HTTPX","P05-2026",supported,ineligible,SAVED_SNIPPET,
+P05,7,7,"Anthropic Python SDK 采用 HTTPX","P05-2026",supported,ineligible,SAVED_SNIPPET,
+P05,7,8,"FastAPI TestClient 由 HTTPX 驱动","P05-2026",supported,ineligible,SAVED_SNIPPET,
+P05,7,9,"上述 SDK/TestClient 采用足以证明高并发生产验证","P05-2026",unsupported,ineligible,INFERENCE,S0-Q4-01
+P05,7,10,"aiohttp 在纯异步性能上通常更优","P05-COMPARE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,7,11,"aiohttp 提供原生 WebSocket","P05-ROLA",supported,ineligible,SAVED_SNIPPET,
+P05,7,12,"aiohttp 提供更细的连接器控制","P05-ROLA",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,7,13,"不需要 HTTP/2 时 aiohttp 可作为备选","P05-ROLA",partial,ineligible,INFERENCE,S0-Q5-01
+P05,7,14,"追求极致吞吐时 aiohttp 可作为备选","P05-ROLA",partial,ineligible,INFERENCE,S0-Q5-01
+P05,7,15,"HTTPX 与 aiohttp 使用 Apache 2.0 或 BSD 三条款等宽松许可","P05-LICENSE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P05,7,16,"HTTPX 与 aiohttp 商用没有许可障碍","P05-LICENSE",partial,ineligible,INFERENCE,S0-Q2-01
+P05,7,17,"最终选型应在目标服务、并发量和代理路径下复测性能","P05-ROLA",supported,ineligible,INFERENCE,S0-Q5-01
+P05,7,18,"公开性能基准依赖具体环境","P05-ROLA",supported,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,47,1,"Node.js 生态成熟","P06-NODEDOC;P06-NODEREPO;P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,47,2,"Node.js 生产稳定性高","P06-NODEDOC;P06-NODEREPO;P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,47,3,"当前项目负载以数据库 I/O 为主","P06-NODEDOC;P06-NODEREPO;P06-BUNNODE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,47,4,"Node.js 最契合当前数据库 I/O 与生态稳定约束","P06-NODEDOC;P06-NODEREPO;P06-BUNNODE",partial,ineligible,INFERENCE,S0-Q4-03
+P06,49,1,"新 TypeScript API 应采用 Node.js","P06-NODEDOC",partial,ineligible,INFERENCE,S0-Q4-03
+P06,49,2,"当前负载以数据库 I/O 为主","P06-PERF",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,49,3,"Bun 的 HTTP 吞吐优势在真实数据库与路由负载下缩小到约 3%","P06-PERF",partial,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,49,4,"外部约 3% 数字适用于当前项目负载","P06-PERF",unsupported,ineligible,INFERENCE,S0-Q4-03
+P06,49,5,"供应方 3–4x 宣传不适用于当前项目","P06-TECH3;P06-TECH4;P06-PERF",partial,ineligible,INFERENCE,S0-Q2-02
+P06,49,6,"团队已有 Node.js 经验","P06-NODEREPO",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,49,7,"团队可复用现有 Node.js 运维能力","P06-NODEREPO",unsupported,ineligible,INFERENCE,S0-Q4-01
+P06,49,8,"团队可复用现有 Node.js 调试能力","P06-NODEREPO",unsupported,ineligible,INFERENCE,S0-Q4-01
+P06,49,9,"Node.js 生态成熟","P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,49,10,"Node.js 生产验证充分","P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,49,11,"Bun 仍有约 5% 遗留包不兼容","P06-REDDIT",unknown,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,49,12,"Bun 被收购后治理发生变化","P06-PERF",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,49,13,"治理变化带来额外不确定性","P06-PERF",partial,ineligible,INFERENCE,S0-Q2-01
+P06,49,14,"应先使用 Node.js 交付","P06-DENO",partial,ineligible,INFERENCE,S0-Q4-03
+P06,49,15,"应以当前项目真实数据库负载做配对基准","P06-DENO",partial,ineligible,INFERENCE,S0-Q5-01
+P06,49,16,"只有实际基准支持时才迁移非关键服务到 Bun","P06-DENO",partial,ineligible,INFERENCE,S0-Q5-01
+P06,52,1,"团队已有 Node.js 经验并可复用运维调试能力","P06-NODEREPO",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,52,2,"Node.js 生态成熟且生产验证充分","P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,52,3,"真实数据库负载下 Bun 与 Node.js 性能差约 3%","P06-PERF",partial,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,52,4,"上述外部数字足以支持 Node.js 排名第一","P06-NODEREPO;P06-BUNNODE;P06-PERF",unsupported,ineligible,INFERENCE,S0-Q4-03
+P06,53,1,"Bun 合成 HTTP 吞吐领先 3–4x","P06-TECH3;P06-TECH4",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,53,2,"真实数据库负载下差距缩小到约 3%","P06-PERF",partial,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,53,3,"Bun 的 Node 兼容性约 95%","P06-REDDIT",unknown,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,53,4,"约 5% 遗留包仍有风险","P06-REDDIT",unknown,ineligible,INFERENCE,S0-Q2-02
+P06,53,5,"Bun 被收购","P06-PERF",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,53,6,"收购造成治理变化","P06-PERF",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,53,7,"治理变化带来不确定性","P06-PERF",partial,ineligible,INFERENCE,S0-Q2-01
+P06,56,1,"Bun 合成 HTTP 基准领先 3–4x","P06-TECH3;P06-TECH4",supported,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,56,2,"真实数据库与路由负载下差距约 3%","P06-PERF",partial,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,56,3,"Node.js 生态成熟","P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,56,4,"Node.js 生产验证充分","P06-BUNNODE",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,57,1,"Bun 可原生运行 TypeScript","P06-REDDIT",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,57,2,"Bun 运行 TypeScript 无需转译","P06-REDDIT",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,57,3,"Bun 约有 5% 遗留包不兼容","P06-REDDIT",unknown,ineligible,SAVED_SNIPPET,S0-Q2-02
+P06,57,4,"Node.js 运行 TypeScript 需要 ts-node 或 tsx","P06-REDDIT",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,58,1,"Bun 于 2025 年 12 月被 Anthropic 收购","P06-PERF",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,58,2,"Bun 项目仍为 MIT 开源","P06-PERF",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P06,58,3,"企业背书带来治理变化","P06-PERF",partial,ineligible,INFERENCE,S0-Q2-01
+P06,60,1,"当前场景要求生态稳定","P06-NODEREPO;P06-BUNNODE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,60,2,"团队已有 Node.js 经验","P06-NODEREPO;P06-BUNNODE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,60,3,"当前负载以数据库 I/O 为主","P06-NODEREPO;P06-BUNNODE",unsupported,ineligible,PROJECT_CONTEXT,S0-Q4-01
+P06,60,4,"Bun 的 HTTP 优势在当前负载下缩小","P06-PERF",unsupported,ineligible,INFERENCE,S0-Q4-03
+P06,60,5,"Node.js 的成熟生态与生产验证更契合当前场景","P06-BUNNODE",partial,ineligible,INFERENCE,S0-Q4-03
+P07,23,1,"没有证据链或已评分来源，因此 Poetry 与 uv 不能按证据排名","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,28,1,"当前证据不足以给出确定性迁移结论","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,28,2,"当前没有证据链或已评分来源","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,28,3,"Poetry 与 uv 的速度对比没有可用证据","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,28,4,"Poetry 与 uv 的稳定性对比没有可用证据","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,28,5,"Poetry 与 uv 的 CI 行为对比没有可用证据","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,28,6,"应先做可回滚试点","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,7,"试点在现有 Poetry 项目旁新增 uv 配置","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,8,"试点只用于 CI 安装步骤","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,9,"试点保留 pyproject.toml 为唯一依赖声明来源","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,10,"试点记录安装耗时","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,11,"试点记录失败率","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,12,"试点记录锁文件差异","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,13,"只有 CI 安装时间或失败率改善可复现时才完整迁移","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,14,"只有团队可承担锁文件与工具链维护成本时才完整迁移","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,15,"迁移前需验证锁文件一致性","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,16,"迁移前需验证私有源认证","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,17,"迁移前需验证 Python 版本约束","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,18,"迁移前需验证 CI 缓存行为","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,28,19,"迁移必须保留回退到 Poetry 的路径","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,31,1,"uv 的速度主张与 CI 安装慢的诉求方向一致","",uncited,unknown,INFERENCE,S0-Q4-02
+P07,31,2,"uv 可作为试点候选","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,31,3,"锁文件兼容性、私有源与 CI 稳定性缺少实测","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,31,4,"没有实测时无法确认 uv 收益","",uncited,unknown,INFERENCE,S0-Q4-02
+P07,32,1,"维持 Poetry 可避免迁移风险","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,32,2,"现有 CI 慢","",uncited,unknown,PROJECT_CONTEXT,
+P07,32,3,"现有 CI 稳定","",uncited,unknown,PROJECT_CONTEXT,
+P07,32,4,"若 CI 耗时成为瓶颈，维持现状不能解决该问题","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,35,1,"uv 速度宣传是当前唯一迁移动机","",uncited,unknown,PROJECT_CONTEXT,S0-Q4-02
+P07,35,2,"当前项目没有实测证明 30 个依赖下可复现速度收益","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,36,1,"迁移涉及锁文件格式维护","",uncited,unknown,INFERENCE,S0-Q4-02
+P07,36,2,"迁移涉及私有源认证维护","",uncited,unknown,INFERENCE,S0-Q4-02
+P07,36,3,"迁移涉及 CI 缓存行为维护","",uncited,unknown,INFERENCE,S0-Q4-02
+P07,36,4,"上述迁移成本尚未量化","",uncited,unknown,REPORT_STATE,S0-Q4-02
+P07,38,1,"场景为两人团队","",uncited,unknown,PROJECT_CONTEXT,
+P07,38,2,"项目约有 30 个依赖","",uncited,unknown,PROJECT_CONTEXT,
+P07,38,3,"CI 慢但稳定且没有自身迁移数据","",uncited,unknown,PROJECT_CONTEXT,S0-Q4-02
+P07,38,4,"当前信息只支持小范围试点而非全量迁移","",uncited,unknown,INFERENCE,S0-Q5-01
+P07,38,5,"缺少证据时无法确认 uv 能解决 CI 耗时","",uncited,unknown,INFERENCE,S0-Q4-02
+P08,62,1,"Redis 在功能上全面领先","P08-CN",unsupported,ineligible,INFERENCE,S0-Q4-03
+P08,62,2,"Redis 在持久化上全面领先","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,62,3,"Redis 在生态上全面领先","P08-CN",unsupported,ineligible,INFERENCE,S0-Q2-01
+P08,62,4,"多数团队即使只用 KV 也选择 Redis","P08-CN",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,1,"约束未知时默认推荐 Redis","P08-CN",unsupported,ineligible,INFERENCE,S0-Q4-03
+P08,67,2,"Redis 支持 String","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,67,3,"Redis 支持 List","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,67,4,"Redis 支持 Set","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,67,5,"Redis 支持 Hash","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,67,6,"Redis 支持 Sorted Set","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,67,7,"Redis 支持 RDB 持久化","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,8,"Redis 支持 AOF 持久化","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,9,"Redis 支持复制","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,10,"Redis 支持 Sentinel 故障转移","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,11,"Memcached 只支持简单 KV","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,12,"Memcached 没有原生持久化","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,13,"Memcached 重启后数据完全丢失","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,67,14,"Memcached 在纯 KV 单机可能快 10–15%","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-02
+P08,67,15,"Redis 6.0+ 多线程缩小了与 Memcached 的差距","P08-CN",unknown,ineligible,SAVED_SNIPPET,S0-Q2-02
+P08,67,16,"网络往返延迟通常掩盖单机处理差异","P08-CN",unknown,ineligible,SAVED_SNIPPET,S0-Q2-02
+P08,67,17,"只需极简 KV 且重视内存效率时可考虑 Memcached","P08-KEYDIFF",partial,ineligible,INFERENCE,S0-Q5-01
+P08,67,18,"新项目应 100% 选择 Redis","P08-CN",unsupported,ineligible,INFERENCE,S0-Q4-03
+P08,67,19,"老 Memcached 项目可逐步迁移到 Redis","P08-CN",partial,ineligible,INFERENCE,S0-Q5-01
+P08,67,20,"Redis 运维需配置持久化、内存驱逐、复制与监控","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P08,70,1,"Redis 支持多种数据结构","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,70,2,"Redis 支持持久化","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,70,3,"Redis 支持复制","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,70,4,"Redis 支持高可用","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,70,5,"Redis 生态成熟","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,70,6,"Redis 社区活跃","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,70,7,"多数团队即使只用 KV 也选择 Redis","P08-CN",unknown,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,70,8,"Memcached 仅适合极简 KV 场景","P08-KEYDIFF",partial,ineligible,INFERENCE,S0-Q2-01
+P08,72,1,"Memcached 使用多线程","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,72,2,"Memcached 是纯字符串缓存","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,72,3,"Memcached 简单高效","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,72,4,"Memcached 没有持久化","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,72,5,"Memcached 没有丰富数据结构","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,72,6,"Memcached 重启数据全丢","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,72,7,"只有简单 get/set 且内存效率优先时才选 Memcached","P08-KEYDIFF",partial,ineligible,INFERENCE,S0-Q5-01
+P08,76,1,"Redis 支持多种数据结构","P08-CN",supported,ineligible,SAVED_SNIPPET,
+P08,76,2,"Redis 支持持久化","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,76,3,"Redis 支持 Pub/Sub","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,76,4,"Memcached 只支持简单 KV","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,76,5,"Memcached 没有持久化","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,78,1,"Memcached 在纯 KV 单机可能快 10–15%","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-02
+P08,78,2,"Redis 6.0+ 多线程缩小了性能差距","P08-CN",unknown,ineligible,SAVED_SNIPPET,S0-Q2-02
+P08,78,3,"简单 KV 下 Memcached 内存效率更高","P08-MEMEFF",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,78,4,"上述性能比较适用于未说明的当前环境","P08-CN;P08-MEMEFF",unsupported,ineligible,INFERENCE,S0-Q2-02
+P08,80,1,"Redis 需要配置持久化","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P08,80,2,"Redis 需要配置内存驱逐","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P08,80,3,"Redis 需要配置复制","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P08,80,4,"Redis 需要配置监控","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q5-01
+P08,80,5,"Redis 提供故障转移","P08-CN",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,80,6,"Redis 可保证数据不丢","P08-CN",unsupported,ineligible,INFERENCE,S0-Q4-01
+P08,80,7,"Memcached 运维简单","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,80,8,"Memcached 没有持久化","P08-CN2",partial,ineligible,SAVED_SNIPPET,S0-Q2-01
+P08,83,1,"没有任何约束时无法精确匹配","",uncited,unknown,PROJECT_CONTEXT,S0-Q4-02
+P08,83,2,"尽管无法精确匹配仍默认推荐 Redis","P08-KEYDIFF",unsupported,ineligible,INFERENCE,S0-Q4-03
+P08,83,3,"若只需简单 KV 且内存效率优先可重新评估 Memcached","P08-KEYDIFF",partial,ineligible,INFERENCE,S0-Q5-01

@@ -1,6 +1,6 @@
 # 当前执行状态与证据索引
 
-最后实际研究：2026-09-21；本次规划/归档新增研究、健康、LLM 调用均为 0。
+最后实际研究：2026-09-21；本次 S0 离线诊断新增研究、健康、LLM 调用均为 0。
 本文只维护最新状态和账本。后续目标见 [地图](current-roadmap.md)，操作方式见 [执行规则](optimization-execution.md)。
 
 | 项目 | 当前事实 |
@@ -8,9 +8,29 @@
 | 工作分支 | codex/baseline-readiness；文档 HEAD 与产品候选不能混为一谈 |
 | 产品候选 / 控制身份 | d23c948 / 7d16d28；P01 助手暂定资格有效 |
 | 持续授权研究账本 | 90/134，剩余 44；不是项目全部历史分母 |
-| 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告；全组 12 报告 |
-| 尚未完成 | 当前完整质量台账、最终产品验收、两轮并发；保留集/人类校准未验收 |
-| 下一成果 | S0 离线全面诊断与验收卡；本会话只做规划归档和交接 |
+| 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
+| 尚未完成 | S1 产品修改/局部配对、最终产品验收、两轮并发；保留集/人类校准未验收 |
+| 下一成果 | 按 S0 卡完成 constraint-aware conclusion 的离线实现、测试与独立复审；live 不自动启动 |
+
+## S0 离线诊断
+
+2026-09-21 对主诊断根 serial-r1 的 P01–P08 完成锁分。必答 **32/48（66.7%）**，冻结冲突点
+**16/16**；P04/P06/P08 有已确认 major，当前候选未达到产品质量目标。360 个逐处原子关键声明
+的人工支持分布为 supported 71、partial 179、unsupported 35、unknown 22、uncited 53，
+完整支持率 micro 19.7%、macro 19.4%；来源质量为 eligible 0、ineligible 304、unknown 56，
+micro/macro 均为 0。确定性引用投影 0 verified / 94 unsupported /
+342 unknown，与人工语义判断分开。
+
+八例共 95,718 tokens、113 LLM、48 retrieval，usage 完整、0 failed calls、0 LLM retries。
+冲突扫描占 66 次 LLM 与 34,620 tokens，但八份快照 conflicts 均为空；这是后续效率/效用问题，
+不据此捏造事实冲突。P07 是唯一 completed_with_warnings/一次 limited-report resolution；
+P08 为 completed、`hitl_resolutions=0`，不存在已提交 supplemental input 后恢复丢失的证据。
+
+首个假设是强制 Winner/排名且关键约束与证据不足未形成决策强度门控。S1 计划目标 P04/P08、
+回归 P01，并用 P07 做受限报告离线回归。完整证据见
+[S0 诊断](product-optimization-s0-review.md)、[绑定](product-optimization-s0-bindings.json)和
+[声明台账](product-optimization-s0-claims.csv)。独立复审不具保留集盲评资格，人类校准未运行；
+没有读取 P09–P12 报告或快照。
 
 ## 最近一次研究及收尾
 
@@ -46,7 +66,8 @@ running，最终态以 lifecycle-metrics/stop-final 为准；521 的外部成因
 
 先前外传授权继续覆盖冻结查询/候选/必要上下文、DeepSeek/Tavily/GitHub API/StackExchange API/
 arXiv/PyPI/官方来源、已配置 local-proxy/self-forward 路由及公共 HTTP(S) 引用安全抓取。
-134 硬上限未提高；新地图的小样本、最终串行与并发整合方案尚待冻结，不从额度余额推定可立即执行。
+134 硬上限未提高；S0 卡给出的 13-run 只是 S1 规划上界，机器可读 live 协议与执行仍待单独冻结，
+不从额度余额推定可立即执行。最终串行与并发整合方案仍未冻结。
 阶段切换不单独创造审批；只有实质边界变化按执行规则集中处理。当前产品未因文档归档改变。
 
 - [当前 P01 资格与冻结](o1c-single-case-verification.md)。

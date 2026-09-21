@@ -10,10 +10,12 @@
 | 1 | [整体任务地图](current-roadmap.md) | 产品目标、全部优化方向、依赖、阶段、完成/停止标准、预算方案 | 逐次运行流水和实现细节 |
 | 2 | [执行与协作](optimization-execution.md) | 复盘、成果粒度、发现偏离、授权及中断恢复规则 | 直接批准新付费实验 |
 | 3 | [当前执行状态](o1-execution-status.md) | 研究准入账本、产品/控制身份、最新停止/收尾和证据定位 | 新任务排序 |
+| 4 | [S0 开发集诊断](product-optimization-s0-review.md) | P01–P08 锁分、全问题表、严重性、首要根因和 S1 执行卡 | 保留集、最终产品或并发验收 |
 | 按需 | [评估边界](product-effectiveness-optimization.md) | 评分、分母、冻结协议生效范围、新方案待办 | 改历史结果或自动启动批次 |
 | 按需 | [当前候选资格](o1c-single-case-verification.md) | 当前 P01 资格与证据、限制 | 全产品/并发通过 |
 
-下一会话的第一个成果是 S0 离线全开发集诊断和验收卡；先从地图确认范围，不从历史 PR 号推断行动。
+S0 已完成；下一成果是按 S0 卡完成 S1 离线实现与验证，live 协议和执行仍须在运行前单独冻结。
+先从地图确认范围，不从历史 PR 号推断行动。
 `o1-next-steps.md` 已退役为兼容跳转，不再单独维护一份任务地图。
 
 ## 持续维护的契约与冻结证据
@@ -23,6 +25,9 @@
 - [工程验收](phase5-engineering-acceptance.md)、[Phase 1 验收](phase1-acceptance-report.md)：相应阶段的已验证工程事实与残余风险，不能解释成待做路线。
 - [冻结参考](o1-reference-audit.md)、[声明台账契约](o1a-evaluation-contract.json)、
   [报告绑定](o1-development-review-bindings.json)、[原子台账](o1a-development-claims.csv)：保留原路径和内容，避免破坏可执行检查和测量身份。
+- [S0 绑定](product-optimization-s0-bindings.json) 与
+  [S0 关键声明台账](product-optimization-s0-claims.csv)：绑定当前候选 serial-r1 的八份开发报告和 360 项逐处原子关键声明，
+  不替换历史六报告分母，也不包含保留集报告内容。
 - [评估工具操作说明](../benchmarks/README.md)：CLI 用法，不能自行产生执行授权。
 
 历史评分和 token CSV/JSON 都保留原分母/版本，不回填为当前候选；原始报告、快照、Trace、实验库留 outputs/。
