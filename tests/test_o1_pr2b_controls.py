@@ -10,6 +10,7 @@ import pytest
 
 from scripts import o1_pr2b_child as child
 from scripts import o1_pr2b_control as control
+from scripts import o1_pr2b_preflight as preflight
 from scripts import o1_pr2b_prepare as prepare
 from scripts import o1_pr2b_review_pack as review
 from scripts import o1_pr2b_round_gate as gate
@@ -180,6 +181,17 @@ def test_pr2b_control_chain_is_complete_and_current():
         "o1_pr2b_review_pack.py",
         "o1_pr2b_round_gate.py",
     )
+
+
+def test_pr2b_candidate_binding_is_consistent():
+    expected = "15ca251a89ff996bc787435d8965a918a89437f6"
+    assert {
+        preflight.EXPECTED_COMMIT,
+        prepare.EXPECTED_COMMIT,
+        control.EXPECTED_COMMIT,
+        review.EXPECTED_COMMIT,
+        gate.EXPECTED_COMMIT,
+    } == {expected}
 
 
 def test_pr2b_blind_review_and_round_gate_reject_tampering(tmp_path):

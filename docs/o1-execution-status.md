@@ -8,7 +8,17 @@ self-forward 路由及公共 HTTP(S) 引用安全抓取范围。正常阶段门�
 资源、预算、租约、主机、身份或质量异常须自动停线。超额、扩展外传范围、改变冻结评测口径、
 冻结后生产代码变更所需的额外付费替代运行，以及 push/merge/release/发布仍须另行批准。
 
-当前（2026-09-21）：用户批准使用控制提交 `30c63f9`、新的 fresh 输出根、原冻结
+随后候选 `15ca251` 的 P01 单例资格完成并由独立只读复核确认助手暂定通过：前置五类路由、
+Tavily POST 和 DeepSeek JSON/tool 均通过；P01 completed，11 LLM / 6 retrieval，11,914 tokens，
+0 failed/retry/lease loss，usage/cache 完整。v4 台账为 68 原子，支持 31/22/1/2/12，来源质量
+7/52/9；必答 5/6、冲突 2/2、冻结重大错误 0。“零运维”五次绝对化为重要非阻断缺陷；动态
+pinned CONNECT/TLS 仍 unavailable。产品库及 immutable result 一致，停后 PID/端口无残留，
+exit code unavailable。资格使用 1/49，正式两轮剩余 48。PR2B 五个执行工具已重绑定新候选，
+33 项聚焦与 1540 项全套、0 skipped（184.26 秒）通过；待提交并冻结六文件 hash 后使用 fresh 根
+进入第一轮，不复用任何旧候选/失败根。
+
+较早的第四次正式第一轮尝试（2026-09-21，已由上文新候选状态取代）：用户批准使用控制提交
+`30c63f9`、新的 fresh 输出根、原冻结
 候选 `7d622fd` 和原知识种子，执行 O1-PR2B 完整第一轮 12 serial + 12 concurrent。
 有界前置再次通过五类路由、Tavily POST 200 与 DeepSeek JSON/tool 2/2；0 research run。
 fresh prepare 冻结候选、12 个 case manifest、知识种子及六文件 PR2B 控制链。
@@ -38,8 +48,9 @@ fail closed。控制器只在 HTTP 遥测全部为 `CancelledError` 且 health �
 本轮修复通过 103 项聚焦回归与 **1539 项全套测试、0 skipped（189.64 秒）**；
 smoke-v1 12/12 baseline 匹配，pyflakes、vulture 100% 与 pip check 通过；独立只读复审无阻断项。
 本轮没有为修复再次联网、提交研究或重启失败根。由于生产 runtime 已改变，`7d622fd` 只保留为本次已测证据身份，
-不能作为下一次 live 的当前候选；须先从新提交形成候选并重新完成单例资格/冻结，再另行批准
-fresh 第一轮。24-report 配对、声明台账、第一轮门禁和第二轮仍 unavailable。
+不能作为下一次 live 的当前候选；当时的下一步是从新提交形成候选并重新完成单例资格/冻结。
+该前置现已由上文候选 `15ca251` 完成，fresh 正式两轮也已纳入持续授权；24-report 配对、
+声明台账、第一轮门禁和第二轮结果仍 unavailable。
 
 PR1 历史分母与 PR2 新批次分开；下文为较早历史轮次。
 

@@ -1,5 +1,43 @@
 # O1-C 真实单例验真
 
+## O1-PR2B 修复候选重新资格：2026-09-21
+
+**候选 `15ca251a89ff996bc787435d8965a918a89437f6` 的助手暂定单例测量资格通过。**
+本轮只执行 P01 × 1，使用全新产品/检查点数据库、原冻结知识种子和 cold-in-research；
+不与旧候选报告拼接。持续授权 49 个研究 run 已使用资格 1 个，正式两轮剩余 48 个。
+
+- 前置 06:29:14–06:29:30 UTC：五类路由 5/5、Tavily POST 200、DeepSeek JSON/tool 2/2；
+  非 LLM HTTP 8、Tavily POST 1、LLM 2，research run 0。依赖/配置/模型端点/代理/数据集/
+  manifest/registry 与候选一致；知识种子 hash
+  `e55ddcac30d0e498c6e5ae02cb40d1bae95eb2831fda71e924ed9211b76466e4`。
+- P01 于 06:33:31–06:35:19 UTC completed；task `205b1912-bd86-44a0-af5f-b39ff4a0618e`，
+  run `04cb62cb-2bac-4bc6-94e2-7ede035102da`，manifest
+  `3a7cd59683104f31c9e43f2b52defdef2c3c2bdf3fe48e5853482d9b0dddcd4a`。Wall 108,282 ms /
+  active 107,276 ms；11 LLM / 6 retrieval / 17 Trace calls，0 failed、0 LLM/node retry。
+  输入 9,627、输出 2,287、合计 11,914 tokens；usage/cache 11/11 完整，hit 512 / miss 9,115。
+- 六源均 success、partial_failures 空。系统 50 项投影为 verified 2 / unsupported 24 /
+  unreachable 0 / unknown 24；这不是语义质量评分。产品库 quick_check ok，task/run/result
+  completed 且 immutable snapshot/report 与采集原件相等；run heartbeat 10 success / 0 failure /
+  0 loss，实例 authority 有效。停机后服务 PID 与 8021 监听均不存在；exit code unavailable，
+  因而只声明进程/监听已停止和持久结果一致，不声明自然 exit 0 或 guard 清理已证明。
+- v4 完整分母 68 原子：supported 31 / partial 22 / unsupported 1 / uncited 2 / unknown 12；
+  来源 eligible 7 / ineligible 52 / unknown 9；逐原子系统投影 verified 2 / unsupported 29 /
+  unknown 37。必答 5/6、冲突 2/2，冻结重大错误 0；非盲 assistant_review、人类校准 not_run。
+  “零运维”在 5 处绝对化，与报告自身监控、备份和迁移要求矛盾，是重要非阻断缺陷并使
+  运维比较只得 1/2；不能把本次资格写成高质量证据通过。
+- 动态 pinned CONNECT/TLS 能力仍 unavailable：快照有 24 项 network_uncertain，运行投影
+  http_calls=0，未保存传输层证据；前置静态 provider 200 不能代替。该能力盲区不阻断本次
+  单例测量资格，也不证明并发、硬件稳定、最终产品质量或 O1 完成。
+
+本地主审、68 原子台账、独立复核、终态/知识/关停审计与候选冻结在
+`outputs/o1-pr2b-qualification-p01-20260921-15ca251-standing/review/`；原始报告和快照不提交。
+主审 hash `3ef487fd8b247d9e2f1d5549cd29cb1963eeaaab1254d14493fda3e0524809c2`，
+独立复核 `c264ee56732cb2b0081ea2b8f15af11f44d81e3773ccd19d945aa50f6b053ab9`，
+声明台账 `9c28ff747c8b3ccb4de9eb9722d30dd91fcded4a2aa5e5e97c136c8e341409f8`，
+候选冻结 `1f47cf1e3c0e9b8deb37fb43ce1a3040927c2c598b458e8328bdda4714b5f050`。
+候选生产代码此前 103 聚焦、1539 全套、smoke 12/12 及独立代码复核通过；本轮 PR2B
+控制链候选重绑定及一致性门禁另通过 33 项聚焦与 1540 项全套、0 skipped（184.26 秒）。
+
 ## O1-PR1 新候选单例：2026-09-18
 
 **O1-PR1 已完成：助手暂定单例测量资格通过，候选已冻结。**
