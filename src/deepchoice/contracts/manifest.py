@@ -42,9 +42,9 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v4",
-    "evidence_first": "evidence-first-v2",
-    "comparison_matrix": "comparison-matrix-v2",
+    "what_why_how": "what-why-how-v5",
+    "evidence_first": "evidence-first-v3",
+    "comparison_matrix": "comparison-matrix-v3",
 }
 PROMPT_VERSIONS = {
     "conclusion_synthesizer.synthesis_prompt": "v4",

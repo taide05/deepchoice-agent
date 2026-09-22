@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v2"
+    assert first.report.template_version == "evidence-first-v3"
     assert first.scoring_policy_version == "source-score-v3"
     assert first.security_policy_version == "outbound-url-v2"
     assert first.citation_policy_version == "deterministic-citation-v1"
@@ -92,9 +92,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v4",
-        "evidence_first": "evidence-first-v2",
-        "comparison_matrix": "comparison-matrix-v2",
+        "what_why_how": "what-why-how-v5",
+        "evidence_first": "evidence-first-v3",
+        "comparison_matrix": "comparison-matrix-v3",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 
@@ -148,6 +148,9 @@ def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
         ("template", "what_why_how", "what-why-how-v3"),
         ("template", "evidence_first", "evidence-first-v1"),
         ("template", "comparison_matrix", "comparison-matrix-v1"),
+        ("template", "what_why_how", "what-why-how-v4"),
+        ("template", "evidence_first", "evidence-first-v2"),
+        ("template", "comparison_matrix", "comparison-matrix-v2"),
     ],
 )
 def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(

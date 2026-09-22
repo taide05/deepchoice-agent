@@ -50,7 +50,7 @@ def _citation_coverage(fr: dict) -> dict:
             if to.get(f):
                 fields.append(to[f])
     for collection, limit, keys in (
-        ("requirement_assessments", 40, ("explanation",)),
+        ("requirement_assessments", 40, ("explanation", "provisional_explanation")),
         ("decision_branches", 20, ("condition",)),
         ("action_plan", 20, ("step", "verification", "change_trigger", "rollback")),
     ):

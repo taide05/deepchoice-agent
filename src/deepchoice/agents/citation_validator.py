@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from ..citations import verify_citations
+from ..citations.verifier import MAX_CLAIM_TEXT
 from ..utils.decision_contract import abstain_recommendation
 from ..utils.views import print_agent_output
 
@@ -27,13 +28,35 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
     )
     by_path = {}
     for check in verification.checks:
-        by_path.setdefault(check.claim_path, []).append(check.status.value)
+        by_path.setdefault(check.claim_path, []).append(check)
 
     def passed(path):
-        statuses = by_path.get(path, [])
-        return bool(statuses) and all(status == "verified" for status in statuses)
+        checks = by_path.get(path, [])
+        return bool(checks) and all(check.status.value == "verified" for check in checks)
+
+    def provisional(path, explanation):
+        # Never copy unchecked tails, overflow, missing citations or a negative
+        # lexical check into the uncertainty display. This is not proof of truth.
+        checks = by_path.get(path, [])
+        allowed_outcomes = {
+            ("verified", "lexical_support"),
+            ("unknown", "network_uncertain"),
+            ("unknown", "cross_language"),
+            ("unknown", "http_uncertain"),
+            ("unknown", "content_insufficient"),
+            ("unreachable", "not_publicly_accessible"),
+        }
+        return (
+            "final_recommendation" not in by_path
+            and isinstance(explanation, str)
+            and 0 < len(explanation) <= MAX_CLAIM_TEXT
+            and bool(checks)
+            and all((check.status.value, check.reason.value) in allowed_outcomes
+                    for check in checks)
+        )
 
     withdraw = "final_recommendation" in by_path  # Bounded-check overflow summary.
+    pending_analysis = {}
     rows = result.get("requirement_assessments", [])
     if not isinstance(rows, list):
         rows = []
@@ -42,9 +65,13 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
         if not isinstance(row, dict):
             withdraw = True
             continue
-        if row.get("status") != "unknown" and not passed(
-            f"final_recommendation.requirement_assessments[{index}].explanation"
-        ):
+        # Only this pass may create the display-only field. Model input and old
+        # projections cannot use it as a second, unchecked assertion channel.
+        row.pop("provisional_explanation", None)
+        path = f"final_recommendation.requirement_assessments[{index}].explanation"
+        if row.get("status") != "unknown" and not passed(path):
+            if provisional(path, row.get("explanation")):
+                pending_analysis[row.get("id")] = row["explanation"]
             row.update(status="unknown", explanation=note, evidence_ids=[])
         if row.get("decision_critical", True) is not False and row.get("status") != "satisfied":
             withdraw = True
@@ -74,6 +101,14 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
                     withdraw = True
     if withdraw:
         result = abstain_recommendation(result, query, note)
+    # Abstention deliberately normalizes away model-supplied extension fields.
+    # Attach only freshly checked analysis after that boundary; limited reports
+    # normalize again and therefore remove it.
+    for row in result.get("requirement_assessments", []):
+        if isinstance(row, dict) and row.get("status") == "unknown":
+            analysis = pending_analysis.get(row.get("id"))
+            if analysis:
+                row["provisional_explanation"] = analysis
     return result
 
 

@@ -1,6 +1,6 @@
 # 产品效果评估：现行边界与协议入口
 
-更新：2026-09-21。本文只管理测量口径和协议生效状态，不管理任务顺序、运行流水或阶段审批。
+更新：2026-09-22。本文只管理测量口径和协议生效状态，不管理任务顺序、运行流水或阶段审批。
 目标/完成标准见 [任务地图](current-roadmap.md)，执行协作见 [执行规则](optimization-execution.md)，
 实际消耗见 [执行状态](o1-execution-status.md)。
 
@@ -11,7 +11,7 @@
 | [历史冻结 v4](archive/product-optimization-20260921/evaluation-protocol-v4.md) | 冻结判定依据，48-run 未完成 | 解释此前 O1 运行和原并发阈值；不能从其中“下一步/批准”启动新任务 |
 | key-claim-occurrence-v1 与 0/1/2 rubric | 保留 | 下文评审口径及 [结构契约](o1a-evaluation-contract.json)，不能按新结果更换分母 |
 | [S0 开发集诊断](product-optimization-s0-review.md) | 已完成 | serial-r1 的 P01–P08 锁分、360 行逐处原子关键声明、严重性和 S1 执行卡；不是产品通过 |
-| [S1 小样本局部配对](../benchmarks/product-optimization-s1-constraint-aware-v1.json) | 协议已冻结，尚未执行 | P04/P08 目标 + P01 回归，2 版本 × 2 重复，必要资格另计；仅支持局部改善 |
+| [S1 小样本局部配对](../benchmarks/product-optimization-s1-constraint-aware-v1.json) | 原候选 P01 内容资格未通过，正式配对未启动 | 只绑定 bcb4c87，不覆盖后续修复；P04/P08 目标 + P01 回归，2 版本 × 2 重复，仅支持局部改善 |
 | S3 完整候选串行验收 | 目标卡已冻结，执行协议待进入阶段后固化 | 12 例 × 2 重复；按地图的目标验收卡判断，不伪装成前后因果对照 |
 | C1 并发验收 | 保留为待完成目标 | S3 前决定是否整合完整 48-run；保留 v4 并发阈值，不跨停止根补齐 |
 

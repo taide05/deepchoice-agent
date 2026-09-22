@@ -1,5 +1,27 @@
 # O1-C 真实单例验真
 
+## S1 约束感知候选：2026-09-22
+
+**bcb4c87 的 P01 执行完成，但内容资格未通过；正式局部配对尚未启动。**
+使用冻结 product-baseline-v1 v1.0.0（2026-09-16）的 P01；不是重复采样效果对照。
+主评与独立助手评审锁定必答 **2/6（1、0、1）**、冲突 **1/2**、已确认 major **0**，
+qualification blocker 为 S1-P01-CONTENT-01。评审非盲、人类校准 not_run，未读取保留集正文。
+
+报告 L87/L92 保留 SQLite 条件分支与起步行动，故不是完全无行动；但 L67/L72 顶层退回
+“暂无唯一胜者/再决定”，L76–83 中六项解释变成通用 unknown，未解释 SQLite 写串行化与
+PostgreSQL 运维成本。迁移方向可见，但缺门槛及阶段验证。未知未被当作事实错误；没有命中
+冻结重大错误条件。资格失败不应靠删除未知标记或放宽抓取安全来解决。
+
+独立复核后冻结 **20 个逐处原子关键声明**：supported 14 / partial 5 / unsupported 1，
+来源 eligible 0 / ineligible 20，系统投影 unknown 20。支持度来自当次保存片段，既非权威
+事实核验，也非本项目适用性证明；系统原始 38 项检查（0 verified / 7 unsupported /
+31 unknown）是不同分母。没有配对改善声明，不与原候选 43 原子的比例直接作因果比较。
+
+本地证据：outputs/s1-qualification-20260922-constraint-aware-v2/qualification/collections/serial-r1/
+下 development/reports/P01.md、development/snapshots/P01.json；锁分及独立复核差异合并在
+outputs/s1-qualification-review-20260922-bcb4c87/main-review.json。执行身份、前置、账本和
+收尾以[当前执行状态](o1-execution-status.md)为准。原始结果保持不变；后续修复尚无新资格。
+
 ## GitHub 响应中断修复候选重新资格：2026-09-21
 
 **候选 `d23c9480b9f368f8ec75ec44ee7e25c64146d4be` 的助手暂定单例测量资格通过。**
@@ -35,8 +57,8 @@
   候选冻结 `5e185da8bc31c5d91536d1004e9227347a7f9ef489c4761f31632ddab891099c`。
 
 资格冻结时累计为 62/110；随后 24-run 停止根达到 86/110，再获上限 134 的新根
-准入 4 个 run 后因 HTTP 521 收尾。当前累计 **90/134**，产品候选资格仍有效，
-正式配对与并发门禁未完成。最新计数以[执行记录](o1-execution-status.md)为准；
+准入 4 个 run 后因 HTTP 521 收尾，当时累计 **90/134**。该历史资格只覆盖 d23c948，
+不覆盖 S1 及其后续修复。正式配对与并发门禁未完成。最新计数以[执行记录](o1-execution-status.md)为准；
 后续任务以[整体地图](current-roadmap.md)为准，本文件只维护资格及其证据。
 
 ## 历史资格

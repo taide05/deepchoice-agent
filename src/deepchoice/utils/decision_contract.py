@@ -156,6 +156,17 @@ def abstain_recommendation(
         result.get("decision_branches")
     )
     result["action_plan"] = normalize_action_plan(result.get("action_plan"))
+    if result["decision_branches"]:
+        result["recommendation"] = (
+            "当前给出条件性建议：按下方各方案的前提与行动计划验证后选择，不将其视为无条件胜者。"
+            if _is_zh(query) else
+            "Use the conditional choices below: validate each option's prerequisites "
+            "with the action plan before adoption; none is an unconditional winner."
+        )
+        clean_reason = _clean_text(reason, limit=500)
+        if clean_reason:
+            label = "限制原因" if _is_zh(query) else "Restriction reason"
+            result["recommendation"] += f" {label}: {clean_reason}"
     result["unresolved_questions"] = normalize_unknowns(
         result.get("unresolved_questions")
     )

@@ -24,3 +24,8 @@ Artifact 包含数据集 ID、版本、冻结日期和文件 SHA-256，评估时
 仍为 12/12 通过且 12/12 确定性一致。CS-003 的 context_dependent 结果有意清除排名，因此结果
 hash 改变；另外更新评估时间、manifest/core-asset 身份与总 fingerprint。随后
 `--check-baseline` 通过；来源健康仍为 `not_run`，不构成新 live 测量。
+
+2026-09-22 不确定解释修复升级报告模板身份后再次核对产物：12 个案例的输出/hash、
+全部指标、数据集与来源健康完全不变；仅 evaluated_at、current_manifest_id、
+core_asset_registry_id 和 artifact_fingerprint 四项不同，因此只更新这四项基准记录。
+未修改 fixture、预期输出或验收阈值，不把本次身份更新声称为模型质量改善。

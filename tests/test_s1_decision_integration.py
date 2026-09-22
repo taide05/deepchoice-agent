@@ -65,6 +65,7 @@ def _state(fmt):
                 "id": "C1", "requirement": "Private index compatibility",
                 "status": "satisfied", "decision_critical": True,
                 "explanation": "100% guaranteed compatibility without testing.",
+                "provisional_explanation": "Unchecked analysis must not survive a limited report.",
                 "evidence_ids": [1],
             }],
             "decision_branches": [{"option": "uv", "condition": "Only if the pilot passes."}],
@@ -96,6 +97,8 @@ def test_restricted_result_and_all_formats_drop_winner_preserve_plan(fmt, limite
     assert rec["ranked_options"] == []
     assert rec["requirement_assessments"][0]["status"] == "unknown"
     assert rec["requirement_assessments"][0]["evidence_ids"] == []
+    assert "provisional_explanation" not in rec["requirement_assessments"][0]
+    assert "Unchecked analysis" not in result["report"]
     assert "100%" not in result["report"]
     assert "guaranteed best" not in result["report"]
     assert "Always use" not in result["report"]

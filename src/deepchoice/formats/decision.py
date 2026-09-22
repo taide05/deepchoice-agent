@@ -66,6 +66,14 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             ) if item.get("decision_critical") else ""
             suffix = f" — {explanation}" if explanation else ""
             lines.append(f"- **{requirement}**{critical}: **{status_label}**{suffix}")
+            analysis = _text(item.get("provisional_explanation"))
+            if status == "unknown" and analysis:
+                label = (
+                    "待独立核验的分析（不代表需求已满足）"
+                    if lang == "zh" else
+                    "Analysis awaiting independent verification (not a satisfied requirement)"
+                )
+                lines.append(f"  - **{label}:** {analysis}")
         lines.append("")
 
     if branches:

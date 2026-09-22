@@ -24,7 +24,9 @@ constraint-aware-v1：逐项 requirement_assessments、条件 decision_branches 
 记录验证、变更触发与回退。ResearchState 新增可选 constraints，保留需求分析器输出；
 冻结请求的 task.constraints 与分析约束分开传给合成，不允许分析结果覆盖请求。
 状态/schema 和生命周期表仍为原版本；新 synthesis prompt v4 与三个模板
-what-why-how-v4 / evidence-first-v2 / comparison-matrix-v2 冻结新身份。
+what-why-how-v4 / evidence-first-v2 / comparison-matrix-v2 冻结原 S1 身份；
+2026-09-22 不确定解释修复将模板升级为 what-why-how-v5 / evidence-first-v3 /
+comparison-matrix-v3，prompt v4、状态 schema v3 与引用策略 v1 不变。
 历史 manifest/结果可读，旧 prompt/template 的同 run 恢复按既有兼容检查拒绝。
 
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
@@ -34,6 +36,15 @@ what-why-how-v4 / evidence-first-v2 / comparison-matrix-v2 冻结新身份。
 关键判断降为 unknown，不能解释成事实被证伪；一个通过的胜者标题不能掩盖其余无依据结论。
 citation_verification 保留校准前声明的检查证据；校准只在本次 graph 结果内执行，不改历史结果。
 词法 verified 同样不证明语义正确或来源适用，真实效果仍需局部配对评审。
+
+普通报告不把“尚未核验”解释成“没有可读分析”：原已判断需求的 explanation 在完整检查后，
+若只含 verified/unknown/unreachable，且原因仅为词法支持、网络/HTTP/跨语言不确定、
+正文不足或公开不可达，可由引用节点生成显示专用 provisional_explanation。整段须不超过
+MAX_CLAIM_TEXT（500 字符，含标记），任何检查溢出、缺引用、unsupported 或 source_limit
+均不能保留。主 explanation 改为未知提示、status 为 unknown、evidence_ids 清空，具体胜者
+和排名仍撤回。三格式在分析旁明确“待独立核验，不代表需求已满足”；自审覆盖计数包含该字段。
+模型输入归一化丢弃此扩展字段；仅当前校验可生成，不能作为已满足依据。预算/HITL 受限
+路径再次归一化并删除它，历史结果不回填；可用条件分支时摘要指向条件选择而非无结论。
 
 单一 evidence-insufficient gate 继续同时要求结构证据不足与方向实质不确定；
 新契约的 context_dependent 不再依赖存在两条排名才识别不确定性。

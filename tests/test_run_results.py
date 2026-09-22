@@ -64,6 +64,29 @@ def _result(run_id: str, *, report_format: str = "what_why_how"):
     )
 
 
+def test_provisional_analysis_survives_public_result_roundtrip_with_warning():
+    from deepchoice.formats.what_why_how import render
+
+    task, run = _records()
+    analysis = "SQLite allows only one writer. [Source: SQLite Docs]"
+    state = {"task": task.request.model_dump(), "final_recommendation": {
+        "winner": "context_dependent", "ranked_options": [],
+        "requirement_assessments": [{
+            "id": "C1", "requirement": "Write concurrency", "status": "unknown",
+            "explanation": "Unknown: independent verification needed.", "evidence_ids": [],
+            "provisional_explanation": analysis, "lease_owner": "private-worker",
+        }],
+    }}
+    state["report"] = render(state)
+    result = build_public_run_result(run, task.request.model_dump(), state, created_at=run.created_at)
+    restored = RunResultRecord.model_validate_json(result.model_dump_json())
+    row = restored.snapshot["final_recommendation"]["requirement_assessments"][0]
+    assert row["provisional_explanation"] == analysis and row["status"] == "unknown"
+    assert "lease_owner" not in row and "private-worker" not in restored.model_dump_json()
+    assert "Analysis awaiting independent verification (not a satisfied requirement)" in restored.report
+    assert analysis in restored.report
+
+
 @pytest.mark.asyncio
 async def test_result_and_successful_terminal_event_commit_together(tmp_path: Path):
     connection = await connect_database(tmp_path / "product.db")
