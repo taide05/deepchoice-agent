@@ -29,8 +29,9 @@ S0 与原 S1 离线验收已完成；S1 P01 实际执行成功但内容资格未
 - [S0 绑定](product-optimization-s0-bindings.json) 与
   [S0 关键声明台账](product-optimization-s0-claims.csv)：绑定当前候选 serial-r1 的八份开发报告和 360 项逐处原子关键声明，
   不替换历史六报告分母，也不包含保留集报告内容。
-- [S1 局部测量协议](../benchmarks/product-optimization-s1-constraint-aware-v1.json)：
+- [S1 局部测量协议](../benchmarks/product-optimization-s1-constraint-aware-v2.json)：
   P04/P08 目标、P01 回归、身份/顺序/预算/评审/停止规则的机器可读冻结；不是付费执行授权或效果结果。
+  v2 绑定解释保留修复；原 v1 仍保留用于复算 bcb4c87，不跨版本复用资格。
 - [评估工具操作说明](../benchmarks/README.md)：CLI 用法，不能自行产生执行授权。
 
 历史评分和 token CSV/JSON 都保留原分母/版本，不回填为当前候选；原始报告、快照、Trace、实验库留 outputs/。

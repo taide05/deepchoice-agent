@@ -17,6 +17,19 @@ from benchmarks import product_baseline as baseline
 from benchmarks import product_baseline_experiment as experiment
 
 
+def test_runner_pins_current_protocol_and_rejects_historical_binding():
+    from benchmarks import product_optimization_s1 as protocol
+
+    current, digest = protocol.load_protocol(verify_repository=False)
+    assert digest == s1.PROTOCOL_SHA256
+    assert current["identities"]["candidate"]["anchor_commit"] == protocol.CANDIDATE_COMMIT
+    _, historical = protocol.load_protocol(
+        protocol.PROTOCOL_PATH.parent / "product-optimization-s1-constraint-aware-v1.json",
+        verify_repository=False,
+    )
+    assert historical != s1.PROTOCOL_SHA256
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["waiting_for_input", "running", "queued", "interrupted"])
 async def test_qualification_cleanup_never_mutates_nonterminal_tasks(tmp_path, monkeypatch, status):

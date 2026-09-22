@@ -18,11 +18,18 @@ from benchmarks.product_baseline import load_dataset
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOL_PATH = ROOT / "benchmarks" / "product-optimization-s1-constraint-aware-v1.json"
-PROTOCOL_ID = "product-optimization-s1-constraint-aware-v1"
+PROTOCOL_PATH = ROOT / "benchmarks" / "product-optimization-s1-constraint-aware-v2.json"
+PROTOCOL_ID = "product-optimization-s1-constraint-aware-v2"
 DATASET_SHA256 = "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
 BASELINE_COMMIT = "d23c9480b9f368f8ec75ec44ee7e25c64146d4be"
-CANDIDATE_COMMIT = "bcb4c8732e94b5aac4a3645b7d5d682279e2dad0"
+CANDIDATE_COMMIT = "83852d8dda760090e07b094af096af7629104258"
+FROZEN_REVISIONS = {
+    "product-optimization-s1-constraint-aware-v1": {
+        "candidate_commit": "bcb4c8732e94b5aac4a3645b7d5d682279e2dad0",
+        "starting_used": 90,
+    },
+    PROTOCOL_ID: {"candidate_commit": CANDIDATE_COMMIT, "starting_used": 91},
+}
 CONTROLLER_COMMIT = "7d16d2892c22ce5e4940caa1ee8009148f76917b"
 PRODUCT_PATHS = ("src/deepchoice", "pyproject.toml")
 CONTROLLER_PATHS = (
@@ -185,7 +192,8 @@ def load_protocol(
         "protocol top-level fields drift",
     )
     _require(protocol["schema_version"] == 1, "unsupported protocol schema")
-    _require(protocol["protocol_id"] == PROTOCOL_ID, "unexpected protocol id")
+    _require(protocol["protocol_id"] in FROZEN_REVISIONS, "unexpected protocol id")
+    revision = FROZEN_REVISIONS[protocol["protocol_id"]]
     _require(protocol["status"] == "frozen", "protocol must be frozen")
     _require(protocol["freeze_date"] == "2026-09-22", "protocol freeze date drift")
 
@@ -240,7 +248,7 @@ def load_protocol(
     )
     for name, commit, paths in (
         ("baseline", BASELINE_COMMIT, PRODUCT_PATHS),
-        ("candidate", CANDIDATE_COMMIT, PRODUCT_PATHS),
+        ("candidate", revision["candidate_commit"], PRODUCT_PATHS),
         ("controller", CONTROLLER_COMMIT, CONTROLLER_PATHS),
     ):
         _validate_identity(
@@ -310,13 +318,13 @@ def load_protocol(
     _require(
         budgets.get("research_ledger")
         == {
-            "starting_used": 90,
+            "starting_used": revision["starting_used"],
             "hard_cap": 134,
             "qualification_max": 1,
             "formal": 12,
-            "projected_used": 103,
+            "projected_used": revision["starting_used"] + 13,
             "reserved_for_s3": 24,
-            "unallocated_after_reserve": 7,
+            "unallocated_after_reserve": 134 - revision["starting_used"] - 13 - 24,
         },
         "research ledger drift",
     )

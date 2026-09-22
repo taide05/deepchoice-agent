@@ -18,6 +18,8 @@ def frozen_repository(monkeypatch):
     frozen = json.loads(s1.PROTOCOL_PATH.read_text(encoding="utf-8"))
     identities = frozen["identities"]
     refs = {item["anchor_commit"]: item for item in identities.values()}
+    historical = json.loads((s1.PROTOCOL_PATH.parent / "product-optimization-s1-constraint-aware-v1.json").read_text(encoding="utf-8"))
+    refs.update({item["anchor_commit"]: item for item in historical["identities"].values()})
     refs["HEAD"] = identities["candidate"]
     refs["814131f849f417fbcf4f00cfe071d95ccf2b3878"] = identities["baseline"]
 
@@ -49,8 +51,37 @@ def test_frozen_s1_protocol_is_complete_and_repository_bound():
         "P04",
         "P08",
     }
-    assert protocol["budgets"]["research_ledger"]["projected_used"] == 103
+    assert protocol["budgets"]["research_ledger"] == {
+        "starting_used": 91, "hard_cap": 134, "qualification_max": 1,
+        "formal": 12, "projected_used": 104, "reserved_for_s3": 24,
+        "unallocated_after_reserve": 6,
+    }
     assert protocol["review"]["holdout_reports_accessed"] is False
+
+
+def test_historical_protocol_identity_and_ledger_are_unchanged():
+    historical = s1.PROTOCOL_PATH.parent / "product-optimization-s1-constraint-aware-v1.json"
+    protocol, digest = s1.load_protocol(historical, execution_ref="bcb4c8732e94b5aac4a3645b7d5d682279e2dad0")
+    assert digest == "1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391"
+    assert protocol["budgets"]["research_ledger"]["starting_used"] == 90
+    assert protocol["budgets"]["research_ledger"]["projected_used"] == 103
+    with pytest.raises(ValueError, match="product source differs"):
+        s1.load_protocol(historical)
+
+
+@pytest.mark.parametrize("change", ["unknown_revision", "old_revision", "old_candidate", "old_ledger"])
+def test_protocol_revision_cannot_mix_historical_bindings(tmp_path, change):
+    protocol, _ = s1.load_protocol(verify_repository=False)
+    if change == "unknown_revision":
+        protocol["protocol_id"] = "product-optimization-s1-constraint-aware-v3"
+    elif change == "old_revision":
+        protocol["protocol_id"] = "product-optimization-s1-constraint-aware-v1"
+    elif change == "old_candidate":
+        protocol["identities"]["candidate"]["anchor_commit"] = "bcb4c8732e94b5aac4a3645b7d5d682279e2dad0"
+    else:
+        protocol["budgets"]["research_ledger"]["starting_used"] = 90
+    with pytest.raises(ValueError):
+        s1.load_protocol(_write_protocol(tmp_path, protocol), verify_repository=False)
 
 
 def test_schedule_is_deterministic_balanced_and_blinded():

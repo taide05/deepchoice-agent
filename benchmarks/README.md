@@ -24,12 +24,15 @@ O1 的 12 例及[官方参考依据](../docs/o1-reference-audit.md)已冻结为 
 代替此项。
 
 S1 协议文件为
-[product-optimization-s1-constraint-aware-v1.json](product-optimization-s1-constraint-aware-v1.json)，
-冻结 SHA-256 为 1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391。
+[product-optimization-s1-constraint-aware-v2.json](product-optimization-s1-constraint-aware-v2.json)，
+冻结 SHA-256 为 21f561408e7bbaabd057785df685cf36a0271709d92cacc522ff5ac289625f65。
 使用 python -m benchmarks.product_optimization_s1 可纯离线检查当前 candidate 工作树；
 baseline 执行 ref 使用 --execution-arm baseline --execution-ref 814131f849f417fbcf4f00cfe071d95ccf2b3878。
 指定 ref 只检查已提交对象；实际运行仍须由环境清单记录干净工作树的完整 commit。
 校验不等于资格、health 或付费执行通过。
+原 v1 文件/hash 保持不变；可显式 --protocol benchmarks/product-optimization-s1-constraint-aware-v1.json
+并指定原候选 --execution-ref bcb4c8732e94b5aac4a3645b7d5d682279e2dad0 复算，不将历史资格
+用于新身份。v2 从 91/134 起算，至多 1 次资格 + 12 格正式比较，保留最终验收 24 次及余量 6 次。
 
 S1 单例资格使用 python -m scripts.s1_qualification，按 audit → preflight → prepare → run
 顺序执行，同一 --root 指向全新的本地研究目录，--env-file 指向私有配置；audit 只核对身份、
@@ -44,7 +47,7 @@ prepare 需要 --frozen-seed，按原知识哈希复制至隔离目录；run 需
 内容资格评审，formal_measurement_gate 仍为 closed。本入口不执行十二格局部配对；旧 PR2B
 整批命令也不能代替双产品配对执行器。所有原始运行记录留在 outputs/。
 其中 git_commit 表示实际执行 checkout（包含工具和文档），不是另一个产品候选；产品身份
-由严格固定的 protocol_sha256 引用 candidate.anchor_commit=bcb4c87 及 source_objects，
+由严格固定的 protocol_sha256 引用 candidate.anchor_commit=83852d8 及 source_objects，
 并在执行前将 HEAD 产品对象逐一与其比较。只改工具/文档不能绕过该产品字节校验。
 
 隔离实验服务使用独立产品/检查点数据库；知识库与 learned-docs 快照必须显式指定，不能复用

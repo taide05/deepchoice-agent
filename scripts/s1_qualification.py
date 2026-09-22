@@ -19,7 +19,7 @@ from benchmarks.product_baseline_experiment import embedding_revision
 from scripts import o1_pr2b_control as control
 
 
-PROTOCOL_SHA256 = "1e771a7beb8c551df2c4eafc49d5c2a3f0d16845ca678f54f391018b0686d391"
+PROTOCOL_SHA256 = "21f561408e7bbaabd057785df685cf36a0271709d92cacc522ff5ac289625f65"
 ROOT = Path(__file__).resolve().parent.parent
 TOOL_NAMES = ("s1_qualification.py", "o1_pr2b_control.py", "o1_pr2b_child.py")
 PREREQUISITE_FILES = ("preflight-summary.json", "llm-preflight.json", "dependencies.json")
