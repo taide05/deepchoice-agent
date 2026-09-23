@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "fixture_id": "product-optimization-dev-requests-v1",
+  "status": "frozen",
+  "freeze_date": "2026-09-23",
+  "projection": {
+    "source_kind": "s0_snapshot_task_projection",
+    "request_fields": "complete_research_request",
+    "source_content_access": "metadata_only"
+  },
+  "cases": [
+    {
+      "case_id": "P01",
+      "role": "regression",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P01.json",
+      "source_snapshot_sha256": "beab5029af1d367e7d2688253224e54fee43d79898ea867ba033d73342da9fb2",
+      "request_sha256": "738af60c92a6c97360c43c191881cf4fa93836039395663887b04debdf275ea9",
+      "request": {
+        "schema_version": 1,
+        "query": "为个人维护、低写入量的 Web 应用选择 SQLite 还是 PostgreSQL？",
+        "scene_context": "单人开发和运维，预计 12 个月内日活低于 5000，读多写少，需要备份与基本全文检索。",
+        "constraints": [
+          "优先降低运维复杂度",
+          "必须说明未来迁移触发条件",
+          "不能仅按理论性能下结论"
+        ],
+        "candidate_techs": [
+          "SQLite",
+          "PostgreSQL"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "当前规模是否需要独立数据库服务？",
+          "并发写入和备份分别有什么边界？",
+          "何时应迁移？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      }
+    },
+    {
+      "case_id": "P04",
+      "role": "target",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P04.json",
+      "source_snapshot_sha256": "5a464ee1eece9fff7a24c8ca79c4da7cf55b4d9669c983fd6850795ce2d8c6cb",
+      "request_sha256": "9ee6fca21018d59483fcdd9a772df685fdb909776c5c0ee1bdfdf3d889a9b937",
+      "request": {
+        "schema_version": 1,
+        "query": "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
+        "scene_context": "单实例 FastAPI 服务，每天约 200 个任务；任务结果不能因服务重启静默丢失，但团队不想过早引入复杂基础设施。",
+        "constraints": [
+          "必须讨论重启恢复和至少一次执行语义",
+          "允许先做阶段性方案",
+          "不得把任务队列描述为天然 exactly-once"
+        ],
+        "candidate_techs": [
+          "FastAPI BackgroundTasks",
+          "Celery"
+        ],
+        "complexity": "high",
+        "report_format": "evidence_first",
+        "sub_questions": [
+          "进程内任务在哪些故障下会丢失？",
+          "Celery 引入哪些组件和运维责任？",
+          "是否存在过渡方案？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      }
+    },
+    {
+      "case_id": "P08",
+      "role": "target",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P08.json",
+      "source_snapshot_sha256": "4468a403ea1e017edc7c29bade793f7f77a9413b7852993860d9964d6c092c4f",
+      "request_sha256": "7382e2a4c3be83a75a6d0df606a48bce0fc4d55ca33789bccc609c2f2cbbfa88",
+      "request": {
+        "schema_version": 1,
+        "query": "帮我在 Redis 和 Memcached 之间选择缓存。",
+        "scene_context": "请求没有说明数据结构、持久化、淘汰策略、部署环境或团队能力。",
+        "constraints": [
+          "缺少会改变选择的约束时应明确列出未知并给条件性结论；仅在满足项目证据不足 gate 时进行交互",
+          "不得自行编造流量和一致性要求"
+        ],
+        "candidate_techs": [
+          "Redis",
+          "Memcached"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "哪些未知约束会改变选择？",
+          "补充信息后如何形成条件性结论？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      }
+    }
+  ]
+}

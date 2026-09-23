@@ -1,0 +1,576 @@
+{
+  "schema_version": 1,
+  "plan_id": "product-optimization-official-intake-v1",
+  "status": "frozen",
+  "freeze_date": "2026-09-23",
+  "purpose": "offline source-intake plan; no fetching, model calls, or paid research",
+  "catalog": {
+    "module": "src/deepchoice/utils/official_catalog.py",
+    "git_object": "2dcbcdcc539b3d2de14710ab588856b44c5fd2fb",
+    "git_object_algorithm": "git-blob-sha1",
+    "catalog_payload_sha256": "5bd5f76bd4a453ed1bf5878673db2bab9b5b383d6050290a86a7c6ec562b8544",
+    "entry_count": 96,
+    "unique_url_count": 93
+  },
+  "canonical_plan_sha256": "0d0dfc114923e62e231f4ab1472d713165d48408929036883a019ab5b34c88b6",
+  "entries": [
+    {
+      "catalog_key": "react",
+      "url": "https://react.dev",
+      "title": "React \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "vue",
+      "url": "https://vuejs.org",
+      "title": "Vue.js \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "angular",
+      "url": "https://angular.dev",
+      "title": "Angular \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "svelte",
+      "url": "https://svelte.dev",
+      "title": "Svelte \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "django",
+      "url": "https://docs.djangoproject.com",
+      "title": "Django \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "flask",
+      "url": "https://flask.palletsprojects.com",
+      "title": "Flask \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "fastapi",
+      "url": "https://fastapi.tiangolo.com",
+      "title": "FastAPI \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "django-ninja",
+      "url": "https://django-ninja.dev",
+      "title": "Django Ninja \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "bun",
+      "url": "https://bun.sh",
+      "title": "Bun \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "node.js",
+      "url": "https://nodejs.org",
+      "title": "Node.js \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "postgresql",
+      "url": "https://www.postgresql.org/docs/",
+      "title": "PostgreSQL \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "mysql",
+      "url": "https://dev.mysql.com/doc/",
+      "title": "MySQL \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "redis",
+      "url": "https://redis.io/docs/",
+      "title": "Redis \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "mongodb",
+      "url": "https://www.mongodb.com/docs/",
+      "title": "MongoDB \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "sqlite",
+      "url": "https://sqlite.org",
+      "title": "SQLite \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "neo4j",
+      "url": "https://neo4j.com",
+      "title": "Neo4j \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "memcached",
+      "url": "https://memcached.org",
+      "title": "Memcached \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "sqlalchemy",
+      "url": "https://docs.sqlalchemy.org",
+      "title": "SQLAlchemy \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "alembic",
+      "url": "https://alembic.sqlalchemy.org",
+      "title": "Alembic \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "docker",
+      "url": "https://docs.docker.com",
+      "title": "Docker \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "kubernetes",
+      "url": "https://kubernetes.io/docs/",
+      "title": "Kubernetes \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "docker-compose",
+      "url": "https://docs.docker.com/compose",
+      "title": "Docker Compose \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "minikube",
+      "url": "https://minikube.sigs.k8s.io",
+      "title": "Minikube \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "github-actions",
+      "url": "https://docs.github.com/en/actions",
+      "title": "GitHub Actions \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "jenkins",
+      "url": "https://jenkins.io",
+      "title": "Jenkins \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "gitlab-ci",
+      "url": "https://docs.gitlab.com/ee/ci",
+      "title": "GitLab CI \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "nginx",
+      "url": "https://nginx.org/en/docs/",
+      "title": "nginx \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "caddy",
+      "url": "https://caddyserver.com",
+      "title": "Caddy \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "grpc",
+      "url": "https://grpc.io",
+      "title": "gRPC \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "websocket",
+      "url": "https://developer.mozilla.org",
+      "title": "WebSocket API \u2014 MDN Documentation",
+      "catalog_label_unverified": "MDN Documentation"
+    },
+    {
+      "catalog_key": "uvicorn",
+      "url": "https://uvicorn.org",
+      "title": "Uvicorn \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "gunicorn",
+      "url": "https://docs.gunicorn.org",
+      "title": "Gunicorn \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "pytorch",
+      "url": "https://pytorch.org/docs/",
+      "title": "PyTorch \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "tensorflow",
+      "url": "https://www.tensorflow.org/api_docs",
+      "title": "TensorFlow \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "huggingface",
+      "url": "https://huggingface.co/docs/transformers",
+      "title": "HuggingFace Transformers \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "sentence-transformers",
+      "url": "https://sbert.net",
+      "title": "Sentence-Transformers \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "ollama",
+      "url": "https://ollama.com",
+      "title": "Ollama \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "vllm",
+      "url": "https://docs.vllm.ai",
+      "title": "vLLM \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "ray",
+      "url": "https://docs.ray.io",
+      "title": "Ray \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "dask",
+      "url": "https://dask.org",
+      "title": "Dask \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "tiktoken",
+      "url": "https://github.com/openai/tiktoken",
+      "title": "tiktoken \u2014 Official Repository",
+      "catalog_label_unverified": "Official Repository"
+    },
+    {
+      "catalog_key": "sentencepiece",
+      "url": "https://github.com/google/sentencepiece",
+      "title": "SentencePiece \u2014 Official Repository",
+      "catalog_label_unverified": "Official Repository"
+    },
+    {
+      "catalog_key": "langchain",
+      "url": "https://python.langchain.com/docs/",
+      "title": "LangChain \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "langgraph",
+      "url": "https://langchain-ai.github.io/langgraph/",
+      "title": "LangGraph \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "llamaindex",
+      "url": "https://docs.llamaindex.ai",
+      "title": "LlamaIndex \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "crewai",
+      "url": "https://docs.crewai.com",
+      "title": "CrewAI \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "autogen",
+      "url": "https://microsoft.github.io/autogen",
+      "title": "AutoGen \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "semantic-kernel",
+      "url": "https://learn.microsoft.com/semantic-kernel",
+      "title": "Semantic Kernel \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "dify",
+      "url": "https://dify.ai",
+      "title": "Dify \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "langflow",
+      "url": "https://docs.langflow.org",
+      "title": "LangFlow \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "mcp",
+      "url": "https://modelcontextprotocol.io",
+      "title": "MCP \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "chroma",
+      "url": "https://docs.trychroma.com",
+      "title": "Chroma \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "pinecone",
+      "url": "https://pinecone.io",
+      "title": "Pinecone \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "weaviate",
+      "url": "https://weaviate.io",
+      "title": "Weaviate \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "qdrant",
+      "url": "https://qdrant.tech",
+      "title": "Qdrant \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "milvus",
+      "url": "https://milvus.io",
+      "title": "Milvus \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "faiss",
+      "url": "https://github.com/facebookresearch/faiss",
+      "title": "FAISS \u2014 Official Repository",
+      "catalog_label_unverified": "Official Repository"
+    },
+    {
+      "catalog_key": "elasticsearch",
+      "url": "https://elastic.co",
+      "title": "Elasticsearch \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "meilisearch",
+      "url": "https://meilisearch.com",
+      "title": "Meilisearch \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "kafka",
+      "url": "https://kafka.apache.org",
+      "title": "Apache Kafka \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "rabbitmq",
+      "url": "https://rabbitmq.com",
+      "title": "RabbitMQ \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "celery",
+      "url": "https://docs.celeryq.dev",
+      "title": "Celery \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "terraform",
+      "url": "https://terraform.io",
+      "title": "Terraform \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "pulumi",
+      "url": "https://pulumi.com",
+      "title": "Pulumi \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "ansible",
+      "url": "https://docs.ansible.com",
+      "title": "Ansible \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "airflow",
+      "url": "https://airflow.apache.org",
+      "title": "Apache Airflow \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "prefect",
+      "url": "https://prefect.io",
+      "title": "Prefect \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "temporal",
+      "url": "https://docs.temporal.io",
+      "title": "Temporal \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "camunda",
+      "url": "https://docs.camunda.org",
+      "title": "Camunda \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "drools",
+      "url": "https://www.drools.org",
+      "title": "Drools \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "cadence",
+      "url": "https://cadenceworkflow.io",
+      "title": "Cadence \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "conductor",
+      "url": "https://conductor-oss.org",
+      "title": "Conductor \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "prometheus",
+      "url": "https://prometheus.io",
+      "title": "Prometheus \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "datadog",
+      "url": "https://datadoghq.com",
+      "title": "Datadog \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "pydantic",
+      "url": "https://docs.pydantic.dev",
+      "title": "Pydantic \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "python-dotenv",
+      "url": "https://github.com/theskumar/python-dotenv",
+      "title": "python-dotenv \u2014 Official Repository",
+      "catalog_label_unverified": "Official Repository"
+    },
+    {
+      "catalog_key": "streamlit",
+      "url": "https://streamlit.io",
+      "title": "Streamlit \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "gradio",
+      "url": "https://gradio.app",
+      "title": "Gradio \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "playwright",
+      "url": "https://playwright.dev",
+      "title": "Playwright \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "selenium",
+      "url": "https://selenium.dev",
+      "title": "Selenium \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "next.js",
+      "url": "https://nextjs.org/docs",
+      "title": "Next.js \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "nuxt",
+      "url": "https://nuxt.com/docs",
+      "title": "Nuxt \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "tailwind",
+      "url": "https://tailwindcss.com/docs",
+      "title": "Tailwind CSS \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "python",
+      "url": "https://docs.python.org/3/",
+      "title": "Python \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "go",
+      "url": "https://go.dev/doc/",
+      "title": "Go \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "rust",
+      "url": "https://doc.rust-lang.org/",
+      "title": "Rust \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "typescript",
+      "url": "https://www.typescriptlang.org/docs/",
+      "title": "TypeScript \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "aws-lambda",
+      "url": "https://aws.amazon.com/lambda",
+      "title": "AWS Lambda \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "modal",
+      "url": "https://modal.com",
+      "title": "Modal \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "jwt",
+      "url": "https://jwt.io",
+      "title": "JWT \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "openai",
+      "url": "https://platform.openai.com",
+      "title": "OpenAI API \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "anthropic",
+      "url": "https://docs.anthropic.com",
+      "title": "Anthropic Claude API \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    },
+    {
+      "catalog_key": "gitlab",
+      "url": "https://about.gitlab.com",
+      "title": "GitLab \u2014 Official Documentation",
+      "catalog_label_unverified": "Official Documentation"
+    }
+  ]
+}

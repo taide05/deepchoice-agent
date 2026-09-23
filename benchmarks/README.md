@@ -1,16 +1,20 @@
 # 评估入口与历史工具
 
-更新：2026-09-21。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
+更新：2026-09-23。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
 准备检查结果见 [基线准备检查](../docs/baseline-readiness-audit.md)。
 
 | 入口 | 用途和边界 |
 |---|---|
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
 | `evidence_window_prototype.select_evidence_window` | 未推广的纯离线定位原型；输出全部不可绑定，不被默认研究路径调用。反例与限制见 S0 诊断，不作质量/成本评估器 |
+| `product_optimization_dev_requests.load_dev_requests` | 只读固定 P01/P04/P08 开发请求投影；不打开完整案例集或保留集 |
+| `product_optimization_official_intake.load_official_intake_plan` | 只读固定 93 个既有官方目录 URL 身份；目录标签未经发布者审计，不含网页正文 |
+| `product_optimization_source_capture.capture_official_entry` | 仅通过既有安全外呼抓取单个计划 URL，原子保存到忽略的专用目录并标为未批准候选；不自动建库 |
+| `product_optimization_seed.load_and_validate_seed_manifest` | 纯离线检查有界 UTF-8 输入与固定身份/已知模板标记；自报 URL/发布者不构成来源批准 |
 | `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例版本化案例集，不调用 LLM/网络 |
 | `python -m benchmarks.product_baseline collect ...` | 经 durable API 采集 serial=1 或 concurrent=12 的真实结果；必须冻结案例和环境，并显式确认付费运行 |
 | `python -m benchmarks.product_baseline collect-single --case-id P06 ...` | 仅一个开发 case、concurrency=1、新输出目录及付费开关；运行可靠性验证，不是完整基线 |
-| `python -m benchmarks.product_baseline compare ...` | 对人工评分后的同 repetition 串并发结果执行质量门禁，无网络调用 |
+| `python -m benchmarks.product_baseline compare ...` | 对按该批冻结协议完成评分的同 repetition 串并发结果执行历史质量门禁，无网络调用；不替代新 GPT-only 路线的执行器 |
 | `python -m benchmarks.run_baseline --health-check` | 检索路由与 Tavily 连通性，会消耗 Tavily 额度；不检查 LLM，也不证明研究完成 |
 | `/api/v1/tasks/*` | 当前产品路径；真实基线须经此入口采集任务、报告、HITL 和 observability |
 | `python -m benchmarks.run_baseline --legacy-direct ...` | 保留的历史直连实验，不经过 durable RunContext，不能用于新产品基线；会调用付费 LLM 与 judge |
@@ -62,7 +66,7 @@ $env:LEARNED_DOCS_READONLY = "1"
 .\.venv\Scripts\python.exe -m uvicorn benchmarks.product_baseline_server:create_app --factory --workers 1
 ```
 
-另一个终端先校验候选集。人工核验并将案例标为 `frozen`、填写私有环境 manifest 且两项健康
+另一个终端先校验候选集。操作者核验并将案例标为 `frozen`、填写私有环境 manifest 且两项健康
 检查为 `passed`、确认对应实验的剩余额度和运行矩阵后，才可添加显式执行开关：
 
 ```powershell
@@ -72,8 +76,9 @@ $env:LEARNED_DOCS_READONLY = "1"
 .\.venv\Scripts\python.exe -m benchmarks.product_baseline compare --serial-dir outputs/product-baseline-v1/serial-r1 --concurrent-dir outputs/product-baseline-v1/concurrent-r1 --output outputs/product-baseline-v1/concurrency-r1.json
 ```
 
-每次 profile 使用新的 `*-runtime` 数据库目录和单独的新采集输出目录。`scores.csv` 必须先完成
-人工盲评，比较命令才会运行。
+每次 profile 使用新的 `*-runtime` 数据库目录和单独的新采集输出目录。`scores.csv` 必须先按该批次
+冻结的评审协议完成盲评，比较命令才会运行；现行新路线采用 GPT-only，且须另冻协议和双臂执行器，
+不能把这个旧入口直接当成新测量。
 
 `admissions.jsonl` 在 POST 前及确认创建后立即保存并 fsync；重启先核对它，未写完的 run 不能
 自动重建。`usage.csv` 逐 case 导出已知 token/完整性与调用数；未知为空，不是零。报告和 snapshot
