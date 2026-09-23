@@ -113,8 +113,8 @@ class TestClassifySourceType:
     def test_github_url(self):
         assert classify_source_type("https://github.com/langchain-ai/langgraph", "unknown") == "github"
 
-    def test_readthedocs_url(self):
-        assert classify_source_type("https://langchain.readthedocs.io/en/latest/", "unknown") == "official_doc"
+    def test_unregistered_readthedocs_tenant_is_not_an_official_identity(self):
+        assert classify_source_type("https://langchain.readthedocs.io/en/latest/", "unknown") == "tech_blog"
 
     def test_chroma_source(self):
         assert classify_source_type("some-internal-id", "chroma") == "tech_blog"

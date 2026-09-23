@@ -4,6 +4,7 @@ import re
 from urllib.parse import unquote, urlsplit
 
 from ..utils.evidence import is_navigation_placeholder, source_title
+from ..utils.official_catalog import is_catalog_official_url, normalized_hostname
 
 
 def _candidate_patterns(task: dict) -> list[re.Pattern]:
@@ -92,24 +93,28 @@ VERIFIABILITY_MAP = {
 }
 
 
-def classify_source_type(url: str, source: str) -> str:
-    url_lower = url.lower()
-    if url_lower.startswith("file:"):
-        return "tech_blog"
-    if "arxiv.org" in url_lower:
-        return "arxiv_paper"
-    if "github.com" in url_lower:
-        return "github"
-    if "stackoverflow.com" in url_lower or "stackexchange.com" in url_lower:
-        return "stackoverflow"
-    if "reddit.com" in url_lower:
-        return "reddit"
-    if source == "official" or "readthedocs" in url_lower or "docs." in url_lower:
-        return "official_doc"
-    if "blog" in url_lower or "medium.com" in url_lower or "dev.to" in url_lower:
-        return "tech_blog"
-    return "tech_blog"
+def _host_in_family(host: str | None, family: str) -> bool:
+    return host == family or (host is not None and host.endswith("." + family))
 
+
+def classify_source_type(url: str, source: str) -> str:
+    """Classify only valid HTTP(S) identities; source labels never prove authority."""
+    if not isinstance(url, str) or url.casefold().startswith("file:"):
+        return "tech_blog"
+    host = normalized_hostname(url)
+    if host is None:
+        return "tech_blog"
+    if _host_in_family(host, "arxiv.org"):
+        return "arxiv_paper"
+    if _host_in_family(host, "github.com"):
+        return "github"
+    if _host_in_family(host, "stackoverflow.com") or _host_in_family(host, "stackexchange.com"):
+        return "stackoverflow"
+    if _host_in_family(host, "reddit.com"):
+        return "reddit"
+    if is_catalog_official_url(url):
+        return "official_doc"
+    return "tech_blog"
 
 def classify_evidence_type(snippet: str) -> str:
     snip_lower = snippet.lower()

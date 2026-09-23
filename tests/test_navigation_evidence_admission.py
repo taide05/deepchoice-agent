@@ -9,6 +9,7 @@ from deepchoice.agents.evidence_chain import build_evidence_chain
 from deepchoice.agents.evidence_decision_gate import should_request_evidence_decision
 from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
 from deepchoice.budget.limited import minimum_evidence_is_met, usable_evidence_chains
+from deepchoice.cache import build_retrieval_cache_key
 from deepchoice.contracts.errors import DeepChoiceError
 from deepchoice.contracts.manifest import (
     RunManifest,
@@ -17,6 +18,7 @@ from deepchoice.contracts.manifest import (
     ensure_run_manifest_compatible,
 )
 from deepchoice.retrievers.official import TECH_DOCS
+from deepchoice.retrievers.contracts import RetrievalRequest
 
 
 def _source(snippet="Official documentation site for alpha", *, url="https://alpha.example/docs"):
@@ -73,7 +75,9 @@ async def test_actual_content_and_short_package_summary_keep_existing_scores():
         "Version: 1.0, Summary: Alpha client",
     ]
     output = await SourceEvaluatorAgent().run({"search_results": [{
-        "source": "official", "results": [_source(snippet) for snippet in snippets],
+        "source": "official", "results": [
+            _source(snippet, url="https://docs.python.org/3/") for snippet in snippets
+        ],
     }]})
     assert [row["snippet"] for row in output["source_scores"]] == snippets
     assert all(row["total_score"] == 6.8 for row in output["source_scores"])
@@ -122,10 +126,11 @@ def test_synthesis_binding_rejects_navigation_without_renumbering_other_sources(
     assert _usable_evidence_ids(chains) == {2}
 
 
-def test_old_scoring_identity_is_readable_but_cannot_resume():
+@pytest.mark.parametrize("previous", ["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4"])
+def test_old_scoring_identity_is_readable_but_cannot_resume(previous):
     current = build_run_manifest({})
-    assert current.scoring_policy_version == "source-score-v4"
-    old = current.model_copy(update={"scoring_policy_version": "source-score-v3"})
+    assert current.scoring_policy_version == "source-score-v5"
+    old = current.model_copy(update={"scoring_policy_version": previous})
     old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
     restored = RunManifest.model_validate_json(old.model_dump_json())
     assert restored.manifest_id == _expected_manifest_id(restored)
@@ -133,3 +138,9 @@ def test_old_scoring_identity_is_readable_but_cannot_resume():
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
     ensure_run_manifest_compatible(current, {})
+    request = RetrievalRequest(query="Alpha versus Beta", sub_questions=(), max_results=1)
+    assert build_retrieval_cache_key(
+        source="official", request=request, manifest_id=current.manifest_id,
+    ) != build_retrieval_cache_key(
+        source="official", request=request, manifest_id=restored.manifest_id,
+    )

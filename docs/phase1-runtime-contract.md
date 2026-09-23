@@ -123,6 +123,13 @@ HITL 绑定的旧 run 同样不能换模型恢复：未过期 pending decision �
 - 停机取消可能与 lease 提交竞态。coordinator 必须等待正在进行的 lease acquisition 落定；
   如果 grant 已提交，即使调用方尚未收到返回值，也要按该 owner/epoch 完成 fenced finalization，
   然后再传播取消，不能遗留幽灵 `running`。
+- 产品连接的事务入口必须在独占连接锁内完成。SQLite 已排队的 BEGIN 不因 asyncio 取消而
+  撤销；即使入口尚未返回，也须排空并回滚后再传播取消，不能仅依赖本地 began 标志或瞬时
+  in_transaction。预算、Trace、生命周期、实例租约共用此入口；可观测性读快照仍用 deferred
+  BEGIN，不升级写锁。二次取消不能截断回滚；已成功 BEGIN 后 cursor 关闭失败也须回滚。
+  共享入口 helper 本身遇到正常嵌套 BEGIN 错误不主动回滚；不支持合法嵌套，各 owner 既有
+  异常清理仍生效，不保证上层调用路径保留未知外层事务。迁移保留其已有的独立
+  begin-task settle/rollback 机制，迁移SQL、CAS、fencing、预算和事件语义不变。
 - 产品库只保存已接受的 checkpoint 引用；LangGraph payload 保存在独立
   `outputs/checkpoints.db`。每个 epoch 使用隔离的物理 namespace，逻辑根 namespace 为空。
 - checkpoint payload 与产品引用不可能跨两个 SQLite 文件原子提交。恢复只信任产品库中
@@ -499,6 +506,16 @@ PR1 的内容修正冻结 source-score-v3、what-why-how-v3，冲突扫描/仲�
 的样本可能变为证据不足，不增加 HITL 类型或外呼。未把所有弱片段/标题判成占位，也不声称
 通过本规则即具备适用的一手证据。旧 source-score-v1/v2/v3 身份仍可读、校验但不可同 run
 恢复；须新 run。无需迁移、改变工作流/状态 schema、提示/模板版本或核心资产索引范围。
+
+Q2 来源分类后续规则冻结 `source-score-v5`：已知平台类型只按规范化 hostname 的完整域名/
+点边界子域匹配，路径、query、userinfo 中的名字不提供身份。遗留 `official_doc` 标签仅表示
+命中手工静态 locator 的精确 host 和 seed path 段边界，不证明页面所有权、正文真实性或声明/
+场景适用性。静态 GitHub URL 仍优先归 github；多租户站点不因一条登记升级其他路径。
+不为所有站点自动增删 www；仅有冻结参考支持的显式别名。通用 docs.*、ReadTheDocs 或
+`source=official` 不能单独升级；file、未登记/无效URL仍为 tech_blog，不表示它们一定是博客。
+静态 TECH_DOCS 内容和 official.py 兼容导出保留；不读取 learned 数据来建立信任，不改变检索/
+安全 fetch、权重、证据阈值或来源失效投影。旧v1–v4仍可读取/校验，但不能在v5同run恢复，
+新manifest ID隔离缓存；历史报告不重新评分。此分类规则不是新的外呼 allowlist。
 
 2026-09-18 PR1 冻结候选 `7d622fd` 的 P01（product-baseline-v1/1.0.0、分母一 run）
 完成单例测量、完整53原子及独立助手复核，资格为暂定通过；不是并发或人类质量验收。

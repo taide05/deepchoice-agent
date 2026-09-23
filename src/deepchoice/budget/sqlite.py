@@ -13,7 +13,7 @@ import aiosqlite
 from pydantic import JsonValue, ValidationError
 
 from deepchoice.contracts.safe_json import SafeJsonObject
-from deepchoice.persistence.database import _await_cleanup
+from deepchoice.persistence.database import _await_cleanup, _begin_transaction
 from deepchoice.security.redaction import redact_value
 
 from .contracts import (
@@ -196,7 +196,7 @@ class SQLiteBudgetManager:
         async with self._lock:
             began = False
             try:
-                await self._execute("BEGIN IMMEDIATE", ())
+                await _begin_transaction(self._connection)
                 began = True
                 now = self._clock()
                 await self._assert_authority(now, require_running=require_running)

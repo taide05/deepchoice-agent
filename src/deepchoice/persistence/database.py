@@ -66,6 +66,30 @@ async def _await_cleanup(awaitable: Awaitable[object]) -> None:
             pass
 
 
+async def _begin_transaction(
+    connection: aiosqlite.Connection, *, immediate: bool = True
+) -> None:
+    """Enter a transaction while the caller holds exclusive connection access.
+
+    Cancellation of an aiosqlite await does not remove its queued SQLite work.
+    Rollback must therefore be queued and drained even before BEGIN returns;
+    an in_transaction check at that instant can still be false. Nested
+    transactions are not supported; the caller must own an idle connection.
+    """
+    began = False
+    try:
+        cursor = await connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
+        began = True
+        await cursor.close()
+    except asyncio.CancelledError:
+        await _await_cleanup(connection.rollback())
+        raise
+    except Exception:
+        if began:
+            await _await_cleanup(connection.rollback())
+        raise
+
+
 async def _enable_wal(connection: aiosqlite.Connection) -> None:
     """Enable WAL with bounded retry for concurrent database initialization."""
 

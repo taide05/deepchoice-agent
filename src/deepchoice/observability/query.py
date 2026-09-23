@@ -17,6 +17,7 @@ from deepchoice.contracts.api import (
     ObservabilityTotalsResponse,
     TaskObservabilityResponse,
 )
+from deepchoice.persistence.database import _await_cleanup, _begin_transaction
 from deepchoice.persistence.repository import TaskNotFoundError
 from deepchoice.utils.token_usage import CACHE_FIELDS, cache_totals, public_usage
 from deepchoice.utils.call_diagnostics import public_call_result, run_failure
@@ -254,7 +255,7 @@ class SQLiteObservabilityQuery:
         async with self._lock:
             began = False
             try:
-                await self._connection.execute("BEGIN")
+                await _begin_transaction(self._connection, immediate=False)
                 began = True
                 cursor = await self._connection.execute(
                     "SELECT latest_run_id FROM tasks WHERE task_id = ?",
@@ -408,7 +409,7 @@ class SQLiteObservabilityQuery:
                 await self._connection.commit()
             except BaseException:
                 if began:
-                    await self._connection.rollback()
+                    await _await_cleanup(self._connection.rollback())
                 raise
 
         seen_attempts: Counter[str] = Counter()

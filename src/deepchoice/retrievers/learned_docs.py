@@ -1,7 +1,7 @@
 """Self-updating official-docs mapping: evidence harvest + persistent learned cache.
 
-The seed mapping lives in official.py (TECH_DOCS). This module lets the
-system grow it automatically:
+The static seed mapping lives in utils.official_catalog (TECH_DOCS), re-exported
+by official.py. This module maintains a separate learned lookup:
   - harvest(): learns term -> official URL pairs from search evidence
     (a result whose host contains the term as a full label AND whose URL
     carries a docs signal), persisted to learned_docs.json.

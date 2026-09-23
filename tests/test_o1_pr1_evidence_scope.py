@@ -55,7 +55,8 @@ async def test_http_comparison_is_not_treated_as_a_local_pair_template():
                                           "url": "https://docs.example.com/comparison"}]}]}
     result = await SourceEvaluatorAgent().run(state)
     assert len(result["source_scores"]) == 1
-    assert result["source_scores"][0]["source_type"] == "official_doc"
+    # HTTP admission survives; an unregistered docs.* hostname is not authority.
+    assert result["source_scores"][0]["source_type"] == "tech_blog"
 
 
 @pytest.mark.asyncio

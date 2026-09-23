@@ -29,7 +29,7 @@ from deepchoice.runtime.lifecycle import (
     ensure_task_transition_allowed,
 )
 
-from .database import _await_cleanup, _is_locked_error
+from .database import _await_cleanup, _begin_transaction, _is_locked_error
 from .records import (
     CheckpointReference,
     DecisionResolutionResult,
@@ -567,8 +567,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
             await cursor.close()
 
     async def _begin(self) -> None:
-        cursor = await self._connection.execute("BEGIN IMMEDIATE")
-        await cursor.close()
+        await _begin_transaction(self._connection)
 
     async def _insert_run_budget_policy_unlocked(self, run: RunRecord) -> None:
         if run.budget_policy is None:
@@ -702,8 +701,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         async with self._lock:
             transaction_started = False
             try:
-                cursor = await self._connection.execute("BEGIN IMMEDIATE")
-                await cursor.close()
+                await self._begin()
                 transaction_started = True
                 task_cursor = await self._connection.execute(
                     """
@@ -2051,8 +2049,7 @@ class SQLiteTaskRunRepository(TaskRepository, RunRepository):
         async with self._lock:
             transaction_started = False
             try:
-                cursor = await self._connection.execute("BEGIN IMMEDIATE")
-                await cursor.close()
+                await self._begin()
                 transaction_started = True
                 row = await self._fetchone(
                     f"""

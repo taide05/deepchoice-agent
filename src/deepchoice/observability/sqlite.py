@@ -11,7 +11,7 @@ from typing import TypeVar
 
 import aiosqlite
 
-from deepchoice.persistence.database import _await_cleanup
+from deepchoice.persistence.database import _await_cleanup, _begin_transaction
 from deepchoice.security.redaction import redact_value
 
 from .contracts import (
@@ -126,7 +126,7 @@ class SQLiteTraceSink:
         async with self._lock:
             began = False
             try:
-                await self._execute("BEGIN IMMEDIATE", ())
+                await _begin_transaction(self._connection)
                 began = True
                 await self._assert_authority()
                 result = await operation()

@@ -43,7 +43,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v4"
-    assert first.scoring_policy_version == "source-score-v4"
+    assert first.scoring_policy_version == "source-score-v5"
     assert first.security_policy_version == "outbound-url-v2"
     assert first.citation_policy_version == "deterministic-citation-v1"
     assert first.hitl_policy_version == "evidence-insufficient-v1"

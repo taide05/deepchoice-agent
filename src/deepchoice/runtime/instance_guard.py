@@ -15,6 +15,8 @@ from typing import Any
 
 import aiosqlite
 
+from deepchoice.persistence.database import _await_cleanup, _begin_transaction
+
 
 class RuntimeConfigurationError(RuntimeError):
     code = "RUNTIME_SINGLE_WORKER_REQUIRED"
@@ -147,7 +149,7 @@ class RuntimeInstanceGuard:
 
     async def acquire(self) -> None:
         async with self._lock:
-            await self._connection.execute("BEGIN IMMEDIATE")
+            await _begin_transaction(self._connection)
             try:
                 now, expiry = self._now_and_expiry()
                 sampled = time.monotonic()
@@ -180,7 +182,7 @@ class RuntimeInstanceGuard:
                 self._acquired = True
                 self._accepted(expiry, sampled)
             except BaseException:
-                await self._connection.rollback()
+                await _await_cleanup(self._connection.rollback())
                 raise
 
     async def renew_once(self) -> None:
@@ -190,7 +192,7 @@ class RuntimeInstanceGuard:
         async with self._lock:
             try:
                 # Sampling must follow BOTH the shared lock and SQLite writer wait.
-                await self._connection.execute("BEGIN IMMEDIATE")
+                await _begin_transaction(self._connection)
                 now, expiry = self._now_and_expiry()
                 sampled = time.monotonic()
                 if not self.has_authority:
@@ -212,7 +214,7 @@ class RuntimeInstanceGuard:
                 self._max_renewal_ms = max(self._max_renewal_ms or 0, self._renewal_ms)
             except BaseException:
                 self._acquired = False
-                await self._connection.rollback()
+                await _await_cleanup(self._connection.rollback())
                 raise
 
     async def _heartbeat(
