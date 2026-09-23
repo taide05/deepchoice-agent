@@ -110,4 +110,3 @@ def test_invalid_plan_does_not_create_a_fake_validated_procedure(plan):
     result = abstain_recommendation(original, "Choose a database")
     assert result["action_plan_mode"] == "validation_only"
     assert result["action_plan"] == []
-
