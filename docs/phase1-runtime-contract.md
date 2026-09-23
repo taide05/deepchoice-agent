@@ -27,6 +27,8 @@ constraint-aware-v1：逐项 requirement_assessments、条件 decision_branches 
 what-why-how-v4 / evidence-first-v2 / comparison-matrix-v2 冻结原 S1 身份；
 2026-09-22 不确定解释修复将模板升级为 what-why-how-v5 / evidence-first-v3 /
 comparison-matrix-v3，prompt v4、状态 schema v3 与引用策略 v1 不变。
+2026-09-23 行动安全修复使用 synthesis prompt v5 和 what-why-how-v6 / evidence-first-v4 /
+comparison-matrix-v4；manifest schema v1、状态 schema v3、引用/HITL策略不变。
 历史 manifest/结果可读，旧 prompt/template 的同 run 恢复按既有兼容检查拒绝。
 
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
@@ -46,11 +48,22 @@ MAX_CLAIM_TEXT（500 字符，含标记），任何检查溢出、缺引用、un
 模型输入归一化丢弃此扩展字段；仅当前校验可生成，不能作为已满足依据。预算/HITL 受限
 路径再次归一化并删除它，历史结果不回填；可用条件分支时摘要指向条件选择而非无结论。
 
+保守降级同时撤回模型原 action_plan 的生产操作正文，不能只把双写/切流/旧快照恢复
+改标为“待验证”。运行时设置 action_plan_mode=validation_only：原计划结构完整时，替换为
+固定的只读观测、可丢弃隔离副本验证任务，要求定义观测窗口/阈值、权威写入、一致性边界、
+新增已确认写入保全/回放及禁止回退点；未知前提不放行生产变更。空、无效或溢出的原计划仍为空。
+条件分支、需求判断及允许的待核验分析继续显示，三格式明确“仅隔离验证；禁止生产变更”。
+模型归一化将 mode 重置为 proposed，模型不能伪造验证状态。未触发降级的普通提案保留原计划，
+仍只是提案：此修复不是完整语义安全证明，也不是生产实施许可。
+公共 snapshot 的 citation_verification.checks 仍可保存校准前原声明与失败状态供审计，
+包括已撤回的操作文本；它不会重新成为 final_recommendation.action_plan 或报告步骤。
+因此本契约是撤回操作建议，不是抹除整个公共快照的审计原文。
+
 单一 evidence-insufficient gate 继续同时要求结构证据不足与方向实质不确定；
 新契约的 context_dependent 不再依赖存在两条排名才识别不确定性。
 用户 limited_report 与预算触顶报告使用同一纯后处理清除具体胜者、排名及旧确定性总结，
 所有逐项判断改为待独立验证的 unknown 并清除其引用绑定，覆盖预算可能在引用节点前触顶的路径；
-保留可用的条件分支、验证计划和回退。三种格式展示一致，公开事件、决策动作、
+保留可用条件分支，原操作计划按上述规则替换为隔离验证；三种格式展示一致，公开事件、决策动作、
 TTL、CAS、fencing、预算准入及四种引用状态不变。
 
 - `task_id` 标识一次用户研究意图；`run_id` 标识绑定一个 `RunManifest` 的执行尝试。

@@ -80,7 +80,7 @@ def _state(fmt):
 
 @pytest.mark.parametrize("fmt", ["what_why_how", "evidence_first", "comparison_matrix"])
 @pytest.mark.parametrize("limited_kind", ["hitl", "budget"])
-def test_restricted_result_and_all_formats_drop_winner_preserve_plan(fmt, limited_kind):
+def test_restricted_result_and_all_formats_replace_model_plan_with_isolated_validation(fmt, limited_kind):
     state = _state(fmt)
     before = deepcopy(state)
     if limited_kind == "hitl":
@@ -103,9 +103,12 @@ def test_restricted_result_and_all_formats_drop_winner_preserve_plan(fmt, limite
     assert "guaranteed best" not in result["report"]
     assert "Always use" not in result["report"]
     assert "#1 " not in result["report"]
-    assert "Pilot one project" in result["report"]
-    assert "Compare lockfile and CI results" in result["report"]
-    assert "Poetry" in result["report"]
+    assert rec["action_plan_mode"] == "validation_only"
+    assert "Pilot one project" not in result["report"]
+    assert "Compare lockfile and CI results" not in result["report"]
+    assert "Isolated validation only; no production changes" in result["report"]
+    assert "prohibit rollback" in result["report"]
+    assert "Only if the pilot passes" in result["report"]
 
 
 @pytest.mark.asyncio

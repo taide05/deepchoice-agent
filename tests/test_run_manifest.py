@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v3"
+    assert first.report.template_version == "evidence-first-v4"
     assert first.scoring_policy_version == "source-score-v3"
     assert first.security_policy_version == "outbound-url-v2"
     assert first.citation_policy_version == "deterministic-citation-v1"
@@ -82,7 +82,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v1"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v4",
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v5",
                          "conflict_detector.contradiction_scan_system": "v2",
                          "conflict_detector.arbitration_system": "v2"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
@@ -92,9 +92,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v5",
-        "evidence_first": "evidence-first-v3",
-        "comparison_matrix": "comparison-matrix-v3",
+        "what_why_how": "what-why-how-v6",
+        "evidence_first": "evidence-first-v4",
+        "comparison_matrix": "comparison-matrix-v4",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 
@@ -145,12 +145,16 @@ def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
     ("changed_asset", "report_format", "previous_template"),
     [
         ("synthesis", "what_why_how", None),
+        ("synthesis_v4", "what_why_how", None),
         ("template", "what_why_how", "what-why-how-v3"),
         ("template", "evidence_first", "evidence-first-v1"),
         ("template", "comparison_matrix", "comparison-matrix-v1"),
         ("template", "what_why_how", "what-why-how-v4"),
         ("template", "evidence_first", "evidence-first-v2"),
         ("template", "comparison_matrix", "comparison-matrix-v2"),
+        ("template", "what_why_how", "what-why-how-v5"),
+        ("template", "evidence_first", "evidence-first-v3"),
+        ("template", "comparison_matrix", "comparison-matrix-v3"),
     ],
 )
 def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
@@ -160,10 +164,11 @@ def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
 
     task = {"query": "A vs B", "report_format": report_format}
     current = build_run_manifest(task)
-    if changed_asset == "synthesis":
+    if changed_asset in ("synthesis", "synthesis_v4"):
+        previous_version = "v4" if changed_asset == "synthesis_v4" else "v3"
         previous = current.model_copy(update={
             "prompts": tuple(
-                prompt.model_copy(update={"version": "v3", "sha256": "3" * 64})
+                prompt.model_copy(update={"version": previous_version, "sha256": "3" * 64})
                 if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt"
                 else prompt
                 for prompt in current.prompts

@@ -90,11 +90,18 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
         lines.append("")
 
     if action_plan:
+        validation_only = recommendation.get("action_plan_mode") == "validation_only"
+        heading = (
+            "### 行动计划（仅隔离验证；禁止生产变更）"
+            if lang == "zh" else
+            "### Action Plan (Isolated validation only; no production changes)"
+        ) if validation_only else (
+            "### 行动计划（待验证计划）" if lang == "zh"
+            else "### Action Plan (Proposed validation plan)"
+        )
         lines.extend(
             [
-                "### 行动计划（待验证计划）"
-                if lang == "zh"
-                else "### Action Plan (Proposed validation plan)",
+                heading,
                 "",
             ]
         )

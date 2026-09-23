@@ -109,8 +109,11 @@ async def test_all_reports_keep_analysis_warning_and_conditional_plan(monkeypatc
     report = render(state)
     assert label in report and CLAIM in report
     assert "#1" not in report and "Winner: SQLite" not in report
-    assert "Rehearse backup and recovery" in report
-    assert "Measured lock waits" in report and "verified backup" in report
+    assert state["final_recommendation"]["action_plan_mode"] == "validation_only"
+    assert "Rehearse backup and recovery" not in report
+    assert ("仅隔离验证；禁止生产变更" if "选择" in query else
+            "Isolated validation only; no production changes") in report
+    assert "If the write load fits" in report
     assert "provisional_explanation" not in report
 
 

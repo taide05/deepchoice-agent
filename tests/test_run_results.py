@@ -87,6 +87,58 @@ def test_provisional_analysis_survives_public_result_roundtrip_with_warning():
     assert analysis in restored.report
 
 
+def test_validation_only_plan_survives_public_result_without_original_operations():
+    from deepchoice.formats.what_why_how import render
+    from deepchoice.utils.decision_contract import abstain_recommendation
+
+    task, run = _records()
+    recommendation = abstain_recommendation({
+        "action_plan": [{"step": "UNSAFE_LIVE_CUTOVER", "verification": "Later",
+                         "change_trigger": "Now", "rollback": "UNSAFE_OLD_SNAPSHOT"}],
+    }, task.request.query)
+    recommendation["lease_owner"] = "private-worker"
+    state = {"task": task.request.model_dump(), "final_recommendation": recommendation}
+    state["report"] = render(state)
+    result = build_public_run_result(run, task.request.model_dump(), state, created_at=run.created_at)
+    restored = RunResultRecord.model_validate_json(result.model_dump_json())
+    assert restored.snapshot["final_recommendation"]["action_plan_mode"] == "validation_only"
+    assert "Isolated validation only; no production changes" in restored.report
+    assert "acknowledged writes" in restored.report
+    for forbidden in ("UNSAFE_LIVE_CUTOVER", "UNSAFE_OLD_SNAPSHOT", "private-worker"):
+        assert forbidden not in restored.model_dump_json()
+
+
+def test_withdrawn_action_can_remain_only_as_citation_audit_text_in_public_snapshot():
+    from deepchoice.agents.citation_validator import _calibrate_decision
+    from deepchoice.citations import (
+        CitationCheck, CitationReason, CitationStatus, CitationStatusCounts, CitationVerification,
+    )
+    from deepchoice.formats.what_why_how import render
+
+    task, run = _records()
+    text = "UNSAFE_OLD_SNAPSHOT"
+    verification = CitationVerification(status_counts=CitationStatusCounts(unsupported=1), checks=(
+        CitationCheck(claim_id="original-action", claim_path="final_recommendation.action_plan[0].rollback",
+                      claim_text=text, status=CitationStatus.UNSUPPORTED, reason=CitationReason.CITATION_MISSING),
+    ))
+    recommendation = _calibrate_decision({
+        "decision_basis_version": "constraint-aware-v1",
+        "requirement_assessments": [{"id": "A1", "requirement": "Recovery boundary", "status": "unknown"}],
+        "action_plan": [{"step": "UNSAFE_LIVE_CUTOVER", "verification": "Later",
+                         "change_trigger": "Now", "rollback": text}],
+    }, verification, task.request.query)
+    state = {"task": task.request.model_dump(), "final_recommendation": recommendation,
+             "citation_verification": verification.model_dump(mode="json")}
+    state["report"] = render(state)
+    result = build_public_run_result(run, task.request.model_dump(), state, created_at=run.created_at)
+    restored = RunResultRecord.model_validate_json(result.model_dump_json())
+    audit = restored.snapshot["citation_verification"]["checks"][0]
+    assert audit["claim_text"] == text and audit["status"] == "unsupported"
+    assert text not in str(restored.snapshot["final_recommendation"])
+    assert text not in restored.report and "UNSAFE_LIVE_CUTOVER" not in restored.report
+    assert "Isolated validation only; no production changes" in restored.report
+
+
 @pytest.mark.asyncio
 async def test_result_and_successful_terminal_event_commit_together(tmp_path: Path):
     connection = await connect_database(tmp_path / "product.db")

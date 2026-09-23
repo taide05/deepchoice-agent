@@ -119,6 +119,43 @@ def _is_zh(query: Any) -> bool:
     return isinstance(query, str) and bool(re.search(r"[\u3400-\u9fff]", query))
 
 
+def _validation_only_plan(query: Any) -> list[dict[str, str]]:
+    """Fixed review tasks, not a model-authored production runbook.
+
+    Do not interpolate model steps or rollback text here: an uncertainty label
+    cannot make an unestablished cutover or stale-snapshot restore safe.
+    """
+    if _is_zh(query):
+        return [
+            {
+                "step": "只读观察现有系统，在隔离副本中逐项核验条件分支和未决需求。",
+                "verification": "记录实际负载、失败现象与基线；由负责人定义观测窗口、可接受阈值和证据来源，不把未知值当作通过。",
+                "change_trigger": "关键前提或阈值未明确时只继续取证；确认后仅进入隔离演练，不放行生产变更。",
+                "rollback": "保留当前生产状态；验证失败时停止实验，不用实验副本或旧快照覆盖生产。",
+            },
+            {
+                "step": "仅在可丢弃的隔离副本中制定并演练变更、失败和恢复流程。",
+                "verification": "涉及状态或写入时，明确唯一权威源、一致性检查点、已确认新增写入的保全/回放方法，以及不可逆点和禁止回退条件；这些必须有适用依据及演练结果。",
+                "change_trigger": "缺写入保全、放行/中止或回退边界即停止；全部核验后仅提交独立审查，本报告及演练通过均不授权生产双写、切流或覆盖恢复。",
+                "rollback": "只丢弃隔离实验副本并保留诊断；生产回退可行性未成立时明确禁止回退，继续保留当前权威数据。",
+            },
+        ]
+    return [
+        {
+            "step": "Observe the current system read-only and check each conditional choice and unresolved requirement in an isolated copy.",
+            "verification": "Record actual workload, failures and a baseline; have the responsible owner define the observation window, acceptable thresholds and evidence. Unknown values are not passing results.",
+            "change_trigger": "Collect evidence while critical premises or thresholds remain unresolved; confirmation permits only isolated rehearsal, not production changes.",
+            "rollback": "Keep production unchanged; stop a failed experiment without overwriting production with an experimental copy or old snapshot.",
+        },
+        {
+            "step": "Design and rehearse change, failure and recovery procedures only on a disposable isolated copy.",
+            "verification": "For state or writes, establish one authoritative source, a consistency checkpoint, preservation/replay of newly acknowledged writes, irreversible points and conditions that prohibit rollback, with applicable evidence and rehearsal results.",
+            "change_trigger": "Stop if write preservation, advancement/abort or rollback boundaries are missing. Submit complete evidence for independent review only; neither this report nor passing rehearsal authorizes production dual writes, cutover or overwrite recovery.",
+            "rollback": "Discard only the isolated experimental copy and retain diagnostics. Explicitly prohibit rollback when production rollback feasibility is unestablished; retain current authoritative data.",
+        },
+    ]
+
+
 def _restricted_message(query: Any, reason: str | None = None) -> str:
     clean_reason = _clean_text(reason, limit=500)
     if _is_zh(query):
@@ -155,7 +192,12 @@ def abstain_recommendation(
     result["decision_branches"] = normalize_decision_branches(
         result.get("decision_branches")
     )
-    result["action_plan"] = normalize_action_plan(result.get("action_plan"))
+    # Abstention withdraws operational authority as well as winner/rank claims.
+    # Keep decision analysis, but never preserve arbitrary imperative model text
+    # as a production procedure merely by labelling it "proposed".
+    has_plan = bool(normalize_action_plan(result.get("action_plan")))
+    result["action_plan_mode"] = "validation_only"
+    result["action_plan"] = _validation_only_plan(query) if has_plan else []
     if result["decision_branches"]:
         result["recommendation"] = (
             "当前给出条件性建议：按下方各方案的前提与行动计划验证后选择，不将其视为无条件胜者。"

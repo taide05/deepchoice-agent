@@ -29,3 +29,7 @@ hash 改变；另外更新评估时间、manifest/core-asset 身份与总 finger
 全部指标、数据集与来源健康完全不变；仅 evaluated_at、current_manifest_id、
 core_asset_registry_id 和 artifact_fingerprint 四项不同，因此只更新这四项基准记录。
 未修改 fixture、预期输出或验收阈值，不把本次身份更新声称为模型质量改善。
+
+2026-09-23 行动安全修复再次核对：仍只有上述四项身份/时间/fingerprint变化，12个案例
+输出/hash、指标、数据集和 source_health 不变。更新对应四项基准记录；专门的行动安全
+反例由自动化测试覆盖，不把 smoke-v1 冒充本次全部行为覆盖或真实质量证明。
