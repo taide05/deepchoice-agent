@@ -104,6 +104,16 @@ Tavily 检索保留 provider 返回的 content；此处只研究保存片段到�
 场景适用性 S0-Q2-01d 另保留：同名候选不代表相同负载/部署条件，调整窗口不能自动解决。
 本轮没有改本地知识内容或来源评分，也没有启动第三次付费资格。
 
+Q2-01d 的只读定位补充：Chroma 检索仅透传 url/title/date，前500字符作为片段；
+learned_docs 的 `via=harvest:*`/`via=llm` 是官网URL映射学习来源，不是正文出处或模板类别。
+仓库未找到本地语料的 ingestion/indexer。对当前本地索引只用 SQLite `mode=ro` 按已知 P01
+的 sqlite-vs-postgresql 文件URL精确查 metadata（未枚举其他记录、读取正文/向量）：该条只有
+url/title/date、粗分类 `source_type=blogs` 及正文存储字段，没有 document_kind/provenance。
+这不是对全部索引或冻结语料内容的审计；`blogs` 不能可靠区分原始资料与决策模板。
+因此不新增文字黑名单，不广泛排除本地单候选能力文档，也不建设无数据消费的分类脚手架。
+修复仍待可信 ingestion 类别/来源契约；若需重新标注或替换知识种子，必须作为前瞻的独立
+实验变量处理，不能静默修改当前冻结种子或将同名候选视为适用性证明。
+
 #### 离线比较结论
 
 [实验模块](../benchmarks/evidence_window_prototype.py)以 ASCII 词/CJK 双字定位单一连续片段，
