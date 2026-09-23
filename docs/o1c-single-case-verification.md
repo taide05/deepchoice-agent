@@ -1,5 +1,30 @@
 # O1-C 真实单例验真
 
+## S1 解释保留修复候选：2026-09-22 执行，2026-09-23 锁分
+
+**83852d8 的 P01 执行完成，但内容资格不通过。** 冻结数据集仍为 product-baseline-v1
+v1.0.0（2026-09-16）；主评与独立助手复核一致：必答 **5/6（2、2、1）**、冲突 **2/2**、
+已确认 **major 1**。没有同窗口配对，不能据两份单例的分数差宣称因果改善；非盲评，
+人类校准 not_run，未读取保留集报告或反馈。运行器曾自动显示总用量，节点成本在内容锁分后读取。
+
+L78/L84/L89–90 已保留低运维、单 writer 及条件性选择的解释；L79/L85/L94 给出锁频率、
+等待时长等观察方向，但适用阈值未定义。阻断项 **S1-P01-MIGRATION-01** 位于 L96：
+在双写、切读、切写之后，只建议回退 SQLite 快照，没有新增写入回放、逆同步或禁止回退
+条件。这是已确认的数据完整性边界遗漏，并非实际发生了数据丢失。“待验证”标签不能补足
+该边界。L95 的恢复失败即考虑换 PostgreSQL、旧快照回退缺恢复点/新增写入界限另记 high，
+不重复计 major。旧的解释丢失问题得到局部展示证据，但整个 S1 资格门禁未通过。
+
+独立复核后锁定 **36 个逐处原子关键声明**：supported 12 / partial 6 / unsupported 0 /
+unknown 11 / uncited 7；来源 eligible 0 / ineligible 19 / unknown 17；系统逐原子
+unknown 20 / unsupported 16。原系统 36 次检查（unknown 13、unsupported 23）是另一分母。
+完整支持率为 12/36，适用来源确认覆盖率为 0/36；unknown 不被解释为事实错误。
+复核将截断 WAL 片段的一项 unsupported 改 unknown，排除两条纯监控指令，并拆开双写/影子读。
+
+本地报告/快照在 outputs/s1-qualification-20260922-uncertain-analysis-v1/qualification/collections/
+serial-r1/development/；锁分在 outputs/s1-qualification-review-20260922-83852d8/main-review.json。
+报告 SHA256 eec87fc291903f8f60da12dd6353e8d9c5fc2f675e90fa3054fd740882261d2a；快照 SHA256
+07d8c2247547548065203f0d5c109ed0da5c5efffd2add39bccaf49e789ff27a。原始报告不修改、资格不补跑。
+
 ## S1 约束感知候选：2026-09-22
 
 **bcb4c87 的 P01 执行完成，但内容资格未通过；正式局部配对尚未启动。**
