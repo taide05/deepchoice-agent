@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 import json
 
 import httpx
@@ -19,6 +20,17 @@ from deepchoice.server.app import app as server_app
 
 async def _resolve(values):
     return values
+
+
+class _AsyncBytes(httpx.AsyncByteStream):
+    def __init__(self, payload: bytes):
+        self.payload = payload
+
+    async def __aiter__(self):
+        yield self.payload
+
+    async def aclose(self):
+        return None
 
 
 @pytest.mark.asyncio
@@ -125,6 +137,193 @@ async def test_safe_fetch_revalidates_redirects_and_pins_each_connection():
 
 
 @pytest.mark.asyncio
+async def test_safe_fetch_requests_identity_encoding_on_every_hop():
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    requests = []
+
+    def transport_factory(_resolved, _ip):
+        def handler(request):
+            requests.append((request.url.path, request.headers.get("accept-encoding")))
+            if request.url.path == "/start":
+                return httpx.Response(302, headers={"location": "/end"})
+            return httpx.Response(200, headers={"content-type": "text/html"}, content=b"ok")
+
+        return httpx.MockTransport(handler)
+
+    response = await _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory).safe_fetch(
+        "official", "https://example.com/start", allowed_content_types=("text/html",)
+    )
+    assert response.content == b"ok"
+    assert requests == [("/start", "identity"), ("/end", "identity")]
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_rejects_invalid_gzip_as_bounded_failure():
+    from deepchoice.security.urls import SafeFetchFailure
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-encoding": "gzip"},
+                content=b"not-a-gzip-stream",
+                request=request,
+            )
+        )
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+    assert caught.value.failure is SafeFetchFailure.RESPONSE_REJECTED
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_accepts_valid_gzip_but_returns_decoded_headers():
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    encoded = gzip.compress(b"hello")
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={
+                    "content-type": "text/html",
+                    "content-encoding": "gzip",
+                    "content-length": str(len(encoded)),
+                    "transfer-encoding": "chunked",
+                },
+                stream=_AsyncBytes(encoded),
+                request=request,
+            )
+        )
+
+    response = await _direct_resolver(
+        SafeUrlPolicy(resolver=dns), transport_factory
+    ).safe_fetch("official", "https://example.com/", allowed_content_types=("text/html",))
+    assert response.content == b"hello"
+    assert response.headers.get("content-encoding") is None
+    assert response.headers.get("transfer-encoding") is None
+    assert response.headers["content-length"] == "5"
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_limits_decoded_gzip_body():
+    from deepchoice.security.urls import SafeFetchFailure
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    encoded = gzip.compress(b"123456")
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-encoding": "gzip"},
+                stream=_AsyncBytes(encoded),
+                request=request,
+            )
+        )
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch(
+            "official",
+            "https://example.com/",
+            max_response_bytes=5,
+            allowed_content_types=("text/html",),
+        )
+    assert caught.value.failure is SafeFetchFailure.RESPONSE_REJECTED
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_head_returns_buffered_body_length_zero():
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-length": "123"},
+                request=request,
+            )
+        )
+
+    response = await _direct_resolver(
+        SafeUrlPolicy(resolver=dns), transport_factory
+    ).safe_fetch(
+        "official",
+        "https://example.com/",
+        method="HEAD",
+        allowed_content_types=("text/html",),
+    )
+    assert response.content == b""
+    assert response.headers["content-length"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_rejects_invalid_gzip_during_stream_iteration():
+    from deepchoice.security.urls import SafeFetchFailure
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-encoding": "gzip"},
+                stream=_AsyncBytes(b"not-a-gzip-stream"),
+                request=request,
+            )
+        )
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+    assert caught.value.failure is SafeFetchFailure.RESPONSE_REJECTED
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_rejects_unknown_content_encoding_before_normalizing_headers():
+    from deepchoice.security.urls import SafeFetchFailure
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html", "content-encoding": "x-private"},
+                stream=_AsyncBytes(b"opaque"),
+                request=request,
+            )
+        )
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+    assert caught.value.failure is SafeFetchFailure.RESPONSE_REJECTED
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("content_type", ["application/json", "text/plain"])
 async def test_official_non_html_429_publishes_cooldown_without_exposing_body(content_type):
     from deepchoice.outbound import throttle
@@ -172,7 +371,13 @@ async def test_safe_fetch_head_fallback_is_only_405_or_501_and_bounded():
 
     def transport_factory(_resolved, _ip):
         async def handler(request):
-            methods.append((request.method, request.headers.get("range")))
+            methods.append(
+                (
+                    request.method,
+                    request.headers.get("range"),
+                    request.headers.get("accept-encoding"),
+                )
+            )
             if request.method == "HEAD":
                 return httpx.Response(405, headers={"content-type": "text/html"})
             return httpx.Response(200, headers={"content-type": "text/html"}, content=b"12345")
@@ -188,7 +393,10 @@ async def test_safe_fetch_head_fallback_is_only_405_or_501_and_bounded():
         head_fallback_to_range_get=True,
     )
     assert response.content == b"12345"
-    assert methods == [("HEAD", None), ("GET", "bytes=0-4")]
+    assert methods == [
+        ("HEAD", None, "identity"),
+        ("GET", "bytes=0-4", "identity"),
+    ]
 
     def oversized_factory(_resolved, _ip):
         return httpx.MockTransport(

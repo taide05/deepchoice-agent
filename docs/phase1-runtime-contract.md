@@ -468,6 +468,14 @@ TLS 失败、断连、超时和取消均清理持有 stream，取消继续传播
 closed 和 lifecycle/fencing/SSE 不变。self-forward、远程、SOCKS/HTTPS 代理、认证和
 经代理 HTTP 引用继续拒绝。本轮离线验收不证明真实代理可用性或模型报告质量。
 
+安全 fetch 每一跳显式请求 `Accept-Encoding: identity`，HEAD 405/501 的有界 Range GET
+也保留该请求头，以便正文上限作用于实际消费的表示。服务端或中间层仍返回无法解码的
+`Content-Encoding` 时，统一投影为脱敏的 `response_rejected`，不泄露底层解码异常、正文或
+网络细节；未知编码也在读取正文和清理表示头前拒绝。已绑定 `RunContext` 在任何通道上都必须
+匹配 v3 和冻结的代理身份，旧上下文在路由探测前关闭。不放宽 content-type、正文大小、redirect、
+超时、DNS/IP 固定、429 或取消边界。新 run 因此冻结 `outbound-url-v3`；历史 v1/v2 manifest 继续可读，但不能在 v3 runtime
+同 run 恢复，须新建 run，避免同一安全策略身份下改变传输与错误语义。
+
 ## O1-PR1：单例资格消费者（2026-09-18）
 
 仅 `collect-single --stop-at-hitl` 在读取 public pending decision 后停止采集，保留

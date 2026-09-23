@@ -192,7 +192,7 @@ class ChannelResolver:
         proxy_identity = self.cfg.safe_fetch_proxy_sha256
         if context is not None and (
             context.safe_fetch_proxy_sha256 != proxy_identity
-            or (proxy_identity is not None and context.security_policy_version != "outbound-url-v2")
+            or context.security_policy_version != "outbound-url-v3"
         ):
             raise UnsafeUrlError("Safe fetch configuration differs from the frozen run", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
         channel = await self.resolve(source)
@@ -223,6 +223,13 @@ class ChannelResolver:
                 )
             except TimeoutError as exc:
                 raise UnsafeUrlError("Safe URL fetch exceeded the total timeout", failure=SafeFetchFailure.TIMEOUT) from exc
+            except httpx.DecodingError:
+                # httpx may raise while opening the response stream or while
+                # iterating it, depending on the transport implementation.
+                raise UnsafeUrlError(
+                    "Response content encoding could not be decoded",
+                    failure=SafeFetchFailure.RESPONSE_REJECTED,
+                ) from None
 
         if source == "official":
             from . import throttle
@@ -248,7 +255,12 @@ class ChannelResolver:
     ) -> httpx.Response:
         current_url = url
         current_method = method
-        headers: dict[str, str] = {}
+        # Dynamic safe fetches need byte-count enforcement on the exact
+        # representation consumed below.  Asking for identity also avoids a
+        # broken intermediary/server combination advertising gzip after the
+        # body has already been decoded.  Servers may ignore this request, so
+        # decoding failures still fail closed below.
+        headers: dict[str, str] = {"Accept-Encoding": "identity"}
         redirects = 0
         while True:
             if proxy_url is not None:
@@ -301,23 +313,57 @@ class ChannelResolver:
                         and status in {405, 501}
                     ):
                         current_method = "GET"
-                        headers = {"Range": f"bytes=0-{max_response_bytes - 1}"}
+                        headers = {
+                            **headers,
+                            "Range": f"bytes=0-{max_response_bytes - 1}",
+                        }
                         # Re-resolve and repin even for the same logical URL.
                         continue
 
+                    content_encodings = tuple(
+                        encoding.strip().lower()
+                        for header in response_headers.get_list("content-encoding")
+                        for encoding in header.split(",")
+                        if encoding.strip()
+                    )
+                    if any(
+                        encoding not in {"identity", "gzip"}
+                        for encoding in content_encodings
+                    ):
+                        raise UnsafeUrlError(
+                            "Response content encoding is not allowed",
+                            failure=SafeFetchFailure.RESPONSE_REJECTED,
+                        )
                     media_type = response_headers.get("content-type", "").split(";", 1)[0].strip().lower()
                     if not any(
                         media_type == allowed.lower() for allowed in allowed_content_types
                     ):
                         raise UnsafeUrlError("Response content type is not allowed", failure=SafeFetchFailure.RESPONSE_REJECTED)
                     body = bytearray()
-                    async for chunk in streamed.aiter_bytes():
-                        body.extend(chunk)
-                        if len(body) > max_response_bytes:
-                            raise UnsafeUrlError("Response body exceeds the allowed size", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                    try:
+                        async for chunk in streamed.aiter_bytes():
+                            body.extend(chunk)
+                            if len(body) > max_response_bytes:
+                                raise UnsafeUrlError("Response body exceeds the allowed size", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                    except httpx.DecodingError:
+                        raise UnsafeUrlError(
+                            "Response content encoding could not be decoded",
+                            failure=SafeFetchFailure.RESPONSE_REJECTED,
+                        ) from None
+                    decoded_headers = httpx.Headers(response_headers)
+                    # aiter_bytes() returns the decoded representation.  Do
+                    # not attach the upstream representation headers to those
+                    # bytes or downstream httpx consumers will decode again.
+                    for header_name in (
+                        "content-encoding",
+                        "content-length",
+                        "transfer-encoding",
+                    ):
+                        decoded_headers.pop(header_name, None)
+                    decoded_headers["content-length"] = str(len(body))
                     return httpx.Response(
                         status_code=status,
-                        headers=response_headers,
+                        headers=decoded_headers,
                         content=bytes(body),
                         request=streamed.request,
                     )

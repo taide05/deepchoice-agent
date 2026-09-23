@@ -11,8 +11,8 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 有界正文窗口的离线原型未通过推广门槛：仍漏掉已知相关段落，局部邻句也不能保证条件完整，因此未改变生产合成行为。
 用户批准累计研究上限152（已用92）、局部12格加整合最终/并发48格路线，并把最终校准门禁改为 GPT-only；
 独立盲评与残余风险记录仍必需，不称人工验收。开发请求、93个官方目录 URL 身份及有界采集/输入验证
-已有离线工具，但尚未抓取、批准正文或建新知识库，也未冻结新协议/双臂执行器。
-最新离线工程验证为1897项全套测试通过（2026-09-23），不是产品效果验收。
+已有离线工具；目前仅抓取 1 份未批准候选，尚未批准正文或建新知识库，也未冻结新协议/双臂执行器。
+最新离线工程验证为1906项全套测试通过（2026-09-23），不是产品效果验收。
 后续按“全面诊断 → 首个方向验证 → 剩余缺口处理 → 最终候选验收 → 交付”推进，
 每轮一个主要变量，全部优化方向都有处理状态和退出条件；不以一个方向代表整个产品完成。
 
@@ -193,7 +193,9 @@ active-time，80% 时提示。60,000 token 与 900 秒分别给用户提供的�
 Phase 6-A 已收敛默认安全边界：所有受管 URL 外呼使用 `SafeUrlPolicy`/安全 fetch，仅允许
 HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redirect 上重新验证公网地址、
 端口和响应限制；无法证明安全的 proxy/forward 动态 URL fail closed。forward 目标采用完整
-hostname 精确匹配或显式 `*.example.com` 子域匹配。HTTP body 上限为 128 KiB，query、候选、
+hostname 精确匹配或显式 `*.example.com` 子域匹配。动态抓取显式请求 identity content encoding；
+无法解码或含未知编码的响应按脱敏 `response_rejected` 关闭。新 run 冻结 `outbound-url-v3`，历史 v1/v2
+manifest 仍可读取但不能按变化后的传输语义同 run 恢复。HTTP body 上限为 128 KiB，query、候选、
 澄清和聚合输入另有字段/数量限制。日志、错误、Trace 和 LLM diagnostics 统一脱敏，后者只保留
 hash、length、usage 和 error type。报告继续提供 Markdown，并由服务端生成经过 sanitizer 的
 `report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。

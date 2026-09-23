@@ -39,7 +39,7 @@ def _proxy_resolver(
     )
     if context is _UNSET:
         context = (
-            _context_for(cfg, policy="outbound-url-v2")
+            _context_for(cfg, policy="outbound-url-v3")
             if cfg.safe_fetch_proxy_sha256 is not None
             else None
         )
@@ -112,6 +112,24 @@ async def test_trusted_proxy_is_default_off_and_never_falls_back_to_direct():
         await resolver.safe_fetch("community", "https://example.test/")
     assert caught.value.failure is SafeFetchFailure.ROUTE_UNSUPPORTED
     assert direct_calls == []
+
+
+@pytest.mark.asyncio
+async def test_direct_safe_fetch_rejects_historical_policy_context_before_routing(monkeypatch):
+    cfg = OutboundConfig(channel_order=("direct",))
+    monkeypatch.setattr(
+        context_module,
+        "get_run_context",
+        lambda: _context_for(cfg, policy="outbound-url-v2"),
+    )
+
+    async def forbidden_probe(*_args):
+        pytest.fail("historical policy must reject before route probing")
+
+    resolver = ChannelResolver(cfg=cfg, probe_fn=forbidden_probe)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch("community", "https://example.test/")
+    assert caught.value.failure is SafeFetchFailure.ROUTE_UNSUPPORTED
 
 
 @pytest.mark.parametrize(
@@ -378,13 +396,13 @@ async def test_proxy_requires_matching_durable_context_and_rejects_drift(monkeyp
         local_proxy=TRUSTED_PROXY,
         safe_fetch_trusted_local_proxy=TRUSTED_PROXY,
     )
-    matching = _context_for(cfg, policy="outbound-url-v2")
+    matching = _context_for(cfg, policy="outbound-url-v3")
     resolver, calls = _proxy_resolver(cfg=cfg, context=matching, monkeypatch=monkeypatch)
     response = await resolver.safe_fetch("community", "https://example.test/")
     assert response.text == "ok"
     assert len(calls) == 1
 
-    drifted = _context_for(cfg, proxy_hash="0" * 64, policy="outbound-url-v2")
+    drifted = _context_for(cfg, proxy_hash="0" * 64, policy="outbound-url-v3")
     async def forbidden_probe(*_args):
         pytest.fail("configuration drift must reject before route probing")
 

@@ -88,7 +88,9 @@ class RunContext(BaseModel):
     trace: TraceSink
     budget: BudgetManager
     retrieval_cache: RetrievalCachePort | None = None
-    security_policy_version: Literal["outbound-url-v1", "outbound-url-v2"] | None = None
+    security_policy_version: Literal[
+        "outbound-url-v1", "outbound-url-v2", "outbound-url-v3"
+    ] | None = None
     safe_fetch_proxy_sha256: str | None = None
 
     @field_validator("deadline_at")

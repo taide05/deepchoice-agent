@@ -44,7 +44,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v4"
     assert first.scoring_policy_version == "source-score-v5"
-    assert first.security_policy_version == "outbound-url-v2"
+    assert first.security_policy_version == "outbound-url-v3"
     assert first.citation_policy_version == "deterministic-citation-v1"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
@@ -276,7 +276,7 @@ def test_manifest_freezes_trusted_proxy_identity_hash_without_endpoint_text(monk
     manifest = build_run_manifest({"query": "A vs B"})
     serialized = json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False)
 
-    assert manifest.security_policy_version == "outbound-url-v2"
+    assert manifest.security_policy_version == "outbound-url-v3"
     assert re.fullmatch(r"[0-9a-f]{64}", manifest.safe_fetch_proxy_sha256 or "")
     assert endpoint not in serialized
     assert "127.0.0.1" not in serialized
@@ -313,7 +313,33 @@ def test_historical_v1_json_without_proxy_hash_remains_readable_but_cannot_resum
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-def test_v2_manifest_proxy_identity_changes_are_incompatible_and_canonical_equivalents_match(monkeypatch):
+def test_historical_v2_json_remains_readable_but_cannot_resume(monkeypatch):
+    from deepchoice.contracts.manifest import _expected_manifest_id
+
+    monkeypatch.delenv("SAFE_FETCH_TRUSTED_LOCAL_PROXY", raising=False)
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    payload = current.model_dump(mode="json")
+    payload["security_policy_version"] = "outbound-url-v2"
+    payload.pop("manifest_id", None)
+    payload.pop("created_at", None)
+    old_id = __import__("hashlib").sha256(
+        json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+    ).hexdigest()
+    old_json = dict(payload, manifest_id=old_id, created_at=current.created_at.isoformat())
+
+    restored = type(current).model_validate_json(json.dumps(old_json))
+    assert restored.security_policy_version == "outbound-url-v2"
+    assert restored.safe_fetch_proxy_sha256 is None
+    assert restored.manifest_id == old_id == _expected_manifest_id(restored)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_v3_manifest_proxy_identity_changes_are_incompatible_and_canonical_equivalents_match(monkeypatch):
     task = {"query": "A vs B"}
     monkeypatch.setenv("SAFE_FETCH_TRUSTED_LOCAL_PROXY", "http://127.0.0.1:7897")
     manifest = build_run_manifest(task)
