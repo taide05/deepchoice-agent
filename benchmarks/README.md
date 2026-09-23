@@ -6,6 +6,7 @@
 | 入口 | 用途和边界 |
 |---|---|
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
+| `evidence_window_prototype.select_evidence_window` | 未推广的纯离线定位原型；输出全部不可绑定，不被默认研究路径调用。反例与限制见 S0 诊断，不作质量/成本评估器 |
 | `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例版本化案例集，不调用 LLM/网络 |
 | `python -m benchmarks.product_baseline collect ...` | 经 durable API 采集 serial=1 或 concurrent=12 的真实结果；必须冻结案例和环境，并显式确认付费运行 |
 | `python -m benchmarks.product_baseline collect-single --case-id P06 ...` | 仅一个开发 case、concurrency=1、新输出目录及付费开关；运行可靠性验证，不是完整基线 |
