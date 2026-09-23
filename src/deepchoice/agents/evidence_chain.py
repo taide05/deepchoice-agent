@@ -1,3 +1,4 @@
+from ..utils.evidence import is_navigation_placeholder
 from ..utils.views import print_agent_output
 
 
@@ -9,7 +10,7 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
 
     chains = []
     for s in source_scores:
-        if s["total_score"] < 4.0:
+        if s["total_score"] < 4.0 or is_navigation_placeholder(s.get("snippet")):
             continue
 
         evidence_sources = [{

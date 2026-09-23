@@ -3,7 +3,7 @@ import posixpath
 import re
 from urllib.parse import unquote, urlsplit
 
-from ..utils.evidence import source_title
+from ..utils.evidence import is_navigation_placeholder, source_title
 
 
 def _candidate_patterns(task: dict) -> list[re.Pattern]:
@@ -179,9 +179,13 @@ class SourceEvaluatorAgent:
         all_results = []
         patterns = _candidate_patterns(research_state.get("task", {}))
         excluded = 0
+        navigation_excluded = 0
         for channel in research_state.get("search_results", []):
             source = channel.get("source", "unknown")
             for r in channel.get("results", []):
+                if is_navigation_placeholder(r.get("snippet")):
+                    navigation_excluded += 1
+                    continue
                 normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
                 comparison_covers = _local_comparison_covers_candidates(normalized_result, source, patterns)
                 if (comparison_covers is False
@@ -234,6 +238,7 @@ class SourceEvaluatorAgent:
                 "sources_scored": len(source_scores),
                 "candidate_gate": "lexical" if patterns else "not_applied",
                 "candidate_excluded_count": excluded,
+                "navigation_excluded_count": navigation_excluded,
                 "avg_score": avg_score,
                 "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),
                 "low_score_count": sum(1 for s in source_scores if s["total_score"] < 5.0),

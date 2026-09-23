@@ -491,6 +491,15 @@ PR1 的内容修正冻结 source-score-v3、what-why-how-v3，冲突扫描/仲�
 缺强链的 What 保留任务候选标签，不提升 moderate 为 strong；合成未决问题在报告可见，
 不能用“零维护”、无条件并发/WAL/备份/平滑迁移保证替代条件与证据缺口。
 
+2026-09-23 Q2 准入修复冻结 source-score-v4：只排除完整的已知导航占位格式
+`Official documentation site for <single-token term>`（规范化空白/大小写）。它不是页面正文，
+不进入来源评分/冲突候选池或新建证据链；合成结构绑定及预算/HITL 使用已有链时也不接纳，
+其他来源编号不因此错位。原始 search_results、失败投影和检索 envelope 保留，实际正文、
+短包摘要、评分权重、三链/双 hostname/至少 moderate 的结构门槛不变。只有占位帮助满足门槛
+的样本可能变为证据不足，不增加 HITL 类型或外呼。未把所有弱片段/标题判成占位，也不声称
+通过本规则即具备适用的一手证据。旧 source-score-v1/v2/v3 身份仍可读、校验但不可同 run
+恢复；须新 run。无需迁移、改变工作流/状态 schema、提示/模板版本或核心资产索引范围。
+
 2026-09-18 PR1 冻结候选 `7d622fd` 的 P01（product-baseline-v1/1.0.0、分母一 run）
 完成单例测量、完整53原子及独立助手复核，资格为暂定通过；不是并发或人类质量验收。
 锁定身份和残余风险见 [单例验真](o1c-single-case-verification.md)。知识冻结指原种子不变及

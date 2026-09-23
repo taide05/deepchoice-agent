@@ -14,7 +14,7 @@ from ..utils.decision_contract import (
     normalize_requirement_assessments,
     normalize_unknowns,
 )
-from ..utils.evidence import source_title
+from ..utils.evidence import is_navigation_placeholder, source_title
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.views import print_agent_output
 
@@ -306,7 +306,8 @@ def _usable_evidence_ids(evidence_chains: list[dict]) -> set[int]:
         disputed = bool(chain.get("disputed"))
         for source in chain.get("sources", [])[:4]:
             source_number += 1
-            if not disputed and _prompt_data(source.get("snippet", ""), 600):
+            snippet = source.get("snippet", "")
+            if not disputed and not is_navigation_placeholder(snippet) and _prompt_data(snippet, 600):
                 usable.add(source_number)
     return usable
 

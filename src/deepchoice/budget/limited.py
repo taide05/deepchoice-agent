@@ -9,6 +9,7 @@ from urllib.parse import urlsplit, urlunsplit
 from deepchoice.agents.evidence_chain import build_evidence_chain
 from deepchoice.agents.report_generator import FORMAT_RENDERERS
 from deepchoice.utils.decision_contract import restrict_recommendation
+from deepchoice.utils.evidence import is_navigation_placeholder
 
 from .contracts import RunBudgetPolicy
 from .errors import BudgetExceededError
@@ -142,6 +143,8 @@ def usable_evidence_chains(state: dict[str, Any]) -> list[dict[str, Any]]:
         is_disputed = False
         for source in sources:
             if not isinstance(source, dict):
+                continue
+            if is_navigation_placeholder(source.get("snippet")):
                 continue
             url = source.get("url")
             canonical = _canonical_http_url(url)
