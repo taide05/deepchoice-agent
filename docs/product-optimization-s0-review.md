@@ -162,6 +162,16 @@ url/title/date、粗分类 `source_type=blogs` 及正文存储字段，没有 do
 保留旧库和历史证据不动。此举改变测量知识变量及暴露审计权限，须用户决定；仅新增未被现有
 数据消费的 metadata 字段不会清除现有风险，也不能使旧资格有效。
 
+后续对**已绑定的四份开发快照**做精确路径的只读核对：P01、P03、P06、P08 的快照
+SHA-256 均与 S0 绑定一致；四例共四条、每例各有且仅有一条 `file://.../data/blogs/...` 来源进入
+`evidence_chains`，评分均为 5.7，保存片段同时含 `**Category**`、`**Expected winner**`
+和 `## Analysis`。这把已知格式暴露从 P01 精确扩展到四例，仍只是与通用生成格式相符，
+不是逐条 producer 证明或全库污染率。核对范围仅限已有快照 SHA 与
+`source_scores` / `evidence_chains` 的 locator、score；对保存片段只计算三个标记布尔值，
+没有读取四篇本地文件正文、生成器输入案例、其他知识记录或 P09–P12 内容；原快照未改。
+新的隔离规则须基于可信 producer 元数据和前瞻冻结知识版本，不能用这三个文字标记给旧记录
+补写来源身份。
+
 #### 离线比较结论
 
 [实验模块](../benchmarks/evidence_window_prototype.py)以 ASCII 词/CJK 双字定位单一连续片段，
