@@ -1,11 +1,12 @@
-"""Fail-closed tests for the offline official-source intake plan."""
+"""Fail-closed tests for the development official-source intake plan."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import stat
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -26,27 +27,45 @@ def _bytes(payload: dict) -> bytes:
     return (json.dumps(payload, ensure_ascii=True, indent=2) + "\n").encode("utf-8")
 
 
-def test_loads_exact_frozen_plan_and_deduplicates_catalog_aliases() -> None:
+def _refreeze(payload: dict, monkeypatch: pytest.MonkeyPatch) -> bytes:
+    canonical = intake._canonical_plan_sha256(payload)
+    payload["canonical_plan_sha256"] = canonical
+    monkeypatch.setattr(intake, "CANONICAL_PLAN_SHA256", canonical)
+    return _bytes(payload)
+
+
+def test_loads_exact_v2_plan_bound_to_v1_and_development_fixture() -> None:
     plan = load_official_intake_plan()
 
-    assert plan.plan_id == "product-optimization-official-intake-v1"
-    assert plan.catalog_git_object == intake.CATALOG_GIT_OBJECT
+    assert plan.plan_id == "product-optimization-official-intake-v2"
+    assert plan.parent_plan_id == "product-optimization-official-intake-v1"
+    assert plan.development_fixture_id == "product-optimization-dev-requests-v1"
     assert plan.byte_sha256 == intake.PLAN_BYTES_SHA256
-    assert len(plan.entries) == 93
-    assert len({entry.url for entry in plan.entries}) == 93
-    assert plan.entries[9].catalog_key == "node.js"
-    assert plan.entries[51].catalog_key == "chroma"
-    assert plan.entries[74].catalog_key == "pydantic"
-    assert all(entry.catalog_label_unverified for entry in plan.entries)
+    assert len(plan.targets) == 15
+    assert len({target.target_id for target in plan.targets}) == 15
+    assert len({target.url for target in plan.targets}) == 15
+    assert {case_id for target in plan.targets for case_id in target.case_ids} == {
+        "P01",
+        "P04",
+        "P08",
+    }
+    assert all(target.locator_label_unverified for target in plan.targets)
 
 
-def test_loader_only_opens_the_fixed_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_historical_v1_plan_bytes_remain_unchanged() -> None:
+    historical = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v1.json")
+    assert hashlib.sha256(historical.read_bytes()).hexdigest() == intake.PARENT_PLAN_BYTES_SHA256
+
+
+def test_loader_only_opens_the_fixed_v2_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     original_open = Path.open
     opened: list[Path] = []
 
     def guarded_open(self: Path, *args, **kwargs):  # type: ignore[no-untyped-def]
         opened.append(self)
         if self.name in {
+            "product-optimization-official-intake-v1.json",
+            "product-optimization-dev-requests-v1.json",
             "product-baseline-v1.json",
             "cases_200.json",
             "learned_docs.json",
@@ -56,7 +75,7 @@ def test_loader_only_opens_the_fixed_plan(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(Path, "open", guarded_open)
     plan = load_official_intake_plan()
-    assert len(plan.entries) == 93
+    assert len(plan.targets) == 15
     assert opened == [DEFAULT_PLAN_PATH]
 
 
@@ -71,6 +90,8 @@ def test_loader_only_opens_the_fixed_plan(monkeypatch: pytest.MonkeyPatch) -> No
         "https://internal/docs",
         "https://docs.example.test/docs?token=secret",
         "https://docs.example.test/docs#secret",
+        "https://docs.example.test/a/../private",
+        "https://docs.example.test/a\\private",
     ],
 )
 def test_url_validator_rejects_unsafe_literal_or_locator(url: str) -> None:
@@ -78,8 +99,11 @@ def test_url_validator_rejects_unsafe_literal_or_locator(url: str) -> None:
         intake._validate_url_identity(url)
 
 
-def test_url_validator_allows_global_ip_literal_but_plan_mapping_still_binds() -> None:
-    intake._validate_url_identity("https://8.8.8.8/docs")
+def test_url_validator_allows_public_canonical_deep_link() -> None:
+    assert (
+        intake._validate_url_identity("https://docs.example.test/guide/")
+        == "docs.example.test"
+    )
 
 
 @pytest.mark.parametrize("mode", [stat.S_IFLNK, stat.S_IFREG])
@@ -100,25 +124,71 @@ def test_fixed_path_rejects_symlink_or_reparse_component(
 
 
 @pytest.mark.parametrize(
-    "mutation",
+    ("mutation", "match"),
     [
-        lambda payload: payload["entries"][0].update({"url": "http://127.0.0.1/private"}),
-        lambda payload: payload["entries"][0].update({"url": "https://evil.example"}),
-        lambda payload: payload["entries"][0].update({"catalog_key": "nodejs"}),
-        lambda payload: payload["entries"].append(payload["entries"][0]),
+        (
+            lambda payload: payload["targets"][0].update(
+                {"url": "http://127.0.0.1/private"}
+            ),
+            "safe HTTPS identity",
+        ),
+        (
+            lambda payload: payload["targets"][0].update(
+                {"url": "https://evil.example/private"}
+            ),
+            "parent catalog hostname",
+        ),
+        (
+            lambda payload: payload["targets"][0].update(
+                {"parent_catalog_key": "redis"}
+            ),
+            "case or parent binding",
+        ),
+        (
+            lambda payload: payload["targets"][0].update(
+                {"case_ids": ["P08"]}
+            ),
+            "case or parent binding",
+        ),
+        (
+            lambda payload: payload["targets"][0].update(
+                {"evidence_topics": ["invented-topic"]}
+            ),
+            "evidence topics",
+        ),
+        (
+            lambda payload: payload["targets"].append(dict(payload["targets"][0])),
+            "exactly 15",
+        ),
     ],
 )
-def test_malicious_private_alias_or_duplicate_url_fails_closed(mutation) -> None:  # type: ignore[no-untyped-def]
+def test_private_cross_scope_or_drifted_target_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, mutation, match: str  # type: ignore[no-untyped-def]
+) -> None:
     payload = _payload()
     mutation(payload)
 
-    with pytest.raises(OfficialIntakePlanError):
-        _parse_plan_bytes(_bytes(payload))
+    with pytest.raises(OfficialIntakePlanError, match=match):
+        _parse_plan_bytes(_refreeze(payload, monkeypatch))
+
+
+def test_missing_required_topic_coverage_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _payload()
+    for target_id in ("p01-sqlite-backup", "p01-postgresql-backup"):
+        target = next(
+            item for item in payload["targets"] if item["target_id"] == target_id
+        )
+        target["evidence_topics"] = ["operational-complexity"]
+
+    with pytest.raises(OfficialIntakePlanError, match="P01 evidence topic coverage"):
+        _parse_plan_bytes(_refreeze(payload, monkeypatch))
 
 
 def test_duplicate_json_keys_fail_closed() -> None:
     with pytest.raises(OfficialIntakePlanError, match="duplicate JSON object key"):
-        _parse_plan_bytes(b'{"schema_version": 1, "schema_version": 1}')
+        _parse_plan_bytes(b'{"schema_version": 2, "schema_version": 2}')
 
 
 def test_catalog_drift_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,8 +206,8 @@ def test_catalog_drift_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_public_loader_rejects_old_data_path_before_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    old_dataset = DEFAULT_PLAN_PATH.parent / "product-baseline-v1.json"
-    monkeypatch.setattr(intake, "DEFAULT_PLAN_PATH", old_dataset)
+    old_plan = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v1.json")
+    monkeypatch.setattr(intake, "DEFAULT_PLAN_PATH", old_plan)
 
     def forbidden_open(*_args, **_kwargs):  # type: ignore[no-untyped-def]
         raise AssertionError("misconfigured path must be rejected before open")

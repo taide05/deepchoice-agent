@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "plan_id": "product-optimization-official-intake-v2",
+  "status": "frozen_locator_candidates",
+  "freeze_date": "2026-09-24",
+  "purpose": "Development-only exact official-document locators for P01, P04, and P08; locator inclusion is not source approval or claim verification.",
+  "parent_plan": {
+    "plan_id": "product-optimization-official-intake-v1",
+    "byte_sha256": "6ee9a9fddf9367aa507bd262014502fa1e135184ade921b5b2adc13d506964c0",
+    "canonical_plan_sha256": "0d0dfc114923e62e231f4ab1472d713165d48408929036883a019ab5b34c88b6",
+    "catalog_git_object": "2dcbcdcc539b3d2de14710ab588856b44c5fd2fb"
+  },
+  "development_fixture": {
+    "fixture_id": "product-optimization-dev-requests-v1",
+    "byte_sha256": "9c47d8071ed911ede5f810bceda8ba9a4ab19748201f310cf9c033399714871d",
+    "case_ids": [
+      "P01",
+      "P04",
+      "P08"
+    ]
+  },
+  "canonical_plan_sha256": "9f794b80d9b2d89ca473120a9264e3fc8dec9827f7a0ff21969f9a4dd11bff38",
+  "targets": [
+    {
+      "target_id": "p01-sqlite-appropriate-uses",
+      "parent_catalog_key": "sqlite",
+      "case_ids": ["P01"],
+      "evidence_topics": ["migration-triggers", "operational-complexity", "write-concurrency"],
+      "url": "https://sqlite.org/whentouse.html",
+      "locator_label_unverified": "Appropriate Uses For SQLite"
+    },
+    {
+      "target_id": "p01-sqlite-wal",
+      "parent_catalog_key": "sqlite",
+      "case_ids": ["P01"],
+      "evidence_topics": ["write-concurrency"],
+      "url": "https://sqlite.org/wal.html",
+      "locator_label_unverified": "Write-Ahead Logging"
+    },
+    {
+      "target_id": "p01-sqlite-backup",
+      "parent_catalog_key": "sqlite",
+      "case_ids": ["P01"],
+      "evidence_topics": ["backup"],
+      "url": "https://sqlite.org/backup.html",
+      "locator_label_unverified": "SQLite Backup API"
+    },
+    {
+      "target_id": "p01-sqlite-fts5",
+      "parent_catalog_key": "sqlite",
+      "case_ids": ["P01"],
+      "evidence_topics": ["full-text-search"],
+      "url": "https://sqlite.org/fts5.html",
+      "locator_label_unverified": "SQLite FTS5 Extension"
+    },
+    {
+      "target_id": "p01-postgresql-concurrency",
+      "parent_catalog_key": "postgresql",
+      "case_ids": ["P01"],
+      "evidence_topics": ["write-concurrency"],
+      "url": "https://www.postgresql.org/docs/18/mvcc.html",
+      "locator_label_unverified": "PostgreSQL 18 Concurrency Control"
+    },
+    {
+      "target_id": "p01-postgresql-backup",
+      "parent_catalog_key": "postgresql",
+      "case_ids": ["P01"],
+      "evidence_topics": ["backup", "operational-complexity"],
+      "url": "https://www.postgresql.org/docs/18/backup.html",
+      "locator_label_unverified": "PostgreSQL 18 Backup and Restore"
+    },
+    {
+      "target_id": "p01-postgresql-text-search",
+      "parent_catalog_key": "postgresql",
+      "case_ids": ["P01"],
+      "evidence_topics": ["full-text-search"],
+      "url": "https://www.postgresql.org/docs/18/textsearch.html",
+      "locator_label_unverified": "PostgreSQL 18 Full Text Search"
+    },
+    {
+      "target_id": "p04-fastapi-background-tasks",
+      "parent_catalog_key": "fastapi",
+      "case_ids": ["P04"],
+      "evidence_topics": ["execution-boundary", "operational-components"],
+      "url": "https://fastapi.tiangolo.com/tutorial/background-tasks/",
+      "locator_label_unverified": "FastAPI Background Tasks"
+    },
+    {
+      "target_id": "p04-celery-introduction",
+      "parent_catalog_key": "celery",
+      "case_ids": ["P04"],
+      "evidence_topics": ["execution-boundary", "operational-components"],
+      "url": "https://docs.celeryq.dev/en/stable/getting-started/introduction.html",
+      "locator_label_unverified": "Introduction to Celery"
+    },
+    {
+      "target_id": "p04-celery-task-semantics",
+      "parent_catalog_key": "celery",
+      "case_ids": ["P04"],
+      "evidence_topics": ["delivery-semantics", "recovery-semantics"],
+      "url": "https://docs.celeryq.dev/en/stable/userguide/tasks.html",
+      "locator_label_unverified": "Celery Tasks"
+    },
+    {
+      "target_id": "p08-redis-data-types",
+      "parent_catalog_key": "redis",
+      "case_ids": ["P08"],
+      "evidence_topics": ["data-model", "unknown-decision-constraints"],
+      "url": "https://redis.io/docs/latest/develop/data-types/",
+      "locator_label_unverified": "Redis Data Types"
+    },
+    {
+      "target_id": "p08-redis-persistence",
+      "parent_catalog_key": "redis",
+      "case_ids": ["P08"],
+      "evidence_topics": ["persistence", "unknown-decision-constraints"],
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/",
+      "locator_label_unverified": "Redis Persistence"
+    },
+    {
+      "target_id": "p08-redis-eviction",
+      "parent_catalog_key": "redis",
+      "case_ids": ["P08"],
+      "evidence_topics": ["eviction", "unknown-decision-constraints"],
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/",
+      "locator_label_unverified": "Redis Key Eviction"
+    },
+    {
+      "target_id": "p08-memcached-overview",
+      "parent_catalog_key": "memcached",
+      "case_ids": ["P08"],
+      "evidence_topics": ["data-model", "ephemeral-boundary", "eviction"],
+      "url": "https://docs.memcached.org/",
+      "locator_label_unverified": "Memcached Overview"
+    },
+    {
+      "target_id": "p08-memcached-faq",
+      "parent_catalog_key": "memcached",
+      "case_ids": ["P08"],
+      "evidence_topics": ["ephemeral-boundary", "persistence", "unknown-decision-constraints"],
+      "url": "https://docs.memcached.org/userguide/faq/",
+      "locator_label_unverified": "Memcached FAQ"
+    }
+  ]
+}

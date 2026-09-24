@@ -14,13 +14,20 @@ from benchmarks import product_optimization_source_capture as capture
 
 @pytest.fixture
 def frozen_plan(monkeypatch, tmp_path):
-    entry = SimpleNamespace(
-        catalog_key="demo", url="https://docs.example.com/guide",
-        title="Demo — Official Documentation", catalog_label_unverified="Official Documentation",
+    target = SimpleNamespace(
+        target_id="p01-demo-guide",
+        parent_catalog_key="demo",
+        case_ids=("P01",),
+        evidence_topics=("backup",),
+        url="https://docs.example.com/guide",
+        locator_label_unverified="Demo Guide",
     )
     plan = SimpleNamespace(
-        plan_id="product-optimization-official-intake-v1",
-        byte_sha256="a" * 64, entries=(entry,),
+        plan_id="product-optimization-official-intake-v2",
+        byte_sha256="a" * 64,
+        canonical_plan_sha256="b" * 64,
+        development_fixture_id="product-optimization-dev-requests-v1",
+        targets=(target,),
     )
     monkeypatch.setattr(capture, "load_official_intake_plan", lambda: plan)
     (tmp_path / "outputs").mkdir()
@@ -47,14 +54,14 @@ async def test_capture_uses_safe_fetch_and_writes_candidate_receipt(tmp_path, mo
         return _response(body)
 
     monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
-    result = await capture.capture_official_entry("demo")
+    result = await capture.capture_official_target("p01-demo-guide")
     destination = result.directory
     assert len(calls) == 1
     assert calls[0][0:2] == ("official", "https://docs.example.com/guide")
     assert calls[0][2]["max_response_bytes"] == capture.MAX_RESPONSE_BYTES
     assert calls[0][2]["allowed_content_types"] == ("text/html", "application/xhtml+xml")
     assert calls[0][2]["method"] == "GET"
-    assert calls[0][2]["max_redirects"] == 3
+    assert calls[0][2]["max_redirects"] == 0
     assert calls[0][2]["timeout_s"] == 15.0
     assert result.directory == destination
     assert destination.parent == capture.CAPTURE_ROOT
@@ -65,24 +72,33 @@ async def test_capture_uses_safe_fetch_and_writes_candidate_receipt(tmp_path, mo
     receipt_bytes = (destination / "receipt.json").read_bytes()
     receipt = json.loads(receipt_bytes)
     assert receipt["status"] == "candidate_unapproved"
-    assert receipt["catalog_label_unverified"] == "Official Documentation"
+    assert receipt["target_id"] == "p01-demo-guide"
+    assert receipt["parent_catalog_key"] == "demo"
+    assert receipt["case_ids"] == ["P01"]
+    assert receipt["evidence_topics"] == ["backup"]
+    assert receipt["locator_label_unverified"] == "Demo Guide"
     assert receipt["plan_byte_sha256"] == frozen_plan.byte_sha256
+    assert receipt["plan_canonical_sha256"] == frozen_plan.canonical_plan_sha256
+    assert receipt["development_fixture_id"] == frozen_plan.development_fixture_id
     assert receipt["raw_sha256"] == hashlib.sha256(body).hexdigest()
     assert receipt["text_sha256"] == hashlib.sha256(text.encode()).hexdigest()
     assert result.receipt_sha256 == hashlib.sha256(receipt_bytes).hexdigest()
 
 
 @pytest.mark.asyncio
-async def test_unknown_key_and_wrong_root_fail_before_fetch(tmp_path, monkeypatch, frozen_plan):
+async def test_unknown_or_old_catalog_key_and_wrong_root_fail_before_fetch(
+    tmp_path, monkeypatch, frozen_plan
+):
     async def forbidden_fetch(*args, **kwargs):
         raise AssertionError("fetch must not be called")
 
     monkeypatch.setattr(capture.outbound, "safe_fetch", forbidden_fetch)
-    with pytest.raises(capture.SourceCaptureError, match="not in the frozen"):
-        await capture.capture_official_entry("other")
+    for value in ("other", "demo"):
+        with pytest.raises(capture.SourceCaptureError, match="not in the frozen"):
+            await capture.capture_official_target(value)
     monkeypatch.setattr(capture, "CAPTURE_ROOT", tmp_path / "docs")
     with pytest.raises(capture.SourceCaptureError, match="dedicated local output"):
-        await capture.capture_official_entry("demo")
+        await capture.capture_official_target("p01-demo-guide")
 
 
 @pytest.mark.asyncio
@@ -100,7 +116,7 @@ async def test_invalid_response_leaves_no_capture(tmp_path, monkeypatch, frozen_
 
     monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
     with pytest.raises(capture.SourceCaptureError):
-        await capture.capture_official_entry("demo")
+        await capture.capture_official_target("p01-demo-guide")
     assert not list(capture.CAPTURE_ROOT.iterdir())
 
 
@@ -111,20 +127,31 @@ async def test_fetch_exception_does_not_include_body_in_message(tmp_path, monkey
 
     monkeypatch.setattr(capture.outbound, "safe_fetch", broken_fetch)
     with pytest.raises(capture.SourceCaptureError) as caught:
-        await capture.capture_official_entry("demo")
+        await capture.capture_official_target("p01-demo-guide")
     assert "private upstream details" not in str(caught.value)
 
 
 @pytest.mark.asyncio
 async def test_query_in_start_url_fails_before_fetch(monkeypatch, frozen_plan):
-    frozen_plan.entries[0].url = "https://docs.example.com/guide?token=private"
+    frozen_plan.targets[0].url = "https://docs.example.com/guide?token=private"
 
     async def forbidden_fetch(*args, **kwargs):
         raise AssertionError("fetch must not be called")
 
     monkeypatch.setattr(capture.outbound, "safe_fetch", forbidden_fetch)
     with pytest.raises(capture.SourceCaptureError, match="canonical HTTPS"):
-        await capture.capture_official_entry("demo")
+        await capture.capture_official_target("p01-demo-guide")
+
+
+@pytest.mark.asyncio
+async def test_final_url_must_equal_exact_frozen_target(monkeypatch, frozen_plan):
+    async def fake_fetch(*args, **kwargs):
+        return _response(b"<p>Public fact.</p>", url="https://docs.example.com/other")
+
+    monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
+    with pytest.raises(capture.SourceCaptureError, match="differs from the frozen target"):
+        await capture.capture_official_target("p01-demo-guide")
+    assert not list(capture.CAPTURE_ROOT.iterdir())
 
 
 @pytest.mark.asyncio
@@ -147,7 +174,7 @@ async def test_write_failure_cleans_private_stage_and_does_not_publish(
     monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
     monkeypatch.setattr(capture, "_write_exclusive", fail_second_write)
     with pytest.raises(capture.SourceCaptureError, match="could not be published") as caught:
-        await capture.capture_official_entry("demo")
+        await capture.capture_official_target("p01-demo-guide")
     assert "private local path" not in str(caught.value)
     assert not list(capture.CAPTURE_ROOT.iterdir())
 
@@ -167,6 +194,6 @@ async def test_publish_rename_failure_cleans_private_stage(monkeypatch, frozen_p
     monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
     monkeypatch.setattr(capture.Path, "rename", reject_publish)
     with pytest.raises(capture.SourceCaptureError, match="could not be published") as caught:
-        await capture.capture_official_entry("demo")
+        await capture.capture_official_target("p01-demo-guide")
     assert "private local path" not in str(caught.value)
     assert not list(capture.CAPTURE_ROOT.iterdir())

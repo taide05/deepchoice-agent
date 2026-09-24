@@ -1,4 +1,4 @@
-"""Bounded capture of one frozen official-catalog source for later review.
+"""Bounded capture of one frozen official deep-link target for later review.
 
 Captured bytes are *candidates*, not approved seed evidence.  This module
 never promotes a capture into the knowledge index and never reads case data.
@@ -25,7 +25,7 @@ from deepchoice import outbound
 from benchmarks.product_optimization_official_intake import ROOT, load_official_intake_plan
 
 
-CAPTURE_SCHEMA_VERSION = 1
+CAPTURE_SCHEMA_VERSION = 2
 EXTRACTOR_ID = "stdlib-html-text-v1"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_TEXT_BYTES = 2 * 1024 * 1024
@@ -44,7 +44,8 @@ class SourceCaptureError(ValueError):
 
 @dataclass(frozen=True)
 class CapturedSource:
-    catalog_key: str
+    target_id: str
+    parent_catalog_key: str
     directory: Path
     receipt_sha256: str
     raw_sha256: str
@@ -156,26 +157,26 @@ def _prepare_capture_root() -> Path:
     return root
 
 
-async def capture_official_entry(catalog_key: str) -> CapturedSource:
-    """Fetch one fixed plan entry through outbound.safe_fetch into the ignored root.
+async def capture_official_target(target_id: str) -> CapturedSource:
+    """Fetch one exact v2 target through outbound.safe_fetch into the ignored root.
 
     Capture is staged in a new private directory and atomically published only
     after its two bodies and receipt have been written.  It remains unapproved.
     """
 
     plan = load_official_intake_plan()
-    matches = [entry for entry in plan.entries if entry.catalog_key == catalog_key]
-    if len(matches) != 1 or not _SAFE_KEY.fullmatch(catalog_key):
-        raise SourceCaptureError("catalog key is not in the frozen intake plan")
-    entry = matches[0]
-    _safe_final_url(entry.url)
+    matches = [target for target in plan.targets if target.target_id == target_id]
+    if len(matches) != 1 or not _SAFE_KEY.fullmatch(target_id):
+        raise SourceCaptureError("target ID is not in the frozen intake plan")
+    target = matches[0]
+    _safe_final_url(target.url)
     root = _prepare_capture_root()
 
     try:
         response = await outbound.safe_fetch(
-            "official", entry.url, method="GET",
+            "official", target.url, method="GET",
             allowed_content_types=("text/html", "application/xhtml+xml"),
-            max_response_bytes=MAX_RESPONSE_BYTES, max_redirects=3, timeout_s=15.0,
+            max_response_bytes=MAX_RESPONSE_BYTES, max_redirects=0, timeout_s=15.0,
         )
     except Exception:
         raise SourceCaptureError("bounded official source fetch failed") from None
@@ -185,6 +186,8 @@ async def capture_official_entry(catalog_key: str) -> CapturedSource:
     if content_type not in {"text/html", "application/xhtml+xml"}:
         raise SourceCaptureError("official source is not HTML")
     final_url = _safe_final_url(str(response.url))
+    if final_url != target.url:
+        raise SourceCaptureError("official source final URL differs from the frozen target")
     raw = response.content
     if not raw or len(raw) > MAX_RESPONSE_BYTES:
         raise SourceCaptureError("official source body is empty or exceeds the limit")
@@ -196,10 +199,14 @@ async def capture_official_entry(catalog_key: str) -> CapturedSource:
         "status": "candidate_unapproved",
         "plan_id": plan.plan_id,
         "plan_byte_sha256": plan.byte_sha256,
-        "catalog_key": entry.catalog_key,
-        "catalog_title": entry.title,
-        "catalog_label_unverified": entry.catalog_label_unverified,
-        "start_url": entry.url,
+        "plan_canonical_sha256": plan.canonical_plan_sha256,
+        "development_fixture_id": plan.development_fixture_id,
+        "target_id": target.target_id,
+        "parent_catalog_key": target.parent_catalog_key,
+        "case_ids": list(target.case_ids),
+        "evidence_topics": list(target.evidence_topics),
+        "locator_label_unverified": target.locator_label_unverified,
+        "start_url": target.url,
         "final_url": final_url,
         "http_status": 200,
         "content_type": content_type,
@@ -212,7 +219,7 @@ async def capture_official_entry(catalog_key: str) -> CapturedSource:
     }
     receipt_bytes = (json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     temporary: Path | None = None
-    destination = root / f"{catalog_key}-{uuid.uuid4().hex}"
+    destination = root / f"{target_id}-{uuid.uuid4().hex}"
     try:
         temporary = Path(tempfile.mkdtemp(prefix=".pending-", dir=root))
         _write_exclusive(temporary / "response.html", raw)
@@ -230,10 +237,23 @@ async def capture_official_entry(catalog_key: str) -> CapturedSource:
                 # downstream admission accepts only complete published captures.
                 pass
     return CapturedSource(
-        catalog_key=entry.catalog_key, directory=destination,
+        target_id=target.target_id,
+        parent_catalog_key=target.parent_catalog_key,
+        directory=destination,
         receipt_sha256=hashlib.sha256(receipt_bytes).hexdigest(),
         raw_sha256=raw_sha256, text_sha256=text_sha256,
     )
 
 
-__all__ = ["CapturedSource", "SourceCaptureError", "capture_official_entry"]
+async def capture_official_entry(target_id: str) -> CapturedSource:
+    """Compatibility name; v2 accepts only an exact frozen target ID."""
+
+    return await capture_official_target(target_id)
+
+
+__all__ = [
+    "CapturedSource",
+    "SourceCaptureError",
+    "capture_official_entry",
+    "capture_official_target",
+]
