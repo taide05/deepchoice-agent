@@ -23,7 +23,7 @@ def frozen_plan(monkeypatch, tmp_path):
         locator_label_unverified="Demo Guide",
     )
     plan = SimpleNamespace(
-        plan_id="product-optimization-official-intake-v2",
+        plan_id="product-optimization-official-intake-v3",
         byte_sha256="a" * 64,
         canonical_plan_sha256="b" * 64,
         development_fixture_id="product-optimization-dev-requests-v1",
@@ -49,20 +49,15 @@ async def test_capture_uses_safe_fetch_and_writes_candidate_receipt(tmp_path, mo
     body = b"<html><body><h1>Reference</h1><script>SECRET</script><p>Public fact.</p></body></html>"
     calls = []
 
-    async def fake_fetch(source, url, **kwargs):
-        calls.append((source, url, kwargs))
+    async def fake_fetch(url):
+        calls.append(url)
         return _response(body)
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", fake_fetch)
     result = await capture.capture_official_target("p01-demo-guide")
     destination = result.directory
     assert len(calls) == 1
-    assert calls[0][0:2] == ("official", "https://docs.example.com/guide")
-    assert calls[0][2]["max_response_bytes"] == capture.MAX_RESPONSE_BYTES
-    assert calls[0][2]["allowed_content_types"] == ("text/html", "application/xhtml+xml")
-    assert calls[0][2]["method"] == "GET"
-    assert calls[0][2]["max_redirects"] == 0
-    assert calls[0][2]["timeout_s"] == 15.0
+    assert calls == ["https://docs.example.com/guide"]
     assert result.directory == destination
     assert destination.parent == capture.CAPTURE_ROOT
     assert (destination / "response.html").read_bytes() == body
@@ -92,7 +87,7 @@ async def test_unknown_or_old_catalog_key_and_wrong_root_fail_before_fetch(
     async def forbidden_fetch(*args, **kwargs):
         raise AssertionError("fetch must not be called")
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", forbidden_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", forbidden_fetch)
     for value in ("other", "demo"):
         with pytest.raises(capture.SourceCaptureError, match="not in the frozen"):
             await capture.capture_official_target(value)
@@ -114,7 +109,7 @@ async def test_invalid_response_leaves_no_capture(tmp_path, monkeypatch, frozen_
     async def fake_fetch(*args, **kwargs):
         return response
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", fake_fetch)
     with pytest.raises(capture.SourceCaptureError):
         await capture.capture_official_target("p01-demo-guide")
     assert not list(capture.CAPTURE_ROOT.iterdir())
@@ -125,10 +120,94 @@ async def test_fetch_exception_does_not_include_body_in_message(tmp_path, monkey
     async def broken_fetch(*args, **kwargs):
         raise RuntimeError("private upstream details")
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", broken_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", broken_fetch)
     with pytest.raises(capture.SourceCaptureError) as caught:
         await capture.capture_official_target("p01-demo-guide")
     assert "private upstream details" not in str(caught.value)
+    assert caught.value.failure is None
+
+
+@pytest.mark.asyncio
+async def test_known_safe_fetch_failure_is_preserved_as_public_category(
+    monkeypatch, frozen_plan
+):
+    from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
+
+    async def broken_fetch(*args, **kwargs):
+        raise UnsafeUrlError(
+            "private upstream details", failure=SafeFetchFailure.ROUTE_UNSUPPORTED
+        )
+
+    monkeypatch.setattr(capture, "_capture_safe_fetch", broken_fetch)
+    with pytest.raises(capture.SourceCaptureError) as caught:
+        await capture.capture_official_target("p01-demo-guide")
+    assert str(caught.value) == "bounded official source fetch failed"
+    assert caught.value.failure == "route_unsupported"
+
+
+def test_capture_resolver_uses_only_existing_direct_safe_route(monkeypatch):
+    monkeypatch.setenv("OUTBOUND_CHANNELS", "local-proxy,self-forward,direct")
+    monkeypatch.setenv("OUTBOUND_CHANNELS_OFFICIAL", "local-proxy,self-forward,direct")
+    monkeypatch.setenv("LOCAL_PROXY", "http://127.0.0.1:7890")
+    monkeypatch.setattr(capture, "_capture_resolver", None)
+
+    resolver = capture._get_capture_resolver()
+
+    assert resolver.cfg.order_for("official") == ("direct",)
+    assert resolver.cfg.channel_order == ("direct",)
+    assert [channel.kind for channel in resolver.channels] == ["direct"]
+    assert resolver.cfg.v6_enabled is False
+    assert resolver._probe_fn is capture._capture_direct_probe
+
+
+@pytest.mark.asyncio
+async def test_capture_resolver_fetches_only_the_exact_target(monkeypatch):
+    monkeypatch.setenv("OUTBOUND_CHANNELS", "direct")
+    monkeypatch.setattr(capture, "_capture_resolver", None)
+    resolver = capture._get_capture_resolver()
+    requested = []
+
+    async def fake_direct(url, **kwargs):  # type: ignore[no-untyped-def]
+        requested.append(url)
+        return _response(b"<p>Public fact.</p>", url=url)
+
+    monkeypatch.setattr(resolver, "_safe_fetch_direct", fake_direct)
+    monkeypatch.setattr(capture, "_get_capture_resolver", lambda: resolver)
+
+    response = await capture._capture_safe_fetch("https://docs.example.com/guide")
+
+    assert response.status_code == 200
+    assert requested == ["https://docs.example.com/guide"]
+    assert [(item.kind, item.channel) for item in resolver.audit] == [
+        ("probe", "direct"),
+        ("route", "direct"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_capture_safe_fetch_uses_frozen_limits(monkeypatch):
+    calls = []
+
+    class FakeResolver:
+        async def safe_fetch(self, source, url, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append((source, url, kwargs))
+            return _response(b"<p>Public fact.</p>")
+
+    monkeypatch.setattr(capture, "_get_capture_resolver", lambda: FakeResolver())
+    await capture._capture_safe_fetch("https://docs.example.com/guide")
+
+    assert calls == [(
+        "official",
+        "https://docs.example.com/guide",
+        {
+            "method": "GET",
+            "allowed_content_types": ("text/html", "application/xhtml+xml"),
+            "max_response_bytes": capture.MAX_RESPONSE_BYTES,
+            "max_redirects": 0,
+            "timeout_s": capture.CAPTURE_TIMEOUT_S,
+        },
+    )]
+    assert capture.CAPTURE_TIMEOUT_S == 30.0
 
 
 @pytest.mark.asyncio
@@ -138,7 +217,7 @@ async def test_query_in_start_url_fails_before_fetch(monkeypatch, frozen_plan):
     async def forbidden_fetch(*args, **kwargs):
         raise AssertionError("fetch must not be called")
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", forbidden_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", forbidden_fetch)
     with pytest.raises(capture.SourceCaptureError, match="canonical HTTPS"):
         await capture.capture_official_target("p01-demo-guide")
 
@@ -148,7 +227,7 @@ async def test_final_url_must_equal_exact_frozen_target(monkeypatch, frozen_plan
     async def fake_fetch(*args, **kwargs):
         return _response(b"<p>Public fact.</p>", url="https://docs.example.com/other")
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", fake_fetch)
     with pytest.raises(capture.SourceCaptureError, match="differs from the frozen target"):
         await capture.capture_official_target("p01-demo-guide")
     assert not list(capture.CAPTURE_ROOT.iterdir())
@@ -171,7 +250,7 @@ async def test_write_failure_cleans_private_stage_and_does_not_publish(
             raise OSError("private local path")
         original(path, payload)
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", fake_fetch)
     monkeypatch.setattr(capture, "_write_exclusive", fail_second_write)
     with pytest.raises(capture.SourceCaptureError, match="could not be published") as caught:
         await capture.capture_official_target("p01-demo-guide")
@@ -191,7 +270,7 @@ async def test_publish_rename_failure_cleans_private_stage(monkeypatch, frozen_p
             raise OSError("private local path")
         return original_rename(path, target)
 
-    monkeypatch.setattr(capture.outbound, "safe_fetch", fake_fetch)
+    monkeypatch.setattr(capture, "_capture_safe_fetch", fake_fetch)
     monkeypatch.setattr(capture.Path, "rename", reject_publish)
     with pytest.raises(capture.SourceCaptureError, match="could not be published") as caught:
         await capture.capture_official_target("p01-demo-guide")

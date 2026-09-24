@@ -6,7 +6,7 @@ never promotes a capture into the knowledge index and never reads case data.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 from html.parser import HTMLParser
@@ -20,7 +20,8 @@ import tempfile
 from urllib.parse import urlsplit
 import uuid
 
-from deepchoice import outbound
+from deepchoice.outbound import ChannelResolver, OutboundConfig
+from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
 
 from benchmarks.product_optimization_official_intake import ROOT, load_official_intake_plan
 
@@ -29,6 +30,7 @@ CAPTURE_SCHEMA_VERSION = 2
 EXTRACTOR_ID = "stdlib-html-text-v1"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_TEXT_BYTES = 2 * 1024 * 1024
+CAPTURE_TIMEOUT_S = 30.0
 CAPTURE_ROOT = ROOT / "outputs" / "product-optimization-captures"
 _SAFE_KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _SKIP_TAGS = frozenset({"script", "style", "template", "noscript", "svg"})
@@ -39,7 +41,11 @@ _BREAK_TAGS = frozenset({
 
 
 class SourceCaptureError(ValueError):
-    """Body-free capture rejection."""
+    """Body-free capture rejection with an optional public failure category."""
+
+    def __init__(self, message: str, *, failure: str | None = None) -> None:
+        super().__init__(message)
+        self.failure = failure
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,63 @@ class CapturedSource:
     receipt_sha256: str
     raw_sha256: str
     text_sha256: str
+
+
+_capture_resolver: ChannelResolver | None = None
+
+
+async def _capture_direct_probe(source: str, channel) -> bool:
+    """Admit the configured direct route without a second network request.
+
+    The exact frozen target is itself the only permitted reachability check for
+    this one-shot capture tool.  ChannelResolver.safe_fetch still applies the
+    full URL policy, DNS validation, and connection pinning to that request.
+    """
+
+    return source == "official" and channel.name == "direct" and channel.kind == "direct"
+
+
+def _get_capture_resolver() -> ChannelResolver:
+    """Return an outbound resolver restricted to the pin-capable direct route.
+
+    The ordinary source resolver may prefer a local proxy or forwarder.  Those
+    transports correctly fail closed for this non-durable capture tool because
+    it has no frozen RunContext.  Direct remains an existing configured
+    outbound channel and retains DNS validation, IP pinning, TLS/SNI, response
+    and timeout limits in ChannelResolver.safe_fetch.
+    """
+
+    global _capture_resolver
+    if _capture_resolver is None:
+        configured = OutboundConfig.from_env()
+        overrides = dict(configured.order_overrides)
+        overrides["official"] = ("direct",)
+        direct_only = replace(
+            configured,
+            channel_order=("direct",),
+            order_overrides=overrides,
+            v6_enabled=False,
+        )
+        _capture_resolver = ChannelResolver(
+            cfg=direct_only,
+            probe_fn=_capture_direct_probe,
+        )
+    return _capture_resolver
+
+
+async def _capture_safe_fetch(url: str):
+    return await _get_capture_resolver().safe_fetch(
+        "official", url, method="GET",
+        allowed_content_types=("text/html", "application/xhtml+xml"),
+        max_response_bytes=MAX_RESPONSE_BYTES, max_redirects=0,
+        timeout_s=CAPTURE_TIMEOUT_S,
+    )
+
+
+def _public_fetch_failure(exc: Exception) -> str | None:
+    if isinstance(exc, UnsafeUrlError) and isinstance(exc.failure, SafeFetchFailure):
+        return exc.failure.value
+    return None
 
 
 class _VisibleText(HTMLParser):
@@ -158,7 +221,7 @@ def _prepare_capture_root() -> Path:
 
 
 async def capture_official_target(target_id: str) -> CapturedSource:
-    """Fetch one exact v2 target through outbound.safe_fetch into the ignored root.
+    """Fetch one exact current-plan target through outbound safe fetch.
 
     Capture is staged in a new private directory and atomically published only
     after its two bodies and receipt have been written.  It remains unapproved.
@@ -173,13 +236,12 @@ async def capture_official_target(target_id: str) -> CapturedSource:
     root = _prepare_capture_root()
 
     try:
-        response = await outbound.safe_fetch(
-            "official", target.url, method="GET",
-            allowed_content_types=("text/html", "application/xhtml+xml"),
-            max_response_bytes=MAX_RESPONSE_BYTES, max_redirects=0, timeout_s=15.0,
-        )
-    except Exception:
-        raise SourceCaptureError("bounded official source fetch failed") from None
+        response = await _capture_safe_fetch(target.url)
+    except Exception as exc:
+        raise SourceCaptureError(
+            "bounded official source fetch failed",
+            failure=_public_fetch_failure(exc),
+        ) from None
     if response.status_code != 200:
         raise SourceCaptureError("official source did not return HTTP 200")
     content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -246,7 +308,7 @@ async def capture_official_target(target_id: str) -> CapturedSource:
 
 
 async def capture_official_entry(target_id: str) -> CapturedSource:
-    """Compatibility name; v2 accepts only an exact frozen target ID."""
+    """Compatibility name; only an exact current frozen target ID is accepted."""
 
     return await capture_official_target(target_id)
 

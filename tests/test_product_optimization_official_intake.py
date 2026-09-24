@@ -34,11 +34,11 @@ def _refreeze(payload: dict, monkeypatch: pytest.MonkeyPatch) -> bytes:
     return _bytes(payload)
 
 
-def test_loads_exact_v2_plan_bound_to_v1_and_development_fixture() -> None:
+def test_loads_exact_v3_plan_bound_to_v2_and_development_fixture() -> None:
     plan = load_official_intake_plan()
 
-    assert plan.plan_id == "product-optimization-official-intake-v2"
-    assert plan.parent_plan_id == "product-optimization-official-intake-v1"
+    assert plan.plan_id == "product-optimization-official-intake-v3"
+    assert plan.parent_plan_id == "product-optimization-official-intake-v2"
     assert plan.development_fixture_id == "product-optimization-dev-requests-v1"
     assert plan.byte_sha256 == intake.PLAN_BYTES_SHA256
     assert len(plan.targets) == 15
@@ -52,12 +52,14 @@ def test_loads_exact_v2_plan_bound_to_v1_and_development_fixture() -> None:
     assert all(target.locator_label_unverified for target in plan.targets)
 
 
-def test_historical_v1_plan_bytes_remain_unchanged() -> None:
-    historical = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v1.json")
-    assert hashlib.sha256(historical.read_bytes()).hexdigest() == intake.PARENT_PLAN_BYTES_SHA256
+def test_historical_v1_and_v2_plan_bytes_remain_unchanged() -> None:
+    v1 = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v1.json")
+    v2 = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v2.json")
+    assert hashlib.sha256(v1.read_bytes()).hexdigest() == intake.HISTORICAL_V1_PLAN_BYTES_SHA256
+    assert hashlib.sha256(v2.read_bytes()).hexdigest() == intake.PARENT_PLAN_BYTES_SHA256
 
 
-def test_loader_only_opens_the_fixed_v2_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_loader_only_opens_the_fixed_v3_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     original_open = Path.open
     opened: list[Path] = []
 
@@ -65,6 +67,7 @@ def test_loader_only_opens_the_fixed_v2_plan(monkeypatch: pytest.MonkeyPatch) ->
         opened.append(self)
         if self.name in {
             "product-optimization-official-intake-v1.json",
+            "product-optimization-official-intake-v2.json",
             "product-optimization-dev-requests-v1.json",
             "product-baseline-v1.json",
             "cases_200.json",
@@ -188,7 +191,7 @@ def test_missing_required_topic_coverage_fails_closed(
 
 def test_duplicate_json_keys_fail_closed() -> None:
     with pytest.raises(OfficialIntakePlanError, match="duplicate JSON object key"):
-        _parse_plan_bytes(b'{"schema_version": 2, "schema_version": 2}')
+        _parse_plan_bytes(b'{"schema_version": 3, "schema_version": 3}')
 
 
 def test_catalog_drift_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,7 +209,7 @@ def test_catalog_drift_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_public_loader_rejects_old_data_path_before_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    old_plan = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v1.json")
+    old_plan = DEFAULT_PLAN_PATH.with_name("product-optimization-official-intake-v2.json")
     monkeypatch.setattr(intake, "DEFAULT_PLAN_PATH", old_plan)
 
     def forbidden_open(*_args, **_kwargs):  # type: ignore[no-untyped-def]

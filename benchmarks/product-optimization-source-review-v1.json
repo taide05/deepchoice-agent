@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "review_id": "product-optimization-source-review-v1",
+  "status": "approved_for_development_seed",
+  "review_date": "2026-09-24",
+  "reviewer_mode": "gpt-only_source_content_audit",
+  "plan": {
+    "plan_id": "product-optimization-official-intake-v3",
+    "byte_sha256": "32ba72d093c986fa17d47c9aaeaba8101b6bc559ce0ef750efba204a732327af",
+    "canonical_sha256": "3bb61245eb0db520c05615a6471b08efbb727d8215fff05876ac5446eb3456b4"
+  },
+  "evidence_policy": {
+    "evidence_type": "first-party-product-documentation",
+    "permitted_use": "bounded-factual-product-behavior-and-explicit-caveats",
+    "prohibited_inference": "independent-performance-reliability-cost-universal-winner-or-workload-threshold"
+  },
+  "canonical_review_sha256": "fd24fc558597b749566869ecaca0121ff50425bdf8aac5dd21c750291798419b",
+  "approved_sources": [
+    {
+      "target_id": "p01-sqlite-appropriate-uses",
+      "receipt_sha256": "1f408888dcac54ad86810373ea512efc29560572df3176b7292ec9e401e2410b",
+      "publisher": "SQLite Project",
+      "approved_topics": ["migration-triggers", "operational-complexity", "write-concurrency"],
+      "scope_note": "qualitative-use-case-guidance"
+    },
+    {
+      "target_id": "p01-sqlite-wal",
+      "receipt_sha256": "b5248ee9fedf2b2d81309a10bc2bf597292d6f8a10fc529d05db3c2f0af9b5de",
+      "publisher": "SQLite Project",
+      "approved_topics": ["write-concurrency"],
+      "scope_note": "same-host-wal-boundary"
+    },
+    {
+      "target_id": "p01-sqlite-backup",
+      "receipt_sha256": "2a047fde3653382d6cc931d15b3351d0b91b91c50057dd1dbc9276772592c71c",
+      "publisher": "SQLite Project",
+      "approved_topics": ["backup"],
+      "scope_note": "api-specific-backup-semantics"
+    },
+    {
+      "target_id": "p01-sqlite-fts5",
+      "receipt_sha256": "003524a7ce5781bbbc5d0ab910827567d504fae30c84e4d5be5480c4b59ea210",
+      "publisher": "SQLite Project",
+      "approved_topics": ["full-text-search"],
+      "scope_note": "feature-documentation-not-workload-benchmark"
+    },
+    {
+      "target_id": "p01-postgresql-concurrency-introduction",
+      "receipt_sha256": "3393082bc439c6368e40202d57aa08c932fdb35c4e3ad64ab316d8ebf5e7e418",
+      "publisher": "PostgreSQL Global Development Group",
+      "approved_topics": ["write-concurrency"],
+      "scope_note": "mechanism-overview-not-workload-benchmark"
+    },
+    {
+      "target_id": "p01-postgresql-backup",
+      "receipt_sha256": "d21d5d0d8c767b0df229f110f5e3ba193c8650c0eb933f7f5e50e4d0edba6961",
+      "publisher": "PostgreSQL Global Development Group",
+      "approved_topics": ["backup", "operational-complexity"],
+      "scope_note": "chapter-overview-only"
+    },
+    {
+      "target_id": "p01-postgresql-text-search-introduction",
+      "receipt_sha256": "5eccadd817fcb2bad761e3d59de3fbe53d598fe1bda6045ca631871b86fe6db6",
+      "publisher": "PostgreSQL Global Development Group",
+      "approved_topics": ["full-text-search"],
+      "scope_note": "feature-mechanics-not-workload-benchmark"
+    },
+    {
+      "target_id": "p04-fastapi-background-tasks",
+      "receipt_sha256": "5266290fd0586d606b66626ac4682d2900e609fdda32cea0cdc3912a5bc185c0",
+      "publisher": "FastAPI",
+      "approved_topics": ["execution-boundary", "operational-components"],
+      "scope_note": "same-process-caveat-no-durability-guarantee"
+    },
+    {
+      "target_id": "p04-celery-introduction",
+      "receipt_sha256": "cc8c66777b9fda447eda0d40f4346ab6c6938799181842f8d054b29a8310d939",
+      "publisher": "Celery Project",
+      "approved_topics": ["execution-boundary", "operational-components"],
+      "scope_note": "architecture-overview-no-delivery-guarantee"
+    },
+    {
+      "target_id": "p04-celery-task-semantics",
+      "receipt_sha256": "119eeb758cc48bb56f40d84e725bcdd84a3aa04a9913c988ee0f0383d455d64d",
+      "publisher": "Celery Project",
+      "approved_topics": ["delivery-semantics", "recovery-semantics"],
+      "scope_note": "semantics-require-configuration-and-idempotency"
+    },
+    {
+      "target_id": "p08-redis-data-types",
+      "receipt_sha256": "f9385ff7d4167de80251ad3146fb11ec9572e816d16d87c45263892c580b51e0",
+      "publisher": "Redis",
+      "approved_topics": ["data-model", "unknown-decision-constraints"],
+      "scope_note": "feature-catalog-no-workload-fit"
+    },
+    {
+      "target_id": "p08-redis-persistence",
+      "receipt_sha256": "a9174da2df4cf3bfb9b0e4cb5e2fe8d934a205c2de06756f2dceb72078f0d08c",
+      "publisher": "Redis",
+      "approved_topics": ["persistence", "unknown-decision-constraints"],
+      "scope_note": "configuration-tradeoffs-no-durability-sla"
+    },
+    {
+      "target_id": "p08-redis-eviction",
+      "receipt_sha256": "0f823063eeb0bb0f94eebb2a71141ca92fbb301cc89d583815c2ab5b33f8f940",
+      "publisher": "Redis",
+      "approved_topics": ["eviction", "unknown-decision-constraints"],
+      "scope_note": "policy-mechanics-no-hit-rate-claim"
+    },
+    {
+      "target_id": "p08-memcached-overview",
+      "receipt_sha256": "1ed0250d6b160de13dcb0aca3649b32ad362a6e77917cceaad64bfb5f1cce363",
+      "publisher": "Memcached",
+      "approved_topics": ["data-model", "ephemeral-boundary", "eviction"],
+      "scope_note": "product-overview-no-durability-guarantee"
+    },
+    {
+      "target_id": "p08-memcached-faq",
+      "receipt_sha256": "9ec6071b7ca703f06d30a85270f4ec2d4da831ef366708d2577403c977eff80a",
+      "publisher": "Memcached",
+      "approved_topics": ["ephemeral-boundary", "persistence", "unknown-decision-constraints"],
+      "scope_note": "faq-includes-warm-restart-caveat"
+    }
+  ],
+  "excluded_candidates": [
+    {
+      "target_id": "p01-postgresql-concurrency",
+      "receipt_sha256": "36f16e5f2639ad33a040f627cdf681dfab2c32fcbbc2ebcdf8e694bd69c93d46",
+      "reason": "superseded-by-substantive-v3-page"
+    },
+    {
+      "target_id": "p01-postgresql-text-search",
+      "receipt_sha256": "380a92342a66972b094880436c8089afcf798c97a6cc8a42609c7e331e73ca8e",
+      "reason": "superseded-by-substantive-v3-page"
+    }
+  ]
+}

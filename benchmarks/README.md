@@ -1,6 +1,6 @@
 # 评估入口与历史工具
 
-更新：2026-09-23。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
+更新：2026-09-24。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
 准备检查结果见 [基线准备检查](../docs/baseline-readiness-audit.md)。
 
 | 入口 | 用途和边界 |
@@ -8,8 +8,10 @@
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
 | `evidence_window_prototype.select_evidence_window` | 未推广的纯离线定位原型；输出全部不可绑定，不被默认研究路径调用。反例与限制见 S0 诊断，不作质量/成本评估器 |
 | `product_optimization_dev_requests.load_dev_requests` | 只读固定 P01/P04/P08 开发请求投影；不打开完整案例集或保留集 |
-| `product_optimization_official_intake.load_official_intake_plan` | 只读固定 v2 计划中的15个 P01/P04/P08 精确官方深链 locator，并校验开发请求与历史93根目录身份；不读取正文/报告/保留集，locator 不等于来源批准 |
-| `product_optimization_source_capture.capture_official_target` | 仅以冻结 target ID 经既有安全外呼抓取一个精确 URL；禁止重定向并要求最终 URL 完全一致，原子保存到忽略目录且只标为未批准候选；不自动批准或建库 |
+| `product_optimization_official_intake.load_official_intake_plan` | 只读固定 v3 计划中的15个 P01/P04/P08 精确官方深链 locator，并校验开发请求、v1/v2历史身份与93根目录身份；不读取正文/报告/保留集，locator 不等于来源批准 |
+| `product_optimization_source_capture.capture_official_target` | 仅以冻结 target ID 经 direct 安全外呼抓取一个精确 URL；本地 route admission 不探测第二站点，禁止重定向并要求最终 URL 完全一致，30秒/2MiB有界，原子保存到忽略目录且只标为未批准候选 |
+| `product_optimization_source_review.load_approved_source_review` | 对 tracked review 绑定的15份 exact receipt/body 做纯离线 fail-closed 审计，输出限定主题的一方官方证据；不把第一方产品文档提升为独立性能、可靠性、成本或通用胜负证据 |
+| `product_optimization_seed_builder.build_frozen_seed` | 从已批准正文构建固定 ignored 目录中的隔离 Chroma seed；BGE-M3 绑定 commit、`local_files_only`、234个有界 chunk，并经哈希一致的未打开副本原子发布；拒绝覆盖，不读取旧库或保留集 |
 | `product_optimization_seed.load_and_validate_seed_manifest` | 纯离线检查有界 UTF-8 输入与固定身份/已知模板标记；自报 URL/发布者不构成来源批准 |
 | `python -m benchmarks.product_baseline validate` | 校验 O1 的 12 例版本化案例集，不调用 LLM/网络 |
 | `python -m benchmarks.product_baseline collect ...` | 经 durable API 采集 serial=1 或 concurrent=12 的真实结果；必须冻结案例和环境，并显式确认付费运行 |

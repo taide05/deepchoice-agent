@@ -1,8 +1,9 @@
 """Load the frozen development-only official deep-link intake plan.
 
-Version 2 preserves the historical 93-URL v1 locator plan by identity and adds
-only exact P01/P04/P08 document locators.  A target is still unapproved: this
-module performs no network access and makes no claim about captured content.
+Version 3 preserves the v1 root catalog and v2 locator plan by chained identity,
+then replaces two PostgreSQL chapter indexes with their exact introduction
+pages after bounded candidate-content review.  A target is still unapproved:
+this module performs no network access and makes no claim about captured content.
 """
 
 from __future__ import annotations
@@ -26,25 +27,27 @@ from deepchoice.utils.official_catalog import TECH_DOCS
 
 
 ROOT = Path(__file__).resolve().parent.parent
-_EXPECTED_PLAN_PATH = ROOT / "benchmarks" / "product-optimization-official-intake-v2.json"
+_EXPECTED_PLAN_PATH = ROOT / "benchmarks" / "product-optimization-official-intake-v3.json"
 DEFAULT_PLAN_PATH = _EXPECTED_PLAN_PATH
 
-PLAN_ID = "product-optimization-official-intake-v2"
-PLAN_SCHEMA_VERSION = 2
+PLAN_ID = "product-optimization-official-intake-v3"
+PLAN_SCHEMA_VERSION = 3
 PLAN_FREEZE_DATE = "2026-09-24"
-PLAN_STATUS = "frozen_locator_candidates"
+PLAN_STATUS = "frozen_locator_revision"
 PLAN_PURPOSE = (
-    "Development-only exact official-document locators for P01, P04, and P08; "
-    "locator inclusion is not source approval or claim verification."
+    "Development-only exact official-document locators for P01, P04, and P08, "
+    "refined after bounded candidate-content review; locator inclusion is not "
+    "source approval or claim verification."
 )
 MAX_PLAN_BYTES = 256 * 1024
-PLAN_BYTES_SHA256 = "94436e59a1ed4f62d2efa35774566ab6a7699cd737cc4eca3d153f05b1bb8fd0"
-CANONICAL_PLAN_SHA256 = "9f794b80d9b2d89ca473120a9264e3fc8dec9827f7a0ff21969f9a4dd11bff38"
+PLAN_BYTES_SHA256 = "32ba72d093c986fa17d47c9aaeaba8101b6bc559ce0ef750efba204a732327af"
+CANONICAL_PLAN_SHA256 = "3bb61245eb0db520c05615a6471b08efbb727d8215fff05876ac5446eb3456b4"
 EXPECTED_TARGET_COUNT = 15
 
-PARENT_PLAN_ID = "product-optimization-official-intake-v1"
-PARENT_PLAN_BYTES_SHA256 = "6ee9a9fddf9367aa507bd262014502fa1e135184ade921b5b2adc13d506964c0"
-PARENT_CANONICAL_PLAN_SHA256 = "0d0dfc114923e62e231f4ab1472d713165d48408929036883a019ab5b34c88b6"
+PARENT_PLAN_ID = "product-optimization-official-intake-v2"
+PARENT_PLAN_BYTES_SHA256 = "94436e59a1ed4f62d2efa35774566ab6a7699cd737cc4eca3d153f05b1bb8fd0"
+PARENT_CANONICAL_PLAN_SHA256 = "9f794b80d9b2d89ca473120a9264e3fc8dec9827f7a0ff21969f9a4dd11bff38"
+HISTORICAL_V1_PLAN_BYTES_SHA256 = "6ee9a9fddf9367aa507bd262014502fa1e135184ade921b5b2adc13d506964c0"
 CATALOG_GIT_OBJECT = "2dcbcdcc539b3d2de14710ab588856b44c5fd2fb"
 CATALOG_PAYLOAD_SHA256 = "5bd5f76bd4a453ed1bf5878673db2bab9b5b383d6050290a86a7c6ec562b8544"
 EXPECTED_CATALOG_ENTRY_COUNT = 96
@@ -272,7 +275,7 @@ def _parse_plan_payload(payload: Any, byte_sha256: str) -> OfficialIntakePlan:
         "canonical_plan_sha256": PARENT_CANONICAL_PLAN_SHA256,
         "catalog_git_object": CATALOG_GIT_OBJECT,
     }:
-        raise OfficialIntakePlanError("parent v1 plan identity changed")
+        raise OfficialIntakePlanError("parent v2 plan identity changed")
 
     fixture = _require_mapping(payload["development_fixture"], "development_fixture")
     _require_exact_keys(fixture, _DEVELOPMENT_FIXTURE_KEYS, "development_fixture")
