@@ -229,18 +229,21 @@ def test_restriction_helpers_are_pure_and_clear_unconditional_assertions():
         assert result["action_plan"]
 
 
-def test_incomplete_action_step_is_dropped_without_becoming_advice(monkeypatch):
+def test_incomplete_action_step_becomes_fixed_validation_without_withdrawing_winner(monkeypatch):
     model_result = _complete_model_result()
     del model_result["action_plan"][0]["rollback"]
     monkeypatch.setattr(cs_mod, "call_model", _fake_call(model_result))
 
     result = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(_source_state()))
+    recommendation = result["final_recommendation"]
 
-    assert result["final_recommendation"]["action_plan"] == []
-    assert result["final_recommendation"]["winner"] == "context_dependent"
+    assert recommendation["winner"] == "RabbitMQ"
+    assert recommendation["action_plan_mode"] == "validation_only"
+    assert "dual delivery" not in str(recommendation["action_plan"])
+    assert "Observe the current system read-only" in str(recommendation["action_plan"])
     assert any(
-        "complete staged plan" in item
-        for item in result["final_recommendation"]["unresolved_questions"]
+        "Action-plan evidence is unverified" in item
+        for item in recommendation["unresolved_questions"]
     )
 
 

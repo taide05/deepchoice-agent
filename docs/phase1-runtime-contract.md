@@ -28,8 +28,10 @@ what-why-how-v4 / evidence-first-v2 / comparison-matrix-v2 冻结原 S1 身份�
 2026-09-22 不确定解释修复将模板升级为 what-why-how-v5 / evidence-first-v3 /
 comparison-matrix-v3，prompt v4、状态 schema v3 与引用策略 v1 不变。
 2026-09-23 行动安全修复使用 synthesis prompt v5 和 what-why-how-v6 / evidence-first-v4 /
-comparison-matrix-v4；manifest schema v1、状态 schema v3、引用/HITL策略不变。
-历史 manifest/结果可读，旧 prompt/template 的同 run 恢复按既有兼容检查拒绝。
+comparison-matrix-v4；manifest schema v1、状态 schema v3、HITL策略不变。2026-09-25 引用策略
+升级为 deterministic-citation-v2：获胜项仍通过时，任一未验证的模型行动字段会使整份行动计划
+替换为固定的隔离验证步骤，而不是撤回获胜项或发布未核验操作。历史 manifest/结果可读，旧
+prompt/template 或 citation-policy v1 的同 run 恢复按兼容检查拒绝。
 
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
 保留条件分支、待验证计划与明确未知。绑定到有内容的来源只证明结构完整，不是语义验证。
@@ -72,9 +74,9 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v1` 与 `evidence-insufficient-v1` 策略；历史 v1/v2 manifest 仍可读取
-  和校验身份，但不能在 v3 runtime 上续同一 run，须创建新 run。same-run resume 必须校验
-  manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
+  `deterministic-citation-v2` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
+  citation-policy v1 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
 

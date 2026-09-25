@@ -120,7 +120,9 @@ class RunManifest(FrozenModel):
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4"
     ] = "outbound-url-v4"
     safe_fetch_proxy_sha256: str | None = None
-    citation_policy_version: Literal["deterministic-citation-v1"] | None = None
+    citation_policy_version: Literal[
+        "deterministic-citation-v1", "deterministic-citation-v2"
+    ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     gather_evidence: bool
     report: ReportTemplateSnapshot
@@ -135,7 +137,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v3"] = "research-v3"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v1"]
+    citation_policy_version: Literal["deterministic-citation-v2"]
     hitl_policy_version: Literal["evidence-insufficient-v1"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -327,7 +329,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "scoring_policy_version": "source-score-v6",
         "security_policy_version": "outbound-url-v4",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v1",
+        "citation_policy_version": "deterministic-citation-v2",
         "hitl_policy_version": "evidence-insufficient-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(

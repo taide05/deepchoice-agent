@@ -215,11 +215,22 @@ def test_abstention_without_ranks_still_uses_the_single_structural_hitl_gate():
 
 
 @pytest.mark.asyncio
-async def test_supported_single_writer_choice_keeps_backup_and_migration_plan(monkeypatch):
+@pytest.mark.parametrize("missing_field", (None, "step", "verification", "change_trigger", "rollback"))
+async def test_supported_choice_replaces_unverified_action_plan_without_withdrawing_winner(
+    monkeypatch, missing_field,
+):
     from deepchoice.agents.conclusion_synthesizer import ConclusionSynthesizerAgent
     from deepchoice.formats.what_why_how import render
 
     async def model(*args, **kwargs):
+        action = {
+            "step": "Rehearse a consistent backup",
+            "verification": "Check restored data against the source database",
+            "change_trigger": "Consider PostgreSQL after measured lock waits exceed the agreed target",
+            "rollback": "Keep a verified database restore point",
+        }
+        if missing_field:
+            action.pop(missing_field)
         return {
             "winner": "SQLite",
             "winner_rationale": "SQLite allows only one writer [[1]].",
@@ -231,12 +242,7 @@ async def test_supported_single_writer_choice_keeps_backup_and_migration_plan(mo
                 "explanation": "SQLite allows only one writer [[1]].",
             }],
             "decision_branches": [{"option": "SQLite", "condition": "One writer is sufficient"}],
-            "action_plan": [{
-                "step": "Rehearse a consistent backup",
-                "verification": "Check restored data against the source database",
-                "change_trigger": "Consider PostgreSQL after measured lock waits exceed the agreed target",
-                "rollback": "Keep a verified database restore point",
-            }],
+            "action_plan": [action],
         }
 
     async def fetch(*args, **kwargs):
@@ -260,10 +266,12 @@ async def test_supported_single_writer_choice_keeps_backup_and_migration_plan(mo
     assert state["final_recommendation"]["winner"] == "SQLite"
     assert "**Winner: SQLite**" in report
     assert "only one writer" in report
-    assert "consistent backup" in report
-    assert "measured lock waits" in report
-    assert "verified database restore point" in report
-    assert "Proposed validation plan" in report
+    assert state["final_recommendation"]["action_plan_mode"] == "validation_only"
+    assert "consistent backup" not in report
+    assert "measured lock waits" not in report
+    assert "Isolated validation only; no production changes" in report
+    assert "verified database restore point" not in report
+    assert "Proposed validation plan" not in report
 
 
 @pytest.mark.asyncio

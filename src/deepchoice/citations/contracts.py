@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-CITATION_POLICY_VERSION = "deterministic-citation-v1"
+CITATION_POLICY_VERSION = "deterministic-citation-v2"
 
 
 class _FrozenContract(BaseModel):
@@ -57,6 +57,8 @@ class CitationStatusCounts(_FrozenContract):
 
 class CitationVerification(_FrozenContract):
     schema_version: Literal[1] = 1
-    policy_version: Literal["deterministic-citation-v1"] = CITATION_POLICY_VERSION
+    policy_version: Literal[
+        "deterministic-citation-v1", "deterministic-citation-v2"
+    ] = CITATION_POLICY_VERSION
     status_counts: CitationStatusCounts
     checks: tuple[CitationCheck, ...] = Field(max_length=96)

@@ -6,7 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from deepchoice.budget import BudgetExceededError, BudgetResource
-from deepchoice.citations.contracts import CitationCheck
+from deepchoice.citations.contracts import (
+    CitationCheck, CitationStatusCounts, CitationVerification,
+)
 from deepchoice.citations.verifier import canonicalize_source_url, verify_citations
 
 
@@ -48,6 +50,18 @@ def test_public_contract_rejects_extra_fields_and_has_only_four_statuses():
     assert {item.value for item in __import__(
         "deepchoice.citations.contracts", fromlist=["CitationStatus"]
     ).CitationStatus} == {"verified", "unsupported", "unreachable", "unknown"}
+
+def test_historical_citation_v1_result_json_remains_readable():
+    historical = CitationVerification(
+        policy_version="deterministic-citation-v1",
+        status_counts=CitationStatusCounts(verified=0),
+        checks=(),
+    )
+
+    restored = CitationVerification.model_validate_json(historical.model_dump_json())
+
+    assert restored == historical
+    assert restored.policy_version == "deterministic-citation-v1"
 
 
 @pytest.mark.parametrize(

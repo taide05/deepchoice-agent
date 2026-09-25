@@ -224,6 +224,26 @@ def abstain_recommendation(
     return result
 
 
+def restrict_action_plan(recommendation: Any, query: Any) -> dict[str, Any]:
+    """Replace an unverified model plan without withdrawing a verified choice."""
+    result = deepcopy(recommendation) if isinstance(recommendation, dict) else {}
+    has_plan = bool(result.get("action_plan"))
+    result["action_plan_mode"] = "validation_only"
+    result["action_plan"] = _validation_only_plan(query) if has_plan else []
+    result["unresolved_questions"] = normalize_unknowns(
+        result.get("unresolved_questions")
+    )
+    if has_plan:
+        gap = (
+            "行动计划的依据尚未通过核验；仅允许隔离验证，禁止生产变更。"
+            if _is_zh(query) else
+            "Action-plan evidence is unverified; only isolated validation is allowed, not production changes."
+        )
+        if gap not in result["unresolved_questions"]:
+            result["unresolved_questions"].append(gap)
+    return result
+
+
 def restrict_recommendation(recommendation: Any, query: Any) -> dict[str, Any]:
     """Limit a report even when budget exhaustion preceded citation checks."""
     result = abstain_recommendation(recommendation, query)

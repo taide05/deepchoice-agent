@@ -7,7 +7,7 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 工程基础已完成；原候选 d23c948 的 S0 开发集诊断已锁分，S1 约束感知结论已通过离线验收。
 解释保留修复后的 S1 P01 已完成实际执行，但迁移/回退边界仍有阻断，内容资格未通过。完整产品内容验收及
 12 路并发资格尚未完成。
-后续行动安全及官网占位准入修复已通过离线验收；新产品仍未实测。
+后续行动安全、未核验行动计划的确定性隔离替换及官网占位准入修复已通过离线验收；新产品仍未实测。
 有界正文窗口的离线原型未通过推广门槛：仍漏掉已知相关段落，局部邻句也不能保证条件完整，因此未改变生产合成行为。
 用户批准累计研究上限154（已用95）、局部12格加整合最终/并发48格路线，并把最终校准门禁改为 GPT-only；
 独立盲评与残余风险记录仍必需，不称人工验收。历史93个官方根目录 URL 保持不变；面向 P01/P04/P08
@@ -212,9 +212,11 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等价 URL 规范化后每轮最多安全
 抓取一次，额外请求先预留 `http_calls`；检查结果随 immutable run snapshot 持久化，并由报告
 和 Streamlit 证据卡展示。该状态是可解释的规则判断，不是语义事实证明：临时网络、DNS、
-安全路由限制或跨语言难以判断时保持 `unknown`，不会被误写成错误引用。新运行冻结
-`research-v2`、state schema v2 与 `deterministic-citation-v1`；历史 v1 manifest 可审计但须新建
-run，不能在新工作流上续跑旧 checkpoint。
+安全路由限制或跨语言难以判断时保持 `unknown`，不会被误写成错误引用。获胜项仍有支持、但任一
+模型生成的行动字段未通过引用检查时，系统保留获胜项并把整份计划替换为固定的隔离验证步骤，
+不把未核验操作作为可执行建议。新运行冻结 `research-v3`、state schema v3 与
+`deterministic-citation-v2`；历史 workflow v1/v2 和 citation-policy v1 manifest 可审计但须新建
+run，不能在当前工作流上续跑旧 checkpoint。
 
 Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v3`、state
 schema v3 与 `evidence-insufficient-v1`。该 gate 位于引用验证之后、报告渲染之前，只在证据

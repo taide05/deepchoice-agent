@@ -84,11 +84,129 @@ def test_non_abstaining_proposal_is_not_replaced_or_mislabeled_as_validation_onl
     winner_check = check.model_copy(update={
         "claim_id": "winner", "claim_path": "final_recommendation.winner_rationale",
     })
+    action_checks = tuple(
+        check.model_copy(update={
+            "claim_id": f"action-{field}",
+            "claim_path": f"final_recommendation.action_plan[0].{field}",
+        })
+        for field in ("step", "verification", "change_trigger", "rollback")
+    )
     verification = CitationVerification(
-        status_counts=CitationStatusCounts(verified=2), checks=(check, winner_check),
+        status_counts=CitationStatusCounts(verified=6),
+        checks=(check, winner_check, *action_checks),
     )
     result = _calibrate_decision(original, verification, "Choose a database")
     assert result == original  # Lexical support is not production authorization.
+
+
+def test_non_abstaining_choice_replaces_unverified_production_actions():
+    original = _recommendation()
+    original["winner"] = "SQLite"
+    original["winner_rationale"] = "A bounded claim [Source: Docs]"
+    original["action_plan_mode"] = "proposed"
+    original["requirement_assessments"][0].update(
+        status="satisfied", explanation="A bounded claim [Source: Docs]", evidence_ids=[1],
+    )
+    verified = CitationCheck(
+        claim_id="requirement",
+        claim_path="final_recommendation.requirement_assessments[0].explanation",
+        claim_text="A bounded claim",
+        source_title="Docs",
+        status=CitationStatus.VERIFIED,
+        reason=CitationReason.LEXICAL_SUPPORT,
+    )
+    action_checks = tuple(
+        CitationCheck(
+            claim_id=f"action-{field}",
+            claim_path=f"final_recommendation.action_plan[0].{field}",
+            claim_text=original["action_plan"][0][field],
+            status=CitationStatus.UNSUPPORTED,
+            reason=CitationReason.CITATION_MISSING,
+        )
+        for field in ("step", "verification", "change_trigger", "rollback")
+    )
+    verification = CitationVerification(
+        status_counts=CitationStatusCounts(verified=2, unsupported=4),
+        checks=(
+            verified,
+            verified.model_copy(update={
+                "claim_id": "winner",
+                "claim_path": "final_recommendation.winner_rationale",
+            }),
+            *action_checks,
+        ),
+    )
+
+    result = _calibrate_decision(original, verification, "Choose a database")
+
+    assert result["winner"] == "SQLite"
+    assert result["action_plan_mode"] == "validation_only"
+    assert "DUAL_WRITE_LIVE" not in str(result)
+    assert "RESTORE_OLD_SNAPSHOT" not in str(result)
+    assert "production changes" in str(result["action_plan"])
+
+
+@pytest.mark.parametrize("field", ("step", "verification", "change_trigger", "rollback"))
+@pytest.mark.parametrize("outcome", (
+    "field_missing", "check_missing", "unsupported", "unknown", "unreachable",
+))
+def test_each_incomplete_or_unverified_action_field_restricts_the_entire_plan(field, outcome):
+    original = _recommendation()
+    original["winner"] = "SQLite"
+    original["winner_rationale"] = "A bounded claim [Source: Docs]"
+    original["action_plan_mode"] = "proposed"
+    original["requirement_assessments"][0].update(
+        status="satisfied", explanation="A bounded claim [Source: Docs]", evidence_ids=[1],
+    )
+    verified = CitationCheck(
+        claim_id="requirement",
+        claim_path="final_recommendation.requirement_assessments[0].explanation",
+        claim_text="A bounded claim",
+        source_title="Docs",
+        status=CitationStatus.VERIFIED,
+        reason=CitationReason.LEXICAL_SUPPORT,
+    )
+    checks = [
+        verified,
+        verified.model_copy(update={
+            "claim_id": "winner",
+            "claim_path": "final_recommendation.winner_rationale",
+        }),
+    ]
+    status_reason = {
+        "unsupported": (CitationStatus.UNSUPPORTED, CitationReason.CITATION_MISSING),
+        "unknown": (CitationStatus.UNKNOWN, CitationReason.CONTENT_INSUFFICIENT),
+        "unreachable": (CitationStatus.UNREACHABLE, CitationReason.NOT_PUBLICLY_ACCESSIBLE),
+    }
+    if outcome == "field_missing":
+        original["action_plan"][0].pop(field)
+    for action_field in ("step", "verification", "change_trigger", "rollback"):
+        if action_field == field and outcome in {"field_missing", "check_missing"}:
+            continue
+        status, reason = status_reason.get(
+            outcome if action_field == field else "",
+            (CitationStatus.VERIFIED, CitationReason.LEXICAL_SUPPORT),
+        )
+        checks.append(CitationCheck(
+            claim_id=f"action-{action_field}",
+            claim_path=f"final_recommendation.action_plan[0].{action_field}",
+            claim_text=original["action_plan"][0][action_field],
+            source_title="Docs" if status == CitationStatus.VERIFIED else None,
+            status=status,
+            reason=reason,
+        ))
+    verification = CitationVerification(
+        status_counts=CitationStatusCounts(), checks=tuple(checks),
+    )
+
+    result = _calibrate_decision(original, verification, "Choose a database")
+
+    assert result["winner"] == "SQLite"
+    assert result["action_plan_mode"] == "validation_only"
+    assert "DUAL_WRITE_LIVE" not in str(result)
+    assert "RESTORE_OLD_SNAPSHOT" not in str(result)
+    assert "Observe the current system read-only" in str(result["action_plan"])
+    assert "Action-plan evidence is unverified" in str(result["unresolved_questions"])
 
 
 @pytest.mark.parametrize("lang,query,label", [

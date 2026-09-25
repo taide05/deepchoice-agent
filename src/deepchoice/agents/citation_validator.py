@@ -6,7 +6,7 @@ from copy import deepcopy
 
 from ..citations import verify_citations
 from ..citations.verifier import MAX_CLAIM_TEXT
-from ..utils.decision_contract import abstain_recommendation
+from ..utils.decision_contract import abstain_recommendation, restrict_action_plan
 from ..utils.views import print_agent_output
 
 
@@ -99,8 +99,24 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
             for field in fields:
                 if item.get(field) and not passed(f"final_recommendation.{collection}[{index}].{field}"):
                     withdraw = True
+    action_unverified = False
+    action_plan = result.get("action_plan", [])
+    if not isinstance(action_plan, list):
+        action_unverified = bool(action_plan)
+    else:
+        for index, item in enumerate(action_plan):
+            if not isinstance(item, dict):
+                action_unverified = True
+                continue
+            for field in ("step", "verification", "change_trigger", "rollback"):
+                if not item.get(field) or not passed(
+                    f"final_recommendation.action_plan[{index}].{field}"
+                ):
+                    action_unverified = True
     if withdraw:
         result = abstain_recommendation(result, query, note)
+    elif action_unverified:
+        result = restrict_action_plan(result, query)
     # Abstention deliberately normalizes away model-supplied extension fields.
     # Attach only freshly checked analysis after that boundary; limited reports
     # normalize again and therefore remove it.

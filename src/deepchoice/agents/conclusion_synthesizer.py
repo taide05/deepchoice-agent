@@ -13,6 +13,7 @@ from ..utils.decision_contract import (
     normalize_decision_branches,
     normalize_requirement_assessments,
     normalize_unknowns,
+    restrict_action_plan,
 )
 from ..utils.evidence import is_navigation_placeholder, source_title
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
@@ -320,6 +321,7 @@ def _normalize_decision_contract(
     result: dict,
     requirements: list[dict],
     usable_evidence_ids: set[int],
+    query: str = "",
 ) -> tuple[dict, bool]:
     """Fill every required row and fail closed on missing evidence bindings."""
     # This is runtime-owned presentation metadata, never model-granted authority.
@@ -379,10 +381,22 @@ def _normalize_decision_contract(
             "explanation": explanation,
             "evidence_ids": evidence_ids,
         })
+    normalized_action_plan = normalize_action_plan(raw_action_plan)
+    action_plan_invalid = (
+        bool(raw_action_plan)
+        and not overflow
+        and (
+            not isinstance(raw_action_plan, list)
+            or len(normalized_action_plan) != len(raw_action_plan)
+        )
+    )
     result["decision_basis_version"] = DECISION_BASIS_VERSION
     result["requirement_assessments"] = normalized
     result["decision_branches"] = normalize_decision_branches(raw_branches)
-    result["action_plan"] = normalize_action_plan(raw_action_plan)
+    if action_plan_invalid:
+        result = restrict_action_plan(result, query)
+    else:
+        result["action_plan"] = normalized_action_plan
     result["unresolved_questions"] = normalize_unknowns(
         result.get("unresolved_questions")
     )
@@ -749,6 +763,7 @@ class ConclusionSynthesizerAgent:
             result,
             requirements,
             _usable_evidence_ids(evidence_chains),
+            task.get("query", ""),
         )
         winner_before_validation = _prompt_data(result.get("winner"), 300)
         _validate_winner(result)
