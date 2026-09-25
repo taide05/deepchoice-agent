@@ -10,7 +10,7 @@
 | 已测量候选 / 控制身份 | 原基线 d23c948 / 7d16d28；最新产品 83852d8 在实际 checkout 60485b6 执行 P01，内容门禁未放行 |
 | 持续授权研究账本 | 已用 94 / 现行上限 154，v3完整局部12格与整合S3/C1最终/并发48已分别划定；v1/v2不可重跑/拼接；不是项目全部历史分母 |
 | 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告、v2 baseline-r2/P04 单份新报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
-| 尚未完成 | v3 post-commit audit、全新前置、完整局部配对与盲评；最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
+| 尚未完成 | v3全新前置、完整局部配对与盲评；最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
 | 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v3窄遥测/停止契约已通过工程验证，但尚无新的 candidate/配对效果证据，产品质量仍证据不足 |
 
 2026-09-23 用户明确批准前瞻隔离 benchmark 派生比较模板、在现有来源范围审计并重冻
@@ -144,8 +144,10 @@ P09–P12 禁读均未变。工程候选通过121项聚焦、453项相关、1996
 12/12且基线一致、pyflakes、vulture100%、pip check、compileall与diff检查。研究仍为 **94/154**；
 独立复审发现 official retriever 与 citation fetch provenance 混淆阻断后，专属 ContextVar/alias
 绑定与成对反例已关闭该问题；定向复核无剩余 blocker。未以 fake resolver 实际调用安装后 alias 是
-非阻断测试盲区，当前运行时 globals 检查确认绑定有效。post-commit 零研究 audit、全新前置、唯一
-12格执行及报告盲评尚未完成，不能据此声称局部效果改善。
+非阻断测试盲区，当前运行时 globals 检查确认绑定有效。实现提交 `d527ab6` 的 post-commit 零研究
+audit 已通过：baseline/candidate 提交、双臂 manifests、v1/v2 前驱、TCB、种子/SQLite、依赖、环境与
+代理身份均匹配，`research_runs_submitted=0`。全新前置、唯一12格执行及报告盲评尚未完成，不能据此
+声称局部效果改善。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

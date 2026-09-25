@@ -176,7 +176,8 @@ v3 已前瞻实现更窄的降级边界：只有已知 citation safe-fetch 策�
 只把精确冻结 `FWD_BASE` POST 分类为 self-forward，并采用引用 verifier 专属 provenance 的窄降级边界，
 避免把 official retriever 失败误当作 citation unknown。v3 工程候选已通过121项聚焦、453项相关、
 1996项全套、smoke/static/dependency/compile/diff 验证；独立复审发现并确认关闭 provenance 阻断，
-现无阻断项。仍须 post-commit 零研究 audit、全新前置与唯一正式执行。不能重跑/拼接 v1/v2：
+现无阻断项。提交 `d527ab6` 的 post-commit 零研究 audit 已通过，研究提交为0；仍须全新前置与
+唯一正式执行。不能重跑/拼接 v1/v2：
 
 1. 83852d8 的 P01 已有解释保留，但切写后的快照回退缺新增写入保全边界，内容门禁未通过；
 2. 条件分析与未知投影保持，关键前提未成立时撤回生产操作建议的修复已通过136聚焦、1720全套及独立复审；结果和限制见问题表；
