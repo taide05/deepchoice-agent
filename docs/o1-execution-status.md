@@ -44,6 +44,22 @@ P08 5项相关来源，并剔除 P04 4项/P08 2项跨案例来源。该结果是
 vulture100%、pip check、compileall、diff检查通过；独立复审关闭伪造准入、token边界和 legacy
 投影问题，无阻断项。
 
+随后以同一冻结种子、P01/P04/P08 原快照中的原始及 Chroma adapted dimensions 做禁网络 top-100
+回放。当前1800字 chunk 的向量相似度与产品只透传其前500字不一致：PostgreSQL 并发正文位于
+首段500字之后/重叠后段，Celery 确认、重投和幂等边界位于同 URL 的其他段；但同源前两段也会
+选入导航、优化建议或无关特性，不能安全直接拼接。原回放为
+`outputs/product-optimization-q2-multichunk-offline-20260925.json`（SHA-256 `de40db36…`），完整 top-100
+排名原件为 `outputs/product-optimization-q2-original-rank-audit-20260925.json`（SHA-256 `0c5a525b…`）。
+
+500字重分段反事实从234增至960段；存活 collection 已验证 `quick_check=ok`、960个有序ID及矩阵
+SHA-256 `056c6bf6…`，另一种分批编码的 `fd6c4744…` 仅留作浮点/批次差异审计，没有替换存量向量。
+在相同100候选池与7项合并规则下，按原冻结15-target registry 做离线同案例归属投影为
+5/3/5，对照当前种子为7/3/5；P01 丢失 PostgreSQL 并发与 SQLite FTS5，P04 仍未选到确认/幂等段。
+这不是 production admission：960段身份未获批准，实际 source-score-v6 对未知 seed identity 会 fail closed。
+反事实原件为 `outputs/product-optimization-q2-500-counterfactual-replay-20260925.json`（SHA-256
+`4a5bf5a5…`）。因此 Q2-01c 继续开放，naive top-k 与全库缩短 chunk 均被本轮反例否决；不改生产、
+主种子或历史结果，无网络、LLM、付费或研究 run，累计仍为95/154。
+
 开发请求投影只含 P01/P04/P08。历史 v1 及已冻结 v2 计划继续保持原字节身份；2026-09-24 的
 v3 只把两份浅层 PostgreSQL 章节索引替换为 `mvcc-intro` 与 `textsearch-intro`，其余13项不变，
 仍为15个精确深链（P01 7、P04 3、P08 5）。v3 byte SHA-256 为
