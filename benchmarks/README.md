@@ -119,9 +119,12 @@ serve 与 collector 进程须显式继承相同的可信代理配置；一个 CL
 前置与 completed 不能单独证明资格，完整报告声明核对和独立复核见
 [资格证据](../docs/o1c-single-case-verification.md)。未覆盖的实际动态 TLS 保持 unavailable；不额外外呼补测。
 
-## 当前修复包局部12格（v3）
+## 已停止的修复包局部12格（v3）
 
 `product-optimization-repair-pair-v3` 只包含 P01/P04/P08，不读取完整数据集正文或 P09–P12。
+它的唯一正式执行已在 baseline-r2/P04 完成后按 `strict_safe_fetch_failure` 停止：1格 completed、
+11格 not_submitted、无提交不确定性。下列命令仅记录冻结操作界面，**不得再次执行、换根补样或与
+v1/v2 拼接**；后续工作必须先完成三次付费停止后的测量复议并冻结新身份。
 协议外批准 byte SHA 为
 `47bfeffa01893b6077a480b06dd6ff4254d6c121d110614747a3fc2f9db9c268`；每个命令都必须显式传入，
 不能从协议自身推导后自动接受。先在已提交且批准路径干净的 candidate 与只读 baseline checkout 上
@@ -147,7 +150,7 @@ $privateEnv = "<私有 .env 绝对路径>"
 `outputs/product-optimization-ledgers/product-optimization-repair-pair-v3/`。v3 前向绑定已停止的 v2 claim、
 唯一完成的 baseline-r2/P04 cell、observation 与 result；旧 `...repair-pair-v1/` 和
 `...repair-pair-v2/` 必须原样保留。任一命名空间的文件都不能删除或改写为允许重跑；v3 只有一次
-完整执行机会，累计预算固定为94＋12＋48＝154。
+完整执行机会，累计预算固定为94＋12＋48＝154；实际停止后累计研究为95，最终/并发48仍未动。
 `audit`/`prepare` 通过只代表离线控制契约；内容改善须等12格完整报告按冻结盲评协议评审。
 
 ## 有意使用历史直连工具

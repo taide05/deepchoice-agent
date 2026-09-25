@@ -1,6 +1,6 @@
 # 当前执行状态与证据索引
 
-最后完成研究：2026-09-25，v2 baseline-r2/P04 完成；随后严格 telemetry 门禁停止新准入。
+最后完成研究：2026-09-25，v3 baseline-r2/P04 完成；随后严格 citation telemetry 门禁停止新准入。
 普通成本与阶段切换沿用用户持续授权；不再为此逐项停下确认，研究硬上限和安全门禁仍有效。
 本文只维护最新状态和账本。后续目标见 [地图](current-roadmap.md)，操作方式见 [执行规则](optimization-execution.md)。
 
@@ -8,10 +8,10 @@
 |---|---|
 | 工作分支 | codex/baseline-readiness；当前实现与已测量产品候选不能混为一谈 |
 | 已测量候选 / 控制身份 | 原基线 d23c948 / 7d16d28；最新产品 83852d8 在实际 checkout 60485b6 执行 P01，内容门禁未放行 |
-| 持续授权研究账本 | 已用 94 / 现行上限 154，v3完整局部12格与整合S3/C1最终/并发48已分别划定；v1/v2不可重跑/拼接；不是项目全部历史分母 |
-| 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告、v2 baseline-r2/P04 单份新报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
-| 尚未完成 | v3全新前置、完整局部配对与盲评；最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
-| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v3窄遥测/停止契约已通过工程验证，但尚无新的 candidate/配对效果证据，产品质量仍证据不足 |
+| 持续授权研究账本 | 已用 95 / 现行上限 154；v3仅1格完成、余11格未提交且不可重跑/拼接；整合S3/C1最终/并发48仍完整保留；不是项目全部历史分母 |
+| 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告、v2与v3各一份 baseline-r2/P04 报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
+| 尚未完成 | 三次付费停止后的测量复议与有效局部配对；最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
+| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v3遥测边界按冻结规则工作并停止未知 citation 错误，但没有 candidate/配对效果证据，产品质量仍证据不足 |
 
 2026-09-23 用户明确批准前瞻隔离 benchmark 派生比较模板、在现有来源范围审计并重冻
 可信知识种子；批准“修复包局部12格＋预先整合S3/C1共48格”，累计研究上限
@@ -146,8 +146,25 @@ P09–P12 禁读均未变。工程候选通过121项聚焦、453项相关、1996
 绑定与成对反例已关闭该问题；定向复核无剩余 blocker。未以 fake resolver 实际调用安装后 alias 是
 非阻断测试盲区，当前运行时 globals 检查确认绑定有效。实现提交 `d527ab6` 的 post-commit 零研究
 audit 已通过：baseline/candidate 提交、双臂 manifests、v1/v2 前驱、TCB、种子/SQLite、依赖、环境与
-代理身份均匹配，`research_runs_submitted=0`。全新前置、唯一12格执行及报告盲评尚未完成，不能据此
-声称局部效果改善。
+代理身份均匹配，`research_runs_submitted=0`。全新前置随后以 HTTP 8、LLM 2、Tavily POST 1/1
+（200）、五类来源健康和研究0通过；离线 prepare 冻结四块。
+
+v3 唯一正式执行只完成 baseline-r2/P04：10,975 tokens、12次LLM、6次retrieval、18次Trace
+external call，failed_calls=0、终态用量完整、报告/快照存在；其余11格 not_submitted，ledger 为
+attempted/known_min/possible_max=1/1/1、uncertainty=false。`self_forward` 两次均准确记录为
+forward/POST/200；已知 citation `route_unsupported` / `response_rejected` 按协议继续。最早严格停止
+触发是 telemetry 第64行：`citation_safe_fetch_official` / `citation` 的 `OtherError`、failure=null；
+第78行还有同类事件。未知错误不得事后重分类或降级，因此结果固定为 stop reason
+`TELEMETRY_strict_safe_fetch_failure`。claim/cell/observation/result/execution-binding SHA-256 依次为
+`97b8ff04d8b8d1d4554625914f07de04617bb9cfef9fff9d0e119941941d1f56` /
+`3468896e934298d49d9db2faeb56d605af318e48fb038da7b9a870daf89ed7fb` /
+`43fdd654c103b39c7dd05a8daab9fefc6fc6760d82b248861449dc3044040c15` /
+`2dcb6d5fcb1d61feff0ef349095ef081ec161bac4f3b970e614abb9c963ead7f` /
+`005c0fd34ac972ff313df90366e68b5331d2ad00beb7da37404b6651deccc7db`。研究累计 **95/154**，
+telemetry SHA-256 为 `8945c564aed60db5f3ab1778c5d8e022f4bcd8fc8892a9d2b8faadcb459a1343`。独立复审确认 claim/binding、collector journal、runs、
+observation/result 的 task/run/status 一致，停止正确；403 与200响应后都出现过 `OtherError`，无法安全
+归为普通403或既知 transport，允许继续将扩大 fail-closed 边界。最终/并发48完整保留；三次付费停止
+规则已触发测量复议，不能自动追加 v4、复用旧根或据单份 baseline 报告声称局部效果改善。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
