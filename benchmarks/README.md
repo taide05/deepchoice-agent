@@ -119,16 +119,16 @@ serve 与 collector 进程须显式继承相同的可信代理配置；一个 CL
 前置与 completed 不能单独证明资格，完整报告声明核对和独立复核见
 [资格证据](../docs/o1c-single-case-verification.md)。未覆盖的实际动态 TLS 保持 unavailable；不额外外呼补测。
 
-## 当前修复包局部12格（v2）
+## 当前修复包局部12格（v3）
 
-`product-optimization-repair-pair-v2` 只包含 P01/P04/P08，不读取完整数据集正文或 P09–P12。
+`product-optimization-repair-pair-v3` 只包含 P01/P04/P08，不读取完整数据集正文或 P09–P12。
 协议外批准 byte SHA 为
-`404ff295d0a66fdbaab610f96b6b85a6a0b1bcdebc6c588fd9475975b00e7117`；每个命令都必须显式传入，
+`47bfeffa01893b6077a480b06dd6ff4254d6c121d110614747a3fc2f9db9c268`；每个命令都必须显式传入，
 不能从协议自身推导后自动接受。先在已提交且批准路径干净的 candidate 与只读 baseline checkout 上
 执行零网络 `audit`。`preflight` 才会做有界付费探测，`run` 才会提交研究任务：
 
 ```powershell
-$protocolSha = "404ff295d0a66fdbaab610f96b6b85a6a0b1bcdebc6c588fd9475975b00e7117"
+$protocolSha = "47bfeffa01893b6077a480b06dd6ff4254d6c121d110614747a3fc2f9db9c268"
 $baselineRoot = "<只读 d23c948 checkout>"
 $candidateRoot = "<当前干净 checkout>"
 $privateEnv = "<私有 .env 绝对路径>"
@@ -140,11 +140,14 @@ $privateEnv = "<私有 .env 绝对路径>"
 ```
 
 顺序固定为 baseline-r2、candidate-r2、candidate-r1、baseline-r1，每块 P01/P04/P08，共12格且
-`concurrency=1`。任一身份、预检、来源、HTTP、预算、租约、服务归属、用量不完整或未知异常都会
-停止新准入；已尝试格不重试、不补样、不跨根拼接。全局 ledger 位于忽略区
-`outputs/product-optimization-ledgers/product-optimization-repair-pair-v2/`。v2 前向绑定已停止的 v1 claim、
-baseline-r2/P04 尝试和结果哈希；旧 `...repair-pair-v1/` 必须原样保留。任一命名空间的文件都不能删除
-或改写为允许重跑；v2 只有一次完整执行机会。
+`concurrency=1`。只有 citation verifier 专属 provenance 下的已知 safe-fetch 策略/传输失败，才在
+终态和来源门禁完整时可降级为
+`unknown` 后继续；`safety_rejected`、429、普通5xx、检索、预算、租约、身份或未分类异常仍会停止
+新准入。已尝试格不重试、不补样、不跨根拼接。全局 ledger 位于忽略区
+`outputs/product-optimization-ledgers/product-optimization-repair-pair-v3/`。v3 前向绑定已停止的 v2 claim、
+唯一完成的 baseline-r2/P04 cell、observation 与 result；旧 `...repair-pair-v1/` 和
+`...repair-pair-v2/` 必须原样保留。任一命名空间的文件都不能删除或改写为允许重跑；v3 只有一次
+完整执行机会，累计预算固定为94＋12＋48＝154。
 `audit`/`prepare` 通过只代表离线控制契约；内容改善须等12格完整报告按冻结盲评协议评审。
 
 ## 有意使用历史直连工具

@@ -8,10 +8,10 @@
 |---|---|
 | 工作分支 | codex/baseline-readiness；当前实现与已测量产品候选不能混为一谈 |
 | 已测量候选 / 控制身份 | 原基线 d23c948 / 7d16d28；最新产品 83852d8 在实际 checkout 60485b6 执行 P01，内容门禁未放行 |
-| 持续授权研究账本 | 已用 94 / 现行上限 153，尚可准入 59；v2 仅1格完成、余11格未提交且不可重跑/拼接；整合S3/C1仍完整预留48；不是项目全部历史分母 |
+| 持续授权研究账本 | 已用 94 / 现行上限 154，v3完整局部12格与整合S3/C1最终/并发48已分别划定；v1/v2不可重跑/拼接；不是项目全部历史分母 |
 | 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告、v2 baseline-r2/P04 单份新报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
-| 尚未完成 | 新的测量复议与有效局部配对、最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
-| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v2 前置通过且单个 baseline P04 完成，但无 candidate/配对效果证据，产品质量仍证据不足 |
+| 尚未完成 | v3 post-commit audit、全新前置、完整局部配对与盲评；最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
+| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v3窄遥测/停止契约已通过工程验证，但尚无新的 candidate/配对效果证据，产品质量仍证据不足 |
 
 2026-09-23 用户明确批准前瞻隔离 benchmark 派生比较模板、在现有来源范围审计并重冻
 可信知识种子；批准“修复包局部12格＋预先整合S3/C1共48格”，累计研究上限
@@ -22,6 +22,9 @@
 研究准入1、累计已用93；停止格不能重试或拼接，剩余额度仍须保留既定分母，不能自动补样。
 2026-09-25 用户进一步批准累计上限 **152→153**，保持局部完整12格和最终/并发48格不变。
 该批准只允许另冻 v2 执行身份，不允许删除或复用 v1 claim，也不降低内容/工程验收门槛。
+v2 执行按冻结 telemetry 门禁停止后，用户又明确批准所有后续付费评测与再次测量复议：累计上限
+**153→154**，v3 获得独立完整12格，最终/并发48格保持不变；该批准仍不允许重跑、改写或拼接
+v1/v2，也不改变供应商、安全、数据集或验收门槛。
 用户随后明确将最终人工门禁改为 GPT-only；本地固定P07受限与新P01迁移两份开发锚点，
 独立 GPT 已先盲评再对照既有判断：P07 高严重度且旧报告不可直接用于决策，P01 重大数据完整性风险；
 分别与历史严重度一致，P07 可用性判断更严格，详见 S0 问题表。不得把它记成人类校准或新产品效果；
@@ -117,12 +120,32 @@ safe-fetch 错误，因此依冻结规则停止全部新准入。结合前置已
 两次 unclassified POST 很可能是已冻结转发端点但 telemetry 未分类；因 URL 按设计不落盘，此点只是
 推断。即使修正该分类，五次 safe-fetch 失败仍会独立触发当前停止规则，不能把本次重标为有效配对。
 v2 claim/cell/observation/result SHA-256 分别为 `4f77600f…` / `bde2aedf…` / `c991d96d…` /
-`2c8cfe8…`；结果固定为1格 completed、11格 not_submitted、无不确定提交。研究现为 **94/153**，
-最终/并发48完整保留；局部11格余量不能解释为 v2 可续跑。下一步必须做测量复议并另冻协议/身份/
-ledger，不能自动第三次执行、删除旧 claim 或拼接停止根。
+`2c8cfe8…`；结果固定为1格 completed、11格 not_submitted、无不确定提交。v2停止时研究为
+**94/153**，最终/并发48完整保留；局部11格余量不能解释为 v2 可续跑。后续复议与扩额只授权
+新的 v3 协议/身份/ledger，不能删除旧 claim 或拼接停止根。
 复审保留的新增非阻断盲区：控制器级 fresh-subprocess 测试直接覆盖有效 IPv4 loopback，但未逐项参数化
 baseline checkout、IPv6、缺失/恶意 `LOCAL_PROXY` 或冲突预置 SAFE 值；底层代理合约和独立负测已
 覆盖核心拒绝行为。真实服务启动到首个 safe fetch 的端到端一致性尚未在修复后付费复验。
+
+现行 `product-optimization-repair-pair-v3` 协议 byte/canonical SHA-256 为
+`47bfeffa01893b6077a480b06dd6ff4254d6c121d110614747a3fc2f9db9c268` /
+`59d3649601c8985c944452f2caff05996659469c4d2a22b31ad5ac663981cd69`。runner/child/control/loader
+SHA-256 分别为 `6ce9ea1247a68e8a053469622d143170f7eec8056c97127d119c95bc87f36f1a` /
+`598e429d045fc9825b56ff0d7753a9599901c756b2390ec2f443a55473dedaf0` /
+`955f9fc22169f9f0a9fb4573032343d135e64485552cbb7a05be2cdc9ff96013` /
+`022fb88afbc782ff15d38e4c91b6805c57500d24f26f2de6bf5057440375b959`。v3 使用 `RP3-*` 标签及
+独立 ledger，bootstrap 与每格准入都验证 v1 安全前驱和 v2 的 claim/cell/observation/result 路径、
+字节哈希及1格完成/11格未提交语义。只有规范化 scheme/IDNA host/port/path/query 全部等于冻结
+`FWD_BASE` 的 POST 才记为 `self_forward`；匹配的 forward/POST/2xx–3xx 可继续。citation verifier
+通过专属进程内 provenance 与共用同一 resolver 的 official retriever 区分；只有前者的已知
+safe-fetch 策略/传输失败可在终态与来源门禁完整时降级为 unknown。`safety_rejected`、429、普通
+5xx、检索/预算/租约/身份及未知失败仍停止。产品、种子、顺序、单并发、阈值、供应商、安全边界和
+P09–P12 禁读均未变。工程候选通过121项聚焦、453项相关、1996项全套（223.87秒）、smoke-v1
+12/12且基线一致、pyflakes、vulture100%、pip check、compileall与diff检查。研究仍为 **94/154**；
+独立复审发现 official retriever 与 citation fetch provenance 混淆阻断后，专属 ContextVar/alias
+绑定与成对反例已关闭该问题；定向复核无剩余 blocker。未以 fake resolver 实际调用安装后 alias 是
+非阻断测试盲区，当前运行时 globals 检查确认绑定有效。post-commit 零研究 audit、全新前置、唯一
+12格执行及报告盲评尚未完成，不能据此声称局部效果改善。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

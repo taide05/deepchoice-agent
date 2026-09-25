@@ -236,7 +236,7 @@ def test_pr2b_safe_fetch_context_marks_source_aware_dynamic_requests():
     head_request = httpx.Request("HEAD", "https://docs.example.com/")
     assert child._observed_operation(get_request, "api.deepseek.com") == "other"
 
-    token = child._SAFE_FETCH_SOURCE.set("public")
+    token = child._SAFE_FETCH_SOURCE.set("safe_fetch_public")
     try:
         assert (
             child._observed_operation(get_request, "api.deepseek.com")
@@ -249,7 +249,7 @@ def test_pr2b_safe_fetch_context_marks_source_aware_dynamic_requests():
     finally:
         child._SAFE_FETCH_SOURCE.reset(token)
 
-    token = child._SAFE_FETCH_SOURCE.set("official")
+    token = child._SAFE_FETCH_SOURCE.set("safe_fetch_official")
     try:
         assert (
             child._observed_operation(get_request, "api.deepseek.com")
@@ -261,10 +261,63 @@ def test_pr2b_safe_fetch_context_marks_source_aware_dynamic_requests():
         )
     finally:
         child._SAFE_FETCH_SOURCE.reset(token)
+
+    citation_token = child._SAFE_FETCH_SOURCE.set(
+        "citation_safe_fetch_official"
+    )
+    try:
+        assert (
+            child._observed_operation(get_request, "api.deepseek.com")
+            == "citation_safe_fetch_official"
+        )
+    finally:
+        child._SAFE_FETCH_SOURCE.reset(citation_token)
+
+    assert child._safe_fetch_operation("official") == "safe_fetch_official"
+    citation_token = child._CITATION_FETCH.set(True)
+    try:
+        assert (
+            child._safe_fetch_operation("official")
+            == "citation_safe_fetch_official"
+        )
+        assert child._safe_fetch_operation("github") == "safe_fetch_public"
+    finally:
+        child._CITATION_FETCH.reset(citation_token)
 
     assert child._observed_source("safe_fetch_official") == "official"
+    assert child._observed_source("citation_safe_fetch_official") == "citation"
     assert child._observed_source("safe_fetch_public") == "safe_fetch"
     assert child._observed_source("tavily_business") == "tavily"
+    forward_endpoint = child._endpoint_identity("https://forward.example.com/v1/relay")
+    assert forward_endpoint is not None
+    forward_request = httpx.Request(
+        "POST", "https://forward.example.com/v1/relay"
+    )
+    assert child._observed_operation(
+        forward_request, "api.deepseek.com", forward_endpoint
+    ) == "self_forward"
+    assert child._observed_operation(
+        httpx.Request("GET", "https://forward.example.com/v1/relay"),
+        "api.deepseek.com", forward_endpoint,
+    ) == "other"
+    assert child._observed_operation(
+        httpx.Request("POST", "https://forward.example.com/v1/other"),
+        "api.deepseek.com", forward_endpoint,
+    ) == "other"
+    for value in (
+        "http://forward.example.com/v1/relay",
+        "https://other.example.com/v1/relay",
+        "https://forward.example.com:444/v1/relay",
+        "https://forward.example.com/v1/relay?mode=other",
+        "https://user@forward.example.com/v1/relay",
+    ):
+        assert child._observed_operation(
+            httpx.Request("POST", value), "api.deepseek.com", forward_endpoint,
+        ) == "other"
+    assert child._endpoint_identity(
+        "https://user@forward.example.com/v1/relay"
+    ) is None
+    assert child._observed_source("self_forward") == "forward"
     assert child._observed_source("github") == "github"
 
 
@@ -277,6 +330,61 @@ def test_pr2b_child_exposes_only_known_safe_fetch_failure_values():
     unknown.failure = SimpleNamespace(value="unexpected")
     assert child._safe_fetch_failure(unknown) is None
     assert child._safe_fetch_failure(RuntimeError("redacted")) is None
+    assert child._error_type(httpx.ProxyError("redacted")) == "TransportError"
+
+
+def test_pr2b_self_forward_response_requires_exact_frozen_context(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {"event": "external_http_response", "operation": "self_forward",
+         "source": "forward", "method": "POST", "status_code": 200},
+    )
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+    for change in (
+        {"source": "other"},
+        {"method": "GET"},
+        {"status_code": 500},
+    ):
+        event = {"event": "external_http_response", "operation": "self_forward",
+                 "source": "forward", "method": "POST", "status_code": 200}
+        event.update(change)
+        _write_telemetry(telemetry, {"event": "telemetry_ready"}, event)
+        state = control.telemetry_state(telemetry)
+        assert state["anomaly"] is True
+        assert state["reason"] == "self_forward_failed"
+
+
+def test_pr2b_safe_fetch_accepts_exact_transport_unknown_pair(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {"event": "external_http_failure", "operation": "safe_fetch_official",
+         "source": "official", "method": "GET", "error_type": "TransportError",
+         "failure": None},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "error_type": "TransportError", "failure": None},
+    )
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+def test_pr2b_citation_safe_fetch_accepts_exact_transport_unknown_pair(tmp_path):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {"event": "external_http_failure",
+         "operation": "citation_safe_fetch_official",
+         "source": "citation", "method": "GET",
+         "error_type": "TransportError", "failure": None},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "error_type": "TransportError", "failure": None},
+    )
+    assert control.telemetry_state(telemetry)["anomaly"] is False
 
 
 @pytest.mark.parametrize(

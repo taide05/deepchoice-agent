@@ -72,6 +72,12 @@ _EXPECTED_SOURCES = {
     "tavily", "chroma", "github", "arxiv", "community", "official",
 }
 
+_SAFE_FETCH_TRANSPORT_ERRORS = frozenset({
+    "TimeoutError", "ConnectTimeout", "ReadTimeout", "WriteTimeout",
+    "PoolTimeout", "ConnectError", "ReadError", "WriteError",
+    "RemoteProtocolError", "TransportError",
+})
+
 
 def source_anomaly(snapshot) -> bool:
     """Require the six source envelopes; other partial failures have other meanings."""
@@ -139,8 +145,8 @@ def tree_identity(root: Path) -> str:
 
 _HTTP_OPERATIONS = {
     "tavily_static_probe", "tavily_business", "llm", "github", "arxiv",
-    "community", "official", "other", "safe_fetch_public",
-    "safe_fetch_official",
+    "community", "official", "self_forward", "other", "safe_fetch_public",
+    "safe_fetch_official", "citation_safe_fetch_official",
 }
 
 _SAFE_FETCH_FAILURES = {
@@ -199,10 +205,19 @@ def telemetry_state(
             elif kind == "external_http_failure":
                 operation = event.get("operation")
                 error_type = event.get("error_type")
-                if operation in {"safe_fetch_public", "safe_fetch_official"}:
+                if operation in {
+                    "safe_fetch_public", "safe_fetch_official",
+                    "citation_safe_fetch_official",
+                }:
                     is_official = operation == "safe_fetch_official"
-                    expected_source = "official" if is_official else "safe_fetch"
-                    allowed_methods = {"GET", "HEAD"} if is_official else {"GET"}
+                    is_citation = operation == "citation_safe_fetch_official"
+                    expected_source = (
+                        "citation" if is_citation
+                        else "official" if is_official else "safe_fetch"
+                    )
+                    allowed_methods = (
+                        {"GET", "HEAD"} if is_official else {"GET"}
+                    )
                     failure_reason = (
                         "safe_fetch_official_failed"
                         if is_official else "safe_fetch_public_failed"
@@ -227,9 +242,18 @@ def telemetry_state(
                             pending_safe_fetch_cancellations.setdefault(
                                 run_id, []
                             ).append(cancelled_at)
+                    elif (error_type in _SAFE_FETCH_TRANSPORT_ERRORS
+                            and event.get("failure") is None):
+                        pass
                     elif (error_type != "UnsafeUrlError"
                             or event.get("failure") not in _SAFE_FETCH_FAILURES):
                         anomaly_reason = failure_reason
+                elif operation == "self_forward":
+                    if (event.get("source") != "forward"
+                            or event.get("method") != "POST"):
+                        anomaly_reason = "self_forward_failed"
+                    else:
+                        anomaly_reason = "external_http_failure"
                 elif operation not in _HTTP_OPERATIONS:
                     anomaly_reason = "external_http_operation_invalid"
                 elif error_type == "CancelledError":
@@ -295,10 +319,19 @@ def telemetry_state(
                 elif operation == "tavily_static_probe":
                     if source != "tavily" or method != "HEAD" or not 200 <= status_code < 500:
                         anomaly_reason = "tavily_static_probe_failed"
-                elif operation in {"safe_fetch_public", "safe_fetch_official"}:
+                elif operation in {
+                    "safe_fetch_public", "safe_fetch_official",
+                    "citation_safe_fetch_official",
+                }:
                     is_official = operation == "safe_fetch_official"
-                    expected_source = "official" if is_official else "safe_fetch"
-                    allowed_methods = {"GET", "HEAD"} if is_official else {"GET"}
+                    is_citation = operation == "citation_safe_fetch_official"
+                    expected_source = (
+                        "citation" if is_citation
+                        else "official" if is_official else "safe_fetch"
+                    )
+                    allowed_methods = (
+                        {"GET", "HEAD"} if is_official else {"GET"}
+                    )
                     status_allowed = (
                         200 <= status_code < 500
                         or (is_official and method == "HEAD" and status_code == 501)
@@ -309,6 +342,10 @@ def telemetry_state(
                             "safe_fetch_official_failed"
                             if is_official else "safe_fetch_public_failed"
                         )
+                elif operation == "self_forward":
+                    if (source != "forward" or method != "POST"
+                            or not 200 <= status_code < 400):
+                        anomaly_reason = "self_forward_failed"
                 elif not 200 <= status_code < 400:
                     anomaly_reason = "external_http_status_failed"
         if state["embedding_ended"] > state["embedding_started"]:

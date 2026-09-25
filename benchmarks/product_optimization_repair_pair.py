@@ -25,8 +25,8 @@ from benchmarks.product_optimization_dev_requests import (
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOL_PATH = ROOT / "benchmarks" / "product-optimization-repair-pair-v2.json"
-PROTOCOL_ID = "product-optimization-repair-pair-v2"
+PROTOCOL_PATH = ROOT / "benchmarks" / "product-optimization-repair-pair-v3.json"
+PROTOCOL_ID = "product-optimization-repair-pair-v3"
 PARENT_DATASET_SHA256 = "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
 PARENT_DATASET_BYTES_SHA256 = "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef"
 PARENT_DATASET_GIT_OBJECT = "da14cf6d72ed528eef3510f48f78116288c3964a"
@@ -190,7 +190,7 @@ def _validate_design(value: Any) -> None:
         != expected_cells
         or [item.get("order") for item in review] != list(range(1, 13))
         or [item.get("blind_label") for item in review]
-        != [f"RP2-{index:02d}" for index in range(1, 13)]
+        != [f"RP3-{index:02d}" for index in range(1, 13)]
         or any(
             set(item) != {"case_id", "role", "arm", "repetition", "order", "blind_label"}
             or item.get("role") != ("regression" if item.get("case_id") == "P01" else "target")
@@ -221,6 +221,7 @@ def _validate_protocol(payload: Any) -> None:
             "acceptance",
             "stopping",
             "predecessor",
+            "immediate_predecessor",
             "authorization",
         },
         "protocol",
@@ -347,8 +348,8 @@ def _validate_protocol(payload: Any) -> None:
         _fail("environment contract changed")
     budgets = protocol["budgets"]
     if budgets != {
-        "research_ledger": {"starting_used": 93, "local_pair_max": 12,
-                            "final_concurrency_reserve": 48, "hard_total": 153,
+        "research_ledger": {"starting_used": 94, "local_pair_max": 12,
+                            "final_concurrency_reserve": 48, "hard_total": 154,
                             "unallocated": 0},
         "per_run": {"total_tokens": 60000, "llm_calls": 96,
                     "retrieval_calls": 72, "active_milliseconds": 900000},
@@ -384,10 +385,13 @@ def _validate_protocol(payload: Any) -> None:
     if protocol["stopping"] != {
         "identity_environment_seed_or_controller_drift": "stop-before-admission",
         "retrieval_rate_limit_safety_budget_lease_or_unknown": "stop-new-admission",
+        "known_citation_policy_or_transport_unknown":
+            "continue-if-terminal-and-source-gates-pass",
+        "unclassified_external_or_safe_fetch_error": "stop-new-admission",
         "ordinary_citation_http_5xx": "stop-new-admission",
         "finish_already_admitted_run": True,
         "replace_retry_or_splice_stopped_roots": False,
-        "two_paid_stops_without_valid_pair": "return-to-measurement-review",
+        "three_paid_stops_without_valid_pair": "return-to-measurement-review",
     }:
         _fail("stopping contract changed")
     if protocol["predecessor"] != {
@@ -414,12 +418,38 @@ def _validate_protocol(payload: Any) -> None:
         _fail("predecessor execution binding changed")
     if protocol["authorization"] != {
         "decision_date": "2026-09-25",
-        "hard_total": 153,
+        "hard_total": 154,
         "local_pair_max": 12,
         "final_concurrency_reserve": 48,
         "preserve_acceptance_thresholds": True,
     }:
         _fail("measurement authorization changed")
+    if protocol["immediate_predecessor"] != {
+        "protocol_id": "product-optimization-repair-pair-v2",
+        "protocol_byte_sha256": "404ff295d0a66fdbaab610f96b6b85a6a0b1bcdebc6c588fd9475975b00e7117",
+        "artifacts": {
+            "execution_claim": {
+                "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v2/execution-claim.json",
+                "sha256": "4f77600f1e86f9eecf7332cb04249a8b1e65660386ec823ef8589631ae93c270",
+            },
+            "attempted_cell": {
+                "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v2/cells/baseline-r2-P04.json",
+                "sha256": "bde2aedf88c33d02404ec4b4d9f586e483fbb351a801ee595e9adc8fc009c9a7",
+            },
+            "observation": {
+                "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v2/observations.jsonl",
+                "sha256": "c991d96d6d6077b2a10fd1d31980b1faeaee7765392a05b4f33abe0b66a25fe6",
+            },
+            "run_result": {
+                "path": "outputs/product-optimization-repair-pair-v2-20260925-v1/repair-pair-run-result.json",
+                "sha256": "2c8cfe8facb0b79cabffe78757bee40979e2ae74e3ac82b645ebd5c4042b7f34",
+            },
+        },
+        "accounted_research_runs": 1,
+        "trace_external_calls": 14,
+        "disposition": "immutable-no-retry-no-splice",
+    }:
+        _fail("immediate predecessor execution binding changed")
 
 
 def load_repair_pair_protocol(path: Path = PROTOCOL_PATH) -> RepairPairProtocol:

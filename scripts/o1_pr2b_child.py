@@ -43,6 +43,7 @@ _ERROR_TYPES = frozenset({
     "BudgetPersistenceError", "BudgetExecutionDeferredError", "ValueError",
     "TypeError", "RuntimeError", "OSError", "MemoryError", "ImportError",
     "ModuleNotFoundError", "PermissionError", "FileNotFoundError",
+    "TransportError",
 })
 
 _SAFE_FETCH_FAILURES = frozenset({
@@ -54,16 +55,48 @@ _SAFE_FETCH_FAILURES = frozenset({
 
 _HTTP_OPERATIONS = frozenset({
     "tavily_static_probe", "tavily_business", "llm", "github", "arxiv",
-    "community", "official", "other", "safe_fetch_public",
-    "safe_fetch_official",
+    "community", "official", "self_forward", "other", "safe_fetch_public",
+    "safe_fetch_official", "citation_safe_fetch_official",
 })
 
 _SAFE_FETCH_SOURCE: ContextVar[str | None] = ContextVar(
     "o1_pr2b_safe_fetch_source", default=None
 )
+_CITATION_FETCH: ContextVar[bool] = ContextVar(
+    "o1_pr2b_citation_fetch", default=False
+)
 
 
-def _external_operation(request: httpx.Request, model_host: str | None) -> str:
+def _safe_fetch_operation(source: str) -> str:
+    if _CITATION_FETCH.get() and source == "official":
+        return "citation_safe_fetch_official"
+    if source == "official":
+        return "safe_fetch_official"
+    return "safe_fetch_public"
+
+
+def _endpoint_identity(value: str | None) -> tuple[str, str, int, str, str] | None:
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value)
+        if (parsed.scheme.lower() not in {"http", "https"}
+                or parsed.hostname is None
+                or parsed.username is not None
+                or parsed.password is not None):
+            return None
+        hostname = parsed.hostname.rstrip(".").encode("idna").decode("ascii").lower()
+        port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
+    except (UnicodeError, ValueError):
+        return None
+    return (parsed.scheme.lower(), hostname, port, parsed.path or "/", parsed.query)
+
+
+def _external_operation(
+    request: httpx.Request,
+    model_host: str | None,
+    forward_endpoint: tuple[str, str, int, str, str] | None = None,
+) -> str:
     """Classify without retaining a URL; the static-probe exception is exact."""
 
     method = request.method.upper()
@@ -87,6 +120,10 @@ def _external_operation(request: httpx.Request, model_host: str | None) -> str:
         return "tavily_business"
     if model_host and host == model_host.lower():
         return "llm"
+    if method == "POST" and forward_endpoint is not None:
+        request_endpoint = _endpoint_identity(str(request.url))
+        if request_endpoint == forward_endpoint:
+            return "self_forward"
     return {
         "api.github.com": "github",
         "export.arxiv.org": "arxiv",
@@ -95,30 +132,43 @@ def _external_operation(request: httpx.Request, model_host: str | None) -> str:
     }.get(host, "other")
 
 
-def _observed_operation(request: httpx.Request, model_host: str | None) -> str:
+def _observed_operation(
+    request: httpx.Request,
+    model_host: str | None,
+    forward_endpoint: tuple[str, str, int, str, str] | None = None,
+) -> str:
     """Keep dynamic safe-fetch traffic distinct without retaining its URL."""
 
     safe_fetch_source = _SAFE_FETCH_SOURCE.get()
-    if safe_fetch_source == "official":
-        return "safe_fetch_official"
-    if safe_fetch_source is not None:
-        return "safe_fetch_public"
-    return _external_operation(request, model_host)
+    if safe_fetch_source in {
+        "safe_fetch_official", "safe_fetch_public",
+        "citation_safe_fetch_official",
+    }:
+        return safe_fetch_source
+    return _external_operation(request, model_host, forward_endpoint)
 
 
 def _observed_source(operation: str) -> str:
     if operation == "safe_fetch_official":
         return "official"
+    if operation == "citation_safe_fetch_official":
+        return "citation"
     if operation == "safe_fetch_public":
         return "safe_fetch"
     if operation.startswith("tavily_"):
         return "tavily"
+    if operation == "self_forward":
+        return "forward"
     return operation
 
 
 def _error_type(exc: BaseException) -> str:
     name = type(exc).__name__
-    return name if name in _ERROR_TYPES else "OtherError"
+    if name in _ERROR_TYPES:
+        return name
+    if isinstance(exc, httpx.TransportError):
+        return "TransportError"
+    return "OtherError"
 
 
 def _safe_fetch_failure(exc: BaseException) -> str | None:
@@ -176,6 +226,7 @@ def _install_observers(telemetry: Telemetry) -> None:
     # serve has configured paths/thread limits, but Config has not loaded the app.
     # Importing the embedding module adds no getter/model invocation.
     from deepchoice.utils import embedding
+    from deepchoice.citations import verifier as citation_verifier
     from deepchoice.outbound import resolver, tunnel
     from deepchoice.utils.llm import TIERS
 
@@ -183,8 +234,10 @@ def _install_observers(telemetry: Telemetry) -> None:
     original_connect = tunnel.PinnedProxyBackend.connect_tcp
     original_tls = tunnel._TunnelStream.start_tls
     original_fetch = resolver.ChannelResolver.safe_fetch
+    original_citation_fetch = citation_verifier.safe_fetch
     original_http = httpx.AsyncClient._send_single_request
     model_host = urlsplit(TIERS["deepseek-flash"]["base"]).hostname
+    forward_endpoint = _endpoint_identity(os.environ.get("FWD_BASE"))
     first_lock = Lock()
     first_seen = False
 
@@ -238,25 +291,35 @@ def _install_observers(telemetry: Telemetry) -> None:
     async def observed_fetch(self, source, url, **kwargs):
         run_id = _run_id()
         started = time.monotonic_ns()
-        safe_fetch_source = "official" if source == "official" else "public"
-        token = _SAFE_FETCH_SOURCE.set(safe_fetch_source)
+        operation = _safe_fetch_operation(source)
+        token = _SAFE_FETCH_SOURCE.set(operation)
         try:
             response = await original_fetch(self, source, url, **kwargs)
         except BaseException as exc:
             telemetry.emit("safe_fetch_failure", run_id=run_id, status="failure",
+                           source=_observed_source(operation), operation=operation,
                            failure=_safe_fetch_failure(exc), error_type=_error_type(exc),
                            duration_ms=(time.monotonic_ns() - started) / 1_000_000)
             raise
         finally:
             _SAFE_FETCH_SOURCE.reset(token)
         telemetry.emit("safe_fetch_success", run_id=run_id, status="success",
+                       source=_observed_source(operation), operation=operation,
                        status_code=response.status_code,
                        duration_ms=(time.monotonic_ns() - started) / 1_000_000)
         return response
 
+    @wraps(original_citation_fetch)
+    async def observed_citation_fetch(source, url, **kwargs):
+        token = _CITATION_FETCH.set(True)
+        try:
+            return await original_citation_fetch(source, url, **kwargs)
+        finally:
+            _CITATION_FETCH.reset(token)
+
     @wraps(original_http)
     async def observed_http(self, request):
-        operation = _observed_operation(request, model_host)
+        operation = _observed_operation(request, model_host, forward_endpoint)
         if operation not in _HTTP_OPERATIONS:
             raise RuntimeError("unclassified external HTTP operation")
         source = _observed_source(operation)
@@ -283,6 +346,7 @@ def _install_observers(telemetry: Telemetry) -> None:
     tunnel.PinnedProxyBackend.connect_tcp = observed_connect
     tunnel._TunnelStream.start_tls = observed_tls
     resolver.ChannelResolver.safe_fetch = observed_fetch
+    citation_verifier.safe_fetch = observed_citation_fetch
     httpx.AsyncClient._send_single_request = observed_http
 
 

@@ -29,10 +29,10 @@ import httpx
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOL_PATH = ROOT / "benchmarks/product-optimization-repair-pair-v2.json"
+PROTOCOL_PATH = ROOT / "benchmarks/product-optimization-repair-pair-v3.json"
 SEED_ROOT = ROOT / "outputs/product-optimization-seeds/product-optimization-knowledge-seed-v1"
 CHILD = ROOT / "scripts/o1_pr2b_child.py"
-LEDGER_ROOT = ROOT / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v2"
+LEDGER_ROOT = ROOT / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v3"
 SUCCESS = frozenset({"completed", "completed_with_warnings"})
 _TRANSPORT_ENV = {
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
@@ -303,6 +303,130 @@ def _validate_predecessor(protocol: dict[str, Any], root: Path = ROOT) -> None:
         raise RepairPairControlError("predecessor stopped record is invalid")
 
 
+def _validate_immediate_predecessor(
+    protocol: dict[str, Any], root: Path = ROOT
+) -> None:
+    predecessor = protocol.get("immediate_predecessor")
+    if not isinstance(predecessor, dict):
+        raise RepairPairControlError("immediate predecessor contract is invalid")
+    artifacts = predecessor.get("artifacts")
+    if not isinstance(artifacts, dict) or set(artifacts) != {
+        "execution_claim", "attempted_cell", "observation", "run_result"
+    }:
+        raise RepairPairControlError(
+            "immediate predecessor artifact contract is invalid"
+        )
+    claim = _bound_json_artifact(root, artifacts["execution_claim"])
+    cell = _bound_json_artifact(root, artifacts["attempted_cell"])
+    observation = _bound_json_artifact(root, artifacts["observation"])
+    result = _bound_json_artifact(root, artifacts["run_result"])
+    predecessor_id = predecessor.get("protocol_id")
+    if not (
+        predecessor_id == "product-optimization-repair-pair-v2"
+        and type(claim.get("schema_version")) is int
+        and claim["schema_version"] == 1
+        and claim.get("protocol_id") == predecessor_id
+        and claim.get("protocol_byte_sha256")
+        == predecessor.get("protocol_byte_sha256")
+        and claim.get("policy") == "single-execution-no-resume-or-retry"
+    ):
+        raise RepairPairControlError("immediate predecessor claim is invalid")
+    if not (
+        type(cell.get("schema_version")) is int
+        and cell["schema_version"] == 1
+        and cell.get("protocol_id") == predecessor_id
+        and (cell.get("arm"), cell.get("repetition"), cell.get("case_id"),
+             cell.get("status"))
+        == ("baseline", 2, "P04", "attempted-before-post")
+    ):
+        raise RepairPairControlError("immediate predecessor cell is invalid")
+    cells = result.get("cells")
+    records = result.get("records")
+    expected_cells = [
+        (block["block"], block["arm"], block["repetition"], case_id)
+        for block in protocol["design"]["execution_blocks"]
+        for case_id in block["case_order"]
+    ]
+    observed_cells = [
+        (item.get("block"), item.get("arm"), item.get("repetition"),
+         item.get("case_id"))
+        for item in cells if isinstance(item, dict)
+    ] if isinstance(cells, list) else []
+    completed = [
+        item for item in cells
+        if isinstance(item, dict) and item.get("status") == "completed"
+    ] if isinstance(cells, list) else []
+    if not (
+        type(result.get("schema_version")) is int
+        and result["schema_version"] == 1
+        and result.get("protocol_id") == predecessor_id
+        and result.get("planned_cells") == 12
+        and result.get("started_cells") == 1
+        and result.get("complete") is False
+        and result.get("stop_reason") == "TELEMETRY_strict_external_http_response"
+        and result.get("no_retries_or_splices") is True
+        and isinstance(cells, list)
+        and len(cells) == 12
+        and observed_cells == expected_cells
+        and len(completed) == 1
+        and sum(item.get("status") == "not_submitted" for item in cells) == 11
+        and (completed[0].get("block"), completed[0].get("arm"),
+             completed[0].get("repetition"), completed[0].get("case_id"))
+        == (1, "baseline", 2, "P04")
+        and result.get("ledger") == {
+            "attempted_cells": 1,
+            "known_admitted_min": 1,
+            "possibly_submitted_max": 1,
+            "submission_count_uncertain": False,
+            "uncertain_cells": 0,
+        }
+        and isinstance(records, list)
+        and len(records) == 1
+    ):
+        raise RepairPairControlError("immediate predecessor result is invalid")
+    record = records[0]
+    usage = record.get("usage") if isinstance(record, dict) else None
+    observability = record.get("observability") if isinstance(record, dict) else None
+    totals = observability.get("totals") if isinstance(observability, dict) else None
+    calls = observability.get("calls") if isinstance(observability, dict) else None
+    if not (
+        isinstance(record, dict)
+        and record.get("experiment_id") == predecessor_id
+        and (record.get("block"), record.get("arm"), record.get("repetition"),
+             record.get("case_id"), record.get("status"), record.get("error_code"))
+        == (1, "baseline", 2, "P04", "completed", None)
+        and record.get("observability_final") is True
+        and isinstance(usage, dict)
+        and usage.get("observation_final") is True
+        and usage.get("token_usage_complete") is True
+        and (usage.get("total_tokens"), usage.get("llm_calls"),
+             usage.get("retrieval_calls"), usage.get("external_calls"),
+             usage.get("failed_calls")) == (8458, 8, 6, 14, 0)
+        and isinstance(totals, dict)
+        and (totals.get("total_tokens"), totals.get("llm_calls"),
+             totals.get("retrieval_calls"), totals.get("external_calls"),
+             totals.get("failed_calls")) == (8458, 8, 6, 14, 0)
+        and isinstance(calls, list)
+        and len(calls) == 14
+        and all(isinstance(item, dict) and item.get("status") == "succeeded"
+                for item in calls)
+        and observation.get("schema_version") == 1
+        and observation.get("protocol_id") == predecessor_id
+        and (observation.get("arm"), observation.get("repetition"),
+             observation.get("case_id"), observation.get("status"),
+             observation.get("error_code"))
+        == ("baseline", 2, "P04", "completed", None)
+        and observation.get("task_id") == record.get("task_id")
+        and observation.get("run_id") == record.get("run_id")
+        and predecessor.get("accounted_research_runs") == 1
+        and predecessor.get("trace_external_calls") == 14
+        and predecessor.get("disposition") == "immutable-no-retry-no-splice"
+    ):
+        raise RepairPairControlError(
+            "immediate predecessor completed record is invalid"
+        )
+
+
 def _tree_hash(root: Path) -> str:
     digest = hashlib.sha256()
     files: list[Path] = []
@@ -476,6 +600,7 @@ def _bootstrap_approved_protocol(expected_protocol_byte_sha256: str) -> dict[str
             raise RepairPairControlError("approved controller TCB drift")
     _reject_import_shadows(ROOT, [item["path"] for item in required])
     _validate_predecessor(protocol)
+    _validate_immediate_predecessor(protocol)
     return protocol
 
 
@@ -1212,9 +1337,64 @@ def _strict_telemetry_state(path: Path, *, require_stopped: bool = False,
         for line in raw.splitlines():
             event = json.loads(line)
             kind = event.get("event") if isinstance(event, dict) else None
-            if kind in {"external_http_failure", "safe_fetch_failure", "child_failure"}:
+            if kind == "child_failure":
                 return {**state, "anomaly": True,
-                        "reason": f"strict_{kind}"}
+                        "reason": "strict_child_failure"}
+            if kind == "external_http_failure":
+                safe_fetch_operation = (
+                    event.get("operation") == "citation_safe_fetch_official"
+                    and event.get("source") == "citation"
+                    and event.get("method") == "GET"
+                )
+                known_policy_failure = (
+                    safe_fetch_operation
+                    and event.get("error_type") == "UnsafeUrlError"
+                    and event.get("failure") in {
+                        "route_unavailable", "route_unsupported",
+                        "dns_uncertain", "timeout", "response_rejected",
+                    }
+                )
+                known_transport_failure = (
+                    safe_fetch_operation
+                    and event.get("failure") is None
+                    and event.get("error_type") in {
+                        "TimeoutError", "ConnectTimeout", "ReadTimeout",
+                        "WriteTimeout", "PoolTimeout", "ConnectError",
+                        "ReadError", "WriteError", "RemoteProtocolError",
+                        "TransportError",
+                    }
+                )
+                if not (known_policy_failure or known_transport_failure):
+                    return {**state, "anomaly": True,
+                            "reason": "strict_external_http_failure"}
+            if kind == "safe_fetch_failure":
+                known_policy_failure = (
+                    event.get("status") == "failure"
+                    and event.get("operation")
+                    == "citation_safe_fetch_official"
+                    and event.get("source") == "citation"
+                    and event.get("error_type") == "UnsafeUrlError"
+                    and event.get("failure") in {
+                        "route_unavailable", "route_unsupported",
+                        "dns_uncertain", "timeout", "response_rejected",
+                    }
+                )
+                known_transport_failure = (
+                    event.get("status") == "failure"
+                    and event.get("operation")
+                    == "citation_safe_fetch_official"
+                    and event.get("source") == "citation"
+                    and event.get("failure") is None
+                    and event.get("error_type") in {
+                        "TimeoutError", "ConnectTimeout", "ReadTimeout",
+                        "WriteTimeout", "PoolTimeout", "ConnectError",
+                        "ReadError", "WriteError", "RemoteProtocolError",
+                        "TransportError",
+                    }
+                )
+                if not (known_policy_failure or known_transport_failure):
+                    return {**state, "anomaly": True,
+                            "reason": "strict_safe_fetch_failure"}
             if kind == "external_http_response":
                 status_code = event.get("status_code")
                 operation = event.get("operation")

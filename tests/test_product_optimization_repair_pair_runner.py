@@ -17,7 +17,7 @@ from scripts import product_optimization_repair_pair as runner
 
 def _protocol() -> dict:
     return {
-        "protocol_id": "product-optimization-repair-pair-v2",
+        "protocol_id": "product-optimization-repair-pair-v3",
         "dataset": {
             "parent_sha256": "e" * 64,
             "development_projection_sha256": "d" * 64,
@@ -177,6 +177,124 @@ def _predecessor_protocol(root: Path) -> dict:
         "artifacts": specifications,
         "accounted_research_runs": 1,
         "external_calls": 0,
+        "disposition": "immutable-no-retry-no-splice",
+    }
+    return protocol
+
+
+def _immediate_predecessor_protocol(root: Path) -> dict:
+    protocol = _protocol()
+    protocol_id = "product-optimization-repair-pair-v2"
+    artifacts_root = root / "legacy-v2"
+    artifacts_root.mkdir(parents=True)
+    claim = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "protocol_byte_sha256": "4" * 64,
+        "policy": "single-execution-no-resume-or-retry",
+    }
+    cell = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "attempted-before-post",
+    }
+    cells = [
+        {
+            "block": block["block"],
+            "arm": block["arm"],
+            "repetition": block["repetition"],
+            "case_id": case_id,
+            "status": "completed" if (block["block"], case_id) == (1, "P04")
+            else "not_submitted",
+            **({"error_code": None}
+               if (block["block"], case_id) == (1, "P04") else {}),
+        }
+        for block in protocol["design"]["execution_blocks"]
+        for case_id in block["case_order"]
+    ]
+    record = {
+        "experiment_id": protocol_id,
+        "block": 1,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "completed",
+        "error_code": None,
+        "task_id": "task-v2",
+        "run_id": "run-v2",
+        "observability_final": True,
+        "usage": {
+            "observation_final": True,
+            "token_usage_complete": True,
+            "total_tokens": 8458,
+            "llm_calls": 8,
+            "retrieval_calls": 6,
+            "external_calls": 14,
+            "failed_calls": 0,
+        },
+        "observability": {
+            "totals": {
+                "total_tokens": 8458,
+                "llm_calls": 8,
+                "retrieval_calls": 6,
+                "external_calls": 14,
+                "failed_calls": 0,
+            },
+            "calls": [{"status": "succeeded"} for _ in range(14)],
+        },
+    }
+    observation = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "completed",
+        "error_code": None,
+        "task_id": "task-v2",
+        "run_id": "run-v2",
+    }
+    result = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "planned_cells": 12,
+        "started_cells": 1,
+        "complete": False,
+        "stop_reason": "TELEMETRY_strict_external_http_response",
+        "no_retries_or_splices": True,
+        "cells": cells,
+        "ledger": {
+            "attempted_cells": 1,
+            "known_admitted_min": 1,
+            "possibly_submitted_max": 1,
+            "submission_count_uncertain": False,
+            "uncertain_cells": 0,
+        },
+        "records": [record],
+    }
+    payloads = {
+        "execution_claim": claim,
+        "attempted_cell": cell,
+        "observation": observation,
+        "run_result": result,
+    }
+    specifications = {}
+    for name, payload in payloads.items():
+        path = artifacts_root / f"{name}.json"
+        path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+        specifications[name] = {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": runner._file_hash(path),
+        }
+    protocol["immediate_predecessor"] = {
+        "protocol_id": protocol_id,
+        "protocol_byte_sha256": "4" * 64,
+        "artifacts": specifications,
+        "accounted_research_runs": 1,
+        "trace_external_calls": 14,
         "disposition": "immutable-no-retry-no-splice",
     }
     return protocol
@@ -505,7 +623,15 @@ def test_health_requires_explicit_authority_lease_and_clean_heartbeat():
         {"event": "external_http_response", "operation": "other", "status_code": 200},
         {"event": "external_http_response", "operation": "official", "status_code": 429},
         {"event": "safe_fetch_failure", "status": "failure",
-         "error_type": "UnsafeUrlError", "failure": "dns_uncertain"},
+         "error_type": "UnsafeUrlError", "failure": "safety_rejected"},
+        {"event": "external_http_failure", "operation": "safe_fetch_official",
+         "source": "official", "method": "HEAD",
+         "error_type": "TransportError", "failure": None},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "operation": "safe_fetch_official", "source": "official",
+         "error_type": "UnsafeUrlError", "failure": "response_rejected"},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "error_type": "OtherError", "failure": None},
     ],
 )
 def test_strict_telemetry_stops_unknown_rate_limit_and_safety_failure(
@@ -520,6 +646,35 @@ def test_strict_telemetry_stops_unknown_rate_limit_and_safety_failure(
     )
     state = runner._strict_telemetry_state(path)
     assert state["anomaly"] is True
+
+
+def test_strict_telemetry_accepts_bound_forward_and_known_citation_unknowns(
+    tmp_path: Path,
+):
+    path = tmp_path / "telemetry.jsonl"
+    events = [
+        {"schema_version": 1, "event": "telemetry_ready"},
+        {"schema_version": 1, "event": "external_http_response",
+         "operation": "self_forward",
+         "source": "forward", "method": "POST", "status_code": 200},
+        {"schema_version": 1, "event": "safe_fetch_failure",
+         "status": "failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "error_type": "UnsafeUrlError", "failure": "response_rejected"},
+        {"schema_version": 1, "event": "external_http_failure",
+         "operation": "citation_safe_fetch_official",
+         "source": "citation", "method": "GET", "error_type": "TransportError",
+         "failure": None},
+        {"schema_version": 1, "event": "safe_fetch_failure",
+         "status": "failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "error_type": "TransportError", "failure": None},
+    ]
+    path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    assert runner._strict_telemetry_state(path)["anomaly"] is False
 
 
 def test_global_ledger_prevents_second_execution_or_cell_attempt(
@@ -561,12 +716,16 @@ def test_global_ledger_prevents_second_execution_or_cell_attempt(
     assert observation["protocol_id"] == "pair-v2"
 
 
-def test_v2_protocol_and_ledger_do_not_alias_retired_v1():
-    assert runner.PROTOCOL_PATH.name == "product-optimization-repair-pair-v2.json"
-    assert runner.LEDGER_ROOT.name == "product-optimization-repair-pair-v2"
+def test_v3_protocol_and_ledger_do_not_alias_retired_predecessors():
+    assert runner.PROTOCOL_PATH.name == "product-optimization-repair-pair-v3.json"
+    assert runner.LEDGER_ROOT.name == "product-optimization-repair-pair-v3"
     assert runner.LEDGER_ROOT != (
         runner.ROOT
         / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v1"
+    )
+    assert runner.LEDGER_ROOT != (
+        runner.ROOT
+        / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v2"
     )
 
 
@@ -656,6 +815,27 @@ def test_predecessor_artifacts_reject_parent_reparse(
     monkeypatch.setattr(Path, "lstat", fake_lstat)
     with pytest.raises(runner.RepairPairControlError, match="parent is not a plain"):
         runner._validate_predecessor(protocol, tmp_path)
+
+
+def test_immediate_predecessor_binds_completed_v2_stop(tmp_path: Path):
+    protocol = _immediate_predecessor_protocol(tmp_path)
+    runner._validate_immediate_predecessor(protocol, tmp_path)
+
+    observation_spec = protocol["immediate_predecessor"]["artifacts"][
+        "observation"
+    ]
+    observation_path = tmp_path / observation_spec["path"]
+    observation = json.loads(observation_path.read_text(encoding="utf-8"))
+    observation["status"] = "failed"
+    observation_path.write_text(
+        json.dumps(observation, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    observation_spec["sha256"] = runner._file_hash(observation_path)
+    with pytest.raises(
+        runner.RepairPairControlError,
+        match="immediate predecessor completed record is invalid",
+    ):
+        runner._validate_immediate_predecessor(protocol, tmp_path)
 
 
 def test_artifact_paths_must_be_contained_regular_nonempty_files(tmp_path: Path):
