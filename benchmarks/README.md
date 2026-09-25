@@ -123,12 +123,12 @@ serve 与 collector 进程须显式继承相同的可信代理配置；一个 CL
 
 `product-optimization-repair-pair-v1` 只包含 P01/P04/P08，不读取完整数据集正文或 P09–P12。
 协议外批准 byte SHA 为
-`581a6cb75a11167644bdee703af073bff859997a4877991487d63474c1d30566`；每个命令都必须显式传入，
+`66676f58b19e186cef765481ccc7ac770a316b29511cb9380cccf0ad6bf3e51b`；每个命令都必须显式传入，
 不能从协议自身推导后自动接受。先在已提交且批准路径干净的 candidate 与只读 baseline checkout 上
 执行零网络 `audit`。`preflight` 才会做有界付费探测，`run` 才会提交研究任务：
 
 ```powershell
-$protocolSha = "581a6cb75a11167644bdee703af073bff859997a4877991487d63474c1d30566"
+$protocolSha = "66676f58b19e186cef765481ccc7ac770a316b29511cb9380cccf0ad6bf3e51b"
 $baselineRoot = "<只读 d23c948 checkout>"
 $candidateRoot = "<当前干净 checkout>"
 $privateEnv = "<私有 .env 绝对路径>"

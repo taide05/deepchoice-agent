@@ -59,7 +59,7 @@
   "controller": {
     "binding_policy": "protocol-plus-execution-binding-v1",
     "required_files": [
-      {"path": "scripts/product_optimization_repair_pair.py", "sha256": "61a93f3f06f0211e427606d3c432106b514fdb3cf1a82bd869b61f6aa8b8f752"},
+      {"path": "scripts/product_optimization_repair_pair.py", "sha256": "06b712d5fd3241fa1afdfdfe8686c335dcdba74b490f94ce7fb1ec53f2d698a0"},
       {"path": "scripts/o1_pr2b_child.py", "sha256": "899de167ef8b50ba68a0d0396bf07a7f4bf320744df6b2e3e26ae8d4fc6a5847"},
       {"path": "scripts/o1_pr2b_control.py", "sha256": "1afa87fc1ec00c81cd552fc6cf852190bdc67943fd6896e13470aa43aaa79fd9"},
       {"path": "benchmarks/product_optimization_repair_pair.py", "sha256": "c5409d2a108fa5ac2b75e9c47184a2a0b683f58fcb1b0548718142e283ca3c5b"},

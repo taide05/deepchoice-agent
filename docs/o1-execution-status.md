@@ -56,9 +56,11 @@ vulture100%、pip check、diff 检查及独立复审通过。
 保留集定义/报告未用于上述准备。同一目录两个构建器并发发布仍是非阻断单机竞态，Windows 会拒绝
 而非覆盖；本次单次离线构建不受影响。
 
-2026-09-25 冻结 `product-optimization-repair-pair-v1`：协议 byte/canonical SHA-256 为
-`581a6cb75a11167644bdee703af073bff859997a4877991487d63474c1d30566` /
-`5c211d8727c15568df179822dbf6c1545743a740d4f1b8d5a29f17d971a0ba4c`。固定顺序为 baseline-r2、
+2026-09-25 冻结 `product-optimization-repair-pair-v1`；首次同窗口前置安全停止后，只修正控制器的
+私有环境安装顺序并重冻协议。现行协议 byte/canonical SHA-256 为
+`66676f58b19e186cef765481ccc7ac770a316b29511cb9380cccf0ad6bf3e51b` /
+`cc70cf6cd577a738b9932a1aa1cbfe747e6ce021120bd491ea2101a37619e9aa`，runner SHA-256 为
+`06b712d5fd3241fa1afdfdfe8686c335dcdba74b490f94ce7fb1ec53f2d698a0`。固定顺序为 baseline-r2、
 candidate-r2、candidate-r1、baseline-r1，每块仅 P01/P04/P08，共12格、串行单并发；配对 P01
 回归替代第三次独立资格，任一停止不重试、不拼接。CLI 要求协议外 byte SHA，并在项目导入前校验
 完整 TCB、批准路径及 import origin/shadow；两臂冻结 DeepSeek 端点、路由/代理、依赖、证书内容、
@@ -66,15 +68,23 @@ candidate-r2、candidate-r1、baseline-r1，每块仅 P01/P04/P08，共12格、�
 `service_started` 和进程存活绑定；localhost 控制客户端禁用环境代理。全局 claim/cell ledger 在 POST
 前持久化，崩溃窗口只报告已知最小/可能最大/不确定，不把可能已提交误报为0。
 
-最终 **106 项聚焦**、扩大相关 **332 项**、**1981 项全套**测试（231.34秒），pyflakes、
-vulture100%、pip check、compileall、diff 检查通过；独立复审另跑40项新增测试和165项扩大聚焦集，
+现行重冻候选最终 **107 项聚焦**、扩大相关 **335 项**、**1982 项全套**测试（228.79秒），
+smoke-v1 12/12、pyflakes、生产代码 vulture100%、pip check、compileall、diff 检查通过；独立复审
+另跑41项新增测试和166项扩大聚焦集，
 结论无阻断。复审保留的非阻断风险：恶意本地篡改仍需外部可信 launcher，依赖身份未覆盖全部
 wheel/DLL/系统证书库字节，ignored ledger 可被有权限操作者删除且未显式 fsync 父目录，
 `service_started`/alive 到 POST 仍有极小 TOCTOU，真实 child 竞态尚未集成演练。
-这些是工程准入证据，不是局部效果、最终质量或12路并发通过。提交 `b5b0886` 的实际离线 audit
-已通过：baseline 精确为 `d23c948`，端点、路由/代理、依赖、两臂 manifest、种子身份及 SQLite
-`quick_check` 全部匹配，research_runs_submitted=0。研究保持 **92/152**；下一步是一次同窗口前置，
-随后按冻结顺序最多准入12格。
+这些是工程准入证据，不是局部效果、最终质量或12路并发通过。旧冻结提交 `b5b0886` 的实际离线
+audit 曾通过：baseline 精确为 `d23c948`，端点、路由/代理、依赖、两臂 manifest、种子身份及
+SQLite `quick_check` 全部匹配，research_runs_submitted=0；现行重冻候选仍须提交后重新 audit。
+
+首次付费前置根 `outputs/product-optimization-repair-pair-preflight-20260925-v1/` 为不可变失败证据：
+五条来源 route 均通过，Tavily POST 1/1 返回200，非 LLM HTTP 8次；LLM 在 HTTP dispatch 前以
+`OpenAIError` 停止，LLM attempts=0、research_runs_submitted=0、金额 unavailable。根因是 audit
+先导入协议依赖的项目模块、后安装私有环境，导致 LLM 配置缓存空值。现行修复改为“stdlib bootstrap
+→双根验证→安装私有环境→加载协议/项目模块→qualification”，不修改产品候选或研究协议门槛。
+失败根不得重跑、改名为通过或补样。研究保持 **92/152**；下一步是提交现行重冻候选、重新执行
+零网络 audit，再在全新目录做一次同窗口前置；只有通过后才按冻结顺序最多准入12格。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

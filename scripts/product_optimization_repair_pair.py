@@ -589,8 +589,8 @@ def audit(baseline_root: Path, candidate_root: Path,
         raise RepairPairControlError("arms must use distinct checkouts")
     roots = {"baseline": _validate_product_root(baseline_root, "baseline", protocol),
              "candidate": _validate_product_root(candidate_root, "candidate", protocol)}
-    frozen = _load_approved_protocol(expected_protocol_byte_sha256)
     effective, environment_identity = _install_private_environment(env_file)
+    frozen = _load_approved_protocol(expected_protocol_byte_sha256)
     from benchmarks import product_baseline_qualification as qualification
 
     cfg = qualification.trusted_configuration()

@@ -551,6 +551,18 @@ def test_external_protocol_root_is_checked_before_project_import():
         runner._load_approved_protocol("0" * 64)
 
 
+def test_audit_installs_private_environment_before_project_module_load():
+    source = Path(runner.audit.__code__.co_filename).read_text(encoding="utf-8")
+    audit_source = source[source.index("def audit("):source.index("def preflight(")]
+    root_validation = audit_source.index("_validate_product_root")
+    environment_install = audit_source.index("_install_private_environment")
+    project_load = audit_source.index("_load_approved_protocol")
+    qualification_import = audit_source.index(
+        "from benchmarks import product_baseline_qualification"
+    )
+    assert root_validation < environment_install < project_load < qualification_import
+
+
 def test_product_root_git_checks_are_scoped_to_approved_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
