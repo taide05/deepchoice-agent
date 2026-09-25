@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "protocol_id": "product-optimization-repair-pair-v2",
+  "status": "frozen",
+  "freeze_date": "2026-09-25",
+  "question": "Does the frozen repair package reduce unsupported conclusions and unsafe actions on P04/P08 without regressing paired P01 decision quality?",
+  "interpretation": "whole-repair-package-local-effect-only",
+  "dataset": {
+    "parent_dataset_id": "product-baseline-v1",
+    "parent_version": "1.0.0",
+    "parent_sha256": "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f",
+    "parent_bytes_sha256": "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef",
+    "parent_git_object": "da14cf6d72ed528eef3510f48f78116288c3964a",
+    "development_projection_id": "product-optimization-dev-requests-v1",
+    "development_projection_sha256": "9c47d8071ed911ede5f810bceda8ba9a4ab19748201f310cf9c033399714871d",
+    "case_ids": ["P01", "P04", "P08"],
+    "roles": {"P01": "regression", "P04": "target", "P08": "target"},
+    "holdout_access": "forbidden"
+  },
+  "identities": {
+    "baseline": {
+      "anchor_commit": "d23c9480b9f368f8ec75ec44ee7e25c64146d4be",
+      "source_objects": [
+        {"path": "src/deepchoice", "git_object": "cb2f57e073c73d1ae59c03ddbe4782c197567e1f"},
+        {"path": "pyproject.toml", "git_object": "72433509ffdfa8d057c6ba21cbe40bf61b55c08d"}
+      ],
+      "runtime_objects": [
+        {"path": "benchmarks/__init__.py", "git_object": "830b6bddff5731d650221c25c60409dfb547d46f"},
+        {"path": "benchmarks/product_baseline.py", "git_object": "c68b828df7e73491d3f085d8e1387b2d7dd5fe17"},
+        {"path": "benchmarks/product_baseline_experiment.py", "git_object": "d05232c6492e069273347ba7423e94ac8fa6a5f4"},
+        {"path": "benchmarks/product_baseline_server.py", "git_object": "819395806e6098fcbf814d590756c80d6c370357"}
+      ]
+    },
+    "candidate": {
+      "anchor_commit": "a2488d81f24e6d42738577306c92cf619239f704",
+      "source_objects": [
+        {"path": "src/deepchoice", "git_object": "7538772459132b7a5d811ead99a0120b730fc522"},
+        {"path": "pyproject.toml", "git_object": "72433509ffdfa8d057c6ba21cbe40bf61b55c08d"}
+      ],
+      "runtime_objects": [
+        {"path": "benchmarks/__init__.py", "git_object": "830b6bddff5731d650221c25c60409dfb547d46f"},
+        {"path": "benchmarks/product_baseline.py", "git_object": "c68b828df7e73491d3f085d8e1387b2d7dd5fe17"},
+        {"path": "benchmarks/product_baseline_experiment.py", "git_object": "d05232c6492e069273347ba7423e94ac8fa6a5f4"},
+        {"path": "benchmarks/product_baseline_server.py", "git_object": "819395806e6098fcbf814d590756c80d6c370357"}
+      ]
+    }
+  },
+  "knowledge_seed": {
+    "seed_id": "product-optimization-knowledge-seed-v1",
+    "logical_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
+    "artifact_tree_sha256": "fa3c542d57e81d85d1f95597e0d77acfea7369a535ddc34b14b635837349a20a",
+    "manifest_sha256": "c22ccad6d9fced3b36dd46ee55b5a5e0f2d6434ce3238ce3de38e2d8c7895348",
+    "admission_identity_sha256": "887af9a435b37b5842ad390a61accfe863f8dacfb5767897d3aa00e0f77fb06c",
+    "embedding_sha256": "ef1a033b0525fcd1bc421c87d84f033ecd03119ca9c365b8586a9bbfacaa2b94",
+    "copy_policy": "byte-exact-independent-per-arm-repetition-v1",
+    "read_only_learned_docs": true,
+    "legacy_seed_access": "forbidden"
+  },
+  "controller": {
+    "binding_policy": "protocol-plus-execution-binding-v1",
+    "required_files": [
+      {"path": "scripts/product_optimization_repair_pair.py", "sha256": "af954419da6359d37fa2eac345fb8369ec4d13d8ec5744fc39f29d7dbd3a7964"},
+      {"path": "scripts/o1_pr2b_child.py", "sha256": "899de167ef8b50ba68a0d0396bf07a7f4bf320744df6b2e3e26ae8d4fc6a5847"},
+      {"path": "scripts/o1_pr2b_control.py", "sha256": "1afa87fc1ec00c81cd552fc6cf852190bdc67943fd6896e13470aa43aaa79fd9"},
+      {"path": "benchmarks/product_optimization_repair_pair.py", "sha256": "ea0c21db98da29e39c1a4406424884b395bb17f51da13083c69c86676c5b7bbe"},
+      {"path": "benchmarks/product_optimization_dev_requests.py", "sha256": "45ee4245f34a577099dad089abc4846292c08aafd2735b9fcafbdbaea353d12b"},
+      {"path": "benchmarks/product-optimization-dev-requests-v1.json", "sha256": "9c47d8071ed911ede5f810bceda8ba9a4ab19748201f310cf9c033399714871d"},
+      {"path": "benchmarks/__init__.py", "sha256": "800aecf80ae03eafa8ad38573962191a518264b05e0bb3f4a70889bc14a57a1d"},
+      {"path": "benchmarks/product_baseline.py", "sha256": "3b8516f7e688d856c5479acd0f098f644bfe8395a19fc7eae6b39ece47bc70dd"},
+      {"path": "benchmarks/product_baseline_qualification.py", "sha256": "fa5642734ec62512c97f2902f1df0df8f3512b6f8e39306f096c3350181d97fe"},
+      {"path": "benchmarks/product_baseline_experiment.py", "sha256": "2df9ab9c1be15ff264d70821dcaa365a2cec82ad8ab601a2ea937a94171045e4"},
+      {"path": "benchmarks/product_baseline_server.py", "sha256": "94698056bf264125e7e788705afa8c47d6ee1c80bf110201eccda272cb945d37"}
+    ],
+    "research_admission": "closed-until-offline-runner-acceptance"
+  },
+  "design": {
+    "formal_research_runs": 12,
+    "profile": "serial",
+    "concurrency": 1,
+    "same_window_days": 7,
+    "independent_single_case_qualification": false,
+    "paired_p01_replaces_qualification": true,
+    "no_ad_hoc_reruns": true,
+    "execution_blocks": [
+      {"block": 1, "arm": "baseline", "repetition": 2, "case_order": ["P04", "P01", "P08"]},
+      {"block": 2, "arm": "candidate", "repetition": 2, "case_order": ["P04", "P08", "P01"]},
+      {"block": 3, "arm": "candidate", "repetition": 1, "case_order": ["P04", "P08", "P01"]},
+      {"block": 4, "arm": "baseline", "repetition": 1, "case_order": ["P04", "P08", "P01"]}
+    ],
+    "blind_review_order": [
+      {"case_id": "P04", "role": "target", "arm": "baseline", "repetition": 2, "order": 1, "blind_label": "RP2-01"},
+      {"case_id": "P01", "role": "regression", "arm": "baseline", "repetition": 2, "order": 2, "blind_label": "RP2-02"},
+      {"case_id": "P04", "role": "target", "arm": "candidate", "repetition": 2, "order": 3, "blind_label": "RP2-03"},
+      {"case_id": "P08", "role": "target", "arm": "baseline", "repetition": 2, "order": 4, "blind_label": "RP2-04"},
+      {"case_id": "P04", "role": "target", "arm": "candidate", "repetition": 1, "order": 5, "blind_label": "RP2-05"},
+      {"case_id": "P08", "role": "target", "arm": "candidate", "repetition": 2, "order": 6, "blind_label": "RP2-06"},
+      {"case_id": "P01", "role": "regression", "arm": "candidate", "repetition": 2, "order": 7, "blind_label": "RP2-07"},
+      {"case_id": "P04", "role": "target", "arm": "baseline", "repetition": 1, "order": 8, "blind_label": "RP2-08"},
+      {"case_id": "P08", "role": "target", "arm": "baseline", "repetition": 1, "order": 9, "blind_label": "RP2-09"},
+      {"case_id": "P01", "role": "regression", "arm": "candidate", "repetition": 1, "order": 10, "blind_label": "RP2-10"},
+      {"case_id": "P08", "role": "target", "arm": "candidate", "repetition": 1, "order": 11, "blind_label": "RP2-11"},
+      {"case_id": "P01", "role": "regression", "arm": "baseline", "repetition": 1, "order": 12, "blind_label": "RP2-12"}
+    ]
+  },
+  "environment": {
+    "provider": "deepseek-flash",
+    "model": "deepseek-v4-flash",
+    "endpoint_sha256": "12b8deaccc34b32757dbb1497e029da0c2e7b26ffa86b9c926c08cb4692f4508",
+    "configuration_sha256": "4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474",
+    "safe_fetch_proxy_sha256": "813477bf51a0efb3b5926c3759f01d02cdf25cd70e6cfc7fa186d9d5e1e1d118",
+    "thinking": "disabled",
+    "embedding_model": "BAAI/bge-m3",
+    "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "durable_api": true,
+    "isolated_product_and_checkpoint_databases": true,
+    "auto_recovery": false,
+    "fresh_runtime_per_arm_repetition": true,
+    "hitl_mode": "stop-at-hitl-no-auto-resolution"
+  },
+  "budgets": {
+    "research_ledger": {"starting_used": 93, "local_pair_max": 12, "final_concurrency_reserve": 48, "hard_total": 153, "unallocated": 0},
+    "per_run": {"total_tokens": 60000, "llm_calls": 96, "retrieval_calls": 72, "active_milliseconds": 900000},
+    "prerequisite_max": {"non_llm_http_attempts": 20, "tavily_post_attempts": 1, "llm_http_attempts": 4, "research_runs": 0}
+  },
+  "review": {
+    "mode": "gpt-only-independent-blind-v1",
+    "score_before_trace": true,
+    "rubric": "key-claim-occurrence-v1",
+    "severity_frozen_from": "product-optimization-s0",
+    "major_and_claimed_improvement_second_review": true,
+    "human_calibration": "not_required-by-user",
+    "do_not_call_human_acceptance": true
+  },
+  "acceptance": {
+    "targets": {"case_ids": ["P04", "P08"], "each_repetition_candidate_strictly_better_than_baseline": true, "candidate_major_errors": 0, "candidate_must_answer_zero_count": 0},
+    "regression": {"case_id": "P01", "candidate_decision_not_lower": true, "candidate_citation_support_not_lower": true, "candidate_report_completion_not_lower": true, "candidate_no_new_major_errors": true},
+    "efficiency_claim": {"minimum_median_reduction_fraction": 0.15, "quality_and_completion_not_lower": true, "complete_usage_required": true},
+    "interpretation_limit": "local-three-case-repair-package-effect-only"
+  },
+  "stopping": {
+    "identity_environment_seed_or_controller_drift": "stop-before-admission",
+    "retrieval_rate_limit_safety_budget_lease_or_unknown": "stop-new-admission",
+    "ordinary_citation_http_5xx": "stop-new-admission",
+    "finish_already_admitted_run": true,
+    "replace_retry_or_splice_stopped_roots": false,
+    "two_paid_stops_without_valid_pair": "return-to-measurement-review"
+  },
+  "predecessor": {
+    "protocol_id": "product-optimization-repair-pair-v1",
+    "protocol_byte_sha256": "66676f58b19e186cef765481ccc7ac770a316b29511cb9380cccf0ad6bf3e51b",
+    "artifacts": {
+      "execution_claim": {
+        "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v1/execution-claim.json",
+        "sha256": "d831d9fe7d2bc6a76d2fedebd259e55826a9dc7f452768aaae1fe7505335e331"
+      },
+      "attempted_cell": {
+        "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v1/cells/baseline-r2-P04.json",
+        "sha256": "0554ea6320700443d17734bbb166130ab2ae39a46607246f1ff4649444aebe7b"
+      },
+      "run_result": {
+        "path": "outputs/product-optimization-repair-pair-20260925-v1/repair-pair-run-result.json",
+        "sha256": "c7d92f9ef72b07a6f2f3068736f8ab41be81fc137cd4c704100f95e678770a86"
+      }
+    },
+    "accounted_research_runs": 1,
+    "external_calls": 0,
+    "disposition": "immutable-no-retry-no-splice"
+  },
+  "authorization": {
+    "decision_date": "2026-09-25",
+    "hard_total": 153,
+    "local_pair_max": 12,
+    "final_concurrency_reserve": 48,
+    "preserve_acceptance_thresholds": true
+  }
+}

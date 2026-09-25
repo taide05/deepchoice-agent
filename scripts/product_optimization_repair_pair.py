@@ -29,10 +29,10 @@ import httpx
 from dotenv import dotenv_values
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOL_PATH = ROOT / "benchmarks/product-optimization-repair-pair-v1.json"
+PROTOCOL_PATH = ROOT / "benchmarks/product-optimization-repair-pair-v2.json"
 SEED_ROOT = ROOT / "outputs/product-optimization-seeds/product-optimization-knowledge-seed-v1"
 CHILD = ROOT / "scripts/o1_pr2b_child.py"
-LEDGER_ROOT = ROOT / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v1"
+LEDGER_ROOT = ROOT / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v2"
 SUCCESS = frozenset({"completed", "completed_with_warnings"})
 _TRANSPORT_ENV = {
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
@@ -121,6 +121,186 @@ def _file_hash(path: Path) -> str:
     except OSError:
         raise RepairPairControlError("required file unavailable") from None
     return digest.hexdigest()
+
+
+def _contained_plain_file(root: Path, relative_value: Any) -> Path:
+    if not isinstance(relative_value, str):
+        raise RepairPairControlError("predecessor artifact path is invalid")
+    relative = Path(relative_value)
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise RepairPairControlError("predecessor artifact path is invalid")
+    root = root.resolve()
+    current = root
+    try:
+        for part in relative.parts[:-1]:
+            current /= part
+            metadata = current.lstat()
+            if (not stat.S_ISDIR(metadata.st_mode)
+                    or stat.S_ISLNK(metadata.st_mode)
+                    or bool(getattr(metadata, "st_file_attributes", 0) & 0x0400)):
+                raise RepairPairControlError(
+                    "predecessor artifact parent is not a plain directory"
+                )
+        target = current / relative.parts[-1]
+        metadata = target.lstat()
+    except OSError:
+        raise RepairPairControlError("predecessor artifact unavailable") from None
+    if (not stat.S_ISREG(metadata.st_mode)
+            or stat.S_ISLNK(metadata.st_mode)
+            or bool(getattr(metadata, "st_file_attributes", 0) & 0x0400)
+            or metadata.st_size <= 0):
+        raise RepairPairControlError("predecessor artifact is not a plain file")
+    resolved = target.resolve()
+    if not resolved.is_relative_to(root):
+        raise RepairPairControlError("predecessor artifact escaped repository")
+    return resolved
+
+
+def _bound_json_artifact(root: Path, specification: Any) -> dict[str, Any]:
+    if (not isinstance(specification, dict)
+            or set(specification) != {"path", "sha256"}
+            or not isinstance(specification.get("sha256"), str)
+            or len(specification["sha256"]) != 64
+            or any(char not in "0123456789abcdef"
+                   for char in specification["sha256"])):
+        raise RepairPairControlError("predecessor artifact contract is invalid")
+    path = _contained_plain_file(root, specification.get("path"))
+    try:
+        payload_bytes = path.read_bytes()
+    except OSError:
+        raise RepairPairControlError("predecessor artifact unavailable") from None
+    _contained_plain_file(root, specification.get("path"))
+    if _sha256_bytes(payload_bytes) != specification["sha256"]:
+        raise RepairPairControlError("predecessor artifact identity drift")
+    try:
+        payload = json.loads(payload_bytes.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise RepairPairControlError("predecessor artifact is invalid") from None
+    if not isinstance(payload, dict):
+        raise RepairPairControlError("predecessor artifact is invalid")
+    return payload
+
+
+def _validate_predecessor(protocol: dict[str, Any], root: Path = ROOT) -> None:
+    predecessor = protocol.get("predecessor")
+    if not isinstance(predecessor, dict):
+        raise RepairPairControlError("predecessor contract is invalid")
+    artifacts = predecessor.get("artifacts")
+    if not isinstance(artifacts, dict) or set(artifacts) != {
+        "execution_claim", "attempted_cell", "run_result"
+    }:
+        raise RepairPairControlError("predecessor artifact contract is invalid")
+    claim = _bound_json_artifact(root, artifacts["execution_claim"])
+    cell = _bound_json_artifact(root, artifacts["attempted_cell"])
+    result = _bound_json_artifact(root, artifacts["run_result"])
+    predecessor_id = predecessor.get("protocol_id")
+    if not isinstance(predecessor_id, str) or not predecessor_id:
+        raise RepairPairControlError("predecessor contract is invalid")
+    if not (
+        type(claim.get("schema_version")) is int
+        and claim["schema_version"] == 1
+        and claim.get("protocol_id") == predecessor_id
+        and claim.get("protocol_byte_sha256")
+        == predecessor.get("protocol_byte_sha256")
+        and claim.get("policy") == "single-execution-no-resume-or-retry"
+    ):
+        raise RepairPairControlError("predecessor execution claim is invalid")
+    if not (
+        type(cell.get("schema_version")) is int
+        and cell["schema_version"] == 1
+        and cell.get("protocol_id") == predecessor_id
+        and cell.get("arm") == "baseline"
+        and type(cell.get("repetition")) is int
+        and cell["repetition"] == 2
+        and cell.get("case_id") == "P04"
+        and cell.get("status") == "attempted-before-post"
+    ):
+        raise RepairPairControlError("predecessor attempted cell is invalid")
+    cells = result.get("cells")
+    records = result.get("records")
+    ledger = result.get("ledger")
+    expected_cells = [
+        (block["block"], block["arm"], block["repetition"], case_id)
+        for block in protocol["design"]["execution_blocks"]
+        for case_id in block["case_order"]
+    ]
+    if not (
+        type(result.get("schema_version")) is int
+        and result["schema_version"] == 1
+        and result.get("protocol_id") == predecessor_id
+        and type(result.get("planned_cells")) is int
+        and result["planned_cells"] == 12
+        and type(result.get("started_cells")) is int
+        and result["started_cells"] == 1
+        and result.get("complete") is False
+        and result.get("stop_reason") == "CELL_NOT_SUCCESSFUL"
+        and result.get("no_retries_or_splices") is True
+        and isinstance(cells, list)
+        and len(cells) == 12
+        and isinstance(records, list)
+        and len(records) == 1
+        and ledger == {
+            "attempted_cells": 1,
+            "known_admitted_min": 1,
+            "possibly_submitted_max": 1,
+            "submission_count_uncertain": False,
+            "uncertain_cells": 0,
+        }
+    ):
+        raise RepairPairControlError("predecessor stopped result is invalid")
+    observed_cells = [
+        (item.get("block"), item.get("arm"), item.get("repetition"),
+         item.get("case_id"))
+        for item in cells if isinstance(item, dict)
+    ]
+    queued = [item for item in cells
+              if isinstance(item, dict) and item.get("status") == "queued"]
+    if (observed_cells != expected_cells
+            or len(queued) != 1
+            or any(item.get("status") not in {"queued", "not_submitted"}
+                   for item in cells)
+            or sum(item.get("status") == "not_submitted" for item in cells) != 11
+            or (queued[0].get("block"), queued[0].get("arm"),
+                queued[0].get("repetition"), queued[0].get("case_id"),
+                queued[0].get("error_code"))
+            != (1, "baseline", 2, "P04", "FROZEN_MANIFEST_MISMATCH")):
+        raise RepairPairControlError("predecessor stopped cell set is invalid")
+    record = records[0]
+    usage = record.get("usage") if isinstance(record, dict) else None
+    observability = record.get("observability") if isinstance(record, dict) else None
+    totals = observability.get("totals") if isinstance(observability, dict) else None
+    usage_resources = usage.get("budget_resources") if isinstance(usage, dict) else None
+    observed_resources = (
+        observability.get("budget", {}).get("resources")
+        if isinstance(observability, dict) else None
+    )
+    if not (
+        isinstance(record, dict)
+        and record.get("experiment_id") == predecessor_id
+        and (record.get("block"), record.get("arm"), record.get("repetition"),
+             record.get("case_id"), record.get("status"), record.get("error_code"))
+        == (1, "baseline", 2, "P04", "queued", "FROZEN_MANIFEST_MISMATCH")
+        and isinstance(usage, dict)
+        and isinstance(totals, dict)
+        and all(usage.get(name) == 0
+                for name in ("external_calls", "llm_calls", "retrieval_calls"))
+        and all(totals.get(name) == 0
+                for name in ("external_calls", "llm_calls", "retrieval_calls"))
+        and isinstance(usage_resources, dict)
+        and isinstance(observed_resources, dict)
+        and all(
+            isinstance(resources.get(name), dict)
+            and all(resources[name].get(field) == 0
+                    for field in ("reserved", "settled", "unknown_spend"))
+            for resources in (usage_resources, observed_resources)
+            for name in ("active_milliseconds", "llm_calls",
+                         "retrieval_calls", "total_tokens")
+        )
+        and predecessor.get("accounted_research_runs") == 1
+        and predecessor.get("external_calls") == 0
+        and predecessor.get("disposition") == "immutable-no-retry-no-splice"
+    ):
+        raise RepairPairControlError("predecessor stopped record is invalid")
 
 
 def _tree_hash(root: Path) -> str:
@@ -295,6 +475,7 @@ def _bootstrap_approved_protocol(expected_protocol_byte_sha256: str) -> dict[str
         if not target.is_relative_to(ROOT.resolve()) or _file_hash(target) != item["sha256"]:
             raise RepairPairControlError("approved controller TCB drift")
     _reject_import_shadows(ROOT, [item["path"] for item in required])
+    _validate_predecessor(protocol)
     return protocol
 
 
@@ -349,12 +530,14 @@ def _ledger_write_once(path: Path, value: dict[str, Any]) -> None:
         raise RepairPairControlError("protocol or cell was already attempted") from None
 
 
-def _claim_protocol_execution(experiment_root: Path, binding: dict[str, Any]) -> None:
+def _claim_protocol_execution(
+    experiment_root: Path, binding: dict[str, Any], protocol_id: str
+) -> None:
     _ledger_write_once(
         LEDGER_ROOT / "execution-claim.json",
         {
             "schema_version": 1,
-            "protocol_id": "product-optimization-repair-pair-v1",
+            "protocol_id": protocol_id,
             "claimed_at": _stamp(),
             "execution_binding_sha256": _file_hash(
                 experiment_root / "execution-binding.json"
@@ -365,12 +548,14 @@ def _claim_protocol_execution(experiment_root: Path, binding: dict[str, Any]) ->
     )
 
 
-def _reserve_cell(arm: str, repetition: int, case_id: str) -> None:
+def _reserve_cell(
+    arm: str, repetition: int, case_id: str, protocol_id: str
+) -> None:
     _ledger_write_once(
         LEDGER_ROOT / "cells" / f"{arm}-r{repetition}-{case_id}.json",
         {
             "schema_version": 1,
-            "protocol_id": "product-optimization-repair-pair-v1",
+            "protocol_id": protocol_id,
             "arm": arm,
             "repetition": repetition,
             "case_id": case_id,
@@ -380,10 +565,13 @@ def _reserve_cell(arm: str, repetition: int, case_id: str) -> None:
     )
 
 
-def _append_ledger_observation(record: dict[str, Any]) -> None:
+def _append_ledger_observation(
+    record: dict[str, Any], protocol_id: str
+) -> None:
     LEDGER_ROOT.mkdir(parents=True, exist_ok=True)
     entry = {
         "schema_version": 1,
+        "protocol_id": protocol_id,
         "observed_at": _stamp(),
         "arm": record.get("arm"),
         "repetition": record.get("repetition"),
@@ -790,6 +978,7 @@ def prepare(root: Path, preflight_dir: Path, baseline_root: Path,
                 "hitl_mode": "stop-at-hitl-no-auto-resolution",
                 "task_admission_limit": 3,
                 "protocol_byte_sha256": frozen.byte_sha256,
+                "protocol_id": protocol["protocol_id"],
             },
         }
         _write_json(block_root / "environment.json", environment)
@@ -916,6 +1105,7 @@ def _validate_execution_binding(root: Path, preflight_dir: Path,
                 or notes.get("dataset_hash") != frozen.payload["dataset"]["parent_sha256"]
                 or notes.get("expected_manifest_by_case")
                 != arm_contract["manifests"]
+                or notes.get("protocol_id") != frozen.payload["protocol_id"]
                 or notes.get("core_asset_registry_id")
                 != arm_contract["core_asset_registry_id"]
                 or notes.get("endpoint_sha256") != arm_contract["endpoint_sha256"]
@@ -1124,6 +1314,7 @@ def _record_stop_reason(record: dict[str, Any], collection: Path) -> str | None:
 
 async def _run_block(*, experiment_root: Path, block: dict[str, Any],
                      product_root: Path, env_file: Path,
+                     protocol_id: str,
                      expected_manifests: dict[str, str],
                      dataset_hash: str,
                      before_admission: Callable[[], None]
@@ -1179,7 +1370,7 @@ async def _run_block(*, experiment_root: Path, block: dict[str, Any],
                 )
                 collector = DurableBaselineCollector(
                     client, collection,
-                    experiment_id="product-optimization-repair-pair-v1",
+                    experiment_id=protocol_id,
                     dataset_hash=dataset_hash,
                     options=options,
                 )
@@ -1188,10 +1379,10 @@ async def _run_block(*, experiment_root: Path, block: dict[str, Any],
                             control / "telemetry.jsonl", instance_nonce
                         )):
                     raise RepairPairControlError("owned service unavailable before admission")
-                _reserve_cell(arm, repetition, case_id)
+                _reserve_cell(arm, repetition, case_id, protocol_id)
                 [record] = await collector.collect([_case_payload(case_id)])
                 record.update(arm=arm, repetition=repetition, block=block["block"])
-                _append_ledger_observation(record)
+                _append_ledger_observation(record, protocol_id)
                 records.append(record)
                 stop_reason = _record_stop_reason(record, collection)
                 if stop_reason is not None:
@@ -1233,7 +1424,7 @@ async def run(experiment_root: Path, preflight_dir: Path, baseline_root: Path,
     protocol, binding = _validate_execution_binding(
         experiment_root, preflight_dir, baseline_root, candidate_root, env_file,
         expected_protocol_byte_sha256)
-    _claim_protocol_execution(experiment_root, binding)
+    _claim_protocol_execution(experiment_root, binding, protocol["protocol_id"])
     planned = [{"block": block["block"], "arm": block["arm"],
                 "repetition": block["repetition"], "case_id": case_id,
                 "status": "not_submitted"}
@@ -1261,6 +1452,7 @@ async def run(experiment_root: Path, preflight_dir: Path, baseline_root: Path,
             block_records, stop_reason = await _run_block(
                 experiment_root=experiment_root, block=block,
                 product_root=product_root, env_file=env_file,
+                protocol_id=protocol["protocol_id"],
                 expected_manifests=expected,
                 dataset_hash=protocol["dataset"]["parent_sha256"],
                 before_admission=before_admission)

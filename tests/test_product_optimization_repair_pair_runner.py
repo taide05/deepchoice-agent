@@ -17,7 +17,7 @@ from scripts import product_optimization_repair_pair as runner
 
 def _protocol() -> dict:
     return {
-        "protocol_id": "product-optimization-repair-pair-v1",
+        "protocol_id": "product-optimization-repair-pair-v2",
         "dataset": {
             "parent_sha256": "e" * 64,
             "development_projection_sha256": "d" * 64,
@@ -78,6 +78,108 @@ def _audit() -> dict:
         "safe_fetch_proxy_sha256": None,
         "endpoint_sha256": "b" * 64,
     }
+
+
+def _predecessor_protocol(root: Path) -> dict:
+    protocol = _protocol()
+    protocol_id = "product-optimization-repair-pair-v1"
+    artifacts_root = root / "legacy"
+    artifacts_root.mkdir(parents=True)
+    resources = {
+        name: {"reserved": 0, "settled": 0, "unknown_spend": 0}
+        for name in ("active_milliseconds", "llm_calls", "retrieval_calls",
+                     "total_tokens")
+    }
+    claim = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "protocol_byte_sha256": "6" * 64,
+        "policy": "single-execution-no-resume-or-retry",
+    }
+    cell = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "attempted-before-post",
+    }
+    cells = [
+        {
+            "block": block["block"],
+            "arm": block["arm"],
+            "repetition": block["repetition"],
+            "case_id": case_id,
+            "status": "queued" if (block["block"], case_id) == (1, "P04")
+            else "not_submitted",
+            **({"error_code": "FROZEN_MANIFEST_MISMATCH"}
+               if (block["block"], case_id) == (1, "P04") else {}),
+        }
+        for block in protocol["design"]["execution_blocks"]
+        for case_id in block["case_order"]
+    ]
+    result = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "planned_cells": 12,
+        "started_cells": 1,
+        "complete": False,
+        "stop_reason": "CELL_NOT_SUCCESSFUL",
+        "no_retries_or_splices": True,
+        "cells": cells,
+        "ledger": {
+            "attempted_cells": 1,
+            "known_admitted_min": 1,
+            "possibly_submitted_max": 1,
+            "submission_count_uncertain": False,
+            "uncertain_cells": 0,
+        },
+        "records": [{
+            "experiment_id": protocol_id,
+            "block": 1,
+            "arm": "baseline",
+            "repetition": 2,
+            "case_id": "P04",
+            "status": "queued",
+            "error_code": "FROZEN_MANIFEST_MISMATCH",
+            "usage": {
+                "external_calls": 0,
+                "llm_calls": 0,
+                "retrieval_calls": 0,
+                "budget_resources": resources,
+            },
+            "observability": {
+                "totals": {
+                    "external_calls": 0,
+                    "llm_calls": 0,
+                    "retrieval_calls": 0,
+                },
+                "budget": {"resources": resources},
+            },
+        }],
+    }
+    payloads = {
+        "execution_claim": claim,
+        "attempted_cell": cell,
+        "run_result": result,
+    }
+    specifications = {}
+    for name, payload in payloads.items():
+        path = artifacts_root / f"{name}.json"
+        path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+        specifications[name] = {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": runner._file_hash(path),
+        }
+    protocol["predecessor"] = {
+        "protocol_id": protocol_id,
+        "protocol_byte_sha256": "6" * 64,
+        "artifacts": specifications,
+        "accounted_research_runs": 1,
+        "external_calls": 0,
+        "disposition": "immutable-no-retry-no-splice",
+    }
+    return protocol
 
 
 def _successful_record(case_id: str, snapshot: str = "snapshot.json") -> dict:
@@ -202,15 +304,21 @@ def test_run_schedules_exact_frozen_twelve_without_retry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     protocol = _protocol()
-    monkeypatch.setattr(
-        runner, "_validate_execution_binding", lambda *args: (protocol, {})
-    )
+    gate_calls = 0
+
+    def validate_binding(*args):
+        nonlocal gate_calls
+        gate_calls += 1
+        return protocol, {}
+
+    monkeypatch.setattr(runner, "_validate_execution_binding", validate_binding)
     monkeypatch.setattr(runner, "audit", lambda *args: _audit())
     monkeypatch.setattr(runner, "_claim_protocol_execution", lambda *args: None)
     observed: list[tuple[str, int, str]] = []
 
     async def fake_block(**kwargs):
         block = kwargs["block"]
+        assert kwargs["protocol_id"] == protocol["protocol_id"]
         records = []
         for case_id in block["case_order"]:
             kwargs["before_admission"]()
@@ -228,6 +336,7 @@ def test_run_schedules_exact_frozen_twelve_without_retry(
     assert result["complete"] is True
     assert result["started_cells"] == result["planned_cells"] == 12
     assert len(observed) == len(set(observed)) == 12
+    assert gate_calls == 13  # initial claim gate plus one gate before every admission
     assert result["no_retries_or_splices"] is True
 
 
@@ -421,12 +530,17 @@ def test_global_ledger_prevents_second_execution_or_cell_attempt(
     experiment.mkdir()
     (experiment / "execution-binding.json").write_text("{}\n", encoding="utf-8")
     binding = {"protocol_byte_sha256": "f" * 64}
-    runner._claim_protocol_execution(experiment, binding)
+    runner._claim_protocol_execution(experiment, binding, "pair-v2")
     with pytest.raises(runner.RepairPairControlError, match="already attempted"):
-        runner._claim_protocol_execution(experiment, binding)
-    runner._reserve_cell("baseline", 2, "P04")
+        runner._claim_protocol_execution(experiment, binding, "pair-v2")
+    runner._reserve_cell("baseline", 2, "P04", "pair-v2")
     with pytest.raises(runner.RepairPairControlError, match="already attempted"):
-        runner._reserve_cell("baseline", 2, "P04")
+        runner._reserve_cell("baseline", 2, "P04", "pair-v2")
+    claim = json.loads((runner.LEDGER_ROOT / "execution-claim.json").read_text())
+    cell = json.loads(
+        (runner.LEDGER_ROOT / "cells/baseline-r2-P04.json").read_text()
+    )
+    assert claim["protocol_id"] == cell["protocol_id"] == "pair-v2"
     assert runner._ledger_summary() == {
         "attempted_cells": 1,
         "known_admitted_min": 0,
@@ -434,6 +548,114 @@ def test_global_ledger_prevents_second_execution_or_cell_attempt(
         "uncertain_cells": 1,
         "submission_count_uncertain": True,
     }
+    runner._append_ledger_observation(
+        {"arm": "baseline", "repetition": 2, "case_id": "P04",
+         "task_id": "task", "run_id": "run", "status": "queued",
+         "error_code": None},
+        "pair-v2",
+    )
+    [observation] = [
+        json.loads(line)
+        for line in (runner.LEDGER_ROOT / "observations.jsonl").read_text().splitlines()
+    ]
+    assert observation["protocol_id"] == "pair-v2"
+
+
+def test_v2_protocol_and_ledger_do_not_alias_retired_v1():
+    assert runner.PROTOCOL_PATH.name == "product-optimization-repair-pair-v2.json"
+    assert runner.LEDGER_ROOT.name == "product-optimization-repair-pair-v2"
+    assert runner.LEDGER_ROOT != (
+        runner.ROOT
+        / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v1"
+    )
+
+
+def test_predecessor_artifacts_are_bound_by_path_hash_and_semantics(tmp_path: Path):
+    protocol = _predecessor_protocol(tmp_path)
+    runner._validate_predecessor(protocol, tmp_path)
+
+    claim_spec = protocol["predecessor"]["artifacts"]["execution_claim"]
+    claim_path = tmp_path / claim_spec["path"]
+    claim_path.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(runner.RepairPairControlError, match="identity drift"):
+        runner._validate_predecessor(protocol, tmp_path)
+
+
+def test_predecessor_artifacts_reject_missing_escape_and_non_file(tmp_path: Path):
+    protocol = _predecessor_protocol(tmp_path)
+    result_spec = protocol["predecessor"]["artifacts"]["run_result"]
+    (tmp_path / result_spec["path"]).unlink()
+    with pytest.raises(runner.RepairPairControlError, match="unavailable"):
+        runner._validate_predecessor(protocol, tmp_path)
+
+    protocol = _predecessor_protocol(tmp_path / "second")
+    protocol["predecessor"]["artifacts"]["run_result"]["path"] = "../escape.json"
+    with pytest.raises(runner.RepairPairControlError, match="path is invalid"):
+        runner._validate_predecessor(protocol, tmp_path / "second")
+
+    protocol = _predecessor_protocol(tmp_path / "third")
+    claim_spec = protocol["predecessor"]["artifacts"]["execution_claim"]
+    claim_path = tmp_path / "third" / claim_spec["path"]
+    claim_path.unlink()
+    claim_path.mkdir()
+    with pytest.raises(runner.RepairPairControlError, match="not a plain file"):
+        runner._validate_predecessor(protocol, tmp_path / "third")
+
+
+def test_predecessor_artifacts_reject_semantic_and_reparse_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    protocol = _predecessor_protocol(tmp_path)
+    cell_spec = protocol["predecessor"]["artifacts"]["attempted_cell"]
+    cell_path = tmp_path / cell_spec["path"]
+    payload = json.loads(cell_path.read_text(encoding="utf-8"))
+    payload["protocol_id"] = "wrong"
+    cell_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    cell_spec["sha256"] = runner._file_hash(cell_path)
+    with pytest.raises(runner.RepairPairControlError, match="attempted cell is invalid"):
+        runner._validate_predecessor(protocol, tmp_path)
+
+    protocol = _predecessor_protocol(tmp_path / "reparse")
+    claim_spec = protocol["predecessor"]["artifacts"]["execution_claim"]
+    claim_path = tmp_path / "reparse" / claim_spec["path"]
+    original_lstat = Path.lstat
+
+    def fake_lstat(path: Path):
+        metadata = original_lstat(path)
+        if str(path) == str(claim_path):
+            return SimpleNamespace(
+                st_mode=metadata.st_mode,
+                st_size=metadata.st_size,
+                st_file_attributes=0x0400,
+            )
+        return metadata
+
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+    with pytest.raises(runner.RepairPairControlError, match="not a plain file"):
+        runner._validate_predecessor(protocol, tmp_path / "reparse")
+
+
+def test_predecessor_artifacts_reject_parent_reparse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    protocol = _predecessor_protocol(tmp_path)
+    claim_spec = protocol["predecessor"]["artifacts"]["execution_claim"]
+    parent = (tmp_path / claim_spec["path"]).parent
+    original_lstat = Path.lstat
+
+    def fake_lstat(path: Path):
+        metadata = original_lstat(path)
+        if str(path) == str(parent):
+            return SimpleNamespace(
+                st_mode=metadata.st_mode,
+                st_size=metadata.st_size,
+                st_file_attributes=0x0400,
+            )
+        return metadata
+
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+    with pytest.raises(runner.RepairPairControlError, match="parent is not a plain"):
+        runner._validate_predecessor(protocol, tmp_path)
 
 
 def test_artifact_paths_must_be_contained_regular_nonempty_files(tmp_path: Path):
@@ -492,9 +714,16 @@ def test_prepare_makes_four_hash_identical_physical_seed_copies(
     result = runner.prepare(experiment, preflight, tmp_path / "base",
                             tmp_path / "candidate", env_file, "f" * 64)
     databases = list(experiment.glob("arms/*/r*/serial-r*/knowledge/chroma/chroma.sqlite3"))
+    environments = list(experiment.glob("arms/*/r*/environment.json"))
 
     assert result["planned_cells"] == 12
     assert len(databases) == 4
+    assert len(environments) == 4
+    assert all(
+        json.loads(path.read_text(encoding="utf-8"))["notes"]["protocol_id"]
+        == protocol["protocol_id"]
+        for path in environments
+    )
     assert len({str(path.resolve()) for path in databases}) == 4
     assert all(path.read_bytes() == b"database" for path in databases)
 
