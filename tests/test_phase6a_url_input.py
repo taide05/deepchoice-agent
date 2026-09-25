@@ -6,6 +6,7 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from deepchoice.budget_errors import BudgetError
 from deepchoice.clarify.session_manager import SessionManager, SessionState
 from deepchoice.clarify.clarification_agent import ClarificationAgent, _research_payload
 from deepchoice.contracts.api import ResearchRequest
@@ -28,6 +29,18 @@ class _AsyncBytes(httpx.AsyncByteStream):
 
     async def __aiter__(self):
         yield self.payload
+
+    async def aclose(self):
+        return None
+
+
+class _BrokenAsyncBytes(httpx.AsyncByteStream):
+    def __init__(self, error_type: type[Exception]):
+        self.error_type = error_type
+
+    async def __aiter__(self):
+        raise self.error_type()
+        yield b""  # pragma: no cover - keep this an async generator
 
     async def aclose(self):
         return None
@@ -285,6 +298,97 @@ async def test_safe_fetch_rejects_invalid_gzip_during_stream_iteration():
                 200,
                 headers={"content-type": "text/html", "content-encoding": "gzip"},
                 stream=_AsyncBytes(b"not-a-gzip-stream"),
+                request=request,
+            )
+        )
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+    assert caught.value.failure is SafeFetchFailure.RESPONSE_REJECTED
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ("dns", "transport_factory"))
+async def test_safe_fetch_does_not_reclassify_stream_error_before_response(stage):
+    async def dns(_host, _port):
+        if stage == "dns":
+            raise httpx.StreamClosed()
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        if stage == "transport_factory":
+            raise httpx.StreamClosed()
+        pytest.fail("transport must not be constructed after DNS failure")
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(httpx.StreamClosed):
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", (asyncio.CancelledError, BudgetError))
+async def test_safe_fetch_stream_boundary_preserves_control_failures(error_type):
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        def handler(_request):
+            raise error_type()
+
+        return httpx.MockTransport(handler)
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(error_type):
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+
+
+@pytest.mark.asyncio
+async def test_safe_fetch_rejects_stream_error_while_opening_response():
+    from deepchoice.security.urls import SafeFetchFailure
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        def handler(_request):
+            raise httpx.StreamClosed()
+
+        return httpx.MockTransport(handler)
+
+    resolver = _direct_resolver(SafeUrlPolicy(resolver=dns), transport_factory)
+    with pytest.raises(UnsafeUrlError) as caught:
+        await resolver.safe_fetch(
+            "official", "https://example.com/", allowed_content_types=("text/html",)
+        )
+    assert caught.value.failure is SafeFetchFailure.RESPONSE_REJECTED
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error_type",
+    (httpx.StreamClosed, httpx.StreamConsumed, httpx.ResponseNotRead),
+)
+async def test_safe_fetch_rejects_response_stream_lifecycle_errors(error_type):
+    from deepchoice.security.urls import SafeFetchFailure
+
+    async def dns(_host, _port):
+        return ["93.184.216.34"]
+
+    def transport_factory(_resolved, _ip):
+        return httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                headers={"content-type": "text/html"},
+                stream=_BrokenAsyncBytes(error_type),
                 request=request,
             )
         )

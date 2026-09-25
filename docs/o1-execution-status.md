@@ -188,6 +188,16 @@ observation/result 的 task/run/status 一致，停止正确；403 与200响应�
 这些脱敏类型；当前冻结 observer 仍把它们归为 `OtherError`，控制器继续 fail closed。既有 P04
 报告41/41 citation 为 unknown，只能用作问题诊断，不能作为质量通过或新基线。
 
+复议后的离线代码审计另确认一个独立、可复现的产品边界：HTTPX 在已验证响应的打开或正文消费阶段
+抛出的 `StreamError` 未统一进入 safe-fetch 脱敏失败类别。前瞻实现将其收敛为
+`UnsafeUrlError(response_rejected)`，明确不属于可重试 transport，并把新 run 安全身份升为
+`outbound-url-v4`；v1–v3 manifest 仅保持历史可读。离线注入覆盖响应打开和正文迭代。该缺口
+本身成立，但冻结 v3 遥测仍不足以证明两个实际 `OtherError` 就是 stream 异常，也不授权付费
+repair-pair v4 或产生产品效果证据。
+最终验收为120项聚焦、337项相关、**2024 passed**（215.78秒）、smoke-v1 12/12且基准一致，
+pyflakes、生产代码vulture100%、pip check、compileall和diff检查通过；独立复审关闭捕获作用域问题后
+无遗留项。本轮未联网、未增加研究格，累计仍为95/154。
+
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
 每跳改为显式请求 identity encoding，并把仍发生的

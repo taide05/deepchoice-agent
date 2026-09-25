@@ -6,8 +6,9 @@ v1/v2/v3 三个正式根均按各自冻结门禁停止且不可重跑或拼接�
 局部效果证据不足并已触发三次付费停止后的测量复议。当前继续可做的离线工作是 Q2 来源覆盖/适用性：
 Chroma v2 与 source-score-v6 候选已在冻结种子回放恢复双候选来源，并以2013项全套及独立复审
 完成工程闭环；真实报告效果尚未测量。
-测量复议未找到可把 v3 `OtherError` 安全降级的证据，因此当前不授权 v4。若未来增强脱敏
-类型诊断，必须使用全新文件和协议身份；新识别的 HTTPX stream 状态仍 fail closed。
+测量复议未找到可把 v3 `OtherError` 安全降级的证据，因此当前不授权付费 repair-pair v4。后续离线
+审计确认 safe-fetch 未归一化 HTTPX `StreamError` 的独立缺口；`outbound-url-v4` 已将其收敛为
+`response_rejected` 并完成全套及独立复审，但不能反推冻结 v3 的实际根因或替代新报告效果验证。
 本文定义整体目标、工作排序和退出条件。
 S0 没有执行产品修改或新付费实验；锁分、问题表和 S1 执行卡见
 [S0 开发集诊断](product-optimization-s0-review.md)。

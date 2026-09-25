@@ -192,7 +192,7 @@ class ChannelResolver:
         proxy_identity = self.cfg.safe_fetch_proxy_sha256
         if context is not None and (
             context.safe_fetch_proxy_sha256 != proxy_identity
-            or context.security_policy_version != "outbound-url-v3"
+            or context.security_policy_version != "outbound-url-v4"
         ):
             raise UnsafeUrlError("Safe fetch configuration differs from the frozen run", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
         channel = await self.resolve(source)
@@ -285,88 +285,94 @@ class ChannelResolver:
                 follow_redirects=False,
                 trust_env=False,
             ) as client:
-                async with client.stream(current_method, resolved.url, headers=headers) as streamed:
-                    status = streamed.status_code
-                    response_headers = streamed.headers
-                    if source == "official":
-                        from . import throttle
+                try:
+                    async with client.stream(current_method, resolved.url, headers=headers) as streamed:
+                        status = streamed.status_code
+                        response_headers = streamed.headers
+                        if source == "official":
+                            from . import throttle
 
-                        # A 429 may have a JSON/plain-text body. Publish only
-                        # its safe status/headers before content validation;
-                        # never read or expose the provider error body.
-                        if throttle.observe(source, streamed, throttle.gate_for("official-web")):
-                            raise throttle.ProviderRateLimitError("official URL rate limited")
-                    if status in {301, 302, 303, 307, 308}:
-                        location = streamed.headers.get("location")
-                        if not location:
-                            raise UnsafeUrlError("Redirect response has no location", failure=SafeFetchFailure.RESPONSE_REJECTED)
-                        if redirects >= max_redirects:
-                            raise UnsafeUrlError("Too many redirects", failure=SafeFetchFailure.RESPONSE_REJECTED)
-                        current_url = urljoin(resolved.url, location)
-                        redirects += 1
-                        if status == 303 and current_method != "HEAD":
+                            # A 429 may have a JSON/plain-text body. Publish only
+                            # its safe status/headers before content validation;
+                            # never read or expose the provider error body.
+                            if throttle.observe(source, streamed, throttle.gate_for("official-web")):
+                                raise throttle.ProviderRateLimitError("official URL rate limited")
+                        if status in {301, 302, 303, 307, 308}:
+                            location = streamed.headers.get("location")
+                            if not location:
+                                raise UnsafeUrlError("Redirect response has no location", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                            if redirects >= max_redirects:
+                                raise UnsafeUrlError("Too many redirects", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                            current_url = urljoin(resolved.url, location)
+                            redirects += 1
+                            if status == 303 and current_method != "HEAD":
+                                current_method = "GET"
+                            continue
+                        if (
+                            current_method == "HEAD"
+                            and head_fallback_to_range_get
+                            and status in {405, 501}
+                        ):
                             current_method = "GET"
-                        continue
-                    if (
-                        current_method == "HEAD"
-                        and head_fallback_to_range_get
-                        and status in {405, 501}
-                    ):
-                        current_method = "GET"
-                        headers = {
-                            **headers,
-                            "Range": f"bytes=0-{max_response_bytes - 1}",
-                        }
-                        # Re-resolve and repin even for the same logical URL.
-                        continue
+                            headers = {
+                                **headers,
+                                "Range": f"bytes=0-{max_response_bytes - 1}",
+                            }
+                            # Re-resolve and repin even for the same logical URL.
+                            continue
 
-                    content_encodings = tuple(
-                        encoding.strip().lower()
-                        for header in response_headers.get_list("content-encoding")
-                        for encoding in header.split(",")
-                        if encoding.strip()
-                    )
-                    if any(
-                        encoding not in {"identity", "gzip"}
-                        for encoding in content_encodings
-                    ):
-                        raise UnsafeUrlError(
-                            "Response content encoding is not allowed",
-                            failure=SafeFetchFailure.RESPONSE_REJECTED,
+                        content_encodings = tuple(
+                            encoding.strip().lower()
+                            for header in response_headers.get_list("content-encoding")
+                            for encoding in header.split(",")
+                            if encoding.strip()
                         )
-                    media_type = response_headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                    if not any(
-                        media_type == allowed.lower() for allowed in allowed_content_types
-                    ):
-                        raise UnsafeUrlError("Response content type is not allowed", failure=SafeFetchFailure.RESPONSE_REJECTED)
-                    body = bytearray()
-                    try:
-                        async for chunk in streamed.aiter_bytes():
-                            body.extend(chunk)
-                            if len(body) > max_response_bytes:
-                                raise UnsafeUrlError("Response body exceeds the allowed size", failure=SafeFetchFailure.RESPONSE_REJECTED)
-                    except httpx.DecodingError:
-                        raise UnsafeUrlError(
-                            "Response content encoding could not be decoded",
-                            failure=SafeFetchFailure.RESPONSE_REJECTED,
-                        ) from None
-                    decoded_headers = httpx.Headers(response_headers)
-                    # aiter_bytes() returns the decoded representation.  Do
-                    # not attach the upstream representation headers to those
-                    # bytes or downstream httpx consumers will decode again.
-                    for header_name in (
-                        "content-encoding",
-                        "content-length",
-                        "transfer-encoding",
-                    ):
-                        decoded_headers.pop(header_name, None)
-                    decoded_headers["content-length"] = str(len(body))
-                    return httpx.Response(
-                        status_code=status,
-                        headers=decoded_headers,
-                        content=bytes(body),
-                        request=streamed.request,
-                    )
+                        if any(
+                            encoding not in {"identity", "gzip"}
+                            for encoding in content_encodings
+                        ):
+                            raise UnsafeUrlError(
+                                "Response content encoding is not allowed",
+                                failure=SafeFetchFailure.RESPONSE_REJECTED,
+                            )
+                        media_type = response_headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                        if not any(
+                            media_type == allowed.lower() for allowed in allowed_content_types
+                        ):
+                            raise UnsafeUrlError("Response content type is not allowed", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                        body = bytearray()
+                        try:
+                            async for chunk in streamed.aiter_bytes():
+                                body.extend(chunk)
+                                if len(body) > max_response_bytes:
+                                    raise UnsafeUrlError("Response body exceeds the allowed size", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                        except httpx.DecodingError:
+                            raise UnsafeUrlError(
+                                "Response stream could not be consumed safely",
+                                failure=SafeFetchFailure.RESPONSE_REJECTED,
+                            ) from None
+                        decoded_headers = httpx.Headers(response_headers)
+                        # aiter_bytes() returns the decoded representation.  Do
+                        # not attach the upstream representation headers to those
+                        # bytes or downstream httpx consumers will decode again.
+                        for header_name in (
+                            "content-encoding",
+                            "content-length",
+                            "transfer-encoding",
+                        ):
+                            decoded_headers.pop(header_name, None)
+                        decoded_headers["content-length"] = str(len(body))
+                        return httpx.Response(
+                            status_code=status,
+                            headers=decoded_headers,
+                            content=bytes(body),
+                            request=streamed.request,
+                        )
+                except httpx.StreamError:
+                    raise UnsafeUrlError(
+                        "Response stream could not be consumed safely",
+                        failure=SafeFetchFailure.RESPONSE_REJECTED,
+                    ) from None
 
     async def invalidate(self, source: str) -> None:
         """Drop the current route for `source` (call after a channel failure).

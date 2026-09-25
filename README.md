@@ -201,8 +201,9 @@ Phase 6-A 已收敛默认安全边界：所有受管 URL 外呼使用 `SafeUrlPo
 HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redirect 上重新验证公网地址、
 端口和响应限制；无法证明安全的 proxy/forward 动态 URL fail closed。forward 目标采用完整
 hostname 精确匹配或显式 `*.example.com` 子域匹配。动态抓取显式请求 identity content encoding；
-无法解码或含未知编码的响应按脱敏 `response_rejected` 关闭。新 run 冻结 `outbound-url-v3`，历史 v1/v2
-manifest 仍可读取但不能按变化后的传输语义同 run 恢复。HTTP body 上限为 128 KiB，query、候选、
+无法解码、含未知编码或在打开/消费响应时发生 HTTPX stream 生命周期错误的响应，都按脱敏
+`response_rejected` 关闭，不能作为可重试 transport 证据。新 run 冻结 `outbound-url-v4`，历史 v1–v3
+manifest 仍可读取但不能按变化后的错误语义同 run 恢复。HTTP body 上限为 128 KiB，query、候选、
 澄清和聚合输入另有字段/数量限制。日志、错误、Trace 和 LLM diagnostics 统一脱敏，后者只保留
 hash、length、usage 和 error type。报告继续提供 Markdown，并由服务端生成经过 sanitizer 的
 `report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。
