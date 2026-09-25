@@ -76,9 +76,10 @@ smoke-v1 12/12、pyflakes、生产代码 vulture100%、pip check、compileall、
 此前复审保留的非阻断风险：恶意本地篡改仍需外部可信 launcher，依赖身份未覆盖全部
 wheel/DLL/系统证书库字节，ignored ledger 可被有权限操作者删除且未显式 fsync 父目录，
 `service_started`/alive 到 POST 仍有极小 TOCTOU，真实 child 竞态尚未集成演练。
-这些是工程准入证据，不是局部效果、最终质量或12路并发通过。前一冻结提交 `6e74945` 的实际
-零网络 audit 已通过；现行代理 manifest 修复候选仍须在提交后重新 audit。该 audit 不会准入研究，
-也不会使已有全局 execution claim 可重用。
+这些是工程准入证据，不是局部效果、最终质量或12路并发通过。现行代理 manifest 修复提交
+`8320a08` 的 post-commit 零网络 audit 已通过：baseline 精确 `d23c948`，端点、路由/代理、依赖、
+两臂 manifest、种子及 SQLite `quick_check` 匹配，research_runs_submitted=0；其 baseline/P04
+预测 `e7389bdb…` 与停止根实际 manifest 相同。该 audit 不会使已有全局 execution claim 可重用。
 
 首次付费前置根 `outputs/product-optimization-repair-pair-preflight-20260925-v1/` 为不可变失败证据：
 五条来源 route 均通过，Tavily POST 1/1 返回200，非 LLM HTTP 8次；LLM 在 HTTP dispatch 前以
