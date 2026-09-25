@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from functools import wraps
 import json
 import os
+import re
 from urllib.parse import urlsplit
 from pathlib import Path
 import ssl
@@ -24,6 +25,7 @@ _FIELDS = frozenset({
     "available_bytes", "cold", "model_initialized", "status", "failure",
     "error_type", "status_code", "certificate_required", "hostname_check_enabled",
     "hostname_matches", "reason", "source", "method", "operation",
+    "instance_nonce",
 })
 _EVENTS = frozenset({
     "embedding_first_start", "embedding_first_end", "proxy_connect_success",
@@ -284,13 +286,16 @@ def _install_observers(telemetry: Telemetry) -> None:
     httpx.AsyncClient._send_single_request = observed_http
 
 
-async def _managed_server(server, root: Path, parent, telemetry: Telemetry) -> None:
+async def _managed_server(server, root: Path, parent, telemetry: Telemetry,
+                          instance_nonce: str) -> None:
     async def watch():
         started_logged = False
         pending_reason = None
         while True:
             if server.started and not started_logged:
-                telemetry.emit("service_started", status="success")
+                telemetry.emit(
+                    "service_started", status="success", instance_nonce=instance_nonce
+                )
                 started_logged = True
             if (root / "stop-service.flag").exists():
                 pending_reason = "stop_flag"
@@ -324,17 +329,27 @@ def main() -> int:
     parser.add_argument("--profile", choices=("serial-r1", "concurrent-r1", "concurrent-r2", "serial-r2"), required=True)
     parser.add_argument("--frozen-root", type=Path, required=True)
     parser.add_argument("--control-root", type=Path, required=True)
+    parser.add_argument("--instance-nonce", required=True)
     args = parser.parse_args()
     root = args.root.resolve()
     frozen_root = args.frozen_root.resolve()
     control_root = args.control_root.resolve()
+    # A repository checkout uses the ``src`` layout.  Put both the frozen
+    # product package and its benchmark helpers ahead of the editable current
+    # checkout so a historical arm cannot silently import current product
+    # code from the active virtual environment.
     sys.path.insert(0, str(frozen_root))
+    sys.path.insert(0, str(frozen_root / "src"))
     telemetry = Telemetry(control_root)
     try:
         if (not root.is_dir() or not frozen_root.is_dir() or not control_root.is_dir()
                 or not 1 <= args.port <= 65535 or (control_root / "stop-service.flag").exists()):
             raise ValueError
-        telemetry.emit("telemetry_ready", status="success")
+        if re.fullmatch(r"[0-9a-f]{32}", args.instance_nonce) is None:
+            raise ValueError
+        telemetry.emit(
+            "telemetry_ready", status="success", instance_nonce=args.instance_nonce
+        )
         # Inherited effective config is trusted only in this child process.
         # No .env or parent environment is changed by this runner.
         from deepchoice.outbound.tunnel import proxy_endpoint_identity
@@ -342,7 +357,15 @@ def main() -> int:
         os.environ["SAFE_FETCH_TRUSTED_LOCAL_PROXY"] = proxy_endpoint_identity(os.environ.get("LOCAL_PROXY", ""))
         import psutil
         import uvicorn
-        from benchmarks.product_baseline_experiment import serve
+        import benchmarks as benchmarks_package
+        import benchmarks.product_baseline_experiment as baseline_experiment
+
+        if (Path(benchmarks_package.__file__).resolve()
+                != (frozen_root / "benchmarks/__init__.py").resolve()
+                or Path(baseline_experiment.__file__).resolve()
+                != (frozen_root / "benchmarks/product_baseline_experiment.py").resolve()):
+            raise RuntimeError("benchmark import escaped frozen root")
+        serve = baseline_experiment.serve
 
         parent = psutil.Process(os.getppid())
         original_run = uvicorn.run
@@ -352,7 +375,11 @@ def main() -> int:
                 raise ValueError
             _install_observers(telemetry)
             server = uvicorn.Server(uvicorn.Config(app, **kwargs))
-            asyncio.run(_managed_server(server, control_root, parent, telemetry))
+            asyncio.run(
+                _managed_server(
+                    server, control_root, parent, telemetry, args.instance_nonce
+                )
+            )
             telemetry.emit("asyncio_runner_returned", status="finished")
 
         uvicorn.run = observed_run

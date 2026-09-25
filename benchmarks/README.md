@@ -119,6 +119,32 @@ serve 与 collector 进程须显式继承相同的可信代理配置；一个 CL
 前置与 completed 不能单独证明资格，完整报告声明核对和独立复核见
 [资格证据](../docs/o1c-single-case-verification.md)。未覆盖的实际动态 TLS 保持 unavailable；不额外外呼补测。
 
+## 当前修复包局部12格
+
+`product-optimization-repair-pair-v1` 只包含 P01/P04/P08，不读取完整数据集正文或 P09–P12。
+协议外批准 byte SHA 为
+`581a6cb75a11167644bdee703af073bff859997a4877991487d63474c1d30566`；每个命令都必须显式传入，
+不能从协议自身推导后自动接受。先在已提交且批准路径干净的 candidate 与只读 baseline checkout 上
+执行零网络 `audit`。`preflight` 才会做有界付费探测，`run` 才会提交研究任务：
+
+```powershell
+$protocolSha = "581a6cb75a11167644bdee703af073bff859997a4877991487d63474c1d30566"
+$baselineRoot = "<只读 d23c948 checkout>"
+$candidateRoot = "<当前干净 checkout>"
+$privateEnv = "<私有 .env 绝对路径>"
+
+.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py audit --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --expected-protocol-byte-sha256 $protocolSha
+.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py preflight --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --output-dir <新前置目录> --expected-protocol-byte-sha256 $protocolSha --trust-current-local-proxy --execute-paid-probes
+.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py prepare --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --preflight-dir <本轮前置目录> --experiment-root <新实验目录> --expected-protocol-byte-sha256 $protocolSha
+.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py run --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --preflight-dir <本轮前置目录> --experiment-root <新实验目录> --expected-protocol-byte-sha256 $protocolSha --execute-paid-runs
+```
+
+顺序固定为 baseline-r2、candidate-r2、candidate-r1、baseline-r1，每块 P01/P04/P08，共12格且
+`concurrency=1`。任一身份、预检、来源、HTTP、预算、租约、服务归属、用量不完整或未知异常都会
+停止新准入；已尝试格不重试、不补样、不跨根拼接。全局 ledger 位于忽略区
+`outputs/product-optimization-ledgers/product-optimization-repair-pair-v1/`，删除它不能被解释为允许重跑。
+`audit`/`prepare` 通过只代表离线控制契约；内容改善须等12格完整报告按冻结盲评协议评审。
+
 ## 有意使用历史直连工具
 
 仅在明确批准历史实验及调用额度后，使用项目 Python 3.11/3.12 环境：
