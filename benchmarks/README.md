@@ -133,10 +133,10 @@ $baselineRoot = "<只读 d23c948 checkout>"
 $candidateRoot = "<当前干净 checkout>"
 $privateEnv = "<私有 .env 绝对路径>"
 
-.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py audit --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --expected-protocol-byte-sha256 $protocolSha
-.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py preflight --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --output-dir <新前置目录> --expected-protocol-byte-sha256 $protocolSha --trust-current-local-proxy --execute-paid-probes
-.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py prepare --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --preflight-dir <本轮前置目录> --experiment-root <新实验目录> --expected-protocol-byte-sha256 $protocolSha
-.\.venv\Scripts\python.exe scripts\product_optimization_repair_pair.py run --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --preflight-dir <本轮前置目录> --experiment-root <新实验目录> --expected-protocol-byte-sha256 $protocolSha --execute-paid-runs
+.\.venv\Scripts\python.exe -m scripts.product_optimization_repair_pair audit --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --expected-protocol-byte-sha256 $protocolSha
+.\.venv\Scripts\python.exe -m scripts.product_optimization_repair_pair preflight --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --output-dir <新前置目录> --expected-protocol-byte-sha256 $protocolSha --trust-current-local-proxy --execute-paid-probes
+.\.venv\Scripts\python.exe -m scripts.product_optimization_repair_pair prepare --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --preflight-dir <本轮前置目录> --experiment-root <新实验目录> --expected-protocol-byte-sha256 $protocolSha
+.\.venv\Scripts\python.exe -m scripts.product_optimization_repair_pair run --baseline-root $baselineRoot --candidate-root $candidateRoot --env-file $privateEnv --preflight-dir <本轮前置目录> --experiment-root <新实验目录> --expected-protocol-byte-sha256 $protocolSha --execute-paid-runs
 ```
 
 顺序固定为 baseline-r2、candidate-r2、candidate-r1、baseline-r1，每块 P01/P04/P08，共12格且
