@@ -563,6 +563,28 @@ def test_audit_installs_private_environment_before_project_module_load():
     assert root_validation < environment_install < project_load < qualification_import
 
 
+def test_arm_probe_reproduces_runtime_trusted_proxy_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from deepchoice.contracts.api import ResearchRequest
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.outbound.tunnel import proxy_endpoint_identity
+
+    proxy = "http://127.0.0.1:17890"
+    environment = os.environ.copy()
+    environment["LOCAL_PROXY"] = proxy
+    request = runner._case_payload("P04")["request"]
+    probe = runner._probe_arm(runner.ROOT, {"P04": request}, environment)
+
+    monkeypatch.setenv("LOCAL_PROXY", proxy)
+    monkeypatch.setenv(
+        "SAFE_FETCH_TRUSTED_LOCAL_PROXY", proxy_endpoint_identity(proxy)
+    )
+    validated = ResearchRequest.model_validate(request).model_dump(exclude_none=True)
+    expected = build_run_manifest(validated).manifest_id
+    assert probe["manifests"] == {"P04": expected}
+
+
 def test_product_root_git_checks_are_scoped_to_approved_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

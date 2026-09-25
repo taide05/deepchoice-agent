@@ -8,18 +8,18 @@
 |---|---|
 | 工作分支 | codex/baseline-readiness；当前实现与已测量产品候选不能混为一谈 |
 | 已测量候选 / 控制身份 | 原基线 d23c948 / 7d16d28；最新产品 83852d8 在实际 checkout 60485b6 执行 P01，内容门禁未放行 |
-| 持续授权研究账本 | 已用 92 / 现行上限 152，尚可准入 60；其中新局部配对至多12、整合S3/C1预留48，均尚未执行；不是项目全部历史分母 |
+| 持续授权研究账本 | 已用 93 / 现行上限 152，尚可准入 59；局部配对首格已准入后控制停止，余11格未提交；整合S3/C1仍预留48；不是项目全部历史分母 |
 | 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
-| 尚未完成 | 同窗口付费前置、局部12格、最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
-| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 的15份官方深链正文、隔离知识种子及局部12格双臂协议/执行器均已离线验收，产品仍未实测 |
+| 尚未完成 | 完整局部12格（当前停止根不可重跑/拼接）、最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
+| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；同窗口前置通过，但首格因控制 manifest 预计算缺陷在外部调用前停止，产品仍未实测 |
 
 2026-09-23 用户明确批准前瞻隔离 benchmark 派生比较模板、在现有来源范围审计并重冻
 可信知识种子；批准“修复包局部12格＋预先整合S3/C1共48格”，累计研究上限
 **134→152**，且以新协议冻结的配对 P01 回归替代第三次独立 P01 资格。
 两臂须使用同一母种子内容身份的物理独立只读副本；旧知识库、历史报告/停止根原样保留，不读取 P09–P12 以准备新候选。
 路线与上限的批准本身不等于工程或内容通过；后续已分别完成新种子和局部协议/执行器离线验收，
-但服务的真实同窗口前置、内容门禁及付费效果仍未通过。目前新增研究0、仍已用92；60次全部已有
-分母去向，不能以重试补齐停止样本。
+服务真实同窗口前置随后通过，但首个局部格在外部调用前因控制 manifest 身份不一致停止。目前新增
+研究准入1、累计已用93；停止格不能重试或拼接，剩余额度仍须保留既定分母，不能自动补样。
 用户随后明确将最终人工门禁改为 GPT-only；本地固定P07受限与新P01迁移两份开发锚点，
 独立 GPT 已先盲评再对照既有判断：P07 高严重度且旧报告不可直接用于决策，P01 重大数据完整性风险；
 分别与历史严重度一致，P07 可用性判断更严格，详见 S0 问题表。不得把它记成人类校准或新产品效果；
@@ -57,10 +57,11 @@ vulture100%、pip check、diff 检查及独立复审通过。
 而非覆盖；本次单次离线构建不受影响。
 
 2026-09-25 冻结 `product-optimization-repair-pair-v1`；首次同窗口前置安全停止后，只修正控制器的
-私有环境安装顺序并重冻协议。现行协议 byte/canonical SHA-256 为
-`66676f58b19e186cef765481ccc7ac770a316b29511cb9380cccf0ad6bf3e51b` /
-`cc70cf6cd577a738b9932a1aa1cbfe747e6ce021120bd491ea2101a37619e9aa`，runner SHA-256 为
-`06b712d5fd3241fa1afdfdfe8686c335dcdba74b490f94ce7fb1ec53f2d698a0`。固定顺序为 baseline-r2、
+私有环境安装顺序并重冻协议；首格停止后又修正审计探针的代理身份预计算并再次重冻。现行协议
+byte/canonical SHA-256 为
+`a777e853c979868526495f5622d3b6d163df2edebacb454059b9efe09cf87dc2` /
+`9a58b8bff3f44b2dd84c3861cc86e5011cc3e7f263db3954ed57a350936c86ab`，runner SHA-256 为
+`52c7777ed0b1ddc715c8966f0318e4461b1372fbffb1b1fbf4653a47d879ad29`。固定顺序为 baseline-r2、
 candidate-r2、candidate-r1、baseline-r1，每块仅 P01/P04/P08，共12格、串行单并发；配对 P01
 回归替代第三次独立资格，任一停止不重试、不拼接。CLI 要求协议外 byte SHA，并在项目导入前校验
 完整 TCB、批准路径及 import origin/shadow；两臂冻结 DeepSeek 端点、路由/代理、依赖、证书内容、
@@ -68,23 +69,39 @@ candidate-r2、candidate-r1、baseline-r1，每块仅 P01/P04/P08，共12格、�
 `service_started` 和进程存活绑定；localhost 控制客户端禁用环境代理。全局 claim/cell ledger 在 POST
 前持久化，崩溃窗口只报告已知最小/可能最大/不确定，不把可能已提交误报为0。
 
-现行重冻候选最终 **107 项聚焦**、扩大相关 **335 项**、**1982 项全套**测试（228.79秒），
-smoke-v1 12/12、pyflakes、生产代码 vulture100%、pip check、compileall、diff 检查通过；独立复审
-另跑41项新增测试和166项扩大聚焦集，
-结论无阻断。复审保留的非阻断风险：恶意本地篡改仍需外部可信 launcher，依赖身份未覆盖全部
+现行重冻候选已通过 **35 项控制器聚焦**、扩大相关 **251 项**、**1983 项全套**测试（234.05秒），
+smoke-v1 12/12、pyflakes、生产代码 vulture100%、pip check、compileall、diff 检查。独立复审未发现
+代码阻断，另跑42项 repair-pair、167项 controller/qualification/child、114项 proxy/manifest 测试，
+并确认非 loopback probe fail closed；运行级阻断是旧全局 claim/cell ledger 正确拒绝任何再次付费执行。
+此前复审保留的非阻断风险：恶意本地篡改仍需外部可信 launcher，依赖身份未覆盖全部
 wheel/DLL/系统证书库字节，ignored ledger 可被有权限操作者删除且未显式 fsync 父目录，
 `service_started`/alive 到 POST 仍有极小 TOCTOU，真实 child 竞态尚未集成演练。
-这些是工程准入证据，不是局部效果、最终质量或12路并发通过。现行重冻提交 `6e74945` 的实际
-零网络 audit 已通过：baseline 精确为 `d23c948`，端点、路由/代理、依赖、两臂 manifest、种子
-身份及 SQLite `quick_check` 全部匹配，research_runs_submitted=0。
+这些是工程准入证据，不是局部效果、最终质量或12路并发通过。前一冻结提交 `6e74945` 的实际
+零网络 audit 已通过；现行代理 manifest 修复候选仍须在提交后重新 audit。该 audit 不会准入研究，
+也不会使已有全局 execution claim 可重用。
 
 首次付费前置根 `outputs/product-optimization-repair-pair-preflight-20260925-v1/` 为不可变失败证据：
 五条来源 route 均通过，Tavily POST 1/1 返回200，非 LLM HTTP 8次；LLM 在 HTTP dispatch 前以
 `OpenAIError` 停止，LLM attempts=0、research_runs_submitted=0、金额 unavailable。根因是 audit
 先导入协议依赖的项目模块、后安装私有环境，导致 LLM 配置缓存空值。现行修复改为“stdlib bootstrap
 →双根验证→安装私有环境→加载协议/项目模块→qualification”，不修改产品候选或研究协议门槛。
-失败根不得重跑、改名为通过或补样。研究保持 **92/152**；下一步是在全新目录做一次同窗口前置；
-只有通过后才按冻结顺序最多准入12格。
+失败根不得重跑、改名为通过或补样。第二个全新前置根
+`outputs/product-optimization-repair-pair-preflight-20260925-v2/` 在前一协议 SHA 下通过：五条来源 route、
+Tavily POST 及两类 DeepSeek 探测兼容，非 LLM HTTP 8、LLM 2、研究0；离线 prepare 随后完成四份
+物理独立种子。它不能给现行新 SHA 或未来新执行身份授权；若测量复议放行，仍须新协议、新 ledger
+命名空间和全新前置根。
+
+首个正式根 `outputs/product-optimization-repair-pair-20260925-v1/` 在 baseline-r2/P04 创建任务后立刻
+以 `FROZEN_MANIFEST_MISMATCH` 停止：实际任务为 queued，清理后 interrupted；LLM/retrieval/external
+calls 均0，无 token、报告或快照。全局账本保守记录 attempted=1、known_admitted_min=1、
+possibly_submitted_max=1、uncertainty=false，其余11格未提交。离线比对证明唯一差异是运行时已绑定
+`safe_fetch_proxy_sha256`，而 ARM probe 在绑定可信代理前预计算 manifest；将实际字段置空后哈希精确
+等于冻结预期。现行修复使 probe 与 child 同序设置 `SAFE_FETCH_TRUSTED_LOCAL_PROXY`，并有全新子进程
+回归。停止根和 no-retry ledger 保持不变。研究现为 **93/152**；完整新12格会令局部累计新增为13，
+连同既定最终/并发48格达到153，超过现行上限1格，因此再次测量须先完成测量授权复议。
+复审保留的新增非阻断盲区：控制器级 fresh-subprocess 测试直接覆盖有效 IPv4 loopback，但未逐项参数化
+baseline checkout、IPv6、缺失/恶意 `LOCAL_PROXY` 或冲突预置 SAFE 值；底层代理合约和独立负测已
+覆盖核心拒绝行为。真实服务启动到首个 safe fetch 的端到端一致性尚未在修复后付费复验。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

@@ -57,7 +57,7 @@ _SECRET_ENV = {
     "STACKEXCHANGE_API_KEY",
 }
 ARM_PROBE = r"""
-import hashlib, json, sys
+import hashlib, json, os, sys
 from pathlib import Path
 root = Path(sys.argv[1]).resolve()
 sys.path.insert(0, str(root))
@@ -67,6 +67,10 @@ import deepchoice
 origin = Path(deepchoice.__file__).resolve()
 if not origin.is_relative_to((root / 'src').resolve()):
     raise RuntimeError('product import escaped frozen root')
+from deepchoice.outbound.tunnel import proxy_endpoint_identity
+os.environ['SAFE_FETCH_TRUSTED_LOCAL_PROXY'] = proxy_endpoint_identity(
+    os.environ.get('LOCAL_PROXY', '')
+)
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_core_asset_registry, build_run_manifest
 from deepchoice.utils.llm import TIERS
