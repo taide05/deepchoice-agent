@@ -1,6 +1,6 @@
 # 当前执行状态与证据索引
 
-最后完成研究：2026-09-22，修复候选 83852d8 的 P01；2026-09-25 的 v1 首格准入后在零外部调用时控制停止。
+最后完成研究：2026-09-25，v2 baseline-r2/P04 完成；随后严格 telemetry 门禁停止新准入。
 普通成本与阶段切换沿用用户持续授权；不再为此逐项停下确认，研究硬上限和安全门禁仍有效。
 本文只维护最新状态和账本。后续目标见 [地图](current-roadmap.md)，操作方式见 [执行规则](optimization-execution.md)。
 
@@ -8,10 +8,10 @@
 |---|---|
 | 工作分支 | codex/baseline-readiness；当前实现与已测量产品候选不能混为一谈 |
 | 已测量候选 / 控制身份 | 原基线 d23c948 / 7d16d28；最新产品 83852d8 在实际 checkout 60485b6 执行 P01，内容门禁未放行 |
-| 持续授权研究账本 | 已用 93 / 现行上限 153，尚可准入 60；新局部 v2 预留12，整合S3/C1预留48；旧 v1 首格已计入93且不可重试；不是项目全部历史分母 |
-| 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
-| 尚未完成 | v2 全新前置与完整局部12格、最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
-| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v1 首格控制停止已修复并保留，v2 离线工程验证、独立复审、本地提交和零研究审计已通过，产品仍未实测 |
+| 持续授权研究账本 | 已用 94 / 现行上限 153，尚可准入 59；v2 仅1格完成、余11格未提交且不可重跑/拼接；整合S3/C1仍完整预留48；不是项目全部历史分母 |
+| 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的 8 development 报告、v2 baseline-r2/P04 单份新报告；S0 身份、哈希和 360 行逐处原子关键声明已锁定 |
+| 尚未完成 | 新的测量复议与有效局部配对、最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
+| 当前成果 | 行动安全、已知占位、source-score-v5身份分类及事务入口取消修复已离线验收；窗口原型未推广；固定开发锚点独立 GPT 复核已完成；P01/P04/P08 官方正文、隔离种子及双臂执行器已验收；v2 前置通过且单个 baseline P04 完成，但无 candidate/配对效果证据，产品质量仍证据不足 |
 
 2026-09-23 用户明确批准前瞻隔离 benchmark 派生比较模板、在现有来源范围审计并重冻
 可信知识种子；批准“修复包局部12格＋预先整合S3/C1共48格”，累计研究上限
@@ -106,8 +106,20 @@ possibly_submitted_max=1、uncertainty=false，其余11格未提交。离线比�
 与最小不可重试语义；bootstrap 和每格准入前均重新验证。当前 v2 已通过47项聚焦、316项相关、
 1988项全套（243.00秒）、smoke-v1、pyflakes、vulture100%、pip check 与 compileall；独立复审
 无阻断，其两项非阻断测试建议也已覆盖。实现提交为 `5e6e88d`；提交后零研究 audit 已通过，冻结
-baseline/P04 manifest 仍为 `e7389bdb…`，predecessor/TCB/种子/环境/代理身份一致。全新前置仍待完成，
-尚未准入 v2 研究。
+baseline/P04 manifest 仍为 `e7389bdb…`，predecessor/TCB/种子/环境/代理身份一致。全新前置随后以
+HTTP 8、LLM 2、Tavily POST 1 全部通过，五类来源健康，研究0；离线 prepare 冻结四个独立块。
+
+v2 唯一执行在 baseline-r2/P04 完成后停止。该格使用8次 LLM、6次 retrieval、14次 Trace 口径
+external call，8458 tokens，Trace logical-call failed_calls=0、终态用量完整、报告/快照均存在；但
+独立的 transport telemetry 在块末先看到两次
+`operation=other` 的成功 POST 200，后又看到四次 `UnsafeUrlError/response_rejected` 与一次未分类
+safe-fetch 错误，因此依冻结规则停止全部新准入。结合前置已确认 community 使用 self-forward，
+两次 unclassified POST 很可能是已冻结转发端点但 telemetry 未分类；因 URL 按设计不落盘，此点只是
+推断。即使修正该分类，五次 safe-fetch 失败仍会独立触发当前停止规则，不能把本次重标为有效配对。
+v2 claim/cell/observation/result SHA-256 分别为 `4f77600f…` / `bde2aedf…` / `c991d96d…` /
+`2c8cfe8…`；结果固定为1格 completed、11格 not_submitted、无不确定提交。研究现为 **94/153**，
+最终/并发48完整保留；局部11格余量不能解释为 v2 可续跑。下一步必须做测量复议并另冻协议/身份/
+ledger，不能自动第三次执行、删除旧 claim 或拼接停止根。
 复审保留的新增非阻断盲区：控制器级 fresh-subprocess 测试直接覆盖有效 IPv4 loopback，但未逐项参数化
 baseline checkout、IPv6、缺失/恶意 `LOCAL_PROXY` 或冲突预置 SAFE 值；底层代理合约和独立负测已
 覆盖核心拒绝行为。真实服务启动到首个 safe fetch 的端到端一致性尚未在修复后付费复验。
