@@ -74,17 +74,17 @@ smoke-v1 12/12、pyflakes、生产代码 vulture100%、pip check、compileall、
 结论无阻断。复审保留的非阻断风险：恶意本地篡改仍需外部可信 launcher，依赖身份未覆盖全部
 wheel/DLL/系统证书库字节，ignored ledger 可被有权限操作者删除且未显式 fsync 父目录，
 `service_started`/alive 到 POST 仍有极小 TOCTOU，真实 child 竞态尚未集成演练。
-这些是工程准入证据，不是局部效果、最终质量或12路并发通过。旧冻结提交 `b5b0886` 的实际离线
-audit 曾通过：baseline 精确为 `d23c948`，端点、路由/代理、依赖、两臂 manifest、种子身份及
-SQLite `quick_check` 全部匹配，research_runs_submitted=0；现行重冻候选仍须提交后重新 audit。
+这些是工程准入证据，不是局部效果、最终质量或12路并发通过。现行重冻提交 `6e74945` 的实际
+零网络 audit 已通过：baseline 精确为 `d23c948`，端点、路由/代理、依赖、两臂 manifest、种子
+身份及 SQLite `quick_check` 全部匹配，research_runs_submitted=0。
 
 首次付费前置根 `outputs/product-optimization-repair-pair-preflight-20260925-v1/` 为不可变失败证据：
 五条来源 route 均通过，Tavily POST 1/1 返回200，非 LLM HTTP 8次；LLM 在 HTTP dispatch 前以
 `OpenAIError` 停止，LLM attempts=0、research_runs_submitted=0、金额 unavailable。根因是 audit
 先导入协议依赖的项目模块、后安装私有环境，导致 LLM 配置缓存空值。现行修复改为“stdlib bootstrap
 →双根验证→安装私有环境→加载协议/项目模块→qualification”，不修改产品候选或研究协议门槛。
-失败根不得重跑、改名为通过或补样。研究保持 **92/152**；下一步是提交现行重冻候选、重新执行
-零网络 audit，再在全新目录做一次同窗口前置；只有通过后才按冻结顺序最多准入12格。
+失败根不得重跑、改名为通过或补样。研究保持 **92/152**；下一步是在全新目录做一次同窗口前置；
+只有通过后才按冻结顺序最多准入12格。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
