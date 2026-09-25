@@ -632,6 +632,9 @@ def test_health_requires_explicit_authority_lease_and_clean_heartbeat():
          "error_type": "UnsafeUrlError", "failure": "response_rejected"},
         {"event": "safe_fetch_failure", "status": "failure",
          "error_type": "OtherError", "failure": None},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "error_type": "StreamClosed", "failure": None},
     ],
 )
 def test_strict_telemetry_stops_unknown_rate_limit_and_safety_failure(
