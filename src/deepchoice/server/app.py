@@ -53,7 +53,7 @@ from ..observability import SQLiteTraceStore
 from ..budget import SQLiteBudgetStore
 from ..cache import SQLiteRetrievalCache, parse_retrieval_cache_enabled
 from ..observability.query import SQLiteObservabilityQuery
-from ..runtime.coordinator import RunCoordinator
+from ..runtime.coordinator import RunCoordinator, sanitize_public_json
 from ..runtime.instance_guard import (
     RuntimeInstanceGuard,
     RuntimeInstanceLeaseLostError,
@@ -578,7 +578,8 @@ async def _legacy_snapshot_or_durable_result(
 
     snapshot = load_snapshot(task_id)
     if snapshot:
-        return snapshot
+        public_snapshot = sanitize_public_json(snapshot)
+        return public_snapshot if isinstance(public_snapshot, dict) else {}
     if not isinstance(getattr(request.app.state, "task_service", None), TaskService):
         raise HTTPException(status_code=404, detail="Task not found")
     _, durable = await _get_durable_result(task_id, request)
@@ -923,15 +924,17 @@ async def start_research(request: ResearchRequest):
 def _format_event(event: dict) -> str:
     node_name = list(event.keys())[0]
     node_data = event[node_name]
+    public_node_data = sanitize_public_json(node_data)
     payload = {
         "node": node_name,
-        "update": node_data,
+        "update": public_node_data,
         "phase": NODE_TO_PHASE.get(node_name),
         "ts": time.time(),
     }
     if node_name == "__error__":
-        error_detail = node_data.get("error_detail") or normalize_error(
-            RuntimeError(node_data.get("detail", ""))
+        raw_error = node_data if isinstance(node_data, dict) else {}
+        error_detail = raw_error.get("error_detail") or normalize_error(
+            RuntimeError(raw_error.get("detail", ""))
         ).model_dump(mode="json")
         payload["detail"] = error_detail["message"]
         payload["error_detail"] = error_detail
@@ -950,7 +953,9 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
             entry["queue"].put_nowait(_STREAM_TICK)
 
         state = await orchestrator.get_state()
-        result = state.values if state else {}
+        raw_result = state.values if state else {}
+        sanitized_result = sanitize_public_json(raw_result)
+        result = sanitized_result if isinstance(sanitized_result, dict) else {}
         save_snapshot(task_id, result)
         if result.get("report"):
             save_report(task_id, result["report"])
@@ -965,7 +970,9 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
         # inspectable after restart instead of vanishing with process memory.
         try:
             state = await orchestrator.get_state()
-            partial = state.values if state else {}
+            raw_partial = state.values if state else {}
+            sanitized_partial = sanitize_public_json(raw_partial)
+            partial = sanitized_partial if isinstance(sanitized_partial, dict) else {}
             save_failed_snapshot(task_id, partial, public_message)
         except Exception:
             print_agent_output(

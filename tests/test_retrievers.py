@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -485,6 +486,158 @@ class TestSearchKBChromaPath:
         assert captured == {"path": "./chroma_kb/chroma_db", "collection": "tech_kb"}
         assert retrieve.call_args.args[0].query == "x"
         assert json.loads(out) == {"error": "KB collection unavailable", "results": []}
+
+    @pytest.mark.asyncio
+    async def test_search_keeps_original_query_and_diversifies_chunked_urls(self, monkeypatch):
+        from deepchoice.retrievers import chroma_kb
+
+        encoded = []
+        queries = []
+
+        class FakeModel:
+            def encode(self, value):
+                encoded.append(value)
+                return SimpleNamespace(tolist=lambda: [0.1, 0.2])
+
+        class FakeCollection:
+            def query(self, **kwargs):
+                queries.append(kwargs)
+                return {
+                    "ids": [["a-1", "a-2", "b-1", "c-1"]],
+                    "documents": [["A first", "A second", "B", "C"]],
+                    "metadatas": [[
+                        {
+                            "url": "https://a.example/docs",
+                            "title": "A",
+                            "target_id": "p01-alpha",
+                            "source_type": "official",
+                            "seed_identity_sha256": "a" * 64,
+                            "private_note": "must not escape",
+                        },
+                        {"url": "https://a.example/docs", "title": "A"},
+                        {"url": "https://b.example/docs", "title": "B"},
+                        {"url": "https://c.example/docs", "title": "C"},
+                    ]],
+                }
+
+        monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: FakeModel())
+        retriever = object.__new__(chroma_kb.ChromaKB)
+        retriever.collection = FakeCollection()
+
+        results = await retriever._do_search(
+            "original comparison",
+            ["unused sub-question"],
+            max_results=3,
+            adapted_queries=["adapted dimension", "original comparison"],
+        )
+
+        assert encoded == ["original comparison", "adapted dimension"]
+        assert all(call["n_results"] == 30 for call in queries)
+        assert [item["url"] for item in results] == [
+            "https://a.example/docs",
+            "https://b.example/docs",
+            "https://c.example/docs",
+        ]
+        assert results[0]["snippet"] == "A first"
+        assert results[0]["_seed_target_id"] == "p01-alpha"
+        assert results[0]["_seed_source_type"] == "official"
+        assert results[0]["_seed_seed_identity_sha256"] == "a" * 64
+        assert "private_note" not in results[0]
+
+    @pytest.mark.asyncio
+    async def test_adapted_dimension_receives_reserved_result_capacity(self, monkeypatch):
+        from deepchoice.retrievers import chroma_kb
+
+        calls = 0
+        monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: SimpleNamespace(
+            encode=lambda _value: SimpleNamespace(tolist=lambda: [0.1, 0.2])
+        ))
+
+        def query(**_kwargs):
+            nonlocal calls
+            calls += 1
+            prefix = "primary" if calls == 1 else "adapted"
+            return {
+                "ids": [[f"{prefix}-{index}" for index in range(3)]],
+                "documents": [[f"{prefix} {index}" for index in range(3)]],
+                "metadatas": [[
+                    {"url": f"https://{prefix}-{index}.example/docs", "title": prefix}
+                    for index in range(3)
+                ]],
+            }
+
+        retriever = object.__new__(chroma_kb.ChromaKB)
+        retriever.collection = SimpleNamespace(query=query)
+        results = await retriever._do_search(
+            "original", [], max_results=3, adapted_queries=["adapted"]
+        )
+
+        assert [item["url"] for item in results] == [
+            "https://primary-0.example/docs",
+            "https://primary-1.example/docs",
+            "https://adapted-0.example/docs",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_candidate_pool_remains_bounded_for_large_public_limit(self, monkeypatch):
+        from deepchoice.retrievers import chroma_kb
+
+        calls = []
+        monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: SimpleNamespace(
+            encode=lambda _value: SimpleNamespace(tolist=lambda: [0.1, 0.2])
+        ))
+        retriever = object.__new__(chroma_kb.ChromaKB)
+        retriever.collection = SimpleNamespace(query=lambda **kwargs: (
+            calls.append(kwargs) or {
+                "ids": [[]], "documents": [[]], "metadatas": [[]]
+            }
+        ))
+
+        assert await retriever._do_search("comparison", [], max_results=100) == []
+        assert calls[0]["n_results"] == 100
+
+    def test_query_dimensions_cap_deduplicate_and_choose_one_secondary_mode(self):
+        from deepchoice.retrievers.chroma_kb import _query_dimensions
+
+        adapted = ["adapted-1", "original", *[f"adapted-{i}" for i in range(2, 12)]]
+        assert _query_dimensions("original", ["ignored-subquestion"], adapted) == [
+            "original", *[f"adapted-{i}" for i in range(1, 8)]
+        ]
+        assert _query_dimensions("original", ["sub-1", "sub-2", "sub-3"], None) == [
+            "original", "sub-1", "sub-2"
+        ]
+
+    def test_dimension_merge_round_robins_adapted_urls_then_falls_back_to_primary(self):
+        from deepchoice.retrievers.chroma_kb import _merge_dimensions
+
+        def item(url):
+            return {"url": url}
+
+        dimensions = [
+            [item("p1"), item("shared"), item("p3"), item("p4")],
+            [item("shared"), item("a1"), item("a2")],
+            [item("b1"), item("b2")],
+        ]
+
+        assert [result["url"] for result in _merge_dimensions(
+            dimensions, 7, has_adapted_queries=True
+        )] == ["p1", "shared", "p3", "p4", "a1", "b1", "a2"]
+
+    def test_subquestion_dimensions_only_fill_primary_shortfall(self):
+        from deepchoice.retrievers.chroma_kb import _merge_dimensions
+
+        def item(url):
+            return {"url": url}
+
+        dimensions = [
+            [item("p1")],
+            [item("p1"), item("s1"), item("s2")],
+            [item("t1")],
+        ]
+
+        assert [result["url"] for result in _merge_dimensions(
+            dimensions, 4, has_adapted_queries=False
+        )] == ["p1", "s1", "t1", "s2"]
 
 
 class TestMultiRetriever:

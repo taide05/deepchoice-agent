@@ -7,6 +7,28 @@ from ..utils.evidence import is_navigation_placeholder, source_title
 from ..utils.official_catalog import is_catalog_official_url, normalized_hostname
 
 
+_AUDITED_SEED_IDENTITY = "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6"
+_AUDITED_SEED_TARGET_ALIASES = {
+    "p01-sqlite-appropriate-uses": frozenset({"sqlite"}),
+    "p01-sqlite-wal": frozenset({"sqlite"}),
+    "p01-sqlite-backup": frozenset({"sqlite"}),
+    "p01-sqlite-fts5": frozenset({"sqlite"}),
+    "p01-postgresql-concurrency-introduction": frozenset({"postgresql", "postgres"}),
+    "p01-postgresql-backup": frozenset({"postgresql", "postgres"}),
+    "p01-postgresql-text-search-introduction": frozenset({"postgresql", "postgres"}),
+    "p04-fastapi-background-tasks": frozenset(
+        {"fastapi", "backgroundtasks", "fastapibackgroundtasks"}
+    ),
+    "p04-celery-introduction": frozenset({"celery"}),
+    "p04-celery-task-semantics": frozenset({"celery"}),
+    "p08-redis-data-types": frozenset({"redis"}),
+    "p08-redis-persistence": frozenset({"redis"}),
+    "p08-redis-eviction": frozenset({"redis"}),
+    "p08-memcached-overview": frozenset({"memcached", "memcache"}),
+    "p08-memcached-faq": frozenset({"memcached", "memcache"}),
+}
+
+
 def _candidate_patterns(task: dict) -> list[re.Pattern]:
     """Use only explicit candidates; do not guess technologies from prose."""
     candidates = task.get("candidate_techs", [])
@@ -32,6 +54,67 @@ def _mentions_candidate(result: dict, patterns: list[re.Pattern]) -> bool:
         if isinstance((value := result.get(key)), str)
     ).casefold()
     return any(pattern.search(text) for pattern in patterns)
+
+
+def _audited_seed_scope_covers_candidate(
+    result: dict,
+    source: str,
+    candidates: object,
+) -> bool | None:
+    """Use an audited seed target only for the product named by its identity.
+
+    Official pages often mention other products incidentally (for example as
+    result backends).  Only the exact frozen identity and target registry may
+    reject such a cross-scope page.  A positive scope match never grants
+    admission: every result still passes the existing lexical candidate gate.
+    Ordinary Chroma documents retain that gate without audited scope claims.
+    """
+
+    target_id = result.get("_seed_target_id")
+    seed_identity = result.get("_seed_seed_identity_sha256")
+    if (
+        source != "chroma"
+        or result.get("_seed_source_type") != "official"
+        or seed_identity != _AUDITED_SEED_IDENTITY
+    ):
+        return None
+    aliases = _AUDITED_SEED_TARGET_ALIASES.get(target_id)
+    if aliases is None:
+        return False
+    if not isinstance(candidates, (list, tuple)) or not candidates:
+        return True
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        normalized = "".join(re.findall(r"[a-z0-9]+", candidate.casefold()))
+        if normalized in aliases:
+            return True
+    return False
+
+
+def _audited_seed_lexically_names_target(result: dict) -> bool:
+    """Match an audited target name across trusted slug/camel separators.
+
+    This is deliberately narrower than general fuzzy matching: the caller has
+    already verified the exact frozen seed identity and registered target ID,
+    and a target alias must still occur in the visible title or snippet.  The
+    provenance claim therefore cannot admit an opaque or unrelated document.
+    """
+
+    aliases = _AUDITED_SEED_TARGET_ALIASES.get(result.get("_seed_target_id"))
+    if aliases is None:
+        return False
+    text = " ".join(
+        value
+        for key in ("title", "snippet")
+        if isinstance((value := result.get(key)), str)
+    )
+    tokens = re.findall(r"[a-z0-9]+", text.casefold())
+    # Match only complete tokens against explicit reviewed aliases.  Separator
+    # slugs expose ``fastapi`` as its own token, while an explicitly reviewed
+    # CamelCase spelling case-folds to the registered compact alias.  Never
+    # concatenate arbitrary natural-language words (``red is`` != ``redis``).
+    return any(token in aliases for token in tokens)
 
 
 def _local_comparison_covers_candidates(result: dict, source: str,
@@ -182,8 +265,11 @@ class SourceEvaluatorAgent:
 
     async def run(self, research_state: dict) -> dict:
         all_results = []
-        patterns = _candidate_patterns(research_state.get("task", {}))
+        task = research_state.get("task", {})
+        patterns = _candidate_patterns(task)
+        candidates = task.get("candidate_techs", []) if isinstance(task, dict) else []
         excluded = 0
+        seed_scope_excluded = 0
         navigation_excluded = 0
         for channel in research_state.get("search_results", []):
             source = channel.get("source", "unknown")
@@ -192,9 +278,21 @@ class SourceEvaluatorAgent:
                     navigation_excluded += 1
                     continue
                 normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
+                seed_scope_covers = _audited_seed_scope_covers_candidate(
+                    normalized_result, source, candidates
+                )
+                if seed_scope_covers is False:
+                    excluded += 1
+                    seed_scope_excluded += 1
+                    continue
                 comparison_covers = _local_comparison_covers_candidates(normalized_result, source, patterns)
+                if seed_scope_covers is True:
+                    lexical_match = _audited_seed_lexically_names_target(normalized_result)
+                else:
+                    lexical_match = _mentions_candidate(normalized_result, patterns)
                 if (comparison_covers is False
-                        or (comparison_covers is None and not _mentions_candidate(normalized_result, patterns))):
+                        or (comparison_covers is None
+                            and not lexical_match)):
                     excluded += 1
                     continue
                 all_results.append({
@@ -243,6 +341,7 @@ class SourceEvaluatorAgent:
                 "sources_scored": len(source_scores),
                 "candidate_gate": "lexical" if patterns else "not_applied",
                 "candidate_excluded_count": excluded,
+                "audited_seed_scope_excluded_count": seed_scope_excluded,
                 "navigation_excluded_count": navigation_excluded,
                 "avg_score": avg_score,
                 "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),

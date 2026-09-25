@@ -60,6 +60,141 @@ async def test_http_comparison_is_not_treated_as_a_local_pair_template():
 
 
 @pytest.mark.asyncio
+async def test_audited_seed_target_rejects_incidental_candidate_mentions():
+    seed = {
+        "_seed_source_type": "official",
+        "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
+    }
+    state = {"task": {"candidate_techs": ["Redis", "Memcached"]}, "search_results": [{
+        "source": "chroma", "results": [
+            {
+                **seed,
+                "_seed_target_id": "p04-celery-introduction",
+                "title": "p04-celery-introduction",
+                "snippet": "Celery result stores include Redis and Memcached.",
+                "url": "https://docs.celeryq.dev/introduction",
+            },
+            {
+                **seed,
+                "_seed_target_id": "p08-memcached-overview",
+                "title": "p08-memcached-overview",
+                "snippet": "An audited product overview.",
+                "url": "https://docs.memcached.org/",
+            },
+        ],
+    }]}
+
+    result = await SourceEvaluatorAgent().run(state)
+
+    assert [item["title"] for item in result["source_scores"]] == [
+        "p08-memcached-overview"
+    ]
+    signal = result["quality_signals"][0]
+    assert signal["candidate_excluded_count"] == 1
+    assert signal["audited_seed_scope_excluded_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_audited_seed_scope_never_bypasses_candidate_lexical_gate():
+    state = {"task": {"candidate_techs": ["Redis"]}, "search_results": [{
+        "source": "chroma", "results": [{
+            "_seed_source_type": "official",
+            "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
+            "_seed_target_id": "p08-redis-persistence",
+            "title": "Opaque approved page",
+            "snippet": "Unrelated text cannot gain admission from provenance.",
+            "url": "https://redis.io/docs/persistence",
+        }],
+    }]}
+
+    result = await SourceEvaluatorAgent().run(state)
+
+    assert result["source_scores"] == []
+    assert result["quality_signals"][0]["candidate_excluded_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_audited_seed_title_matches_target_across_slug_and_camel_separators():
+    state = {"task": {"candidate_techs": ["FastAPI BackgroundTasks", "Celery"]},
+             "search_results": [{"source": "chroma", "results": [{
+                 "_seed_source_type": "official",
+                 "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
+                 "_seed_target_id": "p04-fastapi-background-tasks",
+                 "title": "p04-fastapi-background-tasks",
+                 "snippet": "Run small work after returning a response.",
+                 "url": "https://fastapi.tiangolo.com/tutorial/background-tasks/",
+             }]}]}
+
+    result = await SourceEvaluatorAgent().run(state)
+
+    assert [item["title"] for item in result["source_scores"]] == [
+        "p04-fastapi-background-tasks"
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("title", "snippet"),
+    [
+        ("Predis integration", "An unrelated client integration."),
+        ("Opaque approved page", "The status light is red. Is the request complete?"),
+    ],
+)
+async def test_audited_seed_compact_match_preserves_identifier_boundaries(
+    title, snippet
+):
+    state = {"task": {"candidate_techs": ["Redis"]}, "search_results": [{
+        "source": "chroma", "results": [{
+            "_seed_source_type": "official",
+            "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
+            "_seed_target_id": "p08-redis-persistence",
+            "title": title,
+            "snippet": snippet,
+            "url": "https://example.test/unrelated",
+        }],
+    }]}
+
+    result = await SourceEvaluatorAgent().run(state)
+
+    assert result["source_scores"] == []
+
+
+@pytest.mark.asyncio
+async def test_untrusted_or_unknown_seed_metadata_cannot_claim_audited_scope():
+    base = {
+        "_seed_source_type": "official",
+        "title": "Redis incidental mention",
+        "snippet": "Redis is mentioned incidentally.",
+        "url": "https://example.test/page",
+    }
+    state = {"task": {"candidate_techs": ["Redis"]}, "search_results": [{
+        "source": "chroma", "results": [
+            {
+                **base,
+                "_seed_seed_identity_sha256": "0" * 64,
+                "_seed_target_id": "p08-redis-forged",
+            },
+            {
+                **base,
+                "url": "https://example.test/other",
+                "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
+                "_seed_target_id": "p08-redis-unknown",
+            },
+        ],
+    }]}
+
+    result = await SourceEvaluatorAgent().run(state)
+
+    # The forged identity receives no audited authority and falls back to the
+    # pre-existing lexical gate; an impossible target under the exact frozen
+    # identity fails closed.
+    assert [item["url"] for item in result["source_scores"]] == [
+        "https://example.test/page"
+    ]
+    assert result["quality_signals"][0]["audited_seed_scope_excluded_count"] == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("title", ["node-postgres-vs-pg_vector", "node-postgres_vs_pg_vector"])
 async def test_local_pair_preserves_hyphens_and_underscores_inside_candidate_identifiers(title):
     state = {"task": {"candidate_techs": ["node-postgres", "pg_vector"]}, "search_results": [{

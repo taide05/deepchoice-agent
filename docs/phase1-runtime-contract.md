@@ -525,6 +525,19 @@ Q2 来源分类后续规则冻结 `source-score-v5`：已知平台类型只按�
 安全 fetch、权重、证据阈值或来源失效投影。旧v1–v4仍可读取/校验，但不能在v5同run恢复，
 新manifest ID隔离缓存；历史报告不重新评分。此分类规则不是新的外呼 allowlist。
 
+2026-09-25 后续 Q2 规则冻结 `source-score-v6` 与 Chroma retriever `v2`。Chroma 始终保留原始
+用户比较，查询维度最多8、每维候选池30–100；无 adapted query 时子问题只补原问题的来源短缺，
+有 adapted query 时原问题占 `ceil(max_results/2)` 个公共结果槽，适配维度至少保留
+`floor(max_results/2)` 个槽并按维度轮转。最终仍受请求 `max_results`
+限制，并按精确 URL 只保留一项；这不是 URL 规范等价证明，也不把同 URL chunk 算成多源佐证。
+受审种子场景门只绑定精确 `product-optimization-knowledge-seed-v1` identity 和15项 target/alias
+registry，且只能负向排除跨场景页面；正向命中仍须通过可见标题/摘要的受审 target 完整 token
+词法门，该门只接受 registry 明示的 separator/CamelCase 拼写。身份不匹配退回原词法门，精确
+身份下未知 target fail closed。内部 `_seed_*` provenance 由 durable 与 deprecated legacy
+公共投影递归移除。
+旧 Chroma v1/source-score-v1–v5 manifest 仍可读取和验证，但不能在当前运行时同 run 恢复；须新 run。
+本规则不证明片段语义支持、来源适用性或正文窗口完整。
+
 2026-09-18 PR1 冻结候选 `7d622fd` 的 P01（product-baseline-v1/1.0.0、分母一 run）
 完成单例测量、完整53原子及独立助手复核，资格为暂定通过；不是并发或人类质量验收。
 锁定身份和残余风险见 [单例验真](o1c-single-case-verification.md)。知识冻结指原种子不变及

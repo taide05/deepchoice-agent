@@ -110,6 +110,23 @@ class TestStreamEventFormat:
 
         assert events[-1] == {"node": "__done__", "update": {}}
 
+    def test_stream_recursively_removes_internal_retrieval_provenance(self):
+        event = {"multi_retriever": {"search_results": [{"results": [{
+            "title": "Public docs",
+            "_seed_target_id": "private-target",
+            "_seed_source_type": "official",
+            "_seed_seed_identity_sha256": "a" * 64,
+        }]}]}}
+        _register(FakeOrchestrator(), status="complete", events=[event])
+
+        response = client.get(f"/research/{TASK_ID}/stream")
+        events = _parse_stream(response.text)
+
+        assert events[0]["update"]["search_results"][0]["results"][0] == {
+            "title": "Public docs"
+        }
+        assert "_seed_" not in response.text
+
     def test_legacy_stream_and_status_include_deprecation_headers(self):
         _register(FakeOrchestrator(), status="complete", events=NODE_EVENTS)
 
@@ -201,6 +218,42 @@ class TestBackgroundRun:
         assert saved["snapshot"]["confidence"] == "high"
         assert saved["report"] == "# R"
 
+    def test_run_saves_only_sanitized_legacy_snapshot(self, monkeypatch):
+        saved = {}
+        monkeypatch.setattr(app_module, "save_snapshot",
+                            lambda task_id, state: saved.setdefault("snapshot", state) or None)
+        monkeypatch.setattr(app_module, "save_report", lambda *args: None)
+        state = {"report": "# R", "search_results": [{"results": [{
+            "title": "Public docs",
+            "_seed_target_id": "private-target",
+        }]}]}
+        orch = FakeOrchestrator(events=[], state=FakeState(values=state))
+        _register(orch)
+
+        asyncio.run(app_module._run_research(TASK_ID, orch))
+
+        assert saved["snapshot"]["search_results"][0]["results"][0] == {
+            "title": "Public docs"
+        }
+        assert app_module._active_tasks[TASK_ID]["result"] == saved["snapshot"]
+
+    def test_legacy_snapshot_defensively_sanitizes_existing_file(self, monkeypatch):
+        monkeypatch.setattr(app_module, "load_snapshot", lambda _task_id: {
+            "report": "# R",
+            "search_results": [{"results": [{
+                "title": "Public docs",
+                "_seed_target_id": "private-target",
+            }]}],
+        })
+
+        response = client.get(f"/research/{TASK_ID}/snapshot")
+
+        assert response.status_code == 200
+        assert response.json()["search_results"][0]["results"][0] == {
+            "title": "Public docs"
+        }
+        assert "_seed_" not in response.text
+
     def test_run_failure_saves_partial_and_records_error(self, monkeypatch):
         saved = {}
         monkeypatch.setattr(app_module, "save_failed_snapshot",
@@ -208,7 +261,13 @@ class TestBackgroundRun:
 
         orch = FakeOrchestrator(
             events=NODE_EVENTS[:2], exc=RuntimeError("boom"),
-            state=FakeState(values={"task": {"query": "x"}}),
+            state=FakeState(values={
+                "task": {"query": "x"},
+                "search_results": [{"results": [{
+                    "title": "Public docs",
+                    "_seed_target_id": "private-target",
+                }]}],
+            }),
         )
         _register(orch)
 
@@ -220,6 +279,9 @@ class TestBackgroundRun:
         assert entry["events"][-1]["__error__"]["detail"] == "Research failed"
         partial_state, error = saved["partial"]
         assert partial_state["task"] == {"query": "x"}
+        assert partial_state["search_results"][0]["results"][0] == {
+            "title": "Public docs"
+        }
         assert error == "Research failed"
 
     def test_run_closes_checkpointer_connection(self, monkeypatch):

@@ -43,10 +43,44 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v4"
-    assert first.scoring_policy_version == "source-score-v5"
+    assert first.scoring_policy_version == "source-score-v6"
+    assert {
+        retriever.retriever_id: retriever.version
+        for retriever in first.retrievers
+    }["chroma"] == "v2"
+    assert all(
+        retriever.version == "v1"
+        for retriever in first.retrievers
+        if retriever.retriever_id != "chroma"
+    )
     assert first.security_policy_version == "outbound-url-v3"
     assert first.citation_policy_version == "deterministic-citation-v1"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
+
+
+def test_historical_chroma_v1_is_readable_but_cannot_resume():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    current = build_run_manifest({})
+    historical = current.model_copy(update={
+        "retrievers": tuple(
+            retriever.model_copy(update={"version": "v1"})
+            if retriever.retriever_id == "chroma" else retriever
+            for retriever in current.retrievers
+        )
+    })
+    historical = historical.model_copy(update={
+        "manifest_id": _expected_manifest_id(historical)
+    })
+
+    restored = RunManifest.model_validate_json(historical.model_dump_json())
+    assert next(
+        item.version for item in restored.retrievers
+        if item.retriever_id == "chroma"
+    ) == "v1"
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
 def test_core_asset_registry_locks_the_versioned_core_asset_inventory():

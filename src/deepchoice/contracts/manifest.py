@@ -95,7 +95,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1"] = "v1"
+    version: Literal["v1", "v2"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -115,7 +115,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5"] = "source-score-v5"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6"] = "source-score-v6"
     security_policy_version: Literal[
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3"
     ] = "outbound-url-v3"
@@ -318,10 +318,13 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             ),
         ),
         "retrievers": tuple(
-            RetrieverSnapshot(retriever_id=retriever_id)
+            RetrieverSnapshot(
+                retriever_id=retriever_id,
+                version="v2" if retriever_id == "chroma" else "v1",
+            )
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v5",
+        "scoring_policy_version": "source-score-v6",
         "security_policy_version": "outbound-url-v3",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v1",

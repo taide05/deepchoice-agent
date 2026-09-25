@@ -281,6 +281,18 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
                         },
                     }
                 ],
+                "search_results": [{
+                    "source": "chroma",
+                    "status": "success",
+                    "results": [{
+                        "url": "https://example.com/docs",
+                        "title": "Public docs",
+                        "snippet": "Public excerpt",
+                        "_seed_target_id": "private-target",
+                        "_seed_source_type": "official",
+                        "_seed_seed_identity_sha256": "a" * 64,
+                    }],
+                }],
                 "token_usage": {"input_tokens": 12, "output_tokens": 7},
                 "citation_verification": {
                     "schema_version": 1,
@@ -329,6 +341,12 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
     assert "private-camel-api-key" not in encoded
     assert result.snapshot["token_usage"]["input_tokens"] == 12
     assert result.snapshot["citation_verification"]["status_counts"]["verified"] == 1
+    public_source = result.snapshot["search_results"][0]["results"][0]
+    assert public_source == {
+        "url": "https://example.com/docs",
+        "title": "Public docs",
+        "snippet": "Public excerpt",
+    }
     assert "raw_body" not in result.snapshot["citation_verification"]["checks"][0]
     assert "must not survive nested sanitization" not in encoded
 

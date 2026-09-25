@@ -197,6 +197,13 @@ def _sanitize_public_json(value: Any) -> Any:
     return _OMIT
 
 
+def sanitize_public_json(value: Any) -> Any:
+    """Return a recursively sanitized value suitable for public legacy APIs."""
+
+    sanitized = _sanitize_public_json(value)
+    return None if sanitized is _OMIT else sanitized
+
+
 def build_public_run_result(
     run: RunRecord,
     request: dict[str, Any],
