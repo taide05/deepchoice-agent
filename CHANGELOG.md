@@ -18,8 +18,10 @@ smoke-v1 12/12 with baseline match, pyflakes, production-code vulture 100%, depe
 drift checks. The proposal protocol byte SHA is
 `7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`. Research admission remains
 closed because current usage 97 plus a fresh 12-cell local comparison and the preserved 48-cell
-final/concurrency reserve require an explicit cumulative cap of 157. No v6 paid preflight or research
-run was made.
+final/concurrency reserve require an explicit cumulative cap of 157. The post-commit zero-research
+audit passed at `9418fe7`: both arms and product objects, v1–v5 predecessor evidence, TCB,
+dependencies, environment/proxy identity, and the approved seed/SQLite identity matched with
+`research_runs_submitted=0`. No v6 paid preflight or research run was made.
 
 Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
 zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical

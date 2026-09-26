@@ -208,7 +208,8 @@ audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**
 提案协议byte SHA为`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。
 离线验收为13项v6聚焦、393项相关、2094项全套（120.00秒）、smoke-v1 12/12基准一致及
 pyflakes/vulture/pip/compile检查。当前准入状态为`closed-pending-explicit-cap-157`；97/156实耗下，
-完整12格与48格预留合计需要累计157。未明确激活前，不得执行v6付费preflight或`run`。
+完整12格与48格预留合计需要累计157。提交`9418fe7`后的零研究audit已通过且
+`research_runs_submitted=0`。未明确激活前，不得执行v6付费preflight或`run`。
 
 ## 有意使用历史直连工具
 

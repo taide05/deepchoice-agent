@@ -143,7 +143,8 @@ v6最小控制提案已完成离线验收，只修复上述两个控制缺口：
 清单/大小不变时漂移；遗漏完成record仅能由同根append-only observation和collection记录在
 experiment/case/task/run身份一致且原停止门禁通过时恢复。协议byte SHA为
 `7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。它仍是
-`closed-pending-explicit-cap-157`提案，不构成付费准入、产品效果证据或历史根重试许可。
+`closed-pending-explicit-cap-157`提案；提交`9418fe7`后的零研究audit已通过且研究提交为0。
+这不构成付费准入、产品效果证据或历史根重试许可。
 
 ## 2. 内容评估口径：key-claim-occurrence-v1
 

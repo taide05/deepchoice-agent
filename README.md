@@ -25,7 +25,8 @@ v5 的零研究audit和有界preflight通过，离线prepare冻结4块；正式�
 完整树哈希复核，record恢复必须同时匹配同根append-only observation、collection记录及既有停止门禁。
 13项v6聚焦、393项相关、2094项全套（120.00秒）、smoke-v1 12/12及静态/依赖/编译检查通过；
 协议byte SHA为`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。
-研究准入仍关闭，等待累计硬上限156→157的明确批准；尚未运行v6付费preflight或研究格。
+提交`9418fe7`后的零研究audit已通过，`research_runs_submitted=0`。研究准入仍关闭，等待累计
+硬上限156→157的明确批准；尚未运行v6付费preflight或研究格。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。

@@ -316,7 +316,10 @@ v6最小控制提案现已实现：只允许已尝试块的3个已观察Chroma�
 collection record唯一匹配恢复，并继续经过原停止门禁。离线验收通过13项v6聚焦、393项相关、
 2094项全套（120.00秒）、smoke-v1 12/12基准一致、pyflakes、生产代码vulture100%、pip check和
 compileall。提案协议byte SHA为`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。
-当前状态`closed-pending-explicit-cap-157`，没有v6付费preflight或研究提交；提交后零研究audit仍待记录。
+提交`9418fe7fdc645cdfb4ef9baf2ccffea00aa6aef0`后的零研究audit已通过：baseline/candidate
+产品对象、v1–v5前序证据、TCB、依赖、环境/代理及批准种子`fa3c542d…`/SQLite quick_check
+全部匹配，`research_runs_submitted=0`。当前状态`closed-pending-explicit-cap-157`，没有v6付费
+preflight或研究提交。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
