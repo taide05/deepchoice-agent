@@ -17,16 +17,18 @@ V6 is frozen at concurrency one: its 12 cells measure repeatable product effect 
 qualification. The user explicitly deferred concurrency until product effect is stable, so concurrency
 research authorization is zero. The existing cumulative cap stays 156: 97 are used, at most 12 are
 assigned to this serial pair, and 47 remain unallocated. The former 48-cell final/concurrency allocation
-is historical and neither reserved nor consumed by this protocol. Acceptance passed 13 v6-focused,
-393 related, and the complete 2,094-test suite (127.63 seconds), plus
+is historical and neither reserved nor consumed by this protocol. The first paid preflight stopped
+before LLM HTTP dispatch: retrieval routes and the Tavily POST passed, but v6 bootstrap imported the
+LLM configuration before installing the private environment, so the SDK raised `OpenAIError` with zero
+LLM attempts. No research task was submitted and the failed preflight root is immutable. V6 entry points
+now install the private environment before any protocol bootstrap or project-module import. Acceptance
+passed 14 v6-focused, 394 related, and the complete 2,095-test suite (117.86 seconds), plus
 smoke-v1 12/12 with baseline match, pyflakes, production-code vulture 100%, dependency, compile, and
 drift checks. The frozen protocol byte SHA is
-`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`.
+`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`.
 The earlier cap-157 proposal and its `9418fe7` audit remain historical evidence; that proposal had no
-paid preflight or research run. The re-frozen serial protocol's post-commit zero-research audit passed
-at `2ca5dfd`: both arms and product objects, v1–v5 predecessor evidence, TCB, dependencies,
-environment/proxy identity, and the approved seed/SQLite identity matched with
-`research_runs_submitted=0`. Its paid preflight and research run have not yet started.
+paid preflight or research run. The `2ca5dfd` audit applies only to the pre-fix serial identity; the
+environment-order fix still requires a new post-commit zero-research audit before a fresh preflight.
 
 Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
 zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical

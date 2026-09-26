@@ -207,11 +207,11 @@ v5 因而只把 dispatch 后的 `DecodingError` 与既有 `StreamError` 在 obse
    append-only observation、collection record及账本仍确定只提交1格，因此累计97/156，v5不可重试或拼接。
 7. **离线通过，待提交后零研究audit：串行产品效果v6。** v6只对已尝试块允许路径受限的Chroma运行态漂移，未来块、
    非Chroma文件、环境、产品、协议和前序证据继续严格复核；控制异常后必须从同根append-only证据
-   恢复已完成record，不得把完成格改记为0。13项v6聚焦、393项相关、2094项全套、smoke-v1与
-   静态/依赖/编译检查已通过；冻结协议byte SHA为
-   `65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。执行固定单并发，
-   并发研究授权为0；12格使用现有156上限，完成后余47。提交`2ca5dfd`后的零研究audit已通过，
-   `research_runs_submitted=0`；下一步是有界付费preflight，通过后才prepare并执行一次性12格。
+   恢复已完成record，不得把完成格改记为0。首次preflight的检索/Tavily通过，但环境安装顺序使LLM
+   在dispatch前停止；0 LLM尝试、0研究提交，旧根不可复用。入口顺序修复后，14项v6聚焦、394项相关、
+   2095项全套、smoke-v1与静态/依赖/编译检查已通过；冻结协议byte SHA为
+   `393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。执行固定单并发，
+   并发研究授权为0；12格使用现有156上限，完成后余47。修复提交后的零研究audit仍待完成。
 8. 满足实际准入后才执行；同批评估需求覆盖、重大错误、证据适用性和可行动性，锁分后看完成率、
    延迟与token。只输出通用验证计划是否损失决策价值必须单独说明，不能把更保守自动当作更好。
 9. 依据净效果处理问题表：保留有收益的修复、登记无收益/未复现/证据不足项；只选择一个有直接

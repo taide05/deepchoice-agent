@@ -143,9 +143,10 @@ Chroma持久化文件发生运行态写入而触发`prepared block drift`，并�
 v6最小控制修复已完成离线验收，只修复上述两个控制缺口：已尝试块仅3个已观察Chroma路径可在
 清单/大小不变时漂移；遗漏完成record仅能由同根append-only observation和collection记录在
 experiment/case/task/run身份一致且原停止门禁通过时恢复。协议byte SHA为
-`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。用户明确把它重冻为
+`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。用户明确把它重冻为
 `serial-concurrency-1`的12格产品效果协议：并发授权0，现行上限97/156，完成后余47且未分配。
-提交`2ca5dfd`后的零研究audit已通过且研究提交为0；付费preflight与正式运行尚未开始。
+首次preflight的检索/Tavily通过，但因环境安装顺序在LLM dispatch前停止，LLM尝试0、研究提交0，
+该根不可复用；入口顺序修复已通过离线验收，提交后仍须重新audit并使用全新preflight根。
 离线通过不构成产品效果证据或历史根重试许可。
 
 ## 2. 内容评估口径：key-claim-occurrence-v1

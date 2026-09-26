@@ -474,22 +474,36 @@ def _configured_base() -> Iterator[None]:
             setattr(_v4, name, value)
 
 
+def _install_call_environment(
+    args: tuple[Any, ...], kwargs: dict[str, Any], index: int
+) -> None:
+    try:
+        env_file = args[index] if len(args) > index else kwargs["env_file"]
+    except (IndexError, KeyError):
+        raise RepairPairControlError("private environment path is required") from None
+    _v4._install_private_environment(Path(env_file))
+
+
 def audit(*args, **kwargs) -> dict[str, Any]:
+    _install_call_environment(args, kwargs, 2)
     with _configured_base():
         return _v4.audit(*args, **kwargs)
 
 
 def preflight(*args, **kwargs) -> dict[str, Any]:
+    _install_call_environment(args, kwargs, 3)
     with _configured_base():
         return _v4.preflight(*args, **kwargs)
 
 
 def prepare(*args, **kwargs) -> dict[str, Any]:
+    _install_call_environment(args, kwargs, 4)
     with _configured_base():
         return _v4.prepare(*args, **kwargs)
 
 
 async def run(*args, **kwargs) -> dict[str, Any]:
+    _install_call_environment(args, kwargs, 4)
     with _configured_base():
         result = await _v4.run(*args, **kwargs)
         experiment_root = Path(

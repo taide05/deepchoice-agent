@@ -12,7 +12,7 @@
     "binding_policy": "delta-over-v5-control-binding-v1",
     "research_admission": "open-after-offline-runner-acceptance",
     "required_files": [
-      {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "335902ba342c6a20bb9333b40e8f14123840678df288f40b30babdb31c5db900"},
+      {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "0f6098902a48d84845b0ac112212cd198cd09e5d75f7f0d4e89d84aed830e53a"},
       {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "89b7006812c7cf0ece2330b4b58239e3126a47bcc45298ad825562e6a583f848"},
       {"path": "scripts/product_optimization_repair_pair_v5.py", "sha256": "6290295582600ad9245b57777303495349bb723e4a30e0801bbd375632573a5e"},
       {"path": "benchmarks/product_optimization_repair_pair_v5.py", "sha256": "b9d2b8c5dfc1a97168f604e33ebf98a2e169878568d3c6fdf1abc1d75ab5ba80"},

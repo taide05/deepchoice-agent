@@ -207,10 +207,12 @@ audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**
 
 用户明确要求先稳定产品效果、后验证并发，因此本协议固定`serial-concurrency-1`，并发研究授权为0。
 97/156实耗下，本协议最多12格，完成后余47格；旧48格最终/并发整合方案仅为历史规划，不在本协议
-预留或消费。冻结协议byte SHA为`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。
-离线验收为13项v6聚焦、393项相关、2094项全套（127.63秒）、smoke-v1 12/12基准一致及
-pyflakes/vulture/pip/compile检查。提交`2ca5dfd`后的零研究audit已通过且
-`research_runs_submitted=0`；付费preflight与正式`run`尚未开始。
+预留或消费。首次preflight的检索与Tavily通过，但协议bootstrap先于私有环境安装，LLM配置缓存空凭据，
+因此在HTTP dispatch前以`OpenAIError`停止；LLM尝试0、研究提交0，该根不得复用。v6入口现先安装
+私有环境，再加载协议和项目模块。冻结协议byte SHA为
+`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。离线验收为14项v6聚焦、
+394项相关、2095项全套（117.86秒）、smoke-v1 12/12基准一致及pyflakes/vulture/pip/compile检查。
+修复提交后的零研究audit通过前，不得使用新根执行付费preflight或`run`。
 
 ## 有意使用历史直连工具
 

@@ -317,10 +317,11 @@ collection record唯一匹配恢复，并继续经过原停止门禁。离线验
 2094项全套（127.63秒）、smoke-v1 12/12基准一致、pyflakes、生产代码vulture100%、pip check和
 compileall。用户随后明确先稳定产品效果、再验证并发；协议重冻为单并发串行12格，并发授权为0，
 仍使用156硬上限，完成后余47。冻结协议byte SHA为
-`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。旧`9418fe7`audit只证明
-此前未执行提案的身份。提交`2ca5dfd79ac00019cdc3b8ab28e6954d93e476d0`后的零研究audit已通过：
-baseline/candidate产品对象、v1–v5前序、TCB、依赖、环境/代理及批准种子`fa3c542d…`/SQLite
-quick_check全部匹配，`research_runs_submitted=0`。没有v6付费preflight或研究提交。
+`65e8216e…`；提交`2ca5dfd`后的零研究audit通过。随后首次preflight的8次HTTP和Tavily POST正常，
+但v6 bootstrap在私有环境安装前导入LLM配置，SDK在dispatch前以`OpenAIError`停止：LLM尝试0、
+研究提交0。该preflight根不可复用。v6入口现先安装私有环境再加载协议/项目模块；修复通过14项聚焦、
+394项相关、2095项全套（117.86秒）、smoke-v1与静态/依赖/编译检查。新协议byte SHA为
+`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`；修复提交/audit尚待完成。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

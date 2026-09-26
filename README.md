@@ -25,9 +25,12 @@ v6仅允许3个已知Chroma路径在文件清单及大小不变时漂移，未�
 完整树哈希复核，record恢复必须同时匹配同根append-only observation、collection记录及既有停止门禁。
 用户随后明确把阶段目标改为“先稳定产品效果，再验证并发”。v6因而冻结为单并发串行12格，
 并发研究授权为0；现行硬上限仍是156，97次已用加12格后余47格，未来并发预算不预留、不提前消费。
-13项v6聚焦、393项相关、2094项全套（127.63秒）、smoke-v1 12/12及静态/依赖/编译检查通过；
-协议byte SHA为`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。
-提交`2ca5dfd`后的零研究audit已通过，`research_runs_submitted=0`；尚未运行v6付费preflight或研究格。
+首次preflight的检索/Tavily健康通过，但v6 bootstrap在安装私有环境前提前导入LLM配置，使SDK在
+HTTP dispatch前以`OpenAIError`停止；LLM尝试0、研究提交0，该根不可复用。入口现先安装私有环境再
+加载协议/项目模块。14项v6聚焦、394项相关、2095项全套（117.86秒）、smoke-v1 12/12及
+静态/依赖/编译检查通过；协议byte SHA为
+`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。修复提交后的零研究audit
+尚待完成，未运行新的付费preflight或研究格。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。

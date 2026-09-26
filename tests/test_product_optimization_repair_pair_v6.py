@@ -333,3 +333,32 @@ def test_v6_base_configuration_is_scoped_and_restored():
             runner_v6._validate_execution_binding_allow_used
         )
     assert {name: getattr(runner_v4, name) for name in names} == before
+
+
+def test_v6_preflight_installs_private_environment_before_base_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    events = []
+    env_file = tmp_path / ".env"
+
+    def install(path: Path):
+        events.append(("install", path))
+        return {}, "environment-id"
+
+    def preflight(*_args, **_kwargs):
+        events.append(("preflight", None))
+        return {"passed": False}
+
+    monkeypatch.setattr(runner_v4, "_install_private_environment", install)
+    monkeypatch.setattr(runner_v4, "preflight", preflight)
+
+    result = runner_v6.preflight(
+        tmp_path / "output",
+        tmp_path / "baseline",
+        tmp_path / "candidate",
+        env_file,
+        "0" * 64,
+    )
+
+    assert result == {"passed": False}
+    assert events == [("install", env_file), ("preflight", None)]
