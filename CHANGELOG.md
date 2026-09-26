@@ -4,6 +4,22 @@
 
 ### Changed
 
+Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
+zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical
+post-response `OtherError` events exactly as `httpx.DecodingError`; the other four remained
+`UnsafeUrlError/response_rejected`, and certificate, hostname, and TLS checks remained successful.
+V4 stays byte-identical and immutable at one completed plus eleven unsubmitted cells. The v5 child
+is a thin observer-only adapter: only `DecodingError` or existing `StreamError` after HTTP dispatch
+is normalized to the existing redacted `response_rejected` category. Pre-dispatch and unrelated
+request, transport, safety, identity, budget, lease, HTTP, and provider failures remain unchanged
+and fail closed under the inherited controller. V5 binds the exact v4 claim, cell, observation,
+result, telemetry hashes, usage, and failure multiset, while preserving the products, seed, order,
+rubric, provider/security policy, per-run limits, and 48-cell final/concurrency reserve. The user
+explicitly approved the cumulative cap increase from 155 to 156. Offline acceptance passed 152
+related tests and the complete 2,081-test suite (219.34 seconds), smoke-v1 12/12 with baseline match,
+pyflakes, production-code vulture 100%, dependency, compile, and diff checks. No v5 paid preflight
+or research run was made; usage remains 96/156 and a post-commit zero-research audit is next.
+
 Measurement review now has a prospective `product-optimization-repair-pair-v4` control contract.
 The observer preserves the safe-fetch phase and exact HTTPX `StreamClosed`, `StreamConsumed`, and
 `ResponseNotRead` types; only citation safe-fetch failures after HTTP dispatch may use the existing

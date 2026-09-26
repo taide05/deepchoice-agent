@@ -177,6 +177,22 @@ preflight、prepare或run写入前拒绝。提交后零研究`audit`曾用提案
 其余11格未提交，累计用量96/155；该根不可重试、续跑或拼接，也不能形成配对。任何替代执行须先完成
 新的安全/测量复议并使用新协议、身份和账本。
 
+## 冻结的修复包局部12格协议（v5）
+
+零模型、零研究诊断已把 v4 的两条 post-response `OtherError` 精确识别为
+`httpx.DecodingError`；另4条仍是既有`UnsafeUrlError/response_rejected`，且TLS、证书和主机名
+检查均成功。v4 不因此重标或复用。`product-optimization-repair-pair-v5` 是薄控制适配器，只在
+`http_dispatch`或`response_received`阶段把`DecodingError`与既有`StreamError`归一为同一
+脱敏`response_rejected`；其他RequestError及全部原停止线保持不变。
+
+v5 使用`RP5-*`盲标签、独立`outputs/product-optimization-ledgers/product-optimization-repair-pair-v5/`
+账本，并精确绑定v4 claim/cell/observation/result/telemetry。用户已批准累计上限155→156；当前
+96/156，局部12格与最终/并发48格完整锁定且无补跑余量。协议byte SHA为
+`13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。离线验收已通过，但尚未
+执行付费preflight或研究；必须先完成本地提交后的零研究audit。之后使用
+`scripts.product_optimization_repair_pair_v5`按audit→preflight→prepare→run顺序执行，每步仍需显式
+传入该SHA，且必须使用全新v5输出目录。历史v1–v4根均不可重试、续跑或拼接。
+
 ## 有意使用历史直连工具
 
 仅在明确批准历史实验及调用额度后，使用项目 Python 3.11/3.12 环境：
