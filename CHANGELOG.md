@@ -4,6 +4,23 @@
 
 ### Changed
 
+Measurement review now has an offline-accepted, paid-admission-closed
+`product-optimization-repair-pair-v6` proposal. It binds the exact immutable v5 claim, attempted cell,
+observation, result, collection record, telemetry, usage, and three-file used-knowledge drift. Only an
+already-attempted block may differ from the seed, only at the three observed Chroma paths, and only
+with an unchanged file inventory and per-file sizes; future blocks, environment, products, protocol,
+predecessors, and every other file remain exact. If a later control check fails after a collector has
+persisted a completed cell, the controller may restore that record only from the same experiment root
+when the append-only observation and collection record agree on experiment/case/task/run identity and
+the inherited stop gate accepts the record. V5 remains immutable and cannot be retried or spliced.
+Acceptance passed 13 v6-focused, 393 related, and the complete 2,094-test suite (120.00 seconds), plus
+smoke-v1 12/12 with baseline match, pyflakes, production-code vulture 100%, dependency, compile, and
+drift checks. The proposal protocol byte SHA is
+`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`. Research admission remains
+closed because current usage 97 plus a fresh 12-cell local comparison and the preserved 48-cell
+final/concurrency reserve require an explicit cumulative cap of 157. No v6 paid preflight or research
+run was made.
+
 Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
 zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical
 post-response `OtherError` events exactly as `httpx.DecodingError`; the other four remained

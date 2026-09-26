@@ -139,6 +139,12 @@ Chroma持久化文件发生运行态写入而触发`prepared block drift`，并�
 该根仍保守计1次研究、不可续跑/拼接，累计97/156。后继控制修复不得改变产品变量或放宽安全门禁；
 若保持完整12格与48格预留，付费硬上限需另行明确到157。
 
+v6最小控制提案已完成离线验收，只修复上述两个控制缺口：已尝试块仅3个已观察Chroma路径可在
+清单/大小不变时漂移；遗漏完成record仅能由同根append-only observation和collection记录在
+experiment/case/task/run身份一致且原停止门禁通过时恢复。协议byte SHA为
+`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。它仍是
+`closed-pending-explicit-cap-157`提案，不构成付费准入、产品效果证据或历史根重试许可。
+
 ## 2. 内容评估口径：key-claim-occurrence-v1
 
 保留必答与冲突 0/1/2：错误/遗漏 = 0，部分正确但缺条件 = 1，正确且说明条件 = 2。

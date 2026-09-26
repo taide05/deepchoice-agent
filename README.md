@@ -21,6 +21,11 @@ v5 的零研究audit和有界preflight通过，离线prepare冻结4块；正式�
 `prepared block drift`并停线。安全遥测最终无异常，首格实际用量与record完整，但父结果保守丢失了
 已落盘record。v5不可续跑或拼接；当前累计97/156，仍无有效配对。下一步是全新v6控制身份：
 只允许已尝试块内受约束的Chroma运行态漂移，并从同根账本恢复已完成record；产品和验收门槛不变。
+该v6提案已完成离线实现与验收：仅3个已知Chroma路径可在文件清单及大小不变时漂移，未来块仍按
+完整树哈希复核，record恢复必须同时匹配同根append-only observation、collection记录及既有停止门禁。
+13项v6聚焦、393项相关、2094项全套（120.00秒）、smoke-v1 12/12及静态/依赖/编译检查通过；
+协议byte SHA为`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。
+研究准入仍关闭，等待累计硬上限156→157的明确批准；尚未运行v6付费preflight或研究格。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。

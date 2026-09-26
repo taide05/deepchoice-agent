@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "protocol_id": "product-optimization-repair-pair-v6",
+  "status": "proposal",
+  "freeze_date": "2026-09-26",
+  "base_protocol": {
+    "protocol_id": "product-optimization-repair-pair-v5",
+    "path": "benchmarks/product-optimization-repair-pair-v5.json",
+    "byte_sha256": "13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796"
+  },
+  "controller": {
+    "binding_policy": "delta-over-v5-control-binding-v1",
+    "research_admission": "closed-pending-explicit-cap-157",
+    "required_files": [
+      {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "2b550966bd0a7967db8f314142f65cd0c20a6f2adbb7ee0c88f2e7d54fd01b63"},
+      {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "c5298aa824d85fdb136bfccee38aba48dc786e92bdf07540e515705e0937d5f7"},
+      {"path": "scripts/product_optimization_repair_pair_v5.py", "sha256": "6290295582600ad9245b57777303495349bb723e4a30e0801bbd375632573a5e"},
+      {"path": "benchmarks/product_optimization_repair_pair_v5.py", "sha256": "b9d2b8c5dfc1a97168f604e33ebf98a2e169878568d3c6fdf1abc1d75ab5ba80"},
+      {"path": "benchmarks/product-optimization-repair-pair-v5.json", "sha256": "13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796"},
+      {"path": "scripts/o1_pr2b_child_v5.py", "sha256": "010a8b0614694612faeaa2f3506051c090e57f90848acaa310b730a2818d1300"}
+    ]
+  },
+  "design": {
+    "blind_labels": ["RP6-01", "RP6-02", "RP6-03", "RP6-04", "RP6-05", "RP6-06", "RP6-07", "RP6-08", "RP6-09", "RP6-10", "RP6-11", "RP6-12"],
+    "inherits_all_other_fields_from": "product-optimization-repair-pair-v5"
+  },
+  "budgets": {
+    "current_research_ledger": {
+      "starting_used": 97,
+      "local_pair_available": 11,
+      "final_concurrency_reserve": 48,
+      "hard_total": 156,
+      "unallocated": 0
+    },
+    "proposed_research_ledger": {
+      "starting_used": 97,
+      "local_pair_max": 12,
+      "final_concurrency_reserve": 48,
+      "hard_total": 157,
+      "unallocated": 0
+    }
+  },
+  "stopping": {
+    "used_block_chroma_runtime_drift": "allow-same-inventory-and-size-only-for-listed-paths-after-attempt",
+    "completed_record_reconciliation": "same-root-append-only-observation-and-collection-record-only",
+    "allowed_chroma_runtime_drift_paths": [
+      "chroma/chroma.sqlite3",
+      "chroma/c29ae142-54e0-4e63-b329-24f1f4af8a53/data_level0.bin",
+      "chroma/c29ae142-54e0-4e63-b329-24f1f4af8a53/length.bin"
+    ]
+  },
+  "control_predecessor": {
+    "protocol_id": "product-optimization-repair-pair-v5",
+    "protocol_byte_sha256": "13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796",
+    "artifacts": {
+      "execution_binding": {"path": "outputs/product-optimization-repair-pair-v5-20260926-v1/execution-binding.json", "sha256": "16f1fbc1646832c4631d6c50f8b415efb78abe0c15f4cb271d1844fe9dd304bc"},
+      "execution_claim": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v5/execution-claim.json", "sha256": "ddf54d1001899867fd52bfb54d3bee43462dbc007cf220b9a346bdcd4d259a39"},
+      "attempted_cell": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v5/cells/baseline-r2-P04.json", "sha256": "1dbe01adceac2914dc285fcef9ad13e9879453b0d08b29076c07906b0a024be9"},
+      "observation": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v5/observations.jsonl", "sha256": "e8918c804bcb6c6784babe6cee96ec56f24729c844ab7ce37babc4d0622205ee"},
+      "run_result": {"path": "outputs/product-optimization-repair-pair-v5-20260926-v1/repair-pair-run-result.json", "sha256": "94b2e72bb86b06bbfd17d35ec1b7bd5d03f9e81424b0a63f9d9db42c569156de"},
+      "collection_record": {"path": "outputs/product-optimization-repair-pair-v5-20260926-v1/collections/baseline-r2/runs.jsonl", "sha256": "66012a77d868cf475f68c16dc7d49e1ae16ce8c8d7ce49cb24df0a66fd1c409f"},
+      "telemetry": {"path": "outputs/product-optimization-repair-pair-v5-20260926-v1/arms/baseline/r2/control/telemetry.jsonl", "sha256": "e86bbfca635c25113247a947447e63075e03222ed0b3e953d4b6d7c28fdd29c1"}
+    },
+    "accounted_research_runs": 1,
+    "trace_external_calls": 16,
+    "used_knowledge_tree_sha256": "c5b46ded75fb9fed8ee93a82d8487813a1c193f457626815336347a1e698ccdf",
+    "disposition": "immutable-no-retry-no-splice"
+  },
+  "authorization": {
+    "status": "pending-explicit-cap",
+    "decision_date": null,
+    "current_hard_total": 156,
+    "proposed_hard_total": 157,
+    "effective_hard_total": 156,
+    "local_pair_max": 12,
+    "final_concurrency_reserve": 48,
+    "preserve_acceptance_thresholds": true
+  }
+}

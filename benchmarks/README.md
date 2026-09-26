@@ -196,6 +196,20 @@ baseline-r2/P04：安全遥测无异常，但Chroma在当前块运行中改写3�
 audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**不得再次执行这些命令**。
 历史v1–v5根均不可重试、续跑或拼接。
 
+## 待激活的修复包局部12格协议（v6）
+
+`product-optimization-repair-pair-v6`是v5停止证据上的最小控制层提案，不改变产品、案例、顺序、
+种子起点、单run预算、来源/安全门禁、内容门槛或最终/并发48格预留。它只允许**已尝试块**中的
+`chroma.sqlite3`、对应segment的`data_level0.bin`和`length.bin`在文件清单与各自大小不变时产生
+运行态内容漂移；未尝试块和其他文件仍须与冻结seed完整一致。若后续控制检查失败，只有同一实验根
+中的append-only observation与collection record在experiment/case/task/run身份上唯一匹配，且原
+`_record_stop_reason`门禁接受时，才可恢复父结果遗漏的已完成record。
+
+提案协议byte SHA为`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`。
+离线验收为13项v6聚焦、393项相关、2094项全套（120.00秒）、smoke-v1 12/12基准一致及
+pyflakes/vulture/pip/compile检查。当前准入状态为`closed-pending-explicit-cap-157`；97/156实耗下，
+完整12格与48格预留合计需要累计157。未明确激活前，不得执行v6付费preflight或`run`。
+
 ## 有意使用历史直连工具
 
 仅在明确批准历史实验及调用额度后，使用项目 Python 3.11/3.12 环境：
