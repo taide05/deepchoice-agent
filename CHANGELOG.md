@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Changed
+
+On 2026-09-26, refocused the product roadmap on useful, stable reports and a bounded real-feedback
+loop before adding further offline heuristics. Quality, completion, latency and token evidence are
+reviewed together, without relaxing acceptance or dropping the 12-way concurrency goal. Consolidated
+current state versus historical protocol guidance and recorded the one-run gap for a fresh full
+12-cell comparison plus the reserved 48-cell final/concurrency plan. This is a documentation-only
+correction: no benchmark, product-code change, acceptance claim or automatic budget increase.
+
 ### Added
 
 `deterministic-citation-v2` now preserves a supported choice while replacing the entire model-authored action plan with the fixed read-only/isolated validation plan whenever any nonempty plan is incomplete or any step, verification, change trigger, or rollback field is missing a verified citation check. Completely absent required plans, bounded-check overflow, unsupported decisive claims and other abstention conditions retain their stricter fail-closed behavior; fully verified plans remain unchanged. Historical citation-policy v1 manifests/results remain readable but cannot resume on the current runtime. Acceptance passed 87 blocker-focused, 250 related and 2,051 full-suite tests (223.66 seconds), smoke-v1 12/12 with the refreshed manifest/core-registry baseline identity, pyflakes, production-code vulture 100%, dependency, compile and diff checks. Independent review first found loss of the incomplete-plan signal, then verified its closure across a four-field/five-outcome matrix and real synthesis-to-rendering paths with no remaining issue. This is deterministic engineering evidence, not live report-quality improvement; no paid research was added and the ledger remains 95/154.
