@@ -209,7 +209,8 @@ audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**
 97/156实耗下，本协议最多12格，完成后余47格；旧48格最终/并发整合方案仅为历史规划，不在本协议
 预留或消费。冻结协议byte SHA为`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。
 离线验收为13项v6聚焦、393项相关、2094项全套（127.63秒）、smoke-v1 12/12基准一致及
-pyflakes/vulture/pip/compile检查。重冻提交后的零研究audit通过前，不得执行付费preflight或`run`。
+pyflakes/vulture/pip/compile检查。提交`2ca5dfd`后的零研究audit已通过且
+`research_runs_submitted=0`；付费preflight与正式`run`尚未开始。
 
 ## 有意使用历史直连工具
 

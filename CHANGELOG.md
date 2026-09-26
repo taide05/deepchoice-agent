@@ -23,8 +23,10 @@ smoke-v1 12/12 with baseline match, pyflakes, production-code vulture 100%, depe
 drift checks. The frozen protocol byte SHA is
 `65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`.
 The earlier cap-157 proposal and its `9418fe7` audit remain historical evidence; that proposal had no
-paid preflight or research run. The re-frozen serial protocol still requires a post-commit zero-research
-audit before its paid preflight.
+paid preflight or research run. The re-frozen serial protocol's post-commit zero-research audit passed
+at `2ca5dfd`: both arms and product objects, v1–v5 predecessor evidence, TCB, dependencies,
+environment/proxy identity, and the approved seed/SQLite identity matched with
+`research_runs_submitted=0`. Its paid preflight and research run have not yet started.
 
 Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
 zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical

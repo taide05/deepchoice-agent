@@ -145,7 +145,8 @@ v6最小控制修复已完成离线验收，只修复上述两个控制缺口：
 experiment/case/task/run身份一致且原停止门禁通过时恢复。协议byte SHA为
 `65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。用户明确把它重冻为
 `serial-concurrency-1`的12格产品效果协议：并发授权0，现行上限97/156，完成后余47且未分配。
-重冻提交后的零研究audit仍是付费preflight前置；离线通过不构成产品效果证据或历史根重试许可。
+提交`2ca5dfd`后的零研究audit已通过且研究提交为0；付费preflight与正式运行尚未开始。
+离线通过不构成产品效果证据或历史根重试许可。
 
 ## 2. 内容评估口径：key-claim-occurrence-v1
 

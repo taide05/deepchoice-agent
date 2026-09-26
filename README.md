@@ -27,7 +27,7 @@ v6仅允许3个已知Chroma路径在文件清单及大小不变时漂移，未�
 并发研究授权为0；现行硬上限仍是156，97次已用加12格后余47格，未来并发预算不预留、不提前消费。
 13项v6聚焦、393项相关、2094项全套（127.63秒）、smoke-v1 12/12及静态/依赖/编译检查通过；
 协议byte SHA为`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`。
-重冻后的提交/audit尚待完成，未运行v6付费preflight或研究格。
+提交`2ca5dfd`后的零研究audit已通过，`research_runs_submitted=0`；尚未运行v6付费preflight或研究格。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。
