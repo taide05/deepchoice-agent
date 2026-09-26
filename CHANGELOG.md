@@ -17,8 +17,10 @@ result, telemetry hashes, usage, and failure multiset, while preserving the prod
 rubric, provider/security policy, per-run limits, and 48-cell final/concurrency reserve. The user
 explicitly approved the cumulative cap increase from 155 to 156. Offline acceptance passed 152
 related tests and the complete 2,081-test suite (219.34 seconds), smoke-v1 12/12 with baseline match,
-pyflakes, production-code vulture 100%, dependency, compile, and diff checks. No v5 paid preflight
-or research run was made; usage remains 96/156 and a post-commit zero-research audit is next.
+pyflakes, production-code vulture 100%, dependency, compile, and diff checks. The post-commit
+zero-research audit passed at `0c4edec`: both arms and product objects, v1–v4 predecessor evidence,
+TCB, dependencies, environment/proxy identity, and the approved seed/SQLite identity matched with
+`research_runs_submitted=0`. No v5 paid preflight or research run was made; usage remains 96/156.
 
 Measurement review now has a prospective `product-optimization-repair-pair-v4` control contract.
 The observer preserves the safe-fetch phase and exact HTTPX `StreamClosed`, `StreamConsumed`, and

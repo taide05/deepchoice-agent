@@ -4,8 +4,8 @@
 没有有效候选配对，当前报告的净改善仍证据不足。v4 首格后的零模型、零研究诊断把两条 citation
 `OtherError` 精确定位为响应已收到后的 `httpx.DecodingError`，而不是 TLS、证书或主机身份异常；
 v4 仍不可重试、重标或拼接。用户已明确批准累计上限155→156。全新 repair-pair v5 只前瞻收敛
-评测 observer 的该已知响应消费类型并绑定 v4 完整停止证据，已通过离线验收；当前累计96/156，
-尚未执行 v5 付费 preflight 或研究运行。
+评测 observer 的该已知响应消费类型并绑定 v4 完整停止证据，已通过离线验收及提交后零研究audit；
+当前累计96/156，尚未执行 v5 付费preflight或研究运行。
 本文只维护目标、优先级和退出条件；实耗、身份、停止根及工程记录见
 [执行状态](o1-execution-status.md)，问题依据见[S0 诊断](product-optimization-s0-review.md)。
 
@@ -198,7 +198,7 @@ v5 因而只把 dispatch 后的 `DecodingError` 与既有 `StreamError` 在 obse
    保留产品、种子、顺序、门槛和48格预留。离线验收为152项相关、2081项全套、smoke-v1 12/12
    及静态/依赖/编译/diff检查；协议byte SHA为
    `13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。
-   下一步是本地提交后的零研究audit，之后才允许新根有界preflight。
+   本地提交`0c4edec`后的零研究audit已通过，`research_runs_submitted=0`；下一步是全新根的有界preflight。
 6. 满足实际准入后才执行；同批评估需求覆盖、重大错误、证据适用性和可行动性，锁分后看完成率、
    延迟与token。只输出通用验证计划是否损失决策价值必须单独说明，不能把更保守自动当作更好。
 7. 依据净效果处理问题表：保留有收益的修复、登记无收益/未复现/证据不足项；只选择一个有直接

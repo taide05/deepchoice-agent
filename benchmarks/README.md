@@ -188,8 +188,8 @@ preflight、prepare或run写入前拒绝。提交后零研究`audit`曾用提案
 v5 使用`RP5-*`盲标签、独立`outputs/product-optimization-ledgers/product-optimization-repair-pair-v5/`
 账本，并精确绑定v4 claim/cell/observation/result/telemetry。用户已批准累计上限155→156；当前
 96/156，局部12格与最终/并发48格完整锁定且无补跑余量。协议byte SHA为
-`13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。离线验收已通过，但尚未
-执行付费preflight或研究；必须先完成本地提交后的零研究audit。之后使用
+`13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。离线验收及提交`0c4edec`
+后的零研究audit均已通过，`research_runs_submitted=0`；尚未执行付费preflight或研究。之后使用
 `scripts.product_optimization_repair_pair_v5`按audit→preflight→prepare→run顺序执行，每步仍需显式
 传入该SHA，且必须使用全新v5输出目录。历史v1–v4根均不可重试、续跑或拼接。
 

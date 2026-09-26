@@ -298,7 +298,10 @@ observation、result与telemetry精确哈希/语义，采用RP5盲标签和独�
 验收门槛、单run预算及48格预留均未变化。离线验收通过152项相关、2081项全套（219.34秒）、
 smoke-v1 12/12且基准一致、pyflakes、生产代码vulture100%、pip check、compileall与diff检查。
 冻结协议byte SHA为`13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。
-当前未执行v5付费preflight或研究，累计仍为96/156；下一步是提交后零研究audit。
+提交`0c4edec0c64dc087218d6b786a13f8087f5e7477`后的零研究audit已通过：baseline/candidate、产品源码
+对象、v1–v4前序证据、TCB、依赖、环境/代理及批准种子`fa3c542d…`/SQLite quick_check全部匹配，
+`research_runs_submitted=0`。当前未执行v5付费preflight或研究，累计仍为96/156；下一步是全新根
+的有界付费preflight。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

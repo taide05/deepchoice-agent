@@ -16,8 +16,8 @@ repair-pair v4 正式运行在首个 baseline-r2/P04 完成后因两条 citation
 `httpx.DecodingError`；TLS、证书和主机名检查均成功。v4 仍不可重试、重标或拼接。
 新的 repair-pair v5 只在评测 observer 中前瞻把 dispatch 后的 `DecodingError` / `StreamError`
 归一为既有 `response_rejected`，并绑定完整 v4 停止证据。用户已明确批准累计上限155→156；
-当前累计96/156，完整12格与最终/并发48格仍分别锁定。v5 已通过离线验收，尚未执行付费
-preflight 或研究运行；下一步是提交后零研究审计。
+当前累计96/156，完整12格与最终/并发48格仍分别锁定。v5 已通过离线验收及提交后零研究
+audit，`research_runs_submitted=0`；尚未执行付费preflight或研究运行，下一步是全新根的有界preflight。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。
