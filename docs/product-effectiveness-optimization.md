@@ -31,7 +31,9 @@ HTTPX response-stream 生命周期类型，控制器仅在已进入 HTTP dispatc
 离线矩阵，再形成明确的测量决定。不能反推v3错误根因，不得仅换协议名再采样。
 `product-optimization-repair-pair-v4` 已绑定完整12格、d23c948 baseline、d7e776d candidate、
 同种子/顺序/盲评门槛及v1–v3历史链。用户已明确批准累计上限154→155，协议切换为冻结/开放；
-未批准状态仍由代码在付费preflight、prepare和run之前拒绝。激活验收期间没有增加研究或修改最终门槛。
+未批准状态仍由代码在付费preflight、prepare和run之前拒绝。激活验收及提交后零研究audit均已通过，
+`research_runs_submitted=0`；期间没有增加研究或修改最终门槛。下一步按顺序执行有界付费preflight、
+离线prepare和不可重试/拼接的完整12格。
 
 ### 历史协议与2026-09-23复议
 

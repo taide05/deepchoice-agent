@@ -262,10 +262,16 @@ v2/v3历史实验仍保有多个物理独立的精确`fa3c542d…`副本；审�
 随后用户在2026-09-26明确批准累计上限154→155，并要求完整局部12格、最终/并发48格及全部
 验收门槛保持不变。v4现为`frozen`、`open-after-offline-runner-acceptance`，授权`approved`、
 有效上限155；当前实耗95/155。激活协议byte SHA为
-`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`。付费前仍须完成激活离线
-验收、本地提交和新的零研究audit；本轮状态切换本身没有执行付费preflight或研究run。激活离线
+`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`。本轮状态切换本身没有执行
+付费preflight或研究run。激活离线
 验收为231项聚焦、**2072 passed**（229.54秒）、smoke-v1 12/12且基准指纹一致，pyflakes、生产
 代码vulture100%、pip check、compileall和diff检查通过。
+
+激活提交`b656c24187d8e2816c438e4d9a360e646fc5191c`后的新零研究audit通过：baseline HEAD/anchor
+严格为`d23c9480b9f368f8ec75ec44ee7e25c64146d4be`，candidate HEAD为`b656c241…`且产品源码对象仍为
+`d0975326…`；双臂manifest、core registry、endpoint、依赖、配置、代理、v1–v3前任证据、批准种子
+`fa3c542d…`与SQLite quick_check全部匹配，`research_runs_submitted=0`。当前实耗仍为95/155。
+下一步是单独执行有界付费preflight；只有通过后才离线prepare并一次性执行冻结12格，不重试或拼接。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

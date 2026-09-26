@@ -166,8 +166,10 @@ d23c948 baseline、d7e776d candidate、原12格顺序/种子/评分门槛，以�
 preflight、prepare或run写入前拒绝。提交后零研究`audit`曾用提案byte SHA
 `1dcc06ed63a7beed4a99823ddd8c3c412612806db1ffb7b0273ecdf0261724b3`通过，
 `research_runs_submitted=0`；它只标识已退役的关闭准入状态。激活后的冻结byte SHA为
-`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`。须先完成离线验收、本地提交
-和新零研究audit，再单独执行有界付费preflight；不得用v4解释或拼接历史v3的两个`OtherError`。
+`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`。激活验收、本地提交
+`b656c24`和提交后零研究audit均已通过，后者再次确认批准种子、双臂及前任身份且
+`research_runs_submitted=0`。下一步是单独执行有界付费preflight；通过后才可离线prepare并一次性执行
+冻结12格。不得用v4解释或拼接历史v3的两个`OtherError`。
 
 ## 有意使用历史直连工具
 

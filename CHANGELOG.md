@@ -19,9 +19,11 @@ states still fail before preflight, preparation, or run writes. Initial offline 
 Activation acceptance reran 231 focused and 2,072 full-suite tests (229.54 seconds), smoke-v1 12/12
 with the same baseline fingerprint, pyflakes, vulture 100%, dependency, compile, and diff checks;
 no paid preflight or research call was made.
-The post-commit zero-research audit passed at `feb649a`: both arms, manifests, v1–v3 predecessor
-evidence, controller TCB, dependencies, environment/proxy identity, and the approved seed/SQLite
-identity matched with zero research submissions. The nominal seed directory in the main checkout
+The proposal-state post-commit zero-research audit passed at `feb649a`. After authorization and
+activation acceptance, the frozen-state audit passed again at `b656c24` with protocol byte SHA
+`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`: both arms, manifests,
+v1–v3 predecessor evidence, controller TCB, dependencies, environment/proxy identity, and the
+approved seed/SQLite identity matched with zero research submissions. The nominal seed directory in the main checkout
 had drifted to tree hash `20e384…`; it was not modified. The audit used a physical copy of an existing
 independent `fa3c54…` historical seed copy in the isolated candidate worktree. No historical error was
 relabeled and no paid call or research run was made.
