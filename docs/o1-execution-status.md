@@ -241,12 +241,24 @@ pyflakes、生产代码vulture100%、pip check、compileall和diff检查通过�
 与candidate `d7e776dffced8d1ddb90d03b924b1217ea766ddb`，保留P04/P08目标、P01回归、两臂各两次、
 单并发、原种子/盲评/停止/验收门槛。它当前是`proposed`且研究准入关闭；授权字段明确记录
 现行154、提议155、当前有效154。runner在付费preflight、prepare和run的网络/写入前统一拒绝
-未批准状态。没有执行付费前置、零研究audit或研究run，账本仍为95/154；下一步只等待用户决定
-是否把累计上限154→155，批准后仍需冻结协议、离线验收、本地提交和零研究audit，不能直接开跑。
+未批准状态。没有执行付费前置或研究run，账本仍为95/154；下一步只等待用户决定
+是否把累计上限154→155，批准后仍需冻结协议、离线验收、本地提交和新的零研究audit，不能直接开跑。
 离线验收为231项聚焦、**2072 passed**（225.67秒）、smoke-v1 12/12且基准一致，pyflakes、
 生产代码vulture100%、pip check、compileall与diff检查通过。首次受限沙箱全套只有legacy路由因无法在
 工作树创建`./outputs/checkpoints.db`失败；同例在专用可写目录通过，最终全套在正常可写工作树条件
 全绿。该环境诊断不改变产品结论或研究账本。
+
+提交`feb649aa3e3e514f54d2b2911c04bf26033e3e4e`后的提案态零研究audit通过：baseline严格为
+`d23c9480b9f368f8ec75ec44ee7e25c64146d4be`，candidate产品对象严格为d7e776d绑定的
+`d0975326b164659fc5601a1987ba5a5cf0265122`，两臂manifest、core registry、endpoint、依赖、
+配置、代理、v1–v3前任证据及种子SQLite quick_check均匹配，`research_runs_submitted=0`。
+提案byte SHA为`1dcc06ed63a7beed4a99823ddd8c3c412612806db1ffb7b0273ecdf0261724b3`。
+
+审计前发现主工作区名义`product-optimization-knowledge-seed-v1`树哈希已为`20e3845a…`，不再是
+批准的`fa3c542d…`；复制件逐文件与它一致，因此不是复制损坏。未修改该目录或任何历史根。
+v2/v3历史实验仍保有多个物理独立的精确`fa3c542d…`副本；审计使用v3 candidate-r1副本的物理复制，
+并再次验证完整树哈希。后续激活/prepare必须保留隔离工作树中的精确副本，不能从已漂移主目录重拷，
+也不能把已运行的baseline-r2副本当作干净种子。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

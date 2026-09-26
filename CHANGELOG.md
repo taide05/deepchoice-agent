@@ -14,7 +14,12 @@ claims/results. It remains `proposed` with research admission closed: preflight,
 all fail before network or experiment writes until the user explicitly approves the cumulative cap
 increase from 154 to 155. Offline acceptance passed 231 focused and 2,072 full-suite tests, smoke-v1
 12/12 with baseline match, pyflakes, production-code vulture 100%, dependency, compile, and diff checks.
-No historical error was relabeled and no paid call or research run was made.
+The post-commit zero-research audit passed at `feb649a`: both arms, manifests, v1–v3 predecessor
+evidence, controller TCB, dependencies, environment/proxy identity, and the approved seed/SQLite
+identity matched with zero research submissions. The nominal seed directory in the main checkout
+had drifted to tree hash `20e384…`; it was not modified. The audit used a physical copy of an existing
+independent `fa3c54…` historical seed copy in the isolated candidate worktree. No historical error was
+relabeled and no paid call or research run was made.
 
 On 2026-09-26, refocused the product roadmap on useful, stable reports and a bounded real-feedback
 loop before adding further offline heuristics. Quality, completion, latency and token evidence are

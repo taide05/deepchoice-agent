@@ -163,8 +163,10 @@ d23c948 baseline、d7e776d candidate、原12格顺序/种子/评分门槛，以�
 
 协议当前为 `proposed`、`closed-pending-hard-cap-approval`，累计研究仍为95/154。完整新12格加
 最终/并发预留48格需要上限155；在用户明确批准这一格差额前，runner会在任何付费preflight、
-prepare或run写入前拒绝。`audit`仍可做零研究只读核验，但本次没有执行它，也没有付费外呼。
-v4没有可执行SHA或运行命令；批准后须先将同一协议切换为冻结/开放状态、重跑离线验收并本地提交，
+prepare或run写入前拒绝。提交后零研究`audit`已用提案byte SHA
+`1dcc06ed63a7beed4a99823ddd8c3c412612806db1ffb7b0273ecdf0261724b3`通过，
+`research_runs_submitted=0`；没有执行付费preflight或外呼。该SHA只标识本次关闭准入的提案，
+不是付费执行授权。批准后须先将同一协议切换为冻结/开放状态、重跑离线验收并本地提交，
 再做零研究audit和有界preflight。不得用v4解释或拼接历史v3的两个`OtherError`。
 
 ## 有意使用历史直连工具
