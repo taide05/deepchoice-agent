@@ -212,7 +212,7 @@ audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**
 私有环境，再加载协议和项目模块。冻结协议byte SHA为
 `393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。离线验收为14项v6聚焦、
 394项相关、2095项全套（117.86秒）、smoke-v1 12/12基准一致及pyflakes/vulture/pip/compile检查。
-修复提交后的零研究audit通过前，不得使用新根执行付费preflight或`run`。
+提交`e05bb6b`后的零研究audit已通过且`research_runs_submitted=0`；新的付费preflight尚未执行。
 
 ## 有意使用历史直连工具
 

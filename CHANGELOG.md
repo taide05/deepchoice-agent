@@ -28,7 +28,9 @@ drift checks. The frozen protocol byte SHA is
 `393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`.
 The earlier cap-157 proposal and its `9418fe7` audit remain historical evidence; that proposal had no
 paid preflight or research run. The `2ca5dfd` audit applies only to the pre-fix serial identity; the
-environment-order fix still requires a new post-commit zero-research audit before a fresh preflight.
+environment-order fix passed its post-commit zero-research audit at `e05bb6b`, with both product arms,
+v1–v5 predecessors, TCB, dependencies, environment/proxy identity, seed/SQLite identity, and zero
+research submissions matching. A fresh post-fix preflight has not yet run.
 
 Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
 zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical

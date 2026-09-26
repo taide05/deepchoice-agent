@@ -146,7 +146,8 @@ experiment/case/task/run身份一致且原停止门禁通过时恢复。协议by
 `393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。用户明确把它重冻为
 `serial-concurrency-1`的12格产品效果协议：并发授权0，现行上限97/156，完成后余47且未分配。
 首次preflight的检索/Tavily通过，但因环境安装顺序在LLM dispatch前停止，LLM尝试0、研究提交0，
-该根不可复用；入口顺序修复已通过离线验收，提交后仍须重新audit并使用全新preflight根。
+该根不可复用；入口顺序修复已通过离线验收，提交`e05bb6b`后的零研究audit也已通过，下一步使用
+全新preflight根。
 离线通过不构成产品效果证据或历史根重试许可。
 
 ## 2. 内容评估口径：key-claim-occurrence-v1

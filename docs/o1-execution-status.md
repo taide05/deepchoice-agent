@@ -321,7 +321,9 @@ compileall。用户随后明确先稳定产品效果、再验证并发；协议�
 但v6 bootstrap在私有环境安装前导入LLM配置，SDK在dispatch前以`OpenAIError`停止：LLM尝试0、
 研究提交0。该preflight根不可复用。v6入口现先安装私有环境再加载协议/项目模块；修复通过14项聚焦、
 394项相关、2095项全套（117.86秒）、smoke-v1与静态/依赖/编译检查。新协议byte SHA为
-`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`；修复提交/audit尚待完成。
+`393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。提交
+`e05bb6b35ad2b10b8d999cde77c5f8c9de282bdd`后的零研究audit已通过：双臂产品对象、v1–v5前序、
+TCB、依赖、环境/代理与种子/SQLite身份匹配，`research_runs_submitted=0`；新preflight尚未执行。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

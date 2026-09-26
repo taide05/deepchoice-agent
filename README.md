@@ -30,7 +30,7 @@ HTTP dispatch前以`OpenAIError`停止；LLM尝试0、研究提交0，该根不�
 加载协议/项目模块。14项v6聚焦、394项相关、2095项全套（117.86秒）、smoke-v1 12/12及
 静态/依赖/编译检查通过；协议byte SHA为
 `393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。修复提交后的零研究audit
-尚待完成，未运行新的付费preflight或研究格。
+已在`e05bb6b`通过，`research_runs_submitted=0`；未运行新的付费preflight或研究格。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。
