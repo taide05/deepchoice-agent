@@ -15,14 +15,14 @@
 纠偏前HEAD为 `5612dbb`；最近已提交生产改动 `d7e776d` 的2051项全套、smoke12/12和
 独立复审记录仍只覆盖该已验证代码，不覆盖草稿。此次文档提交不重跑未变的工程基线。
 
-现行账本为96/156，最终/并发预留48；完整新局部12格恰有12格。用户已明确批准155→156的
-一格差额，样本、门槛与预留不变；不借用旧根未提交格，也没有补跑余量。
+现行账本为97/156，最终/并发预留48；v5停止后局部余量只剩11格。旧根未提交格不可借用；若保持
+全新局部12格和最终/并发48格，累计需要157。先推进零研究控制修复，新增付费硬上限另行冻结。
 
 | 项目 | 当前事实 |
 |---|---|
 | 工作分支 | 隔离工作树codex/measurement-v4承载v5控制协议；主工作树codex/baseline-readiness的六文件草稿继续保全，两者不得混合 |
 | 已测量候选 / 控制身份 | repair-pair基线d23c948、候选d7e776d；v5仅更换控制身份，产品对象不变 |
-| 持续授权研究账本 | 已用 96 / 现行上限 156；v4仅1格完成、余11格未提交且不可重跑/拼接；全新v5局部12格及整合S3/C1最终/并发48分别锁定；不是项目全部历史分母 |
+| 持续授权研究账本 | 已用97 / 现行上限156；v5首格完成后控制停线、余11格未提交且不可重跑/拼接；整合S3/C1最终/并发48仍锁定；完整替代局部12格需累计157 |
 | 可用主诊断材料 | 同候选 github-retry 根 serial-r1 的8份development报告、v2/v3/v4各一份baseline-r2/P04报告及v4类型诊断；S0身份、哈希和360行逐处原子关键声明已锁定 |
 | 尚未完成 | 有效局部配对；最终质量与两轮并发48格；保留集 GPT-only 盲评未验收 |
 | 当前成果 | 行动安全、未核验行动计划隔离替换、source-score与Chroma修复已离线验收；P01/P04/P08官方正文、隔离种子及双臂执行器已验收；v5已按v4精确诊断冻结更窄observer边界，但尚无candidate配对报告效果证据，产品质量仍证据不足 |
@@ -300,8 +300,16 @@ smoke-v1 12/12且基准一致、pyflakes、生产代码vulture100%、pip check�
 冻结协议byte SHA为`13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。
 提交`0c4edec0c64dc087218d6b786a13f8087f5e7477`后的零研究audit已通过：baseline/candidate、产品源码
 对象、v1–v4前序证据、TCB、依赖、环境/代理及批准种子`fa3c542d…`/SQLite quick_check全部匹配，
-`research_runs_submitted=0`。当前未执行v5付费preflight或研究，累计仍为96/156；下一步是全新根
-的有界付费preflight。
+`research_runs_submitted=0`。随后v5付费preflight通过（8 HTTP、2 LLM、1 Tavily POST、五类来源健康、
+零研究提交），prepare冻结4块。正式根只提交并完成baseline-r2/P04：9,372 tokens、10 LLM、
+6 retrieval、16个成功外部调用、0失败、0节点重试，用量与同根observation/collection record完整。
+7条citation失败全部为允许的post-response `UnsafeUrlError/response_rejected`，最终telemetry
+`anomaly=false`。下一格前，Chroma已在使用中改写当前块3个同长度持久化文件；全块seed哈希复核
+因此报`prepared block drift`。父catch又把已落盘record从最终result丢失为`records=[]`/started=0，
+但ledger确定attempted=known=possible=1且无提交不确定性。result/claim/cell/observation/runs/telemetry
+SHA-256依次为`94b2e72b…`/`ddf54d10…`/`1dbe01ad…`/`e8918c80…`/`66012a77…`/`e86bbfca…`。
+v5不可重试、续跑或拼接；累计97/156，仍无有效配对。最小后继只需约束已用块Chroma漂移并保全
+完成record，产品、seed起点、顺序、来源、安全和内容门槛均不变。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

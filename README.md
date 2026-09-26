@@ -16,8 +16,11 @@ repair-pair v4 正式运行在首个 baseline-r2/P04 完成后因两条 citation
 `httpx.DecodingError`；TLS、证书和主机名检查均成功。v4 仍不可重试、重标或拼接。
 新的 repair-pair v5 只在评测 observer 中前瞻把 dispatch 后的 `DecodingError` / `StreamError`
 归一为既有 `response_rejected`，并绑定完整 v4 停止证据。用户已明确批准累计上限155→156；
-当前累计96/156，完整12格与最终/并发48格仍分别锁定。v5 已通过离线验收及提交后零研究
-audit，`research_runs_submitted=0`；尚未执行付费preflight或研究运行，下一步是全新根的有界preflight。
+v5 的零研究audit和有界preflight通过，离线prepare冻结4块；正式根的首个baseline-r2/P04也完成，
+但Chroma在已用块内产生预期持久化写入，下一格前的全块seed哈希复核将其误判为
+`prepared block drift`并停线。安全遥测最终无异常，首格实际用量与record完整，但父结果保守丢失了
+已落盘record。v5不可续跑或拼接；当前累计97/156，仍无有效配对。下一步是全新v6控制身份：
+只允许已尝试块内受约束的Chroma运行态漂移，并从同根账本恢复已完成record；产品和验收门槛不变。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。

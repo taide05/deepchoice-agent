@@ -22,6 +22,19 @@ zero-research audit passed at `0c4edec`: both arms and product objects, v1–v4 
 TCB, dependencies, environment/proxy identity, and the approved seed/SQLite identity matched with
 `research_runs_submitted=0`. No v5 paid preflight or research run was made; usage remains 96/156.
 
+Execution update: the fresh v5 preflight passed with eight HTTP, two LLM, and one Tavily POST attempt,
+all five source classes healthy, and zero research submissions; offline preparation froze four blocks.
+The formal root submitted and completed baseline-r2/P04 with complete usage (9,372 tokens, 10 LLM,
+6 retrieval, 16 successful external calls, no node retry). Its seven citation failures were all the
+approved post-response `UnsafeUrlError/response_rejected` form, and final telemetry reported no anomaly.
+Admission nevertheless stopped before P01 because Chroma had legitimately rewritten three same-length
+files inside the already-used block; the per-admission full seed hash check raised `prepared block drift`.
+The parent catch then conservatively emitted zero result records even though the append-only observation
+and collection record prove one completed admission. V5 is immutable with one accounted run and eleven
+unsubmitted cells; usage is 97/156 and no pair exists. A successor must bind this exact evidence, allow
+only constrained Chroma drift in already-attempted blocks, preserve completed records on later control
+failure, and use a new identity/ledger. No v5 retry or splice is allowed.
+
 Measurement review now has a prospective `product-optimization-repair-pair-v4` control contract.
 The observer preserves the safe-fetch phase and exact HTTPX `StreamClosed`, `StreamConsumed`, and
 `ResponseNotRead` types; only citation safe-fetch failures after HTTP dispatch may use the existing

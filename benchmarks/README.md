@@ -189,9 +189,12 @@ v5 使用`RP5-*`盲标签、独立`outputs/product-optimization-ledgers/product-
 账本，并精确绑定v4 claim/cell/observation/result/telemetry。用户已批准累计上限155→156；当前
 96/156，局部12格与最终/并发48格完整锁定且无补跑余量。协议byte SHA为
 `13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796`。离线验收及提交`0c4edec`
-后的零研究audit均已通过，`research_runs_submitted=0`；尚未执行付费preflight或研究。之后使用
-`scripts.product_optimization_repair_pair_v5`按audit→preflight→prepare→run顺序执行，每步仍需显式
-传入该SHA，且必须使用全新v5输出目录。历史v1–v4根均不可重试、续跑或拼接。
+后的零研究audit均已通过，`research_runs_submitted=0`。随后preflight与prepare通过，正式根只完成
+baseline-r2/P04：安全遥测无异常，但Chroma在当前块运行中改写3个同长度持久化文件，下一格前的
+完整seed哈希复核触发`prepared block drift`；父结果同时丢失已落盘完成record。append-only ledger
+仍确定只提交1格，累计97/156。v5曾使用`scripts.product_optimization_repair_pair_v5`按
+audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**不得再次执行这些命令**。
+历史v1–v5根均不可重试、续跑或拼接。
 
 ## 有意使用历史直连工具
 
