@@ -4,8 +4,8 @@
 
 ### Changed
 
-Measurement review now has an offline-accepted, paid-admission-closed
-`product-optimization-repair-pair-v6` proposal. It binds the exact immutable v5 claim, attempted cell,
+Measurement review now has an offline-accepted `product-optimization-repair-pair-v6` serial product-
+effect protocol. It binds the exact immutable v5 claim, attempted cell,
 observation, result, collection record, telemetry, usage, and three-file used-knowledge drift. Only an
 already-attempted block may differ from the seed, only at the three observed Chroma paths, and only
 with an unchanged file inventory and per-file sizes; future blocks, environment, products, protocol,
@@ -13,15 +13,18 @@ predecessors, and every other file remain exact. If a later control check fails 
 persisted a completed cell, the controller may restore that record only from the same experiment root
 when the append-only observation and collection record agree on experiment/case/task/run identity and
 the inherited stop gate accepts the record. V5 remains immutable and cannot be retried or spliced.
-Acceptance passed 13 v6-focused, 393 related, and the complete 2,094-test suite (120.00 seconds), plus
+V6 is frozen at concurrency one: its 12 cells measure repeatable product effect before any concurrency
+qualification. The user explicitly deferred concurrency until product effect is stable, so concurrency
+research authorization is zero. The existing cumulative cap stays 156: 97 are used, at most 12 are
+assigned to this serial pair, and 47 remain unallocated. The former 48-cell final/concurrency allocation
+is historical and neither reserved nor consumed by this protocol. Acceptance passed 13 v6-focused,
+393 related, and the complete 2,094-test suite (127.63 seconds), plus
 smoke-v1 12/12 with baseline match, pyflakes, production-code vulture 100%, dependency, compile, and
-drift checks. The proposal protocol byte SHA is
-`7566c713794167107259445676d3f8fbc8e772decaa14a0eaef5e17de15c1116`. Research admission remains
-closed because current usage 97 plus a fresh 12-cell local comparison and the preserved 48-cell
-final/concurrency reserve require an explicit cumulative cap of 157. The post-commit zero-research
-audit passed at `9418fe7`: both arms and product objects, v1–v5 predecessor evidence, TCB,
-dependencies, environment/proxy identity, and the approved seed/SQLite identity matched with
-`research_runs_submitted=0`. No v6 paid preflight or research run was made.
+drift checks. The frozen protocol byte SHA is
+`65e8216ed428089a5b8f8b2aa07655102ce1ccbceda79bae6a1dfdf29ee522c9`.
+The earlier cap-157 proposal and its `9418fe7` audit remain historical evidence; that proposal had no
+paid preflight or research run. The re-frozen serial protocol still requires a post-commit zero-research
+audit before its paid preflight.
 
 Measurement review now has a frozen `product-optimization-repair-pair-v5` execution identity. A
 zero-model, zero-research replay of the six unique v4 citation URLs identified the two historical

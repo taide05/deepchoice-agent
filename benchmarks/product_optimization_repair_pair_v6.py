@@ -53,7 +53,7 @@ def _validate_raw(raw: Any) -> None:
     if not (
         raw["schema_version"] == 1
         and raw["protocol_id"] == PROTOCOL_ID
-        and raw["status"] == "proposal"
+        and raw["status"] == "frozen"
         and raw["freeze_date"] == "2026-09-26"
         and raw["base_protocol"] == {
             "protocol_id": "product-optimization-repair-pair-v5",
@@ -76,7 +76,8 @@ def _validate_raw(raw: Any) -> None:
         isinstance(required, list)
         and [item.get("path") for item in required if isinstance(item, dict)] == expected_paths
         and controller.get("binding_policy") == "delta-over-v5-control-binding-v1"
-        and controller.get("research_admission") == "closed-pending-explicit-cap-157"
+        and controller.get("research_admission")
+        == "open-after-offline-runner-acceptance"
     ):
         _fail("controller contract changed")
     for item in required:
@@ -91,22 +92,17 @@ def _validate_raw(raw: Any) -> None:
     if raw.get("design") != {
         "blind_labels": [f"RP6-{index:02d}" for index in range(1, 13)],
         "inherits_all_other_fields_from": "product-optimization-repair-pair-v5",
+        "execution_mode": "serial-concurrency-1",
+        "concurrency_phase": "deferred-until-product-effect-stability",
     }:
         _fail("design delta changed")
     if raw.get("budgets") != {
-        "current_research_ledger": {
-            "starting_used": 97,
-            "local_pair_available": 11,
-            "final_concurrency_reserve": 48,
-            "hard_total": 156,
-            "unallocated": 0,
-        },
-        "proposed_research_ledger": {
+        "research_ledger": {
             "starting_used": 97,
             "local_pair_max": 12,
-            "final_concurrency_reserve": 48,
-            "hard_total": 157,
-            "unallocated": 0,
+            "final_concurrency_reserve": 0,
+            "unallocated": 47,
+            "hard_total": 156,
         },
     }:
         _fail("budget proposal changed")
@@ -139,13 +135,13 @@ def _validate_raw(raw: Any) -> None:
     ):
         _fail("control predecessor changed")
     if raw.get("authorization") != {
-        "status": "pending-explicit-cap",
-        "decision_date": None,
+        "status": "approved-existing-cap",
+        "decision_date": "2026-09-26",
         "current_hard_total": 156,
-        "proposed_hard_total": 157,
         "effective_hard_total": 156,
         "local_pair_max": 12,
-        "final_concurrency_reserve": 48,
+        "concurrency_runs_authorized": 0,
+        "deferred_unallocated": 47,
         "preserve_acceptance_thresholds": True,
     }:
         _fail("measurement authorization changed")
@@ -165,7 +161,7 @@ def _materialize(raw: dict[str, Any]) -> dict[str, Any]:
     ):
         item["blind_label"] = label
     payload["budgets"]["research_ledger"] = deepcopy(
-        raw["budgets"]["proposed_research_ledger"]
+        raw["budgets"]["research_ledger"]
     )
     payload["stopping"].update(deepcopy(raw["stopping"]))
     payload["control_predecessor"] = deepcopy(raw["control_predecessor"])

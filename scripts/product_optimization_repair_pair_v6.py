@@ -231,16 +231,18 @@ def _require_active_protocol(protocol: dict[str, Any]) -> None:
         and isinstance(controller, dict)
         and controller.get("research_admission") == "open-after-offline-runner-acceptance"
         and isinstance(authorization, dict)
-        and authorization.get("status") == "approved"
+        and authorization.get("status") == "approved-existing-cap"
         and authorization.get("current_hard_total") == 156
-        and authorization.get("proposed_hard_total") == 157
-        and authorization.get("effective_hard_total") == 157
+        and authorization.get("effective_hard_total") == 156
+        and authorization.get("local_pair_max") == 12
+        and authorization.get("concurrency_runs_authorized") == 0
+        and authorization.get("deferred_unallocated") == 47
         and isinstance(ledger, dict)
         and ledger.get("starting_used") == 97
         and ledger.get("local_pair_max") == 12
-        and ledger.get("final_concurrency_reserve") == 48
-        and ledger.get("hard_total") == 157
-        and ledger.get("unallocated") == 0
+        and ledger.get("final_concurrency_reserve") == 0
+        and ledger.get("hard_total") == 156
+        and ledger.get("unallocated") == 47
     ):
         raise RepairPairControlError("research admission is not approved")
 

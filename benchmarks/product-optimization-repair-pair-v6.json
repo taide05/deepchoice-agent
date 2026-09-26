@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "protocol_id": "product-optimization-repair-pair-v6",
-  "status": "proposal",
+  "status": "frozen",
   "freeze_date": "2026-09-26",
   "base_protocol": {
     "protocol_id": "product-optimization-repair-pair-v5",
@@ -10,10 +10,10 @@
   },
   "controller": {
     "binding_policy": "delta-over-v5-control-binding-v1",
-    "research_admission": "closed-pending-explicit-cap-157",
+    "research_admission": "open-after-offline-runner-acceptance",
     "required_files": [
-      {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "2b550966bd0a7967db8f314142f65cd0c20a6f2adbb7ee0c88f2e7d54fd01b63"},
-      {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "c5298aa824d85fdb136bfccee38aba48dc786e92bdf07540e515705e0937d5f7"},
+      {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "335902ba342c6a20bb9333b40e8f14123840678df288f40b30babdb31c5db900"},
+      {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "89b7006812c7cf0ece2330b4b58239e3126a47bcc45298ad825562e6a583f848"},
       {"path": "scripts/product_optimization_repair_pair_v5.py", "sha256": "6290295582600ad9245b57777303495349bb723e4a30e0801bbd375632573a5e"},
       {"path": "benchmarks/product_optimization_repair_pair_v5.py", "sha256": "b9d2b8c5dfc1a97168f604e33ebf98a2e169878568d3c6fdf1abc1d75ab5ba80"},
       {"path": "benchmarks/product-optimization-repair-pair-v5.json", "sha256": "13e8bd9ef2e6877c4c8465db22c3ab0bc1b11f3f386e704b7b314a45ef0fd796"},
@@ -22,22 +22,17 @@
   },
   "design": {
     "blind_labels": ["RP6-01", "RP6-02", "RP6-03", "RP6-04", "RP6-05", "RP6-06", "RP6-07", "RP6-08", "RP6-09", "RP6-10", "RP6-11", "RP6-12"],
-    "inherits_all_other_fields_from": "product-optimization-repair-pair-v5"
+    "inherits_all_other_fields_from": "product-optimization-repair-pair-v5",
+    "execution_mode": "serial-concurrency-1",
+    "concurrency_phase": "deferred-until-product-effect-stability"
   },
   "budgets": {
-    "current_research_ledger": {
-      "starting_used": 97,
-      "local_pair_available": 11,
-      "final_concurrency_reserve": 48,
-      "hard_total": 156,
-      "unallocated": 0
-    },
-    "proposed_research_ledger": {
+    "research_ledger": {
       "starting_used": 97,
       "local_pair_max": 12,
-      "final_concurrency_reserve": 48,
-      "hard_total": 157,
-      "unallocated": 0
+      "final_concurrency_reserve": 0,
+      "unallocated": 47,
+      "hard_total": 156
     }
   },
   "stopping": {
@@ -67,13 +62,13 @@
     "disposition": "immutable-no-retry-no-splice"
   },
   "authorization": {
-    "status": "pending-explicit-cap",
-    "decision_date": null,
+    "status": "approved-existing-cap",
+    "decision_date": "2026-09-26",
     "current_hard_total": 156,
-    "proposed_hard_total": 157,
     "effective_hard_total": 156,
     "local_pair_max": 12,
-    "final_concurrency_reserve": 48,
+    "concurrency_runs_authorized": 0,
+    "deferred_unallocated": 47,
     "preserve_acceptance_thresholds": true
   }
 }

@@ -278,17 +278,24 @@ def test_v6_reconciliation_rejects_unknown_observation_cell(
         )
 
 
-def test_v6_proposal_loads_and_preserves_v5_identity():
+def test_v6_serial_effect_protocol_loads_and_preserves_v5_identity():
     frozen_v6 = protocol_v6.load_repair_pair_protocol()
     frozen_v5 = protocol_v5.load_repair_pair_protocol()
 
     assert frozen_v6.payload["protocol_id"] == protocol_v6.PROTOCOL_ID
-    assert frozen_v6.payload["status"] == "proposal"
+    assert frozen_v6.payload["status"] == "frozen"
     assert frozen_v6.payload["controller"]["research_admission"] == (
-        "closed-pending-explicit-cap-157"
+        "open-after-offline-runner-acceptance"
     )
-    assert frozen_v6.payload["budgets"]["research_ledger"]["hard_total"] == 157
+    assert frozen_v6.payload["budgets"]["research_ledger"] == {
+        "starting_used": 97,
+        "local_pair_max": 12,
+        "final_concurrency_reserve": 0,
+        "unallocated": 47,
+        "hard_total": 156,
+    }
     assert frozen_v6.payload["authorization"]["effective_hard_total"] == 156
+    assert frozen_v6.payload["authorization"]["concurrency_runs_authorized"] == 0
     assert [
         item["blind_label"]
         for item in frozen_v6.payload["design"]["blind_review_order"]
@@ -298,22 +305,17 @@ def test_v6_proposal_loads_and_preserves_v5_identity():
     )
 
 
-def test_v6_proposal_cannot_open_research_admission():
+def test_v6_serial_effect_protocol_opens_only_the_existing_cap():
     protocol = protocol_v6.load_repair_pair_protocol().payload
+    runner_v6._require_active_protocol(protocol)
+
+    changed = copy.deepcopy(protocol)
+    changed["authorization"]["concurrency_runs_authorized"] = 1
     with pytest.raises(
         runner_v6.RepairPairControlError,
         match="research admission is not approved",
     ):
-        runner_v6._require_active_protocol(protocol)
-
-    changed = copy.deepcopy(protocol)
-    changed["status"] = "frozen"
-    changed["controller"]["research_admission"] = (
-        "open-after-offline-runner-acceptance"
-    )
-    changed["authorization"]["status"] = "approved"
-    changed["authorization"]["effective_hard_total"] = 157
-    runner_v6._require_active_protocol(changed)
+        runner_v6._require_active_protocol(changed)
 
 
 def test_v6_base_configuration_is_scoped_and_restored():
