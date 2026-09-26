@@ -171,6 +171,12 @@ preflight、prepare或run写入前拒绝。提交后零研究`audit`曾用提案
 `research_runs_submitted=0`。下一步是单独执行有界付费preflight；通过后才可离线prepare并一次性执行
 冻结12格。不得用v4解释或拼接历史v3的两个`OtherError`。
 
+2026-09-26实际执行中，v4 preflight通过（8 HTTP、2 LLM、1 Tavily POST，零研究提交），离线prepare
+冻结4块。一次性run完成baseline-r2/P04后因`TELEMETRY_strict_safe_fetch_failure`停线：4条citation
+`UnsafeUrlError/response_rejected`属于已知策略失败，另2条在`response_received`阶段仍为`OtherError`。
+其余11格未提交，累计用量96/155；该根不可重试、续跑或拼接，也不能形成配对。任何替代执行须先完成
+新的安全/测量复议并使用新协议、身份和账本。
+
 ## 有意使用历史直连工具
 
 仅在明确批准历史实验及调用额度后，使用项目 Python 3.11/3.12 环境：

@@ -28,6 +28,17 @@ had drifted to tree hash `20e384…`; it was not modified. The audit used a phys
 independent `fa3c54…` historical seed copy in the isolated candidate worktree. No historical error was
 relabeled and no paid call or research run was made.
 
+The frozen v4 paid preflight then passed with eight HTTP, two LLM, and one Tavily POST attempt,
+all five source classes healthy, and zero research submissions; offline preparation froze four
+independent blocks. The one-shot run completed only baseline-r2/P04 (8,622 tokens, 8 LLM calls,
+6 retrieval calls, 14 observable external calls, all logical calls successful) before the strict
+controller stopped admission on citation safe-fetch telemetry. Four `UnsafeUrlError` /
+`response_rejected` events were known policy failures, but two additional events remained
+`OtherError` after an HTTP response was received. Therefore v4 is immutable at one completed and
+eleven unsubmitted cells, usage is conservatively 96/155, and no valid pair or product-effect claim
+exists. The root must not be retried or spliced; a new safety/measurement review is required before
+any replacement protocol.
+
 On 2026-09-26, refocused the product roadmap on useful, stable reports and a bounded real-feedback
 loop before adding further offline heuristics. Quality, completion, latency and token evidence are
 reviewed together, without relaxing acceptance or dropping the 12-way concurrency goal. Consolidated

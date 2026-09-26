@@ -273,6 +273,19 @@ v2/v3历史实验仍保有多个物理独立的精确`fa3c542d…`副本；审�
 `fa3c542d…`与SQLite quick_check全部匹配，`research_runs_submitted=0`。当前实耗仍为95/155。
 下一步是单独执行有界付费preflight；只有通过后才离线prepare并一次性执行冻结12格，不重试或拼接。
 
+同日有界付费preflight通过：8次HTTP、2次LLM、1次Tavily POST，五类来源健康，
+`research_runs_submitted=0`；随后离线prepare冻结4个独立块和12个计划格。一次性正式run只提交并完成
+baseline-r2/P04：8,622 tokens、8 LLM、6 retrieval、14个可观测外部调用、0失败、0节点重试，
+观测与token用量完整。完成后控制器以`TELEMETRY_strict_safe_fetch_failure`停线，其余11格均未提交。
+
+安全遥测包含4条citation `UnsafeUrlError/response_rejected`和2条citation `OtherError`，均发生在
+`response_received`阶段；TLS证书要求、主机名检查和主机匹配均成功。已知`response_rejected`本身符合
+冻结白名单，真正阻断是两条无法精确归类的`OtherError`。因此不能把它们追认为解码或流生命周期异常，
+也不能降级继续。v4结果为1 completed + 11 not_submitted，账本确定、无不确定提交，累计实耗96/155。
+运行结果SHA256为`c9ae68174c9382332b92dec2f44831647da597d5f6d4d529368dd06a2c116ab1`，遥测SHA256为
+`5b85c3f6cab8f2917a732fb65001a107b4365d26c107ce5169706211efd59e10`。该根不可重试、续跑或拼接，
+仍无有效配对；下一步仅能是新的安全/测量复议，而不是直接追加运行。
+
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
 每跳改为显式请求 identity encoding，并把仍发生的
