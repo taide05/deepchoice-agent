@@ -37,6 +37,10 @@ def render(state: dict) -> str:
         "step1": {"en": "1. Verify the strongest evidence source independently", "zh": "1. 独立验证最强证据来源"},
         "step2": {"en": "2. Check if the disputed claims affect your use case", "zh": "2. 检查争议项是否影响你的使用场景"},
         "step3": {"en": "3. Run a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
+        "validation_only": {
+            "en": "3. Follow only the isolated validation plan above; do not make production changes",
+            "zh": "3. 仅执行上方隔离验证计划；不要进行生产变更",
+        },
         "no_single_winner": {"en": no_single_winner("en"), "zh": no_single_winner("zh")},
     }
 
@@ -107,7 +111,9 @@ def render(state: dict) -> str:
         T["step1"][lang],
         T["step2"][lang],
     ])
-    if not is_context_dependent(rec):
+    if rec.get("action_plan_mode") == "validation_only":
+        lines.append(T["validation_only"][lang])
+    elif not is_context_dependent(rec):
         lines.append(T["step3"][lang])
 
     lines.extend(citation_verification_section(state, lang))

@@ -10,6 +10,7 @@ from deepchoice.citations import (
     CitationCheck, CitationReason, CitationStatus, CitationStatusCounts, CitationVerification,
 )
 from deepchoice.formats.decision import render_decision_details
+from deepchoice.formats.evidence_first import render as render_evidence_first
 from deepchoice.utils.decision_contract import abstain_recommendation, restrict_recommendation
 
 
@@ -228,3 +229,16 @@ def test_invalid_plan_does_not_create_a_fake_validated_procedure(plan):
     result = abstain_recommendation(original, "Choose a database")
     assert result["action_plan_mode"] == "validation_only"
     assert result["action_plan"] == []
+
+
+def test_evidence_first_does_not_invite_generic_prototype_when_plan_is_restricted():
+    recommendation = abstain_recommendation(_recommendation(), "选择 Celery")
+    report = render_evidence_first({
+        "task": {"query": "选择 Celery"},
+        "final_recommendation": recommendation,
+        "evidence_chains": [],
+        "conflicts": [],
+    })
+
+    assert "仅执行上方隔离验证计划；不要进行生产变更" in report
+    assert "用推荐方案做快速原型验证" not in report

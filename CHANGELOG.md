@@ -4,6 +4,21 @@
 
 ### Changed
 
+P04 task-queue reports now treat an explicitly phased or transitional queue/recovery request as a
+deterministic migration contract. The synthesizer adds advancement/abort and rollback/restored-state
+obligations alongside delivery, duplicate-processing, idempotency, and recovery requirements. Its
+prompt now distinguishes broker durability from result-backend outcome storage and states that late
+acknowledgement permits redelivery, so neither a result backend nor `acks_late` alone proves no loss or
+exactly-once execution. Evidence-first reports whose action plan has been restricted now end with an
+explicit isolated-validation/no-production-change instruction instead of the generic quick-prototype
+step. The synthesis prompt advances to v7 and evidence-first to v5; previous identities remain readable
+but cannot resume under the changed behavior. Exact P04 counterexamples withdraw the winner and unsafe
+cutover plan when staged advancement/rollback evidence is missing. Acceptance passed 153 focused tests,
+the complete 2,108-test suite (119.88 seconds), smoke-v1 12/12 with unchanged case outputs/metrics and an
+intentional asset fingerprint update, plus pyflakes, production-code vulture at 100% confidence,
+dependency, compile, and diff checks. This remains offline evidence and made no paid call or research
+submission.
+
 The current candidate now fails closed on the P08 missing-context shape without broad semantic
 guessing. When scene context explicitly says decision-critical inputs are missing and a frozen request
 constraint requires a conditional conclusion, deterministic post-processing withdraws a model-authored
@@ -12,7 +27,7 @@ action plan to isolated validation. Private HITL supplemental context is now sho
 synthesizer as untrusted user context; it may define requirements but cannot replace cited product
 evidence. The synthesis prompt advances to v6, so historical v5 runs remain readable but cannot resume
 under the changed behavior. This is offline regression evidence, not a live quality or paired-effect
-claim. Acceptance passed 112 focused tests and the complete 2,102-test suite (117.21 seconds), plus
+claim. Acceptance passed 112 focused tests and the then-complete 2,102-test suite (117.21 seconds), plus
 smoke-v1 12/12 with the intentionally updated asset/manifest fingerprint, pyflakes, production-code
 vulture at 100% confidence, dependency, compile, and diff checks. No paid call, research submission,
 concurrency scope, or budget allocation changed.

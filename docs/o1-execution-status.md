@@ -358,6 +358,17 @@ case输出与指标未变，只更新有意变化的asset/manifest身份和artif
 反例和兼容性回归证据，未追加付费运行、未形成配对，也未改变100/156账本。下一项转向P04完整性
 与行动边界，之后处理citation verified=0。
 
+P04的离线修复随后闭合。历史baseline报告的核心问题不是字符数本身，而是把result backend当成
+任务持久化、把`acks_late`写成不丢任务保障，并在缺少幂等、重复执行、broker持久化、推进/中止和
+回退证据时直接给出Redis+单worker生产方案。当前候选在队列/恢复语义存在时，才把“阶段性/过渡”
+确定性扩展为推进/中止与回退义务，避免普通feature-flag rollout误触发；prompt明确result backend
+只存结果状态、late acknowledgement可能重投，不能单独证明不丢失或exactly-once。缺少新增义务的
+精确P04反例会撤回Winner、把A4/A5标为unknown并将生产切换替换为隔离验证。evidence-first v5在
+action_plan_mode=validation_only时只显示禁止生产变更提示，不再附加“用推荐方案做快速原型”。
+synthesis prompt为v7，旧prompt/template身份可读但不能同run恢复。验收为153项聚焦、2108项全套
+（119.88秒）、smoke-v1 12/12及静态/依赖/编译检查；case输出和指标未变，只更新资产指纹。该结果
+仍未追加付费运行或证明真实报告净改善，100/156账本不变；下一项仅处理citation verified=0。
+
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
 每跳改为显式请求 identity encoding，并把仍发生的

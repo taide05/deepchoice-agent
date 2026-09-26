@@ -461,6 +461,7 @@ def test_malformed_nested_model_fields_do_not_raise(monkeypatch):
     [
         ("Choose the default formatter for a small project", 0),
         ("Compare switchboard visualization libraries", 0),
+        ("Our team wants feature flags with gradual rollout", 0),
         ("Compare reliable storage", 1),
         ("Choose a queue with retry support", 3),
         ("比较任务队列的重试与迁移", 5),
@@ -470,3 +471,116 @@ def test_operational_obligations_match_words_not_accidental_substrings(query, ex
     requirements, overflow = cs_mod._decision_requirements(query, [], [], [], [])
     assert not overflow
     assert sum(item["kind"] == "operational_obligation" for item in requirements) == expected
+
+
+def test_p04_phased_transition_adds_migration_and_rollback_obligations():
+    requirements, overflow = cs_mod._decision_requirements(
+        "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
+        [
+            "必须讨论重启恢复和至少一次执行语义",
+            "允许先做阶段性方案",
+            "不得把任务队列描述为天然 exactly-once",
+        ],
+        [],
+        [
+            "进程内任务在哪些故障下会丢失？",
+            "Celery 引入哪些组件和运维责任？",
+            "是否存在过渡方案？",
+        ],
+        [],
+    )
+
+    obligations = [
+        item["requirement"]
+        for item in requirements
+        if item["kind"] == "operational_obligation"
+    ]
+    assert not overflow
+    assert len(obligations) == 5
+    assert any("推进条件和中止条件" in item for item in obligations)
+    assert any("回退步骤" in item for item in obligations)
+    assert "result backend or late acknowledgement alone" in cs_mod.SYNTHESIS_PROMPT
+
+
+def test_p04_missing_transition_obligations_withdraws_winner_and_unsafe_plan(monkeypatch):
+    state = _p08_state()
+    state["task"] = {
+        "query": "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
+        "scene_context": (
+            "单实例 FastAPI 服务，每天约 200 个任务；任务结果不能因服务重启静默丢失，"
+            "但团队不想过早引入复杂基础设施。"
+        ),
+        "constraints": [
+            "必须讨论重启恢复和至少一次执行语义",
+            "允许先做阶段性方案",
+            "不得把任务队列描述为天然 exactly-once",
+        ],
+        "sub_questions": [
+            "进程内任务在哪些故障下会丢失？",
+            "Celery 引入哪些组件和运维责任？",
+            "是否存在过渡方案？",
+        ],
+    }
+    model_result = _p08_overconfident_model_result()
+    model_result.update(
+        winner="Celery",
+        winner_rationale="Celery 可以可靠执行长任务 [[1]].",
+        recommendation="启用 acks_late 后直接切换生产长任务 [[1]].",
+        ranked_options=[
+            {
+                "name": "Celery",
+                "rank": 1,
+                "constraint_fit": "high",
+                "constraint_fit_reason": "支持后台任务 [[1]].",
+                "rationale": "支持后台任务 [[1]].",
+                "key_strength": "独立 worker [[1]].",
+                "key_weakness": "增加组件 [[1]].",
+            },
+            {
+                "name": "FastAPI BackgroundTasks",
+                "rank": 2,
+                "constraint_fit": "low",
+                "constraint_fit_reason": "进程内执行 [[1]].",
+                "rationale": "部署简单 [[1]].",
+                "key_strength": "无需额外组件 [[1]].",
+                "key_weakness": "恢复语义待确认 [[1]].",
+            },
+        ],
+        requirement_assessments=[
+            {
+                "id": identifier,
+                "requirement": "模型不得改写冻结要求",
+                "status": "satisfied",
+                "decision_critical": True,
+                "explanation": "该要求已由来源覆盖 [[1]].",
+                "evidence_ids": [1],
+            }
+            for identifier in (
+                "C1", "C2", "C3", "A1", "A2", "A3", "Q1", "Q2", "Q3",
+            )
+        ],
+        decision_branches=[{
+            "option": "Celery",
+            "condition": "仅在恢复和重复执行演练通过后采用 [[1]].",
+        }],
+        action_plan=[{
+            "step": "直接开启 acks_late 并切换生产任务 [[1]].",
+            "verification": "观察任务是否完成 [[1]].",
+            "change_trigger": "worker 可以运行时切换 [[1]].",
+            "rollback": "关闭 Celery 后重跑任务 [[1]].",
+        }],
+    )
+    monkeypatch.setattr(cs_mod, "call_model", _fake_call(model_result))
+
+    result = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(state))
+    recommendation = result["final_recommendation"]
+    assessments = {
+        item["id"]: item for item in recommendation["requirement_assessments"]
+    }
+
+    assert recommendation["winner"] == "context_dependent"
+    assert assessments["A4"]["status"] == "unknown"
+    assert assessments["A5"]["status"] == "unknown"
+    assert recommendation["action_plan_mode"] == "validation_only"
+    assert "直接开启 acks_late" not in str(recommendation["action_plan"])
+    assert recommendation["decision_branches"]

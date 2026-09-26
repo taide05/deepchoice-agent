@@ -40,6 +40,14 @@ HITL提供的私有补充上下文显式进入合成提示，但仍是不可信�
 也不得进入公共事件或结果投影。prompt v5 的历史run可读，但不能在v6运行时同run恢复；workflow、
 state schema、HITL策略与报告模板版本不变。
 
+同日P04行动完整性修复将 synthesis prompt 升级为v7、evidence-first模板升级为v5。对同时涉及
+队列/恢复与阶段性/过渡要求的请求，确定性要求集增加可观测推进/中止和回退/恢复后验证；普通
+rollout措辞本身不会触发。合成必须区分broker消息持久化与result backend结果状态，明确late
+acknowledgement可能重投，不能单独证明不丢失或exactly-once，并要求幂等和重复执行边界。若行动
+计划已被限制为validation_only，evidence-first末尾只允许隔离验证，不再给通用快速原型指令。
+历史prompt v6与evidence-first v4结果可读，但不能在当前运行时同run恢复；workflow、state schema、
+HITL与citation策略不变。
+
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
 保留条件分支、待验证计划与明确未知。绑定到有内容的来源只证明结构完整，不是语义验证。
 引用节点优先检查新判断字段，继续使用原总检查/安全抓取上限；关键判断、胜者依据及

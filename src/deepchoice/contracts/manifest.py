@@ -43,11 +43,11 @@ WORKFLOW_NODES = (
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
     "what_why_how": "what-why-how-v6",
-    "evidence_first": "evidence-first-v4",
+    "evidence_first": "evidence-first-v5",
     "comparison_matrix": "comparison-matrix-v4",
 }
 PROMPT_VERSIONS = {
-    "conclusion_synthesizer.synthesis_prompt": "v6",
+    "conclusion_synthesizer.synthesis_prompt": "v7",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -72,7 +72,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7"] = "v1"
     sha256: str
 
 
