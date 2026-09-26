@@ -8,12 +8,17 @@ Measurement review now has a prospective `product-optimization-repair-pair-v4` c
 The observer preserves the safe-fetch phase and exact HTTPX `StreamClosed`, `StreamConsumed`, and
 `ResponseNotRead` types; only citation safe-fetch failures after HTTP dispatch may use the existing
 terminal/source-gated unknown path. Non-citation, pre-dispatch, `OtherError`, ordinary 5xx, safety,
-identity, budget, lease, and all other unclassified failures still stop admission. The proposed
+identity, budget, lease, and all other unclassified failures still stop admission. The
 12-cell protocol binds candidate `d7e776d`, the unchanged baseline/seed/design, and immutable v1–v3
-claims/results. It remains `proposed` with research admission closed: preflight, preparation, and run
-all fail before network or experiment writes until the user explicitly approves the cumulative cap
-increase from 154 to 155. Offline acceptance passed 231 focused and 2,072 full-suite tests, smoke-v1
+claims/results. The user explicitly approved the cumulative cap increase from 154 to 155 while
+preserving the 12-cell local pair, 48-cell final/concurrency reserve, and every acceptance threshold;
+the protocol is now frozen with research admission enabled after offline acceptance. Unapproved
+states still fail before preflight, preparation, or run writes. Initial offline acceptance passed
+231 focused and 2,072 full-suite tests, smoke-v1
 12/12 with baseline match, pyflakes, production-code vulture 100%, dependency, compile, and diff checks.
+Activation acceptance reran 231 focused and 2,072 full-suite tests (229.54 seconds), smoke-v1 12/12
+with the same baseline fingerprint, pyflakes, vulture 100%, dependency, compile, and diff checks;
+no paid preflight or research call was made.
 The post-commit zero-research audit passed at `feb649a`: both arms, manifests, v1–v3 predecessor
 evidence, controller TCB, dependencies, environment/proxy identity, and the approved seed/SQLite
 identity matched with zero research submissions. The nominal seed directory in the main checkout

@@ -153,21 +153,21 @@ $privateEnv = "<私有 .env 绝对路径>"
 完整执行机会，累计预算固定为94＋12＋48＝154；实际停止后累计研究为95，最终/并发48仍未动。
 `audit`/`prepare` 通过只代表离线控制契约；内容改善须等12格完整报告按冻结盲评协议评审。
 
-## 关闭准入的修复包局部12格提案（v4）
+## 冻结的修复包局部12格协议（v4）
 
-`product-optimization-repair-pair-v4` 是测量复议后的前瞻提案，不是已批准执行卡。它绑定
+`product-optimization-repair-pair-v4` 是测量复议后的前瞻协议。它绑定
 d23c948 baseline、d7e776d candidate、原12格顺序/种子/评分门槛，以及v1、v2、v3三个不可变
 停止根。新增控制信息仅为 `safe_fetch_phase` 和三个明确的HTTPX response-stream生命周期类型；
 只有citation safe-fetch已进入HTTP dispatch且终态/来源门禁完整时才可继续保留citation unknown。
 非citation、dispatch前、`OtherError`、普通5xx、429、安全、身份、预算、租约及其他未分类错误仍停线。
 
-协议当前为 `proposed`、`closed-pending-hard-cap-approval`，累计研究仍为95/154。完整新12格加
-最终/并发预留48格需要上限155；在用户明确批准这一格差额前，runner会在任何付费preflight、
-prepare或run写入前拒绝。提交后零研究`audit`已用提案byte SHA
+用户已明确批准累计上限154→155；协议现为`frozen`、`open-after-offline-runner-acceptance`，
+当前研究累计95/155，局部12格与最终/并发48格均完整锁定。未批准状态仍由runner在任何付费
+preflight、prepare或run写入前拒绝。提交后零研究`audit`曾用提案byte SHA
 `1dcc06ed63a7beed4a99823ddd8c3c412612806db1ffb7b0273ecdf0261724b3`通过，
-`research_runs_submitted=0`；没有执行付费preflight或外呼。该SHA只标识本次关闭准入的提案，
-不是付费执行授权。批准后须先将同一协议切换为冻结/开放状态、重跑离线验收并本地提交，
-再做零研究audit和有界preflight。不得用v4解释或拼接历史v3的两个`OtherError`。
+`research_runs_submitted=0`；它只标识已退役的关闭准入状态。激活后的冻结byte SHA为
+`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`。须先完成离线验收、本地提交
+和新零研究audit，再单独执行有界付费preflight；不得用v4解释或拼接历史v3的两个`OtherError`。
 
 ## 有意使用历史直连工具
 

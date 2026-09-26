@@ -9,7 +9,7 @@ import pytest
 from benchmarks import product_optimization_repair_pair as pair
 
 
-def test_proposed_repair_pair_protocol_loads_with_conservative_boundaries():
+def test_frozen_repair_pair_protocol_loads_with_conservative_boundaries():
     frozen = pair.load_repair_pair_protocol()
     payload = frozen.payload
 
@@ -19,11 +19,12 @@ def test_proposed_repair_pair_protocol_loads_with_conservative_boundaries():
     assert payload["design"]["formal_research_runs"] == 12
     assert payload["design"]["independent_single_case_qualification"] is False
     assert payload["design"]["paired_p01_replaces_qualification"] is True
-    assert payload["status"] == "proposed"
-    assert payload["freeze_date"] is None
-    assert payload["authorization"]["status"] == "pending"
+    assert payload["status"] == "frozen"
+    assert payload["freeze_date"] == "2026-09-26"
+    assert payload["authorization"]["status"] == "approved"
+    assert payload["authorization"]["effective_hard_total"] == 155
     assert payload["controller"]["research_admission"] == (
-        "closed-pending-hard-cap-approval"
+        "open-after-offline-runner-acceptance"
     )
     assert payload["environment"]["hitl_mode"] == "stop-at-hitl-no-auto-resolution"
     assert payload["environment"]["endpoint_sha256"] == (

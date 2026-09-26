@@ -239,10 +239,9 @@ pyflakes、生产代码vulture100%、pip check、compileall和diff检查通过�
 
 新的`product-optimization-repair-pair-v4`绑定baseline `d23c9480b9f368f8ec75ec44ee7e25c64146d4be`
 与candidate `d7e776dffced8d1ddb90d03b924b1217ea766ddb`，保留P04/P08目标、P01回归、两臂各两次、
-单并发、原种子/盲评/停止/验收门槛。它当前是`proposed`且研究准入关闭；授权字段明确记录
-现行154、提议155、当前有效154。runner在付费preflight、prepare和run的网络/写入前统一拒绝
-未批准状态。没有执行付费前置或研究run，账本仍为95/154；下一步只等待用户决定
-是否把累计上限154→155，批准后仍需冻结协议、离线验收、本地提交和新的零研究audit，不能直接开跑。
+单并发、原种子/盲评/停止/验收门槛。初始提交是`proposed`且研究准入关闭；授权字段记录
+现行154、提议155、当时有效154。runner在付费preflight、prepare和run的网络/写入前统一拒绝
+未批准状态。该检查点没有执行付费前置或研究run，账本为95/154。
 离线验收为231项聚焦、**2072 passed**（225.67秒）、smoke-v1 12/12且基准一致，pyflakes、
 生产代码vulture100%、pip check、compileall与diff检查通过。首次受限沙箱全套只有legacy路由因无法在
 工作树创建`./outputs/checkpoints.db`失败；同例在专用可写目录通过，最终全套在正常可写工作树条件
@@ -259,6 +258,14 @@ pyflakes、生产代码vulture100%、pip check、compileall和diff检查通过�
 v2/v3历史实验仍保有多个物理独立的精确`fa3c542d…`副本；审计使用v3 candidate-r1副本的物理复制，
 并再次验证完整树哈希。后续激活/prepare必须保留隔离工作树中的精确副本，不能从已漂移主目录重拷，
 也不能把已运行的baseline-r2副本当作干净种子。
+
+随后用户在2026-09-26明确批准累计上限154→155，并要求完整局部12格、最终/并发48格及全部
+验收门槛保持不变。v4现为`frozen`、`open-after-offline-runner-acceptance`，授权`approved`、
+有效上限155；当前实耗95/155。激活协议byte SHA为
+`dd6814e128c9e40b7b4f70b6a2b1e6db2434f4243876e783f5a20a1a25a3a6c6`。付费前仍须完成激活离线
+验收、本地提交和新的零研究audit；本轮状态切换本身没有执行付费preflight或研究run。激活离线
+验收为231项聚焦、**2072 passed**（229.54秒）、smoke-v1 12/12且基准指纹一致，pyflakes、生产
+代码vulture100%、pip check、compileall和diff检查通过。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch
