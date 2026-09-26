@@ -77,6 +77,9 @@ _SAFE_FETCH_TRANSPORT_ERRORS = frozenset({
     "PoolTimeout", "ConnectError", "ReadError", "WriteError",
     "RemoteProtocolError", "TransportError",
 })
+_SAFE_FETCH_RESPONSE_STREAM_ERRORS = frozenset({
+    "StreamClosed", "StreamConsumed", "ResponseNotRead",
+})
 
 
 def source_anomaly(snapshot) -> bool:
@@ -244,6 +247,11 @@ def telemetry_state(
                             ).append(cancelled_at)
                     elif (error_type in _SAFE_FETCH_TRANSPORT_ERRORS
                             and event.get("failure") is None):
+                        pass
+                    elif (is_citation
+                            and error_type in _SAFE_FETCH_RESPONSE_STREAM_ERRORS
+                            and event.get("failure") is None
+                            and event.get("safe_fetch_phase") == "http_dispatch"):
                         pass
                     elif (error_type != "UnsafeUrlError"
                             or event.get("failure") not in _SAFE_FETCH_FAILURES):

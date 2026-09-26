@@ -17,7 +17,31 @@ from scripts import product_optimization_repair_pair as runner
 
 def _protocol() -> dict:
     return {
-        "protocol_id": "product-optimization-repair-pair-v3",
+        "protocol_id": "product-optimization-repair-pair-v4",
+        "status": "frozen",
+        "freeze_date": "2026-09-26",
+        "authorization": {
+            "status": "approved",
+            "decision_date": "2026-09-26",
+            "current_hard_total": 154,
+            "proposed_hard_total": 155,
+            "effective_hard_total": 155,
+            "local_pair_max": 12,
+            "final_concurrency_reserve": 48,
+            "preserve_acceptance_thresholds": True,
+        },
+        "controller": {
+            "research_admission": "open-after-offline-runner-acceptance",
+        },
+        "budgets": {
+            "research_ledger": {
+                "starting_used": 95,
+                "local_pair_max": 12,
+                "final_concurrency_reserve": 48,
+                "hard_total": 155,
+                "unallocated": 0,
+            },
+        },
         "dataset": {
             "parent_sha256": "e" * 64,
             "development_projection_sha256": "d" * 64,
@@ -300,6 +324,124 @@ def _immediate_predecessor_protocol(root: Path) -> dict:
     return protocol
 
 
+def _latest_predecessor_protocol(root: Path) -> dict:
+    protocol = _protocol()
+    protocol_id = "product-optimization-repair-pair-v3"
+    artifacts_root = root / "legacy-v3"
+    artifacts_root.mkdir(parents=True)
+    claim = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "protocol_byte_sha256": "7" * 64,
+        "policy": "single-execution-no-resume-or-retry",
+    }
+    cell = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "attempted-before-post",
+    }
+    cells = [
+        {
+            "block": block["block"],
+            "arm": block["arm"],
+            "repetition": block["repetition"],
+            "case_id": case_id,
+            "status": "completed" if (block["block"], case_id) == (1, "P04")
+            else "not_submitted",
+            **({"error_code": None}
+               if (block["block"], case_id) == (1, "P04") else {}),
+        }
+        for block in protocol["design"]["execution_blocks"]
+        for case_id in block["case_order"]
+    ]
+    record = {
+        "experiment_id": protocol_id,
+        "block": 1,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "completed",
+        "error_code": None,
+        "task_id": "task-v3",
+        "run_id": "run-v3",
+        "observability_final": True,
+        "usage": {
+            "observation_final": True,
+            "token_usage_complete": True,
+            "total_tokens": 10975,
+            "llm_calls": 12,
+            "retrieval_calls": 6,
+            "external_calls": 18,
+            "failed_calls": 0,
+        },
+        "observability": {
+            "totals": {
+                "total_tokens": 10975,
+                "llm_calls": 12,
+                "retrieval_calls": 6,
+                "external_calls": 18,
+                "failed_calls": 0,
+            },
+            "calls": [{"status": "succeeded"} for _ in range(18)],
+        },
+    }
+    observation = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "arm": "baseline",
+        "repetition": 2,
+        "case_id": "P04",
+        "status": "completed",
+        "error_code": None,
+        "task_id": "task-v3",
+        "run_id": "run-v3",
+    }
+    result = {
+        "schema_version": 1,
+        "protocol_id": protocol_id,
+        "planned_cells": 12,
+        "started_cells": 1,
+        "complete": False,
+        "stop_reason": "TELEMETRY_strict_safe_fetch_failure",
+        "no_retries_or_splices": True,
+        "cells": cells,
+        "ledger": {
+            "attempted_cells": 1,
+            "known_admitted_min": 1,
+            "possibly_submitted_max": 1,
+            "submission_count_uncertain": False,
+            "uncertain_cells": 0,
+        },
+        "records": [record],
+    }
+    payloads = {
+        "execution_claim": claim,
+        "attempted_cell": cell,
+        "observation": observation,
+        "run_result": result,
+    }
+    specifications = {}
+    for name, payload in payloads.items():
+        path = artifacts_root / f"{name}.json"
+        path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+        specifications[name] = {
+            "path": path.relative_to(root).as_posix(),
+            "sha256": runner._file_hash(path),
+        }
+    protocol["latest_predecessor"] = {
+        "protocol_id": protocol_id,
+        "protocol_byte_sha256": "7" * 64,
+        "artifacts": specifications,
+        "accounted_research_runs": 1,
+        "trace_external_calls": 18,
+        "disposition": "immutable-no-retry-no-splice",
+    }
+    return protocol
+
+
 def _successful_record(case_id: str, snapshot: str = "snapshot.json") -> dict:
     resources = {
         name: {
@@ -328,6 +470,88 @@ def _successful_record(case_id: str, snapshot: str = "snapshot.json") -> dict:
         },
         "run_heartbeat": {"failures": 0, "lease_losses": 0},
     }
+
+
+def _proposed_protocol() -> dict:
+    protocol = _protocol()
+    protocol["status"] = "proposed"
+    protocol["freeze_date"] = None
+    protocol["controller"]["research_admission"] = (
+        "closed-pending-hard-cap-approval"
+    )
+    protocol["authorization"].update(
+        status="pending", decision_date=None, effective_hard_total=154
+    )
+    return protocol
+
+
+def test_research_admission_requires_approved_active_protocol():
+    runner._require_active_protocol(_protocol())
+    with pytest.raises(
+        runner.RepairPairControlError, match="research admission is not approved"
+    ):
+        runner._require_active_protocol(_proposed_protocol())
+
+
+def test_proposed_protocol_blocks_preflight_before_audit_or_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("", encoding="utf-8")
+    output = tmp_path / "preflight"
+    monkeypatch.setattr(
+        runner, "_bootstrap_approved_protocol", lambda value: _proposed_protocol()
+    )
+    monkeypatch.setattr(
+        runner, "audit", lambda *args: pytest.fail("audit must not run")
+    )
+
+    with pytest.raises(
+        runner.RepairPairControlError, match="research admission is not approved"
+    ):
+        runner.preflight(
+            output, tmp_path / "base", tmp_path / "candidate", env_file, "f" * 64
+        )
+    assert not output.exists()
+
+
+def test_proposed_protocol_blocks_prepare_and_run_before_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    protocol = _proposed_protocol()
+    experiment = tmp_path / "experiment"
+    monkeypatch.setattr(
+        runner, "_bootstrap_approved_protocol", lambda value: protocol
+    )
+    monkeypatch.setattr(
+        runner, "audit", lambda *args: pytest.fail("audit must not run")
+    )
+    with pytest.raises(
+        runner.RepairPairControlError, match="research admission is not approved"
+    ):
+        runner.prepare(
+            experiment, tmp_path / "preflight", tmp_path / "base",
+            tmp_path / "candidate", tmp_path / ".env", "f" * 64,
+        )
+    assert not experiment.exists()
+
+    monkeypatch.setattr(
+        runner, "_validate_execution_binding", lambda *args: (protocol, {})
+    )
+    monkeypatch.setattr(
+        runner, "_claim_protocol_execution",
+        lambda *args: pytest.fail("execution claim must not be written"),
+    )
+    with pytest.raises(
+        runner.RepairPairControlError, match="research admission is not approved"
+    ):
+        asyncio.run(
+            runner.run(
+                experiment, tmp_path / "preflight", tmp_path / "base",
+                tmp_path / "candidate", tmp_path / ".env", "f" * 64,
+            )
+        )
+    assert not experiment.exists()
 
 
 def test_case_payload_uses_only_frozen_development_projection():
@@ -680,6 +904,60 @@ def test_strict_telemetry_accepts_bound_forward_and_known_citation_unknowns(
     assert runner._strict_telemetry_state(path)["anomaly"] is False
 
 
+@pytest.mark.parametrize(
+    "error_type", ("StreamClosed", "StreamConsumed", "ResponseNotRead")
+)
+def test_strict_telemetry_accepts_only_bounded_citation_stream_failures(
+    tmp_path: Path, error_type: str,
+):
+    path = tmp_path / "telemetry.jsonl"
+    events = [
+        {"schema_version": 1, "event": "telemetry_ready"},
+        {"schema_version": 1, "event": "external_http_failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "method": "GET", "error_type": error_type, "failure": None,
+         "safe_fetch_phase": "http_dispatch"},
+        {"schema_version": 1, "event": "safe_fetch_failure",
+         "status": "failure", "operation": "citation_safe_fetch_official",
+         "source": "citation", "error_type": "UnsafeUrlError",
+         "failure": "response_rejected", "safe_fetch_phase": "http_dispatch"},
+    ]
+    path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    assert runner._strict_telemetry_state(path)["anomaly"] is False
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"event": "external_http_failure", "operation": "safe_fetch_official",
+         "source": "official", "method": "GET", "error_type": "StreamClosed",
+         "failure": None, "safe_fetch_phase": "http_dispatch"},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "error_type": "StreamClosed", "failure": None,
+         "safe_fetch_phase": "before_http"},
+        {"event": "external_http_failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "method": "GET", "error_type": "OtherError", "failure": None,
+         "safe_fetch_phase": "http_dispatch"},
+    ],
+)
+def test_strict_telemetry_rejects_stream_failures_outside_bounded_citation_phase(
+    tmp_path: Path, event: dict, monkeypatch: pytest.MonkeyPatch,
+):
+    path = tmp_path / "telemetry.jsonl"
+    path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+    monkeypatch.setattr(
+        o1_pr2b_control,
+        "telemetry_state",
+        lambda *args, **kwargs: {"anomaly": False, "reason": None},
+    )
+    assert runner._strict_telemetry_state(path)["anomaly"] is True
+
+
 def test_global_ledger_prevents_second_execution_or_cell_attempt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -719,9 +997,9 @@ def test_global_ledger_prevents_second_execution_or_cell_attempt(
     assert observation["protocol_id"] == "pair-v2"
 
 
-def test_v3_protocol_and_ledger_do_not_alias_retired_predecessors():
-    assert runner.PROTOCOL_PATH.name == "product-optimization-repair-pair-v3.json"
-    assert runner.LEDGER_ROOT.name == "product-optimization-repair-pair-v3"
+def test_v4_protocol_and_ledger_do_not_alias_retired_predecessors():
+    assert runner.PROTOCOL_PATH.name == "product-optimization-repair-pair-v4.json"
+    assert runner.LEDGER_ROOT.name == "product-optimization-repair-pair-v4"
     assert runner.LEDGER_ROOT != (
         runner.ROOT
         / "outputs/product-optimization-ledgers/product-optimization-repair-pair-v1"
@@ -839,6 +1117,25 @@ def test_immediate_predecessor_binds_completed_v2_stop(tmp_path: Path):
         match="immediate predecessor completed record is invalid",
     ):
         runner._validate_immediate_predecessor(protocol, tmp_path)
+
+
+def test_latest_predecessor_binds_completed_v3_stop(tmp_path: Path):
+    protocol = _latest_predecessor_protocol(tmp_path)
+    runner._validate_latest_predecessor(protocol, tmp_path)
+
+    result_spec = protocol["latest_predecessor"]["artifacts"]["run_result"]
+    result_path = tmp_path / result_spec["path"]
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["stop_reason"] = "TELEMETRY_strict_external_http_response"
+    result_path.write_text(
+        json.dumps(result, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    result_spec["sha256"] = runner._file_hash(result_path)
+    with pytest.raises(
+        runner.RepairPairControlError,
+        match="latest predecessor result is invalid",
+    ):
+        runner._validate_latest_predecessor(protocol, tmp_path)
 
 
 def test_artifact_paths_must_be_contained_regular_nonempty_files(tmp_path: Path):

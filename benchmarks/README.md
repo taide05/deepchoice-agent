@@ -153,6 +153,20 @@ $privateEnv = "<私有 .env 绝对路径>"
 完整执行机会，累计预算固定为94＋12＋48＝154；实际停止后累计研究为95，最终/并发48仍未动。
 `audit`/`prepare` 通过只代表离线控制契约；内容改善须等12格完整报告按冻结盲评协议评审。
 
+## 关闭准入的修复包局部12格提案（v4）
+
+`product-optimization-repair-pair-v4` 是测量复议后的前瞻提案，不是已批准执行卡。它绑定
+d23c948 baseline、d7e776d candidate、原12格顺序/种子/评分门槛，以及v1、v2、v3三个不可变
+停止根。新增控制信息仅为 `safe_fetch_phase` 和三个明确的HTTPX response-stream生命周期类型；
+只有citation safe-fetch已进入HTTP dispatch且终态/来源门禁完整时才可继续保留citation unknown。
+非citation、dispatch前、`OtherError`、普通5xx、429、安全、身份、预算、租约及其他未分类错误仍停线。
+
+协议当前为 `proposed`、`closed-pending-hard-cap-approval`，累计研究仍为95/154。完整新12格加
+最终/并发预留48格需要上限155；在用户明确批准这一格差额前，runner会在任何付费preflight、
+prepare或run写入前拒绝。`audit`仍可做零研究只读核验，但本次没有执行它，也没有付费外呼。
+v4没有可执行SHA或运行命令；批准后须先将同一协议切换为冻结/开放状态、重跑离线验收并本地提交，
+再做零研究audit和有界preflight。不得用v4解释或拼接历史v3的两个`OtherError`。
+
 ## 有意使用历史直连工具
 
 仅在明确批准历史实验及调用额度后，使用项目 Python 3.11/3.12 环境：

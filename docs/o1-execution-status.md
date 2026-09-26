@@ -212,11 +212,11 @@ observation/result 的 task/run/status 一致，停止正确；403 与200响应�
 归为普通403或既知 transport，允许继续将扩大 fail-closed 边界。最终/并发48完整保留；三次付费停止
 规则已触发测量复议，不能自动追加 v4、复用旧根或据单份 baseline 报告声称局部效果改善。
 
-三次停止后的测量复议结论：v1 是零外呼控制身份停止；v2/v3 都只完成同一个 baseline-r2/P04，
+三次停止后的初始测量复议检查点：v1 是零外呼控制身份停止；v2/v3 都只完成同一个 baseline-r2/P04，
 没有产生配对候选证据。v3 的两个 `OtherError` 分别出现在已收到403和200响应之后，冻结遥测不足以
 确定真实异常类型；HTTPX 的 `StreamClosed`、`StreamConsumed`、`ResponseNotRead` 等 stream 状态
 又不属于 `TransportError`，旧 observer 会统一压成 `OtherError`。现阶段不把任何 stream 状态自动
-改判为可降级 transport，也不追加 v4。若未来增强 observer，只能通过全新文件和协议身份前瞻保留
+改判为可降级 transport；该检查点当时也不追加 v4。后续增强 observer 只能通过全新文件和协议身份前瞻保留
 这些脱敏类型；当前冻结 observer 仍把它们归为 `OtherError`，控制器继续 fail closed。既有 P04
 报告41/41 citation 为 unknown，只能用作问题诊断，不能作为质量通过或新基线。
 
@@ -229,6 +229,24 @@ repair-pair v4 或产生产品效果证据。
 最终验收为120项聚焦、337项相关、**2024 passed**（215.78秒）、smoke-v1 12/12且基准一致，
 pyflakes、生产代码vulture100%、pip check、compileall和diff检查通过；独立复审关闭捕获作用域问题后
 无遗留项。本轮未联网、未增加研究格，累计仍为95/154。
+
+2026-09-26 的后续测量复议把“产品safe-fetch的response-stream收敛”和“评测控制器能否识别该类
+终态unknown”分开处理。最小控制缺口是旧observer丢失异常类型与发生阶段，使v3只能记录
+`OtherError`。新控制层前瞻保留`safe_fetch_phase`，并只接受citation safe-fetch在HTTP dispatch后
+出现的`StreamClosed`、`StreamConsumed`或`ResponseNotRead`；其余边界仍fail closed。v1/v2/v3
+校验保持原语义，v3作为新增latest predecessor按claim/cell/observation/result路径、字节哈希、
+1 completed + 11 not_submitted、10,975 tokens/12 LLM/6 retrieval/18 external calls绑定。
+
+新的`product-optimization-repair-pair-v4`绑定baseline `d23c9480b9f368f8ec75ec44ee7e25c64146d4be`
+与candidate `d7e776dffced8d1ddb90d03b924b1217ea766ddb`，保留P04/P08目标、P01回归、两臂各两次、
+单并发、原种子/盲评/停止/验收门槛。它当前是`proposed`且研究准入关闭；授权字段明确记录
+现行154、提议155、当前有效154。runner在付费preflight、prepare和run的网络/写入前统一拒绝
+未批准状态。没有执行付费前置、零研究audit或研究run，账本仍为95/154；下一步只等待用户决定
+是否把累计上限154→155，批准后仍需冻结协议、离线验收、本地提交和零研究audit，不能直接开跑。
+离线验收为231项聚焦、**2072 passed**（225.67秒）、smoke-v1 12/12且基准一致，pyflakes、
+生产代码vulture100%、pip check、compileall与diff检查通过。首次受限沙箱全套只有legacy路由因无法在
+工作树创建`./outputs/checkpoints.db`失败；同例在专用可写目录通过，最终全套在正常可写工作树条件
+全绿。该环境诊断不改变产品结论或研究账本。
 
 实际安全采集首次验证时，React、Vue、Python 三个不同官网的 GET 均安全停止且没有落盘；对
 React 的异常分类和 Python 的响应头诊断将共同根因定位到 gzip 解码不一致。定位后，safe-fetch

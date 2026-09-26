@@ -9,7 +9,7 @@ import pytest
 from benchmarks import product_optimization_repair_pair as pair
 
 
-def test_frozen_repair_pair_protocol_loads_with_conservative_boundaries():
+def test_proposed_repair_pair_protocol_loads_with_conservative_boundaries():
     frozen = pair.load_repair_pair_protocol()
     payload = frozen.payload
 
@@ -19,6 +19,12 @@ def test_frozen_repair_pair_protocol_loads_with_conservative_boundaries():
     assert payload["design"]["formal_research_runs"] == 12
     assert payload["design"]["independent_single_case_qualification"] is False
     assert payload["design"]["paired_p01_replaces_qualification"] is True
+    assert payload["status"] == "proposed"
+    assert payload["freeze_date"] is None
+    assert payload["authorization"]["status"] == "pending"
+    assert payload["controller"]["research_admission"] == (
+        "closed-pending-hard-cap-approval"
+    )
     assert payload["environment"]["hitl_mode"] == "stop-at-hitl-no-auto-resolution"
     assert payload["environment"]["endpoint_sha256"] == (
         "12b8deaccc34b32757dbb1497e029da0c2e7b26ffa86b9c926c08cb4692f4508"
@@ -31,10 +37,10 @@ def test_frozen_repair_pair_protocol_loads_with_conservative_boundaries():
     )
     assert payload["stopping"]["ordinary_citation_http_5xx"] == "stop-new-admission"
     assert payload["budgets"]["research_ledger"] == {
-        "starting_used": 94,
+        "starting_used": 95,
         "local_pair_max": 12,
         "final_concurrency_reserve": 48,
-        "hard_total": 154,
+        "hard_total": 155,
         "unallocated": 0,
     }
 
@@ -46,7 +52,7 @@ def test_protocol_covers_each_development_cell_once():
                 for item in review}) == 12
     assert all(item["case_id"] in {"P01", "P04", "P08"} for item in review)
     assert [item["blind_label"] for item in review] == [
-        f"RP3-{index:02d}" for index in range(1, 13)
+        f"RP4-{index:02d}" for index in range(1, 13)
     ]
 
 

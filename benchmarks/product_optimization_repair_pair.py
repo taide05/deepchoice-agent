@@ -25,13 +25,13 @@ from benchmarks.product_optimization_dev_requests import (
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PROTOCOL_PATH = ROOT / "benchmarks" / "product-optimization-repair-pair-v3.json"
-PROTOCOL_ID = "product-optimization-repair-pair-v3"
+PROTOCOL_PATH = ROOT / "benchmarks" / "product-optimization-repair-pair-v4.json"
+PROTOCOL_ID = "product-optimization-repair-pair-v4"
 PARENT_DATASET_SHA256 = "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
 PARENT_DATASET_BYTES_SHA256 = "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef"
 PARENT_DATASET_GIT_OBJECT = "da14cf6d72ed528eef3510f48f78116288c3964a"
 BASELINE_COMMIT = "d23c9480b9f368f8ec75ec44ee7e25c64146d4be"
-CANDIDATE_COMMIT = "a2488d81f24e6d42738577306c92cf619239f704"
+CANDIDATE_COMMIT = "d7e776dffced8d1ddb90d03b924b1217ea766ddb"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_OBJECT = re.compile(r"^[0-9a-f]{40}$")
 
@@ -190,7 +190,7 @@ def _validate_design(value: Any) -> None:
         != expected_cells
         or [item.get("order") for item in review] != list(range(1, 13))
         or [item.get("blind_label") for item in review]
-        != [f"RP3-{index:02d}" for index in range(1, 13)]
+        != [f"RP4-{index:02d}" for index in range(1, 13)]
         or any(
             set(item) != {"case_id", "role", "arm", "repetition", "order", "blind_label"}
             or item.get("role") != ("regression" if item.get("case_id") == "P01" else "target")
@@ -222,6 +222,7 @@ def _validate_protocol(payload: Any) -> None:
             "stopping",
             "predecessor",
             "immediate_predecessor",
+            "latest_predecessor",
             "authorization",
         },
         "protocol",
@@ -229,8 +230,11 @@ def _validate_protocol(payload: Any) -> None:
     if (
         protocol["schema_version"] != 1
         or protocol["protocol_id"] != PROTOCOL_ID
-        or protocol["status"] != "frozen"
-        or protocol["freeze_date"] != "2026-09-25"
+        or protocol["status"] not in {"proposed", "frozen"}
+        or (
+            protocol["freeze_date"] is not None
+            and protocol["freeze_date"] != "2026-09-26"
+        )
         or protocol["interpretation"] != "whole-repair-package-local-effect-only"
     ):
         _fail("protocol identity changed")
@@ -304,7 +308,10 @@ def _validate_protocol(payload: Any) -> None:
     )
     if (
         controller["binding_policy"] != "protocol-plus-execution-binding-v1"
-        or controller["research_admission"] != "closed-until-offline-runner-acceptance"
+        or controller["research_admission"] not in {
+            "closed-pending-hard-cap-approval",
+            "open-after-offline-runner-acceptance",
+        }
         or not isinstance(controller["required_files"], list)
     ):
         _fail("controller policy changed")
@@ -348,8 +355,8 @@ def _validate_protocol(payload: Any) -> None:
         _fail("environment contract changed")
     budgets = protocol["budgets"]
     if budgets != {
-        "research_ledger": {"starting_used": 94, "local_pair_max": 12,
-                            "final_concurrency_reserve": 48, "hard_total": 154,
+        "research_ledger": {"starting_used": 95, "local_pair_max": 12,
+                            "final_concurrency_reserve": 48, "hard_total": 155,
                             "unallocated": 0},
         "per_run": {"total_tokens": 60000, "llm_calls": 96,
                     "retrieval_calls": 72, "active_milliseconds": 900000},
@@ -387,11 +394,13 @@ def _validate_protocol(payload: Any) -> None:
         "retrieval_rate_limit_safety_budget_lease_or_unknown": "stop-new-admission",
         "known_citation_policy_or_transport_unknown":
             "continue-if-terminal-and-source-gates-pass",
+        "bounded_citation_response_stream_unknown":
+            "continue-if-dispatch-entered-terminal-and-source-gates-pass",
         "unclassified_external_or_safe_fetch_error": "stop-new-admission",
         "ordinary_citation_http_5xx": "stop-new-admission",
         "finish_already_admitted_run": True,
         "replace_retry_or_splice_stopped_roots": False,
-        "three_paid_stops_without_valid_pair": "return-to-measurement-review",
+        "next_paid_stop_without_valid_pair": "return-to-measurement-review",
     }:
         _fail("stopping contract changed")
     if protocol["predecessor"] != {
@@ -416,14 +425,46 @@ def _validate_protocol(payload: Any) -> None:
         "disposition": "immutable-no-retry-no-splice",
     }:
         _fail("predecessor execution binding changed")
-    if protocol["authorization"] != {
-        "decision_date": "2026-09-25",
-        "hard_total": 154,
+    authorization = protocol["authorization"]
+    if authorization not in ({
+        "status": "pending",
+        "decision_date": None,
+        "current_hard_total": 154,
+        "proposed_hard_total": 155,
+        "effective_hard_total": 154,
         "local_pair_max": 12,
         "final_concurrency_reserve": 48,
         "preserve_acceptance_thresholds": True,
-    }:
+    }, {
+        "status": "approved",
+        "decision_date": "2026-09-26",
+        "current_hard_total": 154,
+        "proposed_hard_total": 155,
+        "effective_hard_total": 155,
+        "local_pair_max": 12,
+        "final_concurrency_reserve": 48,
+        "preserve_acceptance_thresholds": True,
+    }):
         _fail("measurement authorization changed")
+    pending = authorization["status"] == "pending"
+    if (
+        pending
+        and (
+            protocol["status"] != "proposed"
+            or protocol["freeze_date"] is not None
+            or controller["research_admission"]
+            != "closed-pending-hard-cap-approval"
+        )
+    ) or (
+        not pending
+        and (
+            protocol["status"] != "frozen"
+            or protocol["freeze_date"] != "2026-09-26"
+            or controller["research_admission"]
+            != "open-after-offline-runner-acceptance"
+        )
+    ):
+        _fail("protocol activation state changed")
     if protocol["immediate_predecessor"] != {
         "protocol_id": "product-optimization-repair-pair-v2",
         "protocol_byte_sha256": "404ff295d0a66fdbaab610f96b6b85a6a0b1bcdebc6c588fd9475975b00e7117",
@@ -450,6 +491,32 @@ def _validate_protocol(payload: Any) -> None:
         "disposition": "immutable-no-retry-no-splice",
     }:
         _fail("immediate predecessor execution binding changed")
+    if protocol["latest_predecessor"] != {
+        "protocol_id": "product-optimization-repair-pair-v3",
+        "protocol_byte_sha256": "47bfeffa01893b6077a480b06dd6ff4254d6c121d110614747a3fc2f9db9c268",
+        "artifacts": {
+            "execution_claim": {
+                "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v3/execution-claim.json",
+                "sha256": "97b8ff04d8b8d1d4554625914f07de04617bb9cfef9fff9d0e119941941d1f56",
+            },
+            "attempted_cell": {
+                "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v3/cells/baseline-r2-P04.json",
+                "sha256": "3468896e934298d49d9db2faeb56d605af318e48fb038da7b9a870daf89ed7fb",
+            },
+            "observation": {
+                "path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v3/observations.jsonl",
+                "sha256": "43fdd654c103b39c7dd05a8daab9fefc6fc6760d82b248861449dc3044040c15",
+            },
+            "run_result": {
+                "path": "outputs/product-optimization-repair-pair-v3-20260925-v1/repair-pair-run-result.json",
+                "sha256": "2dcb6d5fcb1d61feff0ef349095ef081ec161bac4f3b970e614abb9c963ead7f",
+            },
+        },
+        "accounted_research_runs": 1,
+        "trace_external_calls": 18,
+        "disposition": "immutable-no-retry-no-splice",
+    }:
+        _fail("latest predecessor execution binding changed")
 
 
 def load_repair_pair_protocol(path: Path = PROTOCOL_PATH) -> RepairPairProtocol:

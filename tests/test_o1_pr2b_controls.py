@@ -330,6 +330,28 @@ def test_pr2b_child_exposes_only_known_safe_fetch_failure_values():
     unknown.failure = SimpleNamespace(value="unexpected")
     assert child._safe_fetch_failure(unknown) is None
     assert child._safe_fetch_failure(RuntimeError("redacted")) is None
+
+
+@pytest.mark.parametrize(
+    "error_type", (httpx.StreamClosed, httpx.StreamConsumed, httpx.ResponseNotRead)
+)
+def test_pr2b_child_normalizes_only_dispatched_response_stream_failures(error_type):
+    from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
+
+    original = error_type()
+    assert child._bounded_stream_failure(original, "before_http") is original
+    for phase in ("http_dispatch", "response_received"):
+        normalized = child._bounded_stream_failure(original, phase)
+        assert isinstance(normalized, UnsafeUrlError)
+        assert normalized.failure is SafeFetchFailure.RESPONSE_REJECTED
+        assert normalized.__cause__ is None
+
+
+@pytest.mark.parametrize(
+    "error", (httpx.StreamClosed(), httpx.StreamConsumed(), httpx.ResponseNotRead())
+)
+def test_pr2b_child_preserves_bounded_stream_error_types(error):
+    assert child._error_type(error) == type(error).__name__
     assert child._error_type(httpx.ProxyError("redacted")) == "TransportError"
 
 
@@ -385,6 +407,49 @@ def test_pr2b_citation_safe_fetch_accepts_exact_transport_unknown_pair(tmp_path)
          "error_type": "TransportError", "failure": None},
     )
     assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+@pytest.mark.parametrize(
+    "error_type", ("StreamClosed", "StreamConsumed", "ResponseNotRead")
+)
+def test_pr2b_citation_safe_fetch_accepts_dispatched_response_stream_failure(
+    tmp_path, error_type,
+):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {"event": "external_http_failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "method": "GET", "error_type": error_type, "failure": None,
+         "safe_fetch_phase": "http_dispatch"},
+        {"event": "safe_fetch_failure", "status": "failure",
+         "operation": "citation_safe_fetch_official", "source": "citation",
+         "error_type": "UnsafeUrlError", "failure": "response_rejected",
+         "safe_fetch_phase": "http_dispatch"},
+    )
+    assert control.telemetry_state(telemetry)["anomaly"] is False
+
+
+@pytest.mark.parametrize(
+    "operation,source,phase",
+    [
+        ("safe_fetch_official", "official", "http_dispatch"),
+        ("citation_safe_fetch_official", "citation", "before_http"),
+    ],
+)
+def test_pr2b_response_stream_failure_remains_narrowly_scoped(
+    tmp_path, operation, source, phase,
+):
+    telemetry = tmp_path / "telemetry.jsonl"
+    _write_telemetry(
+        telemetry,
+        {"event": "telemetry_ready"},
+        {"event": "external_http_failure", "operation": operation,
+         "source": source, "method": "GET", "error_type": "StreamClosed",
+         "failure": None, "safe_fetch_phase": phase},
+    )
+    assert control.telemetry_state(telemetry)["anomaly"] is True
 
 
 @pytest.mark.parametrize(

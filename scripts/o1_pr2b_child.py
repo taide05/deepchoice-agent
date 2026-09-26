@@ -25,7 +25,7 @@ _FIELDS = frozenset({
     "available_bytes", "cold", "model_initialized", "status", "failure",
     "error_type", "status_code", "certificate_required", "hostname_check_enabled",
     "hostname_matches", "reason", "source", "method", "operation",
-    "instance_nonce",
+    "instance_nonce", "safe_fetch_phase",
 })
 _EVENTS = frozenset({
     "embedding_first_start", "embedding_first_end", "proxy_connect_success",
@@ -43,7 +43,7 @@ _ERROR_TYPES = frozenset({
     "BudgetPersistenceError", "BudgetExecutionDeferredError", "ValueError",
     "TypeError", "RuntimeError", "OSError", "MemoryError", "ImportError",
     "ModuleNotFoundError", "PermissionError", "FileNotFoundError",
-    "TransportError",
+    "TransportError", "StreamClosed", "StreamConsumed", "ResponseNotRead",
 })
 
 _SAFE_FETCH_FAILURES = frozenset({
@@ -64,6 +64,9 @@ _SAFE_FETCH_SOURCE: ContextVar[str | None] = ContextVar(
 )
 _CITATION_FETCH: ContextVar[bool] = ContextVar(
     "o1_pr2b_citation_fetch", default=False
+)
+_SAFE_FETCH_PHASE: ContextVar[dict[str, str] | None] = ContextVar(
+    "o1_pr2b_safe_fetch_phase", default=None
 )
 
 
@@ -177,6 +180,22 @@ def _safe_fetch_failure(exc: BaseException) -> str | None:
     except Exception:
         return None
     return value if value in _SAFE_FETCH_FAILURES else None
+
+
+def _bounded_stream_failure(
+    exc: BaseException, phase: str
+) -> BaseException:
+    """Match the product boundary without weakening pre-dispatch failures."""
+
+    if (not isinstance(exc, httpx.StreamError)
+            or phase not in {"http_dispatch", "response_received"}):
+        return exc
+    from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
+
+    return UnsafeUrlError(
+        "Response stream could not be consumed safely",
+        failure=SafeFetchFailure.RESPONSE_REJECTED,
+    )
 
 
 def _timestamp() -> str:
@@ -293,15 +312,23 @@ def _install_observers(telemetry: Telemetry) -> None:
         started = time.monotonic_ns()
         operation = _safe_fetch_operation(source)
         token = _SAFE_FETCH_SOURCE.set(operation)
+        phase = {"value": "before_http"}
+        phase_token = _SAFE_FETCH_PHASE.set(phase)
         try:
             response = await original_fetch(self, source, url, **kwargs)
         except BaseException as exc:
+            normalized = _bounded_stream_failure(exc, phase["value"])
             telemetry.emit("safe_fetch_failure", run_id=run_id, status="failure",
                            source=_observed_source(operation), operation=operation,
-                           failure=_safe_fetch_failure(exc), error_type=_error_type(exc),
+                           failure=_safe_fetch_failure(normalized),
+                           error_type=_error_type(normalized),
+                           safe_fetch_phase=phase["value"],
                            duration_ms=(time.monotonic_ns() - started) / 1_000_000)
+            if normalized is not exc:
+                raise normalized from None
             raise
         finally:
+            _SAFE_FETCH_PHASE.reset(phase_token)
             _SAFE_FETCH_SOURCE.reset(token)
         telemetry.emit("safe_fetch_success", run_id=run_id, status="success",
                        source=_observed_source(operation), operation=operation,
@@ -323,6 +350,9 @@ def _install_observers(telemetry: Telemetry) -> None:
         if operation not in _HTTP_OPERATIONS:
             raise RuntimeError("unclassified external HTTP operation")
         source = _observed_source(operation)
+        phase = _SAFE_FETCH_PHASE.get()
+        if phase is not None:
+            phase["value"] = "http_dispatch"
         try:
             response = await original_http(self, request)
         except BaseException as exc:
@@ -330,11 +360,15 @@ def _install_observers(telemetry: Telemetry) -> None:
                            status="failure", source=source,
                            operation=operation, method=request.method,
                            error_type=_error_type(exc),
-                           failure=_safe_fetch_failure(exc))
+                           failure=_safe_fetch_failure(exc),
+                           safe_fetch_phase=(phase or {}).get("value"))
             raise
+        if phase is not None:
+            phase["value"] = "response_received"
         telemetry.emit("external_http_response", run_id=_run_id(),
                        status="success", source=source, operation=operation,
-                       method=request.method, status_code=response.status_code)
+                       method=request.method, status_code=response.status_code,
+                       safe_fetch_phase=(phase or {}).get("value"))
         return response
     embedding.get_embedding_model = observed_embedding
     # Existing direct-import aliases must point to the same observer. Future

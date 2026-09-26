@@ -4,6 +4,18 @@
 
 ### Changed
 
+Measurement review now has a prospective `product-optimization-repair-pair-v4` control contract.
+The observer preserves the safe-fetch phase and exact HTTPX `StreamClosed`, `StreamConsumed`, and
+`ResponseNotRead` types; only citation safe-fetch failures after HTTP dispatch may use the existing
+terminal/source-gated unknown path. Non-citation, pre-dispatch, `OtherError`, ordinary 5xx, safety,
+identity, budget, lease, and all other unclassified failures still stop admission. The proposed
+12-cell protocol binds candidate `d7e776d`, the unchanged baseline/seed/design, and immutable v1–v3
+claims/results. It remains `proposed` with research admission closed: preflight, preparation, and run
+all fail before network or experiment writes until the user explicitly approves the cumulative cap
+increase from 154 to 155. Offline acceptance passed 231 focused and 2,072 full-suite tests, smoke-v1
+12/12 with baseline match, pyflakes, production-code vulture 100%, dependency, compile, and diff checks.
+No historical error was relabeled and no paid call or research run was made.
+
 On 2026-09-26, refocused the product roadmap on useful, stable reports and a bounded real-feedback
 loop before adding further offline heuristics. Quality, completion, latency and token evidence are
 reviewed together, without relaxing acceptance or dropping the 12-way concurrency goal. Consolidated
