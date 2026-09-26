@@ -4,6 +4,20 @@
 
 ### Changed
 
+Product optimization now excludes concurrency qualification from the current and near-term roadmap.
+Concurrency collection support remains available, but no concurrency protocol, acceptance gate, or
+research reserve is active; the work now targets serial report correctness, completeness, evidence
+quality, and repeatability. The formal v6 root completed baseline-r2 P04, P01, and P08 serially, with
+3/3 terminal reports, 59/59 LLM/retrieval Trace calls succeeded, no timeout, retry, or partial failure,
+and wall times of 114.1, 50.8, and 45.5 seconds. The first case included a successful 73.6-second cold
+embedding initialization, while warmed cases finished in 45–51 seconds. Product quality did not pass:
+all three reports had zero verified citation checks, P04 was materially shorter with self-review 3/6,
+and P08 forced Redis despite missing decision-critical constraints. Two P08 citation failures before
+HTTP dispatch (`safety_rejected` and `route_unsupported`) correctly stopped admission. V6 is immutable
+at three completed and nine unsubmitted cells, cannot be retried or spliced, and cumulative usage is
+100/156 with the remaining 56 unallocated. No paid successor is open; next work is offline minimal
+repair of conditional decision/HITL, P04 completeness/action boundaries, and citation verification.
+
 Measurement review now has an offline-accepted `product-optimization-repair-pair-v6` serial product-
 effect protocol. It binds the exact immutable v5 claim, attempted cell,
 observation, result, collection record, telemetry, usage, and three-file used-knowledge drift. Only an

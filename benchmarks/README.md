@@ -205,14 +205,19 @@ audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**
 中的append-only observation与collection record在experiment/case/task/run身份上唯一匹配，且原
 `_record_stop_reason`门禁接受时，才可恢复父结果遗漏的已完成record。
 
-用户明确要求先稳定产品效果、后验证并发，因此本协议固定`serial-concurrency-1`，并发研究授权为0。
-97/156实耗下，本协议最多12格，完成后余47格；旧48格最终/并发整合方案仅为历史规划，不在本协议
-预留或消费。首次preflight的检索与Tavily通过，但协议bootstrap先于私有环境安装，LLM配置缓存空凭据，
+本协议固定`serial-concurrency-1`，并发研究授权为0。用户随后把并发测试从当前及近期产品目标中
+移除；不再冻结并发协议、设置并发门槛或预留研究格。97/156实耗下，本协议原计划最多12格；
+旧48格最终/并发整合方案仅为历史规划。首次preflight的检索与Tavily通过，但协议bootstrap先于私有环境安装，LLM配置缓存空凭据，
 因此在HTTP dispatch前以`OpenAIError`停止；LLM尝试0、研究提交0，该根不得复用。v6入口现先安装
 私有环境，再加载协议和项目模块。冻结协议byte SHA为
 `393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c`。离线验收为14项v6聚焦、
 394项相关、2095项全套（117.86秒）、smoke-v1 12/12基准一致及pyflakes/vulture/pip/compile检查。
-提交`e05bb6b`后的零研究audit已通过且`research_runs_submitted=0`；新的付费preflight尚未执行。
+提交`e05bb6b`后的零研究audit通过。新的preflight通过后，正式根串行完成baseline-r2的P04/P01/P08，
+任务3/3完成、59/59个LLM/检索Trace调用成功、0超时/重试/部分失败；wall为114.1/50.8/45.5秒，
+首例包含73.6秒embedding冷启动。产品质量未通过：三例citation verified均为0，P04报告明显偏短，
+P08在关键约束缺失时仍强制Winner。P08两条citation pre-HTTP安全拒绝触发正确停线，最终为
+3 completed + 9 not_submitted，累计100/156。v6不可续跑、重试或拼接；余56格未分配，当前没有
+开放的付费后继协议。
 
 ## 有意使用历史直连工具
 
