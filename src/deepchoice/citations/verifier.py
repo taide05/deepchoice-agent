@@ -131,6 +131,7 @@ class _FetchOutcome:
     status: CitationStatus
     reason: CitationReason
     text: str = ""
+    truncated: bool = False
 
 
 def canonicalize_source_url(value: Any) -> str | None:
@@ -504,6 +505,7 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
             max_response_bytes=MAX_RESPONSE_BYTES,
             max_redirects=MAX_REDIRECTS,
             timeout_s=FETCH_TIMEOUT_S,
+            allow_response_truncation=True,
         )
     except BudgetError:
         raise
@@ -542,6 +544,7 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
             CitationStatus.VERIFIED,
             CitationReason.LEXICAL_SUPPORT,
             _html_to_text(response.text),
+            bool(response.extensions.get("deepchoice_body_truncated")),
         )
     if status_code in {401, 403, 404, 410}:
         return _FetchOutcome(
@@ -654,6 +657,14 @@ async def verify_citations(
                 # Search snippets are useful synthesis input but may be stale;
                 # only the bounded live response can earn ``verified``.
                 status, reason = _support_status(claim.text, outcome.text)
+                if outcome.truncated and reason in {
+                    CitationReason.NUMERIC_MISMATCH,
+                    CitationReason.LEXICAL_MISMATCH,
+                }:
+                    # A bounded prefix can prove a lexical match, but absence
+                    # from that prefix does not prove the full page disagrees.
+                    status = CitationStatus.UNKNOWN
+                    reason = CitationReason.CONTENT_INSUFFICIENT
             else:
                 status, reason = outcome.status, outcome.reason
             check = _make_check(claim, source=source, status=status, reason=reason)

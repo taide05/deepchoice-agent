@@ -101,6 +101,7 @@ async def test_equivalent_urls_are_fetched_once_and_source_projection_is_public(
     assert len(calls) == 1
     assert calls[0][0:2] == ("official", "https://example.com/docs")
     assert calls[0][2]["max_response_bytes"] == 64 * 1024
+    assert calls[0][2]["allow_response_truncation"] is True
     assert verification.status_counts.verified == 2
     assert projected[0]["sources"][0]["canonical_url"] == "https://example.com/docs"
     assert projected[0]["sources"][0]["verification_status"] == "verified"
@@ -184,6 +185,50 @@ async def test_explainable_support_heuristics(monkeypatch, claim, body, expected
     )
     check = verification.checks[0]
     assert (check.status.value, check.reason.value) == (expected_status, expected_reason)
+
+
+@pytest.mark.asyncio
+async def test_truncated_page_prefix_can_verify_a_present_claim(monkeypatch):
+    async def fake_fetch(*args, **kwargs):
+        response = _response(200, "FastAPI supports WebSockets and SSE." * 8)
+        response.extensions["deepchoice_body_truncated"] = True
+        return response
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fake_fetch)
+    verification, _ = await verify_citations(
+        _recommendation("FastAPI supports WebSockets. [Source: Docs]"),
+        _chains({"title": "Docs", "url": "https://example.com/docs", "snippet": ""}),
+    )
+
+    assert verification.checks[0].status.value == "verified"
+    assert verification.checks[0].reason.value == "lexical_support"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("claim", "body"),
+    [
+        ("Python 3.12 is supported.", "Python 3.11 is supported." * 8),
+        (
+            "FastAPI supports WebSockets.",
+            "This prefix discusses database migrations and rollbacks." * 8,
+        ),
+    ],
+)
+async def test_truncated_page_prefix_miss_remains_unknown(monkeypatch, claim, body):
+    async def fake_fetch(*args, **kwargs):
+        response = _response(200, body)
+        response.extensions["deepchoice_body_truncated"] = True
+        return response
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fake_fetch)
+    verification, _ = await verify_citations(
+        _recommendation(f"{claim} [Source: Docs]"),
+        _chains({"title": "Docs", "url": "https://example.com/docs", "snippet": ""}),
+    )
+
+    assert verification.checks[0].status.value == "unknown"
+    assert verification.checks[0].reason.value == "content_insufficient"
 
 
 @pytest.mark.asyncio

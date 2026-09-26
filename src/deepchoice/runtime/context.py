@@ -89,7 +89,7 @@ class RunContext(BaseModel):
     budget: BudgetManager
     retrieval_cache: RetrievalCachePort | None = None
     security_policy_version: Literal[
-        "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4"
+        "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4", "outbound-url-v5"
     ] | None = None
     safe_fetch_proxy_sha256: str | None = None
 

@@ -517,6 +517,18 @@ async def test_safe_fetch_head_fallback_is_only_405_or_501_and_bounded():
             allowed_content_types=("text/html",),
         )
 
+    truncated = await _direct_resolver(
+        SafeUrlPolicy(resolver=dns), oversized_factory
+    ).safe_fetch(
+        "official",
+        "https://example.com/",
+        max_response_bytes=5,
+        allowed_content_types=("text/html",),
+        allow_response_truncation=True,
+    )
+    assert truncated.content == b"12345"
+    assert truncated.extensions["deepchoice_body_truncated"] is True
+
     def missing_type_factory(_resolved, _ip):
         return httpx.MockTransport(lambda _request: httpx.Response(200, content=b"ok"))
 

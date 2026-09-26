@@ -494,6 +494,13 @@ closed 和 lifecycle/fencing/SSE 不变。self-forward、远程、SOCKS/HTTPS �
 固定、429 或取消边界。新 run 因此冻结 `outbound-url-v4`；历史 v1–v3 manifest 继续可读，
 但不能在 v4 runtime 同 run 恢复，须新建 run，避免同一安全策略身份下改变错误语义。
 
+2026-09-26 的引用正文边界修复将新 run 的安全策略升级为 `outbound-url-v5`。共享安全抓取默认仍在
+正文超过上限时 fail closed；只有引用验证显式启用有界前缀，最多消费 64 KiB 已解码正文并立即关闭
+响应。前缀内存在足够词法支持时可判 `verified`；前缀内的数字或词法缺失只能判
+`unknown/content_insufficient`，不能把未读取的后半页推断为不支持。否定冲突、跨语言不确定、HTTP
+状态、预算、DNS/IP固定、重定向、content-type、编码、总耗时、代理身份及脱敏边界不变。历史
+v1–v4 manifest 继续可读，但不能在 v5 runtime 同 run 恢复。
+
 ## O1-PR1：单例资格消费者（2026-09-18）
 
 仅 `collect-single --stop-at-hitl` 在读取 public pending decision 后停止采集，保留

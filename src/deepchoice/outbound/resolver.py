@@ -170,6 +170,7 @@ class ChannelResolver:
         max_redirects: int = 3,
         timeout_s: float = 15.0,
         head_fallback_to_range_get: bool = False,
+        allow_response_truncation: bool = False,
     ) -> httpx.Response:
         """Fetch a dynamic URL after DNS validation and connection pinning.
 
@@ -192,7 +193,7 @@ class ChannelResolver:
         proxy_identity = self.cfg.safe_fetch_proxy_sha256
         if context is not None and (
             context.safe_fetch_proxy_sha256 != proxy_identity
-            or context.security_policy_version != "outbound-url-v4"
+            or context.security_policy_version != "outbound-url-v5"
         ):
             raise UnsafeUrlError("Safe fetch configuration differs from the frozen run", failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
         channel = await self.resolve(source)
@@ -217,6 +218,7 @@ class ChannelResolver:
                         max_response_bytes=max_response_bytes, max_redirects=max_redirects,
                         timeout_s=timeout_s,
                         head_fallback_to_range_get=head_fallback_to_range_get,
+                        allow_response_truncation=allow_response_truncation,
                         proxy_url=proxy_url,
                     ),
                     timeout=timeout_s,
@@ -251,6 +253,7 @@ class ChannelResolver:
         max_redirects: int,
         timeout_s: float,
         head_fallback_to_range_get: bool,
+        allow_response_truncation: bool,
         proxy_url: str | None = None,
     ) -> httpx.Response:
         current_url = url
@@ -341,11 +344,19 @@ class ChannelResolver:
                         ):
                             raise UnsafeUrlError("Response content type is not allowed", failure=SafeFetchFailure.RESPONSE_REJECTED)
                         body = bytearray()
+                        body_truncated = False
                         try:
-                            async for chunk in streamed.aiter_bytes():
-                                body.extend(chunk)
-                                if len(body) > max_response_bytes:
+                            async for chunk in streamed.aiter_bytes(
+                                chunk_size=min(8192, max_response_bytes)
+                            ):
+                                remaining = max_response_bytes - len(body)
+                                if len(chunk) > remaining:
+                                    if allow_response_truncation:
+                                        body.extend(chunk[:remaining])
+                                        body_truncated = True
+                                        break
                                     raise UnsafeUrlError("Response body exceeds the allowed size", failure=SafeFetchFailure.RESPONSE_REJECTED)
+                                body.extend(chunk)
                         except httpx.DecodingError:
                             raise UnsafeUrlError(
                                 "Response stream could not be consumed safely",
@@ -367,6 +378,7 @@ class ChannelResolver:
                             headers=decoded_headers,
                             content=bytes(body),
                             request=streamed.request,
+                            extensions={"deepchoice_body_truncated": body_truncated},
                         )
                 except httpx.StreamError:
                     raise UnsafeUrlError(

@@ -4,6 +4,19 @@
 
 ### Changed
 
+Citation verification can now opt into a bounded 64 KiB page prefix while the shared safe-fetch
+default continues to reject oversized responses. A claim found in that live prefix may earn lexical
+`verified`; a numeric or lexical miss on a truncated prefix is conservatively
+`unknown/content_insufficient`, never `unsupported`, because the supporting text may occur later in
+the page. Other safe-fetch consumers retain full-body fail-closed behavior. The frozen security policy
+advances to `outbound-url-v5`; v1-v4 manifests remain readable but cannot resume under the changed
+response semantics. This closes the deterministic oversized-page cause behind the v6 reports' zero
+verified citations, but does not claim live-source or report-quality improvement until a later serial
+measurement. Acceptance passed 157 focused tests, the complete 2,112-test suite (236.43 seconds),
+smoke-v1 12/12 with unchanged case outputs/metrics and the intentional current-manifest update, plus
+pyflakes, production-code vulture at 100% confidence, dependency, compile, and diff checks. No network,
+paid call, or research submission was made.
+
 P04 task-queue reports now treat an explicitly phased or transitional queue/recovery request as a
 deterministic migration contract. The synthesizer adds advancement/abort and rollback/restored-state
 obligations alongside delivery, duplicate-processing, idempotency, and recovery requirements. Its

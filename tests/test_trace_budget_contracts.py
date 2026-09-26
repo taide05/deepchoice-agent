@@ -382,7 +382,7 @@ def test_run_context_identity_comes_from_running_record(monkeypatch) -> None:
     context = RunContext.from_run_record(
         running, cancellation=_Cancellation(), trace=_Trace(), budget=_Budget()
     )
-    assert context.security_policy_version == manifest.security_policy_version == "outbound-url-v4"
+    assert context.security_policy_version == manifest.security_policy_version == "outbound-url-v5"
     assert context.safe_fetch_proxy_sha256 == manifest.safe_fetch_proxy_sha256
     assert context.safe_fetch_proxy_sha256 is not None
     assert (context.task_id, context.run_id, context.manifest_id, context.execution_epoch) == (
