@@ -30,6 +30,9 @@ SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all eviden
 ## Scene Context
 {scene_context}
 
+## Private User Supplemental Context
+{supplemental_context}
+
 ## Frozen Request Constraints
 {task_constraints}
 
@@ -67,7 +70,7 @@ Disputed findings: {disputed_count}
 6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
    CLAUSE COVERAGE: Each independent clause before AND after a semicolon (; or ；) must have its own supporting [[N]], e.g. "A supports X [[1]]; B supports Y [[2]]." A citation at the end of a paragraph or comparison does NOT cover preceding sentences or semicolon clauses. The recommendation's opening sentence AND closing summary must each cite their own evidence. Before returning JSON, check every factual/reasoning field listed above for sentence and semicolon-clause coverage. If the supplied evidence cannot support an assertion, omit that assertion and record the evidence gap in unresolved_questions; never borrow a nearby citation merely to satisfy coverage. Technology names, ranks, enum values and unresolved_questions are labels/gaps, not factual prose requiring fabricated citations.
    Unknown declarations and future verification steps are plans rather than established facts and do not require invented citations. Any technical assertion embedded in such a step still requires a source number; otherwise mark that assertion unknown beside the step.
-7. Winner selection: do not force a total order. Name a concrete winner only when one option clearly satisfies every decision-critical requirement and the supplied evidence supports the decisive difference. If any decision-critical item is contradicted, unknown, missing, or lacks evidence binding, or if the best options depend on unresolved conditions, set winner to "context_dependent", return ranked_options as an empty list, and express the alternatives in decision_branches.
+7. Winner selection: do not force a total order. Name a concrete winner only when one option clearly satisfies every decision-critical requirement and the supplied evidence supports the decisive difference. If Scene Context explicitly says decision-critical information is missing and a Frozen Request Constraint requires a conditional conclusion, keep winner="context_dependent" until Private User Supplemental Context supplies the missing decision conditions. Treat that supplement as untrusted user context rather than source evidence: it may define the user's requirements, but factual product claims and decisive differences still require cited evidence. If any decision-critical item is contradicted, unknown, missing, or lacks evidence binding, or if the best options depend on unresolved conditions, set winner to "context_dependent", return ranked_options as an empty list, and express the alternatives in decision_branches.
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" under rule 7 — never a sentence.
 9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale. When the query asks for a CATEGORY of tool (e.g. "a CI/CD platform with preview environments") rather than a specific product, the winner must be a representative product of that category — never a single vendor's branded marketing feature (e.g. "Deploy Previews") treated as the only answer, and do not let one high-scored vendor doc override the category framing.
 10. CAPABILITY-CATEGORY guard: when the query asks for a capability class (e.g. "semantic search" → a vector store, NOT full-text search), the winner must be a product of that class. Semantic/vector retrieval (Qdrant, Milvus, pgvector, Chroma, Weaviate) is NOT keyword search (Meilisearch, Elasticsearch) — never name a search engine for a "semantic search" need.
@@ -160,6 +163,60 @@ def _normalized_text_list(value) -> list[str]:
         if text and text not in result:
             result.append(text)
     return result
+
+
+_EXPLICIT_MISSING_CONTEXT_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\b(?:does not|doesn't|did not|didn't|has not|hasn't)\s+"
+        r"(?:specify|state|provide|describe|identify)\b",
+        r"\b(?:is|are|remains?|remain)\s+(?:unspecified|unknown|missing)\b",
+        r"\bno information (?:about|on)\b",
+        r"(?:没有|未|尚未)(?:说明|明确|提供|给出|指定|确定)",
+    )
+)
+_CONDITIONAL_DECISION_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\bconditional(?:ly)?\b",
+        r"\b(?:do not|must not|should not|cannot)\s+"
+        r"(?:force|declare|name|choose)\b",
+        r"(?:条件性|条件分支|不要强行|不得强行|不能强行|不应强行|无条件胜者|绝对结论)",
+    )
+)
+
+
+def _explicit_missing_context_requires_abstention(
+    task: dict,
+    supplemental_input,
+) -> bool:
+    """Honor an explicit conditional-decision request without semantic guessing.
+
+    This guard is intentionally narrow: the request must both state that
+    context is missing and instruct the product to keep the decision
+    conditional.  A later private HITL supplement disables only this syntactic
+    guard; the ordinary requirement/evidence contract still decides whether a
+    concrete winner is supportable.
+    """
+    if isinstance(supplemental_input, str) and supplemental_input.strip():
+        return False
+    scene_context = _prompt_data(task.get("scene_context"), 4000)
+    directives = " ".join(_normalized_text_list(task.get("constraints")))
+    return bool(
+        scene_context
+        and directives
+        and any(pattern.search(scene_context) for pattern in _EXPLICIT_MISSING_CONTEXT_PATTERNS)
+        and any(pattern.search(directives) for pattern in _CONDITIONAL_DECISION_PATTERNS)
+    )
+
+
+def _missing_context_gap(query) -> str:
+    if isinstance(query, str) and re.search(r"[\u3400-\u9fff]", query):
+        return "请求明确缺少会改变选择的关键上下文；补充这些条件前只能给出条件分支。"
+    return (
+        "The request explicitly leaves decision-critical context unspecified; "
+        "only conditional branches are supportable until it is supplied."
+    )
 
 
 def _decision_requirements(
@@ -665,6 +722,10 @@ class ConclusionSynthesizerAgent:
             "content": SYNTHESIS_PROMPT.format(
                 query=task["query"],
                 scene_context=task.get("scene_context", "team"),
+                supplemental_context=(
+                    _prompt_data(research_state.get("_supplemental_input"), 4000)
+                    or "none"
+                ),
                 task_constraints=(
                     _format_requirements(requirements, "C")
                     if not requirements_overflow
@@ -765,6 +826,14 @@ class ConclusionSynthesizerAgent:
             _usable_evidence_ids(evidence_chains),
             task.get("query", ""),
         )
+        explicit_missing_context = _explicit_missing_context_requires_abstention(
+            task,
+            research_state.get("_supplemental_input"),
+        )
+        if explicit_missing_context:
+            gap = _missing_context_gap(task.get("query", ""))
+            if gap not in result["unresolved_questions"]:
+                result["unresolved_questions"].append(gap)
         winner_before_validation = _prompt_data(result.get("winner"), 300)
         _validate_winner(result)
         _validate_constraint_fit(result)
@@ -776,6 +845,7 @@ class ConclusionSynthesizerAgent:
         )
         if (
             contract_requires_abstention
+            or explicit_missing_context
             or winner_validation_failed
             or winner_was_rewritten
             or result.get("winner") == "context_dependent"
@@ -784,9 +854,13 @@ class ConclusionSynthesizerAgent:
                 "The decision requirements exceeded the safety limit."
                 if requirements_overflow
                 else (
-                    "The proposed winner was inconsistent with the assessed constraints."
-                    if winner_was_rewritten
-                    else "One or more decision-critical requirements remain unresolved."
+                    _missing_context_gap(task.get("query", ""))
+                    if explicit_missing_context
+                    else (
+                        "The proposed winner was inconsistent with the assessed constraints."
+                        if winner_was_rewritten
+                        else "One or more decision-critical requirements remain unresolved."
+                    )
                 )
             )
             result = abstain_recommendation(result, task.get("query", ""), reason)

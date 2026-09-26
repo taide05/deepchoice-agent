@@ -95,6 +95,107 @@ def _fake_call(result: dict, captured: list | None = None):
     return call
 
 
+def _p08_state(*, supplemental_input: str | None = None) -> dict:
+    state = {
+        "task": {
+            "query": "帮我在 Redis 和 Memcached 之间选择缓存。",
+            "scene_context": (
+                "请求没有说明数据结构、持久化、淘汰策略、部署环境或团队能力。"
+            ),
+            "constraints": [
+                (
+                    "缺少会改变选择的约束时应明确列出未知并给条件性结论；"
+                    "仅在满足项目证据不足 gate 时进行交互"
+                ),
+                "不得自行编造流量和一致性要求",
+            ],
+            "sub_questions": [
+                "哪些未知约束会改变选择？",
+                "补充信息后如何形成条件性结论？",
+            ],
+        },
+        "constraints": [],
+        "sub_questions": [],
+        "evidence_chains": [{
+            "evidence_strength": "strong",
+            "conclusion": "缓存选型取决于所需能力",
+            "disputed": False,
+            "sources": [{
+                "title": "缓存能力说明",
+                "url": "https://example.test/cache",
+                "snippet": "Redis 与 Memcached 提供不同的数据结构和持久化能力。",
+            }],
+        }],
+        "conflicts": [],
+        "source_scores": [],
+        "token_usage": [],
+    }
+    if supplemental_input is not None:
+        state["_supplemental_input"] = supplemental_input
+    return state
+
+
+def _p08_overconfident_model_result() -> dict:
+    return {
+        "winner": "Redis",
+        "winner_rationale": "Redis 的能力更丰富，因此应直接选择 Redis [[1]].",
+        "recommendation": "立即采用 Redis [[1]].",
+        "ranked_options": [
+            {
+                "name": "Redis",
+                "rank": 1,
+                "constraint_fit": "high",
+                "constraint_fit_reason": "能力范围更广 [[1]].",
+                "rationale": "覆盖更多缓存场景 [[1]].",
+                "key_strength": "支持更多数据结构 [[1]].",
+                "key_weakness": "运维面更大 [[1]].",
+            },
+            {
+                "name": "Memcached",
+                "rank": 2,
+                "constraint_fit": "medium",
+                "constraint_fit_reason": "适合简单键值缓存 [[1]].",
+                "rationale": "能力范围较窄 [[1]].",
+                "key_strength": "模型简单 [[1]].",
+                "key_weakness": "缺少部分能力 [[1]].",
+            },
+        ],
+        "trade_offs": [],
+        "evidence_summary": "来源描述了两者的能力差异 [[1]].",
+        "confidence": "medium",
+        "confidence_rationale": "来源可用于比较能力边界 [[1]].",
+        "requirement_assessments": [
+            {
+                "id": identifier,
+                "requirement": "模型不得改写冻结要求",
+                "status": "satisfied",
+                "decision_critical": True,
+                "explanation": "该要求已由来源覆盖 [[1]].",
+                "evidence_ids": [1],
+            }
+            for identifier in ("C1", "C2", "Q1", "Q2")
+        ],
+        "decision_branches": [
+            {
+                "option": "Redis",
+                "condition": "若需要复杂数据结构或持久化，则选择 Redis [[1]].",
+            },
+            {
+                "option": "Memcached",
+                "condition": "若只需简单可再生键值缓存，则选择 Memcached [[1]].",
+            },
+        ],
+        "action_plan": [{
+            "step": "在隔离环境中验证候选缓存 [[1]].",
+            "verification": "检查命中率和故障恢复 [[1]].",
+            "change_trigger": "关键约束明确后再推进 [[1]].",
+            "rollback": "停止试验并保留现有缓存路径 [[1]].",
+        }],
+        "unresolved_questions": [],
+        "scene_fit_note": "Redis 更适合当前请求 [[1]].",
+    }
+
+
 def test_complete_bound_requirements_keep_conditional_winner(monkeypatch):
     captured = []
     monkeypatch.setattr(
@@ -125,6 +226,88 @@ def test_complete_bound_requirements_keep_conditional_winner(monkeypatch):
     assert "Q2 [analysis-sub-question]: How will rollback be verified?" in prompt_text
     assert "Idempotency ownership and verification" in prompt_text
     assert "Rollback procedure and restored-state verification" in prompt_text
+
+
+def test_explicit_missing_context_prevents_overconfident_p08_winner(monkeypatch):
+    monkeypatch.setattr(
+        cs_mod,
+        "call_model",
+        _fake_call(_p08_overconfident_model_result()),
+    )
+
+    result = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(_p08_state()))
+    recommendation = result["final_recommendation"]
+
+    assert recommendation["winner"] == "context_dependent"
+    assert recommendation["ranked_options"] == []
+    assert recommendation["decision_branches"]
+    assert recommendation["action_plan_mode"] == "validation_only"
+    assert "立即采用 Redis" not in recommendation["recommendation"]
+    assert any(
+        "明确缺少会改变选择的关键上下文" in question
+        for question in recommendation["unresolved_questions"]
+    )
+
+
+def test_p08_supplement_allows_supported_concrete_winner(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        cs_mod,
+        "call_model",
+        _fake_call(_p08_overconfident_model_result(), captured),
+    )
+
+    result = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(_p08_state(
+        supplemental_input=(
+            "缓存内容是可再生 JSON，不要求持久化；峰值约 3000 次读取和 "
+            "200 次写入；团队已有 Redis 经验。"
+        ),
+    )))
+
+    assert result["final_recommendation"]["winner"] == "Redis"
+    assert "缓存内容是可再生 JSON" in captured[0][0]["content"]
+    assert "untrusted user context rather than source evidence" in captured[0][0]["content"]
+
+
+@pytest.mark.parametrize(
+    "scene_context, constraints, supplemental_input, expected",
+    [
+        (
+            "The request does not specify persistence or team capability.",
+            ["Give only a conditional conclusion until those constraints are known."],
+            None,
+            True,
+        ),
+        (
+            "The request does not specify persistence or team capability.",
+            ["Compare both products."],
+            None,
+            False,
+        ),
+        (
+            "The workload is fully described.",
+            ["Give only a conditional conclusion if critical context is missing."],
+            None,
+            False,
+        ),
+        (
+            "The request does not specify persistence or team capability.",
+            ["Give only a conditional conclusion until those constraints are known."],
+            "The workload is regenerable and persistence is not required.",
+            False,
+        ),
+    ],
+)
+def test_explicit_missing_context_guard_is_narrow(
+    scene_context,
+    constraints,
+    supplemental_input,
+    expected,
+):
+    assert cs_mod._explicit_missing_context_requires_abstention(
+        {"scene_context": scene_context, "constraints": constraints},
+        supplemental_input,
+    ) is expected
 
 
 def test_missing_critical_assessment_removes_winner_rank_and_old_prose(monkeypatch):

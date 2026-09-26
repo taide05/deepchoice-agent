@@ -4,6 +4,19 @@
 
 ### Changed
 
+The current candidate now fails closed on the P08 missing-context shape without broad semantic
+guessing. When scene context explicitly says decision-critical inputs are missing and a frozen request
+constraint requires a conditional conclusion, deterministic post-processing withdraws a model-authored
+winner/ranking, preserves bounded decision branches, records the unresolved context, and restricts the
+action plan to isolated validation. Private HITL supplemental context is now shown explicitly to the
+synthesizer as untrusted user context; it may define requirements but cannot replace cited product
+evidence. The synthesis prompt advances to v6, so historical v5 runs remain readable but cannot resume
+under the changed behavior. This is offline regression evidence, not a live quality or paired-effect
+claim. Acceptance passed 112 focused tests and the complete 2,102-test suite (117.21 seconds), plus
+smoke-v1 12/12 with the intentionally updated asset/manifest fingerprint, pyflakes, production-code
+vulture at 100% confidence, dependency, compile, and diff checks. No paid call, research submission,
+concurrency scope, or budget allocation changed.
+
 Product optimization now excludes concurrency qualification from the current and near-term roadmap.
 Concurrency collection support remains available, but no concurrency protocol, acceptance gate, or
 research reserve is active; the work now targets serial report correctness, completeness, evidence

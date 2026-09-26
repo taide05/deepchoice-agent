@@ -47,7 +47,7 @@ REPORT_TEMPLATE_VERSIONS = {
     "comparison_matrix": "comparison-matrix-v4",
 }
 PROMPT_VERSIONS = {
-    "conclusion_synthesizer.synthesis_prompt": "v5",
+    "conclusion_synthesizer.synthesis_prompt": "v6",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -72,7 +72,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6"] = "v1"
     sha256: str
 
 

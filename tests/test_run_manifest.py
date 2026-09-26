@@ -134,7 +134,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v2"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v5",
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v6",
                          "conflict_detector.contradiction_scan_system": "v2",
                          "conflict_detector.arbitration_system": "v2"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
@@ -198,6 +198,7 @@ def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
     [
         ("synthesis", "what_why_how", None),
         ("synthesis_v4", "what_why_how", None),
+        ("synthesis_v5", "what_why_how", None),
         ("template", "what_why_how", "what-why-how-v3"),
         ("template", "evidence_first", "evidence-first-v1"),
         ("template", "comparison_matrix", "comparison-matrix-v1"),
@@ -216,8 +217,12 @@ def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
 
     task = {"query": "A vs B", "report_format": report_format}
     current = build_run_manifest(task)
-    if changed_asset in ("synthesis", "synthesis_v4"):
-        previous_version = "v4" if changed_asset == "synthesis_v4" else "v3"
+    if changed_asset in ("synthesis", "synthesis_v4", "synthesis_v5"):
+        previous_version = {
+            "synthesis": "v3",
+            "synthesis_v4": "v4",
+            "synthesis_v5": "v5",
+        }[changed_asset]
         previous = current.model_copy(update={
             "prompts": tuple(
                 prompt.model_copy(update={"version": previous_version, "sha256": "3" * 64})
