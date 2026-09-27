@@ -259,7 +259,19 @@ def _iter_claim_fields(recommendation: dict[str, Any]):
             if not isinstance(row, dict):
                 continue
             for field in fields:
-                yield f"final_recommendation.{collection}[{index}].{field}", row.get(field)
+                value = row.get(field)
+                if (
+                    collection == "requirement_assessments"
+                    and row.get("status") == "unknown"
+                    and not row.get("evidence_ids")
+                    and isinstance(value, str)
+                    and not _citation_spans(value)
+                ):
+                    # A plain declaration of an unresolved requirement is a
+                    # gap, not a factual premise offered as evidence. Cited
+                    # analysis beside an unknown remains verifiable.
+                    continue
+                yield f"final_recommendation.{collection}[{index}].{field}", value
     for field in (
         "winner_rationale", "recommendation", "evidence_summary",
         "confidence_rationale", "scene_fit_note",

@@ -54,7 +54,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         if retriever.retriever_id != "chroma"
     )
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v2"
+    assert first.citation_policy_version == "deterministic-citation-v3"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -83,19 +83,22 @@ def test_historical_chroma_v1_is_readable_but_cannot_resume():
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-def test_historical_citation_v1_is_readable_but_cannot_resume():
+@pytest.mark.parametrize("policy_version", [
+    "deterministic-citation-v1", "deterministic-citation-v2",
+])
+def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     current = build_run_manifest({})
     historical = current.model_copy(update={
-        "citation_policy_version": "deterministic-citation-v1"
+        "citation_policy_version": policy_version
     })
     historical = historical.model_copy(update={
         "manifest_id": _expected_manifest_id(historical)
     })
 
     restored = RunManifest.model_validate_json(historical.model_dump_json())
-    assert restored.citation_policy_version == "deterministic-citation-v1"
+    assert restored.citation_policy_version == policy_version
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
@@ -131,7 +134,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v3"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v2"
+    assert registry.citation_policy_version == "deterministic-citation-v3"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v7",

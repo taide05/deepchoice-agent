@@ -48,6 +48,13 @@ acknowledgement可能重投，不能单独证明不丢失或exactly-once，并�
 历史prompt v6与evidence-first v4结果可读，但不能在当前运行时同run恢复；workflow、state schema、
 HITL与citation策略不变。
 
+2026-09-27引用策略升级为deterministic-citation-v3。结论合成器在主动收回结论时生成的固定
+validation-only计划是确定性安全输出，不是模型事实断言；只有计划模式和全部字段与代码内模板精确
+一致时才从引用检查中排除，空计划也允许，伪造模式或任意计划继续逐字段检查并在未核验时整体替换。
+status为unknown、没有evidence_ids且不含引用标记的说明只表达证据缺口，不再制造
+`citation_missing`；带引用的unknown分析仍照常核验。历史citation-policy v1/v2结果和计数原样可读，
+但不得按v3语义同run恢复。
+
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
 保留条件分支、待验证计划与明确未知。绑定到有内容的来源只证明结构完整，不是语义验证。
 引用节点优先检查新判断字段，继续使用原总检查/安全抓取上限；关键判断、胜者依据及
@@ -89,8 +96,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v2` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
-  citation-policy v1 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v3` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
+  citation-policy v1/v2 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

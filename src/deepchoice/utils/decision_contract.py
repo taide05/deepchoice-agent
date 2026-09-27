@@ -156,6 +156,23 @@ def _validation_only_plan(query: Any) -> list[dict[str, str]]:
     ]
 
 
+def is_fixed_validation_only_plan(recommendation: Any, query: Any) -> bool:
+    """Return whether a restricted plan is exactly the deterministic safe plan.
+
+    The marker alone is not trusted: model output and historical state may carry
+    arbitrary fields.  Citation verification may exempt only the byte-for-byte
+    normalized plan produced by this module (or the deliberate empty plan).
+    """
+    if not isinstance(recommendation, dict):
+        return False
+    if recommendation.get("action_plan_mode") != "validation_only":
+        return False
+    plan = recommendation.get("action_plan")
+    if plan == []:
+        return True
+    return plan == _validation_only_plan(query)
+
+
 def _restricted_message(query: Any, reason: str | None = None) -> str:
     clean_reason = _clean_text(reason, limit=500)
     if _is_zh(query):

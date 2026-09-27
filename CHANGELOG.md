@@ -4,6 +4,28 @@
 
 ### Changed
 
+The current-candidate `product-optimization-serial-check-v1` completed P04, P01, and P08 once each
+before stopping on one P08 citation safe-fetch rejection that occurred before HTTP dispatch. All three
+reports, snapshots, terminal records, and observability projections are queryable; 62/62 LLM and
+retrieval calls succeeded with no timeout, retry, or partial failure. Wall times were 117.3, 50.5, and
+54.5 seconds and token totals were 11,146, 18,541, and 21,356. P08 now correctly remains conditional,
+but P01 and P04 are still over-restricted by unverified decisive citations, and P04 lacks a concrete
+staged validation path. The immutable root consumed three research admissions, bringing the ledger to
+103/156 with 53 unallocated; it is not a pair and cannot be rerun or spliced.
+
+Citation accounting advances to `deterministic-citation-v3`. The exact deterministic
+`validation_only` plan emitted by the safety boundary is no longer reclassified as model-authored
+uncited factual prose, while a forged mode or any non-matching plan remains fully checked and replaced
+when unsupported. A requirement explanation whose status is `unknown`, with no evidence binding and
+no citation marker, is recorded as a gap rather than a `citation_missing` claim; cited unknown analysis
+is still verified. Historical v1/v2 results retain their original counts and remain readable but cannot
+resume under v3. An offline extraction of the three immutable snapshots reduces potential missing-
+citation entries from 18 per report to 3/4/3 without changing their report text. This is measurement
+integrity work, not evidence that report quality improved. Acceptance passed 196 focused/related
+tests, the complete 2,137-test suite (253.48 seconds), smoke-v1 12/12 with the intentional manifest
+and core-registry refresh, pyflakes, production-code vulture at 100% confidence, dependency, compile,
+and diff checks.
+
 The frozen `product-optimization-serial-check-v1` card reduces the next product-feedback step to
 one serial P04/P01/P08 pass on the current candidate, for at most three research runs. It reuses the
 existing durable collector, isolated seed, manifest, ledger, service, and telemetry boundaries, and

@@ -14,6 +14,7 @@ from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY, BudgetExceededError, Bu
 from deepchoice.budget.limited import build_budget_limited_state
 from deepchoice.citations.verifier import _extract_claims, verify_citations
 from deepchoice.state import ResearchState
+from deepchoice.utils.decision_contract import abstain_recommendation
 
 
 @pytest.mark.asyncio
@@ -140,6 +141,100 @@ async def test_new_decision_claims_share_one_bounded_fetch(monkeypatch):
         *(f"final_recommendation.action_plan[0].{field}"
           for field in ("step", "verification", "change_trigger", "rollback")),
     }
+
+
+def test_plain_unknown_requirement_is_a_gap_not_an_uncited_claim():
+    claims, truncated = _extract_claims({
+        "requirement_assessments": [{
+            "status": "unknown",
+            "evidence_ids": [],
+            "explanation": "This requirement remains unresolved.",
+        }, {
+            "status": "unknown",
+            "evidence_ids": [1],
+            "explanation": "One writer is allowed. [Source: SQLite Docs]",
+        }],
+    })
+
+    assert not truncated
+    assert len(claims) == 1
+    assert claims[0].path.endswith("requirement_assessments[1].explanation")
+    assert claims[0].source_title == "SQLite Docs"
+
+
+@pytest.mark.asyncio
+async def test_fixed_validation_plan_does_not_inflate_missing_citations(monkeypatch):
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text="SQLite allows only one writer.",
+                              headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", "https://example.org/sqlite"))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    recommendation = abstain_recommendation({
+        "decision_basis_version": "constraint-aware-v1",
+        "winner": "SQLite",
+        "winner_rationale": "",
+        "recommendation": "SQLite allows only one writer. [Source: SQLite Docs]",
+        "ranked_options": [],
+        "requirement_assessments": [{
+            "id": "C1", "requirement": "Confirm writer concurrency",
+            "status": "unknown", "decision_critical": True,
+            "explanation": "This requirement remains unresolved.",
+            "evidence_ids": [],
+        }],
+        "action_plan": [{
+            "step": "Unsafe model step", "verification": "Unsafe model check",
+            "change_trigger": "Unsafe model trigger", "rollback": "Unsafe model rollback",
+        }],
+    }, "SQLite or PostgreSQL?")
+
+    output = await CitationValidatorAgent().run({
+        "task": {"query": "SQLite or PostgreSQL?"},
+        "final_recommendation": recommendation,
+        "evidence_chains": [{"sources": [{
+            "title": "SQLite Docs", "url": "https://example.org/sqlite",
+        }]}],
+    })
+
+    paths = {check["claim_path"] for check in output["citation_verification"]["checks"]}
+    assert not any("action_plan" in path for path in paths)
+    assert not any("requirement_assessments" in path for path in paths)
+    assert output["final_recommendation"]["action_plan"] == recommendation["action_plan"]
+
+
+@pytest.mark.asyncio
+async def test_forged_validation_mode_does_not_exempt_an_arbitrary_plan(monkeypatch):
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text="SQLite allows only one writer.",
+                              headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", "https://example.org/sqlite"))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    supported = "SQLite allows only one writer. [Source: SQLite Docs]"
+    recommendation = {
+        "decision_basis_version": "constraint-aware-v1",
+        "winner": "SQLite", "winner_rationale": supported,
+        "recommendation": supported, "ranked_options": [],
+        "requirement_assessments": [],
+        "action_plan_mode": "validation_only",
+        "action_plan": [{
+            "step": "Deploy now", "verification": "Assume success",
+            "change_trigger": "Immediately", "rollback": "Restore an old snapshot",
+        }],
+    }
+
+    output = await CitationValidatorAgent().run({
+        "task": {"query": "SQLite or PostgreSQL?"},
+        "final_recommendation": recommendation,
+        "evidence_chains": [{"sources": [{
+            "title": "SQLite Docs", "url": "https://example.org/sqlite",
+        }]}],
+    })
+
+    paths = {check["claim_path"] for check in output["citation_verification"]["checks"]}
+    assert any("action_plan" in path for path in paths)
+    assert output["final_recommendation"]["action_plan_mode"] == "validation_only"
+    assert "Deploy now" not in str(output["final_recommendation"]["action_plan"])
 
 
 def test_new_decision_claim_overflow_is_explicit_and_bounded():

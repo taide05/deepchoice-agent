@@ -29,14 +29,19 @@ exactly-once，必须说明重复执行与幂等。受限的evidence-first计划
 64 KiB页面前缀：前缀命中可判为词法verified，截断后未命中仍保守记为unknown。三项修复均只有
 离线反例，尚未证明真实报告净改善。
 
-下一步已收敛为已冻结的`product-optimization-serial-check-v1`：只对当前候选串行运行P04、P01、P08
-各一次，最多3个研究任务，统一检查运行时间、成功率、调用/token、报告完整性和行动安全、引用、
-Winner/HITL及模块异常。历史v6报告仅作诊断背景，不构成同窗口配对。当前协议已冻结并只开放这
-三个任务的准入。首次preflight的五类来源与Tavily POST通过，但collector顶层导入导致LLM配置在
-私有环境安装前冻结，LLM HTTP尝试为0、研究提交为0，失败根不复用；现已改为环境安装后延迟导入。
-逐案例HITL策略已经
-冻结：P01/P04暂停时不提交decision，P08才使用冻结输入自动继续且最多两次。执行卡及其复用
-控制器链路已通过21项聚焦、166项相关、2133项全套、smoke-v1 12/12、静态检查和独立复审。
+`product-optimization-serial-check-v1`现已完成唯一一次正式执行并停止，不会重跑或拼接。P04、P01、
+P08三例均产出可查询报告，62/62次LLM/检索调用成功，0超时、0重试、0部分失败；耗时117.3、
+50.5、54.5秒，总计51,043 tokens。P04首例包含88.2秒本地Chroma冷启动，后两例运行时间接近。
+内容诊断仍未通过：P08正确保留条件分支，P01/P04却都因决定性引用未通过而退化为低置信度受限
+报告，P04的阶段推进、幂等验证和回退边界仍不够具体。三例引用结果合计4 verified、61 unsupported、
+4 unreachable、42 unknown；P08另有一次citation安全抓取在HTTP前被拒，控制器按冻结规则在第三例
+完成后停止。账本为103/156，余53未分配。
+
+本轮还定位到一个独立的引用计数缺口：确定性安全边界自己生成的固定隔离验证计划，以及没有提出
+事实支持的显式unknown说明，被误当作模型事实断言计入`citation_missing`。新运行使用
+`deterministic-citation-v3`：只有与代码内安全模板逐字段一致的validation-only计划才免于重复引用
+检查，伪造标记或任意计划仍照常校验；无引用、无evidence绑定的纯unknown只作为缺口保留。历史v1/v2
+结果保持原计数且不能同run恢复。该修复只提高测量真实性，不把三份报告追认成产品质量通过。
 
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。
@@ -221,8 +226,10 @@ Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等�
 安全路由限制或跨语言难以判断时保持 `unknown`，不会被误写成错误引用。获胜项仍有支持、但任一
 模型生成的行动字段未通过引用检查时，系统保留获胜项并把整份计划替换为固定的隔离验证步骤，
 不把未核验操作作为可执行建议。新运行冻结 `research-v3`、state schema v3 与
-`deterministic-citation-v2`；历史 workflow v1/v2 和 citation-policy v1 manifest 可审计但须新建
-run，不能在当前工作流上续跑旧 checkpoint。
+`deterministic-citation-v3`。v3不再把系统生成且逐字段匹配的固定validation-only计划当作模型事实
+断言，也不把无引用/无evidence绑定的纯unknown声明计为`citation_missing`；任意或伪造计划仍按原
+规则校验。历史 workflow v1/v2 和 citation-policy v1/v2 manifest 可审计但须新建run，不能在当前
+工作流上续跑旧 checkpoint。
 
 Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v3`、state
 schema v3 与 `evidence-insufficient-v1`。该 gate 位于引用验证之后、报告渲染之前，只在证据
