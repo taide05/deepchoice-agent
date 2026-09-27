@@ -43,7 +43,7 @@
   },
   "controller": {
     "binding_policy": "candidate-only-three-case-over-serial-v1-v2",
-    "research_admission": "closed-after-offline-binding",
+    "research_admission": "open-after-independent-review-and-offline-acceptance",
     "required_files": [
       {
         "sha256": "d00127dab015c5f4c3828ea2eca96be5cd4400dbc23a351e2ed51b26badb6ddc",

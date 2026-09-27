@@ -14,6 +14,18 @@ from scripts import product_optimization_serial_check_v1 as old_runner
 from scripts import product_optimization_serial_check_v2 as runner
 
 
+@pytest.fixture
+def closed_card(monkeypatch, tmp_path_factory):
+    """Exercise a fully validated closed card after the checked-in activation."""
+    path = tmp_path_factory.mktemp("closed-card") / "protocol.json"
+    path.write_text(json.dumps(contract._expected_raw()), encoding="utf-8")
+    monkeypatch.setattr(contract, "PROTOCOL_PATH", path)
+    monkeypatch.setattr(runner, "PROTOCOL_PATH", path)
+    real_load = contract.load_serial_check_protocol
+    monkeypatch.setattr(contract, "load_serial_check_protocol", lambda: real_load(path))
+    assert contract.load_serial_check_protocol().payload["controller"]["research_admission"] == contract.CLOSED
+
+
 def test_frozen_overlay_preserves_execution_and_updates_only_candidate_and_ledger():
     old = old_contract.load_serial_check_protocol().payload
     frozen = contract.load_serial_check_protocol()
@@ -32,9 +44,8 @@ def test_frozen_overlay_preserves_execution_and_updates_only_candidate_and_ledge
         "starting_used": 103, "diagnostic_max": 3, "concurrency_reserve": 0,
         "unallocated": 50, "hard_total": 156,
     }
-    assert new["controller"]["research_admission"] == contract.CLOSED
-    with pytest.raises(runner.RepairPairControlError, match="not open"):
-        runner._require_active_protocol(new)
+    assert new["controller"]["research_admission"] == contract.OPEN
+    runner._require_active_protocol(new)
 
 
 @pytest.mark.parametrize("path,value", [
@@ -74,11 +85,38 @@ def test_frozen_design_hash_is_verified(monkeypatch):
         contract._validate_raw(raw)
 
 
-def test_wrong_external_protocol_hash_fails_before_loader(monkeypatch):
+@pytest.mark.parametrize("digest", ["0" * 64,
+    "29f97e3d26996b00211a97399c27df9a839327ce503f99d996b37fda948c9337"])
+def test_wrong_or_pre_activation_protocol_hash_fails_before_loader(monkeypatch, digest):
     monkeypatch.setattr(runner, "_load_approved_protocol", lambda *_:
                         pytest.fail("loader must not run before external SHA check"))
     with pytest.raises(runner.RepairPairControlError, match="identity mismatch"):
-        runner._bootstrap_approved_protocol("0" * 64)
+        runner._bootstrap_approved_protocol(digest)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["preflight", "prepare", "run"])
+async def test_activated_public_gate_validates_frozen_identity_before_delegation(monkeypatch, tmp_path, command):
+    seen = []
+    monkeypatch.setattr(old_runner, "_install_call_environment", lambda *_: seen.append("env"))
+    digest = contract.load_serial_check_protocol().byte_sha256
+
+    def delegated(*args):
+        assert seen == ["env"]
+        assert args[-1] == digest
+        assert old_runner.PROTOCOL_PATH == runner.PROTOCOL_PATH
+        assert old_runner.LEDGER_ROOT == runner.LEDGER_ROOT
+        return {"research_runs_submitted": 0}
+
+    async def async_delegated(*args):
+        return delegated(*args)
+
+    monkeypatch.setattr(old_runner, command, async_delegated if command == "run" else delegated)
+    args = [tmp_path / "unused"] * (5 if command == "preflight" else 6)
+    args[-1] = digest
+    result = await runner.run(*args) if command == "run" else getattr(runner, command)(*args)
+    assert result == {"research_runs_submitted": 0}
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_import_does_not_freeze_llm_settings_before_private_environment():
@@ -163,8 +201,8 @@ async def test_real_run_shell_uses_only_v2_ledger_and_three_serial_cells(monkeyp
     protocol = contract.load_serial_check_protocol().payload
     digest = contract.load_serial_check_protocol().byte_sha256
     base = old_runner._v4
-    # Exercise the inherited execution shell only under explicitly simulated
-    # future activation; the actual checked-in card is tested closed below.
+    # Exercise the inherited execution shell without external calls; real
+    # activated and closed admission gates are tested separately.
     monkeypatch.setattr(runner, "_admit_call", lambda *_: None)
     monkeypatch.setattr(runner, "_require_active_protocol", lambda *_: None)
     ledger = tmp_path / "v2-ledger"
@@ -220,7 +258,7 @@ def test_cli_requires_paid_flags_before_any_entry(monkeypatch, command):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["preflight", "prepare", "run"])
-async def test_actual_frozen_card_blocks_all_side_effect_entrypoints(monkeypatch, tmp_path, command):
+async def test_frozen_closed_card_blocks_all_side_effect_entrypoints(monkeypatch, tmp_path, command, closed_card):
     monkeypatch.setattr(old_runner, "_install_call_environment", lambda *_: None)
     monkeypatch.setattr(old_runner, command, lambda *_: pytest.fail("closed card dispatched"))
     monkeypatch.setattr(runner, "LEDGER_ROOT", tmp_path / "new-ledger")
@@ -235,7 +273,7 @@ async def test_actual_frozen_card_blocks_all_side_effect_entrypoints(monkeypatch
 
 
 @pytest.mark.parametrize("command", ["preflight", "prepare", "run"])
-def test_cli_paid_flags_cannot_open_actual_closed_card(monkeypatch, tmp_path, capsys, command):
+def test_cli_paid_flags_cannot_open_frozen_closed_card(monkeypatch, tmp_path, capsys, command, closed_card):
     env = tmp_path / "private.env"
     env.write_text("", encoding="utf-8")
     monkeypatch.setattr(old_runner, "_install_call_environment", lambda *_: None)

@@ -7,9 +7,11 @@
 The serial-check-v2 machine card now binds candidate c1c43d8 and the unchanged three-case serial
 execution path through a scoped adapter. Candidate objects, prior stopped evidence, fixed order,
 HITL, safety stops and a separate 103-to-106/156 ledger are checked without rewriting v1. Paid
-admission remains closed; even explicit paid flags cannot activate it. The audit path remains
-credential-safe and network-free. No new product behavior, live research or concurrency test is
-included; activation requires new protocol bytes and fresh audit/preflight/execution bindings.
+admission was closed during offline acceptance and is now prospectively activated under the existing
+three-run authorization. The new protocol bytes invalidate closed-card bindings and require fresh
+audit/preflight/execution bindings. The audit path remains credential-safe and network-free; this
+activation changes no product behavior or safety stops and authorizes no concurrency test. Actual
+research outcomes are recorded separately in the execution status.
 
 Offline product refinement now uses synthesis v8: decisive cross-language factual clauses retain
 their evidence language instead of treating a translation as lexically verified. Requirement labels,

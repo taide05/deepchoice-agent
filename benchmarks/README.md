@@ -240,14 +240,15 @@ LLM HTTP尝试0、研究提交0；失败根不可复用。现已延迟导入并�
 该卡的唯一正式根已停止：三例均completed且报告/观测完整，62/62次LLM/检索调用成功，wall为
 117.3/50.5/54.5秒；P08一次citation safe-fetch在HTTP前被安全拒绝，控制器在第三例完成后停止。
 内容上P08保持条件性结论，P01/P04仍因决定性引用不足而过度降级。该根计3次研究，累计103/156，
-不可重跑或拼接；余53格未分配，当前无开放付费卡。
+不可重跑或拼接；当时余53格未分配、无开放付费卡；后继v2状态见下节。
 
-## 后继三案例串行卡 v2（机器绑定，付费准入关闭）
+## 后继三案例串行卡 v2（已激活，最多3例）
 
 [v2机器卡](product-optimization-serial-check-v2.json)绑定产品`c1c43d8`和
 [冻结内容验收设计](../docs/product-optimization-serial-check-v2.md)，复用未修改的v1执行器。
 入口为`python -m scripts.product_optimization_serial_check_v2`；支持原有audit/preflight/prepare/run，
-先安装私有环境再加载模型配置。只有audit允许在当前闭卡执行，且不调用网络、模型或研究服务。
+先安装私有环境再加载模型配置。audit不调用网络、模型或研究服务；已激活的付费入口仍检查冻结身份、
+有界前置与单次执行绑定。完成或停止后不得复用。
 
 ```powershell
 $env:PYTHONPATH = (Join-Path (Get-Location).Path 'src')
@@ -258,12 +259,12 @@ D:\deepchoice-agent\.venv\Scripts\python.exe -m scripts.product_optimization_ser
 ```
 
 命令从候选checkout运行；路径为本地部署示例。执行授权以已复核的外部SHA为准，不能以临时计算的
-任意新hash放行漂移。当前闭卡SHA及实际audit记录查[执行状态](../docs/o1-execution-status.md)。
+任意新hash放行漂移。当前激活SHA及实际audit记录查[执行状态](../docs/o1-execution-status.md)。
 audit核对候选Git对象、P01/P04/P08 manifest、种子/数据集/依赖/非敏感环境；不证明服务或来源连通。
 baseline checkout仅为沿用的只读身份参考，不会提交baseline研究。
 
-当前`research_admission=closed-after-offline-binding`，即使传付费flags也不能执行preflight/prepare/run。
-后续按有效授权激活须改变冻结协议状态并复核新byte SHA，重新audit；完成有界付费preflight后，
+当前`research_admission=open-after-independent-review-and-offline-acceptance`，是持续授权下的前瞻激活；
+原闭卡字节保留在Git历史，旧SHA与绑定不得用于新执行。以新byte SHA重新audit；完成有界付费preflight后，
 prepare才会冻结新的输出根、环境、知识副本和execution-binding，再允许一次完整P04→P01→P08。
 准备不能复用旧前置、旧根或v1账本。v2独立ledger位于
 `outputs/product-optimization-ledgers/product-optimization-serial-check-v2/`；最多3格，从103到106，
