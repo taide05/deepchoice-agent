@@ -231,9 +231,11 @@ P08在关键约束缺失时仍强制Winner。P08两条citation pre-HTTP安全拒
 这张卡只回答“当前产品能否稳定产出三份可用报告”，历史v6 baseline只作诊断背景，不构成同窗口
 配对，因此不能据此声称因果改善。研究账本从100起，最多使用3格，硬上限仍为156，并发授权与预留
 均为0；其余53格未分配。当前协议状态为`frozen`，准入为
-`open-after-independent-review-and-offline-acceptance`：20项聚焦、165项相关、2132项全套、
+`open-after-independent-review-and-offline-acceptance`：21项聚焦、166项相关、2133项全套、
 smoke-v1 12/12及静态/依赖/编译检查通过；独立复审发现的两项HITL缺口已经修复并复核通过。
-准入仅覆盖这三个任务，不恢复并发或开放额外预算。
+首次preflight的五类来源与Tavily POST通过，但collector顶层导入使LLM配置在私有环境安装前冻结，
+LLM HTTP尝试0、研究提交0；失败根不可复用。现已延迟导入并增加独立进程回归。准入仅覆盖这三个
+任务，不恢复并发或开放额外预算。
 
 ## 有意使用历史直连工具
 

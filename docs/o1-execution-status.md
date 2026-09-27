@@ -14,8 +14,13 @@
 公共事件。历史v6 baseline仅作背景，不能把本轮称为配对因果改善。
 
 账本仍为100/156；本卡最多分配3格，剩余53格未分配，并发授权/预留仍为0。协议已冻结为
-`frozen`且`open-after-independent-review-and-offline-acceptance`；尚未运行preflight、网络探测或付费研究。
-20项新执行卡测试通过；包含这些测试及复用控制器/基线的165项相关测试通过，完整套件2132项
+`frozen`且`open-after-independent-review-and-offline-acceptance`。首次preflight通过五类来源和
+Tavily POST，但collector顶层导入使LLM配置在私有环境安装前冻结，LLM在HTTP dispatch前以
+`OpenAIError`停止：LLM attempts=0、research_runs_submitted=0。失败根
+`outputs/product-optimization-serial-check-v1-preflight-20260927-v1/`不可复用；现已改为私有环境
+安装后延迟导入，并增加独立进程回归。新协议byte SHA为
+`77b2efce9df2a8ed18b40489b7f569d85159b6d1247c976306cc8550af1e55f5`。
+21项新执行卡测试通过；包含这些测试及复用控制器/基线的166项相关测试通过，完整套件2133项
 通过；smoke-v1 12/12，静态、依赖和编译检查通过。独立复审发现的两项HITL缺口已经修复并复核
 通过；准入只覆盖这三个串行任务。
 

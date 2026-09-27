@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import httpx
 import pytest
@@ -10,6 +13,33 @@ from benchmarks import product_optimization_serial_check_v1 as contract
 from benchmarks.product_baseline import CollectionOptions
 from scripts import product_optimization_repair_pair as runner_base
 from scripts import product_optimization_serial_check_v1 as runner
+
+
+def test_runner_import_does_not_preload_llm_configuration():
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        (str(runner.ROOT / "src"), str(runner.ROOT))
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                "import scripts.product_optimization_serial_check_v1; "
+                "print('loaded' if 'deepchoice.utils.llm' in sys.modules "
+                "else 'not-loaded')"
+            ),
+        ],
+        cwd=runner.ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert completed.stdout.strip() == "not-loaded"
 
 
 def test_serial_check_contract_is_candidate_only_and_open_after_review():
@@ -102,7 +132,7 @@ async def test_p08_resolution_limit_blocks_before_decision_post(tmp_path: Path):
         async def request(self, *_args, **_kwargs):
             raise AssertionError("decision POST must not be sent")
 
-    collector = runner._SerialCheckCollector(
+    collector = runner._serial_check_collector(
         NoRequestClient(),
         tmp_path,
         experiment_id=contract.PROTOCOL_ID,
@@ -186,7 +216,7 @@ async def test_non_p08_collector_stops_at_hitl_without_decision_post(
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler), base_url="http://test"
     ) as client:
-        collector = runner._SerialCheckCollector(
+        collector = runner._serial_check_collector(
             client,
             output_dir,
             experiment_id=contract.PROTOCOL_ID,
@@ -260,7 +290,7 @@ async def test_p08_collector_stops_before_third_decision_post(tmp_path: Path):
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler), base_url="http://test"
     ) as client:
-        collector = runner._SerialCheckCollector(
+        collector = runner._serial_check_collector(
             client,
             output_dir,
             experiment_id=contract.PROTOCOL_ID,

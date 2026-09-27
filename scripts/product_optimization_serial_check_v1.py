@@ -22,7 +22,6 @@ from typing import Any, Iterator
 
 import httpx
 
-from benchmarks.product_baseline import DurableBaselineCollector
 from scripts import product_optimization_repair_pair as _v4
 from scripts import product_optimization_repair_pair_v6 as _v6
 
@@ -43,7 +42,7 @@ _BASE_VALIDATE_EXECUTION_BINDING = _v4._validate_execution_binding
 _BASE_TREE_HASH = _v4._tree_hash
 
 
-class _SerialCheckCollector(DurableBaselineCollector):
+class _SerialCheckCollectorMixin:
     def __init__(self, *args: Any, max_hitl_resolutions: int, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._max_hitl_resolutions = max_hitl_resolutions
@@ -64,6 +63,23 @@ class _SerialCheckCollector(DurableBaselineCollector):
             decision,
             resolution_index=resolution_index,
         )
+
+
+def _serial_check_collector(
+    *args: Any, max_hitl_resolutions: int, **kwargs: Any
+) -> Any:
+    # Keep this import after the private environment is installed. Importing the
+    # collector at module load can transitively freeze LLM settings too early.
+    from benchmarks.product_baseline import DurableBaselineCollector
+
+    class SerialCheckCollector(
+        _SerialCheckCollectorMixin, DurableBaselineCollector
+    ):
+        pass
+
+    return SerialCheckCollector(
+        *args, max_hitl_resolutions=max_hitl_resolutions, **kwargs
+    )
 
 
 def _bound_jsonl_artifact(root: Path, specification: Any) -> list[dict[str, Any]]:
@@ -681,7 +697,7 @@ async def _run_candidate_block(
                     stop_at_hitl=hitl_policy["stop_at_hitl"],
                     expected_manifest_id=expected_manifests[case_id],
                 )
-                collector = _SerialCheckCollector(
+                collector = _serial_check_collector(
                     client,
                     collection,
                     experiment_id=protocol["protocol_id"],

@@ -12,14 +12,17 @@ status and wall time, calls/tokens, report completeness and action safety, citat
 decision/HITL behavior, and module anomalies. Historical v6 baseline reports are diagnostic context
 only, so this run cannot establish paired causal improvement. The hard total remains 156, concurrency
 authorization/reserve remains zero, and only three of the 56 remaining cells are assigned. Research
-admission is open only for this exact three-run card; no preflight, network probe, or paid run has yet
-started. Independent review found that P01/P04 could auto-resolve an unexpected HITL before
+admission is open only for this exact three-run card. Independent review found that P01/P04 could auto-resolve an unexpected HITL before
 the controller rejected it, and that the prepared HITL identity contradicted P08 auto-resolution.
 The controller now stops P01/P04 before any decision POST, allows only P08 to use the frozen policy,
 blocks a third P08 resolution before dispatch, and freezes the same case-specific policy in protocol,
-prepared environment, binding, and validation evidence. The card and reused controller chain pass 20
-focused tests, 165 related tests, the 2,132-test full suite, smoke-v1 12/12, independent re-review,
-and static, dependency, and compilation checks.
+prepared environment, binding, and validation evidence. The first fresh preflight passed all five
+source routes and one Tavily POST, then stopped before LLM HTTP dispatch with zero LLM attempts and
+zero research submissions: a top-level collector import had frozen LLM configuration before private
+environment installation. That root is retained and cannot be reused. Collector import is now delayed
+until after environment installation and covered by a fresh-process regression. The card and reused
+controller chain pass 21 focused tests, 166 related tests, the 2,133-test full suite, smoke-v1 12/12,
+independent re-review, and static, dependency, and compilation checks.
 
 Citation verification can now opt into a bounded 64 KiB page prefix while the shared safe-fetch
 default continues to reject oversized responses. A claim found in that live prefix may earn lexical
