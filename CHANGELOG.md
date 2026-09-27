@@ -11,7 +11,10 @@ admission was closed during offline acceptance and is now prospectively activate
 three-run authorization. The new protocol bytes invalidate closed-card bindings and require fresh
 audit/preflight/execution bindings. The audit path remains credential-safe and network-free; this
 activation changes no product behavior or safety stops and authorizes no concurrency test. Actual
-research outcomes are recorded separately in the execution status.
+research outcomes are recorded separately in the execution status. The one execution subsequently
+stopped after P04/P01 reports when citation HTTP returned 429; P08 was not submitted. The stopped
+identity is not reusable. Report review confirms concrete P04 validation stages but not overall
+product-quality acceptance; follow-up remains offline.
 
 Offline product refinement now uses synthesis v8: decisive cross-language factual clauses retain
 their evidence language instead of treating a translation as lexically verified. Requirement labels,
