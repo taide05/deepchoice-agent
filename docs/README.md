@@ -35,7 +35,8 @@
   v2 绑定解释保留修复；原 v1 仍保留用于复算 bcb4c87，不跨版本复用资格。
 - [评估工具操作说明](../benchmarks/README.md)：CLI 用法，不能自行产生执行授权。
 - [三案例串行测量卡v2](product-optimization-serial-check-v2.md)：离线验收后的冻结设计与候选身份；
-  尚待机器绑定和执行器离线验收，不能直接传给旧v1 CLI或启动付费准入。
+  [机器卡](../benchmarks/product-optimization-serial-check-v2.json)已接到v2薄适配入口，当前只开放
+  零外呼audit，付费准入保持关闭；不把v2交给旧v1 CLI。
 
 历史评分和 token CSV/JSON 都保留原分母/版本，不回填为当前候选；原始报告、快照、Trace、实验库留 outputs/。
 

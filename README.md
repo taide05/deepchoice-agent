@@ -46,6 +46,10 @@ P04 类后台任务的受限计划改为任务对账、重启故障、重复执�
 可读但不能同 run 恢复。三模板升级为 what-why-how-v7 / evidence-first-v6 / comparison-matrix-v5。
 这些是离线机制改进，真实模型是否遵循、三例是否更有用仍待新串行测量；本轮没有付费或并发运行。
 
+后继serial-check-v2机器卡已接入现有串行执行器：绑定该产品对象、P04/P01/P08固定顺序和独立
+账本。当前付费准入关闭，仅开放零外呼audit；付费flags不能绕过关闭状态。使用与激活边界见
+[测量工具说明](benchmarks/README.md)，工程验收及实际audit证据见[执行状态](docs/o1-execution-status.md)。
+
 - [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。
 - [实际执行状态](docs/o1-execution-status.md)：候选、用量、预留和停止证据。
