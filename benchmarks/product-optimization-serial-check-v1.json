@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "protocol_id": "product-optimization-serial-check-v1",
-  "status": "proposed",
-  "freeze_date": null,
+  "status": "frozen",
+  "freeze_date": "2026-09-27",
   "base_protocol": {
     "protocol_id": "product-optimization-repair-pair-v6",
     "path": "benchmarks/product-optimization-repair-pair-v6.json",
@@ -25,10 +25,10 @@
   },
   "controller": {
     "binding_policy": "candidate-only-three-case-over-v6-v1",
-    "research_admission": "closed-pending-independent-review",
+    "research_admission": "open-after-independent-review-and-offline-acceptance",
     "required_files": [
       {"path": "scripts/product_optimization_serial_check_v1.py", "sha256": "510d2e0e1f83fbc6fddfc798b14d82803304bd1534719bb600ac3cc92a623781"},
-      {"path": "benchmarks/product_optimization_serial_check_v1.py", "sha256": "d5a63f1b6aba0a45698ca72e894dcafbaa2b1de15f1fd0163900f35340118316"},
+      {"path": "benchmarks/product_optimization_serial_check_v1.py", "sha256": "37380667c7a17f0fcda8cc02c477a07b6a54e2a470fa9f0c1bfd54bb80a2187f"},
       {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "0f6098902a48d84845b0ac112212cd198cd09e5d75f7f0d4e89d84aed830e53a"},
       {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "89b7006812c7cf0ece2330b4b58239e3126a47bcc45298ad825562e6a583f848"},
       {"path": "benchmarks/product-optimization-repair-pair-v6.json", "sha256": "393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c"},

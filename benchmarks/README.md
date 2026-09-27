@@ -216,10 +216,10 @@ audit→preflight→prepare→run顺序执行；该执行身份现已耗尽，**
 任务3/3完成、59/59个LLM/检索Trace调用成功、0超时/重试/部分失败；wall为114.1/50.8/45.5秒，
 首例包含73.6秒embedding冷启动。产品质量未通过：三例citation verified均为0，P04报告明显偏短，
 P08在关键约束缺失时仍强制Winner。P08两条citation pre-HTTP安全拒绝触发正确停线，最终为
-3 completed + 9 not_submitted，累计100/156。v6不可续跑、重试或拼接；余56格未分配，当前没有
-开放的付费后继协议。
+3 completed + 9 not_submitted，累计100/156。v6不可续跑、重试或拼接；在后继卡冻结前，余56格
+均未分配且没有开放的付费后继协议。
 
-## 候选三案例串行诊断卡（serial-check-v1，待复审）
+## 候选三案例串行诊断卡（serial-check-v1，已冻结）
 
 `product-optimization-serial-check-v1`把下一次真实反馈缩到当前候选的P04、P01、P08各一次，固定
 顺序、单并发、最多3个研究任务。它复用v6已验收的durable collector、子服务、隔离知识副本、
@@ -230,10 +230,10 @@ P08在关键约束缺失时仍强制Winner。P08两条citation pre-HTTP安全拒
 
 这张卡只回答“当前产品能否稳定产出三份可用报告”，历史v6 baseline只作诊断背景，不构成同窗口
 配对，因此不能据此声称因果改善。研究账本从100起，最多使用3格，硬上限仍为156，并发授权与预留
-均为0；其余53格未分配。当前协议状态为`proposed`，准入为
-`closed-pending-independent-review`：20项聚焦、165项相关、2132项全套、smoke-v1 12/12及静态/
-依赖/编译检查通过；独立复审发现的两项HITL缺口已经修复并复核通过。修复提交前仍不开放preflight
-或付费运行。
+均为0；其余53格未分配。当前协议状态为`frozen`，准入为
+`open-after-independent-review-and-offline-acceptance`：20项聚焦、165项相关、2132项全套、
+smoke-v1 12/12及静态/依赖/编译检查通过；独立复审发现的两项HITL缺口已经修复并复核通过。
+准入仅覆盖这三个任务，不恢复并发或开放额外预算。
 
 ## 有意使用历史直连工具
 

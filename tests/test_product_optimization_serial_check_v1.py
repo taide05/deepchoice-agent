@@ -12,14 +12,15 @@ from scripts import product_optimization_repair_pair as runner_base
 from scripts import product_optimization_serial_check_v1 as runner
 
 
-def test_serial_check_contract_is_candidate_only_and_closed_pending_review():
+def test_serial_check_contract_is_candidate_only_and_open_after_review():
     frozen = contract.load_serial_check_protocol()
     payload = frozen.payload
 
     assert payload["protocol_id"] == contract.PROTOCOL_ID
-    assert payload["status"] == "proposed"
+    assert payload["status"] == "frozen"
+    assert payload["freeze_date"] == "2026-09-27"
     assert payload["controller"]["research_admission"] == (
-        "closed-pending-independent-review"
+        "open-after-independent-review-and-offline-acceptance"
     )
     assert payload["design"]["execution_blocks"] == [
         {
@@ -58,11 +59,17 @@ def test_serial_check_bootstrap_binds_stopped_v6_evidence():
     )
 
 
-def test_proposed_card_cannot_admit_research():
+def test_frozen_reviewed_card_admits_only_its_exact_contract():
     protocol = contract.load_serial_check_protocol().payload
 
+    runner._require_active_protocol(protocol)
+
+    drifted = json.loads(json.dumps(protocol))
+    drifted["controller"]["research_admission"] = (
+        "closed-pending-independent-review"
+    )
     with pytest.raises(runner.RepairPairControlError, match="not open"):
-        runner._require_active_protocol(protocol)
+        runner._require_active_protocol(drifted)
 
 
 def test_fixed_case_projection_preserves_existing_hitl_policy():

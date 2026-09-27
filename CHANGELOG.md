@@ -4,7 +4,7 @@
 
 ### Changed
 
-A proposed `product-optimization-serial-check-v1` card now reduces the next product-feedback step to
+The frozen `product-optimization-serial-check-v1` card reduces the next product-feedback step to
 one serial P04/P01/P08 pass on the current candidate, for at most three research runs. It reuses the
 existing durable collector, isolated seed, manifest, ledger, service, and telemetry boundaries, and
 preserves the frozen P08 HITL input instead of stopping before a report. The card measures terminal
@@ -12,8 +12,8 @@ status and wall time, calls/tokens, report completeness and action safety, citat
 decision/HITL behavior, and module anomalies. Historical v6 baseline reports are diagnostic context
 only, so this run cannot establish paired causal improvement. The hard total remains 156, concurrency
 authorization/reserve remains zero, and only three of the 56 remaining cells are assigned. Research
-admission remains closed while the reviewed repair is committed; no preflight, network probe, or paid
-run was started. Independent review found that P01/P04 could auto-resolve an unexpected HITL before
+admission is open only for this exact three-run card; no preflight, network probe, or paid run has yet
+started. Independent review found that P01/P04 could auto-resolve an unexpected HITL before
 the controller rejected it, and that the prepared HITL identity contradicted P08 auto-resolution.
 The controller now stops P01/P04 before any decision POST, allows only P08 to use the frozen policy,
 blocks a third P08 resolution before dispatch, and freezes the same case-specific policy in protocol,

@@ -73,8 +73,8 @@ def _validate_raw(raw: Any) -> None:
     if not (
         raw["schema_version"] == 1
         and raw["protocol_id"] == PROTOCOL_ID
-        and raw["status"] == "proposed"
-        and raw["freeze_date"] is None
+        and raw["status"] == "frozen"
+        and raw["freeze_date"] == "2026-09-27"
         and raw["base_protocol"] == {
             "protocol_id": "product-optimization-repair-pair-v6",
             "path": "benchmarks/product-optimization-repair-pair-v6.json",
@@ -120,7 +120,7 @@ def _validate_raw(raw: Any) -> None:
         and controller.get("binding_policy")
         == "candidate-only-three-case-over-v6-v1"
         and controller.get("research_admission")
-        == "closed-pending-independent-review"
+        == "open-after-independent-review-and-offline-acceptance"
     ):
         _fail("controller contract changed")
     for item in required:
