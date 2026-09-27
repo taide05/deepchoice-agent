@@ -24,6 +24,8 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
     if recommendation.get("decision_basis_version") != "constraint-aware-v1":
         return recommendation
     result = deepcopy(recommendation)
+    # Even fully verified lexical citations cannot attest to a deployment drill.
+    result["deployment_readiness"] = "unverified"
     is_zh = any("一" <= char <= "鿿" for char in query)
     note = (
         "未知：该判断的引用尚未完成可用性与词法支持核验，需要独立确认。"

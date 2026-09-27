@@ -42,12 +42,12 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v7",
-    "evidence_first": "evidence-first-v6",
-    "comparison_matrix": "comparison-matrix-v5",
+    "what_why_how": "what-why-how-v8",
+    "evidence_first": "evidence-first-v7",
+    "comparison_matrix": "comparison-matrix-v6",
 }
 PROMPT_VERSIONS = {
-    "conclusion_synthesizer.synthesis_prompt": "v8",
+    "conclusion_synthesizer.synthesis_prompt": "v9",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -72,7 +72,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"] = "v1"
     sha256: str
 
 
@@ -123,6 +123,7 @@ class RunManifest(FrozenModel):
     citation_policy_version: Literal[
         "deterministic-citation-v1", "deterministic-citation-v2",
         "deterministic-citation-v3", "deterministic-citation-v4",
+        "deterministic-citation-v5",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     gather_evidence: bool
@@ -138,7 +139,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v3"] = "research-v3"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v4"]
+    citation_policy_version: Literal["deterministic-citation-v5"]
     hitl_policy_version: Literal["evidence-insufficient-v1"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -330,7 +331,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "scoring_policy_version": "source-score-v6",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v4",
+        "citation_policy_version": "deterministic-citation-v5",
         "hitl_policy_version": "evidence-insufficient-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(

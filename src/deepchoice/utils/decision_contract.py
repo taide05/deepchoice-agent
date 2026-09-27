@@ -266,6 +266,7 @@ def abstain_recommendation(
     """Return a safe copy that makes no unconditional winner or rank claim."""
     result = deepcopy(recommendation) if isinstance(recommendation, dict) else {}
     result["decision_basis_version"] = DECISION_BASIS_VERSION
+    result["deployment_readiness"] = "unverified"
     result["winner"] = "context_dependent"
     result["winner_rationale"] = ""
     result["recommendation"] = _restricted_message(query, reason)
@@ -314,16 +315,27 @@ def abstain_recommendation(
     return result
 
 
-def restrict_action_plan(recommendation: Any, query: Any) -> dict[str, Any]:
+def restrict_action_plan(
+    recommendation: Any, query: Any, *, deployment_unverified: bool = False,
+) -> dict[str, Any]:
     """Replace an unverified model plan without withdrawing a verified choice."""
     result = deepcopy(recommendation) if isinstance(recommendation, dict) else {}
-    has_plan = bool(result.get("action_plan"))
+    result["deployment_readiness"] = "unverified"
+    has_plan = bool(result.get("action_plan")) or deployment_unverified
     result["action_plan_mode"] = "validation_only"
     result["action_plan"] = _validation_only_plan(query) if has_plan else []
     result["unresolved_questions"] = normalize_unknowns(
         result.get("unresolved_questions")
     )
-    if has_plan:
+    if deployment_unverified:
+        gap = (
+            "实际部署与恢复演练尚未验证；选型依据不等于部署验收，仅允许隔离验证，禁止生产变更。"
+            if _is_zh(query) else
+            "Actual deployment and recovery rehearsals remain unverified; selection evidence is not deployment acceptance. Only isolated validation is allowed, not production changes."
+        )
+        if gap not in result["unresolved_questions"]:
+            result["unresolved_questions"].append(gap)
+    elif has_plan:
         gap = (
             "行动计划的依据尚未通过核验；仅允许隔离验证，禁止生产变更。"
             if _is_zh(query) else

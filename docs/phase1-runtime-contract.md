@@ -67,6 +67,16 @@ v4 将 unknown 豁免缩到代码内精确无事实模板；非模板 unknown �
 旧 citation v3、prompt v7 和旧模板仍可读取，但必须新建 run；schema、预算、HITL、安全抓取
 及生命周期契约不变。
 
+当前候选进一步使用 synthesis v9、citation v5 及三模板 v8/v7/v6。自动恢复 A 义务只询问文献可
+支撑的恢复机制、前提与限制，仍为 decision-critical；用户 C/冻结 Q 和 analysis 中明确要求
+实际演练的原文不豁免。final_recommendation.deployment_readiness 由合成、弃权、受限计划及引用
+校准统一覆盖为 unverified，三个报告模板固定展示未验收警示，不采用模型的 ready/scope 声明。
+该字段嵌套于现有推荐快照，不新增顶层状态、结果 schema 或迁移，也不改 HITL 结构门。
+操作型义务强制完整固定隔离计划（包括模型计划为空/畸形时）；缺模型计划不再单独触发选型弃权，
+但关键需求 unknown/contradicted、溢出、P08 缺上下文和引用失败仍按原规则降级。部署警示及固定
+验证任务不是实测事实，不增加 verified 数量。来源词法支持不能证明真实演练或场景适用性。
+旧 citation v4、prompt v8 和旧模板身份可读但拒绝同 run 恢复；不可改写历史结果或引用计数。
+
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
 保留条件分支、待验证计划与明确未知。绑定到有内容的来源只证明结构完整，不是语义验证。
 引用节点优先检查新判断字段，继续使用原总检查/安全抓取上限；关键判断、胜者依据及
@@ -108,8 +118,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v4` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
-  citation-policy v1/v2/v3 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v5` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
+  citation-policy v1/v2/v3/v4 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

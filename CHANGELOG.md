@@ -4,6 +4,16 @@
 
 ### Changed
 
+Separate source-backed selection from deployment acceptance in the offline candidate (synthesis v9,
+citation v5, templates what-why-how-v8 / evidence-first-v7 / comparison-matrix-v6). The automatically
+derived recovery obligation now asks for mechanisms, prerequisites and limits, not a completed user
+rehearsal. Explicit user/analysis rehearsal requirements and other critical evidence gates remain
+unchanged. Runtime-owned deployment readiness is always unverified; operational decisions receive the
+fixed isolated validation plan even when the model plan is absent or malformed. Missing model plans
+alone no longer withdraw a supported choice. Model readiness/scope flags cannot grant authority.
+Historical identities remain readable but incompatible with same-run resume. No paid run or new
+measurement card accompanies this change; live source relevance and cross-language quality remain open.
+
 The serial-check-v2 machine card now binds candidate c1c43d8 and the unchanged three-case serial
 execution path through a scoped adapter. Candidate objects, prior stopped evidence, fixed order,
 HITL, safety stops and a separate 103-to-106/156 ledger are checked without rewriting v1. Paid

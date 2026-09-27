@@ -80,6 +80,7 @@ Disputed findings: {disputed_count}
 12. GRANULARITY / CLASS-MEMBERSHIP guard: the winner MUST be a SINGLE, adoptable product/tool/library/engine of the EXACT class the query asks for — rate each candidate by how precisely it matches the query's specific requirement and prefer the closest match. Mismatches to avoid: (a) naming a technique instead of a library ("QLoRA"/"LoRA" is the fine-tuning technique, Unsloth/PEFT/TRL are the libraries); (b) an adjacent sync class — Yjs/Automerge are realtime/collaborative sync (correct for "real-time collaborative whiteboard"), NOT offline-first sync (PowerSync/WatermelonDB/PouchDB/Realm) — pick the one matching the query's sync mode; (c) a composite instead of a single product ("Apache Kafka + OLAP database" is not one OLAP engine like ClickHouse/TimescaleDB); (d) a name you are not certain is a real established product — if unsure, pick the closest well-known member of the queried class.
 13. OPERATIONAL BOUNDARIES: Low operational effort or zero configuration NEVER means zero maintenance. Do not repeat absolute assurances from a template as established facts. State ongoing backup, restore verification, upgrades and migration responsibilities when relevant to the request. For databases, daily active users do not determine simultaneous writes; distinguish reader/writer overlap from multiple simultaneous writers. Do not promise that WAL removes writer serialization or lock waits. A single-file layout alone does not establish safe online/WAL backup; require a consistency-aware backup/restore procedure and expose any missing evidence. For task queues, distinguish broker message durability from result-backend outcome storage. Late acknowledgement can cause redelivery after worker failure, so state the at-least-once/duplicate-execution risk and require idempotency; never claim that a result backend or late acknowledgement alone prevents loss or provides exactly-once execution. Migration must be conditional on observable workload/lock-wait/latency or operational requirements, with explicit restore/validation limits; never guarantee a seamless migration or an unmeasured comparative benefit. A phased task-queue rollout must define durable admission or authoritative task state, broker persistence, acknowledgement/retry/timeout failure cases, duplicate handling, observable backlog/failure thresholds, cutover/abort criteria, and rollback or no-rollback boundaries. Cite supplied evidence for asserted details; where it cannot establish the procedure or condition, say the condition needs verification in the recommendation and unresolved_questions rather than inventing support. A source score or a vendor's official identity alone does not establish factual correctness or comparative superiority.
 14. ACTION CONTRACT: Provide conditional decision_branches and a staged action_plan. For operational choices, cover delivery semantics and idempotency, migration stages, verification signals, change triggers, and rollback. Do not claim exactly-once delivery, safe migration, reliability, or rollback feasibility without evidence; mark missing facts unknown near the affected requirement and in unresolved_questions. Unknown operational premises permit read-only observation and disposable isolated rehearsals only, not production dual writes, cutover or overwrite recovery. A snapshot alone cannot establish rollback after new writes: require an authoritative writer, a consistency boundary, preservation/replay of acknowledged writes, abort criteria and an explicit no-rollback point. Do not invent these procedures or treat "verify later" as permission to execute them. Keep useful choice conditions and measurable validation questions even when production action is withheld.
+15. SELECTION IS NOT DEPLOYMENT ACCEPTANCE: The runtime recovery-mechanism obligation asks what the evidence establishes about recovery mechanisms, prerequisites and limits, NOT whether the user's deployment has already passed a rehearsal. Assess those technical facts without inventing test results. Actual deployment readiness remains unverified by this research pipeline and operational actions remain isolated validation only, even if the selection is supported. If the user explicitly requires completed rehearsal or workload-specific proof, preserve that requirement as decision-critical and unknown without applicable evidence. Do not weaken delivery semantics, idempotency ownership, migration/rollback boundaries or other decision requirements.
 
 ## Output Length Limits (CRITICAL — exceed and output will be rejected)
 - recommendation: max 200 words
@@ -291,9 +292,9 @@ def _decision_requirements(
         ])
     if delivery_relevant or recovery_relevant:
         obligations.append(
-            "已针对声明的进程与依赖故障验证恢复行为。"
+            "已明确声明的进程与依赖故障下的恢复机制、前提和限制。"
             if is_zh else
-            "Recovery behavior is verified across the declared process and dependency failures."
+            "Recovery mechanisms, prerequisites and limits are established for the declared process and dependency failures."
         )
     migration_relevant = matches_any(migration_terms) or (
         (delivery_relevant or recovery_relevant)
@@ -400,6 +401,8 @@ def _normalize_decision_contract(
     """Fill every required row and fail closed on missing evidence bindings."""
     # This is runtime-owned presentation metadata, never model-granted authority.
     result["action_plan_mode"] = "proposed"
+    # Source research does not observe the user's deployment or execute drills.
+    result["deployment_readiness"] = "unverified"
     if len(requirements) > MAX_REQUIREMENT_ASSESSMENTS:
         result["decision_basis_version"] = DECISION_BASIS_VERSION
         result["requirement_assessments"] = []
@@ -483,18 +486,11 @@ def _normalize_decision_contract(
         item["decision_critical"] and item["status"] != "satisfied"
         for item in normalized
     )
-    operational_plan_missing = (
-        any(item["kind"] == "operational_obligation" for item in requirements)
-        and not result["action_plan"]
-    )
-    if operational_plan_missing:
-        plan_gap = (
-            "The operational decision needs a complete staged plan with "
-            "verification, change trigger, and rollback."
-        )
-        if plan_gap not in result["unresolved_questions"]:
-            result["unresolved_questions"].append(plan_gap)
-    return result, overflow or unresolved_critical or operational_plan_missing
+    if any(item["kind"] == "operational_obligation" for item in requirements):
+        # Selection can be supported while deployment remains untested. Never
+        # turn source citations into permission to execute a production plan.
+        result = restrict_action_plan(result, query, deployment_unverified=True)
+    return result, overflow or unresolved_critical
 
 
 def _summarize_conflicts(conflicts: list[dict]) -> str:

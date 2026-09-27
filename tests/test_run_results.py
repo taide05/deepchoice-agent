@@ -103,6 +103,8 @@ def test_validation_only_plan_survives_public_result_without_original_operations
     restored = RunResultRecord.model_validate_json(result.model_dump_json())
     assert restored.snapshot["final_recommendation"]["action_plan_mode"] == "validation_only"
     assert "Isolated validation only; no production changes" in restored.report
+    assert restored.snapshot["final_recommendation"]["deployment_readiness"] == "unverified"
+    assert "Deployment acceptance: unverified" in restored.report
     assert "acknowledged writes" in restored.report
     for forbidden in ("UNSAFE_LIVE_CUTOVER", "UNSAFE_OLD_SNAPSHOT", "private-worker"):
         assert forbidden not in restored.model_dump_json()

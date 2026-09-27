@@ -42,6 +42,20 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
     action_plan = _dict_items(recommendation.get("action_plan"), 20)
     lines: list[str] = []
 
+    if recommendation.get("decision_basis_version") == "constraint-aware-v1":
+        # A fixed boundary, never a model-supplied readiness claim. Rendering a
+        # historical snapshot must not upgrade an arbitrary readiness marker.
+        lines.extend([
+            "### 部署验收：未验证" if lang == "zh" else "### Deployment acceptance: unverified",
+            "",
+            (
+                "选型依据与部署验收分开判断。本研究不执行真实部署或恢复演练；文档引用通过不表示演练通过，也不授权生产变更。用户明确要求的实际验收证据仍是关键条件。"
+                if lang == "zh" else
+                "Selection evidence and deployment acceptance are separate. This research does not execute deployment or recovery rehearsals; verified document citations neither prove a successful drill nor authorize production changes. Explicit user requirements for acceptance evidence remain decision-critical."
+            ),
+            "",
+        ])
+
     if assessments:
         lines.extend(
             [

@@ -97,7 +97,8 @@ def test_non_abstaining_proposal_is_not_replaced_or_mislabeled_as_validation_onl
         checks=(check, winner_check, *action_checks),
     )
     result = _calibrate_decision(original, verification, "Choose a database")
-    assert result == original  # Lexical support is not production authorization.
+    assert result == {**original, "deployment_readiness": "unverified"}
+    # Lexical support preserves the proposal, not deployment authorization.
 
 
 def test_non_abstaining_choice_replaces_unverified_production_actions():
