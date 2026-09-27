@@ -47,6 +47,8 @@ REPORT_TEMPLATE_VERSIONS = {
     "comparison_matrix": "comparison-matrix-v6",
 }
 PROMPT_VERSIONS = {
+    "query_analyzer.decomposition_system": "v2",
+    "query_adapter.adapt_system": "v2",
     "conclusion_synthesizer.synthesis_prompt": "v9",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",

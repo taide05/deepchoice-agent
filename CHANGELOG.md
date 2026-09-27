@@ -4,6 +4,13 @@
 
 ### Changed
 
+Preserve original request context in query analysis/adaptation (both prompts v2). A shared allowlisted
+projection supplies the original query, free-text scene, candidates, constraints and frozen questions,
+separately from coarse classification and retry/HITL targets. This fixes deterministic input loss;
+it does not guarantee model compliance or retrieval coverage. No extra call or target is introduced
+by this change, and no retriever, seed, snippet window or citation threshold changes. Historical v1
+prompt identities remain readable but cannot resume on the changed runtime.
+
 Separate source-backed selection from deployment acceptance in the offline candidate (synthesis v9,
 citation v5, templates what-why-how-v8 / evidence-first-v7 / comparison-matrix-v6). The automatically
 derived recovery obligation now asks for mechanisms, prerequisites and limits, not a completed user
