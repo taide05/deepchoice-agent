@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import contextmanager
+from copy import deepcopy
 import importlib
 import json
 from pathlib import Path
@@ -21,6 +22,7 @@ from typing import Any, Iterator
 
 import httpx
 
+from benchmarks.product_baseline import DurableBaselineCollector
 from scripts import product_optimization_repair_pair as _v4
 from scripts import product_optimization_repair_pair_v6 as _v6
 
@@ -35,9 +37,33 @@ LEDGER_ROOT = (
     ROOT / "outputs/product-optimization-ledgers/product-optimization-serial-check-v1"
 )
 RESULT_NAME = "serial-check-run-result.json"
+LEGACY_HITL_MODE = "stop-at-hitl-no-auto-resolution"
 RepairPairControlError = _v4.RepairPairControlError
 _BASE_VALIDATE_EXECUTION_BINDING = _v4._validate_execution_binding
 _BASE_TREE_HASH = _v4._tree_hash
+
+
+class _SerialCheckCollector(DurableBaselineCollector):
+    def __init__(self, *args: Any, max_hitl_resolutions: int, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._max_hitl_resolutions = max_hitl_resolutions
+
+    async def _resolve_decision(
+        self,
+        case: dict[str, Any],
+        task: dict[str, Any],
+        decision: dict[str, Any],
+        *,
+        resolution_index: int,
+    ) -> str | None:
+        if resolution_index >= self._max_hitl_resolutions:
+            return "HITL_RESOLUTION_LIMIT_REACHED"
+        return await super()._resolve_decision(
+            case,
+            task,
+            decision,
+            resolution_index=resolution_index,
+        )
 
 
 def _bound_jsonl_artifact(root: Path, specification: Any) -> list[dict[str, Any]]:
@@ -225,6 +251,128 @@ def _require_active_protocol(protocol: dict[str, Any]) -> None:
         raise RepairPairControlError("research admission is not open")
 
 
+def _case_hitl_policy(
+    protocol: dict[str, Any], case_id: str
+) -> dict[str, Any]:
+    policy = protocol.get("design", {}).get("hitl_policy")
+    cases = policy.get("cases") if isinstance(policy, dict) else None
+    selected = cases.get(case_id) if isinstance(cases, dict) else None
+    if not (
+        isinstance(policy, dict)
+        and policy.get("mode") == "case-specific-p01-p04-stop-p08-auto-v1"
+        and set(cases) == {"P01", "P04", "P08"}
+        and isinstance(selected, dict)
+        and set(selected) == {"stop_at_hitl", "max_auto_resolutions"}
+        and type(selected.get("stop_at_hitl")) is bool
+        and type(selected.get("max_auto_resolutions")) is int
+        and selected["max_auto_resolutions"] >= 0
+    ):
+        raise RepairPairControlError("case HITL policy drift")
+    return selected
+
+
+def _prepared_environment_paths(
+    root: Path, protocol: dict[str, Any]
+) -> list[Path]:
+    return [
+        (
+            _v4._block_root(root, block["arm"], block["repetition"])
+            / "environment.json"
+        ).resolve()
+        for block in protocol["design"]["execution_blocks"]
+    ]
+
+
+def _validate_prepared_hitl_policy(
+    root: Path, protocol: dict[str, Any]
+) -> None:
+    expected = protocol["design"]["hitl_policy"]
+    for environment_path in _prepared_environment_paths(root, protocol):
+        environment = _v4._read_json(environment_path)
+        notes = environment.get("notes") if isinstance(environment, dict) else None
+        if not (
+            isinstance(notes, dict)
+            and notes.get("hitl_mode") == expected["mode"]
+            and notes.get("hitl_policy") == expected
+        ):
+            raise RepairPairControlError("prepared HITL policy drift")
+
+
+def _freeze_prepared_hitl_policy(
+    root: Path, protocol: dict[str, Any]
+) -> None:
+    binding_path = root.resolve() / "execution-binding.json"
+    binding = _v4._read_json(binding_path)
+    blocks = binding.get("blocks") if isinstance(binding, dict) else None
+    expected_blocks = protocol["design"]["execution_blocks"]
+    if not isinstance(blocks, list) or len(blocks) != len(expected_blocks):
+        raise RepairPairControlError("prepared HITL binding drift")
+    binding_by_key = {
+        (item.get("arm"), item.get("repetition")): item
+        for item in blocks
+        if isinstance(item, dict)
+    }
+    if len(binding_by_key) != len(expected_blocks):
+        raise RepairPairControlError("prepared HITL binding drift")
+    expected_policy = protocol["design"]["hitl_policy"]
+    for block, environment_path in zip(
+        expected_blocks, _prepared_environment_paths(root, protocol), strict=True
+    ):
+        key = (block["arm"], block["repetition"])
+        binding_block = binding_by_key.get(key)
+        environment = _v4._read_json(environment_path)
+        notes = environment.get("notes") if isinstance(environment, dict) else None
+        if not (
+            isinstance(binding_block, dict)
+            and isinstance(notes, dict)
+            and notes.get("hitl_mode") == LEGACY_HITL_MODE
+            and "hitl_policy" not in notes
+        ):
+            raise RepairPairControlError("prepared HITL binding drift")
+        notes["hitl_mode"] = expected_policy["mode"]
+        notes["hitl_policy"] = deepcopy(expected_policy)
+        _v4._write_json(environment_path, environment)
+        binding_block["environment_sha256"] = _v4._file_hash(environment_path)
+    _v4._write_json(binding_path, binding)
+    _validate_prepared_hitl_policy(root, protocol)
+
+
+def _base_validate_with_hitl_policy(
+    root: Path,
+    preflight_dir: Path,
+    baseline_root: Path,
+    candidate_root: Path,
+    env_file: Path,
+    expected_protocol_byte_sha256: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    protocol = _bootstrap_approved_protocol(expected_protocol_byte_sha256)
+    _validate_prepared_hitl_policy(root, protocol)
+    environment_paths = set(_prepared_environment_paths(root, protocol))
+    original_read_json = _v4._read_json
+
+    def compatible_read_json(path: Path) -> Any:
+        payload = original_read_json(path)
+        if Path(path).resolve() in environment_paths:
+            payload = deepcopy(payload)
+            payload["notes"]["hitl_mode"] = LEGACY_HITL_MODE
+        return payload
+
+    try:
+        _v4._read_json = compatible_read_json
+        result = _BASE_VALIDATE_EXECUTION_BINDING(
+            root,
+            preflight_dir,
+            baseline_root,
+            candidate_root,
+            env_file,
+            expected_protocol_byte_sha256,
+        )
+    finally:
+        _v4._read_json = original_read_json
+    _validate_prepared_hitl_policy(root, protocol)
+    return result
+
+
 def _regular_file_map(root: Path) -> dict[str, tuple[int, str]]:
     root = _v4._validate_plain_directory(root)
     files: dict[str, tuple[int, str]] = {}
@@ -304,7 +452,7 @@ def _validate_execution_binding_allow_used(
         expected_protocol_byte_sha256,
     )
     try:
-        return _BASE_VALIDATE_EXECUTION_BINDING(*arguments)
+        return _base_validate_with_hitl_policy(*arguments)
     except RepairPairControlError as exc:
         if str(exc) != "prepared block drift":
             raise
@@ -344,7 +492,7 @@ def _validate_execution_binding_allow_used(
     previous = _v4._tree_hash
     try:
         _v4._tree_hash = masked_tree_hash
-        return _BASE_VALIDATE_EXECUTION_BINDING(*arguments)
+        return _base_validate_with_hitl_policy(*arguments)
     finally:
         _v4._tree_hash = previous
 
@@ -392,10 +540,27 @@ def preflight(*args, **kwargs) -> dict[str, Any]:
         return _v4.preflight(*args, **kwargs)
 
 
-def prepare(*args, **kwargs) -> dict[str, Any]:
-    _install_call_environment(args, kwargs, 4)
+def prepare(
+    root: Path,
+    preflight_dir: Path,
+    baseline_root: Path,
+    candidate_root: Path,
+    env_file: Path,
+    expected_protocol_byte_sha256: str,
+) -> dict[str, Any]:
+    arguments = (
+        root,
+        preflight_dir,
+        baseline_root,
+        candidate_root,
+        env_file,
+        expected_protocol_byte_sha256,
+    )
+    _install_call_environment(arguments, {}, 4)
     with _configured_base():
-        result = _v4.prepare(*args, **kwargs)
+        result = _v4.prepare(*arguments)
+        protocol = _bootstrap_approved_protocol(expected_protocol_byte_sha256)
+        _freeze_prepared_hitl_policy(root, protocol)
     return {**result, "blocks": 1, "planned_cells": 3}
 
 
@@ -442,7 +607,7 @@ async def _run_candidate_block(
     expected_manifests: dict[str, str],
     before_admission: Any,
 ) -> tuple[list[dict[str, Any]], str | None]:
-    from benchmarks.product_baseline import CollectionOptions, DurableBaselineCollector
+    from benchmarks.product_baseline import CollectionOptions
 
     arm, repetition = block["arm"], block["repetition"]
     profile = f"serial-r{repetition}"
@@ -498,6 +663,7 @@ async def _run_candidate_block(
                 client, process, control / "telemetry.jsonl", instance_nonce
             )
             for case_id in block["case_order"]:
+                hitl_policy = _case_hitl_policy(protocol, case_id)
                 before_admission()
                 await _v4._require_safe_health(client)
                 telemetry = _v4._strict_telemetry_state(
@@ -512,15 +678,16 @@ async def _run_candidate_block(
                     concurrency=1,
                     poll_interval_seconds=1.0,
                     case_timeout_seconds=900.0,
-                    stop_at_hitl=False,
+                    stop_at_hitl=hitl_policy["stop_at_hitl"],
                     expected_manifest_id=expected_manifests[case_id],
                 )
-                collector = DurableBaselineCollector(
+                collector = _SerialCheckCollector(
                     client,
                     collection,
                     experiment_id=protocol["protocol_id"],
                     dataset_hash=protocol["dataset"]["parent_sha256"],
                     options=options,
+                    max_hitl_resolutions=hitl_policy["max_auto_resolutions"],
                 )
                 if (
                     process.poll() is not None

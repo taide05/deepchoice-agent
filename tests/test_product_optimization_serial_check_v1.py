@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from benchmarks import product_optimization_serial_check_v1 as contract
+from benchmarks.product_baseline import CollectionOptions
 from scripts import product_optimization_repair_pair as runner_base
 from scripts import product_optimization_serial_check_v1 as runner
 
@@ -29,6 +31,9 @@ def test_serial_check_contract_is_candidate_only_and_closed_pending_review():
     ]
     assert payload["design"]["concurrency"] == 1
     assert payload["design"]["holdout_access"] == "forbidden"
+    assert payload["design"]["hitl_policy"] == contract.HITL_POLICY
+    assert payload["environment"]["hitl_mode"] == contract.HITL_MODE
+    assert payload["environment"]["hitl_policy"] == contract.HITL_POLICY
     assert payload["budgets"]["research_ledger"] == {
         "starting_used": 100,
         "diagnostic_max": 3,
@@ -70,6 +75,203 @@ def test_fixed_case_projection_preserves_existing_hitl_policy():
     assert cases["P08"]["hitl"]["action"] == "provide_context"
     assert cases["P08"]["hitl"]["repeat_action"] == "limited_report"
     assert cases["P08"]["hitl"]["supplemental_input"]
+    assert runner._case_hitl_policy(protocol, "P01") == {
+        "stop_at_hitl": True,
+        "max_auto_resolutions": 0,
+    }
+    assert runner._case_hitl_policy(protocol, "P04") == {
+        "stop_at_hitl": True,
+        "max_auto_resolutions": 0,
+    }
+    assert runner._case_hitl_policy(protocol, "P08") == {
+        "stop_at_hitl": False,
+        "max_auto_resolutions": 2,
+    }
+
+
+@pytest.mark.asyncio
+async def test_p08_resolution_limit_blocks_before_decision_post(tmp_path: Path):
+    class NoRequestClient:
+        async def request(self, *_args, **_kwargs):
+            raise AssertionError("decision POST must not be sent")
+
+    collector = runner._SerialCheckCollector(
+        NoRequestClient(),
+        tmp_path,
+        experiment_id=contract.PROTOCOL_ID,
+        dataset_hash="a" * 64,
+        options=CollectionOptions(
+            profile="serial-r1",
+            repetition=1,
+            concurrency=1,
+            poll_interval_seconds=1.0,
+            case_timeout_seconds=900.0,
+        ),
+        max_hitl_resolutions=2,
+    )
+
+    error = await collector._resolve_decision(
+        {"hitl": {"action": "provide_context", "supplemental_input": "x"}},
+        {"task": {"task_id": "task", "version": 1}},
+        {"decision_id": "decision"},
+        resolution_index=2,
+    )
+
+    assert error == "HITL_RESOLUTION_LIMIT_REACHED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case_id", ["P01", "P04"])
+async def test_non_p08_collector_stops_at_hitl_without_decision_post(
+    tmp_path: Path, case_id: str
+):
+    protocol = contract.load_serial_check_protocol().payload
+    case = runner._load_cases(protocol)[case_id]
+    policy = runner._case_hitl_policy(protocol, case_id)
+    decision_posts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal decision_posts
+        path = request.url.path
+        if path == "/health":
+            return httpx.Response(
+                200, json={"status": "ok", "runtime_instance": "active"}
+            )
+        if request.method == "POST" and path == "/api/v1/tasks":
+            return httpx.Response(
+                202,
+                json={
+                    "task": {"task_id": "task", "status": "queued", "version": 0},
+                    "latest_run": {"run_id": "run", "manifest_id": "manifest"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task":
+            return httpx.Response(
+                200,
+                json={
+                    "task": {
+                        "task_id": "task",
+                        "status": "waiting_for_input",
+                        "version": 1,
+                    },
+                    "latest_run": {"run_id": "run", "manifest_id": "manifest"},
+                },
+            )
+        if request.method == "GET" and path.endswith("/decision"):
+            return httpx.Response(200, json={"decision_id": "decision"})
+        if request.method == "GET" and path.endswith("/observability"):
+            return httpx.Response(200, json={"run_id": "run"})
+        if request.method == "POST" and "/decisions/" in path:
+            decision_posts += 1
+            raise AssertionError("non-P08 HITL must not be resolved")
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    options = CollectionOptions(
+        profile="serial-r1",
+        repetition=1,
+        concurrency=1,
+        poll_interval_seconds=0,
+        case_timeout_seconds=5,
+        stop_at_hitl=policy["stop_at_hitl"],
+    )
+    output_dir = tmp_path / case_id
+    output_dir.mkdir()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://test"
+    ) as client:
+        collector = runner._SerialCheckCollector(
+            client,
+            output_dir,
+            experiment_id=contract.PROTOCOL_ID,
+            dataset_hash=protocol["dataset"]["parent_sha256"],
+            options=options,
+            max_hitl_resolutions=policy["max_auto_resolutions"],
+        )
+        result = (await collector.collect([case]))[0]
+
+    assert decision_posts == 0
+    assert result["status"] == "waiting_for_input"
+    assert result["error_code"] == "HITL_REQUIRED_NO_AUTO_RESOLUTION"
+    assert result["hitl_resolutions"] == 0
+
+
+@pytest.mark.asyncio
+async def test_p08_collector_stops_before_third_decision_post(tmp_path: Path):
+    protocol = contract.load_serial_check_protocol().payload
+    case = runner._load_cases(protocol)["P08"]
+    policy = runner._case_hitl_policy(protocol, "P08")
+    decision_bodies: list[dict[str, object]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/health":
+            return httpx.Response(
+                200, json={"status": "ok", "runtime_instance": "active"}
+            )
+        if request.method == "POST" and path == "/api/v1/tasks":
+            return httpx.Response(
+                202,
+                json={
+                    "task": {"task_id": "task", "status": "queued", "version": 0},
+                    "latest_run": {"run_id": "run", "manifest_id": "manifest"},
+                },
+            )
+        if request.method == "GET" and path == "/api/v1/tasks/task":
+            return httpx.Response(
+                200,
+                json={
+                    "task": {
+                        "task_id": "task",
+                        "status": "waiting_for_input",
+                        "version": len(decision_bodies) + 1,
+                    },
+                    "latest_run": {"run_id": "run", "manifest_id": "manifest"},
+                },
+            )
+        if request.method == "GET" and path.endswith("/decision"):
+            return httpx.Response(
+                200,
+                json={"decision_id": f"decision-{len(decision_bodies) + 1}"},
+            )
+        if request.method == "POST" and "/decisions/" in path:
+            decision_bodies.append(json.loads(request.content))
+            return httpx.Response(202, json={"replayed": False})
+        if request.method == "GET" and path.endswith("/observability"):
+            return httpx.Response(200, json={"run_id": "run"})
+        raise AssertionError(f"unexpected request: {request.method} {path}")
+
+    options = CollectionOptions(
+        profile="serial-r1",
+        repetition=1,
+        concurrency=1,
+        poll_interval_seconds=0,
+        case_timeout_seconds=5,
+        stop_at_hitl=policy["stop_at_hitl"],
+    )
+    output_dir = tmp_path / "P08"
+    output_dir.mkdir()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://test"
+    ) as client:
+        collector = runner._SerialCheckCollector(
+            client,
+            output_dir,
+            experiment_id=contract.PROTOCOL_ID,
+            dataset_hash=protocol["dataset"]["parent_sha256"],
+            options=options,
+            max_hitl_resolutions=policy["max_auto_resolutions"],
+        )
+        result = (await collector.collect([case]))[0]
+
+    assert decision_bodies == [
+        {
+            "action": "provide_context",
+            "supplemental_input": case["hitl"]["supplemental_input"],
+        },
+        {"action": "limited_report"},
+    ]
+    assert result["error_code"] == "HITL_RESOLUTION_LIMIT_REACHED"
+    assert result["hitl_resolutions"] == 2
 
 
 @pytest.mark.parametrize(
@@ -115,15 +317,39 @@ def test_prepare_projects_dynamic_three_case_counts(monkeypatch, tmp_path: Path)
     env_file = tmp_path / ".env"
     env_file.write_text("DS_FLASH_API_KEY=secret\n", encoding="utf-8")
     monkeypatch.setattr(runner, "_install_call_environment", lambda *_args: None)
-    monkeypatch.setattr(
-        runner_base,
-        "prepare",
-        lambda *_args, **_kwargs: {
+    protocol = contract.load_serial_check_protocol().payload
+
+    def fake_prepare(root: Path, *_args, **_kwargs):
+        environment_path = root / "arms/candidate/r1/environment.json"
+        environment_path.parent.mkdir(parents=True)
+        runner_base._write_json(
+            environment_path,
+            {"notes": {"hitl_mode": runner.LEGACY_HITL_MODE}},
+        )
+        runner_base._write_json(
+            root / "execution-binding.json",
+            {
+                "blocks": [
+                    {
+                        "arm": "candidate",
+                        "repetition": 1,
+                        "environment_sha256": runner_base._file_hash(
+                            environment_path
+                        ),
+                    }
+                ]
+            },
+        )
+        return {
             "prepared": True,
             "blocks": 4,
             "planned_cells": 12,
             "research_runs_submitted": 0,
-        },
+        }
+
+    monkeypatch.setattr(runner_base, "prepare", fake_prepare)
+    monkeypatch.setattr(
+        runner, "_bootstrap_approved_protocol", lambda *_args: protocol
     )
 
     result = runner.prepare(
@@ -138,6 +364,60 @@ def test_prepare_projects_dynamic_three_case_counts(monkeypatch, tmp_path: Path)
     assert result["blocks"] == 1
     assert result["planned_cells"] == 3
     assert result["research_runs_submitted"] == 0
+    environment_path = tmp_path / "experiment/arms/candidate/r1/environment.json"
+    environment = runner_base._read_json(environment_path)
+    binding = runner_base._read_json(
+        tmp_path / "experiment/execution-binding.json"
+    )
+    assert environment["notes"]["hitl_mode"] == contract.HITL_MODE
+    assert environment["notes"]["hitl_policy"] == contract.HITL_POLICY
+    assert binding["blocks"][0]["environment_sha256"] == (
+        runner_base._file_hash(environment_path)
+    )
+
+
+def test_base_validation_compatibility_does_not_change_frozen_hitl_policy(
+    monkeypatch, tmp_path: Path
+):
+    protocol = contract.load_serial_check_protocol().payload
+    environment_path = tmp_path / "arms/candidate/r1/environment.json"
+    environment_path.parent.mkdir(parents=True)
+    runner_base._write_json(
+        environment_path,
+        {
+            "notes": {
+                "hitl_mode": contract.HITL_MODE,
+                "hitl_policy": contract.HITL_POLICY,
+            }
+        },
+    )
+    monkeypatch.setattr(
+        runner, "_bootstrap_approved_protocol", lambda *_args: protocol
+    )
+
+    def fake_base_validate(*_args):
+        compatible = runner_base._read_json(environment_path)
+        assert compatible["notes"]["hitl_mode"] == runner.LEGACY_HITL_MODE
+        return protocol, {"status": "ready"}
+
+    monkeypatch.setattr(
+        runner, "_BASE_VALIDATE_EXECUTION_BINDING", fake_base_validate
+    )
+
+    result = runner._base_validate_with_hitl_policy(
+        tmp_path,
+        tmp_path / "preflight",
+        tmp_path / "baseline",
+        tmp_path / "candidate",
+        tmp_path / ".env",
+        "a" * 64,
+    )
+
+    assert result == (protocol, {"status": "ready"})
+    assert runner_base._read_json(environment_path)["notes"] == {
+        "hitl_mode": contract.HITL_MODE,
+        "hitl_policy": contract.HITL_POLICY,
+    }
 
 
 def _result() -> dict:

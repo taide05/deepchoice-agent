@@ -27,8 +27,8 @@
     "binding_policy": "candidate-only-three-case-over-v6-v1",
     "research_admission": "closed-pending-independent-review",
     "required_files": [
-      {"path": "scripts/product_optimization_serial_check_v1.py", "sha256": "f9d6eb33139592f09d6712e347accfdd4ba0740195a0eec1ba3080cb93395c2c"},
-      {"path": "benchmarks/product_optimization_serial_check_v1.py", "sha256": "9721bdfffb371f96c737dd999fe952945368ee5357439334365a24bf8ff128a2"},
+      {"path": "scripts/product_optimization_serial_check_v1.py", "sha256": "510d2e0e1f83fbc6fddfc798b14d82803304bd1534719bb600ac3cc92a623781"},
+      {"path": "benchmarks/product_optimization_serial_check_v1.py", "sha256": "d5a63f1b6aba0a45698ca72e894dcafbaa2b1de15f1fd0163900f35340118316"},
       {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "0f6098902a48d84845b0ac112212cd198cd09e5d75f7f0d4e89d84aed830e53a"},
       {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "89b7006812c7cf0ece2330b4b58239e3126a47bcc45298ad825562e6a583f848"},
       {"path": "benchmarks/product-optimization-repair-pair-v6.json", "sha256": "393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c"},
@@ -42,7 +42,15 @@
     "holdout_access": "forbidden",
     "historical_baseline_use": "diagnostic-context-only-not-a-same-window-pair",
     "no_ad_hoc_reruns": true,
-    "blind_labels": ["SC1-01", "SC1-02", "SC1-03"]
+    "blind_labels": ["SC1-01", "SC1-02", "SC1-03"],
+    "hitl_policy": {
+      "mode": "case-specific-p01-p04-stop-p08-auto-v1",
+      "cases": {
+        "P01": {"stop_at_hitl": true, "max_auto_resolutions": 0},
+        "P04": {"stop_at_hitl": true, "max_auto_resolutions": 0},
+        "P08": {"stop_at_hitl": false, "max_auto_resolutions": 2}
+      }
+    }
   },
   "budgets": {
     "research_ledger": {

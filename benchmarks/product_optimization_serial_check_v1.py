@@ -16,6 +16,15 @@ PROTOCOL_PATH = ROOT / "benchmarks/product-optimization-serial-check-v1.json"
 PROTOCOL_ID = "product-optimization-serial-check-v1"
 BASE_SHA256 = "393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c"
 CASE_ORDER = ("P04", "P01", "P08")
+HITL_MODE = "case-specific-p01-p04-stop-p08-auto-v1"
+HITL_POLICY = {
+    "mode": HITL_MODE,
+    "cases": {
+        "P01": {"stop_at_hitl": True, "max_auto_resolutions": 0},
+        "P04": {"stop_at_hitl": True, "max_auto_resolutions": 0},
+        "P08": {"stop_at_hitl": False, "max_auto_resolutions": 2},
+    },
+}
 
 
 class SerialCheckProtocolError(ValueError):
@@ -130,6 +139,7 @@ def _validate_raw(raw: Any) -> None:
         "historical_baseline_use": "diagnostic-context-only-not-a-same-window-pair",
         "no_ad_hoc_reruns": True,
         "blind_labels": ["SC1-01", "SC1-02", "SC1-03"],
+        "hitl_policy": HITL_POLICY,
     }:
         _fail("design changed")
     if raw.get("budgets") != {
@@ -277,7 +287,12 @@ def _materialize(raw: dict[str, Any]) -> dict[str, Any]:
         ],
         "holdout_access": raw["design"]["holdout_access"],
         "historical_baseline_use": raw["design"]["historical_baseline_use"],
+        "hitl_policy": deepcopy(raw["design"]["hitl_policy"]),
     }
+    payload["environment"]["hitl_mode"] = HITL_MODE
+    payload["environment"]["hitl_policy"] = deepcopy(
+        raw["design"]["hitl_policy"]
+    )
     payload["budgets"]["research_ledger"] = deepcopy(
         raw["budgets"]["research_ledger"]
     )
@@ -311,6 +326,8 @@ def load_serial_check_protocol(path: Path = PROTOCOL_PATH) -> SerialCheckProtoco
 
 __all__ = [
     "CASE_ORDER",
+    "HITL_MODE",
+    "HITL_POLICY",
     "SerialCheckProtocol",
     "SerialCheckProtocolError",
     "load_serial_check_protocol",
