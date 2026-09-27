@@ -7,6 +7,7 @@ from copy import deepcopy
 from ..citations import verify_citations
 from ..citations.verifier import MAX_CLAIM_TEXT
 from ..utils.decision_contract import (
+    PLAIN_REQUIREMENT_GAPS,
     abstain_recommendation,
     is_fixed_validation_only_plan,
     restrict_action_plan,
@@ -73,7 +74,13 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
         # projections cannot use it as a second, unchecked assertion channel.
         row.pop("provisional_explanation", None)
         path = f"final_recommendation.requirement_assessments[{index}].explanation"
-        if row.get("status") != "unknown" and not passed(path):
+        plain_gap = (
+            row.get("status") == "unknown"
+            and not row.get("evidence_ids")
+            and isinstance(row.get("explanation"), str)
+            and row.get("explanation") in PLAIN_REQUIREMENT_GAPS
+        )
+        if not plain_gap and not passed(path):
             if provisional(path, row.get("explanation")):
                 pending_analysis[row.get("id")] = row["explanation"]
             row.update(status="unknown", explanation=note, evidence_ids=[])

@@ -4,6 +4,20 @@
 
 ### Changed
 
+Offline product refinement now uses synthesis v8: decisive cross-language factual clauses retain
+their evidence language instead of treating a translation as lexically verified. Requirement labels,
+gaps and validation instructions remain in the query language. No lexical threshold, translator or
+default LLM judge was added. Gist/pastebin evidence is excluded consistently from synthesis bindings
+and final citation resolution, including abbreviated-title collisions. Ordinary GitHub project
+documentation remains eligible; no historical source failure is reclassified.
+Queue-related restricted plans now have four fixed isolated stages: task reconciliation, restart
+faults, duplicate-side-effect checks, and staged transition/rollback rehearsal. They never authorize
+production changes. Citation v4 limits unknown exemptions to exact non-factual gap templates and
+removes unsupported assertions from non-template unknown explanations. Template versions advance to
+what-why-how-v7 / evidence-first-v6 / comparison-matrix-v5; old manifests remain readable but cannot
+resume on the new runtime. Offline acceptance and remaining limitations are recorded in
+`docs/o1-execution-status.md`; this is not a claim of live-model quality improvement.
+
 The current-candidate `product-optimization-serial-check-v1` completed P04, P01, and P08 once each
 before stopping on one P08 citation safe-fetch rejection that occurred before HTTP dispatch. All three
 reports, snapshots, terminal records, and observability projections are queryable; 62/62 LLM and
@@ -13,7 +27,7 @@ but P01 and P04 are still over-restricted by unverified decisive citations, and 
 staged validation path. The immutable root consumed three research admissions, bringing the ledger to
 103/156 with 53 unallocated; it is not a pair and cannot be rerun or spliced.
 
-Citation accounting advances to `deterministic-citation-v3`. The exact deterministic
+The preceding citation-accounting change used `deterministic-citation-v3`. The exact deterministic
 `validation_only` plan emitted by the safety boundary is no longer reclassified as model-authored
 uncited factual prose, while a forged mode or any non-matching plan remains fully checked and replaced
 when unsupported. A requirement explanation whose status is `unknown`, with no evidence binding and

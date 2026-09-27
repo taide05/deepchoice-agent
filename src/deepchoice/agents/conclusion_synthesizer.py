@@ -15,7 +15,7 @@ from ..utils.decision_contract import (
     normalize_unknowns,
     restrict_action_plan,
 )
-from ..utils.evidence import is_navigation_placeholder, source_title
+from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholder, source_title
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.views import print_agent_output
 
@@ -58,11 +58,13 @@ Disputed findings: {disputed_count}
 
 ## Language
 - Output explanatory/reasoning text (recommendation, rationale, trade-off findings, evidence_summary, confidence_rationale, scene_fit_note) in the SAME language as the original query.
+- SOURCE-LANGUAGE EXCEPTION: When decisive evidence is in another language, keep the source-backed factual clause in that source's language in EVERY cited factual field, especially requirement_assessments.explanation and winner_rationale. Keep requirement labels, unresolved questions and non-factual verification instructions in the query language. Do not mix a translated assertion into the same factual clause or append an uncited translation: the deterministic checker cannot establish translation equivalence. Use short, directly supported assertions preserving the source's conditions, qualifications and negation, not disconnected keyword quotations. A matched source-language clause is lexical support only, not proof that the user's requirement is satisfied. If applying it to this workload needs an unmeasured assumption, keep status unknown and a conditional branch; never imply a deployment test has already passed.
 - Technical terms (framework names, API names, algorithms, protocol names), source titles, and benchmark data MUST stay in their original language — do NOT translate them.
 - This applies to the "name" field in ranked_options as well: keep the framework/library name as-is.
 
 ## Synthesis Rules
 1. Weight strong evidence chains more heavily than moderate or weak ones
+   For decisive product behavior prefer applicable original documentation over blogs, summaries or sample code. Source identity and score do not prove a claim: inspect the supplied snippet, preserve version/configuration limits, and do not invent an official alternative when none is supplied. Gists/paste snippets are excluded from conclusion bindings; if no suitable evidence remains, record a gap. Do not infer relative performance, workload thresholds or successful recovery rehearsals from generic capability documentation.
 2. Acknowledge disputed findings — don't pretend they don't exist
 3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong evidence for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it. It is NEVER a license to invent a concrete stack the query did not name: "team" does not imply a Django/.NET stack, and "enterprise" does not imply any specific framework — rate constraint-fit only against constraints actually stated or directly entailed by the query. For a framework-agnostic vs framework-specific comparison, a candidate whose NAME embeds a framework (e.g. "Django Migrations") does NOT imply the scene uses that framework — it is merely a candidate label. Unless the query or scene explicitly commits to a specific stack ("a Django project", "using SQLAlchemy"), default to the framework-agnostic tool (e.g. Alembic over Django Migrations, since Alembic works with any SQLAlchemy project).
 4. CONSTRAINT ASSESSMENT (MANDATORY): Assess every listed C/A/Q requirement by its exact stable ID. C items are frozen user-request constraints. A items are analysis-derived constraints or explicit operational-policy obligations and MUST remain visibly separate from C items. Q items are decision questions. C, A, and frozen-sub-question Q items are always decision-critical. Only an analysis-sub-question Q may set decision_critical=false, and only when answering it cannot change the choice. For satisfied or contradicted, cite the supporting source numbers in both explanation and evidence_ids. If a requirement is absent from the evidence, malformed, disputed, or lacks a directly usable evidence snippet, mark it unknown. A source binding proves only that the source and snippet exist; it does not prove semantic truth.
@@ -133,9 +135,15 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
     for i, c in enumerate(evidence_chains):
         strength = c.get("evidence_strength", "unknown")
         disputed = " [DISPUTED]" if c.get("disputed") else ""
-        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {c.get('conclusion', 'Untitled')}")
-        for src in c.get("sources", [])[:4]:
+        sources = c.get("sources", [])[:4]
+        conclusion = c.get('conclusion', 'Untitled')
+        if any(not conclusion_source_allowed(src) for src in sources):
+            conclusion = "Mixed/excluded-source summary omitted; evaluate allowed snippets only."
+        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {conclusion}")
+        for src in sources:
             n += 1
+            if not conclusion_source_allowed(src):
+                continue  # Keep source numbering stable across all consumers.
             title = source_title(src.get("title"), src.get("url"))
             mapping[n] = title
             lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
@@ -373,7 +381,8 @@ def _usable_evidence_ids(evidence_chains: list[dict]) -> set[int]:
         for source in chain.get("sources", [])[:4]:
             source_number += 1
             snippet = source.get("snippet", "")
-            if not disputed and not is_navigation_placeholder(snippet) and _prompt_data(snippet, 600):
+            if (not disputed and conclusion_source_allowed(source)
+                    and not is_navigation_placeholder(snippet) and _prompt_data(snippet, 600)):
                 usable.add(source_number)
     return usable
 
@@ -625,6 +634,8 @@ def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
     real: set[str] = set()
     for c in evidence_chains:
         for src in c.get("sources", [])[:4]:
+            if not conclusion_source_allowed(src):
+                continue
             t = source_title(src.get("title"), src.get("url"))
             if t:
                 real.add(_norm_title(t))

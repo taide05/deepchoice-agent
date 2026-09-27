@@ -47,6 +47,12 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             [
                 "### 逐项需求判断" if lang == "zh" else "### Requirement Assessments",
                 "",
+                (
+                    "决定性事实保留来源语言以便核对；词法支持不等于语义证明，也不证明实际部署已通过验证。"
+                    if lang == "zh" else
+                    "Decisive facts retain the source language for inspection; lexical support is not semantic proof or evidence of a successful deployment test."
+                ),
+                "",
             ]
         )
         status_labels = {

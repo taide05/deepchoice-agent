@@ -38,6 +38,8 @@ from .contracts import (
     CitationVerification,
 )
 from ..utils.citation_markers import citation_spans as _citation_spans, marker_titles
+from ..utils.decision_contract import PLAIN_REQUIREMENT_GAPS
+from ..utils.evidence import conclusion_source_allowed
 
 
 MAX_UNIQUE_SOURCE_URLS = 12
@@ -265,6 +267,7 @@ def _iter_claim_fields(recommendation: dict[str, Any]):
                     and row.get("status") == "unknown"
                     and not row.get("evidence_ids")
                     and isinstance(value, str)
+                    and value in PLAIN_REQUIREMENT_GAPS
                     and not _citation_spans(value)
                 ):
                     # A plain declaration of an unresolved requirement is a
@@ -362,6 +365,8 @@ def _source_registry(
             continue
         for source_index, source in enumerate(sources):
             if not isinstance(source, dict):
+                continue
+            if not conclusion_source_allowed(source):
                 continue
             if len(output) >= MAX_REGISTRY_SOURCES:
                 return output, True

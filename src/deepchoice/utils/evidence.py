@@ -2,6 +2,20 @@
 
 import hashlib
 import re
+from urllib.parse import urlsplit
+
+
+def conclusion_source_allowed(source: dict) -> bool:
+    """Exclude paste-host evidence from new conclusions, not from retrieval.
+
+    This is a source-quality rule, not a safety/truth classification. Ordinary
+    GitHub project documentation remains eligible for ordinary citation checks.
+    """
+    try:
+        host = (urlsplit(str(source.get("url", ""))).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return False
+    return host not in {"gist.github.com", "gist.githubusercontent.com", "pastebin.com"}
 
 
 def is_navigation_placeholder(snippet) -> bool:

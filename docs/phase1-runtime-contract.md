@@ -55,6 +55,18 @@ status为unknown、没有evidence_ids且不含引用标记的说明只表达证�
 `citation_missing`；带引用的unknown分析仍照常核验。历史citation-policy v1/v2结果和计数原样可读，
 但不得按v3语义同run恢复。
 
+后续同日离线优化使用 synthesis v8、deterministic-citation-v4，以及 what-why-how-v7 /
+evidence-first-v6 / comparison-matrix-v5。决定性事实保留来源语言，需求/未知/非事实验证任务使用
+查询语言；不验证翻译等价、不降低词法阈值、不保证语义或场景适用性。gist.github.com、
+gist.githubusercontent.com、pastebin.com 在合成输入、编号/标题绑定和最终 verifier registry 中
+一致排除，保留其他来源原编号与原始检索数据；这不是 URL 安全分类或历史失败重标。
+v4 将 unknown 豁免缩到代码内精确无事实模板；非模板 unknown 也逐项检查，失败后替换缺口说明，
+仅通过既有有界规则的暂定分析能进入 provisional 字段。后台任务受限计划使用四阶段固定隔离
+模板：权威任务/结果对账、服务/worker/broker 故障矩阵、幂等键和模拟副作用、切换/排空/回退
+演练；每段包含验证、推进/中止与回退边界。生产写入、真实副作用和越过不可逆点的回退仍不放行。
+旧 citation v3、prompt v7 和旧模板仍可读取，但必须新建 run；schema、预算、HITL、安全抓取
+及生命周期契约不变。
+
 关键约束缺项、未知、冲突或缺少可用引用绑定时，结论收回具体 Winner/序数排名，
 保留条件分支、待验证计划与明确未知。绑定到有内容的来源只证明结构完整，不是语义验证。
 引用节点优先检查新判断字段，继续使用原总检查/安全抓取上限；关键判断、胜者依据及
@@ -96,8 +108,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v3` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
-  citation-policy v1/v2 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v4` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
+  citation-policy v1/v2/v3 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

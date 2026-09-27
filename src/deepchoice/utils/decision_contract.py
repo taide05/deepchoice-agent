@@ -20,6 +20,17 @@ MAX_ACTION_PLAN = 20
 _ASSESSMENT_STATUSES = {"satisfied", "contradicted", "unknown"}
 _REQUIREMENT_ID = re.compile(r"^(?:C|A|Q)\d+$")
 
+# Only exact non-factual gap templates can bypass factual citation extraction.
+# The unknown enum alone cannot hide arbitrary technical assertions.
+PLAIN_REQUIREMENT_GAPS = frozenset({
+    "This requirement remains unresolved.",
+    "Unknown: the supplied evidence does not answer this requirement.",
+    "未知：该判断的引用尚未完成可用性与词法支持核验，需要独立确认。",
+    "Unknown: the citations for this assessment have not passed availability and lexical-support checks; independent confirmation is needed.",
+    "未知：研究提前结束，此项判断需要独立验证。",
+    "Unknown: research ended before a complete assessment; verify this requirement independently.",
+})
+
 
 def _clean_text(value: Any, *, limit: int = 2000) -> str:
     if not isinstance(value, str):
@@ -119,12 +130,74 @@ def _is_zh(query: Any) -> bool:
     return isinstance(query, str) and bool(re.search(r"[\u3400-\u9fff]", query))
 
 
+def _queue_validation_plan(query: Any) -> list[dict[str, str]]:
+    """Fixed test objectives, never vendor guarantees or deployment commands."""
+    if _is_zh(query):
+        return [
+            {
+                "step": "阶段一：只读盘点任务接收、任务状态和结果的权威记录，在隔离环境准备长任务与模拟副作用。",
+                "verification": "逐个任务记录 task_id、接收确认、开始、完成或明确失败、结果位置；把 broker 消息持久化、result backend 结果保存和业务权威状态分开列出，未知项不算通过。",
+                "change_trigger": "负责人明确观测窗口、积压任务数、最长等待时间、失败率阈值及幂等责任后才进入下一阶段；不能只按日任务总数决定容量。",
+                "rollback": "生产保持不动；隔离环境使用假凭据、合成数据和模拟外部副作用，缺少隔离条件则停止。",
+            },
+            {
+                "step": "阶段二：在隔离环境按接收确认后、执行中、结果写入后但确认前的时间点，分别演练服务、worker 和 broker 重启或中断。",
+                "verification": "保存故障矩阵和逐 task_id 对账表；已接收任务必须有可追踪的完成、明确失败或待恢复状态，静默丢失数须为零；实测 acknowledgement、retry、timeout 配置，不把 result backend 或 acks_late 当作不丢失保证。",
+                "change_trigger": "任一已接收任务无法对账即中止并定位；所有故障格有记录且满足预先定义的恢复时限才进入重复执行演练。",
+                "rollback": "仅停止隔离进程，保留日志及权威任务记录；不向生产重放任务，也不以旧快照覆盖已确认结果。",
+            },
+            {
+                "step": "阶段三：在隔离环境对相同业务幂等键重复投递，并模拟副作用完成后、结果记录前的崩溃。",
+                "verification": "由业务负责人核对模拟副作用台账，记录同键重复请求的处理结果、重复副作用计数及未决状态；通过要求为重复副作用零且未决状态均可解释，不宣称 exactly-once 投递。",
+                "change_trigger": "重复副作用非零、幂等责任不明或结果无法对账时停止；修复并重放相同失败用例通过后，才进入阶段切换演练。",
+                "rollback": "只重置可丢弃的模拟副作用环境，保留诊断；真实外部副作用未证明可逆时明确禁止回退。",
+            },
+            {
+                "step": "阶段四：仅在隔离环境演练单一权威接收路径的分阶段切换、旧任务排空和停止新准入。",
+                "verification": "形成逐阶段检查表：权威写入方、一致性边界、新增已确认任务/结果的保全与回放、积压/等待/失败指标，以及不可逆点；核对切换前后每个 task_id，无丢失或重复副作用。",
+                "change_trigger": "达到预设中止阈值或任务无法对账就停止新准入；全部通过仅提交独立审查，不授权生产双写、切流或迁移。",
+                "rollback": "只有隔离演练证明新增已确认任务及结果可保全/回放时，才测试回退；越过不可逆点或保全未成立则禁止回退，保留当前权威记录，不覆盖恢复。",
+            },
+        ]
+    return [
+        {
+            "step": "Stage 1: inventory authoritative admission, task-state and result records read-only; prepare long-running jobs with simulated side effects in isolation.",
+            "verification": "For each task_id record acceptance, start, completion or explicit failure and result location. Distinguish broker message persistence, result-backend storage and authoritative business state; unknowns do not pass.",
+            "change_trigger": "Proceed only after the owner defines the observation window, backlog, oldest-wait and failure-rate limits, plus idempotency ownership; daily task count alone is not a capacity measure.",
+            "rollback": "Leave production unchanged; use synthetic data, dummy credentials and simulated effects. Stop if isolation is unavailable.",
+        },
+        {
+            "step": "Stage 2: in isolation interrupt or restart the service, worker and broker after acceptance, during execution and after result storage but before acknowledgement.",
+            "verification": "Keep a fault matrix and task_id reconciliation: every accepted job has a traceable completed, explicitly failed or recoverable state, with zero silently lost jobs. Test acknowledgement, retry and timeout settings; neither a result backend nor acks_late is a no-loss guarantee.",
+            "change_trigger": "Abort on any unreconciled accepted job; proceed only with every failure case recorded and the predefined recovery deadline met.",
+            "rollback": "Stop isolated processes only; retain logs and authoritative records. Do not replay into production or overwrite acknowledged results with an old snapshot.",
+        },
+        {
+            "step": "Stage 3: deliver duplicate business idempotency keys in isolation and simulate a crash after an effect but before recording its result.",
+            "verification": "The business owner reconciles simulated effects, duplicate-request outcomes and unresolved states. Require zero duplicate effects and explanations for all unresolved states, not a claim of exactly-once delivery.",
+            "change_trigger": "Stop on duplicate effects, unclear ownership or unreconciled results; replay the same failure cases after repair before testing transition stages.",
+            "rollback": "Reset only disposable simulated effects and retain diagnostics. Prohibit rollback of real external effects unless reversibility is established.",
+        },
+        {
+            "step": "Stage 4: rehearse staged transition of one authoritative admission path, draining old jobs and stopping new admissions only in isolation.",
+            "verification": "Record each stage's authoritative writer, consistency boundary, preservation/replay of newly acknowledged jobs and results, backlog/wait/failure signals and irreversible point; reconcile every task_id without loss or duplicate effects.",
+            "change_trigger": "Stop new admissions at predefined abort thresholds or reconciliation failure. Passing all stages permits independent review only, not production dual writes, cutover or migration.",
+            "rollback": "Test isolated rollback only after demonstrating preservation/replay of newly acknowledged jobs and results. Prohibit rollback past the irreversible point or without preservation; retain authoritative records, never overwrite-restore them.",
+        },
+    ]
+
+
 def _validation_only_plan(query: Any) -> list[dict[str, str]]:
     """Fixed review tasks, not a model-authored production runbook.
 
     Do not interpolate model steps or rollback text here: an uncertainty label
     cannot make an unestablished cutover or stale-snapshot restore safe.
     """
+    if isinstance(query, str) and re.search(
+        r"\b(?:celery|task queue|background tasks?|job queue)\b|任务队列|后台任务|长任务",
+        query, re.IGNORECASE,
+    ):
+        return _queue_validation_plan(query)
     if _is_zh(query):
         return [
             {
