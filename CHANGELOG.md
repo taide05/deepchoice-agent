@@ -4,6 +4,18 @@
 
 ### Changed
 
+A proposed `product-optimization-serial-check-v1` card now reduces the next product-feedback step to
+one serial P04/P01/P08 pass on the current candidate, for at most three research runs. It reuses the
+existing durable collector, isolated seed, manifest, ledger, service, and telemetry boundaries, and
+preserves the frozen P08 HITL input instead of stopping before a report. The card measures terminal
+status and wall time, calls/tokens, report completeness and action safety, citation status/reasons,
+decision/HITL behavior, and module anomalies. Historical v6 baseline reports are diagnostic context
+only, so this run cannot establish paired causal improvement. The hard total remains 156, concurrency
+authorization/reserve remains zero, and only three of the 56 remaining cells are assigned. Research
+admission remains closed pending independent review; no preflight, network probe, or paid run was
+started. The card and reused controller chain pass 160 focused tests, the 2,127-test full suite,
+smoke-v1 12/12, and static, dependency, and compilation checks.
+
 Citation verification can now opt into a bounded 64 KiB page prefix while the shared safe-fetch
 default continues to reject oversized responses. A claim found in that live prefix may earn lexical
 `verified`; a numeric or lexical miss on a truncated prefix is conservatively

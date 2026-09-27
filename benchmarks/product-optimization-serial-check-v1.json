@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "protocol_id": "product-optimization-serial-check-v1",
+  "status": "proposed",
+  "freeze_date": null,
+  "base_protocol": {
+    "protocol_id": "product-optimization-repair-pair-v6",
+    "path": "benchmarks/product-optimization-repair-pair-v6.json",
+    "byte_sha256": "393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c"
+  },
+  "question": "Can the current candidate produce three usable serial reports for P04, P01, and P08 without runtime, source, budget, citation, or module anomalies?",
+  "interpretation": "three-case-current-candidate-diagnostic-not-paired-effect",
+  "candidate": {
+    "anchor_commit": "4e7ce70e0555c9fc362273d523fe4716a0cfb6f3",
+    "source_objects": [
+      {"path": "src/deepchoice", "git_object": "d5559b8c96d24f70899560fe3b81c85482ac050d"},
+      {"path": "pyproject.toml", "git_object": "72433509ffdfa8d057c6ba21cbe40bf61b55c08d"}
+    ],
+    "runtime_objects": [
+      {"path": "benchmarks/__init__.py", "git_object": "830b6bddff5731d650221c25c60409dfb547d46f"},
+      {"path": "benchmarks/product_baseline.py", "git_object": "c68b828df7e73491d3f085d8e1387b2d7dd5fe17"},
+      {"path": "benchmarks/product_baseline_experiment.py", "git_object": "d05232c6492e069273347ba7423e94ac8fa6a5f4"},
+      {"path": "benchmarks/product_baseline_server.py", "git_object": "819395806e6098fcbf814d590756c80d6c370357"}
+    ]
+  },
+  "controller": {
+    "binding_policy": "candidate-only-three-case-over-v6-v1",
+    "research_admission": "closed-pending-independent-review",
+    "required_files": [
+      {"path": "scripts/product_optimization_serial_check_v1.py", "sha256": "f9d6eb33139592f09d6712e347accfdd4ba0740195a0eec1ba3080cb93395c2c"},
+      {"path": "benchmarks/product_optimization_serial_check_v1.py", "sha256": "9721bdfffb371f96c737dd999fe952945368ee5357439334365a24bf8ff128a2"},
+      {"path": "scripts/product_optimization_repair_pair_v6.py", "sha256": "0f6098902a48d84845b0ac112212cd198cd09e5d75f7f0d4e89d84aed830e53a"},
+      {"path": "benchmarks/product_optimization_repair_pair_v6.py", "sha256": "89b7006812c7cf0ece2330b4b58239e3126a47bcc45298ad825562e6a583f848"},
+      {"path": "benchmarks/product-optimization-repair-pair-v6.json", "sha256": "393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c"},
+      {"path": "scripts/o1_pr2b_child_v5.py", "sha256": "010a8b0614694612faeaa2f3506051c090e57f90848acaa310b730a2818d1300"}
+    ]
+  },
+  "design": {
+    "formal_research_runs": 3,
+    "execution_mode": "serial-concurrency-1",
+    "case_order": ["P04", "P01", "P08"],
+    "holdout_access": "forbidden",
+    "historical_baseline_use": "diagnostic-context-only-not-a-same-window-pair",
+    "no_ad_hoc_reruns": true,
+    "blind_labels": ["SC1-01", "SC1-02", "SC1-03"]
+  },
+  "budgets": {
+    "research_ledger": {
+      "starting_used": 100,
+      "diagnostic_max": 3,
+      "concurrency_reserve": 0,
+      "unallocated": 53,
+      "hard_total": 156
+    }
+  },
+  "metrics": {
+    "runtime": ["terminal_status", "wall_time_ms", "timeouts", "retries", "partial_failures"],
+    "calls": ["llm_calls", "retrieval_calls", "failed_calls", "total_tokens", "token_usage_complete"],
+    "report": ["artifact_present", "self_review", "must_answer_coverage", "major_errors", "action_safety"],
+    "citation": ["verified", "unsupported", "unreachable", "unknown", "reason_counts"],
+    "decision": ["winner", "ranked_options", "unresolved_questions", "hitl_resolutions"],
+    "modules": ["source_envelopes", "trace_attempts", "budget_state", "telemetry_anomalies"]
+  },
+  "acceptance": {
+    "collection": "all-three-cases-have-queryable-terminal-report-and-complete-observability",
+    "p04": "covers-restart-at-least-once-idempotency-staged-advance-abort-rollback-without-exactly-once-claim",
+    "p01": "no-new-major-error-and-keeps-observable-migration-triggers",
+    "p08": "no-unconditional-winner-when-critical-context-is-missing-and-hitl-behavior-is-recorded",
+    "citation": "verified-total-above-zero-and-no-truncated-prefix-miss-is-labelled-unsupported",
+    "interpretation_limit": "diagnostic-product-feedback-only-no-causal-improvement-claim"
+  },
+  "stopping": {
+    "identity_environment_seed_or_controller_drift": "stop-before-admission",
+    "retrieval_rate_limit_safety_budget_lease_or_unknown": "stop-new-admission",
+    "unclassified_external_or_safe_fetch_error": "stop-new-admission",
+    "ordinary_citation_http_5xx": "stop-new-admission",
+    "finish_already_admitted_run": true,
+    "replace_retry_or_splice_stopped_root": false,
+    "used_block_chroma_runtime_drift": "allow-same-inventory-and-size-only-for-listed-paths-after-attempt",
+    "completed_record_reconciliation": "same-root-append-only-observation-and-collection-record-only",
+    "allowed_chroma_runtime_drift_paths": [
+      "chroma/chroma.sqlite3",
+      "chroma/c29ae142-54e0-4e63-b329-24f1f4af8a53/data_level0.bin",
+      "chroma/c29ae142-54e0-4e63-b329-24f1f4af8a53/length.bin"
+    ]
+  },
+  "control_predecessor": {
+    "protocol_id": "product-optimization-repair-pair-v6",
+    "protocol_byte_sha256": "393dd11655b92d8e35683bdcbfdac1fe683f5df63ecc99a59dfdd0a7a0ceb64c",
+    "artifacts": {
+      "execution_binding": {"path": "outputs/product-optimization-repair-pair-v6-20260926-v1/execution-binding.json", "sha256": "148549785fb95df870320ed8dc6ec7beffde6450d53e886d70ef0a1163e6f92a"},
+      "execution_claim": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v6/execution-claim.json", "sha256": "4123a640c90812ba2be995ba7cc855a14b17a817694940242cd1ce5a3212f8ce"},
+      "cell_p04": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v6/cells/baseline-r2-P04.json", "sha256": "ebdd1cb97dd8d36aad716076c32b06a7d0623f7ad56e9f830ded2f7c0b130ea6"},
+      "cell_p01": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v6/cells/baseline-r2-P01.json", "sha256": "ef7a925cacfd24a717d80bec42fb8871f7d261f7b2afb80295fdf236afa099b1"},
+      "cell_p08": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v6/cells/baseline-r2-P08.json", "sha256": "6176ea975daf50485b74471896affd96309c9cca7a6acdb840a506274310cff5"},
+      "observations": {"path": "outputs/product-optimization-ledgers/product-optimization-repair-pair-v6/observations.jsonl", "sha256": "9761b74c58a6f535e339a0e22ab7a9595af7bf4ab6402fec7c8a1c452c50384a"},
+      "run_result": {"path": "outputs/product-optimization-repair-pair-v6-20260926-v1/repair-pair-run-result.json", "sha256": "446dc3e70d433da4300f903c3ac16e8dd593ba3e174512cb5aa6d83f57f525c9"},
+      "collection_record": {"path": "outputs/product-optimization-repair-pair-v6-20260926-v1/collections/baseline-r2/runs.jsonl", "sha256": "f975528e737c8f102b99acc18ab8b179ea3cc3d8b07fba09dfa8674b25261080"},
+      "telemetry": {"path": "outputs/product-optimization-repair-pair-v6-20260926-v1/arms/baseline/r2/control/telemetry.jsonl", "sha256": "924d13a6d32222f7ffc5c7c8ee489f7b19e42f29c4dfe25e1b4d01c6bf2db74d"}
+    },
+    "accounted_research_runs": 3,
+    "disposition": "immutable-no-retry-no-splice"
+  },
+  "authorization": {
+    "status": "approved-existing-cap",
+    "decision_date": "2026-09-27",
+    "current_hard_total": 156,
+    "effective_hard_total": 156,
+    "diagnostic_max": 3,
+    "concurrency_runs_authorized": 0,
+    "deferred_unallocated": 53,
+    "preserve_acceptance_thresholds": true
+  }
+}

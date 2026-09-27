@@ -219,6 +219,20 @@ P08在关键约束缺失时仍强制Winner。P08两条citation pre-HTTP安全拒
 3 completed + 9 not_submitted，累计100/156。v6不可续跑、重试或拼接；余56格未分配，当前没有
 开放的付费后继协议。
 
+## 候选三案例串行诊断卡（serial-check-v1，待复审）
+
+`product-optimization-serial-check-v1`把下一次真实反馈缩到当前候选的P04、P01、P08各一次，固定
+顺序、单并发、最多3个研究任务。它复用v6已验收的durable collector、子服务、隔离知识副本、
+账本、manifest和telemetry门禁；P08若触发HITL，只使用`product-baseline-v1`中已冻结的补充上下文
+继续，并记录resolution次数。指标同时覆盖终态/耗时、LLM与检索调用、token完整性、报告和self-review、
+必答项/重大错误/行动安全、四类citation及reason、winner/unknown/HITL和模块异常。
+
+这张卡只回答“当前产品能否稳定产出三份可用报告”，历史v6 baseline只作诊断背景，不构成同窗口
+配对，因此不能据此声称因果改善。研究账本从100起，最多使用3格，硬上限仍为156，并发授权与预留
+均为0；其余53格未分配。当前协议状态为`proposed`，准入为
+`closed-pending-independent-review`：160项相关测试、2127项全套、smoke-v1 12/12及静态/依赖/
+编译检查通过，但这些结果不会自动开放preflight或付费运行。
+
 ## 有意使用历史直连工具
 
 仅在明确批准历史实验及调用额度后，使用项目 Python 3.11/3.12 环境：
