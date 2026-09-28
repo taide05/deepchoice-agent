@@ -4,6 +4,12 @@
 
 ### Changed
 
+The serial-check-v3 machine card freezes the current product candidate, the
+immutable stopped v2 evidence, and a fresh three-case P04/P01/P08 serial ledger
+from 105 to at most 108/156. Paid admission remains closed during offline
+control acceptance; explicit paid CLI flags cannot bypass it. No research,
+network check, or concurrency test accompanies this binding.
+
 Citation policy v7 adds a bounded, same-sentence qualifier check for decisive
 claims: source conditions and decisive wording cannot be omitted or strengthened
 to earn lexical `verified` from scattered page tokens. Uncertain claims and

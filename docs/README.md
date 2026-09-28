@@ -40,6 +40,8 @@
 - [三案例串行测量卡v2](product-optimization-serial-check-v2.md)：离线验收后的冻结设计与候选身份；
   [机器卡](../benchmarks/product-optimization-serial-check-v2.json)已接到v2薄适配入口，离线验收后
   按持续授权完成唯一正式执行后停止；当前实耗/停止查执行状态，不把v2交给旧v1 CLI或再次执行。
+- [三案例串行机器卡v3](../benchmarks/product-optimization-serial-check-v3.json)：本机忽略区设计卡的
+  机器绑定，当前付费准入关闭；只读 audit 与实测准入分开，旧v2停止根不可续跑。
 
 历史评分和 token CSV/JSON 都保留原分母/版本，不回填为当前候选；原始报告、快照、Trace、实验库留 outputs/。
 

@@ -5,6 +5,7 @@
 
 | 入口 | 用途和边界 |
 |---|---|
+| `python -m scripts.product_optimization_serial_check_v3 audit ...` | v3 三案例串行卡的只读、禁网机器身份审计；卡当前关闭付费准入，`preflight` / `prepare` / `run` 即使带付费 flags 也拒绝。仅绑定 P04/P01/P08，各一次、并发 1，不复用停止的 v2 根或账本。具体身份、用量和准入状态见执行状态。 |
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
 | `evidence_window_prototype.select_evidence_window` | 未推广的纯离线定位原型；输出全部不可绑定，不被默认研究路径调用。反例与限制见 S0 诊断，不作质量/成本评估器 |
 | `product_optimization_dev_requests.load_dev_requests` | 只读固定 P01/P04/P08 开发请求投影；不打开完整案例集或保留集 |
