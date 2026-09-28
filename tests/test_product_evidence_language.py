@@ -77,6 +77,34 @@ async def test_original_language_preserves_supported_premise_without_promoting_t
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("case,original,translated,requirement,url", CASES)
+async def test_supported_source_fact_survives_with_unknown_workload_fit(
+    monkeypatch, case, original, translated, requirement, url,
+):
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=original, headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state = _state(original, case, requirement, url)
+    row = state["final_recommendation"]["requirement_assessments"][0]
+    row["status"] = "unknown"
+    state["final_recommendation"]["unresolved_questions"] = [
+        "该来源条件是否适用于当前工作负载，仍需实测。",
+    ]
+    result = await CitationValidatorAgent().run(state)
+    rec = result["final_recommendation"]
+    report = "\n".join(render_decision_details(rec, "zh"))
+
+    assert result["citation_verification"]["status_counts"]["verified"] == 1
+    assert rec["winner"] == "context_dependent"
+    assert rec["requirement_assessments"][0]["status"] == "unknown"
+    assert original in report
+    assert "仍需实测" in rec["unresolved_questions"][0]
+    assert translated not in report
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("text,reason", [
     ("SQLite supports 5000 simultaneous writers.", "numeric_mismatch"),
     ("SQLite does not support one writer at a time per database file.", "negation_conflict"),
