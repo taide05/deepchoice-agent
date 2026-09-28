@@ -1,8 +1,56 @@
 # 当前执行状态与证据索引
 
-最后完成研究：2026-09-27，serial-check-v2的P04、P01串行完成；P01引用HTTP 429触发停止，P08未提交。
+最后完成研究：2026-09-28，serial-check-v3 的 P04、P01 串行完成；P01 的 arXiv 检索超时触发停线，P08 未提交。
 普通成本与阶段切换沿用用户持续授权；不再为此逐项停下确认，研究硬上限和安全门禁仍有效。
 本文只维护最新状态和账本。后续目标见 [地图](current-roadmap.md)，操作方式见 [执行规则](optimization-execution.md)。
+
+### 2026-09-28 v3 正式串行诊断：2/3 完成，产品效果未通过
+
+在已激活的 v3 机器卡下，禁网 audit 确认产品/依赖/配置/种子/停止证据与三个 manifest 身份一致；
+有界 preflight 的五类来源、Tavily POST 与 DeepSeek JSON/tool 检查通过，研究提交为 0。
+首次 prepare 因普通沙箱与 preflight 的有效环境身份不同被拒，未建实验根或账本；同一已核对
+环境中重新 prepare 一次通过，未重复付费探测。唯一正式执行根为本机忽略区
+`outputs/product-optimization-serial-check-v3-20260928-v1/`，控制器按 P04→P01 串行提交各一次，
+P08 **未提交**，无重试、续跑或跨根拼接。结果文件 SHA-256 为
+`c27c6d11464af8764c4decbb5ccf3b7f15449814ed7a654271c1fe17a4a8abe6`。
+
+| 案例（固定分母 3） | 终态 / 可查询 | 墙钟 | 来源 envelope | 调用与用量 | 内容判断 |
+|---|---|---:|---:|---|---|
+| P04 | completed / 报告、快照可查询 | 67.469 秒 | 6/6 success | 11 LLM、6 检索、17,259 token；0 失败、0 重试 | 必答 [2,1,2]，major 否；隔离四阶段具体，但不足以完成选型 |
+| P01 | completed / 报告、快照可查询 | 72.391 秒 | 5/6 success | 21 LLM、6 检索、21,091 token；1 失败、0 重试 | 必答 [1,1,1]，major 是；备份、基本全文检索和可观察迁移触发未回答到可用程度 |
+| P08 | not_submitted / 无报告 | 不适用 | 未运行 | 未运行 | 不评分，保留分母 |
+
+两例 token usage 完整，预算结算各为零预留/零 unknown spend，均无 budget admission denial；
+价格不可用，不按零成本记。P04 首例包含本地 Chroma 冷启动（检索节点 27.803 秒），P01 检索
+节点 20.659 秒；两例各 10 个节点 Trace 均成功，self-review 均只通过 1/6 检查，HITL resolution
+均为 0。单次耗时不能推出重复稳定性。P01 唯一失败是 Trace 的
+`retrieval/arxiv/provider_timeout`（约 20.499 秒），检索 envelope 明示 failed，报告标明来源 5/6；
+不是预算耗尽，也不是上一 v2 根的 citation HTTP 429。停止原因
+`BUDGET_OR_CALL_OBSERVABILITY_ANOMALY` 是控制器的合并类别；其本次具体触发为 failed call。
+两库只读 `quick_check=ok`，控制 telemetry 有 `service_stopped` 与 `asyncio_runner_returned`；
+账本两条 attempted/两条 terminal observation，无第三格。新累计 **107/156**，剩余 49；
+原卡最大 108 并不表示已支出第三格。该根已停止、只读，不补跑 P08。
+
+内容先锁分、后看 Trace。独立 GPT-only 复核未看 Trace/usage、旧评分或保留集，给出
+P04 [2,1,2]、P01 [1,1,1]；主审初判 P04 第一项为 1，因报告确已说明进程内任务的重启边界
+及逐任务对账条件，按内容 rubric 采纳独立的 2，另把二手来源适用性记为高风险而非把
+词法 `verified=0` 单独当失败。P04 的 broker/worker/幂等说明仍靠 DEV Community 等二手片段，
+Celery 官方任务片段却选到同步子任务段；虽有具体故障矩阵、重复副作用和禁止回退点，
+仍未给硬性“不静默丢失”下有依据的可选方案。P01 虽取到 SQLite 备份与 FTS5 官方来源，
+报告只列链接并把两项硬需求判 unknown；PostgreSQL 检索/备份等片段是目录，决定性条件反而
+靠 Tinybird/博客，`<5000` 日活被塞进 SQLite 选型条件却不能推出写并发边界。P01 major
+指冻结 rubric 的备份与迁移路径实质遗漏，不是已经执行了危险迁移指令；隔离计划仍禁止无保全
+回退。两例均 `winner=context_dependent`、决策行全 unknown，P04/P01 引用状态分别为
+0/8/8/14 与 0/8/1/21（verified/unsupported/unreachable/unknown）；P01/P04 未出现新无条件
+胜者或生产切流。报告 SHA-256 分别为 P04
+`a2c62b38d620609cf1310e439e70b1525e52b47f26d6ffae3aefe297e6cf00de`、P01
+`2cab1b0492ac64a4f8599a349d6fac0c1be3e2b29e6de43cfb779ce477376d5c`。
+
+交付决定：**不把本批作为产品效果通过或有效三例配对交付**。离线下一成果只针对已复现的
+决定性来源错段/导航和结论绑定：在冻结官方种子与 P01/P04 已保存输入上，让 P04 的确认、重投、
+幂等前提及 P01 的备份/FTS5/单写者边界以适用原文进入合成与逐项判断；防止二手片段或日活
+阈值替代一手条件，保留 unknown 与隔离行动边界。先做具体反例和只读重放，再选最小实现并
+运行聚焦/全套与独立复核；未有离线内容闭合前不建新付费卡，不做并发测试。
 
 ### 2026-09-28 v3 前瞻激活（尚未前置或研究）
 
