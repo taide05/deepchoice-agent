@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 
 import chromadb
 from chromadb.config import Settings
@@ -17,6 +18,17 @@ _MAX_CANDIDATE_POOL = 100
 _MAX_QUERY_DIMENSIONS = 8
 _SNIPPET_CHARS = 500
 _MAX_AUDITED_LINE_CHARS = 800
+_FTS5_TARGET = "p01-sqlite-fts5"
+_FTS5_URL = "https://sqlite.org/fts5.html"
+_FTS5_OVERVIEW_ANCHOR = "FTS5 is an SQLite virtual table module"
+_CAPABILITY_CLAUSE_SPLIT = re.compile(
+    r"[，,；;。\n]+|但(?:是)?|不过|并且|且|\b(?:but|however|and)\b", re.I,
+)
+_NEGATED_CAPABILITY = re.compile(
+    r"不需要|无需|不要求|不必|不是必须|并非必须|非必须|不要|不能|禁止|避免|不使用|"
+    r"\b(?:do not|does not|don't|doesn't|not|no|without|avoid|prohibit|must not)\b",
+    re.I,
+)
 
 
 def _bounded_snippet(document: str, metadata: dict) -> str:
@@ -38,6 +50,39 @@ def _bounded_snippet(document: str, metadata: dict) -> str:
         return prefix
     end = document.find("\n", _SNIPPET_CHARS, _MAX_AUDITED_LINE_CHARS + 1)
     return document[:end] if end >= 0 else prefix
+
+
+def _audited_fts5_overview(results: dict, query: str) -> tuple[str, str] | None:
+    """Use the real overview, not navigation or a deep command, for a basic FTS need.
+
+    This is limited to a chunk already in the current local candidate pool and
+    the reviewed seed identity. It does not fetch another page or assert that
+    FTS5 is applicable to the user's workload.
+    """
+    if not any(
+        any(term in clause.casefold() for term in ("全文检索", "full-text search", "full text search"))
+        and not _NEGATED_CAPABILITY.search(clause)
+        for clause in _CAPABILITY_CLAUSE_SPLIT.split(query)
+    ):
+        return None
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    for document, metadata in zip(documents, metadatas):
+        if (not isinstance(document, str) or not isinstance(metadata, dict)
+                or metadata.get("source_type") != "official"
+                or metadata.get("target_id") != _FTS5_TARGET
+                or metadata.get("seed_identity_sha256") != AUDITED_PRODUCT_SEED_IDENTITY
+                or metadata.get("url") != _FTS5_URL):
+            continue
+        start = document.find(_FTS5_OVERVIEW_ANCHOR)
+        if start < 0:
+            continue
+        excerpt = document[start:start + _SNIPPET_CHARS]
+        sentence_end = excerpt.rfind(".")
+        if sentence_end >= 250:
+            excerpt = excerpt[:sentence_end + 1]
+        return metadata["url"], excerpt
+    return None
 
 
 def _query_dimensions(
@@ -148,6 +193,7 @@ class ChromaKB(BaseRetriever):
         model = await asyncio.to_thread(get_embedding_model)
         queries = _query_dimensions(query, sub_questions, adapted_queries)
         dimensions: list[list[dict]] = []
+        audited_overviews: dict[str, str] = {}
 
         # Retrieve enough chunks to diversify after URL de-duplication.  The
         # frozen development seed demonstrated that a three-chunk pool could
@@ -166,6 +212,9 @@ class ChromaKB(BaseRetriever):
                 query_embeddings=[q_embedding],
                 n_results=candidate_pool,
             )
+            overview = _audited_fts5_overview(results, q)
+            if overview is not None:
+                audited_overviews[overview[0]] = overview[1]
             dimension: list[dict] = []
             seen_dimension_urls: set[str] = set()
             for i, doc_id in enumerate(results.get("ids", [[]])[0]):
@@ -196,8 +245,16 @@ class ChromaKB(BaseRetriever):
                         result[f"_seed_{key}"] = value
                 dimension.append(result)
             dimensions.append(dimension)
-        return _merge_dimensions(
+        merged = _merge_dimensions(
             dimensions,
             max_results,
             has_adapted_queries=bool(adapted_queries),
         )
+        for result in merged:
+            if (result["url"] in audited_overviews
+                    and result.get("_seed_target_id") == _FTS5_TARGET
+                    and result.get("_seed_source_type") == "official"
+                    and result.get("_seed_seed_identity_sha256") == AUDITED_PRODUCT_SEED_IDENTITY):
+                result["snippet"] = audited_overviews[result["url"]]
+                result.pop("_seed_excerpt_window", None)
+        return merged

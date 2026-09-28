@@ -97,7 +97,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -326,7 +326,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v3" if retriever_id == "chroma" else "v1",
+                version="v4" if retriever_id == "chroma" else "v1",
             )
             for retriever_id in RETRIEVER_IDS
         ),

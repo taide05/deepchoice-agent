@@ -4,6 +4,15 @@
 
 ### Changed
 
+Chroma v4 now keeps one explicit, non-negated scene requirement as a bounded local search
+dimension, prefixed by the stated candidates. For the reviewed SQLite FTS5 seed only, a
+full-text-search query can replace a navigation/deep-command excerpt with the actual overview
+already present in the same query's candidate pool; source count and external/LLM calls do not
+increase. Offline replay of frozen P01 input moves the FTS5 overview into synthesis while the
+frozen P04 FastAPI qualification remains present. This does not prove model uptake, semantic
+applicability, citation verification, or new-report quality. Historical Chroma identities remain
+readable but cannot resume on the changed runtime. No paid run or new card was started.
+
 Chroma v3 extends only the reviewed official local-seed excerpt from the 500-character prefix
 through its next source-line ending when that ending is within 800 characters. Synthesis v10
 accepts the larger excerpt only after seed/candidate provenance is rechecked and the URL matches

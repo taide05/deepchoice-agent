@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections.abc import Mapping
 
 from ..retrievers import RETRIEVER_REGISTRY
@@ -11,6 +12,44 @@ from ..runtime.context import classify_cancelled_trace_status, get_run_context
 from ..budget_errors import BudgetError
 from ..utils.views import print_agent_output
 from ..utils.call_diagnostics import exception_category, retrieval_failure
+
+
+_SCENE_CLAUSE_SPLIT = re.compile(
+    r"[，,；;。\n]+|但(?:是)?|不过|并且|且|\b(?:but|however|and)\b", re.I,
+)
+_POSITIVE_NEED = re.compile(r"需要|必须|要求|\b(?:need|needs|require|requires|must)\b", re.I)
+_NEGATED_NEED = re.compile(
+    r"不需要|无需|不要求|不必|不是必须|并非必须|非必须|不要|不能|禁止|避免|不使用|"
+    r"没有声明|未声明|没有要求|未要求|"
+    r"\b(?:do not|does not|don't|doesn't|not|must)\s+(?:need|require|use|not)\b|"
+    r"\b(?:no need|need not|not required|avoid|prohibit)\b",
+    re.I,
+)
+
+
+def _chroma_scene_focus_query(task: dict) -> str | None:
+    """Keep one explicit, positive scene requirement visible to local retrieval.
+
+    The user's whole scene is often too broad for a useful vector query. This
+    adds at most one bounded local dimension and never translates or infers a
+    capability. Negated or oversized clauses are not promoted.
+    """
+    scene = task.get("scene_context")
+    candidates = task.get("candidate_techs")
+    if (not isinstance(scene, str) or not isinstance(candidates, (list, tuple))
+            or not candidates or not all(isinstance(name, str) and name.strip()
+                                      for name in candidates)):
+        return None
+    names = " ".join(name.strip() for name in candidates)
+    for raw_clause in reversed(_SCENE_CLAUSE_SPLIT.split(scene)):
+        clause = raw_clause.strip()
+        if (not clause or len(clause) > 160 or not _POSITIVE_NEED.search(clause)
+                or _NEGATED_NEED.search(clause)):
+            continue
+        focused = f"{names} {clause}"
+        if len(focused) <= 500:
+            return focused
+    return None
 
 
 def _is_too_generic(sub_questions: list[str]) -> bool:
@@ -488,7 +527,18 @@ class MultiRetrieverAgent:
         registry_entries = tuple(self.retriever_registry.items())
         tasks = []
         for name, cls in registry_entries:
-            adapted = adapted_queries.get(name, []) if adapted_queries else []
+            adapted = list(adapted_queries.get(name, [])) if adapted_queries else []
+            if name == "chroma":
+                focus = _chroma_scene_focus_query(research_state["task"])
+                if focus and focus not in adapted:
+                    if not adapted:
+                        # Without model adaptations, Chroma previously used
+                        # the first two sub-questions; keep those dimensions.
+                        adapted.extend(sub_questions[:2])
+                    adapted.insert(0, focus)
+                    # The public retriever request permits at most 20 adapted
+                    # values; Chroma consumes at most seven after the primary.
+                    del adapted[20:]
             tasks.append(
                 _invoke_retriever(
                     name,
