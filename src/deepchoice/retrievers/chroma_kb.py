@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
+import json
 import os
-import re
+from pathlib import Path
 
 import chromadb
 from chromadb.config import Settings
@@ -11,6 +13,7 @@ from ..utils.official_catalog import (
     AUDITED_SNIPPET_WINDOW,
 )
 from .base import BaseRetriever
+from .contracts import RetrievalRequest
 
 
 _MIN_CANDIDATE_POOL = 30
@@ -21,17 +24,108 @@ _MAX_AUDITED_LINE_CHARS = 800
 _FTS5_TARGET = "p01-sqlite-fts5"
 _FTS5_URL = "https://sqlite.org/fts5.html"
 _FTS5_OVERVIEW_ANCHOR = "FTS5 is an SQLite virtual table module"
-_CAPABILITY_CLAUSE_SPLIT = re.compile(
-    r"[，,；;。\n]+|但(?:是)?|不过|并且|且|\b(?:but|however|and)\b", re.I,
-)
-_NEGATED_CAPABILITY = re.compile(
-    r"不需要|无需|不要求|不必|不是必须|并非必须|非必须|不要|不能|禁止|避免|不使用|"
-    r"\b(?:do not|does not|don't|doesn't|not|no|without|avoid|prohibit|must not)\b",
-    re.I,
-)
+_AUDITED_CHUNKS_SHA256 = "6c0752cc991da7aa4630850421b66ce1d56f68b274c32663556ee4ee72025f66"
+_AUDITED_MANIFEST_SHA256 = "aaadfe9badb7948788d1dfbcc020ed086d26b5f9fe5741b56e2d323ec4344c0c"
+_MAX_INDEX_BYTES = 128 * 1024
+_MAX_COLLECTION_FILES = 64
+_MAX_COLLECTION_BYTES = 256 * 1024 * 1024
+_BODY_TARGETS = {
+    "p01-sqlite-backup": ("If a power failure or operating system failure occurs while copying", "backup"),
+    "p01-postgresql-backup": ("As with everything that contains valuable data", "backup"),
+    "p01-postgresql-text-search-introduction": ("Full Text Searching (or just text search) provides", "full_text_search"),
+    "p04-celery-task-semantics": ("A task message is not removed from the queue", "task_recovery"),
+}
 
 
-def _bounded_snippet(document: str, metadata: dict) -> str:
+def chroma_collection_identity() -> str | None:
+    """Hash the actual local collection and audit files for cache identity.
+
+    Unknown, oversized, or changing collections cannot safely use the
+    persistent cache. The digest is used only inside an already-hashed key.
+    """
+    root = Path(os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")).resolve()
+    try:
+        if not root.is_dir():
+            return None
+        collection_paths = [path for path in root.rglob("*") if path.is_file()]
+        sidecars = (root.parent / "chunks.json", root.parent / "seed-manifest.json")
+        paths = collection_paths + [path for path in sidecars if path.exists()]
+        if len(paths) > _MAX_COLLECTION_FILES or any(
+            not path.is_file() or path.is_symlink() for path in paths
+        ):
+            return None
+        paths.sort(key=lambda path: str(path))
+        stats = [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]
+        if sum(size for size, _ in stats) > _MAX_COLLECTION_BYTES:
+            return None
+        digest = hashlib.sha256(str(root).encode("utf-8"))
+        for path in sidecars:
+            digest.update(path.name.encode("utf-8"))
+            digest.update(b"present" if path.exists() else b"absent")
+        for path in paths:
+            digest.update(str(path.relative_to(root.parent)).encode("utf-8"))
+            with path.open("rb") as stream:
+                while block := stream.read(1024 * 1024):
+                    digest.update(block)
+        if (stats != [(path.stat().st_size, path.stat().st_mtime_ns) for path in paths]
+                or {path for path in root.rglob("*") if path.is_file()} != set(collection_paths)
+                or any(path.exists() != (path in paths) for path in sidecars)):
+            return None
+        return digest.hexdigest()
+    except (OSError, ValueError):
+        return None
+
+
+def _load_audited_index(chroma_path: str) -> dict[str, tuple[str, str, str]]:
+    """Accept only the frozen seed's bounded chunk/URL audit files."""
+    root = Path(chroma_path).resolve().parent
+    try:
+        with (root / "chunks.json").open("rb") as stream:
+            chunks_bytes = stream.read(_MAX_INDEX_BYTES + 1)
+        with (root / "seed-manifest.json").open("rb") as stream:
+            manifest_bytes = stream.read(_MAX_INDEX_BYTES + 1)
+        if (len(chunks_bytes) > _MAX_INDEX_BYTES or len(manifest_bytes) > _MAX_INDEX_BYTES
+                or hashlib.sha256(chunks_bytes).hexdigest() != _AUDITED_CHUNKS_SHA256
+                or hashlib.sha256(manifest_bytes).hexdigest() != _AUDITED_MANIFEST_SHA256):
+            return {}
+        chunks = json.loads(chunks_bytes)
+        sources = json.loads(manifest_bytes)["sources"]
+        urls = {source["stable_id"]: source["url"] for source in sources
+                if source.get("source_kind") == "official"}
+        if len(urls) != len(sources) or not isinstance(chunks, list):
+            return {}
+        index = {}
+        for chunk in chunks:
+            doc_id, source_id, digest = (
+                chunk["chunk_id"], chunk["source_id"], chunk["text_sha256"]
+            )
+            if (doc_id in index or source_id not in urls or len(digest) != 64
+                    or doc_id.split(":")[-1] != digest[:16]):
+                return {}
+            index[doc_id] = (source_id, urls[source_id], digest)
+        return index
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return {}
+
+
+def _verified_seed_chunk(
+    document: str, metadata: dict, doc_id: str | None,
+    index: dict[str, tuple[str, str, str]] | None,
+) -> bool:
+    if (not isinstance(document, str) or not isinstance(metadata, dict)
+            or not isinstance(doc_id, str) or not index or doc_id not in index
+            or metadata.get("source_type") != "official"
+            or metadata.get("seed_identity_sha256") != AUDITED_PRODUCT_SEED_IDENTITY):
+        return False
+    target, url, digest = index[doc_id]
+    return (metadata.get("target_id") == target and metadata.get("url") == url
+            and hashlib.sha256(document.encode("utf-8")).hexdigest() == digest)
+
+
+def _bounded_snippet(
+    document: str, metadata: dict, *, doc_id: str | None = None,
+    index: dict[str, tuple[str, str, str]] | None = None,
+) -> str:
     """Finish one bounded source line only for the frozen official seed.
 
     The original 500-character prefix remains the fallback. A larger prefix is
@@ -43,35 +137,30 @@ def _bounded_snippet(document: str, metadata: dict) -> str:
         return ""
     prefix = document[:_SNIPPET_CHARS]
     if (len(document) <= _SNIPPET_CHARS
-            or not isinstance(metadata, dict)
-            or metadata.get("source_type") != "official"
-            or metadata.get("seed_identity_sha256") != AUDITED_PRODUCT_SEED_IDENTITY
-            or not isinstance(metadata.get("target_id"), str)):
+            or not _verified_seed_chunk(document, metadata, doc_id, index)):
         return prefix
     end = document.find("\n", _SNIPPET_CHARS, _MAX_AUDITED_LINE_CHARS + 1)
     return document[:end] if end >= 0 else prefix
 
 
-def _audited_fts5_overview(results: dict, query: str) -> tuple[str, str] | None:
+def _audited_fts5_overview(
+    results: dict, local_scene_needs: tuple[str, ...],
+    index: dict[str, tuple[str, str, str]],
+) -> tuple[str, str] | None:
     """Use the real overview, not navigation or a deep command, for a basic FTS need.
 
     This is limited to a chunk already in the current local candidate pool and
     the reviewed seed identity. It does not fetch another page or assert that
     FTS5 is applicable to the user's workload.
     """
-    if not any(
-        any(term in clause.casefold() for term in ("全文检索", "full-text search", "full text search"))
-        and not _NEGATED_CAPABILITY.search(clause)
-        for clause in _CAPABILITY_CLAUSE_SPLIT.split(query)
-    ):
+    if "full_text_search" not in local_scene_needs:
         return None
     documents = results.get("documents", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
-    for document, metadata in zip(documents, metadatas):
-        if (not isinstance(document, str) or not isinstance(metadata, dict)
-                or metadata.get("source_type") != "official"
+    ids = results.get("ids", [[]])[0]
+    for doc_id, document, metadata in zip(ids, documents, metadatas):
+        if (not _verified_seed_chunk(document, metadata, doc_id, index)
                 or metadata.get("target_id") != _FTS5_TARGET
-                or metadata.get("seed_identity_sha256") != AUDITED_PRODUCT_SEED_IDENTITY
                 or metadata.get("url") != _FTS5_URL):
             continue
         start = document.find(_FTS5_OVERVIEW_ANCHOR)
@@ -83,6 +172,30 @@ def _audited_fts5_overview(results: dict, query: str) -> tuple[str, str] | None:
             excerpt = excerpt[:sentence_end + 1]
         return metadata["url"], excerpt
     return None
+
+
+def _audited_body_excerpts(
+    results: dict, local_scene_needs: tuple[str, ...],
+    index: dict[str, tuple[str, str, str]],
+) -> dict[str, str]:
+    selected: dict[str, str] = {}
+    ids = results.get("ids", [[]])[0]
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    for doc_id, document, metadata in zip(ids, documents, metadatas):
+        if not _verified_seed_chunk(document, metadata, doc_id, index):
+            continue
+        spec = _BODY_TARGETS.get(metadata["target_id"])
+        if spec is None or spec[1] not in local_scene_needs or metadata["url"] in selected:
+            continue
+        start = document.find(spec[0])
+        if start < 0:
+            continue
+        excerpt = document[start:start + _MAX_AUDITED_LINE_CHARS].split("\nPrev\n", 1)[0]
+        end = excerpt.rfind(".")
+        if end >= _SNIPPET_CHARS // 2:
+            selected[metadata["url"]] = excerpt[:end + 1]
+    return selected
 
 
 def _query_dimensions(
@@ -182,18 +295,32 @@ class ChromaKB(BaseRetriever):
     source = "chroma"
 
     def __init__(self):
+        chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
+        self._audited_index = _load_audited_index(chroma_path)
         self.client = chromadb.PersistentClient(
-            path=os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db"),
+            path=chroma_path,
             settings=Settings(anonymized_telemetry=False),
         )
         self.collection = self.client.get_or_create_collection("tech_kb")
 
+    async def _do_retrieve(self, request: RetrievalRequest) -> list[dict]:
+        return await self._do_search(
+            request.query,
+            list(request.sub_questions),
+            request.max_results,
+            adapted_queries=list(request.adapted_queries),
+            local_scene_needs=request.local_scene_needs,
+        )
+
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
+                         adapted_queries: list[str] | None = None,
+                         local_scene_needs: tuple[str, ...] = ()) -> list[dict]:
         model = await asyncio.to_thread(get_embedding_model)
         queries = _query_dimensions(query, sub_questions, adapted_queries)
+        index = getattr(self, "_audited_index", {})
         dimensions: list[list[dict]] = []
         audited_overviews: dict[str, str] = {}
+        audited_bodies: dict[str, str] = {}
 
         # Retrieve enough chunks to diversify after URL de-duplication.  The
         # frozen development seed demonstrated that a three-chunk pool could
@@ -212,13 +339,17 @@ class ChromaKB(BaseRetriever):
                 query_embeddings=[q_embedding],
                 n_results=candidate_pool,
             )
-            overview = _audited_fts5_overview(results, q)
+            overview = _audited_fts5_overview(results, local_scene_needs, index)
             if overview is not None:
                 audited_overviews[overview[0]] = overview[1]
+            for url, excerpt in _audited_body_excerpts(results, local_scene_needs, index).items():
+                audited_bodies.setdefault(url, excerpt)
             dimension: list[dict] = []
             seen_dimension_urls: set[str] = set()
             for i, doc_id in enumerate(results.get("ids", [[]])[0]):
                 metadata = results.get("metadatas", [[]])[0][i] if results.get("metadatas") else {}
+                document = results.get("documents", [[]])[0][i]
+                verified_chunk = _verified_seed_chunk(document, metadata or {}, doc_id, index)
                 url = metadata.get("url", doc_id) if metadata else doc_id
                 if url in seen_dimension_urls:
                     continue
@@ -227,7 +358,8 @@ class ChromaKB(BaseRetriever):
                     "url": url,
                     "title": metadata.get("title", "") if metadata else "",
                     "snippet": _bounded_snippet(
-                        results.get("documents", [[]])[0][i], metadata or {},
+                        document, metadata or {},
+                        doc_id=doc_id, index=index,
                     ),
                     "date": metadata.get("date", "") if metadata else "",
                 }
@@ -235,6 +367,8 @@ class ChromaKB(BaseRetriever):
                     # Only _bounded_snippet's exact frozen-seed path can emit
                     # this marker; downstream stages recheck its provenance.
                     result["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
+                if verified_chunk:
+                    result["_seed_verified_chunk"] = True
                 # Keep only the bounded internal provenance needed to enforce
                 # scope for an audited official seed.  Leading-underscore keys
                 # are removed by the durable public-result sanitizer; raw
@@ -252,9 +386,20 @@ class ChromaKB(BaseRetriever):
         )
         for result in merged:
             if (result["url"] in audited_overviews
+                    and result.get("_seed_verified_chunk") is True
                     and result.get("_seed_target_id") == _FTS5_TARGET
                     and result.get("_seed_source_type") == "official"
                     and result.get("_seed_seed_identity_sha256") == AUDITED_PRODUCT_SEED_IDENTITY):
                 result["snippet"] = audited_overviews[result["url"]]
                 result.pop("_seed_excerpt_window", None)
+            if (result["url"] in audited_bodies
+                    and result.get("_seed_verified_chunk") is True
+                    and result.get("_seed_target_id") in _BODY_TARGETS
+                    and result.get("_seed_source_type") == "official"
+                    and result.get("_seed_seed_identity_sha256") == AUDITED_PRODUCT_SEED_IDENTITY):
+                result["snippet"] = audited_bodies[result["url"]]
+                if len(result["snippet"]) > _SNIPPET_CHARS:
+                    result["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
+                else:
+                    result.pop("_seed_excerpt_window", None)
         return merged

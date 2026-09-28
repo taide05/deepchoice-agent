@@ -19,6 +19,14 @@ class RetrievalRequest(BaseModel):
     sub_questions: tuple[str, ...] = Field(default=(), max_length=20)
     max_results: int = Field(default=7, ge=1, le=100)
     adapted_queries: tuple[str, ...] = Field(default=(), max_length=20)
+    # Deterministic capability flags from the original request. Only the local
+    # Chroma retriever may receive non-empty values; never put scene text here.
+    local_scene_needs: tuple[Literal["backup", "full_text_search", "task_recovery"], ...] = Field(
+        default=(), max_length=3
+    )
+    # Hash of the local Chroma collection bytes and audited sidecars. This is
+    # an internal cache identity, not a user-supplied scene or public result.
+    local_collection_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     _query_non_empty = field_validator("query")(_non_empty)
 
@@ -36,6 +44,13 @@ class RetrievalRequest(BaseModel):
             _non_empty(value)
             if len(value) > 1000:
                 raise ValueError("items must be at most 1000 characters")
+        return values
+
+    @field_validator("local_scene_needs")
+    @classmethod
+    def _unique_local_needs(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if len(set(values)) != len(values):
+            raise ValueError("local_scene_needs must be unique")
         return values
 
 

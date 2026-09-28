@@ -4,6 +4,19 @@
 
 ### Changed
 
+Chroma v5 projects only bounded original-user backup, full-text-search, and task-recovery needs
+into local excerpt selection and its cache key; model-authored search hints cannot authorize a
+body replacement. Frozen-seed P01/P04 official chunks require exact content hash, target, URL,
+and seed identity before promotion. The six-hour Chroma cache/single-flight now keys on actual
+collection and audit-sidecar bytes; unavailable identity bypasses cache, and a collection that
+changes during retrieval returns its current result without caching under the old identity.
+Offline frozen-seed replay confirms decisive body reaches evidence chains and synthesis input,
+not final model uptake or report quality. P04 incidental FTS5 relevance and conclusion binding
+remain open; no new paid or concurrent run was started. Historical v4 manifests remain readable
+but cannot resume on this runtime. Acceptance: 162 focused tests, all 2,365 tests (385.00 seconds),
+smoke-v1 12/12 with unchanged baseline, pyflakes and diff checks passed; independent read-only
+review found no remaining blocker.
+
 The serial-check-v3 machine card freezes the current product candidate, the
 immutable stopped v2 evidence, and a fresh three-case P04/P01/P08 serial ledger
 from 105 to at most 108/156. Paid admission stayed closed during offline

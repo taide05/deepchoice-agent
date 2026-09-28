@@ -1,5 +1,6 @@
 """Offline P04 source-line counterexamples; no model or network calls."""
 
+import hashlib
 from types import SimpleNamespace
 
 import pytest
@@ -52,6 +53,12 @@ async def test_frozen_p04_caveat_survives_retrieval_scoring_chains_and_synthesis
         encode=lambda _query: SimpleNamespace(tolist=lambda: [0.1, 0.2])
     ))
     retriever = object.__new__(chroma_kb.ChromaKB)
+    retriever._audited_index = {
+        "p04-fastapi-background-tasks:0006:test": (
+            "p04-fastapi-background-tasks", FASTAPI_URL,
+            hashlib.sha256(document.encode()).hexdigest(),
+        )
+    }
     retriever.collection = SimpleNamespace(query=lambda **_kwargs: {
         "ids": [["p04-fastapi-background-tasks:0006:test"]],
         "documents": [[document]],

@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from ..retrievers import RETRIEVER_REGISTRY
 from ..retrievers.base import error_text
 from ..retrievers.contracts import RetrievalRequest, RetrievalResult
+from ..retrievers.chroma_kb import chroma_collection_identity
 from ..retrievers.learned_docs import extract_terms, harvest
 from ..retrievers.official import TECH_DOCS
 from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
@@ -19,12 +20,54 @@ _SCENE_CLAUSE_SPLIT = re.compile(
 )
 _POSITIVE_NEED = re.compile(r"需要|必须|要求|\b(?:need|needs|require|requires|must)\b", re.I)
 _NEGATED_NEED = re.compile(
-    r"不需要|无需|不要求|不必|不是必须|并非必须|非必须|不要|不能|禁止|避免|不使用|"
+    r"不需要|无需|不要求|不必|不是必须|并非必须|非必须|不要|不用|不能|禁止|避免|不使用|"
     r"没有声明|未声明|没有要求|未要求|"
     r"\b(?:do not|does not|don't|doesn't|not|must)\s+(?:need|require|use|not)\b|"
-    r"\b(?:no need|need not|not required|avoid|prohibit)\b",
+    r"\b(?:no need|needs? no|need not|not required|avoid|prohibit)\b",
     re.I,
 )
+_LOCAL_NEED_TERMS = (
+    ("backup", ("备份", "backup")),
+    ("full_text_search", ("全文检索", "full-text search", "full text search")),
+    ("task_recovery", ("重启", "故障恢复", "任务恢复", "restart", "recovery", "至少一次")),
+)
+_NO_SILENT_LOSS = re.compile(
+    r"不能因[^，,；;。\n]{0,30}(?:重启|故障)[^，,；;。\n]{0,30}(?:静默)?丢失|"
+    r"must not[^.;\n]{0,60}lose (?:tasks?|results?) (?:after|on) (?:restart|failure)",
+    re.I,
+)
+
+
+def _chroma_local_scene_needs(task: dict) -> tuple[str, ...]:
+    """Project bounded capability flags only from the original request fields.
+
+    Model-authored sub-questions and adaptations are search hints, not proof of
+    user intent. An explicit negation of a capability wins over a positive
+    mention elsewhere in the original request.
+    """
+    originals = [task.get("query"), task.get("scene_context")]
+    constraints = task.get("constraints")
+    if isinstance(constraints, (list, tuple)):
+        originals.extend(constraints)
+    clauses = [
+        clause.strip() for value in originals if isinstance(value, str) and len(value) <= 4000
+        for clause in _SCENE_CLAUSE_SPLIT.split(value) if clause.strip()
+    ]
+    selected: list[str] = []
+    for need, terms in _LOCAL_NEED_TERMS:
+        positive = False
+        negated = False
+        for clause in clauses:
+            if len(clause) > 160 or not any(term in clause.casefold() for term in terms):
+                continue
+            no_silent_loss = need == "task_recovery" and bool(_NO_SILENT_LOSS.search(clause))
+            if _NEGATED_NEED.search(clause) and not no_silent_loss:
+                negated = True
+            elif _POSITIVE_NEED.search(clause) or no_silent_loss:
+                positive = True
+        if positive and not negated:
+            selected.append(need)
+    return tuple(selected)
 
 
 def _chroma_scene_focus_query(task: dict) -> str | None:
@@ -83,6 +126,7 @@ async def _invoke_retriever_untraced(
     query: str,
     sub_questions: list[str],
     adapted_queries: list[str],
+    local_scene_needs: tuple[str, ...] = (),
     request: RetrievalRequest | None = None,
 ) -> tuple[object, bool]:
     try:
@@ -107,6 +151,7 @@ async def _invoke_retriever_untraced(
             sub_questions=sub_questions,
             max_results=7,
             adapted_queries=adapted_queries,
+            local_scene_needs=local_scene_needs if name == "chroma" else (),
         )
     except BudgetError:
         raise
@@ -166,6 +211,7 @@ async def _invoke_retriever_miss(
     query: str,
     sub_questions: list[str],
     adapted_queries: list[str],
+    local_scene_needs: tuple[str, ...] = (),
     request: RetrievalRequest | None = None,
 ) -> tuple[object, bool]:
     """Record one independent retrieval call without retaining its query."""
@@ -213,6 +259,7 @@ async def _invoke_retriever_miss(
             query=query,
             sub_questions=sub_questions,
             adapted_queries=adapted_queries,
+            local_scene_needs=local_scene_needs,
             request=request,
         )
     except asyncio.CancelledError:
@@ -329,11 +376,21 @@ async def _invoke_retriever(
     query: str,
     sub_questions: list[str],
     adapted_queries: list[str],
+    local_scene_needs: tuple[str, ...] = (),
 ) -> tuple[object, bool, str]:
     """Use a validated cache before the budgeted and traced dispatch path."""
 
     context = get_run_context()
     cache = context.retrieval_cache if context is not None else None
+    collection_id = (
+        await asyncio.to_thread(chroma_collection_identity)
+        if name == "chroma" and cache is not None and getattr(cache, "enabled", False)
+        else None
+    )
+    # An unidentifiable/moving local collection must not enter persistent cache
+    # or share a flight with a different collection state.
+    if name == "chroma" and collection_id is None:
+        cache = None
     if cache is None or not getattr(cache, "enabled", False):
         result, is_stable = await _invoke_retriever_miss(
             name,
@@ -341,6 +398,7 @@ async def _invoke_retriever(
             query=query,
             sub_questions=sub_questions,
             adapted_queries=adapted_queries,
+            local_scene_needs=local_scene_needs,
         )
         return result, is_stable, "bypass"
 
@@ -350,6 +408,8 @@ async def _invoke_retriever(
             sub_questions=sub_questions,
             max_results=7,
             adapted_queries=adapted_queries,
+            local_scene_needs=local_scene_needs if name == "chroma" else (),
+            local_collection_id=collection_id,
         )
         cache_key = cache.make_key(
             source=name,
@@ -365,10 +425,23 @@ async def _invoke_retriever(
             query=query,
             sub_questions=sub_questions,
             adapted_queries=adapted_queries,
+            local_scene_needs=local_scene_needs,
         )
         return result, is_stable, "bypass"
 
     is_stable = callable(getattr(cls, "retrieve", None))
+    async def collection_unchanged() -> bool:
+        return name != "chroma" or (
+            await asyncio.to_thread(chroma_collection_identity)
+        ) == collection_id
+
+    async def fresh_after_change() -> tuple[object, bool, str]:
+        result, actual_is_stable = await _invoke_retriever_miss(
+            name, cls, query=query, sub_questions=sub_questions,
+            adapted_queries=adapted_queries, local_scene_needs=local_scene_needs,
+        )
+        return result, actual_is_stable, "bypass"
+
     waited = False
     while True:
         try:
@@ -382,6 +455,8 @@ async def _invoke_retriever(
         except Exception:
             cached = None
         if cached is not None:
+            if not await collection_unchanged():
+                return await fresh_after_change()
             return cached, is_stable, "coalesced" if waited else "hit"
 
         try:
@@ -395,6 +470,7 @@ async def _invoke_retriever(
                 query=query,
                 sub_questions=sub_questions,
                 adapted_queries=adapted_queries,
+                local_scene_needs=local_scene_needs,
                 request=request,
             )
             return result, actual_is_stable, "miss"
@@ -411,6 +487,7 @@ async def _invoke_retriever(
                     query=query,
                     sub_questions=sub_questions,
                     adapted_queries=adapted_queries,
+                    local_scene_needs=local_scene_needs,
                     request=request,
                 )
                 return result, actual_is_stable, "miss"
@@ -423,6 +500,8 @@ async def _invoke_retriever(
                 raise shared_error
             shared_invocation = claim.invocation
             if shared_invocation is not None:
+                if not await collection_unchanged():
+                    return await fresh_after_change()
                 result, actual_is_stable = shared_invocation
                 return result, actual_is_stable, "coalesced"
             continue
@@ -439,6 +518,8 @@ async def _invoke_retriever(
             except Exception:
                 cached = None
             if cached is not None:
+                if not await collection_unchanged():
+                    return await fresh_after_change()
                 _publish_cache_flight(
                     cache,
                     claim,
@@ -453,6 +534,7 @@ async def _invoke_retriever(
                     query=query,
                     sub_questions=sub_questions,
                     adapted_queries=adapted_queries,
+                    local_scene_needs=local_scene_needs,
                     request=request,
                 )
             except asyncio.CancelledError:
@@ -461,11 +543,13 @@ async def _invoke_retriever(
             except Exception as exc:
                 _publish_cache_flight(cache, claim, error=exc)
                 raise
-            _publish_cache_flight(
-                cache,
-                claim,
-                invocation=(result, actual_is_stable),
-            )
+            unchanged = await collection_unchanged()
+            _publish_cache_flight(cache, claim, invocation=(result, actual_is_stable))
+            if not unchanged:
+                # Chroma may itself write SQLite/HNSW files while opening or
+                # querying. The current retrieval is still a valid dispatch,
+                # but its pre-dispatch identity must never be cached.
+                return result, actual_is_stable, "miss"
             cacheable = _validated_cache_result(
                 result,
                 source=name,
@@ -473,7 +557,8 @@ async def _invoke_retriever(
             )
             if cacheable is not None:
                 try:
-                    await cache.put(cache_key, cacheable, source=name)
+                    if await collection_unchanged():
+                        await cache.put(cache_key, cacheable, source=name)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -526,6 +611,7 @@ class MultiRetrieverAgent:
 
         registry_entries = tuple(self.retriever_registry.items())
         tasks = []
+        local_scene_needs = _chroma_local_scene_needs(research_state["task"])
         for name, cls in registry_entries:
             adapted = list(adapted_queries.get(name, [])) if adapted_queries else []
             if name == "chroma":
@@ -546,6 +632,7 @@ class MultiRetrieverAgent:
                     query=query,
                     sub_questions=sub_questions,
                     adapted_queries=adapted,
+                    local_scene_needs=local_scene_needs if name == "chroma" else (),
                 )
             )
 

@@ -632,6 +632,17 @@ registry，且只能负向排除跨场景页面；正向命中仍须通过可见
 把正文存在解释为场景适用。Chroma v1–v3 身份可读但不可同 run 恢复。额外计算仅为
 一个本地 embedding/Chroma 查询维度，不新增网络、模型生成调用或外部检索预算格。
 
+2026-09-28 Chroma v5 默认多源路径从原始 `query`、`scene_context`、`constraints` 提取至多三项
+`backup`、`full_text_search`、`task_recovery` 能力标志，原始否定优先；模型子问和适配查询
+只作检索提示，不得产生该标志。标志只交给 Chroma 并进入检索缓存键。FTS5 概述及 P01
+备份/检索、P04 Celery 任务语义正文，只能从本次候选池中精确核对冻结 `chunks.json`、
+`seed-manifest.json` 字节哈希、chunk 内容哈希、target、URL 与种子身份后选用；否则回退
+原片段。直接旧 `search()` 或未带标志的 `retrieve()` 保留端口形状，但不会按查询词擅自
+提升 FTS5 正文。Chroma 缓存键还绑定实际库文件及可选审计 sidecar 的字节身份；身份
+无法取得则旁路缓存，正常可用时保留既有 TTL 与 run 内同键单飞。库在检索期间自然
+改写时保留本次结果、不以旧身份写缓存；命中或等待时身份漂移则重新按预算/Trace
+检索。指纹工作在线程中执行，不阻塞事件循环。v1–v4 身份仍可读但不能同 run 恢复。
+
 2026-09-18 PR1 冻结候选 `7d622fd` 的 P01（product-baseline-v1/1.0.0、分母一 run）
 完成单例测量、完整53原子及独立助手复核，资格为暂定通过；不是并发或人类质量验收。
 锁定身份和残余风险见 [单例验真](o1c-single-case-verification.md)。知识冻结指原种子不变及

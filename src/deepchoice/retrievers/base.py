@@ -32,12 +32,7 @@ class BaseRetriever:
         request = RetrievalRequest.model_validate(request)
         t0 = time.monotonic()
         try:
-            results = await self._do_search(
-                request.query,
-                list(request.sub_questions),
-                request.max_results,
-                adapted_queries=list(request.adapted_queries),
-            )
+            results = await self._do_retrieve(request)
             return RetrievalResult(
                 source=self.source,
                 status="success",
@@ -81,3 +76,11 @@ class BaseRetriever:
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
         raise NotImplementedError
+
+    async def _do_retrieve(self, request: RetrievalRequest) -> list[dict]:
+        return await self._do_search(
+            request.query,
+            list(request.sub_questions),
+            request.max_results,
+            adapted_queries=list(request.adapted_queries),
+        )

@@ -1,12 +1,15 @@
 """Offline P01 retrieval counterexamples; no embedding model or network."""
 
+import hashlib
 from types import SimpleNamespace
 
 import pytest
 
 from deepchoice.agents.conclusion_synthesizer import _summarize_chains
 from deepchoice.agents.evidence_chain import build_evidence_chain
-from deepchoice.agents.multi_retriever import MultiRetrieverAgent, _chroma_scene_focus_query
+from deepchoice.agents.multi_retriever import (
+    MultiRetrieverAgent, _chroma_local_scene_needs, _chroma_scene_focus_query,
+)
 from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
 from deepchoice.retrievers import chroma_kb
 from deepchoice.retrievers.contracts import RetrievalResult
@@ -32,6 +35,51 @@ OVERVIEW = (
     "of a search term.\nTo use FTS5, the user creates an FTS5 virtual table."
 )
 DEEP_COMMAND = "the merge command. The application should stop invoking merge when the result drops."
+
+
+def _index(document=OVERVIEW):
+    return {
+        doc_id: ("p01-sqlite-fts5", FTS5_URL, hashlib.sha256(body.encode()).hexdigest())
+        for doc_id, body in (
+            ("fts5-overview", document),
+            ("fts5-deep", DEEP_COMMAND),
+            ("fts5-nav", "SQLite FTS5 Extension\nHome\nTable Of Contents"),
+        )
+    }
+
+
+def test_original_request_only_projects_local_capability_flags():
+    task = {
+        "query": "SQLite or PostgreSQL?",
+        "scene_context": "不需要备份，但需要基本全文检索。",
+        "constraints": ["必须说明迁移触发"],
+    }
+    assert _chroma_local_scene_needs(task) == ("full_text_search",)
+    task["scene_context"] = "需要备份与基本全文检索。"
+    assert _chroma_local_scene_needs(task) == ("backup", "full_text_search")
+    task["scene_context"] = "任务结果不能因服务重启静默丢失。"
+    task["constraints"] = ["必须讨论重启恢复和至少一次执行语义"]
+    assert _chroma_local_scene_needs(task) == ("task_recovery",)
+
+
+@pytest.mark.asyncio
+async def test_model_generated_subquestion_cannot_override_original_negation():
+    captured = {}
+
+    class Fake:
+        async def retrieve(self, request):
+            captured["request"] = request
+            return RetrievalResult(source="chroma", status="success", results=[], latency_ms=0)
+
+    await MultiRetrieverAgent(retriever_registry={"chroma": Fake}).run({
+        "task": {
+            "query": "SQLite or PostgreSQL?", "candidate_techs": ["SQLite", "PostgreSQL"],
+            "scene_context": "不需要备份和全文检索。",
+        },
+        "sub_questions": ["需要备份和全文检索吗？"],
+        "adapted_queries": {"chroma": ["backup full text search"]},
+    })
+    assert captured["request"].local_scene_needs == ()
 
 
 def test_positive_scene_requirement_is_a_short_candidate_bound_dimension():
@@ -93,6 +141,8 @@ async def test_scene_focus_reaches_only_chroma_and_precedes_model_adaptations():
         "SQLite PostgreSQL 需要备份与基本全文检索", "model query",
     )
     assert captured["official"].adapted_queries == ("official query",)
+    assert captured["chroma"].local_scene_needs == ("backup", "full_text_search")
+    assert captured["official"].local_scene_needs == ()
 
     await MultiRetrieverAgent(retriever_registry={
         "chroma": retriever("chroma"),
@@ -107,21 +157,19 @@ async def test_scene_focus_reaches_only_chroma_and_precedes_model_adaptations():
         "SQLite PostgreSQL 需要基本全文检索",
         "How does each option handle concurrent writes?",
     )
+    assert captured["chroma"].local_scene_needs == ("full_text_search",)
 
 
 def test_overview_must_match_frozen_seed_and_exact_official_page():
-    result = {"documents": [[OVERVIEW]], "metadatas": [[FTS5_META]]}
-    chosen = _audited_fts5_overview(result, "SQLite PostgreSQL 基本全文检索")
+    result = {"ids": [["fts5-overview"]], "documents": [[OVERVIEW]], "metadatas": [[FTS5_META]]}
+    chosen = _audited_fts5_overview(result, ("full_text_search",), _index())
     assert chosen is not None
     assert chosen[0] == FTS5_URL
     assert chosen[1].startswith("FTS5 is an SQLite virtual table module")
     assert "merge command" not in chosen[1]
-    assert _audited_fts5_overview(result, "FTS5 merge command") is None
-    assert _audited_fts5_overview(result, "不需要全文检索") is None
-    assert _audited_fts5_overview(result, "do not need full-text search") is None
-    assert _audited_fts5_overview(result, "需要避免全文检索") is None
-    assert _audited_fts5_overview(result, "不需要备份但需要基本全文检索") is not None
-    assert _audited_fts5_overview(result, "任务不能丢失且需要基本全文检索") is not None
+    assert _audited_fts5_overview(result, (), _index()) is None
+    assert _audited_fts5_overview(result, ("backup",), _index()) is None
+    assert _audited_fts5_overview(result, ("full_text_search",), {}) is None
     for metadata in (
         {**FTS5_META, "seed_identity_sha256": "f" * 64},
         {**FTS5_META, "source_type": "blog"},
@@ -129,8 +177,8 @@ def test_overview_must_match_frozen_seed_and_exact_official_page():
         {**FTS5_META, "url": "http://sqlite.org/fts5.html"},
     ):
         assert _audited_fts5_overview({
-            "documents": [[OVERVIEW]], "metadatas": [[metadata]],
-        }, "SQLite 全文检索") is None
+            "ids": [["fts5-overview"]], "documents": [[OVERVIEW]], "metadatas": [[metadata]],
+        }, ("full_text_search",), _index()) is None
 
 
 @pytest.mark.asyncio
@@ -156,10 +204,12 @@ async def test_same_url_overview_replaces_deep_chroma_snippet_without_extra_sour
         }
 
     retriever = object.__new__(chroma_kb.ChromaKB)
+    retriever._audited_index = _index()
     retriever.collection = SimpleNamespace(query=query)
     results = await retriever._do_search(
         "SQLite versus PostgreSQL", [], 7,
         adapted_queries=["SQLite PostgreSQL 需要备份与基本全文检索"],
+        local_scene_needs=("full_text_search",),
     )
     assert calls == 2
     assert [item["url"] for item in results] == ["https://other.example/docs", FTS5_URL]
@@ -203,10 +253,12 @@ async def test_same_url_cannot_promote_body_into_different_source_identity(
         }
 
     retriever = object.__new__(chroma_kb.ChromaKB)
+    retriever._audited_index = _index()
     retriever.collection = SimpleNamespace(query=query)
     results = await retriever._do_search(
         "SQLite versus PostgreSQL", [], 7,
         adapted_queries=["SQLite PostgreSQL 需要基本全文检索"],
+        local_scene_needs=("full_text_search",),
     )
     assert len(results) == 1
     assert results[0]["snippet"] == DEEP_COMMAND
@@ -235,10 +287,12 @@ async def test_focus_dimension_reserves_source_capacity_without_erasing_primary(
         },
     ]
     retriever = object.__new__(chroma_kb.ChromaKB)
+    retriever._audited_index = _index()
     retriever.collection = SimpleNamespace(query=lambda **_kwargs: responses.pop(0))
     results = await retriever._do_search(
         "SQLite versus PostgreSQL", [], 4,
         adapted_queries=["SQLite PostgreSQL 需要基本全文检索", "Existing subquestion"],
+        local_scene_needs=("full_text_search",),
     )
     assert [item["title"] for item in results] == ["P0", "P1", "p01-sqlite-fts5", "S"]
     assert results[2]["snippet"].startswith("FTS5 is an SQLite virtual table module")

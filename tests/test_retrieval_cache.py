@@ -132,6 +132,112 @@ def test_cache_key_is_hash_only_and_preserves_semantic_input_distinctions() -> N
         manifest_id="manifest-1",
         policy_version=RETRIEVAL_CACHE_POLICY_VERSION + "-next",
     )
+    assert build_retrieval_cache_key(
+        source="chroma",
+        request=RetrievalRequest(query="compare", local_scene_needs=("backup",), local_collection_id="a" * 64),
+        manifest_id="manifest-1",
+    ) != build_retrieval_cache_key(
+        source="chroma",
+        request=RetrievalRequest(query="compare", local_scene_needs=("full_text_search",), local_collection_id="a" * 64),
+        manifest_id="manifest-1",
+    )
+
+
+@pytest.mark.asyncio
+async def test_chroma_cache_binds_collection_bytes_and_keeps_cache_hits(tmp_path, monkeypatch) -> None:
+    connection, store = await _store(tmp_path)
+    calls = 0
+    chroma_path = tmp_path / "seed-a" / "chroma_db"
+    chroma_path.mkdir(parents=True)
+    (chroma_path.parent / "chunks.json").write_bytes(b"same-index")
+    (chroma_path.parent / "seed-manifest.json").write_bytes(b"same-manifest")
+    collection_file = chroma_path / "chroma.sqlite3"
+    collection_file.write_bytes(b"collection-v1")
+    monkeypatch.setenv("CHROMA_PATH", str(chroma_path))
+
+    class Retriever:
+        source = "chroma"
+
+        async def retrieve(self, request):
+            nonlocal calls
+            calls += 1
+            assert request.local_scene_needs == ("backup",)
+            return _success("chroma", results=[{
+                "url": "https://sqlite.org/backup.html", "snippet": f"version-{calls}",
+            }])
+
+    try:
+        with bind_run_context(_context(store)):
+            first = await multi_module._invoke_retriever(
+                "chroma", Retriever, query="SQLite or PostgreSQL?",
+                sub_questions=[], adapted_queries=[], local_scene_needs=("backup",),
+            )
+            second = await multi_module._invoke_retriever(
+                "chroma", Retriever, query="SQLite or PostgreSQL?",
+                sub_questions=[], adapted_queries=[], local_scene_needs=("backup",),
+            )
+            collection_file.write_bytes(b"collection-v2")
+            third = await multi_module._invoke_retriever(
+                "chroma", Retriever, query="SQLite or PostgreSQL?",
+                sub_questions=[], adapted_queries=[], local_scene_needs=("backup",),
+            )
+            other_path = tmp_path / "seed-b" / "chroma_db"
+            other_path.mkdir(parents=True)
+            (other_path.parent / "chunks.json").write_bytes(b"same-index")
+            (other_path.parent / "seed-manifest.json").write_bytes(b"same-manifest")
+            (other_path / "chroma.sqlite3").write_bytes(b"collection-v1")
+            monkeypatch.setenv("CHROMA_PATH", str(other_path))
+            fourth = await multi_module._invoke_retriever(
+                "chroma", Retriever, query="SQLite or PostgreSQL?",
+                sub_questions=[], adapted_queries=[], local_scene_needs=("backup",),
+            )
+        assert calls == 3
+        assert (first[2], second[2], third[2], fourth[2]) == ("miss", "hit", "miss", "miss")
+        assert first[0].results[0]["snippet"] == "version-1"
+        assert second[0].results[0]["snippet"] == "version-1"
+        assert third[0].results[0]["snippet"] == "version-2"
+        assert fourth[0].results[0]["snippet"] == "version-3"
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_chroma_collection_change_during_dispatch_is_visible_and_not_cached(tmp_path, monkeypatch) -> None:
+    connection, store = await _store(tmp_path)
+    chroma_path = tmp_path / "chroma_db"
+    chroma_path.mkdir()
+    (tmp_path / "chunks.json").write_bytes(b"chunks")
+    (tmp_path / "seed-manifest.json").write_bytes(b"manifest")
+    collection_file = chroma_path / "chroma.sqlite3"
+    collection_file.write_bytes(b"old")
+    monkeypatch.setenv("CHROMA_PATH", str(chroma_path))
+    calls = 0
+
+    class Retriever:
+        source = "chroma"
+
+        async def retrieve(self, request):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                collection_file.write_bytes(b"new")
+            return _success("chroma")
+
+    try:
+        with bind_run_context(_context(store)):
+            first = await multi_module._invoke_retriever(
+                "chroma", Retriever, query="compare", sub_questions=[], adapted_queries=[],
+            )
+            second = await multi_module._invoke_retriever(
+                "chroma", Retriever, query="compare", sub_questions=[], adapted_queries=[],
+            )
+        assert first[0].status == "success"
+        assert first[2] == "miss"
+        assert second[0].status == "success"
+        assert second[2] == "miss"
+        assert calls == 2
+    finally:
+        await connection.close()
 
 
 @pytest.mark.parametrize(
