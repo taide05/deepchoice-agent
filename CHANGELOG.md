@@ -4,6 +4,16 @@
 
 ### Changed
 
+Chroma v3 extends only the reviewed official local-seed excerpt from the 500-character prefix
+through its next source-line ending when that ending is within 800 characters. Synthesis v10
+accepts the larger excerpt only after seed/candidate provenance is rechecked and the URL matches
+the static official catalog; ordinary sources keep their 600-character synthesis cap. An offline
+replay of the frozen P04 FastAPI Caveat chunk shows its small-task BackgroundTasks qualification
+now reaches synthesis. P01 FTS5 still has a wrong-section problem, and neither model uptake nor
+new report quality is established. The private provenance marker is removed from public results;
+historical manifest identities remain readable but cannot resume on this runtime. No paid run or
+new serial card was started.
+
 For citation-v6 and report templates v9/v8/v7, cross-language-unknown requirement analysis and
 decision-branch conditions no longer repeat the model's unverified translation. The report instead
 marks applicability unresolved and may show bounded, source-registry-bound excerpts from the saved

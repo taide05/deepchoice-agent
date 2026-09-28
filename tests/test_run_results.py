@@ -271,6 +271,9 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
                         "claim": "supported",
                         "checkpoint_id": "private-cp",
                         "_error": "raw secret exception",
+                        "sources": [{"title": "Public docs", "url": "https://example.com/docs",
+                                     "snippet": "Public excerpt",
+                                     "_seed_excerpt_window": "audited-official-line-v1"}],
                         "api_key": "sk-private-api-key",
                         "Authorization": "Bearer private-token",
                         "provider_password": "private-password",
@@ -293,6 +296,7 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
                         "_seed_target_id": "private-target",
                         "_seed_source_type": "official",
                         "_seed_seed_identity_sha256": "a" * 64,
+                        "_seed_excerpt_window": "audited-official-line-v1",
                     }],
                 }],
                 "token_usage": {"input_tokens": 12, "output_tokens": 7},
@@ -341,6 +345,7 @@ def test_public_result_uses_allowlist_and_removes_private_nested_values():
     assert "private-client-secret" not in encoded
     assert "private-key-material" not in encoded
     assert "private-camel-api-key" not in encoded
+    assert "_seed_excerpt_window" not in encoded
     assert result.snapshot["token_usage"]["input_tokens"] == 12
     assert result.snapshot["citation_verification"]["status_counts"]["verified"] == 1
     public_source = result.snapshot["search_results"][0]["results"][0]

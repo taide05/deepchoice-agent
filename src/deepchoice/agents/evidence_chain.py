@@ -1,4 +1,5 @@
 from ..utils.evidence import is_navigation_placeholder
+from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW
 from ..utils.views import print_agent_output
 
 
@@ -19,6 +20,8 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
             "snippet": s.get("snippet", ""),
             "score": s["total_score"],
         }]
+        if s.get("_seed_excerpt_window") == AUDITED_SNIPPET_WINDOW:
+            evidence_sources[0]["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
 
         if s["total_score"] >= 8.0 and len(s.get("supporting_sources", [])) >= 1:
             strength = "strong"

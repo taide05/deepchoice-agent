@@ -5,6 +5,11 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit
 
+
+# Immutable, reviewed local official-document seed used by the product study.
+AUDITED_PRODUCT_SEED_IDENTITY = "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6"
+AUDITED_SNIPPET_WINDOW = "audited-official-line-v1"
+
 TECH_DOCS: dict[str, dict[str, str]] = {
     # Web frameworks
     "react": {"url": "https://react.dev", "title": "React — Official Documentation"},

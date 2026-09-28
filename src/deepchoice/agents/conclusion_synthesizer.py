@@ -17,6 +17,7 @@ from ..utils.decision_contract import (
 )
 from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholder, source_title
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
+from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
 
 # Preserve the existing timeout while the optional thinking mode is measured.
@@ -148,7 +149,14 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
             title = source_title(src.get("title"), src.get("url"))
             mapping[n] = title
             lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
-            snippet = _prompt_data(src.get("snippet", ""), 600)
+            # A reviewed official-seed snippet can now include a source line
+            # ending just after the old 500-char cutoff. Keep that qualification
+            # visible to synthesis; ordinary sources retain their 600-char cap.
+            snippet_limit = (
+                800 if (src.get("_seed_excerpt_window") == AUDITED_SNIPPET_WINDOW
+                        and is_catalog_official_url(src.get("url", ""))) else 600
+            )
+            snippet = _prompt_data(src.get("snippet", ""), snippet_limit)
             if snippet:
                 lines.append(f"       Untrusted snippet: {snippet}")
         lines.append("")

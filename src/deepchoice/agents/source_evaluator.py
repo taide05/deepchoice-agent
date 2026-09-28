@@ -4,10 +4,14 @@ import re
 from urllib.parse import unquote, urlsplit
 
 from ..utils.evidence import is_navigation_placeholder, source_title
-from ..utils.official_catalog import is_catalog_official_url, normalized_hostname
+from ..utils.official_catalog import (
+    AUDITED_PRODUCT_SEED_IDENTITY,
+    AUDITED_SNIPPET_WINDOW,
+    is_catalog_official_url,
+    normalized_hostname,
+)
 
 
-_AUDITED_SEED_IDENTITY = "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6"
 _AUDITED_SEED_TARGET_ALIASES = {
     "p01-sqlite-appropriate-uses": frozenset({"sqlite"}),
     "p01-sqlite-wal": frozenset({"sqlite"}),
@@ -75,7 +79,7 @@ def _audited_seed_scope_covers_candidate(
     if (
         source != "chroma"
         or result.get("_seed_source_type") != "official"
-        or seed_identity != _AUDITED_SEED_IDENTITY
+        or seed_identity != AUDITED_PRODUCT_SEED_IDENTITY
     ):
         return None
     aliases = _AUDITED_SEED_TARGET_ALIASES.get(target_id)
@@ -314,7 +318,7 @@ class SourceEvaluatorAgent:
             }
             total = compute_total_score(scores)
 
-            source_scores.append({
+            scored = {
                 "url": url,
                 "title": result.get("title", ""),
                 "snippet": result.get("snippet", ""),
@@ -323,7 +327,12 @@ class SourceEvaluatorAgent:
                 "scores": scores,
                 "total_score": total,
                 "supporting_sources": [],
-            })
+            }
+            if (source == "chroma"
+                    and result.get("_seed_excerpt_window") == AUDITED_SNIPPET_WINDOW
+                    and _audited_seed_scope_covers_candidate(result, source, candidates) is True):
+                scored["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
+            source_scores.append(scored)
 
         # Authority/recency or a shared candidate name does not establish
         # claim agreement. No corroboration is inferred from another URL.

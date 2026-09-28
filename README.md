@@ -60,6 +60,11 @@ evidence-first-v8 / comparison-matrix-v7。跨语言检查尚未证明等价时�
 离线回放，两例原错误条件不再出现，但 P01 保存片段缺少足够的适用性限定；产品效果仍未通过
 新串行测量，旧卡不会续跑。
 
+2026-09-28 的离线来源窗口修复仅针对身份已核对的官方本地种子：Chroma v3 在原500字后、
+800字以内补齐当前来源行，合成 v10 只对再次核对的官方来源展示这段文字。冻结 P04
+FastAPI Caveat 的“小任务可用 BackgroundTasks”限定语因此进入合成输入；P01 FTS5 仍是
+目录/错段问题。此检查没有模型或付费研究，不能证明新报告已正确采用条件、引用通过或产品效果达标。
+
 查询分析和适配 prompt 现为 v2：原始场景、候选、约束和冻结子问按字段送达模型，与粗场景分类、
 重试/HITL当前目标分开，避免“基本全文检索”等只写在场景里的条件直接丢失。没有新增调用、
 检索维度或窗口；上下文送达不代表模型遵守、检索命中或报告质量通过。旧 prompt v1 身份不可同 run 恢复。
@@ -82,7 +87,7 @@ evidence-first-v8 / comparison-matrix-v7。跨语言检查尚未证明等价时�
 
 ## 核心特性
 
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；Chroma v2 保留原始比较维度、限制查询维度/候选池、按 URL 合并并给适配查询保留结果容量；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
+- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；Chroma v3 保留原始比较维度、限制查询维度/候选池、按 URL 合并并给适配查询保留结果容量，且仅对受审官方种子补齐有界来源行；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先用规则与 DeepSeek Flash 仲裁矛盾对，再对低置信度的一对补充取证，并用同一 DeepSeek Flash 重新裁决

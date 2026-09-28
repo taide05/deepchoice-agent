@@ -47,7 +47,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
-    }["chroma"] == "v2"
+    }["chroma"] == "v3"
     assert all(
         retriever.version == "v1"
         for retriever in first.retrievers
@@ -58,13 +58,14 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
-def test_historical_chroma_v1_is_readable_but_cannot_resume():
+@pytest.mark.parametrize("old_version", ["v1", "v2"])
+def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     current = build_run_manifest({})
     historical = current.model_copy(update={
         "retrievers": tuple(
-            retriever.model_copy(update={"version": "v1"})
+            retriever.model_copy(update={"version": old_version})
             if retriever.retriever_id == "chroma" else retriever
             for retriever in current.retrievers
         )
@@ -77,7 +78,7 @@ def test_historical_chroma_v1_is_readable_but_cannot_resume():
     assert next(
         item.version for item in restored.retrievers
         if item.retriever_id == "chroma"
-    ) == "v1"
+    ) == old_version
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
@@ -139,7 +140,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v6"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v9",
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v10",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -209,6 +210,7 @@ def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
         ("synthesis_v6", "what_why_how", None),
         ("synthesis_v7", "what_why_how", None),
         ("synthesis_v8", "what_why_how", None),
+        ("synthesis_v9", "what_why_how", None),
         ("template", "what_why_how", "what-why-how-v7"),
         ("template", "evidence_first", "evidence-first-v6"),
         ("template", "comparison_matrix", "comparison-matrix-v5"),
@@ -234,7 +236,7 @@ def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
 
     task = {"query": "A vs B", "report_format": report_format}
     current = build_run_manifest(task)
-    if changed_asset in ("synthesis", "synthesis_v4", "synthesis_v5", "synthesis_v6", "synthesis_v7", "synthesis_v8"):
+    if changed_asset in ("synthesis", "synthesis_v4", "synthesis_v5", "synthesis_v6", "synthesis_v7", "synthesis_v8", "synthesis_v9"):
         previous_version = {
             "synthesis": "v3",
             "synthesis_v4": "v4",
@@ -242,6 +244,7 @@ def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
             "synthesis_v6": "v6",
             "synthesis_v7": "v7",
             "synthesis_v8": "v8",
+            "synthesis_v9": "v9",
         }[changed_asset]
         previous = current.model_copy(update={
             "prompts": tuple(

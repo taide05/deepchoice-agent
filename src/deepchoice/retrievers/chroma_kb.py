@@ -5,12 +5,39 @@ import chromadb
 from chromadb.config import Settings
 
 from ..utils.embedding import get_embedding_model
+from ..utils.official_catalog import (
+    AUDITED_PRODUCT_SEED_IDENTITY,
+    AUDITED_SNIPPET_WINDOW,
+)
 from .base import BaseRetriever
 
 
 _MIN_CANDIDATE_POOL = 30
 _MAX_CANDIDATE_POOL = 100
 _MAX_QUERY_DIMENSIONS = 8
+_SNIPPET_CHARS = 500
+_MAX_AUDITED_LINE_CHARS = 800
+
+
+def _bounded_snippet(document: str, metadata: dict) -> str:
+    """Finish one bounded source line only for the frozen official seed.
+
+    The original 500-character prefix remains the fallback. A larger prefix is
+    emitted only when its first post-boundary newline occurs within 800 chars.
+    A line ending is not a semantic proof that all conditions were captured;
+    the function never splices disconnected text or changes source authority.
+    """
+    if not isinstance(document, str):
+        return ""
+    prefix = document[:_SNIPPET_CHARS]
+    if (len(document) <= _SNIPPET_CHARS
+            or not isinstance(metadata, dict)
+            or metadata.get("source_type") != "official"
+            or metadata.get("seed_identity_sha256") != AUDITED_PRODUCT_SEED_IDENTITY
+            or not isinstance(metadata.get("target_id"), str)):
+        return prefix
+    end = document.find("\n", _SNIPPET_CHARS, _MAX_AUDITED_LINE_CHARS + 1)
+    return document[:end] if end >= 0 else prefix
 
 
 def _query_dimensions(
@@ -150,9 +177,15 @@ class ChromaKB(BaseRetriever):
                 result = {
                     "url": url,
                     "title": metadata.get("title", "") if metadata else "",
-                    "snippet": (results.get("documents", [[]])[0][i] or "")[:500],
+                    "snippet": _bounded_snippet(
+                        results.get("documents", [[]])[0][i], metadata or {},
+                    ),
                     "date": metadata.get("date", "") if metadata else "",
                 }
+                if len(result["snippet"]) > _SNIPPET_CHARS:
+                    # Only _bounded_snippet's exact frozen-seed path can emit
+                    # this marker; downstream stages recheck its provenance.
+                    result["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
                 # Keep only the bounded internal provenance needed to enforce
                 # scope for an audited official seed.  Leading-underscore keys
                 # are removed by the durable public-result sanitizer; raw
