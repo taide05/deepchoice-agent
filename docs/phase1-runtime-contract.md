@@ -98,10 +98,18 @@ prompt v1 身份可读但不可同 run 恢复；现有 state/result schema、预
 关键判断降为 unknown，不能解释成事实被证伪；一个通过的胜者标题不能掩盖其余无依据结论。
 citation_verification 保留校准前声明的检查证据；校准只在本次 graph 结果内执行，不改历史结果。
 词法 verified 同样不证明语义正确或来源适用，真实效果仍需局部配对评审。
-当前 citation v7 对同语言的决定性断言增加有界的句内限定核对：整页分散词不能拼成一次
+此前 citation v7 对同语言的决定性断言增加有界的句内限定核对：整页分散词不能拼成一次
 verified；已匹配来源句中的 if/when 条件分句和强制性语气被省略、换位或强化时标为
 `unknown/qualifier_unverified`，不把它当成反证。完整保留的条件句仍只能得到词法支持，
 不能证明用户工作负载满足条件。旧 v1–v6 检查和 manifest 可读，但不能同 run 恢复。
+
+当前新运行冻结 citation v8：同一需求解释内有引用但跨语言/限定条件不确定的事实与无引用
+推断混写时，整项继续降为 unknown、移除模型原句与 evidence_ids，关键项仍撤回 Winner；
+不得把原句的安全部分自动提取为已验证结论。只可从本次证据链、引用注册表及相同规范 URL
+重新绑定上述不确定检查的保存来源片段；无引用部分不能决定片段内容。保留每处最多两段、
+全报告最多四段及先分配条件分支的上限；关键混合需求行先于普通待核查行各取至多一段，
+不改变报告行顺序。直接来源文字仍不证明语义、工作负载适用或部署验收，也不提升引用通过数、
+选型或行动权限。v1–v7 身份可读，但不能在 v8 runtime 同 run 恢复。
 
 普通报告不把“尚未核验”解释成“没有可读分析”：原已判断需求的 explanation 在完整检查后，
 若只含 verified/unknown/unreachable，且原因仅为词法支持、网络/HTTP/跨语言/限定条件不确定、
@@ -142,8 +150,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v7` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
-  citation-policy v1–v6 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v8` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
+  citation-policy v1–v7 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

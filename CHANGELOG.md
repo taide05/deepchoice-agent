@@ -4,6 +4,20 @@
 
 ### Changed
 
+Citation policy v8 keeps critical mixed statements unknown and withdraws their unchecked model
+wording, but can expose bounded, registry/URL-rebound saved source excerpts for cited
+cross-language or qualifier-uncertain portions even when the same explanation also contains an
+uncited inference. Critical mixed rows receive one excerpt each before ordinary provisional rows;
+the four-excerpt report cap and branch-first allocation remain. This is source inspection, not
+claim verification, workload applicability, Winner restoration, or action authorization. Offline
+P01/P04 counterexamples and a read-only replay of stopped P01 checks cover the boundary; no paid
+run was started. New runs freeze `deterministic-citation-v8`; v7 results remain readable but cannot
+resume the same run. The smoke-v1 dataset/metrics are unchanged; its baseline only refreshes
+manifest/registry identity and evaluation timestamp.
+Acceptance passed 259 related tests and all 2,369 tests (389.60 seconds), smoke-v1 12/12 with
+baseline match, pyflakes, and diff checks. It is a local display-boundary repair, not a measured
+new-report quality result.
+
 Chroma v5 projects only bounded original-user backup, full-text-search, and task-recovery needs
 into local excerpt selection and its cache key; model-authored search hints cannot authorize a
 body replacement. Frozen-seed P01/P04 official chunks require exact content hash, target, URL,

@@ -4,11 +4,13 @@ Short source-language excerpts come from the already captured P01/P04 official
 documents (serial-check-v1, 2026-09-27). HTTP and model calls are replaced.
 """
 from copy import deepcopy
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from deepchoice.agents.citation_validator import CitationValidatorAgent
+from deepchoice.agents.citation_validator import CitationValidatorAgent, _calibrate_decision
+from deepchoice.citations.contracts import CitationCheck, CitationReason, CitationStatus
 from deepchoice.agents.conclusion_synthesizer import (
     SYNTHESIS_PROMPT, _bind_citations, _normalize_decision_contract,
     _sanitize_citations, _summarize_chains, _usable_evidence_ids,
@@ -93,6 +95,79 @@ async def test_source_language_is_not_a_fact_or_applicability_bypass(monkeypatch
     row = result["final_recommendation"]["requirement_assessments"][0]
     assert result["citation_verification"]["checks"][0]["reason"] == reason
     assert row["status"] == "unknown" and "provisional_explanation" not in row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case,original,translated,requirement,url", CASES)
+async def test_mixed_translated_fact_and_uncited_inference_keeps_only_saved_source(
+    monkeypatch, case, original, translated, requirement, url,
+):
+
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=original, headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state = _state(translated, case, requirement, url)
+    state["evidence_chains"][0]["sources"][0]["snippet"] = original
+    inference = "所以当前工作负载已经证明该方案足够安全。"
+    state["final_recommendation"]["requirement_assessments"][0]["explanation"] = (
+        f"{translated} [Source: {case}]；{inference}"
+    )
+    result = await CitationValidatorAgent().run(state)
+    checks = result["citation_verification"]["checks"]
+    assert {check["reason"] for check in checks} >= {"cross_language", "citation_missing"}
+    row = result["final_recommendation"]["requirement_assessments"][0]
+    report = "\n".join(render_decision_details(result["final_recommendation"], "zh"))
+    assert row["status"] == "unknown"
+    assert "provisional_explanation" not in row
+    assert row["saved_source_excerpts"] == [{"title": case, "text": original}]
+    assert inference not in report
+    assert original in report
+
+
+def test_mixed_critical_rows_receive_bounded_source_slots_before_ordinary_rows():
+    sources = [{
+        "title": f"Docs {index}", "url": f"https://docs.example.org/{index}",
+        "snippet": f"Original source condition {index}."
+    } for index in range(6)]
+    checks = []
+    rows = []
+    for row_index in range(4):
+        path = f"final_recommendation.requirement_assessments[{row_index}].explanation"
+        source_indices = (0, 1) if row_index == 0 else (2, 3) if row_index == 1 else (row_index + 2,)
+        for source_index in source_indices:
+            source = sources[source_index]
+            checks.append(CitationCheck(
+                claim_id=f"c{row_index}-{source_index}", claim_path=path,
+                claim_text="Translated source claim", source_title=source["title"],
+                canonical_url=source["url"], status=CitationStatus.UNKNOWN,
+                reason=CitationReason.CROSS_LANGUAGE,
+            ))
+        if row_index >= 2:
+            checks.append(CitationCheck(
+                claim_id=f"missing-{row_index}", claim_path=path,
+                claim_text="Uncited workload inference", status=CitationStatus.UNSUPPORTED,
+                reason=CitationReason.CITATION_MISSING,
+            ))
+        rows.append({
+            "id": f"C{row_index + 1}", "requirement": f"Requirement {row_index}",
+            "status": "satisfied", "decision_critical": True,
+            "explanation": "Mixed model line", "evidence_ids": [1],
+        })
+    recommendation = {
+        "decision_basis_version": "constraint-aware-v1", "winner": "context_dependent",
+        "requirement_assessments": rows, "decision_branches": [], "action_plan": [],
+    }
+    result = _calibrate_decision(
+        recommendation, SimpleNamespace(checks=tuple(checks)), "比较方案",
+        [{"sources": sources}],
+    )
+    visible = result["requirement_assessments"]
+    assert [row["id"] for row in visible] == ["C1", "C2", "C3", "C4"]
+    assert all(row["status"] == "unknown" for row in visible)
+    assert [len(row.get("saved_source_excerpts", [])) for row in visible] == [2, 0, 1, 1]
+    assert all("provisional_explanation" not in row for row in visible[2:])
 
 
 @pytest.mark.parametrize("url", [

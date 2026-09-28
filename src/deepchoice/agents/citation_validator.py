@@ -136,8 +136,17 @@ def _calibrate_decision(
             and row.get("explanation") in PLAIN_REQUIREMENT_GAPS
         )
         if not plain_gap and not passed(path):
+            checks = by_path.get(path, [])
             if provisional(path, row.get("explanation")):
-                pending_analysis[row.get("id")] = (row["explanation"], by_path.get(path, []))
+                pending_analysis[row.get("id")] = (row["explanation"], checks)
+            elif checks and any(
+                check.reason.value in {"cross_language", "qualifier_unverified"}
+                for check in checks
+            ):
+                # A mixed explanation may contain an uncited inference after
+                # a cited source fact. Never display that model-authored line,
+                # but keep bounded source text available for inspection.
+                pending_analysis[row.get("id")] = (None, checks)
             row.update(status="unknown", explanation=note, evidence_ids=[])
         if row.get("decision_critical", True) is not False and row.get("status") != "satisfied":
             withdraw = True
@@ -231,7 +240,18 @@ def _calibrate_decision(
         if excerpts:
             branch["saved_source_excerpts"] = excerpts
             remaining_excerpts -= len(excerpts)
-    for row in result.get("requirement_assessments", []):
+    visible_rows = result.get("requirement_assessments", [])
+    # Keep report order unchanged, but allocate the small source-excerpt
+    # allowance to critical mixed rows before ordinary provisional analysis.
+    def mixed_critical(row: object) -> bool:
+        if not isinstance(row, dict) or row.get("decision_critical", True) is False:
+            return False
+        analysis = pending_analysis.get(row.get("id"))
+        return analysis is not None and analysis[0] is None
+
+    priority_rows = [row for row in visible_rows if mixed_critical(row)]
+    remaining_rows = [row for row in visible_rows if not mixed_critical(row)]
+    for row in priority_rows + remaining_rows:
         if isinstance(row, dict) and row.get("status") == "unknown":
             analysis = pending_analysis.get(row.get("id"))
             if analysis:
@@ -239,10 +259,15 @@ def _calibrate_decision(
                     check.reason.value in {"cross_language", "qualifier_unverified"}
                     for check in analysis[1]
                 )
-                if not qualifier_unknown:
+                if not qualifier_unknown and analysis[0]:
                     row["provisional_explanation"] = analysis[0]
-                excerpts = (_saved_excerpts(analysis[1], evidence_chains,
-                                            min(2, remaining_excerpts))
+                eligible_checks = [
+                    check for check in analysis[1]
+                    if check.reason.value in {"cross_language", "qualifier_unverified"}
+                ]
+                per_row_limit = 1 if mixed_critical(row) else 2
+                excerpts = (_saved_excerpts(eligible_checks, evidence_chains,
+                                            min(per_row_limit, remaining_excerpts))
                             if qualifier_unknown else [])
                 if excerpts:
                     row["saved_source_excerpts"] = excerpts
