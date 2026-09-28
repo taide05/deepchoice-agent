@@ -1,9 +1,11 @@
-"""Offline acceptance for the closed, machine-bound v3 serial card."""
+"""Offline acceptance for the machine-bound v3 serial card."""
+from copy import deepcopy
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -31,9 +33,8 @@ def test_frozen_overlay_preserves_three_serial_cells_and_closes_admission():
         "starting_used": 105, "diagnostic_max": 3, "concurrency_reserve": 0,
         "unallocated": 48, "hard_total": 156,
     }
-    assert new["controller"]["research_admission"] == contract.CLOSED
-    with pytest.raises(runner.RepairPairControlError, match="not open"):
-        runner._require_active_protocol(new)
+    assert new["controller"]["research_admission"] == contract.OPEN
+    runner._require_active_protocol(new)
 
 
 @pytest.mark.parametrize("path,value", [
@@ -87,6 +88,9 @@ def test_previous_stopped_root_cannot_be_relabelled(monkeypatch):
 async def test_closed_paid_entrypoints_have_no_side_effects(monkeypatch, tmp_path, command):
     monkeypatch.setattr(old_runner.parent, "_install_call_environment", lambda *_: None)
     monkeypatch.setattr(old_runner, command, lambda *_: pytest.fail("paid path reached"))
+    closed = deepcopy(contract.load_serial_check_protocol().payload)
+    closed["controller"]["research_admission"] = contract.CLOSED
+    monkeypatch.setattr(runner, "_bootstrap_approved_protocol", lambda *_: closed)
     arguments = [tmp_path / "unused"] * (5 if command == "preflight" else 6)
     arguments[-1] = contract.load_serial_check_protocol().byte_sha256
     with pytest.raises(runner.RepairPairControlError, match="not open"):
@@ -94,6 +98,33 @@ async def test_closed_paid_entrypoints_have_no_side_effects(monkeypatch, tmp_pat
             await runner.run(*arguments)
         else:
             getattr(runner, command)(*arguments)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["preflight", "prepare", "run"])
+async def test_prospectively_open_gate_delegates_only_to_v3_scope(monkeypatch, tmp_path, command):
+    protocol = deepcopy(contract.load_serial_check_protocol().payload)
+    protocol["controller"]["research_admission"] = contract.OPEN
+    seen = []
+    monkeypatch.setattr(old_runner.parent, "_install_call_environment", lambda *_: seen.append("env"))
+    monkeypatch.setattr(runner, "_bootstrap_approved_protocol", lambda *_: protocol)
+    monkeypatch.setattr(runner, "_load_approved_protocol", lambda *_: SimpleNamespace(payload=protocol))
+
+    def delegated(*args):
+        assert seen == ["env"]
+        assert old_runner.PROTOCOL_PATH == runner.PROTOCOL_PATH
+        assert old_runner.LEDGER_ROOT == runner.LEDGER_ROOT
+        return {"research_runs_submitted": 0}
+
+    async def async_delegated(*args):
+        return delegated(*args)
+
+    monkeypatch.setattr(old_runner, command, async_delegated if command == "run" else delegated)
+    arguments = [tmp_path / "unused"] * (5 if command == "preflight" else 6)
+    arguments[-1] = contract.load_serial_check_protocol().byte_sha256
+    result = await runner.run(*arguments) if command == "run" else getattr(runner, command)(*arguments)
+    assert result == {"research_runs_submitted": 0}
     assert list(tmp_path.iterdir()) == []
 
 
@@ -141,6 +172,9 @@ def test_cli_paid_flags_cannot_open_closed_card(monkeypatch, tmp_path, capsys, c
     monkeypatch.setattr(old_runner.parent, "_validate_prepared_hitl_policy", lambda *_: None)
     monkeypatch.setattr(old_runner.parent, "_prepared_environment_paths", lambda *_: [])
     monkeypatch.setattr(old_runner._base, "audit", lambda *_: pytest.fail("audit reached from closed paid path"))
+    closed = deepcopy(contract.load_serial_check_protocol().payload)
+    closed["controller"]["research_admission"] = contract.CLOSED
+    monkeypatch.setattr(runner, "_bootstrap_approved_protocol", lambda *_: closed)
     monkeypatch.setattr(runner, "LEDGER_ROOT", tmp_path / "v3-ledger")
     monkeypatch.setattr(sys, "argv", [
         "v3", command, "--baseline-root", str(tmp_path), "--candidate-root", str(tmp_path),

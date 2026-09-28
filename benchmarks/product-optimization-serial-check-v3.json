@@ -10,7 +10,7 @@
   },
   "design_card": {
     "path": "D:/deepchoice-agent/notes/product-optimization-serial-card-v3-20260928.md",
-    "sha256": "81cf451457f3b6b8f757abd78ceab081319d4619bb2a0e19bc54ee681951bd8b"
+    "sha256": "ac65512a302b82820c4a6d70812137d2b7be4a3bf04d8cecba755a3223a955a8"
   },
   "candidate": {
     "anchor_commit": "13e42c5e932c620c9e8b18736f7fe9b48b95ea13",
@@ -45,7 +45,7 @@
   },
   "controller": {
     "binding_policy": "candidate-only-three-case-over-serial-v1-v2-v3",
-    "research_admission": "closed-pending-independent-review-and-offline-acceptance",
+    "research_admission": "open-after-independent-review-and-offline-acceptance",
     "required_files": [
       {
         "path": "scripts/product_optimization_serial_check_v3.py",
@@ -53,7 +53,7 @@
       },
       {
         "path": "benchmarks/product_optimization_serial_check_v3.py",
-        "sha256": "4b359ed5b29e381a30d75bbbb6294a4f1dfca2a18ee2520b70b73f9d0a113a88"
+        "sha256": "2d8c7a366f5fe7de07ecb54ec850cdbed7d063196302c6d2758a095c3df7a0ea"
       }
     ]
   },
