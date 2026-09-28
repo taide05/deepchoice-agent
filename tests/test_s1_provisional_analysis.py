@@ -63,13 +63,20 @@ async def test_uncertainty_preserves_analysis_without_promoting_support(monkeypa
     rec = result["final_recommendation"]
     row = rec["requirement_assessments"][0]
     assert row["status"] == "unknown" and row["evidence_ids"] == []
-    assert row["provisional_explanation"] == claim
+    if scenario == "cross_language":
+        # A translation can omit a decisive qualifier; do not print the model
+        # wording as a condition while source-language equivalence is unknown.
+        assert "provisional_explanation" not in row
+    else:
+        assert row["provisional_explanation"] == claim
     assert rec["winner"] == "context_dependent" and rec["ranked_options"] == []
     assert "conditional choices" in rec["recommendation"]
     assert "must not enter" not in str(result)
     assert result["citation_verification"]["status_counts"]["verified"] == 0
     assert _citation_coverage({"requirement_assessments": [row]}) == {
-        "total_fields": 2, "cited_fields": 1, "uncited_fields": 1,
+        "total_fields": 2 if scenario != "cross_language" else 1,
+        "cited_fields": 1 if scenario != "cross_language" else 0,
+        "uncited_fields": 1,
     }
 
 

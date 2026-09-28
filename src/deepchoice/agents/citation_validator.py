@@ -3,19 +3,69 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 
 from ..citations import verify_citations
-from ..citations.verifier import MAX_CLAIM_TEXT
+from ..citations.verifier import (
+    MAX_CLAIM_TEXT,
+    _resolve_title,
+    _source_registry,
+)
 from ..utils.decision_contract import (
     PLAIN_REQUIREMENT_GAPS,
     abstain_recommendation,
     is_fixed_validation_only_plan,
+    normalize_decision_branches,
     restrict_action_plan,
 )
+from ..utils.evidence import is_navigation_placeholder
 from ..utils.views import print_agent_output
 
 
-def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
+_MAX_SAVED_EXCERPT_CHARS = 1200
+_MAX_DISPLAY_EXCERPTS = 4
+
+
+def _saved_excerpts(checks, evidence_chains: list[dict], limit: int) -> list[dict[str, str]]:
+    """Show bounded saved source text, never a model-selected or live-verified quote.
+
+    Resolve through the same registry as citation checks.  Refuse an oversized
+    excerpt rather than clipping away a qualifier at the end of its snippet.
+    """
+    if limit <= 0:
+        return []
+    registry, _ = _source_registry(evidence_chains)
+    excerpts: list[dict[str, str]] = []
+    seen: set[tuple[int, int]] = set()
+    for check in checks:
+        if not check.source_title or not check.canonical_url:
+            continue
+        source, error = _resolve_title(check.source_title, registry)
+        if error is not None or source is None or source.canonical_url != check.canonical_url:
+            continue
+        if source.position in seen:
+            continue
+        seen.add(source.position)
+        chain_index, source_index = source.position
+        try:
+            snippet = evidence_chains[chain_index]["sources"][source_index]["snippet"]
+        except (IndexError, KeyError, TypeError):
+            continue
+        if not isinstance(snippet, str) or is_navigation_placeholder(snippet):
+            continue
+        clean = " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", snippet).split())
+        if not clean or len(clean) > _MAX_SAVED_EXCERPT_CHARS:
+            continue
+        excerpts.append({"title": source.title, "text": clean})
+        if len(excerpts) >= limit:
+            break
+    return excerpts
+
+
+def _calibrate_decision(
+    recommendation: dict, verification, query: str,
+    evidence_chains: list[dict] | None = None,
+) -> dict:
     """Withdraw unsupported decision premises without treating unknown as false.
 
     This checks bounded lexical outcomes, not semantic truth. Historical results
@@ -24,6 +74,7 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
     if recommendation.get("decision_basis_version") != "constraint-aware-v1":
         return recommendation
     result = deepcopy(recommendation)
+    evidence_chains = evidence_chains if isinstance(evidence_chains, list) else []
     # Even fully verified lexical citations cannot attest to a deployment drill.
     result["deployment_readiness"] = "unverified"
     is_zh = any("一" <= char <= "鿿" for char in query)
@@ -75,6 +126,7 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
         # Only this pass may create the display-only field. Model input and old
         # projections cannot use it as a second, unchecked assertion channel.
         row.pop("provisional_explanation", None)
+        row.pop("saved_source_excerpts", None)
         path = f"final_recommendation.requirement_assessments[{index}].explanation"
         plain_gap = (
             row.get("status") == "unknown"
@@ -84,7 +136,7 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
         )
         if not plain_gap and not passed(path):
             if provisional(path, row.get("explanation")):
-                pending_analysis[row.get("id")] = row["explanation"]
+                pending_analysis[row.get("id")] = (row["explanation"], by_path.get(path, []))
             row.update(status="unknown", explanation=note, evidence_ids=[])
         if row.get("decision_critical", True) is not False and row.get("status") != "satisfied":
             withdraw = True
@@ -131,6 +183,14 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
                     f"final_recommendation.action_plan[{index}].{field}"
                 ):
                     action_unverified = True
+    branch_paths = []
+    original_branches = result.get("decision_branches", [])
+    for original_index, branch in enumerate(original_branches if isinstance(original_branches, list) else []):
+        if isinstance(branch, dict):
+            branch.pop("saved_source_excerpts", None)
+            normalized = normalize_decision_branches([branch])
+            if normalized:
+                branch_paths.append((original_index, normalized[0]))
     if withdraw:
         result = abstain_recommendation(result, query, note)
     elif action_unverified:
@@ -138,11 +198,48 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
     # Abstention deliberately normalizes away model-supplied extension fields.
     # Attach only freshly checked analysis after that boundary; limited reports
     # normalize again and therefore remove it.
+    # Reserve the bounded report-wide occurrence budget for decision branches
+    # first. Earlier requirement rows otherwise crowd out decisive qualifiers.
+    remaining_excerpts = _MAX_DISPLAY_EXCERPTS
+    branches = result.get("decision_branches", [])
+    for visible_index, branch in enumerate(branches if isinstance(branches, list) else []):
+        if not isinstance(branch, dict):
+            continue
+        if withdraw:
+            if visible_index >= len(branch_paths):
+                continue
+            original_index, expected = branch_paths[visible_index]
+            if branch.get("option") != expected["option"] or branch.get("condition") != expected["condition"]:
+                continue
+        else:
+            original_index = visible_index
+        path = f"final_recommendation.decision_branches[{original_index}].condition"
+        checks = by_path.get(path, [])
+        cross_language = any(check.reason.value == "cross_language" for check in checks)
+        if cross_language:
+            # A translated model condition may have omitted a decisive qualifier.
+            # Do not repeat it as a usable branch while its equivalence is unknown.
+            branch["condition"] = (
+                "适用前提待核对来源原文与当前工作负载。" if is_zh else
+                "Applicability requires checking the original source and this workload."
+            )
+        excerpts = _saved_excerpts(checks, evidence_chains, min(2, remaining_excerpts)) if cross_language else []
+        if excerpts:
+            branch["saved_source_excerpts"] = excerpts
+            remaining_excerpts -= len(excerpts)
     for row in result.get("requirement_assessments", []):
         if isinstance(row, dict) and row.get("status") == "unknown":
             analysis = pending_analysis.get(row.get("id"))
             if analysis:
-                row["provisional_explanation"] = analysis
+                cross_language = any(check.reason.value == "cross_language" for check in analysis[1])
+                if not cross_language:
+                    row["provisional_explanation"] = analysis[0]
+                excerpts = (_saved_excerpts(analysis[1], evidence_chains,
+                                            min(2, remaining_excerpts))
+                            if cross_language else [])
+                if excerpts:
+                    row["saved_source_excerpts"] = excerpts
+                    remaining_excerpts -= len(excerpts)
     return result
 
 
@@ -190,6 +287,7 @@ class CitationValidatorAgent:
             output["final_recommendation"] = _calibrate_decision(
                 recommendation, verification,
                 query,
+                evidence_chains if isinstance(evidence_chains, list) else [],
             )
         return output
 

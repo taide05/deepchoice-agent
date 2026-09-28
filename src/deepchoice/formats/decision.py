@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -29,6 +30,29 @@ def _dict_items(value: Any, limit: int) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)][:limit]
+
+
+def _code(value: str) -> str:
+    """Keep untrusted saved-source text literal in the Markdown report."""
+    longest = max((len(match.group()) for match in re.finditer(r"`+", value)), default=0)
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{value}{fence}"
+
+
+def _render_saved_excerpts(item: dict[str, Any], lang: str) -> list[str]:
+    lines: list[str] = []
+    for excerpt in _dict_items(item.get("saved_source_excerpts"), 2):
+        title = _text(excerpt.get("title"))
+        content = _text(excerpt.get("text"))
+        if not title or not content or len(content) > 1200:
+            continue
+        label = (
+            "保存的来源片段（空白已规范化；不证明原页完整或适用于本场景）"
+            if lang == "zh" else
+            "Saved source excerpt (whitespace normalized; not proof of full-page context or applicability)"
+        )
+        lines.append(f"  - {label}：{_code(title)} — {_code(content)}")
+    return lines
 
 
 def render_decision_details(recommendation: Any, lang: str) -> list[str]:
@@ -94,6 +118,8 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
                     "Analysis awaiting independent verification (not a satisfied requirement)"
                 )
                 lines.append(f"  - **{label}:** {analysis}")
+            if status == "unknown":
+                lines.extend(_render_saved_excerpts(item, lang))
         lines.append("")
 
     if branches:
@@ -104,9 +130,10 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             option = _text(item.get("option")) or ("当前方案" if lang == "zh" else "Current option")
             condition = _text(item.get("condition")) or ("条件待明确" if lang == "zh" else "Condition not specified")
             if lang == "zh":
-                lines.append(f"- **{option}**：仅当（待验证条件）{condition}")
+                lines.append(f"- **{option}**：适用条件（待核查，不能仅据此选型）：{condition}")
             else:
-                lines.append(f"- **{option}**: Only if (condition to be verified): {condition}")
+                lines.append(f"- **{option}**: Applicability condition (unverified; not a choice by itself): {condition}")
+            lines.extend(_render_saved_excerpts(item, lang))
         lines.append("")
 
     if action_plan:

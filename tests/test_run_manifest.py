@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v7"
+    assert first.report.template_version == "evidence-first-v8"
     assert first.scoring_policy_version == "source-score-v6"
     assert {
         retriever.retriever_id: retriever.version
@@ -54,7 +54,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         if retriever.retriever_id != "chroma"
     )
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v5"
+    assert first.citation_policy_version == "deterministic-citation-v6"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -86,7 +86,7 @@ def test_historical_chroma_v1_is_readable_but_cannot_resume():
 @pytest.mark.parametrize("policy_version", [
     "deterministic-citation-v1", "deterministic-citation-v2",
     "deterministic-citation-v3",
-    "deterministic-citation-v4",
+    "deterministic-citation-v4", "deterministic-citation-v5",
 ])
 def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
@@ -136,7 +136,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v3"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v5"
+    assert registry.citation_policy_version == "deterministic-citation-v6"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v9",
@@ -151,9 +151,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v8",
-        "evidence_first": "evidence-first-v7",
-        "comparison_matrix": "comparison-matrix-v6",
+        "what_why_how": "what-why-how-v9",
+        "evidence_first": "evidence-first-v8",
+        "comparison_matrix": "comparison-matrix-v7",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 

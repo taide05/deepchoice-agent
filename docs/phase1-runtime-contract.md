@@ -95,7 +95,13 @@ citation_verification 保留校准前声明的检查证据；校准只在本次 
 
 普通报告不把“尚未核验”解释成“没有可读分析”：原已判断需求的 explanation 在完整检查后，
 若只含 verified/unknown/unreachable，且原因仅为词法支持、网络/HTTP/跨语言不确定、
-正文不足或公开不可达，可由引用节点生成显示专用 provisional_explanation。整段须不超过
+正文不足或公开不可达，可由引用节点生成显示专用 provisional_explanation；跨语言 unknown
+例外：不能把可能遗漏来源限定条件的模型译述当作分析继续展示，条件分支改为固定的适用性待核查
+提示。对这类跨语言检查，引用节点可从同一次运行已保存、经引用来源注册表重新绑定且 URL 一致的
+来源 snippet 回填完整空白规范化片段；gist/paste、导航占位和超过 1200 字的片段不展示，不裁切，
+每处最多两段、全报告最多四次展示，先分配条件分支。片段只是供人工核对的保存内容，不是新外呼、
+原页完整性、当前场景适用性或语义验证；不得因此提升需求状态、Winner、部署验收或引用通过数。
+其他允许原因仍可生成 provisional_explanation。整段须不超过
 MAX_CLAIM_TEXT（500 字符，含标记），任何检查溢出、缺引用、unsupported 或 source_limit
 均不能保留。主 explanation 改为未知提示、status 为 unknown、evidence_ids 清空，具体胜者
 和排名仍撤回。三格式在分析旁明确“待独立核验，不代表需求已满足”；自审覆盖计数包含该字段。

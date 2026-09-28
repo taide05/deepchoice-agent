@@ -4,6 +4,14 @@
 
 ### Changed
 
+For citation-v6 and report templates v9/v8/v7, cross-language-unknown requirement analysis and
+decision-branch conditions no longer repeat the model's unverified translation. The report instead
+marks applicability unresolved and may show bounded, source-registry-bound excerpts from the saved
+run evidence (no new fetch). This withdraws the false P01 WAL/P04 Beat conditions in offline replay
+of the 2026-09-27 serial-check-v2 snapshots; it does not establish the correct workload condition,
+semantic citation support, or live report quality. Historical identities remain readable, not
+same-run resumable; no paid run or new serial card accompanies this change.
+
 Preserve original request context in query analysis/adaptation (both prompts v2). A shared allowlisted
 projection supplies the original query, free-text scene, candidates, constraints and frozen questions,
 separately from coarse classification and retry/HITL targets. This fixes deterministic input loss;

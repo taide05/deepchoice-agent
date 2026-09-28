@@ -201,3 +201,157 @@ def test_prompt_preserves_language_qualifications_and_primary_source_preference(
     for rule in ("SOURCE-LANGUAGE EXCEPTION", "translation equivalence", "negation",
                  "prefer applicable original documentation", "never imply a deployment test has already passed"):
         assert rule in SYNTHESIS_PROMPT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case,source_text,model_claim,qualifier,url", [
+    (
+        "P04",
+        "Celery production uses a broker and workers. Beat is for recurring tasks; monitoring is optional.",
+        "Celery 需要 broker、worker、Beat 和监控。[Source: Source Docs]",
+        "Beat is for recurring tasks",
+        "https://docs.example.org/p04",
+    ),
+    (
+        "P01",
+        "WAL lets readers and a writer proceed concurrently. It can be slower for mostly-read workloads and adds sidecar files.",
+        "SQLite 必须启用 WAL 以提升读写并发。[Source: Source Docs]",
+        "can be slower for mostly-read workloads",
+        "https://docs.example.org/p01",
+    ),
+])
+async def test_unverified_applicability_keeps_complete_saved_source_separate_from_model_hypothesis(
+    monkeypatch, case, source_text, model_claim, qualifier, url,
+):
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=source_text, headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state = _state(model_claim, "Source Docs", "Actual workload applicability", url)
+    state["evidence_chains"][0]["sources"][0]["snippet"] = source_text
+    state["final_recommendation"]["decision_branches"] = [
+        {"option": "Celery" if case == "P04" else "SQLite", "condition": model_claim},
+    ]
+    result = await CitationValidatorAgent().run(state)
+    rec = result["final_recommendation"]
+    report = "\n".join(render_decision_details(rec, "zh"))
+    assert rec["winner"] == "context_dependent"
+    assert rec["deployment_readiness"] == "unverified"
+    assert rec["requirement_assessments"][0]["status"] == "unknown"
+    assert "provisional_explanation" not in rec["requirement_assessments"][0]
+    assert model_claim not in report
+    assert "适用条件（待核查，不能仅据此选型）" in report
+    assert "仅当（待验证条件）" not in report
+    assert qualifier in report
+    assert "保存的来源片段" in report
+    assert "不证明原页完整或适用于本场景" in report
+    assert rec["decision_branches"][0]["saved_source_excerpts"][0]["text"] == source_text
+
+
+@pytest.mark.asyncio
+async def test_many_earlier_unknown_rows_cannot_hide_beat_qualifier_or_bloat_report(monkeypatch):
+    beat = "A broker and workers run tasks. Beat is for recurring tasks, not every queue."
+    sources = [
+        {"title": f"Earlier Docs {index}", "url": f"https://docs.example.org/earlier-{index}",
+         "snippet": f"Earlier source {index} discusses a separate workload limit."}
+        for index in range(9)
+    ] + [{"title": "Celery Docs", "url": "https://docs.example.org/celery", "snippet": beat}]
+
+    async def fetch(_source, url, **kwargs):
+        source = next(item for item in sources if item["url"] == url)
+        return httpx.Response(200, text=source["snippet"], headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    rows = [{
+        "id": f"C{index}", "requirement": f"Requirement {index}",
+        "status": "satisfied", "decision_critical": True,
+        "explanation": f"前置条件 {index} 已满足。[Source: Earlier Docs {index}]",
+        "evidence_ids": [index + 1],
+    } for index in range(9)]
+    rows.append({
+        "id": "C9", "requirement": "Queue scheduling boundary", "status": "satisfied",
+        "decision_critical": True,
+        "explanation": "Celery 总是需要 Beat。[Source: Celery Docs]", "evidence_ids": [10],
+    })
+    state = {
+        "task": {"query": "比较后台任务方案"},
+        "evidence_chains": [{"sources": sources}],
+        "final_recommendation": {
+            "decision_basis_version": "constraint-aware-v1", "winner": "context_dependent",
+            "requirement_assessments": rows,
+            "decision_branches": [
+                {"option": "Alternative", "condition": "先核查另一方案。[Source: Earlier Docs 0]"},
+                {"option": "Celery", "condition": "Celery 必须部署 Beat。[Source: Celery Docs]"},
+            ],
+            "ranked_options": [], "recommendation": "", "action_plan": [],
+        },
+    }
+    rec = (await CitationValidatorAgent().run(state))["final_recommendation"]
+    report = "\n".join(render_decision_details(rec, "zh"))
+    assert "Celery 必须部署 Beat" not in report
+    assert "Celery 总是需要 Beat" not in report
+    assert beat in report
+    assert rec["decision_branches"][1]["saved_source_excerpts"][0]["text"] == beat
+    assert sum(len(item.get("saved_source_excerpts", [])) for item in
+               rec["requirement_assessments"] + rec["decision_branches"]) <= 4
+    assert rec["requirement_assessments"][9]["status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_removed_branch_before_cross_language_claim_does_not_shift_check_binding(monkeypatch):
+    source_text = "Beat is for recurring tasks."
+    url = "https://docs.example.org/beat"
+
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=source_text, headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state = _state("Beat  总是必需。[Source: Celery Docs]", "Celery Docs", "Scheduler", url)
+    state["evidence_chains"][0]["sources"][0]["snippet"] = source_text
+    state["final_recommendation"]["decision_branches"] = [
+        {"option": "", "condition": "invalid branch"},
+        {"option": "Celery", "condition": "Beat  总是必需。[Source: Celery Docs]"},
+    ]
+    rec = (await CitationValidatorAgent().run(state))["final_recommendation"]
+    assert len(rec["decision_branches"]) == 1
+    assert "总是必需" not in rec["decision_branches"][0]["condition"]
+    assert rec["decision_branches"][0]["saved_source_excerpts"][0]["text"] == source_text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url,snippet", [
+    ("https://gist.github.com/user/id", "FORGED SOURCE FACT"),
+    ("https://docs.example.org/too-long", "x" * 1201),
+])
+async def test_model_forged_or_ineligible_saved_source_cannot_become_report_evidence(
+    monkeypatch, url, snippet,
+):
+    async def no_fetch(*args, **kwargs):
+        raise TimeoutError("safe fetch unavailable")
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", no_fetch)
+    state = _state("Questionable claim. [Source: Source Docs]", "Source Docs", "Boundary", url)
+    row = state["final_recommendation"]["requirement_assessments"][0]
+    row["saved_source_excerpts"] = [{"title": "fake", "text": "FORGED EXCERPT"}]
+    state["final_recommendation"]["decision_branches"] = [{
+        "option": "Option A", "condition": "Questionable claim. [Source: Source Docs]",
+        "saved_source_excerpts": [{"title": "fake", "text": "FORGED EXCERPT"}],
+    }]
+    state["evidence_chains"][0]["sources"][0]["snippet"] = snippet
+    result = await CitationValidatorAgent().run(state)
+    report = "\n".join(render_decision_details(result["final_recommendation"], "zh"))
+    assert "FORGED EXCERPT" not in report
+    assert "FORGED SOURCE FACT" not in report
+    assert "saved_source_excerpts" not in result["final_recommendation"]["decision_branches"][0]
+
+
+def test_saved_excerpt_markdown_delimiter_cannot_escape_literal_display():
+    rec = {"decision_branches": [{
+        "option": "Celery", "condition": "Check workload",
+        "saved_source_excerpts": [{"title": "Source", "text": "Beat ```for recurring tasks``` only"}],
+    }]}
+    report = "\n".join(render_decision_details(rec, "en"))
+    assert "````Beat ```for recurring tasks``` only````" in report
