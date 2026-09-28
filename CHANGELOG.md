@@ -4,6 +4,13 @@
 
 ### Changed
 
+Synthesis v11 freezes explicit user scene needs as separately assessed decision rows. P01 backup
+and basic full-text search, and P04 no-silent-loss across restart, can no longer disappear merely
+because they were omitted from the model's analysis; missing hard rows withdraw a Winner. Scene
+complexity preferences remain visible but do not become hard vetoes. Offline positive/negative
+counterexamples and structural checks do not establish that cited source conditions fit the actual
+workload or that a new model-generated report improved. No paid run or new serial card was started.
+
 Chroma v4 now keeps one explicit, non-negated scene requirement as a bounded local search
 dimension, prefixed by the stated candidates. For the reviewed SQLite FTS5 seed only, a
 full-text-search query can replace a navigation/deep-command excerpt with the actual overview

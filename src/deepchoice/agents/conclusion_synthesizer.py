@@ -59,7 +59,7 @@ Disputed findings: {disputed_count}
 
 ## Language
 - Output explanatory/reasoning text (recommendation, rationale, trade-off findings, evidence_summary, confidence_rationale, scene_fit_note) in the SAME language as the original query.
-- SOURCE-LANGUAGE EXCEPTION: When decisive evidence is in another language, keep the source-backed factual clause in that source's language in EVERY cited factual field, especially requirement_assessments.explanation and winner_rationale. Keep requirement labels, unresolved questions and non-factual verification instructions in the query language. Do not mix a translated assertion into the same factual clause or append an uncited translation: the deterministic checker cannot establish translation equivalence. Use short, directly supported assertions preserving the source's conditions, qualifications and negation, not disconnected keyword quotations. A matched source-language clause is lexical support only, not proof that the user's requirement is satisfied. If applying it to this workload needs an unmeasured assumption, keep status unknown and a conditional branch; never imply a deployment test has already passed.
+- SOURCE-LANGUAGE EXCEPTION: When decisive evidence is in another language, keep the source-backed factual clause in that source's language in EVERY cited factual field, especially requirement_assessments.explanation and winner_rationale. Keep requirement labels, unresolved questions and non-factual verification instructions in the query language. Do not mix a translated assertion into the same factual clause or append an uncited translation: the deterministic checker cannot establish translation equivalence. Use short, directly supported assertions preserving the source's conditions, qualifications and negation, not disconnected keyword quotations. A matched source-language clause is lexical support only, not proof that the user's requirement is satisfied. For each scene-requirement row, separately assess whether the source's own conditions match the stated workload; duration, daily volume or a citation alone cannot establish an unmeasured operating condition. If applying it to this workload needs an unmeasured assumption, keep status unknown and a conditional branch; never imply a deployment test has already passed.
 - Technical terms (framework names, API names, algorithms, protocol names), source titles, and benchmark data MUST stay in their original language — do NOT translate them.
 - This applies to the "name" field in ranked_options as well: keep the framework/library name as-is.
 
@@ -68,7 +68,7 @@ Disputed findings: {disputed_count}
    For decisive product behavior prefer applicable original documentation over blogs, summaries or sample code. Source identity and score do not prove a claim: inspect the supplied snippet, preserve version/configuration limits, and do not invent an official alternative when none is supplied. Gists/paste snippets are excluded from conclusion bindings; if no suitable evidence remains, record a gap. Do not infer relative performance, workload thresholds or successful recovery rehearsals from generic capability documentation.
 2. Acknowledge disputed findings — don't pretend they don't exist
 3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong evidence for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it. It is NEVER a license to invent a concrete stack the query did not name: "team" does not imply a Django/.NET stack, and "enterprise" does not imply any specific framework — rate constraint-fit only against constraints actually stated or directly entailed by the query. For a framework-agnostic vs framework-specific comparison, a candidate whose NAME embeds a framework (e.g. "Django Migrations") does NOT imply the scene uses that framework — it is merely a candidate label. Unless the query or scene explicitly commits to a specific stack ("a Django project", "using SQLAlchemy"), default to the framework-agnostic tool (e.g. Alembic over Django Migrations, since Alembic works with any SQLAlchemy project).
-4. CONSTRAINT ASSESSMENT (MANDATORY): Assess every listed C/A/Q requirement by its exact stable ID. C items are frozen user-request constraints. A items are analysis-derived constraints or explicit operational-policy obligations and MUST remain visibly separate from C items. Q items are decision questions. C, A, and frozen-sub-question Q items are always decision-critical. Only an analysis-sub-question Q may set decision_critical=false, and only when answering it cannot change the choice. For satisfied or contradicted, cite the supporting source numbers in both explanation and evidence_ids. If a requirement is absent from the evidence, malformed, disputed, or lacks a directly usable evidence snippet, mark it unknown. A source binding proves only that the source and snippet exist; it does not prove semantic truth.
+4. CONSTRAINT ASSESSMENT (MANDATORY): Assess every listed C/A/Q requirement by its exact stable ID. C items are frozen user-request constraints or explicit user scene requirements; the scene's descriptive facts are context, not source evidence. A items are analysis-derived constraints or explicit operational-policy obligations and MUST remain visibly separate from C items. Q items are decision questions. Frozen C, hard scene-requirement C, A and frozen-sub-question Q items are decision-critical. A scene-preference C is a tilt to discuss in trade-offs, not an automatic veto; only it or an analysis-sub-question Q may set decision_critical=false. For satisfied or contradicted, cite the supporting source numbers in both explanation and evidence_ids. If a requirement is absent from the evidence, malformed, disputed, or lacks a directly usable evidence snippet, mark it unknown. A source binding proves only that the source and snippet exist; it does not prove semantic truth.
 5. If evidence is insufficient for a definitive answer, say so honestly
 6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
    CLAUSE COVERAGE: Each independent clause before AND after a semicolon (; or ；) must have its own supporting [[N]], e.g. "A supports X [[1]]; B supports Y [[2]]." A citation at the end of a paragraph or comparison does NOT cover preceding sentences or semicolon clauses. The recommendation's opening sentence AND closing summary must each cite their own evidence. Before returning JSON, check every factual/reasoning field listed above for sentence and semicolon-clause coverage. If the supplied evidence cannot support an assertion, omit that assertion and record the evidence gap in unresolved_questions; never borrow a nearby citation merely to satisfy coverage. Technology names, ranks, enum values and unresolved_questions are labels/gaps, not factual prose requiring fabricated citations.
@@ -182,6 +182,100 @@ def _normalized_text_list(value) -> list[str]:
     return result
 
 
+_SCENE_SENTENCE_SPLIT = re.compile(r"[，,；;。\n]+|(?<!\d)\.(?!\d)(?:\s+|$)")
+_SCENE_EXPLICIT_NEED = re.compile(
+    r"需要|必须|要求|不能|不得|禁止|避免|不希望|不想|"
+    r"\b(?:need|needs|require|requires|must|cannot|can't|prohibit|avoid|"
+    r"prefer)\b|\bwould rather\b",
+    re.IGNORECASE,
+)
+_SCENE_NO_NEED = re.compile(
+    r"不需要|无需|不要求|不必|不是必须|并非必须|非必须|没有要求|未要求|"
+    r"\b(?:do not|does not|don't|doesn't|no)\s+(?:need|require)\b|"
+    r"\b(?:need not|not required)\b",
+    re.IGNORECASE,
+)
+_SCENE_PREFERENCE = re.compile(
+    r"(?:不希望|不想).{0,30}(?:过早|复杂|运维负担|基础设施|维护成本)|"
+    r"\b(?:prefer|would rather)\b.{0,40}"
+    r"\b(?:lower cost|less complexity|less overhead|simpler infrastructure)\b",
+    re.I,
+)
+_SCENE_HARD_OUTCOME = re.compile(
+    r"丢失|遗失|静默|泄露|损坏|不可恢复|"
+    r"\b(?:data loss|task loss|job loss|lost data|lost tasks|"
+    r"silently lose|silently drop|leak|corrupt)\b",
+    re.I,
+)
+_SCENE_OUTPUT_DIRECTIVE = re.compile(
+    r"^(?:(?:请你|请|本次回答|本次报告|本报告|此报告|你的回答)\s*)"
+    r"(?:需要|必须|要求)(?:用|以).{0,30}(?:回答|回复|撰写|输出)|"
+    r"^(?:(?:请你|请|本次回答|本次报告|本报告|此报告|你的回答)\s*)"
+    r"(?:需要|必须|要求)(?:在|于).{0,30}(?:给出|提交|完成).{0,30}(?:建议|报告|答复)|"
+    r"^(?:for this answer|for this report)\s+(?:we\s+)?"
+    r"\b(?:need|needs|require|requires|must)\b\s+"
+    r"(?:a |an |the )?(?:answer|response|report|recommendation)\b",
+    re.I,
+)
+_SCENE_NEED_LIST = re.compile(
+    r"^(?P<prefix>.*?(?:需要|必须|要求|\b(?:need|needs|require|requires|must)\b))"
+    r"(?P<items>.+)$",
+    re.IGNORECASE,
+)
+_SCENE_NEED_JOIN = re.compile(r"(?:与|和|以及|及|、|且|并且|\band\b)", re.IGNORECASE)
+_SCENE_CONTRAST_SPLIT = re.compile(
+    r"但(?:是)?|不过|而(?=不?需要|无需|不要求|必须|要求|不能|不得|禁止|避免|不希望|不想)|"
+    r"\b(?:but|however)\b|"
+    r"(?:且|并且|同时|以及|\band\b)(?=\s*(?:不?需要|无需|不要求|必须|要求|不能|不得|禁止|"
+    r"避免|不希望|不想|need|must|require|cannot|can't|avoid|do not need|"
+    r"does not need|don't need|doesn't need|no need|need not|not required))",
+    re.IGNORECASE,
+)
+
+
+def _scene_decision_requirements(scene_context) -> list[str]:
+    """Freeze explicit scene needs without promoting descriptive scene facts.
+
+    Split only a plainly enumerated positive need. A source or model may not
+    silently drop the second capability in ``需要备份与基本全文检索``. This is a
+    lexical capture of user requirements, not a judgment that any candidate
+    satisfies them. Oversized clauses become an explicit unknown gate rather
+    than disappearing from the decision contract.
+    """
+    if not isinstance(scene_context, str):
+        return []
+    requirements: list[str] = []
+    for raw_clause in _SCENE_SENTENCE_SPLIT.split(scene_context[:4000]):
+        clause = " ".join(raw_clause.split()).strip()
+        if not clause or not _SCENE_EXPLICIT_NEED.search(clause):
+            continue
+        # Contrasted requirements must be assessed separately. In particular,
+        # ``不能丢失但不想引入复杂设施`` is not one satisfiable requirement.
+        parts = _SCENE_CONTRAST_SPLIT.split(clause)
+        for part in parts:
+            part = part.strip()
+            if (not part or _SCENE_NO_NEED.search(part)
+                    or _SCENE_OUTPUT_DIRECTIVE.search(part)
+                    or not _SCENE_EXPLICIT_NEED.search(part)):
+                continue
+            match = _SCENE_NEED_LIST.match(part)
+            if match and not re.search(r"不能|不得|禁止|避免|不希望|不想|cannot|can't|avoid", part, re.I):
+                pieces = [piece.strip() for piece in _SCENE_NEED_JOIN.split(match["items"])]
+                separator = (" " if match["prefix"][-1:].isascii()
+                             and match["prefix"][-1:].isalpha() else "")
+                proposed = ([match["prefix"] + separator + piece for piece in pieces]
+                            if len(pieces) > 1 and all(pieces) else [part])
+            else:
+                proposed = [part]
+            for item in proposed:
+                item = item.strip()
+                if len(item) > 500:
+                    item = "场景中有超过500字的显式要求，尚未完成逐项评估。"
+                if item and item not in requirements:
+                    requirements.append(item)
+    return requirements
+
+
 _EXPLICIT_MISSING_CONTEXT_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
@@ -242,17 +336,24 @@ def _decision_requirements(
     analysis_constraints,
     task_sub_questions,
     analysis_sub_questions,
+    scene_context=None,
 ) -> tuple[list[dict], bool]:
     """Build stable C/A/Q requirements without merging provenance classes."""
     frozen = _normalized_text_list(task_constraints)
     frozen_keys = {item.casefold() for item in frozen}
+    scene_requirements = [
+        item for item in _scene_decision_requirements(scene_context)
+        if item.casefold() not in frozen_keys
+    ]
+    scene_keys = {item.casefold() for item in scene_requirements}
     analysis = [
         item for item in _normalized_text_list(analysis_constraints)
-        if item.casefold() not in frozen_keys
+        if item.casefold() not in frozen_keys | scene_keys
     ]
     operational_text = " ".join([
         _prompt_data(query, 4000),
         *frozen,
+        *scene_requirements,
         *analysis,
     ]).casefold()
     delivery_terms = (
@@ -336,6 +437,12 @@ def _decision_requirements(
         *[
             {"id": f"C{index}", "requirement": item, "kind": "frozen_constraint"}
             for index, item in enumerate(frozen, 1)
+        ],
+        *[
+            {"id": f"C{index}", "requirement": item,
+             "kind": ("scene_preference" if _SCENE_PREFERENCE.search(item)
+                      and not _SCENE_HARD_OUTCOME.search(item) else "scene_requirement")}
+            for index, item in enumerate(scene_requirements, len(frozen) + 1)
         ],
         *[
             {"id": f"A{index}", "requirement": item, "kind": kind}
@@ -453,7 +560,7 @@ def _normalize_decision_contract(
         if status == "unknown" and not explanation:
             explanation = "Unknown: the supplied evidence does not answer this requirement."
         critical = True
-        if (
+        if requirement["kind"] == "scene_preference" or (
             requirement["kind"] == "analysis_sub_question"
             and item.get("decision_critical") is False
         ):
@@ -729,6 +836,7 @@ class ConclusionSynthesizerAgent:
             research_state.get("constraints", []),
             task.get("sub_questions", []),
             research_state.get("sub_questions", []),
+            task.get("scene_context", ""),
         )
 
         print_agent_output(
