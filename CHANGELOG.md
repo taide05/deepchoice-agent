@@ -4,6 +4,14 @@
 
 ### Changed
 
+The closed serial-check-v4 machine card binds candidate `f021776` and the stopped v3
+result and ledger across their two local roots. It changes only diagnostic case order
+to P04/P08/P01 so an already observed P01 arXiv timeout cannot prevent P08 from being
+attempted first; strict stop rules, three-case denominator, 107/156 starting ledger,
+and zero concurrency reserve remain. Paid entry points reject a closed card. No new
+research or quality claim follows from creating this card. Its 26 focused tests and
+the full 2,397-test suite passed (603.23 seconds); this is offline control evidence.
+
 Citation policy v8 keeps critical mixed statements unknown and withdraws their unchecked model
 wording, but can expose bounded, registry/URL-rebound saved source excerpts for cited
 cross-language or qualifier-uncertain portions even when the same explanation also contains an
