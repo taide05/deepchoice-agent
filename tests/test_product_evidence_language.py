@@ -204,6 +204,51 @@ def test_prompt_preserves_language_qualifications_and_primary_source_preference(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("source_text,model_claim,url", [
+    (
+        "Beat for recurring tasks. Celery workers execute queued tasks.",
+        "Beat is required for Celery tasks.",
+        "https://docs.example.org/p04-beat",
+    ),
+    (
+        "If many threads and/or processes need to write the database at the same instant "
+        "(and they cannot queue up and take turns) then it is best to select a "
+        "client/server database engine.",
+        "Many concurrent writers require a client/server database engine.",
+        "https://docs.example.org/p01-writers",
+    ),
+])
+async def test_same_language_qualifier_gap_withdraws_decisive_row_and_branch_but_keeps_source(
+    monkeypatch, source_text, model_claim, url,
+):
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=source_text, headers={"content-type": "text/plain"},
+                              request=httpx.Request("GET", url))
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state = _state(model_claim, "Source Docs", "Scene fit", url)
+    state["task"]["query"] = "Compare these options for this workload"
+    state["evidence_chains"][0]["sources"][0]["snippet"] = source_text
+    state["final_recommendation"]["decision_branches"] = [
+        {"option": "Option A", "condition": f"{model_claim} [Source: Source Docs]"},
+    ]
+    result = await CitationValidatorAgent().run(state)
+    checks = result["citation_verification"]["checks"]
+    assert [(check["status"], check["reason"]) for check in checks] == [
+        ("unknown", "qualifier_unverified"), ("unknown", "qualifier_unverified"),
+    ]
+    rec = result["final_recommendation"]
+    assert rec["requirement_assessments"][0]["status"] == "unknown"
+    assert "provisional_explanation" not in rec["requirement_assessments"][0]
+    assert rec["decision_branches"][0]["condition"] == (
+        "Applicability requires checking the original source and this workload."
+    )
+    report = "\n".join(render_decision_details(rec, "en"))
+    assert model_claim not in report
+    assert source_text in report
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("case,source_text,model_claim,qualifier,url", [
     (
         "P04",

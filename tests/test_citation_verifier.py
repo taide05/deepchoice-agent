@@ -9,7 +9,7 @@ from deepchoice.budget import BudgetExceededError, BudgetResource
 from deepchoice.citations.contracts import (
     CitationCheck, CitationStatusCounts, CitationVerification,
 )
-from deepchoice.citations.verifier import canonicalize_source_url, verify_citations
+from deepchoice.citations.verifier import _support_status, canonicalize_source_url, verify_citations
 
 
 def _response(status: int, body: str = "") -> httpx.Response:
@@ -185,6 +185,152 @@ async def test_explainable_support_heuristics(monkeypatch, claim, body, expected
     )
     check = verification.checks[0]
     assert (check.status.value, check.reason.value) == (expected_status, expected_reason)
+
+
+@pytest.mark.parametrize(
+    ("claim", "source", "status", "reason"),
+    [
+        (
+            "Beat is required for Celery tasks.",
+            "Beat for recurring tasks. Celery workers execute queued tasks.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "Beat is for recurring tasks.",
+            "Beat for recurring tasks. Celery workers execute queued tasks.",
+            "verified", "lexical_support",
+        ),
+        (
+            "Beat is for recurring tasks.",
+            "Beat is for recurring tasks, not every queue.",
+            "verified", "lexical_support",
+        ),
+        (
+            "Many concurrent writers require a client/server database engine.",
+            "If many threads and/or processes need to write the database at the same instant "
+            "(and they cannot queue up and take turns) then it is best to select a database "
+            "engine that supports that capability, which always means a client/server database engine.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "If many threads or processes need to write the database at the same instant "
+            "and cannot queue, a client/server database engine is best.",
+            "If many threads and/or processes need to write the database at the same instant "
+            "(and they cannot queue up and take turns) then it is best to select a database "
+            "engine that supports that capability, which always means a client/server database engine.",
+            "verified", "lexical_support",
+        ),
+        (
+            "Celery is needed for heavy background computation.",
+            "If you need to perform heavy background computation and you don't necessarily "
+            "need it to be run by the same process, you might benefit from Celery.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "If you need heavy background computation and don't necessarily need the same process, "
+            "you might benefit from Celery.",
+            "If you need to perform heavy background computation and you don't necessarily "
+            "need it to be run by the same process, you might benefit from Celery.",
+            "verified", "lexical_support",
+        ),
+        (
+            "If you need heavy background computation and don't need the same process, "
+            "you might benefit from Celery.",
+            "If you need to perform heavy background computation and you don't necessarily "
+            "need it to be run by the same process, you might benefit from Celery.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "If you do not need heavy background computation but need the same process, "
+            "you might benefit from Celery.",
+            "If you need to perform heavy background computation and you don't necessarily "
+            "need it to be run by the same process, you might benefit from Celery.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "When heavy background tasks are needed, Celery is required.",
+            "When heavy background tasks are needed, Celery may help.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "If many writers run concurrently, use a client/server database.",
+            "If many writers run concurrently and require independent transactions, "
+            "use a client/server database.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "Beat is required for Celery tasks.",
+            "Beat is required. Celery workers execute tasks.",
+            "unknown", "content_insufficient",
+        ),
+        (
+            "Celery workers execute queued tasks.",
+            "Celery workers execute queued tasks, not scheduled tasks.",
+            "verified", "lexical_support",
+        ),
+        (
+            "If many writers require strict low latency, use a client/server database.",
+            "If many writers require strict low latency and many writers need independent "
+            "transactions, use a client/server database.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "Beat runs recurring tasks when it is configured.",
+            "Beat runs recurring tasks when configured.",
+            "verified", "lexical_support",
+        ),
+        (
+            "Beat is required for scheduled tasks.",
+            "Beat must run for scheduled tasks.",
+            "verified", "lexical_support",
+        ),
+        (
+            "If many writers need low latency, use a client/server database.",
+            "If many writers need high latency, use a client/server database.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "If Celery tasks are one-off, use Beat.",
+            "If Celery tasks are recurring, use Beat.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "Beat is required for Celery tasks.",
+            "Beat is required for recurring tasks.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "Beat is required for Celery tasks.",
+            "Beat is required for scheduled Celery tasks. Beat is optional for regular Celery tasks.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "SQLite supports full-text search.",
+            "SQLite includes FTS5 for full-text search.",
+            "verified", "lexical_support",
+        ),
+        (
+            "Beat runs recurring tasks.",
+            "Beat runs for recurring tasks.",
+            "verified", "lexical_support",
+        ),
+        (
+            "Beat is required for all Celery tasks and handles recurring schedules.",
+            "Beat is required for recurring Celery tasks.",
+            "unknown", "qualifier_unverified",
+        ),
+        (
+            "Beat is required for Celery tasks, including recurring schedules.",
+            "Beat is required for recurring Celery tasks.",
+            "unknown", "qualifier_unverified",
+        ),
+    ],
+)
+def test_frozen_p01_p04_source_qualifiers_are_not_upgraded_to_decisive_facts(
+    claim, source, status, reason,
+):
+    outcome = _support_status(claim, source)
+    assert (outcome[0].value, outcome[1].value) == (status, reason)
 
 
 @pytest.mark.asyncio

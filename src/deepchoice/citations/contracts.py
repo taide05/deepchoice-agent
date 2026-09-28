@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-CITATION_POLICY_VERSION = "deterministic-citation-v6"
+CITATION_POLICY_VERSION = "deterministic-citation-v7"
 
 
 class _FrozenContract(BaseModel):
@@ -32,6 +32,7 @@ class CitationReason(StrEnum):
     HTTP_UNCERTAIN = "http_uncertain"
     CONTENT_INSUFFICIENT = "content_insufficient"
     CROSS_LANGUAGE = "cross_language"
+    QUALIFIER_UNVERIFIED = "qualifier_unverified"
     NUMERIC_MISMATCH = "numeric_mismatch"
     NEGATION_CONFLICT = "negation_conflict"
     LEXICAL_MISMATCH = "lexical_mismatch"
@@ -61,6 +62,7 @@ class CitationVerification(_FrozenContract):
         "deterministic-citation-v1", "deterministic-citation-v2",
         "deterministic-citation-v3", "deterministic-citation-v4",
         "deterministic-citation-v5", "deterministic-citation-v6",
+        "deterministic-citation-v7",
     ] = CITATION_POLICY_VERSION
     status_counts: CitationStatusCounts
     checks: tuple[CitationCheck, ...] = Field(max_length=96)

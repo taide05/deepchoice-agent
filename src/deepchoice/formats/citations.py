@@ -47,7 +47,7 @@ def number_sources(chains: list[dict]) -> list[dict]:
     allowed_reasons = {
         "lexical_support", "citation_missing", "source_not_found", "source_ambiguous",
         "url_invalid", "source_limit", "not_publicly_accessible", "network_uncertain",
-        "http_uncertain", "content_insufficient", "cross_language", "numeric_mismatch",
+        "http_uncertain", "content_insufficient", "cross_language", "qualifier_unverified", "numeric_mismatch",
         "negation_conflict", "lexical_mismatch", "not_cited",
     }
     for chain_idx, chain in enumerate(chains):

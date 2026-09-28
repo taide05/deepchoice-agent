@@ -7,6 +7,7 @@ import hashlib
 import html
 import ipaddress
 import logging
+import math
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -74,7 +75,25 @@ _NUMBER_UNIT_RE = re.compile(
     re.IGNORECASE,
 )
 _EN_NEGATIONS = frozenset(
-    {"not", "no", "never", "without", "cannot", "can't", "doesn't", "isn't"}
+    {"not", "no", "never", "without", "cannot", "can't", "don't", "doesn't", "isn't"}
+)
+_DECISIVE_MODAL_RE = re.compile(
+    r"\b(?:must|required|requires?|mandatory|always|guarantee[ds]?|needed|necessary)\b",
+    re.IGNORECASE,
+)
+_CONDITION_RE = re.compile(r"\b(?:if|when|provided that|only if)\b", re.IGNORECASE)
+_NEGATION_MARKER_RE = re.compile(
+    r"\b(?:not|no|never|without|cannot|can't|don't|doesn't|isn't)\b",
+    re.IGNORECASE,
+)
+_WEAK_NEGATION_TARGETS = frozenset(
+    {"do", "does", "need", "necessarily", "run", "you", "it", "be"}
+)
+_WEAK_CONDITION_TOKENS = frozenset(
+    {"if", "when", "you", "they", "it", "do", "does", "need", "require", "many", "perform"}
+)
+_SCOPE_RESTRICTORS = frozenset(
+    {"recurring", "scheduled", "periodic", "one-off", "regular", "mostly-read", "only"}
 )
 _ZH_NEGATIONS = ("不支持", "不兼容", "不能", "无法", "没有", "尚未", "未能")
 _STOPWORDS = frozenset(
@@ -444,6 +463,83 @@ def _has_negation(value: str) -> bool:
     )
 
 
+def _negation_targets(value: str) -> set[str]:
+    """Small local lexical window; never used as a semantic entailment test."""
+    value = re.sub(r"\bnot\s+only\b", "", value, flags=re.IGNORECASE)
+    targets: set[str] = set()
+    for marker in _NEGATION_MARKER_RE.finditer(value):
+        tail = re.split(r"[,.;!?]|\b(?:and|but|or|then)\b", value[marker.end():], maxsplit=1)[0]
+        targets.update(_tokens(" ".join(tail.split()[:10])) - _WEAK_NEGATION_TARGETS)
+    return targets
+
+
+def _condition_parts(value: str) -> tuple[str, str] | None:
+    """Extract a bounded English if/when condition and its consequence."""
+    marker = re.match(r"\s*(?:if|when|provided that|only if)\b", value, re.IGNORECASE)
+    if marker is None:
+        marker = _CONDITION_RE.search(value)
+        if marker is None:
+            return None
+        return value[marker.start():], value[:marker.start()]
+    depth = 0
+    for index in range(marker.end(), len(value)):
+        char = value[index]
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+        elif depth == 0 and char == ",":
+            return value[:index], value[index + 1:]
+        elif depth == 0 and re.match(r"\bthen\b", value[index:], re.IGNORECASE):
+            return value[:index], value[index + 4:]
+    return None
+
+
+def _condition_conjuncts(value: str) -> list[str]:
+    """Split only top-level conjunctions, retaining parenthesized qualifiers."""
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for match in re.finditer(r"\s+and\s+|[()]", value, re.IGNORECASE):
+        token = match.group()
+        if token == "(":
+            depth += 1
+        elif token == ")" and depth:
+            depth -= 1
+        elif token.casefold().strip() == "and" and depth == 0:
+            parts.append(value[start:match.start()])
+            start = match.end()
+    parts.append(value[start:])
+    return parts
+
+
+def _decisive_modals(value: str) -> set[str]:
+    kinds = set()
+    for match in _DECISIVE_MODAL_RE.finditer(value):
+        word = match.group().casefold()
+        if word.startswith("requir") or word in {"must", "mandatory", "needed", "necessary"}:
+            word = "obligation"
+        elif word.startswith("guarantee"):
+            word = "guarantee"
+        kinds.add(word)
+    return kinds
+
+
+def _restricted_for_scope(value: str) -> set[str]:
+    for match in re.finditer(r"\bfor\b", value, re.IGNORECASE):
+        phrase = re.split(r"[,.;!?()]|\b(?:and|but|then)\b", value[match.end():], maxsplit=1)[0]
+        words = phrase.split()[:8]
+        if not words or words[0].casefold() in {"example", "instance"}:
+            continue
+        scope = _tokens(" ".join(words)) - _WEAK_CONDITION_TOKENS
+        if not (
+            scope & _SCOPE_RESTRICTORS or re.search(r"\bonly\s+for\b", value[:match.end()], re.IGNORECASE)
+        ):
+            continue
+        return scope
+    return set()
+
+
 def _number_units(value: str) -> set[tuple[str, str]]:
     unit_groups = {
         "millisecond": "ms", "milliseconds": "ms", "msec": "ms", "msecs": "ms", "ms": "ms",
@@ -472,6 +568,69 @@ def _language_is_crossed(claim: str, evidence: str) -> bool:
     return claim_latin >= 12 and claim_cjk == 0 and evidence_latin == 0 and evidence_cjk >= 8
 
 
+def _qualifier_unverified(claim: str, evidence: str, claim_tokens: set[str]) -> bool:
+    """Catch a few source-condition omissions, without asserting semantic truth.
+
+    Only compare the most lexically relevant sentence.  A modal appearing
+    elsewhere on a long page cannot license a stronger local assertion.
+    """
+    candidates = []
+    for sentence in re.split(r"[.!?。！？；;\n]+", evidence):
+        overlap = len(claim_tokens & _tokens(sentence))
+        if overlap >= 2 and overlap / len(claim_tokens) >= 0.4:
+            candidates.append((overlap, sentence))
+    if not candidates:
+        return False
+    sentence = max(candidates, key=lambda candidate: candidate[0])[1]
+    source_parts = _condition_parts(sentence)
+    claim_parts = _condition_parts(claim)
+    source_consequence = source_parts[1] if source_parts else sentence
+    claim_consequence = claim_parts[1] if claim_parts else claim
+    if _decisive_modals(claim_consequence) - _decisive_modals(source_consequence):
+        return True
+    source_scope = _restricted_for_scope(sentence)
+    if source_scope:
+        # A later aside about recurring work cannot qualify an earlier broad
+        # requirement about every task in the same model sentence.
+        claim_assertion = re.split(r"[,;]|\s+and\s+", claim, maxsplit=1, flags=re.IGNORECASE)[0]
+        if not source_scope <= _tokens(claim_assertion):
+            return True
+        if re.search(r"\b(?:all|every|any)\b", claim_assertion, re.IGNORECASE) and not re.search(
+            r"\b(?:all|every|any)\b", sentence, re.IGNORECASE
+        ):
+            return True
+    if source_parts:
+        if claim_parts is None:
+            return True
+        source_condition, _ = source_parts
+        claim_condition, _ = claim_parts
+        if _has_negation(source_condition) != _has_negation(claim_condition):
+            return True
+        if "necessarily" in _tokens(source_condition) - _tokens(claim_condition):
+            return True
+        source_targets = _negation_targets(source_condition)
+        claim_targets = _negation_targets(claim_condition)
+        if source_targets and claim_targets and not (source_targets & claim_targets):
+            return True
+        claim_condition_tokens = _tokens(claim_condition) - _WEAK_CONDITION_TOKENS
+        conjuncts = _condition_conjuncts(source_condition)
+        token_groups = [
+            _tokens(conjunct) - _WEAK_CONDITION_TOKENS for conjunct in conjuncts
+        ]
+        for index, condition_tokens in enumerate(token_groups):
+            if not condition_tokens:
+                continue
+            shared_elsewhere = set().union(*(
+                group for other_index, group in enumerate(token_groups) if other_index != index
+            ))
+            distinctive = condition_tokens - shared_elsewhere or condition_tokens
+            matches = distinctive & claim_condition_tokens
+            needed = len(distinctive) if len(distinctive) <= 4 else math.ceil(0.6 * len(distinctive))
+            if len(matches) < needed:
+                return True
+    return False
+
+
 def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, CitationReason]:
     claim_numbers = {item.casefold() for item in _NUMBER_RE.findall(claim)}
     evidence_numbers = {item.casefold() for item in _NUMBER_RE.findall(evidence)}
@@ -486,19 +645,41 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
         return CitationStatus.UNKNOWN, CitationReason.CONTENT_INSUFFICIENT
     if _language_is_crossed(claim, evidence):
         return CitationStatus.UNKNOWN, CitationReason.CROSS_LANGUAGE
+    if _qualifier_unverified(claim, evidence, claim_tokens):
+        return CitationStatus.UNKNOWN, CitationReason.QUALIFIER_UNVERIFIED
 
     for sentence in re.split(r"[.!?。！？；;\n]+", evidence):
         sentence_tokens = _tokens(sentence)
         if not sentence_tokens:
             continue
         overlap = len(claim_tokens & sentence_tokens) / len(claim_tokens)
-        if overlap >= 0.6 and _has_negation(claim) != _has_negation(sentence):
-            return CitationStatus.UNSUPPORTED, CitationReason.NEGATION_CONFLICT
+        if overlap >= 0.6:
+            claim_negated = _has_negation(claim)
+            source_negated = _has_negation(sentence)
+            if claim_negated != source_negated:
+                negated = claim if claim_negated else sentence
+                other_tokens = sentence_tokens if claim_negated else claim_tokens
+                targets = _negation_targets(negated)
+                matched_targets = targets & other_tokens
+                if len(matched_targets) >= min(2, len(targets)) and (
+                    not targets or len(matched_targets) / len(targets) >= 0.5
+                ):
+                    return CitationStatus.UNSUPPORTED, CitationReason.NEGATION_CONFLICT
+            elif claim_negated and source_negated:
+                claim_targets = _negation_targets(claim)
+                source_targets = _negation_targets(sentence)
+                if claim_targets and source_targets and not (claim_targets & source_targets):
+                    return CitationStatus.UNKNOWN, CitationReason.QUALIFIER_UNVERIFIED
 
     matched = len(claim_tokens & evidence_tokens)
     overlap = matched / len(claim_tokens)
     if overlap >= 0.55 and (matched >= 2 or len(claim_tokens) == 1):
-        return CitationStatus.VERIFIED, CitationReason.LEXICAL_SUPPORT
+        if any(
+            len(claim_tokens & _tokens(sentence)) / len(claim_tokens) >= 0.55
+            for sentence in re.split(r"[.!?。！？；;\n]+", evidence)
+        ):
+            return CitationStatus.VERIFIED, CitationReason.LEXICAL_SUPPORT
+        return CitationStatus.UNKNOWN, CitationReason.CONTENT_INSUFFICIENT
     if len(evidence) < 80:
         return CitationStatus.UNKNOWN, CitationReason.CONTENT_INSUFFICIENT
     return CitationStatus.UNSUPPORTED, CitationReason.LEXICAL_MISMATCH

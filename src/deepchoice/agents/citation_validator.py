@@ -100,6 +100,7 @@ def _calibrate_decision(
             ("verified", "lexical_support"),
             ("unknown", "network_uncertain"),
             ("unknown", "cross_language"),
+            ("unknown", "qualifier_unverified"),
             ("unknown", "http_uncertain"),
             ("unknown", "content_insufficient"),
             ("unreachable", "not_publicly_accessible"),
@@ -215,15 +216,18 @@ def _calibrate_decision(
             original_index = visible_index
         path = f"final_recommendation.decision_branches[{original_index}].condition"
         checks = by_path.get(path, [])
-        cross_language = any(check.reason.value == "cross_language" for check in checks)
-        if cross_language:
-            # A translated model condition may have omitted a decisive qualifier.
-            # Do not repeat it as a usable branch while its equivalence is unknown.
+        qualifier_unknown = any(
+            check.reason.value in {"cross_language", "qualifier_unverified"}
+            for check in checks
+        )
+        if qualifier_unknown:
+            # A translated or strengthened model condition may omit the source's
+            # applicability boundary. Do not repeat it as a usable branch.
             branch["condition"] = (
                 "适用前提待核对来源原文与当前工作负载。" if is_zh else
                 "Applicability requires checking the original source and this workload."
             )
-        excerpts = _saved_excerpts(checks, evidence_chains, min(2, remaining_excerpts)) if cross_language else []
+        excerpts = _saved_excerpts(checks, evidence_chains, min(2, remaining_excerpts)) if qualifier_unknown else []
         if excerpts:
             branch["saved_source_excerpts"] = excerpts
             remaining_excerpts -= len(excerpts)
@@ -231,12 +235,15 @@ def _calibrate_decision(
         if isinstance(row, dict) and row.get("status") == "unknown":
             analysis = pending_analysis.get(row.get("id"))
             if analysis:
-                cross_language = any(check.reason.value == "cross_language" for check in analysis[1])
-                if not cross_language:
+                qualifier_unknown = any(
+                    check.reason.value in {"cross_language", "qualifier_unverified"}
+                    for check in analysis[1]
+                )
+                if not qualifier_unknown:
                     row["provisional_explanation"] = analysis[0]
                 excerpts = (_saved_excerpts(analysis[1], evidence_chains,
                                             min(2, remaining_excerpts))
-                            if cross_language else [])
+                            if qualifier_unknown else [])
                 if excerpts:
                     row["saved_source_excerpts"] = excerpts
                     remaining_excerpts -= len(excerpts)

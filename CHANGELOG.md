@@ -4,6 +4,14 @@
 
 ### Changed
 
+Citation policy v7 adds a bounded, same-sentence qualifier check for decisive
+claims: source conditions and decisive wording cannot be omitted or strengthened
+to earn lexical `verified` from scattered page tokens. Uncertain claims and
+branches are withdrawn while bounded saved source excerpts remain available for
+inspection. Offline P01/P04 counterexamples do not establish workload fit or
+new-report quality; no paid or concurrent run was started. Historical v6 results
+remain readable but cannot resume on the changed runtime.
+
 Synthesis v11 freezes explicit user scene needs as separately assessed decision rows. P01 backup
 and basic full-text search, and P04 no-silent-loss across restart, can no longer disappear merely
 because they were omitted from the model's analysis; missing hard rows withdraw a Winner. Scene
