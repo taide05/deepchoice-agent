@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Limited delivery check stopped after content review
+
+The explicitly authorized 2026-09-29 check completed P04, then stopped before P01/P08 because
+primary and independent review still found no usable transition design or adequate component/
+failure explanation. Report reading and Markdown export worked; no major factual/action-safety
+error was confirmed. One research admission brings cumulative usage to 109/156. The service
+exited cleanly and both databases passed integrity checks. No production code or historical
+stop rule changed; the existing 2,415-test result remains engineering evidence only.
+
+
 ### Bounded conditional choice evidence
 
 Synthesis v12 selects only source, candidate and original requirement references for conditional
