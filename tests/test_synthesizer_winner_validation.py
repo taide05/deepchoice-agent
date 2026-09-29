@@ -63,6 +63,12 @@ class TestPromptGuards:
         assert "EVERY sentence" in cs_mod.SYNTHESIS_PROMPT
         assert "no sentence or field may be left uncited" in cs_mod.SYNTHESIS_PROMPT
 
+    def test_synthesis_prompt_keeps_external_performance_results_source_scoped(self):
+        assert "EXTERNAL PERFORMANCE BOUNDARY" in cs_mod.SYNTHESIS_PROMPT
+        assert "MUST NOT by itself satisfy a decision-critical requirement" in cs_mod.SYNTHESIS_PROMPT
+        assert "pgvector vs pgvectorscale" in cs_mod.SYNTHESIS_PROMPT
+        assert "local paired measurement" in cs_mod.SYNTHESIS_PROMPT
+
     def test_summarize_chains_includes_up_to_four_titles(self):
         chains = [{"evidence_strength": "strong", "conclusion": "c",
                    "sources": [{"title": f"T{i}"} for i in range(5)]}]

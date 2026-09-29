@@ -4,7 +4,10 @@ from copy import deepcopy
 
 import pytest
 
-from deepchoice.agents.citation_validator import _calibrate_decision
+from deepchoice.agents.citation_validator import (
+    _calibrate_decision,
+    _is_external_performance_measurement,
+)
 from deepchoice.agents.conclusion_synthesizer import _normalize_decision_contract
 from deepchoice.citations import (
     CitationCheck, CitationReason, CitationStatus, CitationStatusCounts, CitationVerification,
@@ -144,6 +147,140 @@ def test_non_abstaining_choice_replaces_unverified_production_actions():
     assert "DUAL_WRITE_LIVE" not in str(result)
     assert "RESTORE_OLD_SNAPSHOT" not in str(result)
     assert "production changes" in str(result["action_plan"])
+
+
+@pytest.mark.parametrize("claim", (
+    "pgvectorscale reaches 471 QPS on 50M vectors",
+    "Real database and routing workloads narrow the difference to 3%",
+    "Redis 6.0+ 多线程缩小了与 Memcached 的差距",
+    "网络往返延迟掩盖了单机处理差异",
+))
+def test_external_performance_measurement_patterns_are_bounded(claim):
+    assert _is_external_performance_measurement(claim)
+
+
+@pytest.mark.parametrize("claim", (
+    "Run a local paired benchmark before choosing.",
+    "Redis supports sorted sets.",
+    "Record the current latency without adopting an external threshold.",
+))
+def test_local_validation_or_nonperformance_claims_are_not_misclassified(claim):
+    assert not _is_external_performance_measurement(claim)
+
+
+def test_external_performance_measurement_cannot_authorize_current_winner():
+    claim = "Redis 6.0+ 多线程缩小了与 Memcached 的差距 [Source: Cache Guide]"
+    original = _recommendation()
+    original.update(
+        winner="Redis",
+        winner_rationale=claim,
+        action_plan=[],
+    )
+    original["requirement_assessments"][0].update(
+        status="satisfied", explanation=claim, evidence_ids=[1],
+    )
+    check = CitationCheck(
+        claim_id="requirement",
+        claim_path="final_recommendation.requirement_assessments[0].explanation",
+        claim_text="Redis 6.0+ 多线程缩小了与 Memcached 的差距",
+        source_title="Cache Guide",
+        status=CitationStatus.VERIFIED,
+        reason=CitationReason.LEXICAL_SUPPORT,
+    )
+    verification = CitationVerification(
+        status_counts=CitationStatusCounts(verified=2),
+        checks=(
+            check,
+            check.model_copy(update={
+                "claim_id": "winner",
+                "claim_path": "final_recommendation.winner_rationale",
+            }),
+        ),
+    )
+
+    result = _calibrate_decision(original, verification, "请选择当前环境的缓存")
+
+    assert result["winner"] == "context_dependent"
+    assert result["winner_rationale"] == ""
+    assert result["ranked_options"] == []
+    assert result["requirement_assessments"][0]["status"] == "unknown"
+    assert "本地配对验证" in result["requirement_assessments"][0]["explanation"]
+    assert result["requirement_assessments"][0]["provisional_explanation"] == claim
+
+
+def test_external_performance_measurement_remains_descriptive_in_tradeoff():
+    original = _recommendation()
+    original.update(
+        winner="Redis",
+        winner_rationale="Redis satisfies the bounded requirement [Source: Cache Guide]",
+        action_plan=[],
+        trade_offs=[{
+            "finding": "A source reports Memcached can be 10-15% faster [Source: Cache Guide]",
+            "impact": "Measure locally before relying on the difference [Source: Cache Guide]",
+        }],
+    )
+    original["requirement_assessments"][0].update(
+        status="satisfied",
+        explanation="The bounded requirement is supported [Source: Cache Guide]",
+        evidence_ids=[1],
+    )
+    base = CitationCheck(
+        claim_id="requirement",
+        claim_path="final_recommendation.requirement_assessments[0].explanation",
+        claim_text="The bounded requirement is supported",
+        source_title="Cache Guide",
+        status=CitationStatus.VERIFIED,
+        reason=CitationReason.LEXICAL_SUPPORT,
+    )
+    checks = (
+        base,
+        base.model_copy(update={
+            "claim_id": "winner",
+            "claim_path": "final_recommendation.winner_rationale",
+            "claim_text": "Redis satisfies the bounded requirement",
+        }),
+        base.model_copy(update={
+            "claim_id": "tradeoff-finding",
+            "claim_path": "final_recommendation.trade_offs[0].finding",
+            "claim_text": "A source reports Memcached can be 10-15% faster",
+        }),
+        base.model_copy(update={
+            "claim_id": "tradeoff-impact",
+            "claim_path": "final_recommendation.trade_offs[0].impact",
+            "claim_text": "Measure locally before relying on the difference",
+        }),
+    )
+    verification = CitationVerification(
+        status_counts=CitationStatusCounts(verified=4), checks=checks,
+    )
+
+    result = _calibrate_decision(original, verification, "Choose a cache")
+
+    assert result == original
+
+
+def test_external_performance_threshold_is_removed_from_decision_branches():
+    original = _recommendation()
+    original["decision_branches"] = [{
+        "option": "Redis",
+        "condition": "Choose Redis because Redis 6.0+ narrowed the gap [Source: Cache Guide]",
+    }]
+    verification = CitationVerification(
+        status_counts=CitationStatusCounts(verified=1),
+        checks=(CitationCheck(
+            claim_id="branch",
+            claim_path="final_recommendation.decision_branches[0].condition",
+            claim_text="Choose Redis because Redis 6.0+ narrowed the gap",
+            source_title="Cache Guide",
+            status=CitationStatus.VERIFIED,
+            reason=CitationReason.LEXICAL_SUPPORT,
+        ),),
+    )
+
+    result = _calibrate_decision(original, verification, "Choose a cache")
+
+    assert result["winner"] == "context_dependent"
+    assert result["decision_branches"] == []
 
 
 @pytest.mark.parametrize("field", ("step", "verification", "change_trigger", "rollback"))

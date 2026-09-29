@@ -3,11 +3,55 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 
 from ..citations import verify_citations
 from ..citations.verifier import MAX_CLAIM_TEXT
 from ..utils.decision_contract import abstain_recommendation, restrict_action_plan
 from ..utils.views import print_agent_output
+
+
+_PERFORMANCE_SIGNAL_RE = re.compile(
+    r"\b(?:benchmark|performance|throughput|latency|qps|rps|ops/?s|"
+    r"requests?/?s|req/?s|faster|slower|workload|load|multithread(?:ed|ing)?)\b|"
+    r"(?:基准|性能|吞吐|延迟|响应时间|每秒|更快|更慢|负载|多线程)",
+    re.IGNORECASE,
+)
+_PERFORMANCE_MEASUREMENT_RE = re.compile(
+    r"\d+(?:[.,]\d+)?\s*(?:qps|rps|ops/?s|requests?/?s|req/?s|ms|x)\b|"
+    r"\d+(?:[.,]\d+)?\s*(?:%|×)|"
+    r"\d+(?:[.,]\d+)?\s*(?:transactions?|operations?|queries?|requests?)\s+per\s+second\b|"
+    r"\b(?:faster|slower|gap|difference|narrow(?:s|ed|ing)?|improves?|reduces?)\b|"
+    r"(?:更快|更慢|差距|差异|缩小|提升|降低|优于|落后|掩盖)",
+    re.IGNORECASE,
+)
+
+
+def _is_external_performance_measurement(value: object) -> bool:
+    """Recognize source measurements that still need current-workload validation.
+
+    Lexical citation support can establish what a source reported, but it cannot
+    establish that the source's product variant, version, hardware, topology and
+    workload match the user's environment. Keep that distinction deterministic.
+    """
+    return (
+        isinstance(value, str)
+        and bool(_PERFORMANCE_SIGNAL_RE.search(value))
+        and bool(_PERFORMANCE_MEASUREMENT_RE.search(value))
+    )
+
+
+def _authorizes_current_decision(path: str) -> bool:
+    return (
+        path.startswith("final_recommendation.requirement_assessments[")
+        or path.startswith("final_recommendation.ranked_options[")
+        or path.startswith("final_recommendation.action_plan[")
+        or path in {
+            "final_recommendation.winner_rationale",
+            "final_recommendation.recommendation",
+            "final_recommendation.scene_fit_note",
+        }
+    )
 
 
 def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
@@ -30,9 +74,31 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
     for check in verification.checks:
         by_path.setdefault(check.claim_path, []).append(check)
 
+    external_performance_paths = {
+        check.claim_path
+        for check in verification.checks
+        if check.status.value == "verified"
+        and _is_external_performance_measurement(check.claim_text)
+    }
+    performance_note = (
+        "未知：外部性能测量只能说明来源报告了什么，不能证明其产品变体、版本、硬件、"
+        "拓扑和负载适用于当前环境；需要当前负载的本地配对验证。"
+        if is_zh else
+        "Unknown: an external performance measurement establishes only what the "
+        "source reported, not that its product variant, version, hardware, topology "
+        "and workload apply here; validate with a local paired measurement."
+    )
+
     def passed(path):
         checks = by_path.get(path, [])
-        return bool(checks) and all(check.status.value == "verified" for check in checks)
+        return (
+            bool(checks)
+            and all(check.status.value == "verified" for check in checks)
+            and not (
+                _authorizes_current_decision(path)
+                and path in external_performance_paths
+            )
+        )
 
     def provisional(path, explanation):
         # Never copy unchecked tails, overflow, missing citations or a negative
@@ -72,7 +138,15 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
         if row.get("status") != "unknown" and not passed(path):
             if provisional(path, row.get("explanation")):
                 pending_analysis[row.get("id")] = row["explanation"]
-            row.update(status="unknown", explanation=note, evidence_ids=[])
+            row.update(
+                status="unknown",
+                explanation=(
+                    performance_note
+                    if path in external_performance_paths
+                    else note
+                ),
+                evidence_ids=[],
+            )
         if row.get("decision_critical", True) is not False and row.get("status") != "satisfied":
             withdraw = True
     if result.get("winner") not in (None, "", "context_dependent") and not passed(
@@ -113,8 +187,29 @@ def _calibrate_decision(recommendation: dict, verification, query: str) -> dict:
                     f"final_recommendation.action_plan[{index}].{field}"
                 ):
                     action_unverified = True
+    branches = result.get("decision_branches", [])
+    if isinstance(branches, list):
+        # Branches survive abstention as conditional guidance, so remove an
+        # external performance threshold even when its check is missing,
+        # unknown or unsupported. A safe branch asks for a local measurement
+        # without importing the source's result as the decision boundary.
+        result["decision_branches"] = [
+            branch for branch in branches
+            if not (
+                isinstance(branch, dict)
+                and _is_external_performance_measurement(branch.get("condition"))
+            )
+        ]
     if withdraw:
-        result = abstain_recommendation(result, query, note)
+        restriction_note = (
+            performance_note
+            if any(
+                _authorizes_current_decision(path)
+                for path in external_performance_paths
+            )
+            else note
+        )
+        result = abstain_recommendation(result, query, restriction_note)
     elif action_unverified:
         result = restrict_action_plan(result, query)
     # Abstention deliberately normalizes away model-supplied extension fields.
