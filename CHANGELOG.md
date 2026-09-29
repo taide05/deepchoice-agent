@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Candidate check stopped at prerequisites
+
+The authorized 2026-09-29 check for candidate `36bc3fd` stopped on arXiv's rate-limited route
+health projection before any research: six HTTP probes, zero LLM attempts and zero Tavily POSTs.
+P04/P01/P08 were not submitted; cumulative research remains 109/156. No service or runtime databases
+were created. Existing offline validation remains valid; live report quality is still unverified.
+
 ### Human-reviewed decision analysis
 
 Following the user's 2026-09-29 scope decision, synthesis v13 can produce explicit conditional
