@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Offline synthesis-structure assessment
+
+The additional offline assessment reproduced a gap between JSON shape diagnostics
+and source/analysis binding with synthetic fixtures. It recommends at most one
+contract-triggered corrective generation, retaining existing limits and citation
+gates. The roadmap records scope, failure handling, accounting and validation needs.
+This is a reviewed design only: no runtime change or new research was performed,
+and the failed P01 content result remains unchanged.
+
 ### P01 demonstration attempt closed without content acceptance
 
 The unchanged P01 request ran once on synthesis v14 / citation v11. Durable
