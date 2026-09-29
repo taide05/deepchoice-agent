@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import re
 import time
@@ -30,6 +31,7 @@ from deepchoice.persistence.records import (
     TaskWithRun,
 )
 from deepchoice.persistence.repository import (
+    RepositoryOperationError,
     RunLeaseLostError,
     SQLiteTaskRunRepository,
 )
@@ -38,6 +40,18 @@ from deepchoice.observability import RuntimeTraceRecorder, SQLiteTraceStore, Tra
 from deepchoice.runtime.checkpoints import FencedCheckpointSaver
 from deepchoice.runtime.context import RunContext, bind_run_context
 from deepchoice.runtime.lifecycle import RunStatus
+from deepchoice.security.redaction import redact_text
+
+
+logger = logging.getLogger(__name__)
+
+
+def _heartbeat_failure_category(exc: Exception) -> str:
+    if isinstance(exc, RunLeaseLostError):
+        return "lease_lost"
+    if isinstance(exc, RepositoryOperationError):
+        return "database_busy" if exc.error_detail.retryable else "database_error"
+    return "unexpected_error"
 
 
 def _utc_now() -> datetime:
@@ -307,6 +321,9 @@ class RunCoordinator:
         self._heartbeat_successes = 0
         self._heartbeat_failures = 0
         self._heartbeat_lease_losses = 0
+        self._heartbeat_retries = 0
+        self._heartbeat_recovered_retries = 0
+        self._heartbeat_failure_categories: dict[str, int] = {}
         self._max_heartbeat_lag_ms: int | None = None
         self._max_heartbeat_renewal_ms: int | None = None
         self._heartbeat_last_success: dict[str, float] = {}
@@ -319,6 +336,9 @@ class RunCoordinator:
             "successes": self._heartbeat_successes,
             "failures": self._heartbeat_failures,
             "lease_losses": self._heartbeat_lease_losses,
+            "retries": self._heartbeat_retries,
+            "recovered_retries": self._heartbeat_recovered_retries,
+            "failure_categories": dict(self._heartbeat_failure_categories),
             "max_schedule_lag_ms": self._max_heartbeat_lag_ms,
             "max_renewal_ms": self._max_heartbeat_renewal_ms,
             "oldest_active_success_age_ms": max(ages) if ages else None,
@@ -442,13 +462,35 @@ class RunCoordinator:
                 started = time.monotonic()
                 lag = max(0, round((started - expected) * 1000))
                 self._max_heartbeat_lag_ms = max(self._max_heartbeat_lag_ms or 0, lag)
-                renewed = await self._heartbeat_repository.heartbeat_run_lease(
-                    run_id,
-                    lease_owner=self.owner_id,
-                    execution_epoch=execution_epoch,
-                    lease_ttl=self.lease_ttl,
-                    clock=self._clock,
-                )
+                for attempt in range(2):
+                    try:
+                        renewed = await self._heartbeat_repository.heartbeat_run_lease(
+                            run_id,
+                            lease_owner=self.owner_id,
+                            execution_epoch=execution_epoch,
+                            lease_ttl=self.lease_ttl,
+                            clock=self._clock,
+                        )
+                    except Exception as exc:
+                        category = _heartbeat_failure_category(exc)
+                        counts = self._heartbeat_failure_categories
+                        counts[category] = counts.get(category, 0) + 1
+                        # Only fixed categories and ordinals enter logs/health.
+                        # Never retain exception text, IDs, paths or stack traces.
+                        logger.warning(redact_text(
+                            f"Run heartbeat renewal failed: category={category} attempt={attempt + 1}"
+                        ))
+                        if category != "database_busy" or attempt or runner.done():
+                            raise
+                        # A busy writer is not proof that the existing lease expired.
+                        # Retry once; the repository reacquires its transaction and
+                        # checks the current clock, owner, epoch and expiry again.
+                        # No successful renewal is recorded until that commit returns.
+                        self._heartbeat_retries += 1
+                        await asyncio.sleep(0)
+                    else:
+                        self._heartbeat_recovered_retries += attempt
+                        break
                 elapsed = max(0, round((time.monotonic() - started) * 1000))
                 self._max_heartbeat_renewal_ms = max(self._max_heartbeat_renewal_ms or 0, elapsed)
                 self._heartbeat_successes += 1

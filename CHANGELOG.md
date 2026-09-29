@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Bounded run-heartbeat contention recovery
+
+Run heartbeat retries once only after a retryable SQLite busy/locked repository
+failure. Every attempt retains the transaction-time lease, owner and epoch checks;
+authority loss, nonretryable failures and exhausted retries still cancel execution.
+Fixed failure categories and retry/recovery counts are available in health/logs
+without exception payloads or private identifiers. Lease durations, database schema,
+instance-guard behavior and lifecycle events are unchanged. The updated roadmap
+permits this offline repair and validation only; no real research is added or resumed.
+The historical interruption's exact cause and report quality remain unverified.
+
 ### Final P01 attempt closed after runtime interruption
 
 The one allowed P01 recheck after synthesis v15 stopped during retrieval following

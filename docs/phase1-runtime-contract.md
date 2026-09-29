@@ -499,6 +499,31 @@ coordinator 取消、fencing 拒绝与 health 503 不变。离线故障回归在
 排队边界，但不能排除主机/磁盘/事件循环的其他风险，也不构成修复后 live 并发验收。
 失败实验根保持关闭，生产变更形成新候选后须重新资格与另行授权。
 
+## Run heartbeat 短时写锁竞争维修（2026-09-29）
+
+每个 run heartbeat 节拍最多尝试两次续租，仅第一次仓库操作明确返回
+`RepositoryOperationError.error_detail.retryable=true`（SQLite busy/locked）时重试。
+第二次仍失败、不可重试仓库错误、租约失效或未知异常，仍取消 runner 并走原有
+fenced interrupted 收尾；取消直接传播。实例 guard 的续租策略、30 秒 TTL、10 秒节拍、
+SQLite busy timeout 和单实例/单 worker 不变，不对磁盘停顿或未知故障自动恢复。
+
+两次续租均调用同一仓库方法，在取得连接锁和 BEGIN IMMEDIATE 写锁后按当前 clock
+检查 owner、epoch、状态与 expiry，并由 UPDATE CAS 再次约束。过期或被替代的 lease
+不能复活；重试开始不算续租成功，提交返回后才更新成功统计。重试只限制尝试次数，
+不声称独立于 SQLite/应用锁等待的固定总耗时。heartbeat 仍不生成用户生命周期事件。
+
+`/health.run_heartbeat` 增加 `retries`、`recovered_retries` 和 `failure_categories`。
+前两者分别统计安排重试的次数及成功的重试；取消可能发生在第二次实际调用之前。
+`failures` 保持“最终失败并取消”含义，
+`successes` 仅计成功节拍；`failure_categories` 统计每次失败尝试，固定为 `database_busy`、
+`database_error`、`lease_lost`、`unexpected_error`，因此恢复的失败也仍可见。
+同样的固定类别及尝试序号写入脱敏日志，不保存原异常、堆栈、ID、路径或请求正文；
+统计是进程内数据，重启清零，不新增 schema 或 Trace 正确性依赖。
+
+真实双连接 SQLite 离线复现证明旧实现会因一次短时竞争取消任务；修复覆盖释放后续租、
+持续竞争、过期、换 epoch、远程取消及重试中取消。该证据不确定历史 P01 中断的具体原因；
+原始异常当时未保存。本次无真实研究，不宣称 live 效果、来源可达性或报告验收通过。
+
 ## O1-C：社区凭据与节拍契约澄清（2026-09-17）
 
 社区 route probe 和业务检索共用请求局部的可选 `STACKEXCHANGE_API_KEY` 参数构造；
