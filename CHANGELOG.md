@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Minimal single-scenario demonstration acceptance
+
+The current roadmap now targets one real, bounded technology-selection scenario.
+It checks existing reports first, permits at most an initial research run and one
+recheck after a substantive fix, and defines content acceptance and stop conditions.
+The previous three-scenario objective is retired as unachieved. This is a scope
+update only: it adds no research result or product-quality claim.
+
 ### Single-user technology-selection Agent closeout scope
 
 The user narrowed this delivery pass while retaining DeepChoice as a technology-selection Agent.
