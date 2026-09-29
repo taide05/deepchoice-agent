@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-09-21
 
+### P01 demonstration attempt closed without content acceptance
+
+The unchanged P01 request ran once on synthesis v14 / citation v11. Durable
+submission, progress SSE, report reading and Markdown export succeeded, but primary
+and independent content review failed. Six model source facts exceeded the existing
+four-fact contract, leaving five analyses unbound before citation verification;
+separate citation fetch timeouts also occurred. No qualified substantive repair was
+established, so no second research was submitted. The objective remains unachieved.
+The service shut down normally and both databases passed integrity checks. Runtime
+code and tests are unchanged; prior engineering validation remains applicable.
+
 ### Minimal single-scenario demonstration acceptance
 
 The current roadmap now targets one real, bounded technology-selection scenario.
