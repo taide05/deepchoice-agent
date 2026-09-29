@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Final P01 attempt closed after runtime interruption
+
+The one allowed P01 recheck after synthesis v15 stopped during retrieval following
+a run-heartbeat renewal exception. It produced no report and never reached synthesis;
+content is not evaluated, not failed or passed. The concrete exception cause was not
+retained. Both allowed research attempts are now used and the demonstration objective
+remains unachieved. The service exited normally and both databases passed read-only
+integrity checks. No runtime code, tests or configuration changed during closeout;
+the frozen candidate's 2467-test engineering result remains applicable.
+
 ### Bounded synthesis structure correction
 
 Synthesis v15 checks source/analysis bindings before normalization and permits one

@@ -1,14 +1,45 @@
 # 当前执行状态与证据索引
 
-最新执行：2026-09-29，单场景最小展示验收的 P01 初验完成，主评和独立复核均判内容 FAIL。
-默认 durable 创建、进度 SSE、成功终态、报告读取、阅读接口和 Markdown 导出可用，
-但报告没有给出可用条件选择及迁移触发条件；**新目标尚未达成，本轮尝试已停止**。
-新增离线评估后，用户允许局部修复；synthesis v15 已实现并通过离线验收，真实研究尚未新增。
-累计研究 **112/156**；新目标使用 1/2 次研究名额，局部实质修复与离线验证条件已满足，最后一次复核须先冻结本轮候选与边界。
-服务正常退出，两库 quick_check 均 ok，1 task / 1 run / 1 result，无不确定提交。
-本轮冻结候选 Python 3.12 完整验证 **2467 passed**（561.65 秒），静态检查与独立复核通过；旧 2438 项仅作历史证据。
-真实报告仍未通过。旧三场景目标保持未达成，验证包后置。
+最新执行：2026-09-29，synthesis v15 的最后一次 P01 复核在检索阶段中断，没有报告，
+内容为 **not_evaluated**；初验的内容 FAIL 保留。**单场景目标未达成，本轮尝试已结束。**
+累计研究 **113/156**，本目标使用 **2/2** 次研究名额，不追加研究、同 run 恢复或调参。
+服务正常退出，两库 quick_check 均 ok，1 task / 1 run / 0 result，无不确定提交。
+本轮冻结候选 Python 3.12 完整验证 **2467 passed**（561.65 秒），静态检查与独立复核通过；
+本次未运行到合成节点，不能据此判断结构修复效果。旧三场景目标未达成，验证包后置。
 本文维护状态与账本；当前完成/停止条件见[地图](current-roadmap.md)，操作规则见[执行规则](optimization-execution.md)。
+
+### 2026-09-29 P01 最后一次复核：运行中断，无报告可评
+
+冻结候选 3a066e3、synthesis v15 / citation v11，manifest
+2c69c597bfb61001ff0bf99eb991a86249cdfff531f55713d3532557aea15a99；
+原 P01 请求、全部硬约束与内容标准不变。前置实际 2 次 LLM、8 次非 LLM HTTP（含
+1 次 Tavily POST）；暂停后复用同次已通过的前置，未重复。仅创建一个 durable task/run。
+
+query_adapter 成功后，multi_retriever 在任务心跳续租异常后被取消；18.235 秒时采集结果
+为 interrupted / RUN_INTERRUPTED_NO_AUTO_RESUME。心跳记录 successes=0、failures=1、
+lease_losses=0，实例权威在采样时有效。协调器在心跳异常后取消任务，与五个检索调用同时
+取消的记录一致；没有保存原始异常类型，不能确定数据库锁、超时或其它具体原因。
+后续显式请求的正常停机发生在中断之后，不是本次研究中断的起因。
+
+主评与独立只读复核均确认：未到合成或引用节点，无 report/snapshot，内容不能判 FAIL 或
+PASS，应记 not_evaluated；初验 FAIL 仍保留。任务和观测接口 HTTP 200 可见 interrupted，
+报告接口 409 / TASK_RESULT_UNAVAILABLE。产品事件有 queued、started、progress、interrupted；
+本次未验收成功报告、导出、SSE 重放或 HITL 分支，不复用初验结果冒充本次成功链路。
+
+已记录一次成功 LLM（1384 tokens）、五次取消的逻辑检索；物理 HTTP 遥测另记 28 次
+CancelledError。collector 观测标记非最终，其 usage 完整性为 false；已记录的那次 LLM
+token 完整，不能混称整个研究完成。停机后账本均 settled，无 reserved/unknown_spend
+余额；价格仍未知，collector http_calls=0 不代表没有 HTTP 请求。
+
+服务 exit 0，端口关闭；产品/检查点两库只读 quick_check 均 ok，1 task / 1 run（均
+interrupted）/ 0 result / 0 HITL，检查前后数据库及 WAL 内容哈希相同。SQLite 只读连接
+可能更新 SHM 读者元数据，SHM 不纳入内容不变断言。原请求与冻结请求逐字段一致。
+累计112→113/156，目标2/2已使用；保留中断 run 和配对数据库，不续跑、补跑或换题。
+
+本地证据根 outputs/minimal-demo-p01-20260929-v2：collections/P01/result.json、
+final-api-observation.json、control/telemetry.jsonl、reviews/、closeout.json；冻结计划在
+notes/minimal-demo-p01-final-20260929.json。原始内容留本地。收尾只更新文档，生产代码、
+测试与运行配置未变，复用该候选有效的 2467 项全套，不以文档修改重复运行测试。
 
 ### 2026-09-29 synthesis v15 局部结构修复
 
@@ -25,8 +56,8 @@
 独立复核无剩余阻断。首轮全套曾因种子临时目录 rename 的 Windows WinError 5 出现一项失败；
 该用例原样单测、所属模块 10 项及新临时目录完整验证均通过，未改动种子发布逻辑。
 固定 smoke-v1 12/12，案例、分母、输出、
-指标均未变；仅测量时间、manifest/资产身份和指纹更新。没有新增真实研究，累计112/156，
-单场景名额仍1/2。工程验证不证明模型下次合规或 P01 内容通过。
+指标均未变；仅测量时间、manifest/资产身份和指纹更新。离线修复提交时尚无新增真实研究，
+当时累计112/156、单场景名额1/2；后续最后一次复核见顶部。工程验证不证明模型下次合规或 P01 内容通过。
 
 ### 2026-09-29 新增离线结构方案评估（当时尚未实施）
 
