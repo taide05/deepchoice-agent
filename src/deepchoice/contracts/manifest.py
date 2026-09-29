@@ -7,7 +7,10 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict
 
-from ..agents.conclusion_synthesizer import SYNTHESIS_CALL_TIMEOUT_S, SYNTHESIS_PROMPT
+from ..agents.conclusion_synthesizer import (
+    SYNTHESIS_CALL_TIMEOUT_S, SYNTHESIS_CORRECTION_TEMPLATE, SYNTHESIS_PROMPT,
+    SYNTHESIS_STRUCTURE_POLICY,
+)
 from ..agents.conflict_detector import (
     ARBITRATION_SYSTEM,
     CONTRADICTION_SCAN_SYSTEM,
@@ -49,7 +52,7 @@ REPORT_TEMPLATE_VERSIONS = {
 PROMPT_VERSIONS = {
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
-    "conclusion_synthesizer.synthesis_prompt": "v14",
+    "conclusion_synthesizer.synthesis_prompt": "v15",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -74,7 +77,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15"] = "v1"
     sha256: str
 
 
@@ -233,7 +236,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             "conflict_detector.evidence_gather",
             EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE,
         ),
-        ("conclusion_synthesizer.synthesis_prompt", SYNTHESIS_PROMPT),
+        ("conclusion_synthesizer.synthesis_prompt",
+         SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE),
         ("self_reviewer.review_system", REVIEW_SYSTEM),
     )
     report_format = task.get("report_format", "what_why_how")

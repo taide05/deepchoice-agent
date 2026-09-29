@@ -117,6 +117,12 @@ _SHAPES = {
 }
 
 
+def output_shape_valid(tag: str, value: Any) -> bool:
+    """Check the existing content shape without recording or trusting its prose."""
+    shape = _SHAPES.get(tag)
+    return shape is not None and _matches(value, shape)
+
+
 def observe_output(choice: Any, *, json_requested: bool = False, content: Any = None,
                    parsed: Any = None, parse_ok: bool | None = None,
                    repair_attempts: int = 0, tag: str = "") -> dict:
@@ -141,7 +147,7 @@ def observe_output(choice: Any, *, json_requested: bool = False, content: Any = 
         shape = _SHAPES.get(tag)
         diagnostic.schema_status = (
             "not_configured" if shape is None
-            else "valid" if parse_ok and _matches(parsed, shape) else "invalid"
+            else "valid" if parse_ok and output_shape_valid(tag, parsed) else "invalid"
         )
         if shape is not None and tag.startswith("search_") and isinstance(parsed, dict):
             maximum = parsed.get("max_results", 3)

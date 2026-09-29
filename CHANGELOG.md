@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Bounded synthesis structure correction
+
+Synthesis v15 checks source/analysis bindings before normalization and permits one
+corrective generation for structural violations. Both calls retain frozen model
+settings, budget/Trace accounting and citation gates. Empty results do not trigger
+correction; invalid corrective output or an ordinary provider failure preserves the
+first safely bound response. Authority loss and cancellation propagate. Feedback
+contains runtime-owned identifiers and error counts, never prior model prose, and
+its template and one-correction policy are frozen in the prompt asset identity.
+Historical v14 runs remain readable but cannot resume under the new behavior.
+
 ### Offline synthesis-structure assessment
 
 The additional offline assessment reproduced a gap between JSON shape diagnostics

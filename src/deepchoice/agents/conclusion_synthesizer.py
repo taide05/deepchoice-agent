@@ -1,7 +1,8 @@
 import json
 import re
 
-from ..utils.decision_analysis import bind_decision_analysis
+from ..utils.decision_analysis import inspect_synthesis_bindings, original_analysis_requirements
+from ..utils.call_diagnostics import output_shape_valid
 
 from ..budget_errors import BudgetError
 from ..utils.citation_markers import citation_spans, marker_titles, title_key
@@ -21,10 +22,30 @@ from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholde
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
-from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, eligible_source_fact_ids, whole_source_text
+from ..utils.evidence_choices import MAX_SOURCE_TEXT, eligible_source_fact_ids, whole_source_text
 
 # Preserve the existing timeout while the optional thinking mode is measured.
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
+
+# Included with the feedback template in the immutable synthesis prompt asset.
+SYNTHESIS_STRUCTURE_POLICY = "binding-correction-v1:max_corrections=1"
+SYNTHESIS_CORRECTION_TEMPLATE = """A local binding-contract check rejected part of the previous JSON response.
+Regenerate the COMPLETE response for exactly the original request, candidates, hard constraints and evidence above.
+Only one corrective generation is allowed. Do not invent sources or relax constraints.
+Return both source_facts (at most 4) and decision_analysis (at most 8) as lists, plus every other required response field.
+Empty lists are valid if there is no usable basis. Assign unique F1..F99 IDs to selected eligible source numbers;
+analysis must reference those IDs and only original R0/C/Q requirement IDs. Recheck the original text limits.
+This check does not establish factual support or authorize operations. Do not repeat the malformed response.
+Runtime-computed error counts and eligible identifiers: {feedback_json}
+"""
+
+
+def _propagate_authority_error(exc):
+    """Do not turn execution authority loss into an ordinary model fallback."""
+    codes = {"RUN_LEASE_LOST", "RUNTIME_INSTANCE_LEASE_LOST", "RUN_BUDGET_AUTHORITY_STALE"}
+    detail = getattr(exc, "error_detail", None)
+    if getattr(exc, "code", None) in codes or getattr(detail, "code", None) in codes:
+        raise exc
 
 SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all evidence into a final, actionable recommendation.
 
@@ -954,7 +975,8 @@ class ConclusionSynthesizerAgent:
             )
         except BudgetError:
             raise
-        except Exception:
+        except Exception as exc:
+            _propagate_authority_error(exc)
             print_agent_output("Synthesis failed", agent="CONCLUSION_SYNTHESIZER")
             result = {
                 "recommendation": "Unable to synthesize recommendation due to insufficient evidence.",
@@ -969,6 +991,53 @@ class ConclusionSynthesizerAgent:
 
         if not isinstance(result, dict):
             result = {}
+        result, binding = inspect_synthesis_bindings(
+            result, evidence_chains, requirements, task.get("candidate_techs", []), task.get("query", ""),
+        )
+        correction = {"policy": SYNTHESIS_STRUCTURE_POLICY, "attempted": 0,
+                      "outcome": "not_needed", "initial": binding}
+        if binding["errors"]:
+            correction["attempted"] = 1
+            feedback = {
+                "errors": binding["errors"],
+                "source_facts_received": binding["source_facts_received"],
+                "source_facts_bound": binding["source_facts_bound"],
+                "analysis_received": binding["analysis_binding"]["received"],
+                "eligible_source_numbers": sorted(eligible_source_fact_ids(evidence_chains)),
+                "original_requirement_ids": list(original_analysis_requirements(
+                    requirements, task.get("query", ""),
+                )),
+            }
+            # Neither raw nor bound model prose enters the corrective feedback.
+            corrective_prompt = prompt + [{"role": "user", "content":
+                SYNTHESIS_CORRECTION_TEMPLATE.format(feedback_json=json.dumps(feedback, ensure_ascii=False))}]
+            try:
+                revised = await call_model(
+                    corrective_prompt, model=model, response_format=response_format,
+                    tag="conclusion_synthesizer", usage=local_usage, extra_body=extra_body,
+                    timeout=timeout, seed=seed,
+                )
+            except BudgetError:
+                raise
+            except Exception as exc:
+                _propagate_authority_error(exc)
+                correction["outcome"] = "provider_error"
+            else:
+                complete = output_shape_valid("conclusion_synthesizer", revised) and all(
+                    isinstance(revised.get(key), list) for key in ("source_facts", "decision_analysis")
+                )
+                revised, revised_binding = inspect_synthesis_bindings(
+                    revised if isinstance(revised, dict) else {}, evidence_chains, requirements,
+                    task.get("candidate_techs", []), task.get("query", ""),
+                )
+                if not complete:
+                    revised_binding["errors"]["incomplete_response"] = 1
+                correction["corrected"] = revised_binding
+                if revised_binding["errors"]:
+                    correction["outcome"] = "invalid"
+                else:
+                    result, binding = revised, revised_binding
+                    correction["outcome"] = "corrected"
         for field in ("ranked_options", "trade_offs"):
             value = result.get(field)
             result[field] = (
@@ -976,11 +1045,6 @@ class ConclusionSynthesizerAgent:
                 if isinstance(value, list)
                 else []
             )
-        raw_facts = result.get("source_facts")
-        fact_count = len(raw_facts) if isinstance(raw_facts, list) else None
-        result = bind_evidence_choices(result, evidence_chains, task.get("candidate_techs", []), requirements)
-        analysis_binding = {}
-        result = bind_decision_analysis(result, requirements, task.get("candidate_techs", []), task.get("query", ""), diagnostics=analysis_binding)
         result, contract_requires_abstention = _normalize_decision_contract(
             result,
             requirements,
@@ -1036,9 +1100,10 @@ class ConclusionSynthesizerAgent:
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
             # Counts and fixed rejection categories only; never model prose.
-            "source_facts_received": fact_count,
+            "source_facts_received": binding["source_facts_received"],
             "source_facts_bound": len(result.get("source_facts", [])),
-            "analysis_binding": analysis_binding,
+            "analysis_binding": binding["analysis_binding"],
+            "structure_correction": correction,
         }]
 
         return {

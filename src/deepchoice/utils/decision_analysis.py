@@ -29,6 +29,17 @@ def _refs(value, allowed):
     return value
 
 
+def original_analysis_requirements(requirements, query=""):
+    """The same original-request inventory for binding and correction feedback."""
+    original = {
+        row["id"]: row["requirement"] for row in requirements
+        if row.get("kind") in {"frozen_constraint", "scene_requirement", "scene_preference", "frozen_sub_question"}
+    }
+    if isinstance(query, str) and query.strip():
+        original["R0"] = query
+    return original
+
+
 def bind_decision_analysis(recommendation, requirements, candidates, query="", *, diagnostics=None):
     """Rebuild model output from original C/Q requirements and bound fact IDs.
 
@@ -54,12 +65,7 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
     if not isinstance(raw, list) or len(raw) > MAX_ANALYSES:
         reject("invalid_list" if not isinstance(raw, list) else "item_limit")
         return result
-    original = {
-        row["id"]: row["requirement"] for row in requirements
-        if row.get("kind") in {"frozen_constraint", "scene_requirement", "scene_preference", "frozen_sub_question"}
-    }
-    if isinstance(query, str) and query.strip():
-        original["R0"] = query
+    original = original_analysis_requirements(requirements, query)
     facts = {row["id"] for row in result.get("source_facts", [])}
     options = {value for value in candidates if isinstance(value, str)} if isinstance(candidates, list) else set()
     for item in raw:
@@ -96,6 +102,39 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
         })
         counts["retained"] += 1
     return result
+
+
+def inspect_synthesis_bindings(recommendation, chains, requirements, candidates, query=""):
+    """Bind once and report only structural losses, never semantic satisfaction.
+
+    Missing optional projections and explicit empty lists are valid. The binders
+    remain the authority for source identity, reference and prose restrictions.
+    """
+    from .evidence_choices import MAX_SOURCE_FACTS, bind_evidence_choices
+
+    facts = recommendation.get("source_facts", [])
+    errors = {}
+    bound = bind_evidence_choices(recommendation, chains, candidates, requirements)
+    if not isinstance(facts, list):
+        errors["facts_invalid_list"] = 1
+    elif len(facts) > MAX_SOURCE_FACTS:
+        errors["facts_item_limit"] = 1
+    elif len(bound.get("source_facts", [])) != len(facts):
+        errors["facts_binding_loss"] = len(facts) - len(bound.get("source_facts", []))
+    analysis = {}
+    bound = bind_decision_analysis(bound, requirements, candidates, query, diagnostics=analysis)
+    if "decision_analysis" in recommendation and recommendation["decision_analysis"] is None:
+        errors["analysis_invalid_list"] = 1
+    for reason, count in analysis["rejected"].items():
+        # One invalid factual projection can invalidate every dependent analysis.
+        if reason != "invalid_fact_ids" or not any(key.startswith("facts_") for key in errors):
+            errors["analysis_" + reason] = count
+    return bound, {
+        "source_facts_received": len(facts) if isinstance(facts, list) else None,
+        "source_facts_bound": len(bound.get("source_facts", [])),
+        "analysis_binding": analysis,
+        "errors": errors,
+    }
 
 
 def calibrate_decision_analysis(recommendation):

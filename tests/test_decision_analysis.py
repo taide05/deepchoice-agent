@@ -119,7 +119,7 @@ async def test_ineligible_source_is_disclosed_before_generation_and_rejection_is
 
     async def model(messages, **kwargs):
         model_calls.append(messages)
-        prompt = messages[-1]["content"]
+        prompt = messages[0]["content"]
         assert "[[1]] Recovery fixture (score: N/A)\n       Source-fact binding allowed: yes" in prompt
         assert "[[2]] Long source (score: N/A)\n       Source-fact binding allowed: no" in prompt
         assert "1-4 unique original R0/C/Q" in prompt
@@ -142,7 +142,8 @@ async def test_ineligible_source_is_disclosed_before_generation_and_rejection_is
     assert signal["source_facts_received"] == 2 and signal["source_facts_bound"] == 1
     assert signal["analysis_binding"] == {"provided": True, "received": 2, "retained": 1, "rejected": {"invalid_fact_ids": 1}}
     assert "MODEL_PROSE" not in json.dumps(signal)
-    assert len(model_calls) == 1
+    assert len(model_calls) == 2
+    assert signal["structure_correction"]["outcome"] == "invalid"
     assert state["final_recommendation"]["source_facts"][0]["status"] == "unknown"
     state.update(await CitationValidatorAgent().run(state))
     rec = state["final_recommendation"]

@@ -838,3 +838,54 @@ async def test_coordinator_without_trace_store_still_binds_budget_context(
     finally:
         await coordinator.stop()
         await connection.close()
+
+
+@pytest.mark.parametrize("call_limit", [1, 2, 6])
+async def test_synthesis_correction_uses_real_budget_trace_and_transport_limits(tmp_path, monkeypatch, call_limit):
+    import json
+    from deepchoice.agents.conclusion_synthesizer import ConclusionSynthesizerAgent
+    from deepchoice.observability import SQLiteTraceStore, RuntimeTraceRecorder
+    from deepchoice.runtime.context import bind_node_attempt
+
+    connection, lock, manager, _, clock = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(llm_calls=call_limit, total_tokens=200_000))
+    sink = SQLiteTraceStore(connection, lock, clock=clock).bind(
+        run_id="run-1", execution_epoch=1, lease_owner="worker")
+    trace = RuntimeTraceRecorder(sink, task_id="task-1")
+    payload = {"source_facts": [{"id": f"F{i}", "evidence_id": 1} for i in range(1, 7)]}
+    response = SimpleNamespace(model="fixture", usage=SimpleNamespace(
+        prompt_tokens=11, completion_tokens=7, total_tokens=18),
+        choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(content=json.dumps(payload)))])
+
+    class RetryableError(Exception):
+        status_code = 500
+
+    effects = [response, response] if call_limit < 6 else [RetryableError(), RetryableError(), response] * 2
+    create = AsyncMock(side_effect=effects)
+    monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setattr(llm_module, "_retry_sleep", AsyncMock())
+    try:
+        node = await trace.start_node_attempt("conclusion_synthesizer")
+        assert node is not None
+        with bind_run_context(_context(manager, trace)), bind_node_attempt(node.node_attempt_id):
+            if call_limit == 1:
+                with pytest.raises(BudgetExceededError):
+                    await ConclusionSynthesizerAgent().run({"task": {"query": "compare a and b"}})
+            else:
+                state = await ConclusionSynthesizerAgent().run({"task": {"query": "compare a and b"}})
+                assert state["quality_signals"][0]["structure_correction"]["outcome"] == "invalid"
+                assert state["token_usage"][0]["calls"] == 2
+                assert state["token_usage"][0]["total_tokens"] == 36
+        assert create.await_count == call_limit
+        usage = await manager._usage()
+        assert usage[BudgetResource.LLM_CALLS] == call_limit
+        if call_limit < 6:
+            assert usage[BudgetResource.TOTAL_TOKENS] == 18 * call_limit
+        else:
+            assert usage[BudgetResource.TOTAL_TOKENS] > 36  # uncertain failed transmissions charged
+        rows = await (await connection.execute("SELECT status FROM external_calls")).fetchall()
+        assert len(rows) == (2 if call_limit == 1 else call_limit)
+        assert sum(row[0] == "succeeded" for row in rows) == (1 if call_limit == 1 else 2)
+    finally:
+        await connection.close()
