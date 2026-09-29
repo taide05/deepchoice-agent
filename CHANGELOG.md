@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Authorized post-heartbeat P01 recheck closed
+
+The user explicitly added one unchanged P01 recheck after the offline repair.
+Candidate 21a3189 completed; report reads, SSE replay and Markdown export agreed.
+Fourteen run-heartbeat renewals succeeded with no failures or retries; this does
+not identify the historical failure or establish long-term stability. The report
+retained useful conditional analysis, but primary and independent content review
+failed on decisive-source mapping and an overexclusive client/server condition.
+Research is now 114/156 and the revised three-attempt demonstration allowance is
+used. No further sampling or content tuning is included. The service shut down
+normally and both databases passed read-only integrity checks. Closeout changes
+documentation only; the 2476-test engineering baseline remains applicable.
+
 ### Bounded run-heartbeat contention recovery
 
 Run heartbeat retries once only after a retryable SQLite busy/locked repository
@@ -10,7 +23,7 @@ authority loss, nonretryable failures and exhausted retries still cancel executi
 Fixed failure categories and retry/recovery counts are available in health/logs
 without exception payloads or private identifiers. Lease durations, database schema,
 instance-guard behavior and lifecycle events are unchanged. The updated roadmap
-permits this offline repair and validation only; no real research is added or resumed.
+permitted this offline repair and validation only; no research was added in that change.
 The historical interruption's exact cause and report quality remain unverified.
 
 ### Final P01 attempt closed after runtime interruption
