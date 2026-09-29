@@ -55,6 +55,58 @@ def _render_saved_excerpts(item: dict[str, Any], lang: str) -> list[str]:
     return lines
 
 
+def _plain_analysis(value: Any) -> str:
+    # Model prose is literal content, never a link, HTML node or citation badge.
+    import html
+    text = html.escape(_text(value), quote=False)
+    return re.sub(r"([\\`*_{}\[\]#!|])", r"\\\1", text)
+
+
+def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
+    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 4)
+             if isinstance(item.get("id"), str)}
+    accepted = []
+    for item in _dict_items(recommendation.get("decision_analysis"), 8):
+        ids = item.get("fact_ids")
+        if (item.get("review_status") == "human_review_required"
+                and isinstance(ids, list) and 0 < len(ids) <= 4
+                and all(isinstance(key, str) and key in facts
+                        and facts[key].get("status") == "verified" for key in ids)):
+            accepted.append(item)
+    if not accepted:
+        return []
+    zh = lang == "zh"
+    lines = ["### 模型分析 · 待人工审阅" if zh else "### Model analysis · Human review required", "",
+             "以下释义、适用性判断与概念设计是模型推断，尚未经过语义验证。假设仍需确认，来源词法核验不证明建议正确；实际操作仅限下方隔离验证计划。"
+             if zh else "The paraphrases, applicability judgments and conceptual designs below are model inferences, not semantically verified conclusions. Assumptions need confirmation. Source lexical checks do not prove the proposals; operations remain limited to the isolated validation plan below.", ""]
+    labels = {"choice": "条件选择" if zh else "Conditional choice",
+              "answer": "问题解答" if zh else "Question analysis",
+              "design": "概念方案" if zh else "Conceptual design"}
+    used = {}
+    for item in accepted:
+        title = labels.get(item.get("kind"), labels["answer"])
+        if item.get("option"):
+            title += " — " + _plain_analysis(item["option"])
+        lines.extend([f"#### {title}", ""])
+        requirements = item.get("requirements", [])
+        if isinstance(requirements, list):
+            lines.append(("对应问题：" if zh else "Addresses: ") + " / ".join(_plain_analysis(v) for v in requirements[:4]))
+        lines.extend(["", _plain_analysis(item.get("reasoning")), ""])
+        assumptions = item.get("assumptions", [])
+        if isinstance(assumptions, list):
+            for assumption in assumptions[:4]:
+                lines.append(("- 待确认假设：" if zh else "- Unconfirmed assumption: ") + _plain_analysis(assumption))
+        lines.append(("- 改变判断的条件：" if zh else "- What would change this judgment: ") + _plain_analysis(item.get("change_condition")))
+        lines.append(("- 来源原文见下方：" if zh else "- Source text below: ") + " / ".join(_code(_text(facts[key].get("source_title"))) for key in item["fact_ids"]))
+        lines.append("")
+        used.update({key: facts[key] for key in item["fact_ids"]})
+    lines.extend(["#### 来源原文与核验状态" if zh else "#### Source text and check status", ""])
+    for fact in used.values():
+        lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{"title": fact.get("source_title"), "text": fact.get("saved_text")}]}, lang))
+        lines.append("  - " + ("原文词法核验：verified；不验证上方模型推断。" if zh else "Source lexical check: verified; this does not verify the model inferences above."))
+    return lines + [""]
+
+
 def render_decision_details(recommendation: Any, lang: str) -> list[str]:
     """Render structured decision fields without exposing internal IDs."""
 
@@ -65,6 +117,8 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
     branches = _dict_items(recommendation.get("decision_branches"), 20)
     action_plan = _dict_items(recommendation.get("action_plan"), 20)
     lines: list[str] = []
+
+    lines.extend(_render_model_analysis(recommendation, lang))
 
     if recommendation.get("decision_basis_version") == "constraint-aware-v1":
         # A fixed boundary, never a model-supplied readiness claim. Rendering a

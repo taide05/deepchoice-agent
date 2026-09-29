@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Human-reviewed decision analysis
+
+Following the user's 2026-09-29 scope decision, synthesis v13 can produce explicit conditional
+reasoning, assumptions and conceptual designs for human review, linked to original questions
+and completely checked source facts. Inferences never inherit factual verification or winner,
+requirement, HITL or operational authority. Limited results remove them. Citation v10 and report
+templates v11/v10/v9 freeze this projection; historical results retain their identities.
+
+Live report-quality evidence is still pending; no historical content failure is relabeled.
+The separately discussed validation package is deferred and is not part of this change.
+
 ### Limited delivery check stopped after content review
 
 The explicitly authorized 2026-09-29 check completed P04, then stopped before P01/P08 because

@@ -21,6 +21,7 @@ from ..utils.decision_contract import (
 from ..utils.evidence import is_navigation_placeholder
 from ..utils.views import print_agent_output
 from ..utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+from ..utils.decision_analysis import bind_decision_analysis, calibrate_decision_analysis
 from .conclusion_synthesizer import _decision_requirements
 
 
@@ -274,7 +275,7 @@ def _calibrate_decision(
                 if excerpts:
                     row["saved_source_excerpts"] = excerpts
                     remaining_excerpts -= len(excerpts)
-    return calibrate_evidence_choices(result, verification)
+    return calibrate_decision_analysis(calibrate_evidence_choices(result, verification))
 
 
 class CitationValidatorAgent:
@@ -296,6 +297,7 @@ class CitationValidatorAgent:
             recommendation = bind_evidence_choices(
                 recommendation, evidence_chains, task.get("candidate_techs", []), requirements,
             )
+            recommendation = bind_decision_analysis(recommendation, requirements, task.get("candidate_techs", []), task.get("query", ""))
         verification_input = recommendation
         if (
             isinstance(recommendation, dict)

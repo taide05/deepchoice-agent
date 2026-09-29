@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v9"
+    assert first.report.template_version == "evidence-first-v10"
     assert first.scoring_policy_version == "source-score-v6"
     assert {
         retriever.retriever_id: retriever.version
@@ -54,7 +54,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         if retriever.retriever_id != "chroma"
     )
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v9"
+    assert first.citation_policy_version == "deterministic-citation-v10"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -139,10 +139,10 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v3"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v9"
+    assert registry.citation_policy_version == "deterministic-citation-v10"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v12",
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v13",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -154,9 +154,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v10",
-        "evidence_first": "evidence-first-v9",
-        "comparison_matrix": "comparison-matrix-v8",
+        "what_why_how": "what-why-how-v11",
+        "evidence_first": "evidence-first-v10",
+        "comparison_matrix": "comparison-matrix-v9",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 
