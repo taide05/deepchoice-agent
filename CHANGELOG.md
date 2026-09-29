@@ -4,6 +4,15 @@
 
 ### Changed
 
+On 2026-09-29, explicit user confirmation reopens only the reviewed serial-check-v4
+three-case diagnostic. The machine card is prospectively activated; offline tests cover
+the real open gate and retain closed-gate rejection. Product code, case order, budget,
+and strict stop rules are unchanged. Live execution still requires current audit and
+bounded preflight; activation alone is not research or quality evidence.
+The post-review gate checks and all 2,397 tests passed (627.13 seconds); smoke-v1
+12/12 matched its baseline, static/dependency checks passed, and independent review
+closed the matched-closed-payload test gap. No product code changed.
+
 The closed serial-check-v4 machine card binds candidate `f021776` and the stopped v3
 result and ledger across their two local roots. It changes only diagnostic case order
 to P04/P08/P01 so an already observed P01 arXiv timeout cannot prevent P08 from being

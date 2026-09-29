@@ -45,7 +45,7 @@
   },
   "controller": {
     "binding_policy": "candidate-only-three-case-over-serial-v1-v2-v3-v4",
-    "research_admission": "closed-pending-machine-review-and-offline-acceptance",
+    "research_admission": "open-after-independent-review-and-offline-acceptance",
     "required_files": [
       {
         "path": "scripts/product_optimization_serial_check_v4.py",

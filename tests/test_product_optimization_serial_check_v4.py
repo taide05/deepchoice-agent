@@ -1,4 +1,4 @@
-"""Offline acceptance for the closed v4 serial measurement identity."""
+"""Offline acceptance for the activated v4 serial measurement identity."""
 from copy import deepcopy
 import json
 import os
@@ -15,7 +15,7 @@ from scripts import product_optimization_serial_check_v3 as old_runner
 from scripts import product_optimization_serial_check_v4 as runner
 
 
-def test_frozen_overlay_binds_new_candidate_and_preserves_strict_stopping():
+def test_frozen_overlay_binds_new_candidate_and_preserves_strict_stopping(monkeypatch):
     old = old_contract.load_serial_check_protocol().payload
     frozen = contract.load_serial_check_protocol()
     new = runner._bootstrap_approved_protocol(frozen.byte_sha256)
@@ -33,9 +33,13 @@ def test_frozen_overlay_binds_new_candidate_and_preserves_strict_stopping():
         "starting_used": 107, "diagnostic_max": 3, "concurrency_reserve": 0,
         "unallocated": 46, "hard_total": 156,
     }
-    assert new["controller"]["research_admission"] == contract.CLOSED
+    assert new["controller"]["research_admission"] == contract.OPEN
+    runner._require_active_protocol(new)
+    closed = deepcopy(new)
+    closed["controller"]["research_admission"] = contract.CLOSED
+    monkeypatch.setattr(runner, "_load_approved_protocol", lambda *_: SimpleNamespace(payload=closed))
     with pytest.raises(runner.RepairPairControlError, match="not open"):
-        runner._require_active_protocol(new)
+        runner._require_active_protocol(closed)
 
 
 @pytest.mark.parametrize("path,value", [
@@ -90,6 +94,8 @@ async def test_closed_paid_entrypoints_have_no_side_effects(monkeypatch, tmp_pat
     monkeypatch.setattr(old_runner.parent.parent, "_install_call_environment", lambda *_: None)
     monkeypatch.setattr(old_runner, command, lambda *_: pytest.fail("paid path reached"))
     closed = deepcopy(contract.load_serial_check_protocol().payload)
+    closed["controller"]["research_admission"] = contract.CLOSED
+    monkeypatch.setattr(runner, "_load_approved_protocol", lambda *_: SimpleNamespace(payload=closed))
     monkeypatch.setattr(runner, "_bootstrap_approved_protocol", lambda *_: closed)
     arguments = [tmp_path / "unused"] * (5 if command == "preflight" else 6)
     arguments[-1] = contract.load_serial_check_protocol().byte_sha256
@@ -172,6 +178,8 @@ def test_cli_paid_flags_cannot_open_closed_card(monkeypatch, tmp_path, capsys, c
     monkeypatch.setattr(old_runner.parent.parent, "_prepared_environment_paths", lambda *_: [])
     monkeypatch.setattr(old_runner._base, "audit", lambda *_: pytest.fail("audit reached from closed paid path"))
     closed = deepcopy(contract.load_serial_check_protocol().payload)
+    closed["controller"]["research_admission"] = contract.CLOSED
+    monkeypatch.setattr(runner, "_load_approved_protocol", lambda *_: SimpleNamespace(payload=closed))
     monkeypatch.setattr(runner, "_bootstrap_approved_protocol", lambda *_: closed)
     monkeypatch.setattr(runner, "LEDGER_ROOT", tmp_path / "v4-ledger")
     monkeypatch.setattr(sys, "argv", [
