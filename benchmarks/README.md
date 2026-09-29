@@ -2,7 +2,7 @@
 
 更新：2026-09-29。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 判据见[quality-selection-v1](../docs/product-effectiveness-optimization.md)，实际预算与结果见
-[当前状态](../docs/o1-execution-status.md)。新协议的4+4案例清单和运行适配尚待Q0完成。
+[当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存；运行适配尚待完成。
 
 ## 当前可复用能力
 
@@ -17,7 +17,9 @@
 | 官方source-capture/review/seed模块 | 已有来源保存、审核与种子工具；按原安全/身份契约复用，不把旧受审主题外推为通用证据 |
 | `locust -f benchmarks/locustfile.py` | 只读端点负载；不是报告质量或研究吞吐验收 |
 
-新路线先复用现有collector和数据结构；仅增加确有缺口的薄适配，不新增通用评估平台。
+新开发请求及必答项见 `quality-selection-development-v1.json`（版本1.0.0；SHA-256 `e230c6e28e117a7e1216e6e507431a90712013dd2a51655f2396ea0525bfc3b0`）。
+新保留集由独立评审封存；实现者在候选锁定前只接触其类别、版本和哈希，
+不得在本工具说明中展开题目。新路线先复用现有collector和数据结构；仅增加确有缺口的薄适配，不新增通用评估平台。
 必须在首次外呼前检查新场景是否被旧case allowlist、旧停止规则或源hash锁定；有差异先
 离线验收再执行，不能把新协议JSON直接交给旧CLI。不要声称不存在的新命令已经可用。
 

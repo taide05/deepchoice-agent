@@ -11,6 +11,7 @@
 | 2 | [评估协议](product-effectiveness-optimization.md) | quality-selection-v1数据/分母/严重性/稳定性门槛 |
 | 3 | [推进与维修](optimization-execution.md) | 实现粒度、验证节奏、无收益后的调整、持续授权 |
 | 4 | [当前状态](o1-execution-status.md) | 已验证候选、实际账本、当前缺口和下一成果 |
+| 按阶段 | [Q0开发冻结与诊断](quality-selection-q0.md) | 现有报告共性缺陷、开发请求/rubric与评审锚点 |
 | 按需 | [运行契约](phase1-runtime-contract.md) | durable、预算/Trace、引用、安全、HITL和恢复边界 |
 | 按需 | [评估工具](../benchmarks/README.md) | 已有工具能做什么、哪些入口只供历史复算 |
 

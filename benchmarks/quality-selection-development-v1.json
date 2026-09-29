@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "dataset_id": "quality-selection-development-v1",
+  "version": "1.0.0",
+  "status": "frozen",
+  "freeze_date": "2026-09-29",
+  "protocol": "quality-selection-v1",
+  "source_snapshot_root": "D:/deepchoice-agent",
+  "case_order": [
+    "P01",
+    "P04",
+    "P08",
+    "P02"
+  ],
+  "review_mode": "assistant_review_with_independent_adjudication",
+  "human_calibration": "not_run",
+  "case_specific_expectations_frozen_before_new_runs": true,
+  "cases": [
+    {
+      "case_id": "P01",
+      "split": "development",
+      "source_fixture_id": "product-optimization-dev-requests-v1",
+      "source_fixture_sha256": "9c47d8071ed911ede5f810bceda8ba9a4ab19748201f310cf9c033399714871d",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P01.json",
+      "source_snapshot_sha256": "beab5029af1d367e7d2688253224e54fee43d79898ea867ba033d73342da9fb2",
+      "request_sha256": "738af60c92a6c97360c43c191881cf4fa93836039395663887b04debdf275ea9",
+      "request": {
+        "schema_version": 1,
+        "query": "为个人维护、低写入量的 Web 应用选择 SQLite 还是 PostgreSQL？",
+        "scene_context": "单人开发和运维，预计 12 个月内日活低于 5000，读多写少，需要备份与基本全文检索。",
+        "constraints": [
+          "优先降低运维复杂度",
+          "必须说明未来迁移触发条件",
+          "不能仅按理论性能下结论"
+        ],
+        "candidate_techs": [
+          "SQLite",
+          "PostgreSQL"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "当前规模是否需要独立数据库服务？",
+          "并发写入和备份分别有什么边界？",
+          "何时应迁移？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": [
+          "在单人、读多写少、低运维偏好下给出有前提的当前选择，并说明日活不能替代同时写入测量",
+          "比较 SQLite 单写者/写等待与 PostgreSQL 的相关能力和新增服务运维责任，决定性事实各自绑定适用来源",
+          "说明一致性备份和基本全文检索的能力、前提与尚未验证部分",
+          "给出可观察的迁移触发条件，不把一种充分条件写成唯一条件",
+          "保留有依据的条件分析；未知部署/恢复演练不自动取消选型问题的回答"
+        ],
+        "acceptable_conditional_outcomes": [
+          "可有条件倾向 SQLite，说明写入与运维前提、备份及反转条件",
+          "如果实证或硬约束要求独立服务，可有条件倾向 PostgreSQL，但不编造该需求"
+        ],
+        "critical_error_examples": [
+          "把低日活当成并发写入已低的证明",
+          "把无法排队多写者这一充分理由写成客户端/服务器唯一理由并改变选型",
+          "以无关来源支持决定性候选排除或数据安全保证，或提出可能导致备份损坏的操作保证；未改变选择的来源错配按重要缺口审"
+        ],
+        "review_rule": "按 quality-selection-v1 五项二元检查；逐项决定性判断核对原保存来源。例示不替代通用关键错误定义。"
+      }
+    },
+    {
+      "case_id": "P04",
+      "split": "development",
+      "source_fixture_id": "product-optimization-dev-requests-v1",
+      "source_fixture_sha256": "9c47d8071ed911ede5f810bceda8ba9a4ab19748201f310cf9c033399714871d",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P04.json",
+      "source_snapshot_sha256": "5a464ee1eece9fff7a24c8ca79c4da7cf55b4d9669c983fd6850795ce2d8c6cb",
+      "request_sha256": "9ee6fca21018d59483fcdd9a772df685fdb909776c5c0ee1bdfdf3d889a9b937",
+      "request": {
+        "schema_version": 1,
+        "query": "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
+        "scene_context": "单实例 FastAPI 服务，每天约 200 个任务；任务结果不能因服务重启静默丢失，但团队不想过早引入复杂基础设施。",
+        "constraints": [
+          "必须讨论重启恢复和至少一次执行语义",
+          "允许先做阶段性方案",
+          "不得把任务队列描述为天然 exactly-once"
+        ],
+        "candidate_techs": [
+          "FastAPI BackgroundTasks",
+          "Celery"
+        ],
+        "complexity": "high",
+        "report_format": "evidence_first",
+        "sub_questions": [
+          "进程内任务在哪些故障下会丢失？",
+          "Celery 引入哪些组件和运维责任？",
+          "是否存在过渡方案？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": [
+          "回答进程内任务在重启/进程故障下的结果丢失风险，区分每日任务量与单任务时长",
+          "区分 Celery broker、worker、可选结果后端及各自持久性和运维责任",
+          "解释确认、重投、至少一次/重复执行与业务幂等责任，不能宣称天然 exactly-once",
+          "在不能静默丢失结果和不想过早加设施之间给出有条件选择或阶段性替代，并说明权威任务状态",
+          "说明影响切换的观察条件；若提出有副作用操作，只给有界且安全的隔离验证路径"
+        ],
+        "acceptable_conditional_outcomes": [
+          "在结果不得静默丢失这一条件下选择带可追踪权威状态的阶段性方案，或有条件引入 Celery 并说明配置和幂等责任",
+          "资料不足时明确尚缺的恢复证明与低风险核验，不将裸 BackgroundTasks 宣称已满足可靠性"
+        ],
+        "critical_error_examples": [
+          "将 broker 或结果后端当作重启后任务及副作用可靠恢复的充分保证",
+          "宣称 exactly-once、忽略重复执行或给无保护的生产切换步骤",
+          "在不得静默丢失的硬条件下无条件推荐裸进程内任务"
+        ],
+        "review_rule": "按 quality-selection-v1 五项二元检查；逐项决定性判断核对原保存来源。例示不替代通用关键错误定义。"
+      }
+    },
+    {
+      "case_id": "P08",
+      "split": "development",
+      "source_fixture_id": "product-optimization-dev-requests-v1",
+      "source_fixture_sha256": "9c47d8071ed911ede5f810bceda8ba9a4ab19748201f310cf9c033399714871d",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P08.json",
+      "source_snapshot_sha256": "4468a403ea1e017edc7c29bade793f7f77a9413b7852993860d9964d6c092c4f",
+      "request_sha256": "7382e2a4c3be83a75a6d0df606a48bce0fc4d55ca33789bccc609c2f2cbbfa88",
+      "request": {
+        "schema_version": 1,
+        "query": "帮我在 Redis 和 Memcached 之间选择缓存。",
+        "scene_context": "请求没有说明数据结构、持久化、淘汰策略、部署环境或团队能力。",
+        "constraints": [
+          "缺少会改变选择的约束时应明确列出未知并给条件性结论；仅在满足项目证据不足 gate 时进行交互",
+          "不得自行编造流量和一致性要求"
+        ],
+        "candidate_techs": [
+          "Redis",
+          "Memcached"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "哪些未知约束会改变选择？",
+          "补充信息后如何形成条件性结论？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": [
+          "明确数据结构、持久化、淘汰、部署和团队能力等会改变选择的缺失输入，不编造流量或 SLA",
+          "用适用来源比较两种缓存的决定性能力与取舍，不能把功能更全自动等同更合适",
+          "根据已知输入给出有用的条件分支或具体待确认问题，不用无差别清单代替回答",
+          "仅在现有证据不足 gate 触发时请求补充上下文；否则诚实给条件结论或受限报告"
+        ],
+        "acceptable_conditional_outcomes": [
+          "输入不足时保持条件结论，说明哪些要求指向 Redis 或 Memcached",
+          "满足项目 HITL gate 时按冻结动作处理；未触发也要给有用比较"
+        ],
+        "critical_error_examples": [
+          "缺决定性输入仍以流行度或功能全面为由给无条件胜者",
+          "捏造性能、流量、持久化保证或无依据地排除候选"
+        ],
+        "review_rule": "按 quality-selection-v1 五项二元检查；逐项决定性判断核对原保存来源。例示不替代通用关键错误定义。"
+      }
+    },
+    {
+      "case_id": "P02",
+      "split": "development",
+      "source_fixture_id": "product-baseline-v1",
+      "source_fixture_sha256": "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef",
+      "source_snapshot_path": "outputs/o1-pr2b-pair-20260921-f6d6089-d23c948-github-retry/collections/serial-r1/development/snapshots/P02.json",
+      "source_snapshot_sha256": "8b72169a4afca4e6f1fbe6499232f5052b74646b48c118c2356152b8a72e5ba6",
+      "request_sha256": "f1f87bdcc00120b772993c69af60947afe95abf9ecd582fd3552dd6ae77e4a69",
+      "request": {
+        "schema_version": 1,
+        "query": "小团队内部知识库应该使用 PostgreSQL + pgvector，还是部署独立向量数据库 Qdrant？",
+        "scene_context": "5 人团队，约 100 万段文本，已有 PostgreSQL，更新频率低，目标是语义检索与权限过滤。",
+        "constraints": [
+          "两名后端工程师兼任运维",
+          "必须考虑过滤、备份和扩容",
+          "首年基础设施预算有限"
+        ],
+        "candidate_techs": [
+          "PostgreSQL + pgvector",
+          "Qdrant"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "现有 PostgreSQL 能否承载当前规模？",
+          "独立向量库带来的能力是否值得新增运维面？",
+          "什么指标触发迁移？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "rubric": {
+        "must_answer": [
+          "将现有 PostgreSQL、有限运维人员、首年预算纳入选择，而非只比较向量检索 QPS",
+          "比较 pgvector 与 Qdrant 的过滤、索引与权限边界；不把检索过滤等同权限系统",
+          "明确约一百万段文本和低更新频率下哪些能力可据来源判断、哪些须本地测量",
+          "若引用 pgvectorscale 或外部容量/性能数据，须区分产品、版本和负载适用性；未引用时不额外要求讨论",
+          "给出延迟、召回、过滤或容量的可观察复评条件，包含备份/扩容责任"
+        ],
+        "acceptable_conditional_outcomes": [
+          "可有条件从既有 PostgreSQL+pgvector 起步并保留测量后的迁移路径",
+          "若适用证据或实测要求独立能力，可有条件选择 Qdrant"
+        ],
+        "critical_error_examples": [
+          "将外部 50M 向量/QPS 直接证明当前权限过滤负载性能足够",
+          "将 pgvector 与 pgvectorscale 的能力混为一谈并据此作决定",
+          "把向量库过滤功能当作租户权限保证"
+        ],
+        "review_rule": "按 quality-selection-v1 五项二元检查；逐项决定性判断核对原保存来源。例示不替代通用关键错误定义。"
+      }
+    }
+  ]
+}
