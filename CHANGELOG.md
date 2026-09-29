@@ -4,11 +4,20 @@
 
 ### Changed
 
-On 2026-09-29, explicit user confirmation reopens only the reviewed serial-check-v4
-three-case diagnostic. The machine card is prospectively activated; offline tests cover
+The 2026-09-29 serial-check-v4 diagnostic ended after P04 completed; P08/P01 were
+not submitted. A community HTTP 429 recovered within the existing retry policy but
+still triggered the frozen stop rule. The ledger is 108/156, with no uncertain
+admission; the service stopped and both databases passed read-only integrity checks.
+The one available report retains official task-semantics excerpts and an isolated
+validation plan, but independent content review still finds no usable conditional
+choice. This closes the bounded diagnostic, not product-quality acceptance. No
+product code, historical result, stop rule, or follow-up paid authorization changed.
+
+On 2026-09-29, explicit user confirmation reopened only the reviewed serial-check-v4
+three-case diagnostic. The machine card was prospectively activated; offline tests cover
 the real open gate and retain closed-gate rejection. Product code, case order, budget,
-and strict stop rules are unchanged. Live execution still requires current audit and
-bounded preflight; activation alone is not research or quality evidence.
+and strict stop rules were unchanged. Current audit and bounded preflight passed
+before the sole live execution; activation alone was not research or quality evidence.
 The post-review gate checks and all 2,397 tests passed (627.13 seconds); smoke-v1
 12/12 matched its baseline, static/dependency checks passed, and independent review
 closed the matched-closed-payload test gap. No product code changed.

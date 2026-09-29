@@ -1,10 +1,61 @@
 # 当前执行状态与证据索引
 
-最后完成研究：2026-09-28，serial-check-v3 的 P04、P01 串行完成；P01 的 arXiv 检索超时触发停线，P08 未提交。
-普通成本与阶段切换沿用用户持续授权；不再为此逐项停下确认，研究硬上限和安全门禁仍有效。
+最后完成研究：2026-09-29，serial-check-v4 仅 P04 完成；社区检索 HTTP 429 触发停线，P08/P01 未提交。
+累计研究 **108/156**，剩余48未分配。本次有界验证已结束；停止根、未提交格及余额不产生再次执行授权。
 本文只维护最新状态和账本。后续目标见 [地图](current-roadmap.md)，操作方式见 [执行规则](optimization-execution.md)。
 
-### 2026-09-29 v4 前瞻激活与有界验证
+### 2026-09-29 v4 一次性执行已停止：1 completed + 2 not_submitted
+
+本次为 `product-optimization-serial-check-v4` 的三案例开发诊断，固定顺序 P04→P08→P01，
+每例最多一次。开放态禁网 audit、同环境有界 preflight 和 prepare 均通过；preflight 为
+8 次 HTTP、1 次 Tavily POST、2 次 LLM 尝试、0 次研究，金额 unavailable。
+激活/测试提交 `c2e225e`，产品锚点 `f021776`，产品源树对象
+`c23f03dd5189bedbe72770a194b70562b18c9d4a`；产品代码未改动。
+
+| 案例 | 本次结果 | 内容复核 | 运行观察 |
+|---|---|---|---|
+| P04 | completed，报告/快照可查询 | 必答 [1,1,1]，3/6；冻结 major 未发现；选型可用性未通过 | 129.485 秒；9 LLM、6 检索、16,619 token；usage 完整 |
+| P08 | not_submitted | 无新报告，不评分 | 0 研究准入 |
+| P01 | not_submitted | 无新报告，不评分 | 0 研究准入 |
+
+内容先于 Trace/用量初评；独立 GPT-only 复核仅见冻结任务、rubric、报告和保存证据，未见历史
+评分或运行指标。初评 [1,1,2] 与独立 [1,1,1] 的差异只在第三项：具体的四阶段隔离验证不等于
+分阶段落地/迁移方案，按冻结 rubric 采用后者。两份复核均认为不足以完成所问选型。
+P04 的 Celery 确认/重投/幂等官方原文已出现在报告中，隔离计划具有对账、模拟副作用和保全
+边界；仍未把“不静默丢失”约束转化为持久队列或持久任务状态过渡方案。部分机制解释被留作
+未知，且把用户未要求的实际部署演练当成选型前提。唯一 verified 是复杂度偏好的博客文字，
+不能证明可靠性约束满足。引用计数 1 verified、4 unsupported、0 unreachable、23 unknown
+只作诊断，不是此次不通过的评分依据。不外推 P08/P01，不构成配对净改善、重复稳定性或最终验收。
+
+六路逻辑检索最终均为 success（社区结果0）；LLM/node 重试均0、逻辑失败调用0。
+但 telemetry 在 `2026-09-29T01:31:40.817618+00:00` 记录 community GET 429，已有有界
+HTTP 重试随后得到200。冻结控制器因此在 P04 收尾后以
+`TELEMETRY_external_http_status_failed` 停止，不把逻辑 success 当作所有 HTTP 成功，
+也不追溯放宽停止规则。Tavily HEAD401 为已允许的无凭据探测，与本次停止原因不同。
+P04 检索节点90.345秒，其中 Chroma 冷启动72.640秒；active129.108秒，HITL0，预算未拒绝，
+标准资源 reserved/unknown_spend 均0，价格未知。collector 的 http_calls=0 不能证明没有HTTP。
+
+账本为 attempted1 / known-admitted1 / possible-max1，无不确定提交；累计从107增至
+**108/156**，剩余48。服务按 stop flag 完整退出，product/checkpoint 两库只读 quick_check 均
+为 ok；产品库为一条 completed task/run 和一条结果，没有待收尾任务。P08/P01 不补跑，
+本卡及停止根不可重试、续跑或拼接；机器卡 OPEN 保留为本次执行的冻结字节，不是再次准入。
+
+证据位于本机忽略区，不提交原始报告、Trace 或实验库：
+
+- audit：`D:\deepchoice-agent\outputs\product-optimization-serial-check-v4-audit-20260929.json`。
+- preflight：`D:\deepchoice-agent\outputs\product-optimization-serial-check-v4-preflight-20260929-v1`。
+- 执行根：`D:\deepchoice-agent\outputs\product-optimization-serial-check-v4-20260929-v1`；报告相对路径
+  `collections/candidate-r1/development/reports/P04.md`，快照位于同层 `snapshots/P04.json`。
+- 初评、独立复核与协调：`D:\deepchoice-agent\outputs\product-optimization-serial-check-v4-review-20260929`。
+- result SHA-256：`5241c6f25137bedee45e9605be75c329bccab2d448fd879d5fc0f525be05b1a6`。
+- report / snapshot SHA-256：`3b8026a35a106f15e91cf83ef4983347fbf68d514c102e7c7ec7b45ab6a96edd` /
+  `1d36e969c368e33368630f088b18d176b809038d34fe7d42088431a8a09e077a`。
+- telemetry SHA-256：`65b1d85238426c549dba8520bd19771f4d385bce67a08f00d7c3458e96610ec1`。
+
+本轮交付为真实诊断、停止对账及一个核心内容缺口；未改产品、未开始下一张卡，也不宣布产品
+质量通过。以下工程验收覆盖本次冻结对象；其后仅更新结果文档，不重复全套。
+
+### 2026-09-29 v4 前瞻激活与离线验收
 
 用户确认恢复已复审的 v4：P04→P08→P01 串行各最多一次，累计从107最多至110/156。
 本卡的暂停解除；旧根不续跑，其他批次不从本次确认推导准入。机器卡仅切换到既有
@@ -15,7 +66,7 @@
 smoke-v1 12/12且基准匹配、pyflakes、vulture100%、pip check及diff检查通过；独立复核
 无剩余阻断。开放态协议字节SHA-256为
 `e241df35a734963de799d5848c3bd74efdc16676398f5edd748e39530af64be9`。
-尚待开放态只读audit和有界前置；截至本次离线验收新增研究0。
+截至该离线验收新增研究0；其后的audit、前置与唯一执行结果见本页顶部。
 
 ### 2026-09-28 v4 串行测量绑定（当时付费准入关闭）
 
@@ -491,10 +542,10 @@ v6 正式根取得三份可查询报告和完整观测：P04、P01、P08 全部 
 纠偏前HEAD为 `5612dbb`；最近已提交生产改动 `d7e776d` 的2051项全套、smoke12/12和
 独立复审记录仍只覆盖该已验证代码，不覆盖草稿。此次文档提交不重跑未变的工程基线。
 
-最新账本见本页v2执行节；serial-check-v1的3格和v2的2格均已计入，旧根未提交格不可借用。
+以下简表保留2026-09-27 v2时点的事实；最新账本与候选见本页顶部v4执行节，旧根未提交格不可借用。
 用户已将并发测试从当前及近期目标中移除，历史48格路线不再是现行目标或预算预留。
 
-| 项目 | 当前事实 |
+| 项目 | 2026-09-27 v2时点事实 |
 |---|---|
 | 工作分支 | 隔离工作树codex/measurement-v4承载v1–v6停止证据与后续产品效果修复；主工作树codex/baseline-readiness的六文件草稿继续保全，两者不得混合 |
 | 已测量候选 / 控制身份 | 当前产品c1c43d8由v2取得P04/P01报告；4e7ce70的v1三例与d23c948基线只作历史背景；不构成配对 |

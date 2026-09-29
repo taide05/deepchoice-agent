@@ -1,11 +1,11 @@
 # 评估入口与历史工具
 
-更新：2026-09-24。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
+更新：2026-09-29。本文是工具操作说明，不是任务授权或当前运行状态。正式产品效果协议见 [产品效果优化](../docs/product-effectiveness-optimization.md)，
 准备检查结果见 [基线准备检查](../docs/baseline-readiness-audit.md)。
 
 | 入口 | 用途和边界 |
 |---|---|
-| `python -m scripts.product_optimization_serial_check_v4 audit ...` | v4 机器卡的只读、禁网身份审计；顺序 P04/P08/P01、并发 1、各最多一次。audit 不开启付费准入；2026-09-29 按用户确认前瞻激活，关闭态及身份漂移仍拒绝付费入口。旧 v3 根和账本只读绑定，实际状态见执行状态。 |
+| `python -m scripts.product_optimization_serial_check_v4 audit ...` | v4机器卡的只读、禁网身份审计。2026-09-29唯一执行在P04完成后因社区429停止，P08/P01未提交；OPEN保留为冻结历史字节，不能再次准入、续跑或补格。结果见执行状态。 |
 | `python -m scripts.product_optimization_serial_check_v3 audit ...` | 历史 v3 三例串行卡及停止根的只读身份审计；不复用已停止的 v3 准入、根或账本。 |
 | `python -m benchmarks.run_offline_eval --check-baseline` | 固定 smoke-v1 的 12 例，无 LLM/网络；只验证确定性路径 |
 | `evidence_window_prototype.select_evidence_window` | 未推广的纯离线定位原型；输出全部不可绑定，不被默认研究路径调用。反例与限制见 S0 诊断，不作质量/成本评估器 |
