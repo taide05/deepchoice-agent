@@ -349,6 +349,9 @@ def restrict_action_plan(
 def restrict_recommendation(recommendation: Any, query: Any) -> dict[str, Any]:
     """Limit a report even when budget exhaustion preceded citation checks."""
     result = abstain_recommendation(recommendation, query)
+    # Early/limited results cannot publish unchecked conditional-choice extensions.
+    result.pop("source_facts", None)
+    result.pop("conditional_choices", None)
     note = (
         "未知：研究提前结束，此项判断需要独立验证。"
         if _is_zh(query)

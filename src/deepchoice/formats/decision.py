@@ -73,12 +73,66 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             "### 部署验收：未验证" if lang == "zh" else "### Deployment acceptance: unverified",
             "",
             (
-                "选型依据与部署验收分开判断。本研究不执行真实部署或恢复演练；文档引用通过不表示演练通过，也不授权生产变更。用户明确要求的实际验收证据仍是关键条件。"
+                "选型依据与部署验收分开判断。本研究不执行真实部署或恢复演练；文档引用通过不表示演练通过，也不授权生产变更。仅在用户明确要求实际验收证据时，该证据才作为相应要求评估。"
                 if lang == "zh" else
-                "Selection evidence and deployment acceptance are separate. This research does not execute deployment or recovery rehearsals; verified document citations neither prove a successful drill nor authorize production changes. Explicit user requirements for acceptance evidence remain decision-critical."
+                "Selection evidence and deployment acceptance are separate. This research does not execute deployment or recovery rehearsals; verified document citations neither prove a successful drill nor authorize production changes. Acceptance evidence is assessed as a requirement only when the user explicitly requests it."
             ),
             "",
         ])
+
+    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 4)
+             if isinstance(item.get("id"), str)}
+    choices = _dict_items(recommendation.get("conditional_choices"), 4)
+    if choices:
+        lines.extend(["### 条件选择依据" if lang == "zh" else "### Basis for conditional choices", ""])
+        lines.append(
+            "以下选择关系是模型推断；来源词法核验不证明场景适用性、需求满足或部署就绪。"
+            if lang == "zh" else
+            "Choice relations are model inferences; lexical checks do not prove applicability, requirement satisfaction or deployment readiness."
+        )
+        labels = {
+            "prefer": "优先考虑" if lang == "zh" else "Prioritize considering",
+            "consider": "可以考虑" if lang == "zh" else "Consider",
+            "insufficient_alone": "不能仅凭所列机制认定满足需求" if lang == "zh" else "The listed mechanisms alone do not establish satisfaction",
+        }
+        displayed_facts = {}
+        for choice in choices:
+            identifiers = choice.get("fact_ids", [])
+            if not isinstance(identifiers, list) or not identifiers or any(
+                not isinstance(key, str) or key not in facts for key in identifiers
+            ):
+                continue
+            verified = choice.get("basis_status") == "verified" and all(
+                facts[key].get("status") == "verified" for key in identifiers
+            )
+            option = _code(_text(choice.get("option")))
+            relation = labels.get(_text(choice.get("relation")))
+            if relation is None:
+                continue
+            requirements = choice.get("requirements", [])
+            if not isinstance(requirements, list) or not requirements:
+                continue
+            lines.append("- " + ("用户需求：" if lang == "zh" else "User requirements: ")
+                         + " / ".join(_code(_text(value)) for value in requirements[:8]))
+            lines.append(
+                f"  - 模型条件推断：{option} — {relation}；仍需核对下列来源的适用前提。"
+                if verified and lang == "zh" else
+                f"  - Conditional model inference: {option} — {relation}; check the source prerequisites below."
+                if verified else
+                f"  - {option}：依据尚未通过完整核验，暂不展示选择推断。"
+                if lang == "zh" else
+                f"  - {option}: the evidence has not passed complete checks; choice inference withheld."
+            )
+            lines.append("  - " + ("依据：" if lang == "zh" else "Sources: ")
+                         + " / ".join(_code(_text(facts[key].get("source_title"))) for key in identifiers))
+            displayed_facts.update({key: facts[key] for key in identifiers})
+        for fact in displayed_facts.values():
+            lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{
+                "title": fact.get("source_title"), "text": fact.get("saved_text"),
+            }]}, lang))
+            lines.append("    " + ("引用状态：" if lang == "zh" else "Citation status: ")
+                         + _code(_text(fact.get("status"))))
+        lines.append("")
 
     if assessments:
         lines.extend(

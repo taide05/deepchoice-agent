@@ -20,6 +20,8 @@ from ..utils.decision_contract import (
 )
 from ..utils.evidence import is_navigation_placeholder
 from ..utils.views import print_agent_output
+from ..utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+from .conclusion_synthesizer import _decision_requirements
 
 
 _MAX_SAVED_EXCERPT_CHARS = 1200
@@ -272,7 +274,7 @@ def _calibrate_decision(
                 if excerpts:
                     row["saved_source_excerpts"] = excerpts
                     remaining_excerpts -= len(excerpts)
-    return result
+    return calibrate_evidence_choices(result, verification)
 
 
 class CitationValidatorAgent:
@@ -285,6 +287,15 @@ class CitationValidatorAgent:
         recommendation = research_state.get("final_recommendation", {})
         evidence_chains = research_state.get("evidence_chains", [])
         query = str(research_state.get("task", {}).get("query", ""))
+        task = research_state.get("task", {})
+        requirements, _ = _decision_requirements(
+            task.get("query", ""), task.get("constraints", []), [],
+            task.get("sub_questions", []), [], task.get("scene_context", ""),
+        )
+        if isinstance(recommendation, dict):
+            recommendation = bind_evidence_choices(
+                recommendation, evidence_chains, task.get("candidate_techs", []), requirements,
+            )
         verification_input = recommendation
         if (
             isinstance(recommendation, dict)

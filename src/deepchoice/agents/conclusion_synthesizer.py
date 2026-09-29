@@ -19,6 +19,7 @@ from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholde
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
+from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, whole_source_text
 
 # Preserve the existing timeout while the optional thinking mode is measured.
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
@@ -27,6 +28,9 @@ SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all eviden
 
 ## Original Query
 {query}
+
+## Candidate Technologies (conditional choices must use these exact names)
+{candidate_techs}
 
 ## Scene Context
 {scene_context}
@@ -83,6 +87,8 @@ Disputed findings: {disputed_count}
 14. ACTION CONTRACT: Provide conditional decision_branches and a staged action_plan. For operational choices, cover delivery semantics and idempotency, migration stages, verification signals, change triggers, and rollback. Do not claim exactly-once delivery, safe migration, reliability, or rollback feasibility without evidence; mark missing facts unknown near the affected requirement and in unresolved_questions. Unknown operational premises permit read-only observation and disposable isolated rehearsals only, not production dual writes, cutover or overwrite recovery. A snapshot alone cannot establish rollback after new writes: require an authoritative writer, a consistency boundary, preservation/replay of acknowledged writes, abort criteria and an explicit no-rollback point. Do not invent these procedures or treat "verify later" as permission to execute them. Keep useful choice conditions and measurable validation questions even when production action is withheld.
 15. SELECTION IS NOT DEPLOYMENT ACCEPTANCE: The runtime recovery-mechanism obligation asks what the evidence establishes about recovery mechanisms, prerequisites and limits, NOT whether the user's deployment has already passed a rehearsal. Assess those technical facts without inventing test results. Actual deployment readiness remains unverified by this research pipeline and operational actions remain isolated validation only, even if the selection is supported. If the user explicitly requires completed rehearsal or workload-specific proof, preserve that requirement as decision-critical and unknown without applicable evidence. Do not weaken delivery semantics, idempotency ownership, migration/rollback boundaries or other decision requirements.
 
+16. PRESERVE CONDITIONAL DECISION ANALYSIS: Provide up to four source_facts as references only: id (F1..F99), evidence_id (a supplied source number). The runtime copies and checks the entire bounded saved snippet; do not write text, status, excerpts or instructions into these objects. Choose applicable original mechanism evidence with intact limitations. Separately provide up to four conditional_choices: exact candidate option, relation (consider|prefer|insufficient_alone), nonempty fact_ids and nonempty requirement_ids referring only to C items. No free-text conditions, inferred user facts or operational steps belong in these objects. A relation is your conditional inference from cited mechanisms and actual user needs, not proof that a requirement or deployment has passed. prefer means prioritize investigation of that option under the stated source limitations; insufficient_alone means those mechanisms alone do not establish satisfaction, not that the product is always unsuitable. Missing decision context still prevents an unconditional winner. Keep these evidence-bound choices even when other requirements remain unknown. Do not demand a source reproduce the user's workload numbers or a completed deployment test just to discuss a documented mechanism. Explain supported mechanism and staged design details in the existing cited assessment fields; do not substitute an untested production procedure.
+
 ## Output Length Limits (CRITICAL — exceed and output will be rejected)
 - recommendation: max 200 words
 - each ranked_option rationale: max 80 words
@@ -95,6 +101,8 @@ Return ONLY a JSON object:
 {{
   "winner": "Single technology name or context_dependent (REQUIRED)",
   "decision_basis_version": "constraint-aware-v1",
+  "source_facts": [{{"id": "F1", "evidence_id": 1}}],
+  "conditional_choices": [{{"option": "exact candidate name", "relation": "consider", "fact_ids": ["F1"], "requirement_ids": ["C1"]}}],
   "winner_rationale": "One sentence citing strongest evidence (max 40 words)",
   "recommendation": "Actionable recommendation paragraph (max 200 words)",
   "ranked_options": [
@@ -156,7 +164,13 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
                 800 if (src.get("_seed_excerpt_window") == AUDITED_SNIPPET_WINDOW
                         and is_catalog_official_url(src.get("url", ""))) else 600
             )
-            snippet = _prompt_data(src.get("snippet", ""), snippet_limit)
+            raw_snippet = src.get("snippet", "")
+            # A conditional fact may use the whole bounded snippet. Show its
+            # trailing prerequisites to the model as well as to the verifier.
+            whole_snippet = whole_source_text(raw_snippet)
+            if whole_snippet:
+                snippet_limit = MAX_SOURCE_TEXT
+            snippet = _prompt_data(raw_snippet, snippet_limit)
             if snippet:
                 lines.append(f"       Untrusted snippet: {snippet}")
         lines.append("")
@@ -852,6 +866,7 @@ class ConclusionSynthesizerAgent:
             "role": "user",
             "content": SYNTHESIS_PROMPT.format(
                 query=task["query"],
+                candidate_techs=_prompt_data(json.dumps(task.get("candidate_techs", []), ensure_ascii=False), 4000),
                 scene_context=task.get("scene_context", "team"),
                 supplemental_context=(
                     _prompt_data(research_state.get("_supplemental_input"), 4000)
@@ -951,6 +966,7 @@ class ConclusionSynthesizerAgent:
                 if isinstance(value, list)
                 else []
             )
+        result = bind_evidence_choices(result, evidence_chains, task.get("candidate_techs", []), requirements)
         result, contract_requires_abstention = _normalize_decision_contract(
             result,
             requirements,

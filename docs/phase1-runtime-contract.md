@@ -19,6 +19,24 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-09-29 当前候选使用 synthesis v12、citation v9、三模板 what-why-how-v10 /
+evidence-first-v9 / comparison-matrix-v8。推荐内新增至多四条 source_facts 和四条
+conditional_choices：模型只选择来源编号、原始候选名、原始 C 需求 ID 和固定关系枚举；
+不接受模型编造的片段、需求、核验状态或操作步骤。运行时绑定本次未争议的唯一来源，完整
+保留至多1200字且符合逐句检查上限的保存片段，过长或带引用标记的片段不截断使用。
+这些可用片段也完整进入合成输入，使模型能看到尾部前提；其余片段沿用旧提示长度限制。
+
+引用节点每次重建绑定；标题须能往返解析为唯一原标题，逐句检查必须完整覆盖该片段，且
+标题和规范 URL 必须与绑定相同。任一检查未知/不支持/不可达、缺失或总检查溢出时，相关
+选择推断不展示为可用依据。核验通过仅说明来源文字有词法支持；consider/prefer/
+insufficient_alone 始终是模型对用户需求的条件推断，不证明适用性、满足要求或产品必然不适合。
+报告保留原文前提并明确推断性质；未完成部署演练不再被固定文案描述为用户要求。
+
+这些字段在普通弃权时保留，但不提升 Winner、需求状态、HITL或行动权限；预算/HITL受限
+报告移除这两项。部署状态仍为未验证，操作型计划仍限隔离验证。嵌套字段沿现有结果快照
+持久化，无新迁移或顶层状态。旧 citation v1–v8、prompt及模板身份仍可读取，但拒绝同run
+恢复；当前策略不回写历史结果。真实模型是否选对关系及阶段性方案仍需有限内容复核。
+
 S1 约束感知结论（2026-09-21）在 final_recommendation 内使用
 constraint-aware-v1：逐项 requirement_assessments、条件 decision_branches 和 action_plan
 记录验证、变更触发与回退。ResearchState 新增可选 constraints，保留需求分析器输出；
@@ -67,7 +85,7 @@ v4 将 unknown 豁免缩到代码内精确无事实模板；非模板 unknown �
 旧 citation v3、prompt v7 和旧模板仍可读取，但必须新建 run；schema、预算、HITL、安全抓取
 及生命周期契约不变。
 
-当前候选进一步使用 synthesis v9、citation v5 及三模板 v8/v7/v6。自动恢复 A 义务只询问文献可
+此前候选使用 synthesis v9、citation v5 及三模板 v8/v7/v6。自动恢复 A 义务只询问文献可
 支撑的恢复机制、前提与限制，仍为 decision-critical；用户 C/冻结 Q 和 analysis 中明确要求
 实际演练的原文不豁免。final_recommendation.deployment_readiness 由合成、弃权、受限计划及引用
 校准统一覆盖为 unverified，三个报告模板固定展示未验收警示，不采用模型的 ready/scope 声明。
@@ -103,7 +121,7 @@ verified；已匹配来源句中的 if/when 条件分句和强制性语气被省
 `unknown/qualifier_unverified`，不把它当成反证。完整保留的条件句仍只能得到词法支持，
 不能证明用户工作负载满足条件。旧 v1–v6 检查和 manifest 可读，但不能同 run 恢复。
 
-当前新运行冻结 citation v8：同一需求解释内有引用但跨语言/限定条件不确定的事实与无引用
+此前 citation v8：同一需求解释内有引用但跨语言/限定条件不确定的事实与无引用
 推断混写时，整项继续降为 unknown、移除模型原句与 evidence_ids，关键项仍撤回 Winner；
 不得把原句的安全部分自动提取为已验证结论。只可从本次证据链、引用注册表及相同规范 URL
 重新绑定上述不确定检查的保存来源片段；无引用部分不能决定片段内容。保留每处最多两段、
@@ -150,8 +168,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v8` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
-  citation-policy v1–v7 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v9` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
+  citation-policy v1–v8 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Bounded conditional choice evidence
+
+Synthesis v12 selects only source, candidate and original requirement references for conditional
+choices. Runtime-owned whole snippets are checked sentence by sentence, including source identity;
+unknown or incomplete support withholds the choice projection. Reports distinguish these model
+inferences from requirement satisfaction and deployment readiness, retain source prerequisites,
+and no longer imply a deployment rehearsal was requested when it was not. Ordinary abstention
+preserves this analysis; limited reports remove it and operational authority stays unchanged.
+Citation v9 and templates v10/v9/v8 freeze the behavior; old identities remain readable but cannot
+resume on the new runtime. Focused and full validation, smoke baseline and independent review
+passed; evidence is recorded in the execution status. This is an offline repair, not new live-report
+quality evidence.
+
 ### Changed
 
 Development now follows the bounded delivery roadmap dated 2026-09-29: useful

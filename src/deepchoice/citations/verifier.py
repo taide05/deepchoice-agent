@@ -54,6 +54,7 @@ MAX_FIELD_SENTENCES = 16
 MAX_RANKED_OPTIONS = 20
 MAX_TRADEOFFS = 20
 _DECISION_FIELDS = {
+    "source_facts": (4, ("text",)),
     "requirement_assessments": (40, ("explanation",)),
     "decision_branches": (20, ("condition",)),
     "action_plan": (20, ("step", "verification", "change_trigger", "rollback")),
