@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Unchecked branch condition withdrawn
+
+Citation v11 calibration now replaces a model-authored decision branch condition whenever its
+source check is not fully verified, including insufficient content and missing checks.
+The v14 P04 report is unchanged historical evidence. This closes a reproduced unsafe
+display path but does not answer the missing P04 decision questions or establish live quality.
+Affected tests and the full suite (2,438 passed) are green; independent review found no blocker.
+
 ### Source-fact binding contract made explicit
 
 Synthesis v14 now receives per-source binding eligibility from the same runtime binder used after

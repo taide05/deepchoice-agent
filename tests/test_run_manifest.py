@@ -54,7 +54,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         if retriever.retriever_id != "chroma"
     )
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v10"
+    assert first.citation_policy_version == "deterministic-citation-v11"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -89,7 +89,8 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     "deterministic-citation-v3",
     "deterministic-citation-v4", "deterministic-citation-v5",
     "deterministic-citation-v6",
-    "deterministic-citation-v7",
+    "deterministic-citation-v7", "deterministic-citation-v8",
+    "deterministic-citation-v9", "deterministic-citation-v10",
 ])
 def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
@@ -139,7 +140,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v3"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v10"
+    assert registry.citation_policy_version == "deterministic-citation-v11"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v14",

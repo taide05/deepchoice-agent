@@ -306,6 +306,52 @@ def test_prompt_preserves_language_qualifications_and_primary_source_preference(
         assert rule in SYNTHESIS_PROMPT
 
 
+@pytest.mark.parametrize("checks", [
+    [SimpleNamespace(claim_path="final_recommendation.decision_branches[0].condition",
+                     status=SimpleNamespace(value="unknown"),
+                     reason=SimpleNamespace(value="content_insufficient"))],
+    [],
+])
+def test_unchecked_branch_cannot_advertise_restart_loss_as_viable(checks):
+    condition = "可接受重启后任务静默丢失，因此继续使用进程内后台任务。"
+    rec = {
+        "decision_basis_version": "constraint-aware-v1",
+        "winner": "context_dependent",
+        "requirement_assessments": [], "ranked_options": [],
+        "decision_branches": [{"option": "BackgroundTasks", "condition": condition}],
+        "recommendation": "", "action_plan": [],
+    }
+    calibrated = _calibrate_decision(rec, SimpleNamespace(checks=checks), "后台任务不能静默丢失")
+    assert calibrated["decision_branches"][0]["condition"] == "适用前提待核对来源原文与当前工作负载。"
+    assert condition not in "\n".join(render_decision_details(calibrated, "zh"))
+    assert rec["decision_branches"][0]["condition"] == condition
+
+
+def test_only_fully_verified_branch_conditions_remain_model_authored():
+    def check(index, status, reason):
+        return SimpleNamespace(
+            claim_path=f"final_recommendation.decision_branches[{index}].condition",
+            status=SimpleNamespace(value=status), reason=SimpleNamespace(value=reason),
+        )
+
+    rec = {
+        "decision_basis_version": "constraint-aware-v1", "winner": "context_dependent",
+        "requirement_assessments": [], "ranked_options": [], "recommendation": "", "action_plan": [],
+        "decision_branches": [
+            {"option": "A", "condition": "Source-supported condition"},
+            {"option": "B", "condition": "Unconfirmed condition"},
+        ],
+    }
+    checks = [check(0, "verified", "lexical_support"),
+              check(1, "verified", "lexical_support"),
+              check(1, "unknown", "content_insufficient")]
+    result = _calibrate_decision(rec, SimpleNamespace(checks=checks), "Compare choices")
+    assert result["decision_branches"][0]["condition"] == "Source-supported condition"
+    assert result["decision_branches"][1]["condition"] == (
+        "Applicability requires checking the original source and this workload."
+    )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("source_text,model_claim,url", [
     (

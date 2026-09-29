@@ -232,9 +232,9 @@ def _calibrate_decision(
             check.reason.value in {"cross_language", "qualifier_unverified"}
             for check in checks
         )
-        if qualifier_unknown:
-            # A translated or strengthened model condition may omit the source's
-            # applicability boundary. Do not repeat it as a usable branch.
+        if not passed(path):
+            # An unchecked model condition cannot be presented as a usable branch,
+            # including when source content is insufficient or a check is absent.
             branch["condition"] = (
                 "适用前提待核对来源原文与当前工作负载。" if is_zh else
                 "Applicability requires checking the original source and this workload."

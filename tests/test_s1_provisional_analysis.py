@@ -120,7 +120,9 @@ async def test_all_reports_keep_analysis_warning_and_conditional_plan(monkeypatc
     assert "Rehearse backup and recovery" not in report
     assert ("仅隔离验证；禁止生产变更" if "选择" in query else
             "Isolated validation only; no production changes") in report
-    assert "If the write load fits" in report
+    assert "If the write load fits" not in report
+    assert ("适用前提待核对来源原文与当前工作负载" if "选择" in query else
+            "Applicability requires checking the original source and this workload") in report
     assert "provisional_explanation" not in report
 
 

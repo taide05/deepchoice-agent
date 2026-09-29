@@ -92,9 +92,13 @@ def test_non_abstaining_proposal_is_not_replaced_or_mislabeled_as_validation_onl
         })
         for field in ("step", "verification", "change_trigger", "rollback")
     )
+    branch_check = check.model_copy(update={
+        "claim_id": "branch",
+        "claim_path": "final_recommendation.decision_branches[0].condition",
+    })
     verification = CitationVerification(
-        status_counts=CitationStatusCounts(verified=6),
-        checks=(check, winner_check, *action_checks),
+        status_counts=CitationStatusCounts(verified=7),
+        checks=(check, winner_check, branch_check, *action_checks),
     )
     result = _calibrate_decision(original, verification, "Choose a database")
     assert result == {**original, "deployment_readiness": "unverified"}
