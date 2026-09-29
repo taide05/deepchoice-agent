@@ -308,31 +308,43 @@ When adding a setting, update the code default, tests, README configuration sect
 
 ### Current implementation scope
 
-- `docs/current-roadmap.md` is the source of truth for work after Phase 6-A. The broader technical
-  design remains historical design space and must not be interpreted as authorized current scope.
-- Phase 3, Phase 4, Phase 5-1/5-2 and the approved Phase 6-A engineering scope are complete.
-  Product optimization now follows `docs/current-roadmap.md`; engineering completion is not product
-  quality acceptance. See `docs/phase5-engineering-acceptance.md` for engineering evidence.
-- Read `docs/README.md` first for document roles, then the current map, execution rules and latest
-  status. `docs/optimization-execution.md` defines outcome-based work and deviation handling: carry
-  authorized work through verification and local commit without asking to continue at every PR.
-  Respect genuine budget, data-transfer, security, acceptance and publication boundaries.
-- Do not bulk-load `docs/archive/` or prior session handoffs. Archived instructions and approval
-  wording are historical evidence, not current scope. Open a specific historical file only when
-  needed; maintain one source for each fact. Current user instructions override archived limits.
-- `notes/` holds local handoffs and detailed session evidence. End-of-session handoffs point to
-  maintained documents and record the next outcome, not a replay of the conversation.
-- Do not add excluded enterprise scope—multi-user auth/RBAC, rate limiting, distributed workers,
-  external queues, PostgreSQL/Redis/OTel platforms, generalized billing, or multi-gate HITL—unless
-  the roadmap is explicitly revised again.
-- The 2026-09-16 user-approved prerequisite is unifying all LLM calls on DeepSeek Flash before
-  measuring the product baseline. The evaluation protocol defines selective development checks and
-  a frozen-candidate full comparison; it does not require a paid case batch after every code edit.
-- The baseline-readiness audit is recorded in `docs/baseline-readiness-audit.md`. Legacy batch/generator/
-  merge CLIs are retired; direct-graph experiments require an explicit CLI selector and fresh output
-  directory. New baseline consumers use durable APIs. The 12-case set and collector are implemented;
-  current qualification, study usage and remaining acceptance are in `docs/o1-execution-status.md`.
-  Retrieval health checks do not validate LLM connectivity; prior implementation is not live quality proof.
+- Read `docs/README.md` first, then `docs/current-roadmap.md`,
+  `docs/product-effectiveness-optimization.md`, `docs/optimization-execution.md`, and
+  `docs/o1-execution-status.md`. These own scope, quality criteria, work cadence, and actual state.
+- The 2026-09-29 user direction is sustained overall selection quality and repeatability across
+  supported scenarios. The former single-case/two-or-three-attempt stopping scope is retired;
+  its failed/unassessed outcomes and closed run roots remain unchanged. Do not reactivate old
+  12/24/48-run or concurrent protocols, and do not treat historical OPEN fields as authority.
+- Optimize evidence relevance/completeness, conditional reasoning, decisive-source mapping and
+  preservation of useful analysis through the report. Prefer simplifying low-value processing;
+  permit evidence-backed local structural fixes. No case-answer hardcoding or cosmetic sampling.
+- Separate runtime failures, critical content errors, evidence gaps and minor presentation issues.
+  Test counts and lexical citation status do not prove report quality; useful conditional advice
+  may pass without a unique Winner. Freeze case-specific expectations before observing outputs.
+- Quality-selection-v1 defines the new development/repeated acceptance plan. Its dataset and batch
+  bindings must actually exist before execution; documentation is not proof of implementation.
+  The actual cumulative research ledger and remaining resources live only in current status.
+- Carry authorized diagnosis, implementation, necessary repair, validation, review and local
+  commits through without per-step permission requests. Existing paid authorization persists;
+  freeze each batch and honor actual budget/data/security/publication boundaries.
+- Use independent reviewers for final content acceptance, unexposed validation-case preparation
+  and contract-required engineering review. Content/code review is read-only; case preparation
+  writes only assigned evaluation materials. A document reorganization may receive one
+  independent consistency review. Record exposure, disagreements and assistant-only limitations;
+  do not claim human calibration. Default implementation stays focused rather than broadly delegated.
+- Phase 3/4/5 and approved Phase 6-A engineering work is complete. Keep the durable/runtime,
+  safety, budget and compatibility contracts; current version identities come from the checked-out
+  manifest builder and maintained runtime contract. Phase-era version literals are historical
+  snapshots, not instructions to downgrade the current workflow or asset policy.
+- No new providers, multi-user auth/RBAC, rate limiting, distributed workers, external queues,
+  PostgreSQL/Redis/OTel platforms, generalized billing, multi-gate HITL or default LLM judge.
+  Validation packages and external career material remain deferred unless scope changes explicitly.
+- Archive instructions and old qualifications are historical evidence. Open a specific archive
+  only for a concrete fact; do not bulk-load historical roadmaps or session handoffs. Preserve
+  immutable fixtures, machine-card hashes and original failure records. Notes hold local handoffs.
+- New product measurements use durable APIs and frozen clean identities. Reuse compatible bounded
+  preflight evidence; retrieval health alone does not validate LLM connectivity. Legacy direct-graph
+  commands remain historical tools and cannot stand in for default-path quality acceptance.
 
 ## Local and generated data
 

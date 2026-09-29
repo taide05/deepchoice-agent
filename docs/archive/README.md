@@ -3,6 +3,25 @@
 归档日期：2026-09-21。默认不整包读取本目录；只有当前工作需要核对某个历史决定或证据时，才打开对应文件。
 当前规划以 [任务地图](../current-roadmap.md)为准，阅读次序见 [文档索引](../README.md)。
 
+## 2026-09-29 整体质量方向整理
+
+来源提交`4e37e87`。以下正文已退出当前默认阅读路径；各文件注明原路径和SHA256，
+保留历史事实/失败，仅重定位相对链接。[当前路线](../current-roadmap.md)改为整体质量与重复稳定性。
+
+| 历史正文 | 保留用途 |
+|---|---|
+| [单场景路线](quality-direction-20260929/single-case-roadmap.md) | 原最小展示目标及三次停止边界 |
+| [单场景执行规则](quality-direction-20260929/single-case-execution.md) | 原维修/授权边界 |
+| [评估历史](quality-direction-20260929/evaluation-history.md) | 旧S1/S3、逐处声明和有限交付口径 |
+| [执行历史](quality-direction-20260929/execution-history.md) | 到累计114/156的候选、失败、调用和停止证据 |
+| [S0诊断](quality-direction-20260929/s0-review.md) | 当时问题、评分、代码线索，不是现行任务单 |
+| [旧资格](quality-direction-20260929/qualification-history.md) | 原P01资格及冻结分母 |
+| [README交付历史](quality-direction-20260929/readme-delivery-history.md) | 原用户入口中的逐轮优化叙述 |
+| [旧工具指南](quality-direction-20260929/benchmark-guide-history.md) | 冻结历史工具的参数及当时适用条件 |
+
+`docs/product-optimization-serial-check-v2.md`被机器卡按路径/SHA绑定，原地保留；
+其旧计划只供复算。原始数据集、CSV/JSON台账、机器卡、运行库和代码不因文档归档而修改。
+
 ## 2026-09-29 路线调整
 
 [交付调整前的完整地图](roadmap-before-delivery-closeout-20260929.md)来自本地提交eaaf448。

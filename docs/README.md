@@ -1,70 +1,42 @@
-# 文档入口与职责
+# Codex文档入口与效力
 
-更新：2026-09-29。开始后续工作只读下列当前入口，按任务需要补读契约；不要递归加载全部 docs 或 archive。
-用户当前指令与仓库代码/可执行测试优先；历史“下一步”“待批准”不产生现行任务。
+更新：2026-09-29。用户当前指令优先；代码、manifest构建器、pyproject.toml和可执行测试
+描述已实现行为。路线描述目标，不能把尚未实现的计划当成代码事实。
 
-## 当前入口：每种事实只维护一处
+## 默认阅读顺序
 
-| 顺序 | 文档 | 负责什么 | 不负责什么 |
-|---|---|---|---|
-| 1 | [交付范围](current-roadmap.md) | 本轮定位、收尾判据、已知限制与后续边界 | 历史全量优化路线、逐次流水 |
-| 2 | [执行与协作](optimization-execution.md) | 复盘、成果粒度、发现偏离、授权及中断恢复规则 | 直接批准新付费实验 |
-| 3 | [当前执行状态](o1-execution-status.md) | 研究准入账本、产品/控制身份、最新停止/收尾和证据定位 | 新任务排序 |
-| 按需 | [历史S0诊断](product-optimization-s0-review.md) | 旧候选锁分、问题线索和当时依据 | 当前任务排序、自动恢复S1执行卡 |
-| 按需 | [评估边界](product-effectiveness-optimization.md) | 评分、分母、冻结协议生效范围、新方案准入条件 | 改历史结果或自动启动批次 |
-| 按需 | [历史P01资格](o1c-single-case-verification.md) | 对应旧候选的资格与证据、限制 | 当前候选放行或新的采样要求 |
+| 顺序 | 文档 | 唯一职责 |
+|---|---|---|
+| 1 | [质量路线](current-roadmap.md) | 支持范围、优化优先级、Q0–Q3成果与总边界 |
+| 2 | [评估协议](product-effectiveness-optimization.md) | quality-selection-v1数据/分母/严重性/稳定性门槛 |
+| 3 | [推进与维修](optimization-execution.md) | 实现粒度、验证节奏、无收益后的调整、持续授权 |
+| 4 | [当前状态](o1-execution-status.md) | 已验证候选、实际账本、当前缺口和下一成果 |
+| 按需 | [运行契约](phase1-runtime-contract.md) | durable、预算/Trace、引用、安全、HITL和恢复边界 |
+| 按需 | [评估工具](../benchmarks/README.md) | 已有工具能做什么、哪些入口只供历史复算 |
 
-2026-09-29用户采纳单场景最小展示验收：先检查已有报告，必要时按地图的有限次数核对，
-证明一个真实请求可得到有依据的条件建议。DeepChoice 仍是单用户技术选型 Agent。
-此前三场景目标退役且未达成；P01初验内容FAIL、原第二次复核中断且内容未评估。
-离线心跳维修通过完整2476项及独立复核后，用户明确批准再核对一次原P01。
-追加复核完成报告、SSE重放、读取与导出；报告已有条件分析，但来源绑定和过度推断问题
-使主评/独立内容复核仍为FAIL。调整后3/3次名额已用完，目标未达成，本轮结束。
-累计研究114/156。先前失败保留，P08无当前候选报告；不继续采样或内容调优。
-状态、账本和定位限制见执行状态，
-本轮判据与剩余风险见地图。验证包继续后置。
-旧v4及本轮停止根均不补跑；代码/工程通过不能改写为产品质量通过。
-工程完成、有限开发交付与广泛质量研究分别记录。旧12/24/48格及完整S3要求已退役为
-[历史路线](archive/roadmap-before-delivery-closeout-20260929.md)，不阻塞当前交付。12路并发不属于当前或近期目标，
-不从历史“下一步”、剩余额度或机器卡OPEN值恢复运行。
-`o1-next-steps.md` 已退役为兼容跳转，不再维护另一份任务地图。
+本轮目标是多场景整体质量与重复稳定性；旧“仅一次P01/三次后只收尾”及旧完整矩阵任务均
+已退役。旧目标保持未达成，旧停止根不补跑。不能从归档的“下一步/OPEN/待批准”产生任务。
+当前状态中的计划格不代表已实现数据集或已批准跳过身份核对。
 
-## 持续维护的契约与冻结证据
+## 持续有效与冻结保留
 
-- [默认运行契约](phase1-runtime-contract.md)：生命周期、预算/Trace、HITL、恢复、安全等实现契约。
-- [Phase 5 离线评估](phase5-offline-eval.md)：smoke-v1 操作与能力边界。
-- [工程验收](phase5-engineering-acceptance.md)、[Phase 1 验收](phase1-acceptance-report.md)：相应阶段的已验证工程事实与残余风险，不能解释成待做路线。
-- [冻结参考](o1-reference-audit.md)、[声明台账契约](o1a-evaluation-contract.json)、
-  [报告绑定](o1-development-review-bindings.json)、[原子台账](o1a-development-claims.csv)：保留原路径和内容，避免破坏可执行检查和测量身份。
-- [S0 绑定](product-optimization-s0-bindings.json) 与
-  [S0 关键声明台账](product-optimization-s0-claims.csv)：绑定当前候选 serial-r1 的八份开发报告和 360 项逐处原子关键声明，
-  不替换历史六报告分母，也不包含保留集报告内容。
-- [S1 局部测量协议](../benchmarks/product-optimization-s1-constraint-aware-v2.json)：
-  P04/P08 目标、P01 回归、身份/顺序/预算/评审/停止规则的机器可读冻结；不是付费执行授权或效果结果。
-  v2 绑定解释保留修复；原 v1 仍保留用于复算 bcb4c87，不跨版本复用资格。
-- [评估工具操作说明](../benchmarks/README.md)：CLI 用法，不能自行产生执行授权。
-- [三案例串行测量卡v2](product-optimization-serial-check-v2.md)：离线验收后的冻结设计与候选身份；
-  [机器卡](../benchmarks/product-optimization-serial-check-v2.json)已接到v2薄适配入口，离线验收后
-  按持续授权完成唯一正式执行后停止；当前实耗/停止查执行状态，不把v2交给旧v1 CLI或再次执行。
-- [三案例串行机器卡v3](../benchmarks/product-optimization-serial-check-v3.json)：本机忽略区设计卡的
-  机器绑定，离线复核后前瞻激活；只读 audit 与实测准入分开，旧v2停止根不可续跑。
-- [三案例串行机器卡v4](../benchmarks/product-optimization-serial-check-v4.json)：新候选的
-  P04→P08→P01 身份与 v3 停止证据绑定；2026-09-29唯一执行已停止，OPEN冻结字节不授权重跑。
+- README负责产品、启动、使用和已知限制；CHANGELOG记录交付，均不再充当优化流水。
+- [Phase 5离线评估](phase5-offline-eval.md)、[工程验收](phase5-engineering-acceptance.md)、
+  [Phase 1验收](phase1-acceptance-report.md)保留阶段事实与日期；不据历史测试数推断今天的质量。
+- `o1a-evaluation-contract.json`、`o1-development-review-bindings.json`、
+  `o1a-development-claims.csv`、`product-optimization-s0-bindings.json`和
+  `product-optimization-s0-claims.csv`是历史冻结证据，保留路径和字节，不作新测量依据。
+- [旧参考表](o1-reference-audit.md)绑定历史案例；参考和日期不当成当前网页事实或新保留集。
+- [serial-check-v2设计](product-optimization-serial-check-v2.md)被机器卡按路径及SHA绑定，
+  **原地冻结保留**；其中“未运行/下一步”是历史文字，当前不可执行。v1–v4和repair-pair
+  等机器卡、原始产物与评分不改；OPEN字段不授权重新执行。
 
-历史评分和 token CSV/JSON 都保留原分母/版本，不回填为当前候选；原始报告、快照、Trace、实验库留 outputs/。
+## 归档与兼容入口
 
-## 归档与本地会话材料
+[本次归档](archive/README.md)收录旧单场景路线、执行规则、评估历史、1417行执行流水、
+S0诊断、旧资格、README交付历史和旧工具指南。归档正文标明来源提交/原文件hash，保留
+原判断；只调整相对链接。S0和资格旧路径保留短跳转，当前入口不再要求读历史全文。
+既有PRD/设计、O1拆分和历史handoff跳转继续失效。默认不递归加载archive或notes。
 
-[归档索引](archive/README.md)记录历史设计、评估协议、任务拆分和阶段证据，新增退役的完整优化地图；保留来源提交与原判断。
-只在需要追溯一个特定事实时打开对应文件。归档文件顶部明确失效范围，原路径保留短跳转，避免既有链接失效。
-
-两份历史会话交接移到本地忽略区 `notes/archive/20260921/`，原路径只保留失效提示；
-下一会话交接也放 notes/，不加入公开文档，不重复整段对话。归档不改写 Git 历史。
-
-## 维护约定
-
-- 目标变更只改地图；运行结果只改状态与对应证据；测量规则只改独立冻结协议；执行经验只改执行规则。
-- README 只展示概况并链接上述入口，CHANGELOG 只记录已交付变化，不再复制整条执行时间线。
-- 历史解释必须带日期、案例/版本/分母；不得用“旧”笼统替代“哪个版本、是否仍适用”。
-- 新的阻断按影响写入当前地图或执行状态；不会因为换 session/PR 就消失。不要为每次停线再新建长期规划文档。
-- 会话结束前更新本地交接的目标、完成项、当前断点、有效授权、下一成果与必要证据定位。
+会话交接、临时方案、执行明细与原始报告放忽略区notes/outputs；不用每轮创建新长期文档。
+同一事实只维护一个入口。下一轮开始按上表顺序读，再依据具体问题打开契约或某条历史证据。

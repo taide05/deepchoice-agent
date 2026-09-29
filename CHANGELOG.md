@@ -2,6 +2,22 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Overall selection quality roadmap and documentation reset
+
+Replaced the closed single-case demonstration scope with a multi-scenario quality
+and repeatability roadmap. Quality-selection-v1 separates usefulness, decisive
+evidence, material errors and runtime outcomes, and defines prospective development
+comparisons plus a fixed-candidate repeated acceptance set within the existing
+research cap. Dataset/rubric freezing is the next implementation outcome, not a
+completed evaluation. Normal repair, verification and local commits continue under
+existing authorization; low-yield approaches must be reassessed instead of repeated.
+
+Updated the Codex reading order and project guide, shortened current status and
+user/tool entry points, and archived superseded plans and execution history with
+source commit/hash metadata. Hash-bound design cards and historical fixtures,
+scores, runtime contracts and outcomes remain intact. No product behavior or new
+research changed in this documentation-only revision.
+
 ### Authorized post-heartbeat P01 recheck closed
 
 The user explicitly added one unchanged P01 recheck after the offline repair.
