@@ -4,6 +4,15 @@
 
 ### Changed
 
+Development now follows the bounded delivery roadmap dated 2026-09-29: useful
+conditional recommendations, the default durable user flow, limited development-case
+review, necessary repairs, and reproducible local handoff. The former comprehensive
+optimization roadmap is archived; its paired/full-matrix requirements no longer gate
+this delivery. Historical results, immutable protocols, engineering/security contracts,
+and paid-run/publication authorization boundaries retain their meanings. Normal work,
+fault repair, interruption recovery, and a no-progress escalation rule are explicit.
+This documentation change does not claim a product-quality improvement.
+
 The 2026-09-29 serial-check-v4 diagnostic ended after P04 completed; P08/P01 were
 not submitted. A community HTTP 429 recovered within the existing retry policy but
 still triggered the frozen stop rule. The ledger is 108/156, with no uncertain
