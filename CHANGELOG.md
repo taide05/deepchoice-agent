@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Human-review candidate content check stopped
+
+The separately authorized retry passed prerequisites and completed P04 on the unchanged `36bc3fd`
+product candidate. Report reading and Markdown export worked, but primary and independent review
+found the decision questions still unanswered; P01/P08 were not submitted. Cumulative research is
+110/156. The service exited normally and both runtime databases passed read-only checks. Saved node
+states show one bound analysis removed after its source stayed unknown; other missing analyses cannot
+be attributed to generation versus binding from the retained evidence. No further paid sampling or
+production change was made, and existing offline validation remains valid.
+
 ### Candidate check stopped at prerequisites
 
 The authorized 2026-09-29 check for candidate `36bc3fd` stopped on arXiv's rate-limited route
