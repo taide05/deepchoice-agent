@@ -11,6 +11,17 @@ Content-free counts distinguish source facts received/bound and analysis rows re
 The prompt now states the existing four-reference limit. This repairs a reproducible input-contract gap;
 it does not prove the cause of all missing P04 answers or establish live quality improvement.
 
+### v14 single-case content check stopped
+
+The 2026-09-29 bounded check completed one P04 durable run on `eedce26`; the report and
+Markdown export were readable, and the service stopped normally. Primary and independent content
+review both failed: restart-loss and component responsibilities remain unanswered, while the report
+retains an inapplicable BackgroundTasks branch and cites unsupported database replay to the FastAPI
+snippet. Two bound analyses depended on an unknown source and were removed by citation calibration;
+no analysis survives in the public snapshot. The synthesis counters are visible only in its accepted
+local checkpoint because later nodes replace quality signals. P01/P08 were not submitted; cumulative
+research is 111/156. This candidate is not accepted as a usable final report.
+
 ### Human-review candidate content check stopped
 
 The separately authorized retry passed prerequisites and completed P04 on the unchanged `36bc3fd`
