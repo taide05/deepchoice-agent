@@ -21,7 +21,7 @@ from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholde
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
-from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, whole_source_text
+from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, eligible_source_fact_ids, whole_source_text
 
 # Preserve the existing timeout while the optional thinking mode is measured.
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
@@ -89,8 +89,8 @@ Disputed findings: {disputed_count}
 14. ACTION CONTRACT: Provide conditional decision_branches and a staged action_plan. For operational choices, cover delivery semantics and idempotency, migration stages, verification signals, change triggers, and rollback. Do not claim exactly-once delivery, safe migration, reliability, or rollback feasibility without evidence; mark missing facts unknown near the affected requirement and in unresolved_questions. Unknown operational premises permit read-only observation and disposable isolated rehearsals only, not production dual writes, cutover or overwrite recovery. A snapshot alone cannot establish rollback after new writes: require an authoritative writer, a consistency boundary, preservation/replay of acknowledged writes, abort criteria and an explicit no-rollback point. Do not invent these procedures or treat "verify later" as permission to execute them. Keep useful choice conditions and measurable validation questions even when production action is withheld.
 15. SELECTION IS NOT DEPLOYMENT ACCEPTANCE: The runtime recovery-mechanism obligation asks what the evidence establishes about recovery mechanisms, prerequisites and limits, NOT whether the user's deployment has already passed a rehearsal. Assess those technical facts without inventing test results. Actual deployment readiness remains unverified by this research pipeline and operational actions remain isolated validation only, even if the selection is supported. If the user explicitly requires completed rehearsal or workload-specific proof, preserve that requirement as decision-critical and unknown without applicable evidence. Do not weaken delivery semantics, idempotency ownership, migration/rollback boundaries or other decision requirements.
 
-16. HUMAN-REVIEWED DECISION ANALYSIS: This is the primary place to answer the user's actual decision questions in the query language. Provide up to four source_facts as REFERENCES ONLY: id (F1..F99), evidence_id (a supplied source number). The runtime copies and checks each complete saved snippet, including its limitations; choose substantive mechanism evidence rather than navigation or general definitions.
-   Then provide at most eight decision_analysis entries. Each entry references actual fact_ids and original R0/C/Q requirement_ids (R0 is always the original query), and includes kind (choice|answer|design), option (an exact candidate or empty for general answers), reasoning, explicit assumptions, and a change_condition that would change or refute the proposed conclusion. Cover the original mandatory questions, at least one conditional choice when possible, and conceptual stages when the user asks for a transition. State which responsibilities/components are needed and why each stage helps; a list of tests alone does not answer a design question.
+16. HUMAN-REVIEWED DECISION ANALYSIS: This is the primary place to answer the user's actual decision questions in the query language. Provide up to four source_facts as REFERENCES ONLY: id (F1..F99), evidence_id (a supplied source number). The runtime copies and checks each complete saved snippet, including its limitations; choose substantive mechanism evidence rather than navigation or general definitions. Only use sources marked "Source-fact binding allowed: yes" for source_facts. Other sources cannot back decision_analysis even when they remain usable in ordinary cited fields. This marker means the saved text can be bound, NOT that the source or inference is verified.
+   Then provide at most eight decision_analysis entries. Each entry references 1-4 unique actual fact_ids and 1-4 unique original R0/C/Q requirement_ids (R0 is always the original query), and includes kind (choice|answer|design), option (an exact candidate or empty for general answers), reasoning, explicit assumptions, and a change_condition that would change or refute the proposed conclusion. Cover the original mandatory questions, at least one conditional choice when possible, and conceptual stages when the user asks for a transition. State which responsibilities/components are needed and why each stage helps; a list of tests alone does not answer a design question.
    Source facts, user context and your inference are different: do not claim your inference is verified. Explain how the cited mechanism applies UNDER the listed assumptions; never invent the user's workload, environment, acceptance results, performance thresholds or a guarantee. Do not demand that source documents reproduce this user's workload or an already-completed deployment rehearsal. If a critical mechanism is genuinely absent, identify that gap precisely instead of inventing an answer. Keep conditional reasoning even when winner remains context_dependent.
    All decision_analysis text is an unverified MODEL PROPOSAL for human review, including translations of source facts. Source lexical support does not verify translation, applicability or reasoning. Use plain text, not inline citation markers, links, commands, code, or production cutover/rollback instructions. Reference sources ONLY through fact_ids. Hypothetical stages describe goals, responsibilities, prerequisites and what would change the design; actual operations stay in the isolated-validation action_plan. Unknown decisive user conditions must remain explicit and may require clarification. Do not present a branch contradicting a stated hard condition as a current viable choice; mark it inapplicable and explain the missing capability instead.
 
@@ -110,7 +110,7 @@ Return ONLY a JSON object:
   "winner": "Single technology name or context_dependent (REQUIRED)",
   "decision_basis_version": "constraint-aware-v1",
   "source_facts": [{{"id": "F1", "evidence_id": 1}}],
-  "decision_analysis": [{{"kind": "choice|answer|design", "option": "exact candidate or empty", "fact_ids": ["F1"], "requirement_ids": ["C1"], "reasoning": "Answer the actual question; distinguish documented mechanism from conditional inference (max 1500 characters)", "assumptions": ["Explicit unconfirmed applicability assumption (max 300 characters each, 1-4 items)"], "change_condition": "What observation or missing condition would change this proposal (max 600 characters)"}}],
+  "decision_analysis": [{{"kind": "answer", "option": "exact candidate or empty", "fact_ids": ["F1"], "requirement_ids": ["C1"], "reasoning": "Answer the actual question; distinguish documented mechanism from conditional inference (max 1500 characters)", "assumptions": ["Explicit unconfirmed applicability assumption (max 300 characters each, 1-4 items)"], "change_condition": "What observation or missing condition would change this proposal (max 600 characters)"}}],
   "winner_rationale": "One sentence citing strongest evidence (max 40 words)",
   "recommendation": "Actionable recommendation paragraph (max 200 words)",
   "ranked_options": [
@@ -149,6 +149,7 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
         "",
     ]
     mapping: dict[int, str] = {}
+    eligible_facts = eligible_source_fact_ids(evidence_chains)
     n = 0
     for i, c in enumerate(evidence_chains):
         strength = c.get("evidence_strength", "unknown")
@@ -165,6 +166,7 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
             title = source_title(src.get("title"), src.get("url"))
             mapping[n] = title
             lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
+            lines.append("       Source-fact binding allowed: " + ("yes" if n in eligible_facts else "no"))
             # A reviewed official-seed snippet can now include a source line
             # ending just after the old 500-char cutoff. Keep that qualification
             # visible to synthesis; ordinary sources retain their 600-char cap.
@@ -974,8 +976,11 @@ class ConclusionSynthesizerAgent:
                 if isinstance(value, list)
                 else []
             )
+        raw_facts = result.get("source_facts")
+        fact_count = len(raw_facts) if isinstance(raw_facts, list) else None
         result = bind_evidence_choices(result, evidence_chains, task.get("candidate_techs", []), requirements)
-        result = bind_decision_analysis(result, requirements, task.get("candidate_techs", []), task.get("query", ""))
+        analysis_binding = {}
+        result = bind_decision_analysis(result, requirements, task.get("candidate_techs", []), task.get("query", ""), diagnostics=analysis_binding)
         result, contract_requires_abstention = _normalize_decision_contract(
             result,
             requirements,
@@ -1030,6 +1035,10 @@ class ConclusionSynthesizerAgent:
             "disputed_chains": disputed_count,
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
+            # Counts and fixed rejection categories only; never model prose.
+            "source_facts_received": fact_count,
+            "source_facts_bound": len(result.get("source_facts", [])),
+            "analysis_binding": analysis_binding,
         }]
 
         return {

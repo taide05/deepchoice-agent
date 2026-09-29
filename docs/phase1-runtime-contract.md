@@ -686,3 +686,8 @@ registry，且只能负向排除跨场景页面；正向命中仍须通过可见
 此投影不升级winner、需求satisfied、HITL或action_plan，不回灌为来源证据；历史结果不回填。
 原实际操作门禁继续生效，概念方案供人审，不构成生产执行许可。Markdown/HTML/PDF共享
 现有出口，模型文本以字面内容呈现，不能产生自带引用徽标、链接或可执行模板。
+后续synthesis v14在生成前用同一来源绑定器标记source_facts可接受编号，保持完整片段、
+句数、身份与争议规则；标记不表示verified。现有quality_signals记录source_facts收到/绑定
+数量及analysis_binding的provided、received、retained和固定拒绝类别计数，不包含模型正文、
+来源文本、请求或私有身份；这些是结构诊断，不是答案覆盖率或质量分数。没有新增网络调用、
+自动重试或决定权限；历史快照无需回填，缺少诊断时不能反推当时生成或拒绝了多少分析。

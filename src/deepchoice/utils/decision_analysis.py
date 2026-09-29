@@ -29,7 +29,7 @@ def _refs(value, allowed):
     return value
 
 
-def bind_decision_analysis(recommendation, requirements, candidates, query=""):
+def bind_decision_analysis(recommendation, requirements, candidates, query="", *, diagnostics=None):
     """Rebuild model output from original C/Q requirements and bound fact IDs.
 
     This first pass does not grant display permission. Citation calibration must
@@ -37,10 +37,22 @@ def bind_decision_analysis(recommendation, requirements, candidates, query=""):
     """
     result = deepcopy(recommendation)
     raw = result.pop("decision_analysis", None)
+    counts = {"provided": "decision_analysis" in recommendation,
+              "received": len(raw) if isinstance(raw, list) else None,
+              "retained": 0, "rejected": {}}
+    if diagnostics is not None:
+        diagnostics.clear()
+        diagnostics.update(counts)
+        counts = diagnostics
+
+    def reject(reason):
+        counts["rejected"][reason] = counts["rejected"].get(reason, 0) + 1
+
     if raw is None:
         return result
     result["decision_analysis"] = []
     if not isinstance(raw, list) or len(raw) > MAX_ANALYSES:
+        reject("invalid_list" if not isinstance(raw, list) else "item_limit")
         return result
     original = {
         row["id"]: row["requirement"] for row in requirements
@@ -53,21 +65,27 @@ def bind_decision_analysis(recommendation, requirements, candidates, query=""):
     for item in raw:
         if (not isinstance(item, dict) or not isinstance(item.get("kind"), str)
                 or item["kind"] not in KINDS):
+            reject("invalid_kind")
             continue
         option = item.get("option", "")
-        if not isinstance(option, str) or (option and option not in options):
-            continue
-        if item["kind"] == "choice" and not option:
+        if (not isinstance(option, str) or (option and option not in options)
+                or (item["kind"] == "choice" and not option)):
+            reject("invalid_option")
             continue
         fact_ids = _refs(item.get("fact_ids"), facts)
         requirement_ids = _refs(item.get("requirement_ids"), original)
+        if not fact_ids or not requirement_ids:
+            reject("invalid_fact_ids" if not fact_ids else "invalid_requirement_ids")
+            continue
         reasoning = _text(item.get("reasoning"), 1500)
         change_condition = _text(item.get("change_condition"), 600)
         raw_assumptions = item.get("assumptions")
         if not isinstance(raw_assumptions, list) or not 0 < len(raw_assumptions) <= 4:
+            reject("invalid_assumptions")
             continue
         assumptions = [_text(value, 300) for value in raw_assumptions]
-        if not (fact_ids and requirement_ids and reasoning and change_condition and all(assumptions)):
+        if not (reasoning and change_condition and all(assumptions)):
+            reject("invalid_prose")
             continue
         result["decision_analysis"].append({
             "kind": item["kind"], "option": option,
@@ -76,6 +94,7 @@ def bind_decision_analysis(recommendation, requirements, candidates, query=""):
             "reasoning": reasoning, "assumptions": assumptions,
             "change_condition": change_condition, "review_status": "not_checked",
         })
+        counts["retained"] += 1
     return result
 
 

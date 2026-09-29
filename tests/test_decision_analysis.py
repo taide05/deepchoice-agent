@@ -91,7 +91,10 @@ def test_untrusted_analysis_cannot_forge_bindings(bad):
     elif bad == "long": item["reasoning"] = "x" * 1501
     elif bad == "assumption": item["assumptions"] = []
     requirements, _ = synth._decision_requirements(TASK["query"], TASK["constraints"], [], TASK["sub_questions"], [])
-    assert bind_decision_analysis(rec, requirements, TASK["candidate_techs"])["decision_analysis"] == []
+    diagnostics = {"untrusted": "not retained"}
+    assert bind_decision_analysis(rec, requirements, TASK["candidate_techs"], diagnostics=diagnostics)["decision_analysis"] == []
+    assert diagnostics["retained"] == 0 and diagnostics["rejected"]
+    assert "untrusted" not in diagnostics
 
 
 def test_model_prose_is_literal_and_never_an_html_or_link_channel():
@@ -103,3 +106,68 @@ def test_model_prose_is_literal_and_never_an_html_or_link_channel():
     html = render_safe_report_html("\n".join(render_decision_details(rec, "zh")))
     assert '<img' not in html and '<strong>verified</strong>' not in html
     assert "待人工审阅" in html
+
+
+@pytest.mark.asyncio
+async def test_ineligible_source_is_disclosed_before_generation_and_rejection_is_counted(monkeypatch):
+    import json
+
+    long_text = " ".join(f"Statement {i} describes the saved component." for i in range(17))
+    chains = deepcopy(CHAINS)
+    chains[0]["sources"].append({"title": "Long source", "url": "https://example.org/long", "snippet": long_text})
+    model_calls = []
+
+    async def model(messages, **kwargs):
+        model_calls.append(messages)
+        prompt = messages[-1]["content"]
+        assert "[[1]] Recovery fixture (score: N/A)\n       Source-fact binding allowed: yes" in prompt
+        assert "[[2]] Long source (score: N/A)\n       Source-fact binding allowed: no" in prompt
+        assert "1-4 unique original R0/C/Q" in prompt
+        result = proposal()
+        result["source_facts"].append({"id": "F2", "evidence_id": 2})
+        rejected = deepcopy(result["decision_analysis"][0])
+        rejected.update(fact_ids=["F2"], reasoning="MODEL_PROSE_MUST_NOT_ENTER_BINDING_DIAGNOSTICS")
+        result["decision_analysis"].append(rejected)
+        return result
+
+    async def fetch(source, url, *args, **kwargs):
+        assert source == "official" and url == "https://example.org/recovery"
+        return httpx.Response(200, text=SNIPPET, headers={"content-type": "text/plain"}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(synth, "call_model", model)
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state = {"task": deepcopy(TASK), "evidence_chains": chains}
+    state.update(await synth.ConclusionSynthesizerAgent().run(state))
+    signal = state["quality_signals"][0]
+    assert signal["source_facts_received"] == 2 and signal["source_facts_bound"] == 1
+    assert signal["analysis_binding"] == {"provided": True, "received": 2, "retained": 1, "rejected": {"invalid_fact_ids": 1}}
+    assert "MODEL_PROSE" not in json.dumps(signal)
+    assert len(model_calls) == 1
+    assert state["final_recommendation"]["source_facts"][0]["status"] == "unknown"
+    state.update(await CitationValidatorAgent().run(state))
+    rec = state["final_recommendation"]
+    assert len(rec["decision_analysis"]) == 1
+    assert rec["decision_analysis"][0]["review_status"] == "human_review_required"
+    assert rec["winner"] == "context_dependent" and rec["action_plan_mode"] == "validation_only"
+
+
+def test_eligible_fact_inventory_preserves_numbering_and_identity_rules_across_batches():
+    from deepchoice.utils.evidence_choices import eligible_source_fact_ids
+
+    def source(title, path, snippet=SNIPPET):
+        return {"title": title, "url": "https://example.org/" + path, "snippet": snippet}
+
+    long_text = " ".join(f"Statement {i} describes the saved component." for i in range(17))
+    chains = [
+        {"sources": [source("First", "one"), source("Ambiguous", "two"),
+                     source("Ambiguous", "three"), source("Long", "four", long_text)]},
+        {"sources": [source("Next batch", "five")]},
+        {"disputed": True, "sources": [source("Disputed", "six")]},
+    ]
+    before = deepcopy(chains)
+    assert eligible_source_fact_ids(chains) == {1, 5}
+    assert chains == before
+    prompt, mapping = synth._summarize_chains(chains)
+    assert mapping[5] == "Next batch" and mapping[6] == "Disputed"
+    assert "[[5]] Next batch (score: N/A)\n       Source-fact binding allowed: yes" in prompt
+    assert "[[6]] Disputed (score: N/A)\n       Source-fact binding allowed: no" in prompt

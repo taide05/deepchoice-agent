@@ -128,6 +128,22 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
     return result
 
 
+def eligible_source_fact_ids(chains):
+    """Use the binding contract itself to advertise admissible source numbers.
+
+    Eligibility concerns complete saved text and identity, not live citation
+    verification. Batches retain the same four-fact limit as model output.
+    """
+    count = sum(len(chain.get("sources", [])[:4]) for chain in chains)
+    eligible = set()
+    for start in range(1, count + 1, MAX_SOURCE_FACTS):
+        refs = [{"id": f"F{offset + 1}", "evidence_id": number}
+                for offset, number in enumerate(range(start, min(start + MAX_SOURCE_FACTS, count + 1)))]
+        bound = bind_evidence_choices({"source_facts": refs}, chains, [], [])
+        eligible.update(fact["evidence_id"] for fact in bound.get("source_facts", []))
+    return eligible
+
+
 def calibrate_evidence_choices(recommendation, verification):
     """Require whole-snippet coverage; leave uncertainty and choice authority separate."""
     from ..citations.verifier import _split_sentences, _strip_citations

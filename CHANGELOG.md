@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Source-fact binding contract made explicit
+
+Synthesis v14 now receives per-source binding eligibility from the same runtime binder used after
+model output. Over-limit, disputed or ambiguous sources are not silently advertised as valid human-review
+analysis inputs. Eligibility is not verification and does not change citation or action authority.
+Content-free counts distinguish source facts received/bound and analysis rows received/retained/rejected.
+The prompt now states the existing four-reference limit. This repairs a reproducible input-contract gap;
+it does not prove the cause of all missing P04 answers or establish live quality improvement.
+
 ### Human-review candidate content check stopped
 
 The separately authorized retry passed prerequisites and completed P04 on the unchanged `36bc3fd`
