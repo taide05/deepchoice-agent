@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Single-user research-assistant closeout scope
+
+The user approved closing necessary development as a single-user, human-reviewed evidence
+research assistant. The durable workflow, bounded citation projection, HITL and report export
+remain the delivery surface. The v14 P04 content review failed and P01/P08 have no current
+candidate reports; the smaller scope does not relabel those results. Citation v11 was validated
+offline but has not received a new live report check. README and current roadmap now state
+these limits and the trusted-network deployment boundary. No new paid research was run.
+
 ### Unchecked branch condition withdrawn
 
 Citation v11 calibration now replaces a model-authored decision branch condition whenever its

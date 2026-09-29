@@ -1,11 +1,12 @@
 # DeepChoice — AI 驱动的技术选型深度研究 Agent
 
-DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI vs Flask 该选哪个"就能自动搜索 6 路数据源、给每篇信源打分、检测矛盾观点并用两阶段仲裁解决、最终输出有据可查的对比推荐报告。
+DeepChoice 是基于 LangGraph 的单用户技术选型研究助手：输入需求与候选后，它从 6 路来源检索、评估并生成可查看和导出的报告。来源核验、模型推断与待补信息分别呈现；报告供人工复核，不能单独决定生产选型。
 
-## 当前产品优化状态
+## 当前交付定位与限制
 
-当前实施将来源事实与模型分析分开：来源仍逐句核验；中文释义、适用性推断、概念方案
-明确供人工审阅，列明假设与改变判断的条件，不冒用来源的verified状态或放行生产操作。
+本轮按较小范围结束必要开发：交付单用户可信网络内的证据研究助手，不承诺自动给出可靠选型。
+来源事实与模型分析分开：来源仍逐句核验；中文释义、适用性推断、概念方案明确供人工审阅，
+列明假设与改变判断的条件，不冒用来源的verified状态或放行生产操作。
 新身份为 synthesis v14、citation v11、报告模板 v11/v10/v9；历史结果可读，旧身份不能同run续跑。
 来源无法完成核验时，对应分析不展示；普通弃权可保留有完整来源绑定的分析，受限报告清除。
 合成前标明可绑定来源，绑定诊断只保留计数与固定拒绝类别；可绑定不表示已核验，也不保证答案完整。
@@ -14,12 +15,13 @@ DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI 
 Markdown导出可用；主评和独立复核仍判核心内容失败。报告把可接受重启丢失窗口的分支列入
 本案选项，并将未获来源支持的数据库重放设想引用到FastAPI文档，不能据此作决定。
 累计研究111/156；P01/P08未提交。本次运行已停止收尾，停止同类提示与来源准入修法。
-后续离线修复撤回引用检查未通过或缺失时的模型分支条件；相关全套2438项通过，尚无新真实报告证明核心内容改善。
+后续离线修复撤回引用检查未通过或缺失时的模型分支条件；相关全套2438项通过，尚无新真实
+报告证明核心内容改善。P01/P08与高质量条件选型不属于本轮完成声明。
 工程验证通过不等于真实报告达标。详见[执行状态](docs/o1-execution-status.md)。
 
-2026-09-29起按[必要开发交付路线](docs/current-roadmap.md)收尾：修复决定性证据到条件建议的
-核心缺口，核对默认使用流程，完成有限开发场景验证与运行说明。旧全量优化、24次完整验收及
-配对收益目标退出本次交付前置；历史未通过结果保持原义，生命周期/预算/安全契约继续有效。
+现行[交付范围与限制](docs/current-roadmap.md)以可用的 durable 研究流程、证据可追溯、未知可见和
+人工复核为边界。P04核心内容仍失败，P01/P08没有当前候选报告；旧全量优化、24次完整验收及
+配对收益目标不属于本轮，历史未通过结果保持原义，生命周期/预算/安全契约继续有效。
 
 工程基础与若干稳定性、来源和行动安全修复已通过离线验证；真实报告的净改善和最终产品质量
 仍未通过验收。并发测试已从当前及近期产品目标中移除，不设置并发门槛或预算预留；代码中的并发
@@ -32,7 +34,7 @@ Markdown导出可用；主评和独立复核仍判核心内容失败。报告把
 重大事实错误，但不能据此宣布产品质量通过。此前P01缺口没有本轮新报告验证。
 本轮已对账结束，停止根不可补跑或拼接，不自动追加付费卡。
 v4诊断前的工程验收为完整2397项通过（627.13秒），与报告内容判断分开；实际结果、评分和证据见
-[执行状态](docs/o1-execution-status.md)，开发收尾边界见[地图第7节](docs/current-roadmap.md#7-当前下一成果)。
+[执行状态](docs/o1-execution-status.md)；现行边界见[交付范围](docs/current-roadmap.md)。
 
 以下为历史修复与诊断背景，数字只适用于所述版本和案例，最新状态以上述入口为准。
 
@@ -133,16 +135,17 @@ P01 备份/检索与 P04 Celery 任务语义的正文替换须核对精确 chunk
 付费flags不能绕过身份及停止规则，后继运行须另冻新卡。使用与激活边界见
 [测量工具说明](benchmarks/README.md)，工程验收及实际audit证据见[执行状态](docs/o1-execution-status.md)。
 
-- [整体任务地图](docs/current-roadmap.md)：目标、优先级、完成标准和下一成果。
+- [现行交付范围](docs/current-roadmap.md)：本轮定位、收尾判据和已知限制。
 - [执行与协作规则](docs/optimization-execution.md)：纠偏依据、反馈闭环及连续执行方式。
 - [实际执行状态](docs/o1-execution-status.md)：候选、用量、预留和停止证据。
 - [文档索引](docs/README.md)：维护契约、诊断与历史证据的阅读边界。
 
 ## 为什么值得关注
 
-技术选型搜索通常靠开发者自己翻博客、刷 GitHub、看文档，几个小时下来还不确定信源质量。DeepChoice 把这个过程自动化了——不只是搜，而是评分、对比、仲裁、自审，每一句推荐都能追溯到具体来源。
+技术选型搜索常需开发者自己翻博客、看仓库和文档。DeepChoice 汇总多个来源并展示评分、
+冲突处理和引用状态，帮助用户检查观点的依据；部分推断可能缺少充分支持，应保持未知。
 
-与 Perplexity/ChatGPT 的对比：它们给答案但不展示证据链和矛盾处理过程。DeepChoice 的输出是**可审计的**——你会看到每篇文章的信源评分、冲突观点是怎么仲裁的、结论为什么可信。
+DeepChoice 展示信源评分、冲突处理、引用状态和未知项，方便使用者核对报告依据。引用检查只验证有界的可达性与词法支持，不能证明结论语义正确或适用于当前团队。
 
 ## 核心特性
 
@@ -165,18 +168,15 @@ P01 备份/检索与 P04 Celery 任务语义的正文替换须核对精确 chunk
 
 ## 快速开始
 
-正常产品启动使用下列命令。评估与单例资格工具的操作说明见 [评估入口](benchmarks/README.md)，
-命令存在不代表本轮已获付费执行授权；当前候选资格见 [资格记录](docs/o1c-single-case-verification.md)。
+使用 Python 3.11 或 3.12。以下命令启动单用户本地体验；配置 DeepSeek/Tavily 密钥后，实际研究会调用
+外部服务并可能产生费用。评估工具另见 [评估入口](benchmarks/README.md)。
 
 ```powershell
-# 1. 克隆
-git clone https://github.com/taide05/deepchoice-agent.git
-cd deepchoice-agent
+# 1. 在项目根目录创建环境并安装
 python -m venv .venv
-# PowerShell：.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-# Linux/macOS：./.venv/bin/python -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 
-# 2. 配置 API Key（不要提交 .env）
+# 2. 在项目根目录的私有 .env 或进程环境中配置 API Key（不要提交 .env）
 # 所有 LLM：DS_FLASH_API_KEY，兼容 FLASH_API_KEY / DEEPSEEK_API_KEY
 # Tavily：TAVILY_API_KEYS（逗号分隔），或单个 TAVILY_API_KEY
 # 可选：GITHUB_TOKEN、STACKEXCHANGE_API_KEY
@@ -188,6 +188,11 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run frontend/app.py
 # 浏览器打开 http://localhost:8501
 ```
+
+在前端填写比较问题、候选和约束后提交；任务进度与最终状态在页面显示。若出现
+“需要更多信息”，可补充背景继续、基于已有证据生成受限报告或取消。完成后在“报告”页
+核对引用与未知项，再按需导出 Markdown/PDF。失败或受限状态不代表已作出可靠选型。
+默认后端 `API_BASE` 为 `http://localhost:8000`，前端可通过同名环境变量连接其他受信地址。
 
 可选网络配置包括 `LOCAL_PROXY`、`FWD_BASE`、`FWD_KEY`、`FWD_TARGETS`、
 `OUTBOUND_CHANNELS`、`OUTBOUND_CHANNELS_COMMUNITY` 和 `OUTBOUND_CHANNELS_TAVILY`；Tavily
