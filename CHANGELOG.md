@@ -2,6 +2,25 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Acquire bounded relevant official-page excerpts
+
+Official retriever v2 adds durable-only reading of at most two curated document roots
+and two relevant direct children per root. Existing safe fetch, catalog host/explicit alias,
+same scheme/effective port, path-segment scope, 128 KiB prefixes and serial HTTP budget
+admission bound the new path. The new parser excludes explicit navigation/hidden containers
+and pre blocks; neighbouring limitations are retained. Learned/fallback URLs keep their
+directory role, and adapted-query fallback selection stays compatible. Existing HEAD/PyPI operations now also record logical HTTP
+usage; redirects and HEAD fallback can produce more physical requests. Failures remain
+visible and budget rejection/cancellation preserve ledger accounting. Official v1 identities
+remain readable but require a new run. No paid research or frozen-data changes.
+
+Historical 2026-09-24 HTML replay on 12 previously used pages, with receipt-topic queries,
+selects eight excerpts: six verify lexically and two remain unknown; two pages are outside
+the current root scope and two yield no bounded relevant prose. This does not test root
+link discovery, current websites, actual adapted queries or report quality.
+Validated on 2026-09-30 with 2677 tests (445.98 seconds), 221 focused tests,
+smoke-v1 12/12, pyflakes/vulture and independent review.
+
 ### Preserve line-wrapped source qualifications within the existing bound
 
 Chroma retriever v6 extends an exactly audited source prefix to the first line end

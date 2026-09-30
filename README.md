@@ -30,6 +30,7 @@ DeepChoice 展示信源评分、冲突处理、引用状态和未知项，方便
 ## 核心特性
 
 - **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；Chroma v6 保留原始比较维度、限制查询维度/候选池、按 URL 合并并给适配查询保留结果容量，针对明确原始场景需求增加有界本地查询，并只在冻结正文身份核验通过时选用受审官方正文；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
+- **有界官方正文检索**：v2 在 durable 路径读取至多两个登记文档根，每根最多跟随两个相关链接；限定为登记主机或显式别名、相同 scheme/有效端口及路径段范围。保留相邻限定并逐次计入 HTTP 预算；目录命中与词法相关不证明适用性，旧兼容路径保留目录结果。
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先用规则与 DeepSeek Flash 仲裁矛盾对，再对低置信度的一对补充取证，并用同一 DeepSeek Flash 重新裁决
@@ -188,7 +189,7 @@ HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redi
 hostname 精确匹配或显式 `*.example.com` 子域匹配。动态抓取显式请求 identity content encoding；
 无法解码、含未知编码或在打开/消费响应时发生 HTTPX stream 生命周期错误的响应，都按脱敏
 `response_rejected` 关闭，不能作为可重试 transport 证据。新 run 冻结 `outbound-url-v5`：默认安全
-抓取仍拒绝超过上限的正文；只有引用验证显式选择最多 128 KiB 的有界页面前缀（提取文本最多 65,536 字符），前缀命中可以获得
+抓取仍拒绝超过上限的正文；引用验证与 durable 官方正文读取显式选择最多 128 KiB 的有界页面前缀（提取文本最多 65,536 字符）。引用前缀命中可以获得
 词法 `verified`，前缀未命中保持 `unknown/content_insufficient`，不能据此判为不支持。历史 v1–v4
 manifest 仍可读取但不能按变化后的响应语义同 run 恢复。HTTP body 上限为 128 KiB，query、候选、
 澄清和聚合输入另有字段/数量限制。日志、错误、Trace 和 LLM diagnostics 统一脱敏，后者只保留

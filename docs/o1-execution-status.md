@@ -13,7 +13,7 @@
 
 已测量冻结为84a3528（synthesis v18），它修复种子准备并压缩合成提示；这是可追溯
 工程候选，**不是质量通过版本**。测量后的引用文本块定位v12已完成工程验证并冻结为7a9e14a；
-后续Chroma v6也已完成工程验证，尚无新真实报告。
+后续Chroma v6也已完成工程验证；官方正文v2也已完成工程验证，尚无新真实报告。
 
 ## 2026-09-30维修开发对照
 
@@ -87,10 +87,14 @@ P01/P04/P08/P02，每例一次，不是重复稳定性观察。
    找不到时保留旧前缀，不回切删除限定尾句。实际代码对同一21个历史事实回放：v12的12个
    verified全部保留，另6个补全后verified，3个仍unknown。该诊断不重写原报告得分、不证明
    当前网页相同或P01推理已纠正。公共快照没有过滤前模型输出，不能重建实际删除分析数。
-5. **官方来源入口仍缺正文。** 当前代码的无外呼mock复现：已知文档站命中返回一条目录占位，
-   来源评估正确排除后保留0条。P02已有证据主要是仓库摘要及二手比较；不能通过提高链接权重
-   解决。下一实质方案优先检查有界官方正文取得与相关性，保留安全fetch、预算和可见失败；
-   不新增案例答案或把首页正文等同于决定性依据。
+5. **官方目录命中需要转为相关正文。** 原v1无外呼mock复现已知文档站只返回目录占位，
+   来源评估正确排除后保留0条。官方v2新增durable有界正文取得：至多两个登记根各跟随两个
+   相关子页，逐次HTTP预算、安全fetch及失败可见；限定条件相邻保留。真实账本离线测试覆盖
+   拒绝、取消及成功，目录页→实际子页→来源绑定→引用核验的fixture往返通过。2026-09-24
+   历史HTML的12页主题查询回放中，8页选出片段（6词法verified、2unknown），2页因目录范围
+   排除、2页无合格片段。回放发现并修复hidden机器元数据误选。这里使用已存receipt主题，
+   不是实际适配查询、官网根链接发现或实时质量测量；Memcached文档子域仍未获目录遍历权限。
+   P02的决定性事实覆盖仍未通过真实报告证明，不能通过提高链接权重或首页命中宣称已解决。
 6. **原句完整仍不能解决推理错误。** P01条件反转仍未修复，自审也未审查已保留分析。
    不继续同类提示补丁、放宽unknown或把词法verified当语义证明。当前工程修复尚未成为
    晋级候选，未冻结新付费批次。
@@ -108,9 +112,10 @@ P01/P04/P08/P02，每例一次，不是重复稳定性观察。
 | 84a3528 / synthesis v18 | 2026-09-30全套2608项（452.78秒），相关268项及引用/smoke回归33项，smoke-v1 12/12、静态与独立复核 | 本次候选0/4内容通过，1关键错误 |
 | citation v12 / 完整文本块定位 | 2026-09-30 Python3.12全套2635项（471.06秒），相关229项、smoke-v1 12/12、pyflakes/vulture及独立复核通过 | 仅历史HTML离线诊断，无新增真实报告，未晋级 |
 | Chroma v6 / 排版换行补全 | 2026-09-30 Python3.12全套2643项（482.17秒），相关246项、smoke-v1 12/12、pyflakes/vulture及独立复核通过 | 同一21事实的历史回放，无新增真实报告，未晋级 |
+| official v2 / 有界正文获取 | 2026-09-30 Python3.12全套2677项（445.98秒），相关221项、smoke-v1 12/12、pyflakes/vulture及独立复核通过 | 12页历史主题回放与fixture根链接往返，无新增真实报告，未晋级 |
 
-最新2643项覆盖Chroma v6及引用v12代码与测试冻结；本次smoke仅更新运行时间和manifest身份，
-资产身份、12例及指标不变。v12此前2635项结果单独保留。
+最新2677项覆盖official v2、Chroma v6及引用v12代码与测试冻结；本次smoke仅更新运行时间和
+manifest身份，资产身份、12例及指标不变。此前2635/2643项结果单独保留。
 工程验证不替代报告质量验收，后续生产/测试改动仍须完成新的全套验证。
 四项种子复制、用途/原控制binding校验和跨binding准入限制已实现；原审定正文/metadata
 逐项234/234核对，历史原根保持。v18静态提示从22,367降至13,025 UTF-8字节，5份历史
@@ -148,7 +153,9 @@ P01/P04/P08/P02，每例一次，不是重复稳定性观察。
   `quality-selection-repair-review-adjudication.json`与`quality-selection-repair-development-closeout.json`。
 - 定位：`notes/quality-selection-repair-evidence-path-diagnostic.json`（离线历史正文）与
   `quality-selection-repair-runtime-analysis.json`（评分锁定后的原Trace/代码核对）。
-- 工程冻结：`notes/quality-selection-repair-closeout.json`及验证日志；种子事故和首批评分
+- 官方正文工程冻结：`notes/quality-selection-official-body-closeout.json`、对应验证日志及
+  `quality-selection-official-body-replay.json`（12页历史主题回放，不是实时召回）。
+- 维修工程冻结：`notes/quality-selection-repair-closeout.json`及验证日志；种子事故和首批评分
   仍在原 `quality-selection-seed-preparation-incident.json` / `quality-selection-development-closeout.json`。
 
 原始报告、Trace、数据库、评审细节及会话材料留本地忽略区；不发布原始材料或更新外部简历。

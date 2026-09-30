@@ -195,6 +195,25 @@ def normalized_hostname(url: str) -> str | None:
     return parsed[0] if parsed else None
 
 
+def catalog_scope_contains(root_url: str, url: str) -> bool:
+    """Exact catalog host/explicit alias and segment scope, never a host prefix.
+
+    Callers must separately establish that root_url is a curated catalog entry.
+    This is an authority scope check, not DNS or connection safety validation.
+    """
+    root, target = parse_http_identity(root_url), parse_http_identity(url)
+    if root is None or target is None:
+        return False
+    origin, destination = urlsplit(root_url), urlsplit(url)
+    origin_port = origin.port or (443 if origin.scheme.casefold() == "https" else 80)
+    destination_port = destination.port or (443 if destination.scheme.casefold() == "https" else 80)
+    if origin.scheme.casefold() != destination.scheme.casefold() or origin_port != destination_port:
+        return False
+    root_host = _EXPLICIT_HOST_ALIASES.get(root[0], root[0])
+    target_host = _EXPLICIT_HOST_ALIASES.get(target[0], target[0])
+    return root_host == target_host and target[1][:len(root[1])] == root[1]
+
+
 def is_catalog_official_url(url: str) -> bool:
     """Match an HTTP(S) URL against exact catalog hosts and seed path prefixes."""
     parsed = parse_http_identity(url)
@@ -212,4 +231,4 @@ def is_catalog_official_url(url: str) -> bool:
     return False
 
 
-__all__ = ["TECH_DOCS", "is_catalog_official_url", "normalized_hostname", "parse_http_identity"]
+__all__ = ["catalog_scope_contains", "TECH_DOCS", "is_catalog_official_url", "normalized_hostname", "parse_http_identity"]

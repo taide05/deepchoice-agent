@@ -51,8 +51,9 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert all(
         retriever.version == "v1"
         for retriever in first.retrievers
-        if retriever.retriever_id != "chroma"
+        if retriever.retriever_id not in {"chroma", "official"}
     )
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v2"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v12"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
@@ -82,6 +83,22 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_historical_official_directory_manifest_cannot_resume_body_retrieval():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    current = build_run_manifest({})
+    historical = current.model_copy(update={"retrievers": tuple(
+        row.model_copy(update={"version": "v1"}) if row.retriever_id == "official" else row
+        for row in current.retrievers
+    )})
+    historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
+    restored = RunManifest.model_validate_json(historical.model_dump_json())
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+    assert restored.manifest_id != current.manifest_id
 
 
 @pytest.mark.parametrize("policy_version", [

@@ -708,6 +708,29 @@ Q2 来源分类后续规则冻结 `source-score-v5`：已知平台类型只按�
 安全 fetch、权重、证据阈值或来源失效投影。旧v1–v4仍可读取/校验，但不能在v5同run恢复，
 新manifest ID隔离缓存；历史报告不重新评分。此分类规则不是新的外呼 allowlist。
 
+2026-09-30 官方 retriever `v2` 在存在 RunContext 且取得真实 HTTP 预算预留时，从现有
+TECH_DOCS 匹配中选择至多两个文档根；每根读取根页与至多两个根页实际链接，共最多六次
+新增逻辑 GET，串行执行。旧 adapted-only 目录匹配/LLM回退输入保持；原 query、适配查询
+及子问只供正文与子页词法相关性使用。learned/LLM 回退 URL 不获得正文遍历权限，未选根
+及无 RunContext 的旧路径保留目录角色。跨根按轮转保留结果，最终仍受 max_results 限制。
+
+每页经过既有 safe_fetch：HTTP(S)、DNS/IP 固定、每跳安全检查、HTML/XHTML/plain 类型、
+15秒总限、最多三次 redirect、最多128 KiB前缀。子页必须同 scheme、有效端口、精确目录
+hostname/已有显式别名与路径段范围；拒绝 query、userinfo、编码路径、非网页资源。最终
+响应URL再次核对范围；越界正文使整源失败，不声称 redirect 从未访问其他安全公共域名。
+正文提取仅在此 opt-in 路径跳过 nav/form/pre、role=navigation 和 hidden 容器，保留 aside
+等限定条件。选取相关实质段及相邻各一块，最多1200字符，不裁去过长相邻条件来迁就上限；
+截断边缘、空相关词或无合格正文不产出证据。默认引用解析行为保持。HTML/链接仅在内存短暂
+使用，结果仍为 URL/title/snippet/date，不能把相关片段或目录来源当成语义/场景证明。
+
+全部官方 HTTP 分支先预留 http_calls：新增正文最多6，已有回退HEAD最多3、PyPI最多3，
+合计最多12次逻辑HTTP；redirect/HEAD的range-GET回退可能产生更多物理请求。已知响应结算1，
+异常/取消保守记 unknown_spend；正文预留为空则fail closed，预算拒绝/持久化错误透传。
+外层 retrieval_calls 仍按来源计1；没有RunContext的既有HEAD/PyPI保留历史无预算行为。
+已发正文请求失败不返回部分成功或静默空成功，使用既有原子失败 envelope；成功网页无相关
+正文才可为空。旧 official v1 manifest 可读但不能同run恢复；manifest身份隔离缓存。
+本变更不扩展目录、供应商、提示、种子、默认工作流或安全策略，也不变更历史评分。
+
 2026-09-25 后续 Q2 规则冻结 `source-score-v6` 与 Chroma retriever `v2`。Chroma 始终保留原始
 用户比较，查询维度最多8、每维候选池30–100；无 adapted query 时子问题只补原问题的来源短缺，
 有 adapted query 时原问题占 `ceil(max_results/2)` 个公共结果槽，适配维度至少保留

@@ -28,11 +28,15 @@ class SourceWindow:
 
 
 class _Blocks(HTMLParser):
-    def __init__(self):
+    def __init__(self, *, skip_navigation: bool = False):
         super().__init__(convert_charrefs=True)
+        self.skip_tags = _SKIP_TAGS | ({"nav", "form", "pre"} if skip_navigation else set())
+        self.separate_omitted = skip_navigation
         self.blocks = []
         self.pending = []
         self.ignored_depth = 0
+        self.omitted_tag = None
+        self.omitted_depth = 0
         self.used = 0
         self.exhausted = False
 
@@ -47,24 +51,44 @@ class _Blocks(HTMLParser):
         self.blocks.append(text)
         self.used += len(text) + 1
 
-    def handle_starttag(self, tag, _attrs):
-        if tag in _SKIP_TAGS:
+    def handle_starttag(self, tag, attrs):
+        if self.omitted_depth:
+            if tag == self.omitted_tag:
+                self.omitted_depth += 1
+            return
+        if self.separate_omitted and not self.ignored_depth and any(
+            (key == "role" and "navigation" in (value or "").casefold().split()) or key == "hidden"
+            for key, value in attrs
+        ):
+            self.flush()
+            if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+                self.omitted_tag, self.omitted_depth = tag, 1
+            return
+        if tag in self.skip_tags:
+            if self.separate_omitted and not self.ignored_depth:
+                self.flush()
             self.ignored_depth += 1
         if not self.ignored_depth and tag in _BLOCK_TAGS:
             self.flush()
 
     def handle_endtag(self, tag):
-        if tag in _SKIP_TAGS and self.ignored_depth:
+        if self.omitted_depth:
+            if tag == self.omitted_tag:
+                self.omitted_depth -= 1
+            return
+        if tag in self.skip_tags and self.ignored_depth:
             self.ignored_depth -= 1
         if not self.ignored_depth and (tag in _BLOCK_TAGS or tag == 'body'):
             self.flush()
 
     def handle_data(self, data):
-        if not self.ignored_depth and not self.exhausted:
+        if not self.ignored_depth and not self.omitted_depth and not self.exhausted:
             self.pending.append(data)
 
 
-def extract_source_document(value: str, *, truncated: bool, plain_text: bool = False) -> SourceDocument:
+def extract_source_document(
+    value: str, *, truncated: bool, plain_text: bool = False, skip_navigation: bool = False,
+) -> SourceDocument:
     value = value.removeprefix('\ufeff')
     if plain_text:
         lines = value.splitlines()
@@ -81,7 +105,7 @@ def extract_source_document(value: str, *, truncated: bool, plain_text: bool = F
             blocks.append(text)
             used += len(text) + 1
         return SourceDocument(tuple(blocks), truncated)
-    parser = _Blocks()
+    parser = _Blocks(skip_navigation=skip_navigation)
     try:
         parser.feed(value)
         parser.close()
@@ -89,7 +113,7 @@ def extract_source_document(value: str, *, truncated: bool, plain_text: bool = F
         # an unclosed paragraph retained its trailing qualification.
     except Exception:
         return SourceDocument((), True)
-    unfinished = bool(''.join(parser.pending).strip()) or bool(parser.ignored_depth)
+    unfinished = bool(''.join(parser.pending).strip()) or bool(parser.ignored_depth) or bool(parser.omitted_depth)
     return SourceDocument(tuple(parser.blocks), truncated or parser.exhausted or unfinished)
 
 

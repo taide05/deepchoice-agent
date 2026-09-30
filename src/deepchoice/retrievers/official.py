@@ -5,6 +5,7 @@ from ..outbound import throttle
 from ..budget_errors import BudgetError
 from ..utils.llm import call_model
 from .base import BaseRetriever
+from .official_pages import MAX_ROOTS, budgeted_http, read_official_roots
 from .learned_docs import (
     _looks_official,
     domain_label_match,
@@ -73,12 +74,12 @@ class OfficialSearch(BaseRetriever):
 
     async def _verify_reachable(self, url: str) -> bool:
         try:
-            resp = await _outbound.safe_fetch(
-                "official",
-                url,
-                method="HEAD",
-                allowed_content_types=("text/html", "application/xhtml+xml"),
-                head_fallback_to_range_get=True,
+            resp = await budgeted_http(
+                lambda: _outbound.safe_fetch(
+                    "official", url, method="HEAD",
+                    allowed_content_types=("text/html", "application/xhtml+xml"),
+                    head_fallback_to_range_get=True,
+                ), kind="official_reachability",
             )
             if resp.status_code == 429:
                 raise throttle.ProviderRateLimitError("official documentation rate limited")
@@ -90,6 +91,8 @@ class OfficialSearch(BaseRetriever):
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
+        from ..runtime.context import get_run_context
+
         all_text = " ".join(adapted_queries) if adapted_queries else query
         keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
         learned = load_learned()
@@ -98,6 +101,7 @@ class OfficialSearch(BaseRetriever):
         # overrode docs.python.org with python.langchain.com).
         lookup = {**learned, **TECH_DOCS}
         results = []
+        roots = []
 
         # Pass 1: curated seed + learned cache via normalized n-gram matching.
         # Space-separated multi-word terms ('AWS Lambda') match hyphenated or
@@ -118,6 +122,8 @@ class OfficialSearch(BaseRetriever):
                 matched_norms.add(norm)
                 matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
                 doc = lookup[key]
+                if key in TECH_DOCS and doc["url"] not in {item["url"] for item in roots}:
+                    roots.append({"url": doc["url"], "title": doc["title"], "tech": key})
                 results.append({
                     "url": doc["url"],
                     "title": doc["title"],
@@ -174,7 +180,10 @@ class OfficialSearch(BaseRetriever):
                 for kw in keywords[:3]:
                     if len(kw) < 3:
                         continue
-                    resp = await throttle.get("official", client, f"https://pypi.org/pypi/{kw}/json")
+                    resp = await budgeted_http(
+                        lambda: throttle.get("official", client, f"https://pypi.org/pypi/{kw}/json"),
+                        kind="official_package_metadata",
+                    )
                     if resp.status_code not in (200, 404):
                         raise RuntimeError(f"PyPI HTTP {resp.status_code}")
                     if resp.status_code != 200:
@@ -186,4 +195,11 @@ class OfficialSearch(BaseRetriever):
                         "snippet": f"Version: {info.get('version', 'N/A')}, Summary: {info.get('summary', '')}",
                         "date": "",
                     })
+        if get_run_context() is not None:
+            # New body traversal is durable-only and requires real HTTP budget
+            # admission. Learned/fallback URLs retain their old directory role.
+            selected = roots[:min(MAX_ROOTS, max_results)]
+            bodies = await read_official_roots(selected, " ".join([query, all_text, *sub_questions]))
+            replaced = {item["url"] for item in selected}
+            results = bodies + [item for item in results if item["url"] not in replaced]
         return results[:max_results]
