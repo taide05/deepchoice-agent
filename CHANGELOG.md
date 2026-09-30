@@ -2,6 +2,29 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Review bound decision analyses before rendering
+
+Research-v4 moves the existing reviewer between deterministic citations and the single
+HITL gate. Review v2 receives exact bound sentences, complete saved source context and
+original requirements, then may retain, withdraw or revise only reasoning, assumptions
+and change conditions. Invalid/missing/duplicate rows are withheld individually; usable
+unrelated analyses survive. Fixed review metadata/disclosures preserve source text, and
+model inferences still require human review. Confidence can only decrease. Free-form
+review gap text is discarded to avoid reflecting private context into public projections.
+No source, citation, winner or operational authority is granted by review.
+
+Ordinary research passes keep one review call; paths previously paused/cancelled/limited
+before review now also incur that call and its budget admission point. Pending restarts
+and limited-report resolution do not repeat it; provide-context starts a new reviewed pass.
+Full input bytes plus the existing output cap are reserved before dispatch. Large inputs
+can be denied and use only the existing evidence-qualified local restricted fallback.
+Workflow v1–v3 remains readable but cannot resume on v4; state schema stays v3. Report
+templates advance to v13/v12/v11. The unused automatic research retry branch is removed.
+Offline tests and mock responses do not establish real-model correction or report quality.
+Validated on 2026-09-30 with Python 3.12: 2699 tests (447.39 seconds), 81 focused tests,
+smoke-v1 12/12, pyflakes/vulture and independent review. Smoke changes only time,
+manifest/registry identity and fingerprint; all case outputs and metrics stay unchanged.
+
 ### Acquire bounded relevant official-page excerpts
 
 Official retriever v2 adds durable-only reading of at most two curated document roots

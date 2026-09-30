@@ -46,7 +46,7 @@ class ReportGeneratorAgent:
         rec = research_state.get("final_recommendation", {})
         return {
             "report": report,
-            "quality_signals": [{
+            "quality_signals": list(research_state.get("quality_signals", [])) + [{
                 "agent": "report_generator",
                 "format": fmt,
                 "has_recommendation": bool(rec.get("recommendation")),

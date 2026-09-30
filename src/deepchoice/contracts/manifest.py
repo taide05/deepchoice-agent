@@ -28,7 +28,7 @@ from ..agents.self_reviewer import REVIEW_SYSTEM
 from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS, max_output_tokens_for, synthesis_extra_body
 
 
-CURRENT_WORKFLOW_VERSION = "research-v3"
+CURRENT_WORKFLOW_VERSION = "research-v4"
 
 WORKFLOW_NODES = (
     "query_analyzer",
@@ -39,17 +39,18 @@ WORKFLOW_NODES = (
     "evidence_chain",
     "conclusion_synthesizer",
     "citation_validator",
+    "self_reviewer",
     "evidence_decision_gate",
     "report_generator",
-    "self_reviewer",
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v12",
-    "evidence_first": "evidence-first-v11",
-    "comparison_matrix": "comparison-matrix-v10",
+    "what_why_how": "what-why-how-v13",
+    "evidence_first": "evidence-first-v12",
+    "comparison_matrix": "comparison-matrix-v11",
 }
 PROMPT_VERSIONS = {
+    "self_reviewer.review_system": "v2",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
     "conclusion_synthesizer.synthesis_prompt": "v18",
@@ -113,7 +114,7 @@ class RunManifest(FrozenModel):
     manifest_id: str
     created_at: datetime
     app_version: str
-    workflow_version: Literal["research-v1", "research-v2", "research-v3"] = "research-v3"
+    workflow_version: Literal["research-v1", "research-v2", "research-v3", "research-v4"] = "research-v4"
     workflow_nodes: tuple[str, ...] = WORKFLOW_NODES
     state_schema_version: Literal[1, 2, 3] = 3
     models: tuple[ModelConfigSnapshot, ...]
@@ -146,7 +147,7 @@ class CoreAssetRegistry(FrozenModel):
     registry_schema_version: Literal[1] = 1
     registry_id: str
     manifest_schema_version: Literal[1] = 1
-    workflow_version: Literal["research-v3"] = "research-v3"
+    workflow_version: Literal["research-v4"] = "research-v4"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
     citation_policy_version: Literal["deterministic-citation-v12"]

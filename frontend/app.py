@@ -803,7 +803,7 @@ st.markdown("""<style>
 
 API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
 PHASES = ["query_analysis", "retrieval", "source_evaluation", "conflict_detection",
-          "evidence_chain", "report_generation", "self_review"]
+          "evidence_chain", "self_review", "report_generation"]
 
 # Fallback copy of NODE_TO_PHASE from src/deepchoice/server/app.py (server is the
 # single source of truth — keep the two tables in sync). Used only when a stream
@@ -816,7 +816,8 @@ NODE_TO_PHASE = {
     "conflict_detector": "conflict_detection",
     "evidence_chain": "evidence_chain",
     "conclusion_synthesizer": "evidence_chain",
-    "citation_validator": "report_generation",
+    "citation_validator": "self_review",
+    "evidence_decision_gate": "self_review",
     "report_generator": "report_generation",
     "self_reviewer": "self_review",
 }

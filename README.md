@@ -34,7 +34,7 @@ DeepChoice 展示信源评分、冲突处理、引用状态和未知项，方便
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先用规则与 DeepSeek Flash 仲裁矛盾对，再对低置信度的一对补充取证，并用同一 DeepSeek Flash 重新裁决
-- **自审查与缺口记录**：最后一环用 6 项清单记录质量与知识缺口；当前路由在首次自审后结束，即使置信度低也不会自动补搜。已有重试分支不代表默认路径实际执行重试
+- **渲染前分析自审**：引用核验后，自审读取原问题、已保留分析和完整保存原文，可有界修订推理/假设/改变条件，再经唯一 HITL 门渲染。未完成审查的分析撤回并说明；模型修订仍需人工审阅，不是语义验证。置信度只降不升，不自动补搜。
 - **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
 - **约束感知结论**：显式回答请求约束与子问题；关键未知或引用未通过检查时撤回确定胜者及排名，展示条件分支、待验证步骤和回退。用户受限报告与预算触顶报告遵循相同结论规则；迁移触发与概念性过渡问题不自动要求完整迁移方案，明确步骤请求仍保留，操作计划仍限隔离验证
 - **可追溯的模型分析**：每项新分析选择保存来源中的具体句子，运行时重建引文并与模型判断分别展示；完整片段仍须通过引用检查。原句可追溯不代表推理已被语义验证，适用性与条件仍需审阅；合成提示已精简重复规则，保留完整保存片段与最多一次结构纠正，外呼仍受原预算准入约束
@@ -211,13 +211,25 @@ Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等�
 和 Streamlit 证据卡展示。该状态是可解释的规则判断，不是语义事实证明：临时网络、DNS、
 安全路由限制或跨语言难以判断时保持 `unknown`，不会被误写成错误引用。获胜项仍有支持、但任一
 模型生成的行动字段未通过引用检查时，系统保留获胜项并把整份计划替换为固定的隔离验证步骤，
-不把未核验操作作为可执行建议。新运行冻结 `research-v3`、state schema v3 与
-`deterministic-citation-v3`。v3不再把系统生成且逐字段匹配的固定validation-only计划当作模型事实
-断言，也不把无引用/无evidence绑定的纯unknown声明计为`citation_missing`；任意或伪造计划仍按原
-规则校验。历史 workflow v1/v2 和 citation-policy v1/v2 manifest 可审计但须新建run，不能在当前
-工作流上续跑旧 checkpoint。
+不把未核验操作作为可执行建议。新运行冻结 `research-v4`、state schema v3 与
+`deterministic-citation-v12`。保留v3引入的规则：系统生成且逐字段匹配的固定validation-only
+计划不作模型事实断言，无引用/无evidence绑定的纯unknown声明不计为`citation_missing`；
+任意或伪造计划仍按原规则校验。历史 workflow v1–v3 和 citation-policy v1–v11 manifest
+可审计但须新建run，不能在当前工作流上续跑旧 checkpoint。
 
-Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v3`、state
+当前 `research-v4` 顺序为引用核验 → 分析自审 → 唯一 evidence-insufficient 门 → 报告。
+自审只看所供分析、来源和结论摘要，不审完整行动方案；只修改已绑定分析的推理、假设和
+改变条件，不改变来源、引用状态、Winner或操作权威。缺失/重复/非法自审项按项撤回，
+有效其他项保留；模型服务失败会公开说明审查不可用。公开缺口使用固定提示，避免回显
+私密补充输入。三模板身份为 v13/v12/v11，自审提示为 v2；旧 workflow v1–v3 可读但不能
+按新图续同一 run，须新建运行，旧 pending decision 仍可取消。
+
+普通研究轮仍有一次自审；原来在 HITL 门暂停、取消或受限输出的路径，现在也先消耗一次
+自审。pending 重启不会重审；用户补充上下文后会随新研究轮再次自审。所有调用沿用预算
+准入，完整消息 UTF-8 字节加4096输出上限保守预留；大输入或剩余预算不足会被拒绝，
+符合结构最低条件时才生成本地受限报告。本改动尚未通过新真实报告验证推理质量。
+
+Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v4`、state
 schema v3 与 `evidence-insufficient-v1`。该 gate 位于引用验证之后、报告渲染之前，只在证据
 结构不足且推荐方向实质不确定时暂停。`GET /api/v1/tasks/{task_id}/decision` 读取当前决策；
 `POST /api/v1/tasks/{task_id}/decisions/{decision_id}` 以 `If-Match` task version 提交动作。
@@ -230,7 +242,7 @@ Streamlit 待决策界面及 SSE 等待断开/按 `Last-Event-ID` 续接，并�
 StateGraph/checkpoint 验证 pending 跨重启、幂等/冲突、过期、取消和绑定 checkpoint 的单次 resume。
 
 Phase 5-1 已完成最小版本资产清单和离线 smoke/eval。当前契约限定为默认路径使用的 7 个
-核心 Prompt hash/version、`research-v3`/state v3/workflow nodes、citation/HITL policy 及三个报告
+核心 Prompt hash/version、`research-v4`/state v3/workflow nodes、citation/HITL policy 及三个报告
 模板版本；固定 12 个 fixture replay case 覆盖 query analysis、引用验证、结论后处理和报告渲染，
 每项 3 个，不调用 LLM、judge 或网络。其 artifact 会记录数据集 hash/date、各指标分母、manifest、
 registry 与 source health `not_run`/`degraded`。此测试只验证确定性代码和 fixture/报告结构，不能
@@ -320,10 +332,11 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
    │         │                                            │
    │  [8] CitationValidator  URL/声明支持确定性检查          │
    │         │                                            │
-   │  [9] ReportGenerator    3 种格式选一渲染               │
+   │  [9] SelfReviewer       分析、原句和条件推理自审       │
    │         │                                            │
-   │ [10] SelfReviewer       6 项质量审查                  │
-   │         │              首次自审后结束，不自动重试       │
+   │ [10] EvidenceDecision   唯一 evidence-insufficient 门 │
+   │         │              补充上下文可启动新研究轮        │
+   │ [11] ReportGenerator    3 种格式选一渲染，不自动重试    │
    │         ▼                                            │
    │       END                                            │
    └──────────────────────────────────────────────────────┘

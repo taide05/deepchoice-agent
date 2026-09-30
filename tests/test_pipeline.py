@@ -84,7 +84,7 @@ class TestFullPipeline:
         assert result["report"] == MOCK_REPORT
         assert len(result["evidence_chains"]) == 1
         assert result.get("retry_count", 0) == 0
-        assert result["current_phase"] == "self_reviewer"
+        assert result["current_phase"] == "report_generator"
         all_nodes = {
             "query_analyzer", "query_adapter", "multi_retriever", "source_evaluator",
             "conflict_detector", "evidence_chain", "conclusion_synthesizer",
@@ -93,7 +93,7 @@ class TestFullPipeline:
         assert all_nodes <= set(result["agent_timing"].keys())
 
     @pytest.mark.asyncio
-    async def test_pipeline_triggers_retry_on_low_confidence(self):
+    async def test_pipeline_renders_low_confidence_without_automatic_research_retry(self):
         task = {"query": "test", "scene_context": "team", "constraints": [], "report_format": "evidence_first"}
         orchestrator = ChiefEditorAgent(task)
 
@@ -116,9 +116,9 @@ class TestFullPipeline:
         ):
             result = await orchestrator.run_research_task()
 
-        assert call_count["review"] >= 2, "SelfReviewer should be called at least twice (retry after low confidence)"
-        assert result["confidence"] == "medium"
-        assert result["current_phase"] == "self_reviewer"
+        assert call_count["review"] == 1
+        assert result["confidence"] == "low"
+        assert result["current_phase"] == "report_generator"
 
     @pytest.mark.asyncio
     async def test_clarify_integration_skips_query_analyzer(self):

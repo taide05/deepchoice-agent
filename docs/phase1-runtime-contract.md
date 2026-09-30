@@ -19,13 +19,33 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-09-30 当前候选使用 synthesis v18、citation v11、三模板 what-why-how-v12 /
-evidence-first-v11 / comparison-matrix-v10。新生成的每项 decision_analysis 必须提供 basis：
+2026-09-30 当前运行使用 `research-v4` / state schema v3、synthesis v18、citation v12、
+self-review v2，三模板 what-why-how-v13 / evidence-first-v12 / comparison-matrix-v11。
+工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
+自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
+旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。
+
+自审对每个运行时 A 槽位返回 keep/revise/withdraw，输入包含原请求、私有补充上下文、
+已保留分析、准确绑定原句和完整保存来源。六项检查仅覆盖这些分析/来源及标题摘要，
+不代表完整需求解释、分支或行动方案的审查。revise 只允许 reasoning/assumptions/
+change_condition，绑定与校准再次执行，来源事实、citation 状态、Winner和行动权威不变。
+缺失/重复/非法回应按槽位撤回，保留其他合格项；无法解析/服务失败时撤回未审分析，
+保存来源仍可核对。结果只保存固定状态/计数及固定公开缺口，不保存自由自审评语；
+模型修订仍是 human_review_required 推断，不是语义验证。置信度只降不升。
+
+普通研究轮仍调用自审一次；过去先暂停/limited_report/cancel而跳过自审的分支，现在
+会先调用一次并可能预算拒绝。pending 检查点重启与 limited_report 恢复不重复自审；
+provide_context 发起新的研究轮并再次计量自审。模型成功、失败、重试和取消沿用既有
+预算准入/结算；拒绝与持久化失败不能吞掉。完整消息按UTF-8字节加4096输出上限预留，
+不截断已绑定依据以绕过预算；大输入可超过60,000上限，只有符合最低结构证据时生成
+本地受限报告。真实双库测试覆盖暂停、重启、两种恢复及重复解决；这是离线工程证明。
+
+以下为 synthesis v18 已引入并保留的绑定规则。新生成的每项 decision_analysis 必须提供 basis：
 1–4个不重复 fact_id，每项选择该保存片段内1–3个不重复、从1开始的整数 sentence_ids。
 提示与绑定使用同一完整文本规范化和分句函数；运行时据此重建 fact_ids 与 source_sentences，
 不信任模型提供的引文或旧 fact_ids。无效地址移除整项并进入既有最多一次结构纠正，不增加
 新调用类别；历史无 basis 投影可只读，当前生成不能走该兼容分支。旧 v16/v17 身份仍可读取，
-不能在当前行为下同 run 恢复；workflow/state schema、迁移与生命周期不变。
+不能在当前行为下同 run 恢复；该次合成修订未改变 workflow/state schema、迁移与生命周期。
 v18精简重复的合成规则与示例；完整保存片段、句子地址和一次纠正保持。预算仍按完整消息
 UTF-8字节加输出上限保守预留，未提高硬限额或改用乐观token估算。
 
@@ -209,9 +229,9 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
 - task/run 的 `version` 是乐观并发控制字段。读取后再写的生命周期操作必须做 CAS；
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
-  模板版本。当前新运行使用 `research-v3`/state schema v3，并冻结
-  `deterministic-citation-v9` 与 `evidence-insufficient-v1` 策略；历史 workflow v1/v2 及
-  citation-policy v1–v8 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
+  `deterministic-citation-v12` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
+  citation-policy v1–v11 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

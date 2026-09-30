@@ -444,3 +444,86 @@ async def test_expiry_boundary_cancels_without_resuming_graph(tmp_path: Path) ->
         await coordinator.stop()
         await product.close()
         await checkpoint.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["provide_context", "limited_report"])
+async def test_default_reviewed_graph_pauses_and_resumes_without_replaying_review(tmp_path, monkeypatch, action):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from copy import deepcopy
+    from tests.test_self_review import make_state, reviewed, revision, CORRECTED, BAD
+    from deepchoice.agents.orchestrator import ChiefEditorAgent
+    from deepchoice.agents import self_reviewer
+
+    fixture = make_state()
+    answer = reviewed([revision(), {"analysis_id": "A2", "action": "keep"}])
+    answer.update(confidence="low", knowledge_gaps=["PRIVATE_ADDITIONAL_CONTEXT", "PRIVATE_SOURCE_BODY"])
+    model = AsyncMock(return_value=answer)
+    monkeypatch.setattr(self_reviewer, "call_model", model)
+    async def noop(_state): return {}
+    async def cited(_state):
+        return {key: deepcopy(fixture[key]) for key in ("final_recommendation", "evidence_chains", "citation_verification")}
+    class ReviewedOrchestrator(ChiefEditorAgent):
+        def _initialize_agents(self):
+            agents = super()._initialize_agents()
+            for key in ("query_analyzer", "query_adapter", "multi_retriever", "source_evaluator",
+                        "conflict_detector", "evidence_chain", "conclusion_synthesizer"):
+                agents[key] = SimpleNamespace(run=noop)
+            agents["citation_validator"] = SimpleNamespace(run=cited)
+            return agents
+    clock = _MutableClock(datetime.now(UTC))
+    product_path, checkpoint_path = tmp_path / "product.db", tmp_path / "checkpoints.db"
+    def coordinator(repository, saver, owner):
+        return RunCoordinator(repository, saver, owner_id=owner, clock=clock,
+                              lease_ttl=timedelta(minutes=1), heartbeat_interval=timedelta(seconds=1),
+                              recovery_interval=timedelta(seconds=10), orchestrator_factory=ReviewedOrchestrator)
+    product, checkpoint, saver, repository = await _open_stores(product_path, checkpoint_path, migrate=True)
+    active = coordinator(repository, saver, "before-review-pause")
+    try:
+        created = await TaskService(repository, clock=clock).create(ResearchRequest(**fixture["task"]))
+        task_id, run_id = created.task.task_id, created.latest_run.run_id
+        assert await active.submit(run_id, resume=False)
+        await _wait_inactive(active, run_id)
+        waiting = await repository.get_task(task_id)
+        decision = await repository.get_latest_decision(task_id)
+        assert waiting.task.status is TaskStatus.WAITING_FOR_INPUT
+        assert decision is not None and "PRIVATE_SOURCE_BODY" not in str(decision.gaps)
+        model.assert_awaited_once()
+    finally:
+        await active.stop()
+        await product.close()
+        await checkpoint.close()
+    product, checkpoint, saver, repository = await _open_stores(product_path, checkpoint_path)
+    active = coordinator(repository, saver, "after-review-pause")
+    try:
+        assert await active.start() == ()
+        await asyncio.sleep(0.06)
+        model.assert_awaited_once()  # A pending restart never replays the reviewer.
+        waiting = await repository.get_task(task_id)
+        resolution = DecisionResolution(action=action, **({"supplemental_input": "PRIVATE_ADDITIONAL_CONTEXT"} if action == "provide_context" else {}))
+        resolved = await repository.resolve_decision(task_id, decision.decision_id, resolution,
+            expected_task_version=waiting.task.version, now=clock.now)
+        assert not resolved.replayed
+        assert await active.submit(run_id, resume=True)
+        await _wait_inactive(active, run_id)
+        completed = await repository.get_task(task_id)
+        result = await repository.get_run_result(run_id)
+        assert completed.task.status is (TaskStatus.COMPLETED if action == "provide_context" else TaskStatus.COMPLETED_WITH_WARNINGS) and result is not None
+        assert model.await_count == (2 if action == "provide_context" else 1)
+        assert BAD not in result.report
+        assert "PRIVATE_ADDITIONAL_CONTEXT" not in str(result)
+        assert "PRIVATE_SOURCE_BODY" not in str(result)
+        if action == "provide_context":
+            assert CORRECTED in result.report
+            assert "PRIVATE_ADDITIONAL_CONTEXT" in model.await_args.args[0][1]["content"]
+        else:
+            assert "Evidence-limited report" in result.report
+        replay = await repository.resolve_decision(task_id, decision.decision_id, resolution,
+            expected_task_version=0, now=clock.now)
+        assert replay.replayed
+        assert model.await_count == (2 if action == "provide_context" else 1)
+    finally:
+        await active.stop()
+        await product.close()
+        await checkpoint.close()

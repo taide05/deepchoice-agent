@@ -79,16 +79,30 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
                     continue
                 item = {**item, "basis": basis}
             accepted.append(item)
-    if not accepted:
-        return []
     zh = lang == "zh"
+    review = recommendation.get("analysis_review")
+    note = ""
+    if (isinstance(review, dict) and review.get("status") in {"complete", "incomplete", "unavailable"}
+            and all(type(review.get(key)) is int and 0 <= review[key] <= 9
+                    for key in ("submitted", "retained", "revised", "withdrawn"))
+            and review["submitted"] > 0):
+        if review["status"] != "complete":
+            note = ("部分模型分析未获得可用的自审结果，已撤回；保存的来源原文仍可核对。保留或修订的分析仍需人工审阅。"
+                    if zh else "Some model analyses lacked a usable review and were withheld. Saved sources remain available for inspection. Retained or revised analyses still require human review.")
+        elif review["withdrawn"]:
+            note = ("部分模型分析在自审后撤回；保存的来源原文仍可核对。保留或修订的分析仍需人工审阅。"
+                    if zh else "Some model analyses were withdrawn after review. Saved sources remain available for inspection. Retained or revised analyses still require human review.")
+    if not accepted and not note:
+        return []
     lines = ["### 模型分析 · 待人工审阅" if zh else "### Model analysis · Human review required", "",
              "以下释义、适用性判断与概念设计是模型推断，尚未经过语义验证。假设仍需确认，来源词法核验不证明建议正确；实际操作仅限下方隔离验证计划。"
              if zh else "The paraphrases, applicability judgments and conceptual designs below are model inferences, not semantically verified conclusions. Assumptions need confirmation. Source lexical checks do not prove the proposals; operations remain limited to the isolated validation plan below.", ""]
     labels = {"choice": "条件选择" if zh else "Conditional choice",
               "answer": "问题解答" if zh else "Question analysis",
               "design": "概念方案" if zh else "Conceptual design"}
-    used = {}
+    if note:
+        lines.extend([note, ""])
+    used = {key: fact for key, fact in facts.items() if fact.get("status") == "verified"} if note else {}
     for item in accepted:
         title = labels.get(item.get("kind"), labels["answer"])
         if item.get("option"):

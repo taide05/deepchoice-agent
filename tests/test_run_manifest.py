@@ -33,7 +33,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.manifest_id == second.manifest_id
     assert first.manifest_schema_version == 1
     assert first.app_version
-    assert first.workflow_version == "research-v3"
+    assert first.workflow_version == "research-v4"
     assert first.workflow_nodes == WORKFLOW_NODES
     assert first.state_schema_version == 3
     assert len(first.prompts) == 7
@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v11"
+    assert first.report.template_version == "evidence-first-v12"
     assert first.scoring_policy_version == "source-score-v6"
     assert {
         retriever.retriever_id: retriever.version
@@ -147,20 +147,20 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         "evidence_chain",
         "conclusion_synthesizer",
         "citation_validator",
+        "self_reviewer",
         "evidence_decision_gate",
         "report_generator",
-        "self_reviewer",
     )
 
     assert registry.registry_schema_version == 1
     assert registry.manifest_schema_version == 1
-    assert registry.workflow_version == "research-v3"
+    assert registry.workflow_version == "research-v4"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
     assert registry.citation_policy_version == "deterministic-citation-v12"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v18",
+    expected_versions = {"self_reviewer.review_system": "v2", "conclusion_synthesizer.synthesis_prompt": "v18",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -172,9 +172,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v12",
-        "evidence_first": "evidence-first-v11",
-        "comparison_matrix": "comparison-matrix-v10",
+        "what_why_how": "what-why-how-v13",
+        "evidence_first": "evidence-first-v12",
+        "comparison_matrix": "comparison-matrix-v11",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 
@@ -284,7 +284,7 @@ def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
     restored = RunManifest.model_validate_json(previous.model_dump_json())
 
     assert restored.manifest_id == _expected_manifest_id(restored)
-    assert restored.workflow_version == "research-v3"
+    assert restored.workflow_version == "research-v4"
     assert restored.state_schema_version == 3
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, task)
@@ -746,4 +746,18 @@ def test_v11_citation_manifest_remains_readable_but_cannot_resume_with_windows()
     assert restored.manifest_id == _expected_manifest_id(restored)
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_post_render_review_workflow_is_readable_but_cannot_resume():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+    current = build_run_manifest({})
+    old = current.model_copy(update={"workflow_version": "research-v3",
+        "workflow_nodes": tuple(node for node in current.workflow_nodes if node != "self_reviewer") + ("self_reviewer",)})
+    old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
+    restored = RunManifest.model_validate_json(old.model_dump_json())
+    assert restored.workflow_version == "research-v3"
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

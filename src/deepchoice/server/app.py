@@ -431,8 +431,8 @@ NODE_TO_PHASE = {
     "conflict_detector": "conflict_detection",
     "evidence_chain": "evidence_chain",
     "conclusion_synthesizer": "evidence_chain",
-    "citation_validator": "report_generation",
-    "evidence_decision_gate": "report_generation",
+    "citation_validator": "self_review",
+    "evidence_decision_gate": "self_review",
     "report_generator": "report_generation",
     "self_reviewer": "self_review",
 }

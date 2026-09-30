@@ -353,6 +353,7 @@ def restrict_recommendation(recommendation: Any, query: Any) -> dict[str, Any]:
     result.pop("source_facts", None)
     result.pop("conditional_choices", None)
     result.pop("decision_analysis", None)
+    result.pop("analysis_review", None)
     note = (
         "未知：研究提前结束，此项判断需要独立验证。"
         if _is_zh(query)

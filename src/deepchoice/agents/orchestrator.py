@@ -211,7 +211,8 @@ class ChiefEditorAgent:
         workflow.add_edge("conflict_detector", "evidence_chain")
         workflow.add_edge("evidence_chain", "conclusion_synthesizer")
         workflow.add_edge("conclusion_synthesizer", "citation_validator")
-        workflow.add_edge("citation_validator", "evidence_decision_gate")
+        workflow.add_edge("citation_validator", "self_reviewer")
+        workflow.add_edge("self_reviewer", "evidence_decision_gate")
         workflow.add_conditional_edges(
             "evidence_decision_gate",
             route_after_evidence_decision,
@@ -221,38 +222,9 @@ class ChiefEditorAgent:
                 "limited_report": END,
             },
         )
-        workflow.add_edge("report_generator", "self_reviewer")
-        workflow.add_conditional_edges(
-            "self_reviewer",
-            self._route_after_review,
-            {
-                "end": END,
-                "retry_small": "query_adapter",
-                "retry_full": "query_analyzer",
-            },
-        )
+        workflow.add_edge("report_generator", END)
 
         return workflow
-
-    def _route_after_review(self, state: ResearchState) -> str:
-        confidence = state.get("confidence", "medium")
-        retry_count = state.get("retry_count", 0)
-        gaps = state.get("knowledge_gaps", [])
-
-        if confidence in ("high", "medium"):
-            return "end"
-        # self_reviewer increments retry_count before routing, so retry_count==1
-        # after the first self-review pass. With >= 1, the first low-confidence
-        # pass ends immediately (no retry) — the 08-31 baseline behavior.
-        # NOTE: 5908b73b enabled retry via "> 1", but full-pipeline retry
-        # (retry_full) blows the 600s per-case budget; reverted here to unblock
-        # evaluation. A true incremental retry is a separate follow-up item.
-        if retry_count >= 1:
-            return "end"
-
-        if len(gaps) <= 2:
-            return "retry_small"
-        return "retry_full"
 
     def init_research_team(self, start_from="query_analyzer"):
         agents = self._initialize_agents()

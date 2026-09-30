@@ -63,7 +63,14 @@ def _public_gaps(state: dict[str, Any]) -> tuple[str, ...]:
     gaps: list[str] = []
     raw = state.get("knowledge_gaps")
     if isinstance(raw, list):
-        gaps.extend(item.strip()[:500] for item in raw if isinstance(item, str) and item.strip())
+        # A pre-render model review may quote private source/supplemental text.
+        # Keep decision events on a fixed public projection even for historical state.
+        reviewed = any(isinstance(row, dict) and row.get("agent") == "self_reviewer"
+                       for row in state.get("quality_signals", []))
+        if reviewed and any(isinstance(item, str) and item.strip() for item in raw):
+            gaps.append("Model review identified unresolved evidence or reasoning gaps.")
+        elif not reviewed:
+            gaps.extend(item.strip()[:500] for item in raw if isinstance(item, str) and item.strip())
     chains = usable_evidence_chains(state)
     if len(chains) < 3:
         gaps.append("Fewer than three non-disputed usable evidence chains are available.")
