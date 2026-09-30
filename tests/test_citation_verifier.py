@@ -100,7 +100,7 @@ async def test_equivalent_urls_are_fetched_once_and_source_projection_is_public(
 
     assert len(calls) == 1
     assert calls[0][0:2] == ("official", "https://example.com/docs")
-    assert calls[0][2]["max_response_bytes"] == 64 * 1024
+    assert calls[0][2]["max_response_bytes"] == 128 * 1024
     assert calls[0][2]["allow_response_truncation"] is True
     assert verification.status_counts.verified == 2
     assert projected[0]["sources"][0]["canonical_url"] == "https://example.com/docs"

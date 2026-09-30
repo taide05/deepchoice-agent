@@ -626,7 +626,7 @@ CONNECT 使用 public h11 的有界协议握手：每隧道最多 16 KiB 接收�
 1xx、分片合计在这些限制内，101、非 2xx、缺失/异常隧道和共包额外数据拒绝。正常完成、
 TLS 失败、断连、超时和取消均清理持有 stream，取消继续传播。握手失败抛固定脱敏安全
 错误，不把代理 404/407 当作目标 HTTP 状态，引用保持 unknown；不返回原始代理响应。
-保留 content-type/64 KiB、最多 3 redirects、15 秒总网络限制、官方节拍/429 冷却及引用
+保留 content-type/有界正文、最多 3 redirects、15 秒总网络限制、官方节拍/429 冷却及引用
 逻辑 `http_calls` reserve/settle/unknown。公开引用四状态/reason/schema、预算错误 fail
 closed 和 lifecycle/fencing/SSE 不变。self-forward、远程、SOCKS/HTTPS 代理、认证和
 经代理 HTTP 引用继续拒绝。本轮离线验收不证明真实代理可用性或模型报告质量。
@@ -646,6 +646,18 @@ closed 和 lifecycle/fencing/SSE 不变。self-forward、远程、SOCKS/HTTPS �
 `unknown/content_insufficient`，不能把未读取的后半页推断为不支持。否定冲突、跨语言不确定、HTTP
 状态、预算、DNS/IP固定、重定向、content-type、编码、总耗时、代理身份及脱敏边界不变。历史
 v1–v4 manifest 继续可读，但不能在 v5 runtime 同 run 恢复。
+
+2026-09-30 的 `deterministic-citation-v12` 将引用专用响应上限设为 128 KiB，提取文本最多
+65,536 字符；共享安全 fetch 默认和 `outbound-url-v5` 的路由/DNS/IP/编码/超时/预算语义不变。
+仅对可从本次来源编号、标题、URL、保存片段和逐句标记重新构建的 `source_facts` 使用段落定位：
+原片段须在正文中唯一出现、起止完整；取覆盖的完整块及两侧相邻块，最多 6,000 字符。HTML
+未闭合尾部、响应/提取边界、过长窗口、缺失或重复位置不授予通过；text/plain 的完整 EOF
+单独处理。限定词、否定和支持检查使用同一窗口，并检查已消费页面内其他强匹配句的反证，
+包括窗口内部并列句，避免句序决定结果。原句与强匹配数字/否定反证同时存在时为unknown，
+保留冲突reason而不把适用范围歧义断言为原句错误。模型断言不使用此特殊路径。原始正文和段落窗口仅在
+本次校验内存中，不能进入状态、公开结果、Trace 或日志；仍一次 URL fetch/预留，无新增模型调用。
+来源事实仍须完整逐句通过，未通过的依赖分析不保留；词法定位不是语义证明。旧引用策略 v1–v11
+manifest 继续可读但须新 run，不能与新策略混用同 run 恢复。
 
 ## O1-PR1：单例资格消费者（2026-09-18）
 

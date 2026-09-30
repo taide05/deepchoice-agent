@@ -30,6 +30,8 @@ from deepchoice.outbound.throttle import ProviderAdmissionError, ProviderRateLim
 from deepchoice.security.redaction import redact_text
 from deepchoice.security.urls import ALLOWED_PORTS, MAX_URL_LENGTH, UnsafeUrlError
 
+from .source_windows import SourceDocument, extract_source_document, locate_source_window
+
 from .contracts import (
     CITATION_POLICY_VERSION,
     CitationCheck,
@@ -45,7 +47,8 @@ from ..utils.evidence import conclusion_source_allowed
 
 MAX_UNIQUE_SOURCE_URLS = 12
 MAX_FETCH_CONCURRENCY = 4
-MAX_RESPONSE_BYTES = 64 * 1024
+MAX_RESPONSE_BYTES = 128 * 1024
+MAX_EXTRACTED_TEXT = 64 * 1024
 MAX_REDIRECTS = 3
 FETCH_TIMEOUT_S = 15.0
 MAX_CLAIM_TEXT = 500
@@ -154,6 +157,7 @@ class _FetchOutcome:
     reason: CitationReason
     text: str = ""
     truncated: bool = False
+    document: SourceDocument | None = None
 
 
 def canonicalize_source_url(value: Any) -> str | None:
@@ -425,8 +429,8 @@ def _html_to_text(value: str) -> str:
         parser.feed(value)
         parser.close()
     except Exception:
-        return _bounded_plain_text(html.unescape(value), limit=MAX_RESPONSE_BYTES)
-    return _bounded_plain_text(" ".join(parser.parts), limit=MAX_RESPONSE_BYTES)
+        return _bounded_plain_text(html.unescape(value), limit=MAX_EXTRACTED_TEXT)
+    return _bounded_plain_text(" ".join(parser.parts), limit=MAX_EXTRACTED_TEXT)
 
 
 def _tokens(value: str) -> set[str]:
@@ -686,6 +690,66 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
     return CitationStatus.UNSUPPORTED, CitationReason.LEXICAL_MISMATCH
 
 
+def _source_fact_support(claim, source, recommendation, evidence_chains, outcome):
+    """Apply local checks only to a runtime-reconstructible complete excerpt.
+
+    Model-authored claims retain the ordinary page checks. A claimed source-fact
+    field cannot use this path to smuggle rewritten or partially quoted prose.
+    """
+    from ..utils.evidence_choices import whole_source_text
+
+    match = re.fullmatch(r"final_recommendation\.source_facts\[(\d+)\]\.text", claim.path)
+    if match is None:
+        return None
+    unknown = (CitationStatus.UNKNOWN, CitationReason.CONTENT_INSUFFICIENT)
+    try:
+        fact = recommendation["source_facts"][int(match[1])]
+        chain_index, source_index = source.position
+        snippet = whole_source_text(evidence_chains[chain_index]["sources"][source_index].get("snippet"))
+    except (KeyError, IndexError, TypeError):
+        return unknown
+    number = 0
+    expected_number = None
+    for chain_index, chain in enumerate(evidence_chains):
+        sources = chain.get("sources", []) if isinstance(chain, dict) else []
+        for source_index, _ in enumerate(sources[:4] if isinstance(sources, list) else []):
+            number += 1
+            if source.position == (chain_index, source_index):
+                expected_number = number
+    expected = " ".join(f"{sentence} [Source: {source.title}]" for sentence in _split_sentences(snippet))
+    if (not snippet or not isinstance(fact, dict)
+            or fact.get("saved_text") != snippet or fact.get("text") != expected
+            or type(fact.get("evidence_id")) is not int or fact["evidence_id"] != expected_number
+            or fact.get("source_title") != source.title
+            or fact.get("canonical_url") != source.canonical_url or outcome.document is None):
+        return unknown
+    window = locate_source_window(snippet, outcome.document)
+    if window is None:
+        return unknown
+    status, reason = _support_status(claim.text, window.text)
+    if status is not CitationStatus.VERIFIED:
+        if reason in {CitationReason.NEGATION_CONFLICT, CitationReason.NUMERIC_MISMATCH}:
+            return CitationStatus.UNKNOWN, reason
+        return status, reason
+    # A local exact match cannot hide a strongly matching contrary statement
+    # inside OR outside the window, including tied matches whose order differs.
+    # Lower-overlap paragraphs about different
+    # acknowledgement modes, for example, are not this source-text occurrence.
+    tokens = _tokens(claim.text)
+    for block in (window.text,) + window.outside:
+        for sentence in re.split(r"[.!?。！？；;\n]+", block):
+            if not tokens or len(tokens & _tokens(sentence)) / len(tokens) < 0.9:
+                continue
+            other_status, other_reason = _support_status(claim.text, sentence)
+            if other_reason in {CitationReason.NEGATION_CONFLICT, CitationReason.NUMERIC_MISMATCH}:
+                # Both the copied wording and a strong contrary statement are
+                # present. Their applicability is uncertain, not proved false.
+                return CitationStatus.UNKNOWN, other_reason
+            if other_reason is CitationReason.QUALIFIER_UNVERIFIED:
+                return other_status, other_reason
+    return status, reason
+
+
 async def _fetch_one(index: int, url: str) -> _FetchOutcome:
     reservations = await reserve_call(
         (BudgetAmount(resource=BudgetResource.HTTP_CALLS, amount=1),),
@@ -744,6 +808,11 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
             CitationReason.LEXICAL_SUPPORT,
             _html_to_text(response.text),
             bool(response.extensions.get("deepchoice_body_truncated")),
+            extract_source_document(
+                response.text,
+                truncated=bool(response.extensions.get("deepchoice_body_truncated")),
+                plain_text=response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain",
+            ),
         )
     if status_code in {401, 403, 404, 410}:
         return _FetchOutcome(
@@ -855,7 +924,8 @@ async def verify_citations(
             if outcome.status is CitationStatus.VERIFIED:
                 # Search snippets are useful synthesis input but may be stale;
                 # only the bounded live response can earn ``verified``.
-                status, reason = _support_status(claim.text, outcome.text)
+                local = _source_fact_support(claim, source, recommendation, evidence_chains, outcome)
+                status, reason = local if local is not None else _support_status(claim.text, outcome.text)
                 if outcome.truncated and reason in {
                     CitationReason.NUMERIC_MISMATCH,
                     CitationReason.LEXICAL_MISMATCH,

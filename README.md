@@ -188,13 +188,19 @@ HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redi
 hostname 精确匹配或显式 `*.example.com` 子域匹配。动态抓取显式请求 identity content encoding；
 无法解码、含未知编码或在打开/消费响应时发生 HTTPX stream 生命周期错误的响应，都按脱敏
 `response_rejected` 关闭，不能作为可重试 transport 证据。新 run 冻结 `outbound-url-v5`：默认安全
-抓取仍拒绝超过上限的正文；只有引用验证显式选择最多 64 KiB 的有界页面前缀，前缀命中可以获得
+抓取仍拒绝超过上限的正文；只有引用验证显式选择最多 128 KiB 的有界页面前缀（提取文本最多 65,536 字符），前缀命中可以获得
 词法 `verified`，前缀未命中保持 `unknown/content_insufficient`，不能据此判为不支持。历史 v1–v4
 manifest 仍可读取但不能按变化后的响应语义同 run 恢复。HTTP body 上限为 128 KiB，query、候选、
 澄清和聚合输入另有字段/数量限制。日志、错误、Trace 和 LLM diagnostics 统一脱敏，后者只保留
 hash、length、usage 和 error type。报告继续提供 Markdown，并由服务端生成经过 sanitizer 的
 `report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。
 本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全 fetch。
+
+当前引用策略为 `deterministic-citation-v12`。运行时复制的来源片段须在已获取正文中唯一定位，
+保留其完整的已闭合文本块及两侧邻块后核验；句中截断、重复位置、未闭合边界保持 `unknown`，同页强匹配
+反证也不能被局部正句掩盖。每段窗口最多 6,000 字符，仍要求整份来源事实的每句通过才保留依赖分析。
+其他模型断言沿用原核验规则；这只核对文本出处与词法支持，不证明推理正确或来源语义完整。
+历史引用 v1–v11 manifest 可读，但不兼容同 run 恢复。该改动尚未获得真实报告质量验证。
 
 Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等价 URL 规范化后每轮最多安全
 抓取一次，额外请求先预留 `http_calls`；检查结果随 immutable run snapshot 持久化，并由报告

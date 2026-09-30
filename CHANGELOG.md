@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Locate copied source facts in bounded complete text blocks
+
+Citation policy v12 fetches at most 128 KiB per URL while retaining a 65,536-character extracted-text
+limit. Runtime-owned source facts must resolve to a unique complete excerpt and are
+checked in its closed text blocks plus neighbouring blocks (at most 6,000 characters).
+Incomplete HTML/snippets, ambiguous locations and strong matching counter-evidence
+remain non-verified; tied local conditions cannot depend on sentence order. Source
+number/title/URL/text bindings are rechecked. Other claims, whole-fact calibration,
+source authority, paid-call count, and safe-fetch/budget/lifecycle boundaries remain.
+Raw page windows stay transient. Historical citation-v11 manifests remain readable
+but cannot resume on v12. Offline historical HTML diagnosis does not rescore the
+original reports or establish live source availability or report-quality acceptance.
+Validated on 2026-09-30 with 2635 tests, 229 focused tests, unchanged smoke-v1 12/12
+case results, pyflakes/vulture and independent review; no new paid measurements.
+
 ### Record repaired development comparison without quality promotion
 
 On 2026-09-30, quality-selection-development-v1 / 1.0.0 completed all four control

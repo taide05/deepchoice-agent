@@ -54,7 +54,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         if retriever.retriever_id != "chroma"
     )
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v11"
+    assert first.citation_policy_version == "deterministic-citation-v12"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -140,7 +140,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v3"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v11"
+    assert registry.citation_policy_version == "deterministic-citation-v12"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v18",
@@ -716,3 +716,17 @@ def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(
         with monkeypatch.context() as patcher:
             patcher.setattr(module, field, getattr(module, field) + "changed")
             assert build_run_manifest({}).manifest_id != current.manifest_id
+
+
+def test_v11_citation_manifest_remains_readable_but_cannot_resume_with_windows():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    previous = current.model_copy(update={"citation_policy_version": "deterministic-citation-v11"})
+    previous = previous.model_copy(update={"manifest_id": _expected_manifest_id(previous)})
+    restored = RunManifest.model_validate_json(previous.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, task)
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
