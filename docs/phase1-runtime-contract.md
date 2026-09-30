@@ -19,7 +19,20 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-09-30 当前候选使用 synthesis v16、citation v11、三模板 what-why-how-v11 /
+2026-09-30 当前候选使用 synthesis v17、citation v11、三模板 what-why-how-v12 /
+evidence-first-v11 / comparison-matrix-v10。新生成的每项 decision_analysis 必须提供 basis：
+1–4个不重复 fact_id，每项选择该保存片段内1–3个不重复、从1开始的整数 sentence_ids。
+提示与绑定使用同一完整文本规范化和分句函数；运行时据此重建 fact_ids 与 source_sentences，
+不信任模型提供的引文或旧 fact_ids。无效地址移除整项并进入既有最多一次结构纠正，不增加
+新调用类别；历史无 basis 投影可只读，当前生成不能走该兼容分支。旧 v16 身份仍可读取，
+不能在当前行为下同 run 恢复；workflow/state schema、迁移与生命周期不变。
+
+引用节点继续重建来源及地址，必须完整保存片段通过本轮核验后才保留分析；渲染再次复制
+保存原句并转义，先展示原句、再展示模型判断，完整上下文继续可见。提示要求按判断维度
+拆分、明确缺失前提并保留条件方向，但这些是生成约束，不是语义证明。合法地址仍可能
+指向不相关原句；human_review_required、未知语义、Winner及行动隔离边界保持。
+
+以下记录 v16 引入并由当前版本保留的需求范围规则：citation v11、三模板 what-why-how-v11 /
 evidence-first-v10 / comparison-matrix-v9。迁移触发/概念性过渡不再自动追加完整迁移与回退
 的决策关键义务；仅原 query、冻结约束、显式 scene 要求或原始子问题中的明确步骤/方案请求
 经有界措辞识别后追加。识别不是通用语义分类，原始 C/Q 始终保留；分析器文本不触发额外

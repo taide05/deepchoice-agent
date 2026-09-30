@@ -63,6 +63,7 @@ def _plain_analysis(value: Any) -> str:
 
 
 def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
+    from ..utils.decision_analysis import bind_analysis_basis
     facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 4)
              if isinstance(item.get("id"), str)}
     accepted = []
@@ -72,6 +73,11 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
                 and isinstance(ids, list) and 0 < len(ids) <= 4
                 and all(isinstance(key, str) and key in facts
                         and facts[key].get("status") == "verified" for key in ids)):
+            if "basis" in item:
+                basis, error = bind_analysis_basis(item["basis"], facts)
+                if error or [row["fact_id"] for row in basis] != ids:
+                    continue
+                item = {**item, "basis": basis}
             accepted.append(item)
     if not accepted:
         return []
@@ -91,6 +97,14 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
         requirements = item.get("requirements", [])
         if isinstance(requirements, list):
             lines.append(("对应问题：" if zh else "Addresses: ") + " / ".join(_plain_analysis(v) for v in requirements[:4]))
+        if "basis" in item:
+            lines.extend(["", "来源原句（完整保存上下文见下方）：" if zh else
+                          "Source sentences (complete saved context below):"])
+            for row in item["basis"]:
+                title = _plain_analysis(facts[row["fact_id"]].get("source_title"))
+                for sentence in row["source_sentences"]:
+                    lines.append("- " + _plain_analysis(sentence) + " — " + title)
+            lines.extend(["", "基于上述原句的模型判断：" if zh else "Model judgment based on those sentences:"])
         lines.extend(["", _plain_analysis(item.get("reasoning")), ""])
         assumptions = item.get("assumptions", [])
         if isinstance(assumptions, list):

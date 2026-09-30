@@ -23,6 +23,7 @@ def proposal():
     return {"winner": "ExampleQueue", "ranked_options": [],
             "source_facts": [{"id": "F1", "evidence_id": 1}],
             "decision_analysis": [{"kind": "design", "option": "ExampleQueue", "fact_ids": ["F1"],
+                                   "basis": [{"fact_id": "F1", "sentence_ids": [1, 2]}],
                                    "requirement_ids": ["Q1"], "reasoning": "先定义权威任务记录，再评估执行器替换；这一设计仍需人工审阅。",
                                    "assumptions": ["业务副作用可以定义幂等键"],
                                    "change_condition": "若副作用无法对账，需要重新设计业务恢复边界。",
@@ -80,10 +81,10 @@ async def test_analysis_survives_normal_abstention_without_upgrading_authority(m
 def test_untrusted_analysis_cannot_forge_bindings(bad):
     rec = proposal()
     item = rec["decision_analysis"][0]
-    if bad == "fact": item["fact_ids"] = ["F2"]
+    if bad == "fact": item["basis"][0]["fact_id"] = "F2"
     elif bad == "question": item["requirement_ids"] = ["A1"]
     elif bad == "option": item["option"] = "InventedCandidate"
-    elif bad == "duplicate": item["fact_ids"] *= 2
+    elif bad == "duplicate": item["basis"] *= 2
     elif bad == "overflow": rec["decision_analysis"] *= 9
     elif bad == "kind": item["kind"] = []
     elif bad == "link": item["reasoning"] = "[fake](https://evil.example/)"
@@ -126,7 +127,7 @@ async def test_ineligible_source_is_disclosed_before_generation_and_rejection_is
         result = proposal()
         result["source_facts"].append({"id": "F2", "evidence_id": 2})
         rejected = deepcopy(result["decision_analysis"][0])
-        rejected.update(fact_ids=["F2"], reasoning="MODEL_PROSE_MUST_NOT_ENTER_BINDING_DIAGNOSTICS")
+        rejected.update(basis=[{"fact_id": "F2", "sentence_ids": [1]}], reasoning="MODEL_PROSE_MUST_NOT_ENTER_BINDING_DIAGNOSTICS")
         result["decision_analysis"].append(rejected)
         return result
 
@@ -140,7 +141,7 @@ async def test_ineligible_source_is_disclosed_before_generation_and_rejection_is
     state.update(await synth.ConclusionSynthesizerAgent().run(state))
     signal = state["quality_signals"][0]
     assert signal["source_facts_received"] == 2 and signal["source_facts_bound"] == 1
-    assert signal["analysis_binding"] == {"provided": True, "received": 2, "retained": 1, "rejected": {"invalid_fact_ids": 1}}
+    assert signal["analysis_binding"] == {"provided": True, "received": 2, "retained": 1, "rejected": {"basis_invalid_fact": 1}}
     assert "MODEL_PROSE" not in json.dumps(signal)
     assert len(model_calls) == 2
     assert signal["structure_correction"]["outcome"] == "invalid"

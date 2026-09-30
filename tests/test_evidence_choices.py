@@ -145,4 +145,7 @@ def test_model_sees_trailing_prerequisite_of_whole_bounded_fact():
     assert 800 < len(snippet) <= 1200
     chains[0]["sources"][0]["snippet"] = snippet
     prompt, _ = synth._summarize_chains(chains)
-    assert snippet in prompt
+    numbered = [line.strip() for line in prompt.splitlines() if line.strip().startswith(tuple(f"s{i}: " for i in range(1, 14)))]
+    assert [line.split(": ", 1)[0] for line in numbered] == [f"s{i}" for i in range(1, 14)]
+    assert " ".join(line.split(": ", 1)[1] for line in numbered) == snippet
+    assert numbered[-1] == "s13: This requires an independently durable journal."

@@ -40,7 +40,36 @@ def original_analysis_requirements(requirements, query=""):
     return original
 
 
-def bind_decision_analysis(recommendation, requirements, candidates, query="", *, diagnostics=None):
+def bind_analysis_basis(raw, facts):
+    """Copy addressed full saved sentences; never label an inference verified."""
+    from ..citations.verifier import _split_sentences
+
+    if not isinstance(raw, list) or not 0 < len(raw) <= 4:
+        return None, "basis_missing_or_invalid"
+    selected = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            return None, "basis_invalid_item"
+        key = item.get("fact_id")
+        if not isinstance(key, str) or key not in facts or key in seen:
+            return None, "basis_invalid_fact"
+        text = facts[key].get("saved_text")
+        if not isinstance(text, str) or not text:
+            return None, "basis_invalid_fact"
+        sentences = _split_sentences(text)
+        indexes = item.get("sentence_ids")
+        if (not isinstance(indexes, list) or not 0 < len(indexes) <= 3
+                or any(type(index) is not int or not 1 <= index <= len(sentences) for index in indexes)
+                or len(set(indexes)) != len(indexes)):
+            return None, "basis_invalid_sentences"
+        seen.add(key)
+        selected.append({"fact_id": key, "sentence_ids": list(indexes),
+                         "source_sentences": [sentences[index - 1] for index in indexes]})
+    return selected, None
+
+
+def bind_decision_analysis(recommendation, requirements, candidates, query="", *, diagnostics=None, require_basis=False):
     """Rebuild model output from original C/Q requirements and bound fact IDs.
 
     This first pass does not grant display permission. Citation calibration must
@@ -66,7 +95,7 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
         reject("invalid_list" if not isinstance(raw, list) else "item_limit")
         return result
     original = original_analysis_requirements(requirements, query)
-    facts = {row["id"] for row in result.get("source_facts", [])}
+    facts = {row["id"]: row for row in result.get("source_facts", [])}
     options = {value for value in candidates if isinstance(value, str)} if isinstance(candidates, list) else set()
     for item in raw:
         if (not isinstance(item, dict) or not isinstance(item.get("kind"), str)
@@ -78,7 +107,17 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
                 or (item["kind"] == "choice" and not option)):
             reject("invalid_option")
             continue
-        fact_ids = _refs(item.get("fact_ids"), facts)
+        basis = None
+        if require_basis or "basis" in item:
+            basis, reason = bind_analysis_basis(item.get("basis"), facts)
+            if reason:
+                reject(reason)
+                continue
+            fact_ids = [row["fact_id"] for row in basis]
+        else:
+            # Historical projections remain readable; current synthesis always
+            # requires explicit basis and never takes this compatibility path.
+            fact_ids = _refs(item.get("fact_ids"), facts)
         requirement_ids = _refs(item.get("requirement_ids"), original)
         if not fact_ids or not requirement_ids:
             reject("invalid_fact_ids" if not fact_ids else "invalid_requirement_ids")
@@ -100,6 +139,8 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
             "reasoning": reasoning, "assumptions": assumptions,
             "change_condition": change_condition, "review_status": "not_checked",
         })
+        if basis is not None:
+            result["decision_analysis"][-1]["basis"] = basis
         counts["retained"] += 1
     return result
 
@@ -122,12 +163,12 @@ def inspect_synthesis_bindings(recommendation, chains, requirements, candidates,
     elif len(bound.get("source_facts", [])) != len(facts):
         errors["facts_binding_loss"] = len(facts) - len(bound.get("source_facts", []))
     analysis = {}
-    bound = bind_decision_analysis(bound, requirements, candidates, query, diagnostics=analysis)
+    bound = bind_decision_analysis(bound, requirements, candidates, query, diagnostics=analysis, require_basis=True)
     if "decision_analysis" in recommendation and recommendation["decision_analysis"] is None:
         errors["analysis_invalid_list"] = 1
     for reason, count in analysis["rejected"].items():
         # One invalid factual projection can invalidate every dependent analysis.
-        if reason != "invalid_fact_ids" or not any(key.startswith("facts_") for key in errors):
+        if reason not in {"invalid_fact_ids", "basis_invalid_fact"} or not any(key.startswith("facts_") for key in errors):
             errors["analysis_" + reason] = count
     return bound, {
         "source_facts_received": len(facts) if isinstance(facts, list) else None,

@@ -32,7 +32,7 @@ def response():
             "unresolved_questions": [], "scene_fit_note": "",
             "source_facts": [{"id": "F1", "evidence_id": 1}],
             "decision_analysis": [{"kind": "answer", "option": "ExampleQueue",
-                "fact_ids": ["F1"], "requirement_ids": ["Q1"], "reasoning": "FIRST_PRIVATE_REASON",
+                "basis": [{"fact_id": "F1", "sentence_ids": [1]}], "requirement_ids": ["Q1"], "reasoning": "FIRST_PRIVATE_REASON",
                 "assumptions": ["A durable journal is available."],
                 "change_condition": "Reconsider if the journal cannot be read."}]}
 
@@ -140,7 +140,7 @@ def test_binding_inspection_reuses_existing_contract(bad):
     elif bad == "bool_id": rec["source_facts"][0]["evidence_id"] = True
     elif bad == "null_facts": rec["source_facts"] = None
     elif bad == "null_analysis": rec["decision_analysis"] = None
-    elif bad == "missing_fact": rec["decision_analysis"][0]["fact_ids"] = ["F99"]
+    elif bad == "missing_fact": rec["decision_analysis"][0]["basis"][0]["fact_id"] = "F99"
     else: rec["decision_analysis"] *= 9
     _, diagnostic = inspect_synthesis_bindings(rec, CHAINS, REQS, TASK["candidate_techs"], TASK["query"])
     assert diagnostic["errors"]

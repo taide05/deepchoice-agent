@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Bind decision analysis to saved source sentences
+
+Synthesis v17 selects bounded fact/sentence addresses for each analysis instead of
+an independent coarse fact list. Runtime binding derives the references and copies
+saved sentences; rendering rebuilds them again and separates them from model
+judgment while retaining full source context. Missing or invalid addresses use the
+existing single correction limit and cannot bypass citation calibration. No new
+model call class, semantic judge or operational authority is introduced. Historical
+v16 manifests remain readable but cannot resume under the changed behavior.
+Three template identities were updated; smoke case outputs and metrics are unchanged.
+Verified on 2026-09-30 with Python 3.12: 2590 full-suite tests (453.58s),
+192 related tests, smoke-v1 12/12 with matching baseline, static checks and
+independent review. This is not a real-model quality result.
+
 ### Traceable serial quality-selection collection
 
 Added offline binding preparation and a serial adapter over the durable collector.
