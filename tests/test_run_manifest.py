@@ -143,7 +143,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v11"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v17",
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v18",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -695,7 +695,7 @@ async def test_resume_passes_none_input_to_langgraph(monkeypatch):
     assert captured["config"]["configurable"]["thread_id"] == "thread-1"
 
 
-@pytest.mark.parametrize("old_version", ["v14", "v15", "v16"])
+@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17"])
 def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(monkeypatch, old_version):
     import hashlib
     from deepchoice.contracts import manifest as module

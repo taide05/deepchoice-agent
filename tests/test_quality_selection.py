@@ -6,6 +6,7 @@ from contextlib import closing
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 import json
+import hashlib
 from pathlib import Path
 import sqlite3
 
@@ -15,6 +16,26 @@ import pytest
 from benchmarks import quality_selection as q
 from benchmarks import quality_selection_runtime as runtime
 
+
+
+def audited_seed(path, monkeypatch):
+    from deepchoice.retrievers import chroma_kb
+    from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
+    (path / "chroma").mkdir(parents=True)
+    with closing(sqlite3.connect(path / "chroma/chroma.sqlite3")) as db, db:
+        db.execute("CREATE TABLE fixture (id INTEGER)")
+    (path / "learned_docs.json").write_text("{}", encoding="utf-8")
+    text = "Source statement. " * 33 + "Only with the stated prerequisite.\nAnother line."
+    text_hash = hashlib.sha256(text.encode()).hexdigest()
+    doc_id = "fixture:" + text_hash[:16]
+    metadata = {"target_id": "fixture", "url": "https://example.com/doc", "source_type": "official",
+                "seed_identity_sha256": AUDITED_PRODUCT_SEED_IDENTITY}
+    q.write_json(path / "chunks.json", [{"chunk_id": doc_id, "source_id": "fixture", "text_sha256": text_hash}])
+    q.write_json(path / "seed-manifest.json", {"sources": [{"stable_id": "fixture", "url": metadata["url"],
+                                                          "source_kind": "official"}]})
+    monkeypatch.setattr(chroma_kb, "_AUDITED_CHUNKS_SHA256", q.file_digest(path / "chunks.json"))
+    monkeypatch.setattr(chroma_kb, "_AUDITED_MANIFEST_SHA256", q.file_digest(path / "seed-manifest.json"))
+    return text, metadata, doc_id
 
 def initialize_ledger(tmp_path):
     proof = tmp_path / "reconciliation.json"
@@ -419,11 +440,9 @@ def test_runtime_freeze_copies_seed_and_binds_clean_identities(frozen, tmp_path,
     proof = tmp_path / "reconciliation.json"
     q.ResearchLedger.initialize(runner / "outputs/quality-selection-v1-ledger.sqlite3", proof)
     seed = tmp_path / "seed"
-    (seed / "chroma").mkdir(parents=True)
-    with closing(sqlite3.connect(seed / "chroma/chroma.sqlite3")) as db, db:
-        db.execute("CREATE TABLE fixture (id INTEGER)")
-    (seed / "learned_docs.json").write_text("{}", encoding="utf-8")
-    environment = {**binding["environment"], "knowledge_root": str(seed), "knowledge_sha256": tree_hash(seed)}
+    audited_seed(seed, monkeypatch)
+    environment = {**binding["environment"], "knowledge_root": str(seed), "knowledge_sha256": tree_hash(seed),
+                   "knowledge_audit": runtime.audited_seed_identity(seed)}
     preflight = tmp_path / "preflight.json"
     q.write_json(preflight, {"ended_at": datetime.now(UTC).isoformat()})
     monkeypatch.setattr(runtime, "runner_root", lambda: runner)
@@ -574,7 +593,7 @@ def test_environment_identity_uses_loaded_code_and_shared_key_state(tmp_path, mo
     from benchmarks import product_baseline_qualification as qualification
     production = Path(next(iter(deepchoice.__path__))).resolve().parents[1]
     seed = tmp_path / "seed"
-    seed.mkdir()
+    audited_seed(seed, monkeypatch)
     state = tmp_path / "shared-key-state.json"
     for key, value in {**experiment.RESOURCE_SETTINGS, "DEEPCHOICE_SYNTH_THINKING": "0",
                        "LLM_DS_CONCURRENCY": "80", "TAVILY_KEY_STATE_PATH": str(state)}.items():
@@ -591,3 +610,135 @@ def test_environment_identity_uses_loaded_code_and_shared_key_state(tmp_path, mo
     assert first["knowledge_sha256"] == second["knowledge_sha256"]
     with pytest.raises(ValueError, match="loaded production"):
         runtime.environment_identity(tmp_path / "other-code", seed, object())
+
+
+def test_audited_copy_preserves_real_retriever_window_and_identity(tmp_path, monkeypatch):
+    from benchmarks.product_baseline_experiment import tree_hash
+    from deepchoice.retrievers import chroma_kb
+    seed, copy = tmp_path / "seed", tmp_path / "copy"
+    text, metadata, doc_id = audited_seed(seed, monkeypatch)
+    before = chroma_kb._load_audited_index(str(seed / "chroma"))
+    assert len(before) == 1
+    audit = runtime.copy_audited_seed(seed, copy, tree_hash(seed))
+    after = chroma_kb._load_audited_index(str(copy / "chroma"))
+    assert audit == runtime.audited_seed_identity(copy) and before == after
+    assert tree_hash(seed) == tree_hash(copy)
+    restored = chroma_kb._bounded_snippet(text, metadata, doc_id=doc_id, index=after)
+    assert restored == text.split("\n")[0] and len(restored) > 500
+    assert chroma_kb._bounded_snippet(text, metadata, doc_id=doc_id, index={}) == text[:500]
+
+
+@pytest.mark.parametrize("fault", ["chunks.json", "seed-manifest.json", "tamper", "wal", "extra", "database", "link"])
+def test_audited_copy_rejects_broken_runtime_seed_before_creating_output(tmp_path, monkeypatch, fault):
+    from benchmarks.product_baseline_experiment import tree_hash
+    seed, copy = tmp_path / "seed", tmp_path / "copy"
+    audited_seed(seed, monkeypatch)
+    if fault in {"chunks.json", "seed-manifest.json"}:
+        (seed / fault).unlink()
+    elif fault == "tamper":
+        with (seed / "chunks.json").open("a") as handle:
+            handle.write(" ")
+    elif fault == "wal":
+        (seed / "chroma/chroma.sqlite3-wal").write_bytes(b"pending")
+    elif fault == "extra":
+        (seed / "build-record.json").write_text("{}")
+    elif fault == "database":
+        (seed / "chroma/chroma.sqlite3").write_bytes(b"not SQLite")
+    elif fault == "link":
+        original = Path.is_symlink
+        monkeypatch.setattr(Path, "is_symlink", lambda p: p == seed / "chroma" or original(p))
+    with pytest.raises((ValueError, sqlite3.DatabaseError)):
+        runtime.copy_audited_seed(seed, copy, tree_hash(seed))
+    assert not copy.exists()
+
+
+def repair_binding(binding, tmp_path):
+    original = tmp_path / "original-baseline.json"
+    q.write_json(original, binding)
+    incident = tmp_path / "incident.json"
+    q.write_json(incident, {"research_used": 119, "old_roots_closed": True,
+                           "original_audited_index_entries": 234, "prepared_audited_index_entries": 0})
+    binding.update(phase="repair_baseline", starting_used=119, repair_purpose={"id": q.REPAIR_PURPOSE,
+        "incident": {"path": str(incident), "sha256": q.file_digest(incident)},
+        "original_baseline_binding": {"path": str(original), "sha256": q.file_digest(original)}})
+    binding["environment"]["knowledge_audit"] = {"index_entries": 234}
+    binding["identity"]["environment_sha256"] = q.digest(binding["environment"])
+    return binding
+
+
+def test_repair_binding_and_followup_bind_purpose_and_incident(frozen, tmp_path):
+    baseline, _, path = frozen
+    repair_binding(baseline, tmp_path)
+    q.write_json(path, baseline)
+    assert q.load_binding(path)[0]["phase"] == "repair_baseline"
+    candidate = deepcopy(baseline)
+    candidate.pop("repair_purpose")
+    candidate.update(phase="followup", starting_used=123,
+                     baseline_binding={"path": str(path), "sha256": q.file_digest(path)})
+    target = tmp_path / "followup.json"
+    q.write_json(target, candidate)
+    assert q.load_binding(target)[0]["phase"] == "followup"
+    candidate["phase"] = "candidate"
+    q.write_json(target, candidate)
+    with pytest.raises(ValueError, match="baseline binding"):
+        q.load_binding(target)
+    baseline["repair_purpose"]["id"] = "try-until-pass"
+    q.write_json(path, baseline)
+    with pytest.raises(ValueError, match="repair purpose"):
+        q.load_binding(path)
+    baseline["repair_purpose"]["id"] = q.REPAIR_PURPOSE
+    q.write_json(path, baseline)
+    (tmp_path / "incident.json").write_text("{}")
+    with pytest.raises(ValueError, match="incident drift"):
+        q.load_binding(path)
+
+
+def test_one_repair_batch_never_refunds_old_calls_or_consumes_final_allocation(ledger):
+    with pytest.raises(ValueError, match="reconciled batch"):
+        ledger.reserve("repair", "early", "repair_baseline", expected_used=114)
+    for i in range(4):
+        ledger.reserve("old-baseline", str(i), "baseline", expected_used=114 + i)
+    ledger.reserve("old-candidate", "one", "candidate", expected_used=118)
+    ledger.reserve("repair", "one", "repair_baseline", expected_used=119)
+    with pytest.raises(ValueError, match="one frozen batch"):
+        ledger.reserve("different-repair", "two", "repair_baseline", expected_used=120)
+    for i in range(3):
+        ledger.reserve("repair", str(i), "repair_baseline", expected_used=120 + i)
+    with pytest.raises(ValueError, match="exhausted"):
+        ledger.reserve("repair", "fifth", "repair_baseline", expected_used=123)
+    for i in range(4):
+        ledger.reserve("followup", str(i), "followup", expected_used=123 + i)
+    for i in range(24):
+        ledger.reserve("acceptance", str(i), "acceptance", expected_used=127 + i)
+    assert ledger.used() == 151
+    with closing(sqlite3.connect(ledger.path)) as db:
+        assert db.execute("SELECT COUNT(*) FROM admissions WHERE batch LIKE 'old-%'").fetchone() == (5,)
+
+
+@pytest.mark.parametrize("change", ["production", "request", "hitl", "manifest", "config"])
+def test_repair_cannot_replace_the_original_control(frozen, tmp_path, change):
+    binding, _, path = frozen
+    repair_binding(binding, tmp_path)
+    if change == "production":
+        binding["identity"]["production_commit"] = "0" * 40
+    elif change == "request":
+        binding["cells"][0]["request_sha256"] = "0" * 64
+    elif change == "hitl":
+        binding["cells"][0]["hitl"] = {"action": "cancel"}
+    elif change == "manifest":
+        binding["cells"][0]["manifest_id"] = "0" * 64
+    else:
+        binding["environment"]["configuration_sha256"] = "0" * 64
+        binding["identity"]["environment_sha256"] = q.digest(binding["environment"])
+    q.write_json(path, binding)
+    with pytest.raises(ValueError, match="drift"):
+        q.load_binding(path)
+
+
+def test_old_partly_used_phase_cannot_be_reallocated(ledger):
+    ledger.reserve("closed-candidate", "one", "candidate", expected_used=114)
+    with pytest.raises(ValueError, match="frozen batch"):
+        ledger.require_unused_phase("candidate", 4)
+    with pytest.raises(ValueError, match="one frozen batch"):
+        ledger.reserve("new-candidate", "two", "candidate", expected_used=115)
+    assert ledger.used() == 115

@@ -29,7 +29,8 @@ from deepchoice.contracts.api import ResearchRequest
 PROTOCOL = "quality-selection-v1"
 BASE_USED = 114
 HARD_TOTAL = 156
-PHASE_LIMITS = {"baseline": 4, "candidate": 4, "followup": 4, "acceptance": 24}
+PHASE_LIMITS = {"baseline": 4, "candidate": 4, "followup": 4, "repair_baseline": 4, "acceptance": 24}
+REPAIR_PURPOSE = "restore-audited-seed-runtime-files"
 DATASETS = {
     "development": ("quality-selection-development-v1", "e230c6e28e117a7e1216e6e507431a90712013dd2a51655f2396ea0525bfc3b0"),
     "holdout": ("quality-selection-holdout-v1", "bd30ee3844834983fa72e2d7d1631bf26155bda719b9d3fe7e952c467b7ff7ca"),
@@ -133,6 +134,29 @@ def validate_hitl(value: dict) -> None:
         DecisionResolution.model_validate({"action": "provide_context", "supplemental_input": text})
 
 
+
+def validate_repair_purpose(value: dict | None) -> dict:
+    """One reserve allocation for the recorded runtime-seed omission, not retries."""
+    _require(isinstance(value, dict) and value.get("id") == REPAIR_PURPOSE,
+             "repair purpose is required")
+    ref = value.get("incident", {})
+    _require(_hash(ref.get("sha256")) and isinstance(ref.get("path"), str), "repair incident is required")
+    path = Path(ref["path"])
+    _require(file_digest(path) == ref["sha256"], "repair incident drift")
+    incident = json.loads(path.read_text(encoding="utf-8"))
+    _require(incident.get("old_roots_closed") is True and incident.get("research_used") == 119
+             and incident.get("original_audited_index_entries") == 234
+             and incident.get("prepared_audited_index_entries") == 0,
+             "repair incident does not establish the stopped seed fault")
+    control = value.get("original_baseline_binding", {})
+    _require(_hash(control.get("sha256")) and isinstance(control.get("path"), str),
+             "original baseline binding is required")
+    control_path = Path(control["path"])
+    _require(file_digest(control_path) == control["sha256"], "original baseline binding drift")
+    raw = json.loads(control_path.read_text(encoding="utf-8"))
+    _require(raw.get("phase") == "baseline", "repair must reference the original baseline")
+    return load_binding(control_path, require_current=False)[0]
+
 def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dict[str, dict]]:
     binding = json.loads(path.read_text(encoding="utf-8"))
     _require(binding.get("schema_version") == 1 and binding.get("protocol") == PROTOCOL, "invalid binding")
@@ -147,6 +171,13 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
         _require(_hash(identity.get(field)), "missing frozen environment/asset identity")
     _require(identity["environment_sha256"] == digest(binding.get("environment"))
              and identity["source_policy_sha256"] == digest(binding.get("source_policy")), "frozen metadata drift")
+    repair_control = None
+    if phase == "repair_baseline":
+        repair_control = validate_repair_purpose(binding.get("repair_purpose"))
+        _require(type(binding.get("starting_used")) is int and binding["starting_used"] >= 119,
+                 "repair requires reconciled prior admissions")
+        _require(binding["environment"].get("knowledge_audit", {}).get("index_entries") == 234,
+                 "repair requires restored audited seed")
     locked_candidate = None
     if phase == "acceptance":
         locked_candidate = load_candidate_lock(binding.get("candidate_lock"), identity["production_commit"])
@@ -173,6 +204,18 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
         validate_hitl(cell["hitl"])
         if case["hitl"] is not None:
             _require(cell["hitl"] == case["hitl"], "sealed HITL policy drift")
+    if repair_control is not None:
+        _require(identity["production_commit"] == repair_control["identity"]["production_commit"],
+                 "repair control production drift")
+        original = {c["case_id"]: c for c in repair_control["cells"]}
+        _require(all(all(c[key] == original[c["case_id"]][key] for key in
+                         ("request_sha256", "manifest_id", "hitl")) for c in schedule),
+                 "repair control request/manifest/HITL drift")
+        _require(binding["ledger_identity"] == repair_control["ledger_identity"], "repair ledger drift")
+        fixed = ("configuration_sha256", "dependency_snapshot_sha256", "embedding_revision",
+                 "settings", "model_id", "endpoint_sha256", "tavily_state_path")
+        _require(all(binding["environment"][key] == repair_control["environment"][key] for key in fixed),
+                 "repair control configuration drift")
     if phase == "acceptance":
         # Each pass covers every case before the next repetition begins.
         for rep in range(1, 4):
@@ -195,7 +238,9 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
         _require(file_digest(baseline_path) == ref["sha256"], "baseline binding drift")
         # Check phase before recursion; a malformed reference cannot form a cycle.
         baseline_raw = json.loads(baseline_path.read_text(encoding="utf-8"))
-        _require(baseline_raw.get("phase") == "baseline", "comparison requires a baseline binding")
+        _require(baseline_raw.get("phase") == "baseline"
+                 or phase == "followup" and baseline_raw.get("phase") == "repair_baseline",
+                 "comparison requires a baseline binding")
         baseline, _ = load_binding(baseline_path, require_current=False)
         verify_comparison(binding, baseline)
         _require(end <= _time(baseline["frozen_at"]) + timedelta(days=7),
@@ -225,6 +270,8 @@ def verify_comparison(binding: dict, baseline: dict) -> None:
              == Path(baseline["environment"]["tavily_state_path"]).resolve(), "shared key-state path drift")
     _require(binding["identity"]["runner_commit"] == baseline["identity"]["runner_commit"],
              "comparison runner drift")
+    _require(binding["environment"].get("knowledge_audit") == baseline["environment"].get("knowledge_audit"),
+             "comparison audit identity drift")
     _require(all(binding["environment"][key] == baseline["environment"][key] for key in keys)
              and binding["source_policy"] == baseline["source_policy"], "comparison environment drift")
 
@@ -310,6 +357,15 @@ class ResearchLedger:
             db.execute("BEGIN IMMEDIATE")
             return BASE_USED + len(self._checked_rows(db))
 
+    def require_unused_phase(self, phase: str, count: int) -> None:
+        """Preparation only; actual admission remains serialized in reserve()."""
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = self._checked_rows(db)
+            _require(phase in PHASE_LIMITS and count == PHASE_LIMITS[phase], "invalid phase allocation")
+            _require(not any(row[3] == phase for row in rows), "phase already belongs to a frozen batch")
+            _require(BASE_USED + len(rows) + count <= HARD_TOTAL, "research allocation exhausted")
+
     def reserve(self, batch: str, cell: str, phase: str, *, expected_used: int) -> int:
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -319,6 +375,10 @@ class ResearchLedger:
             _require(phase in PHASE_LIMITS, "unallocated research phase")
             _require(used == expected_used, "research ledger changed; reconcile before admission")
             _require(used < HARD_TOTAL and phase_used < PHASE_LIMITS[phase], "research allocation exhausted")
+            _require(all(row[1] == batch for row in rows if row[3] == phase),
+                     "phase allocation is limited to one frozen batch")
+            if phase == "repair_baseline":
+                _require(used >= 119, "repair requires a reconciled batch")
             row = (used + 1, batch, cell, phase, datetime.now(UTC).isoformat())
             db.execute("INSERT INTO admissions VALUES (?,?,?,?,?)", row)
             # Write ahead to a separate witness. A crash or failed DB commit fails

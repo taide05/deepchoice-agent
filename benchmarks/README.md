@@ -4,7 +4,7 @@
 判据见[quality-selection-v1](../docs/product-effectiveness-optimization.md)，实际预算与结果见
 [当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存。
 新串行运行适配已执行首批开发对照，但发现准备过程遗漏运行时种子审定文件，且候选触发预算停止。
-实际结果与119/156账本见当前状态；复制契约修复并核对审定行为前，不启动新的审定种子对照。
+实际结果与账本见当前状态。修复后的准备接口强制保留四项运行输入，并为已记录的事故提供一次性维修基线入口。
 
 ## quality-selection-v1 操作接口
 
@@ -25,7 +25,7 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   必须先核实历史累计及新协议尚无准入；不能编造凭据以重置额度。固定账本位于采集器
   checkout 的 `outputs/quality-selection-v1-ledger.sqlite3`，另有身份及逐笔准入见证文件；
   一起保存。冻结/采集不会自动建库，缺文件、身份不符或两份准入记录不一致均须先对账。
-- spec 包含 `phase`（`baseline/candidate/followup/acceptance`）、`production_root`、
+- spec 包含 `phase`（`baseline/candidate/followup/repair_baseline/acceptance`）、`production_root`、
   `seed_path`/`seed_sha256`、`preflight_path`、`datasets`、`source_policy` 和开发例 `hitl`。
   dataset 项为 `split/path/sha256`，只能引用已冻结版本。来源政策必须声明
   `holdout_reference_ingestion:false`，并用 `development_exposure` 说明开发材料与知识种子的关系。
@@ -35,11 +35,21 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   `candidate_lock_path`，指向已完成开发评审的 `accepted:true`/`candidate_commit` 记录；
   该记录另含 `candidate_binding` 的 `path/sha256`。校验开发候选绑定及运行条件后才能读保留材料，
   开发HITL沿用锁定规则且同例三次相同。锁定记录是评审结论的载体，不由运行器自动判分。
+- `repair_baseline` 仅用于恢复遗漏审定文件后的原控制组复测，最多4格。spec 的
+  `repair_purpose.id` 固定为 `restore-audited-seed-runtime-files`，`incident` 和
+  `original_baseline_binding` 各提供 `path/sha256`。必须匹配已关闭事故、原控制组生产提交、
+  四格请求/manifest/HITL、配置与账本；修复允许知识身份改变，并要求234项审定索引。
+  新 `followup` 可以比较该维修基线；原 `candidate` 不能借此重开。实际分配仍受156总上限。
+- 知识种子恰含 `chroma/`、`learned_docs.json`、`chunks.json`、`seed-manifest.json`。
+  审定文件参与检索行为，不能当作可丢弃的构建附件。复制前后和启动时校验整树字节身份、
+  审定索引数量/哈希、侧车文件哈希、SQLite完整性与文件边界；链接、待处理WAL等拒绝。
+  `build-record.json` 和原始 `data/` 留在来源根，准备方先核对四项与原停止根逐字节一致。
 - 前置只复用有界、通过且未过期的 receipt，并核对模型/端点哈希、配置、依赖及探测代码。
   freeze 会复制停止状态的知识种子；serve 在导入工作流前设置隔离路径。耗尽的 Tavily key
   状态沿用同一绝对路径并核对启动前哈希，禁止强制 reprobe，不重置供应商配额。
 - 每批单 worker、串行、新产品/检查点库，停止根不续跑。每格在提交前保守占用额度；
-  未知提交和取消不退款。开发三批各最多4次，最终最多24次；其余6次专项额度没有通用运行入口。
+  未知提交和取消不退款。开发三批各最多4次，最终最多24次；专项6次中的4次仅供上述维修基线。
+  每相位只允许一个获得准入的binding：已有准入后拒绝再冻结，准入事务拒绝跨binding续记。
   所有格先写入 `matrix.json`，未提交格保留原因；`runs.jsonl`、准入、正文/快照/Markdown
   导出均分格保存。运行异常立即关闭本批，新批次先对账，不重试未知 POST。
 - 普通已分类来源/模型故障及匹配终态的超时/取消按冻结矩阵保留并继续。身份、预算、

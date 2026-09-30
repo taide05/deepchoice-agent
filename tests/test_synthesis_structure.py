@@ -156,3 +156,28 @@ async def test_correction_feedback_excludes_derived_questions(monkeypatch):
     feedback = model.await_args_list[1].args[0][-1]["content"]
     assert '"original_requirement_ids": ["C1", "Q1", "R0"]' in feedback
     assert "Q2" not in feedback
+
+
+async def test_two_synthesis_attempts_keep_full_evidence_within_observed_reservation_margin(monkeypatch):
+    # Representative 14-source input; this is a byte-reservation regression, not a
+    # guarantee for all workloads or a model-quality assertion. No source is clipped.
+    chains = []
+    for number in range(14):
+        snippet = ("The documented mechanism has explicit prerequisites and bounded failure conditions. " * 9
+                   + f"Final prerequisite for source {number}: validate the actual operating conditions.")
+        chains.append({"evidence_strength": "moderate", "sources": [{
+            "title": f"Mechanism {number}", "url": f"https://example.org/source-{number}", "snippet": snippet}]})
+    model = AsyncMock(side_effect=[overflowing(), response()])
+    monkeypatch.setattr(synth, "call_model", model)
+    await synth.ConclusionSynthesizerAgent().run({"task": TASK, "evidence_chains": chains})
+    assert model.await_count == 2
+    for call in model.await_args_list:
+        messages = call.args[0]
+        for chain in chains:
+            # Numbering may add sentence labels, but every original sentence must remain.
+            from deepchoice.citations.verifier import _split_sentences
+            for sentence in _split_sentences(chain["sources"][0]["snippet"]):
+                assert sentence in messages[0]["content"]
+        reserved = len(json.dumps(messages, ensure_ascii=False, separators=(",", ":")).encode()) + 4096
+        assert reserved < 40267  # Remaining capacity at the recorded correction refusal.
+    assert model.await_args_list[1].args[0][0] == model.await_args_list[0].args[0][0]

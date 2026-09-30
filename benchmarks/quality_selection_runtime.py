@@ -6,12 +6,15 @@ runs prerequisites or research; collection is a separate explicit paid command.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import sqlite3
 
 
 def clean_commit(root: Path) -> str:
@@ -55,6 +58,59 @@ def set_knowledge_paths(knowledge: Path) -> None:
         raise ValueError("knowledge configuration was loaded before evaluation isolation")
 
 
+
+def audited_seed_identity(seed: Path) -> dict:
+    """Validate all runtime inputs, including the retriever's frozen audit index."""
+    from benchmarks.quality_selection import _require, digest, file_digest
+    from deepchoice.retrievers.chroma_kb import (
+        _load_audited_index, _MAX_COLLECTION_BYTES, _MAX_COLLECTION_FILES,
+    )
+    from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
+
+    def linked(path: Path) -> bool:
+        return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+
+    _require(not linked(seed) and seed.is_dir() and {p.name for p in seed.iterdir()} == {
+        "chroma", "learned_docs.json", "chunks.json", "seed-manifest.json",
+    }, "audited seed requires exactly four runtime entries")
+    _require((seed / "chroma").is_dir(), "invalid audited collection directory")
+    paths = list(seed.rglob("*"))
+    _require(not any(linked(p) for p in paths), "linked seed entries are forbidden")
+    files = [p for p in paths if p.is_file()]
+    _require(all(p.is_file() or p.is_dir() for p in paths)
+             and len(files) <= _MAX_COLLECTION_FILES
+             and sum(p.stat().st_size for p in files) <= _MAX_COLLECTION_BYTES,
+             "audited seed exceeds file bounds")
+    _require(not any(p.name.endswith(("-wal", "-shm", "-journal")) for p in paths),
+             "audited seed must be stopped without SQLite sidecars")
+    _require(all((seed / name).is_file() for name in
+                 ("learned_docs.json", "chunks.json", "seed-manifest.json")), "invalid audit files")
+    db_path = seed / "chroma/chroma.sqlite3"
+    _require(db_path.is_file(), "audited collection database is missing")
+    with closing(sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)) as db:
+        _require(db.execute("PRAGMA quick_check").fetchall() == [("ok",)], "audited collection integrity failed")
+    index = _load_audited_index(str(seed / "chroma"))
+    _require(bool(index), "runtime audited index is unavailable")
+    return {"policy": "audited-runtime-seed-v1", "seed_identity": AUDITED_PRODUCT_SEED_IDENTITY,
+            "index_entries": len(index), "index_sha256": digest(index),
+            "sidecar_sha256": {name: file_digest(seed / name) for name in
+                               ("chunks.json", "seed-manifest.json")}}
+
+
+def copy_audited_seed(seed: Path, destination: Path, expected: str) -> dict:
+    """Copy a bounded stopped four-entry seed; leave historical helper unchanged."""
+    from benchmarks.product_baseline_experiment import tree_hash
+    from benchmarks.quality_selection import _require
+    _require(not destination.exists(), "knowledge destination must be fresh")
+    audit = audited_seed_identity(seed)
+    before = tree_hash(seed)
+    _require(before == expected, "frozen knowledge identity mismatch")
+    shutil.copytree(seed, destination)
+    _require(audited_seed_identity(seed) == audit and audited_seed_identity(destination) == audit
+             and tree_hash(seed) == before and tree_hash(destination) == before,
+             "audited knowledge changed while copying")
+    return audit
+
 def environment_identity(production_root: Path, knowledge: Path, cfg) -> dict:
     import deepchoice
     from benchmarks.product_baseline_experiment import RESOURCE_SETTINGS, embedding_revision, tree_hash
@@ -72,12 +128,14 @@ def environment_identity(production_root: Path, knowledge: Path, cfg) -> dict:
     state_path = Path(os.environ["TAVILY_KEY_STATE_PATH"])
     if not state_path.is_absolute():
         raise ValueError("shared exhausted-key state must use an absolute path")
+    audit = audited_seed_identity(knowledge)
     return {
         "production_root": str(production_root.resolve()), "runner_root": str(runner_root()),
         "configuration_sha256": configuration_sha256(cfg),
         "dependency_snapshot_sha256": hashlib.sha256(dependencies).hexdigest(),
         "knowledge_root": str(knowledge.resolve()), "knowledge_sha256": tree_hash(knowledge),
         "embedding_revision": embedding_revision(), "settings": settings,
+        "knowledge_audit": audit,
         "tavily_state_path": str(state_path),
         "tavily_state_sha256": hashlib.sha256(state_path.read_bytes()).hexdigest() if state_path.exists() else "absent",
         "model_id": model["model"], "endpoint_sha256": hashlib.sha256(model["base"].encode()).hexdigest(),
@@ -117,20 +175,24 @@ def _preflight_compatible(path: Path, environment: dict) -> dict:
 
 
 def freeze(spec_path: Path, destination: Path, cfg) -> dict:
-    from benchmarks.product_baseline_qualification import copy_frozen_seed
     from benchmarks.quality_selection import (
         BASE_USED, PHASE_LIMITS, PROTOCOL, RUN_LIMITS, STOP_POLICY, ResearchLedger,
         _require, _time, digest, file_digest, load_binding, load_cases, write_json,
-        load_candidate_lock, verify_comparison,
+        load_candidate_lock, verify_comparison, validate_repair_purpose,
     )
     from deepchoice.contracts.api import ResearchRequest
     from deepchoice.contracts.manifest import build_core_asset_registry, build_run_manifest
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     phase = spec["phase"]
     _require(phase in PHASE_LIMITS, "invalid phase")
+    repair_control = validate_repair_purpose(spec.get("repair_purpose")) if phase == "repair_baseline" else None
     production = Path(spec["production_root"]).resolve()
     commit = clean_commit(production)
     runner_commit = clean_commit(runner_root())
+    if repair_control is not None:
+        _require(commit == repair_control["identity"]["production_commit"], "repair control production drift")
+    ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
+    ledger.require_unused_phase(phase, PHASE_LIMITS[phase])
     lock = None
     if phase == "acceptance":
         lock_path = Path(spec["candidate_lock_path"])
@@ -158,9 +220,9 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     cases = load_cases(spec["datasets"], allow_holdout=lock is not None)
     destination.parent.mkdir(parents=True)
     knowledge = destination.parent / "knowledge"
-    copy_frozen_seed(seed, knowledge, spec["seed_sha256"])
+    copied_audit = copy_audited_seed(seed, knowledge, spec["seed_sha256"])
+    _require(copied_audit == source_environment["knowledge_audit"], "copied audit identity drift")
     environment = {**source_environment, "knowledge_root": str(knowledge.resolve())}
-    ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
     started = datetime.now(UTC)
     until = min(started + timedelta(days=7), _time(preflight["ended_at"]) + timedelta(days=7))
     binding = {
@@ -175,6 +237,8 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
         "stop_policy": STOP_POLICY, "starting_used": ledger.used(), "ledger_base_used": BASE_USED,
         "ledger_identity": ledger.identity, "cells": [],
     }
+    if phase == "repair_baseline":
+        binding["repair_purpose"] = spec["repair_purpose"]
     order = list(cases)
     if phase == "acceptance":
         development = [key for key in order if cases[key]["split"] == "development"]

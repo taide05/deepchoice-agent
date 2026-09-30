@@ -141,8 +141,8 @@ async def test_synthesis_clause_instruction_does_not_auto_fill_missing_citations
 
     async def model(prompt, **kwargs):
         content = prompt[0]["content"]
-        assert "Each independent clause before AND after a semicolon" in content
-        assert "never borrow a nearby citation" in content
+        assert "each independent semicolon clause needs its own [[N]]" in content
+        assert "A nearby citation cannot support a different assertion" in content
         return {"winner": "SQLite", "recommendation": "SQLite is simple; PostgreSQL scales [[1]]."}
 
     monkeypatch.setattr(synthesis, "call_model", model)

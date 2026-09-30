@@ -2,6 +2,25 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Restore audited evaluation inputs and reduce synthesis reservation overhead
+
+Quality-selection preparation now requires chroma/, learned_docs.json, chunks.json
+and seed-manifest.json together. Bounded layout, stopped SQLite integrity, runtime
+audit identity and byte hashes are checked before/after copying and at startup.
+A single four-cell repair_baseline allocation references the recorded incident and
+the original control binding; production identity, requests, manifests, HITL and
+configuration cannot drift. All phases reject a second binding's admissions, so
+closed candidate cells cannot become fresh attempts. Historical results/charges stay.
+Synthesis v18 removes repeated instructions and examples while preserving complete
+saved evidence, sentence addresses, source/uncertainty rules and isolated operations.
+The original conservative reservation and 60,000-token limit remain. Five saved
+2026-09-30 development snapshots with synthetic corrective feedback require
+26,706–33,053 tokens for correction in offline replay. This is neither a live-budget
+guarantee nor a quality result. No new research, paid preflight or holdout exposure.
+Verified on 2026-09-30 with Python 3.12: 2608 full-suite tests (452.78s),
+268 related tests plus 33 citation/smoke regressions, smoke-v1 12/12 with unchanged
+case outputs, pyflakes/vulture and independent code/document/preparation review.
+
 ### Record stopped development comparison and seed preparation fault
 
 The 2026-09-30 quality-selection-v1 batch completed four baseline reports and one
