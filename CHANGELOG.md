@@ -2,6 +2,22 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Traceable serial quality-selection collection
+
+Added offline binding preparation and a serial adapter over the durable collector.
+Bindings separate production and runner commits, preserve frozen requests/HITL,
+verify comparable environments and a bounded preflight receipt, and require a
+reviewed candidate lock before opening holdout cases. Shared admissions are
+conservative and independently journaled; missing or inconsistent ledgers stop.
+Each planned cell retains its outcome, including uncertain submissions and cells
+not reached after a stop. Report, snapshot and Markdown export must agree.
+Ordinary classified degradation remains visible; identity, authority, budget and
+unclassified faults stop further admission. Completion is not a content grade.
+The isolated evaluation server does not alter the normal product lifecycle.
+Verified on 2026-09-30 with Python 3.12: 2575 full-suite tests, 86 related tests,
+smoke-v1 12/12 with matching baseline, static checks and independent review.
+No new paid research or live preflight was performed during implementation.
+
 ### Preserve selection scope without granting deployment authority
 
 Synthesis v16 stops turning migration-trigger or conceptual-transition questions

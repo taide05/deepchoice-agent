@@ -1,8 +1,52 @@
 # 评估工具入口
 
-更新：2026-09-29。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
+更新：2026-09-30。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 判据见[quality-selection-v1](../docs/product-effectiveness-optimization.md)，实际预算与结果见
-[当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存；运行适配尚待完成。
+[当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存。
+新串行运行适配与离线故障测试已实现；实际批次尚未冻结或执行。
+
+## quality-selection-v1 操作接口
+
+所有命令从干净的采集器 checkout 运行。Python 3.11/3.12 的 `PYTHONPATH` 指向绑定的
+生产 checkout 的 `src`；基线可以使用改动前生产提交，采集器提交单独记录。`--env-file`
+只读加载本地配置，不复制或输出密钥。以下为接口示意，路径均指忽略区内人工审阅后的材料：
+
+```powershell
+python -m benchmarks.quality_selection_runtime init-ledger --reconciliation <reconciliation.json>
+python -m benchmarks.quality_selection_runtime freeze --spec <spec.json> --binding <fresh-root/binding.json> --env-file <private-env>
+python -m benchmarks.quality_selection_runtime serve --binding <fresh-root/binding.json> --env-file <private-env> --port 8765
+python -m benchmarks.quality_selection validate --binding <fresh-root/binding.json>
+python -m benchmarks.quality_selection collect --binding <fresh-root/binding.json> --output <fresh-collection-root> --api-base http://127.0.0.1:8765 --execute-paid-runs
+```
+
+- `init-ledger` 是首次对账后的显式操作。对账 JSON 包含 `protocol`、`used:114`、
+  `new_protocol_admissions:0`、`reviewed:true` 与已核对证据的 `evidence_path`/`evidence_sha256`，摘要须与实际文件相等。
+  必须先核实历史累计及新协议尚无准入；不能编造凭据以重置额度。固定账本位于采集器
+  checkout 的 `outputs/quality-selection-v1-ledger.sqlite3`，另有身份及逐笔准入见证文件；
+  一起保存。冻结/采集不会自动建库，缺文件、身份不符或两份准入记录不一致均须先对账。
+- spec 包含 `phase`（`baseline/candidate/followup/acceptance`）、`production_root`、
+  `seed_path`/`seed_sha256`、`preflight_path`、`datasets`、`source_policy` 和开发例 `hitl`。
+  dataset 项为 `split/path/sha256`，只能引用已冻结版本。来源政策必须声明
+  `holdout_reference_ingestion:false`，并用 `development_exposure` 说明开发材料与知识种子的关系。
+  每例 HITL 固定 `action`、可选 `repeat_action`、需要时的 `supplemental_input`；保留例采用封存规则。
+- candidate/followup 另需 `baseline_binding_path`：原请求、HITL、模型、配置、依赖、种子、
+  嵌入版本、采集器提交及来源政策必须一致，比较窗口不超过7天。acceptance 另需
+  `candidate_lock_path`，指向已完成开发评审的 `accepted:true`/`candidate_commit` 记录；
+  该记录另含 `candidate_binding` 的 `path/sha256`。校验开发候选绑定及运行条件后才能读保留材料，
+  开发HITL沿用锁定规则且同例三次相同。锁定记录是评审结论的载体，不由运行器自动判分。
+- 前置只复用有界、通过且未过期的 receipt，并核对模型/端点哈希、配置、依赖及探测代码。
+  freeze 会复制停止状态的知识种子；serve 在导入工作流前设置隔离路径。耗尽的 Tavily key
+  状态沿用同一绝对路径并核对启动前哈希，禁止强制 reprobe，不重置供应商配额。
+- 每批单 worker、串行、新产品/检查点库，停止根不续跑。每格在提交前保守占用额度；
+  未知提交和取消不退款。开发三批各最多4次，最终最多24次；其余6次专项额度没有通用运行入口。
+  所有格先写入 `matrix.json`，未提交格保留原因；`runs.jsonl`、准入、正文/快照/Markdown
+  导出均分格保存。运行异常立即关闭本批，新批次先对账，不重试未知 POST。
+- 普通已分类来源/模型故障及匹配终态的超时/取消按冻结矩阵保留并继续。身份、预算、
+  权威、缺最终观测、未分类错误、导出不一致停止后续准入。身份端点在采集健康检查时重新核对生产/采集器提交及配置/资产。成功正文只记 `artifact_complete`
+  或降级；Trace 完整性始终标为未知，来源失败及引用 unknown 计数另存，不据此自动通过内容评审。
+
+本工具面向受控的本地评估进程；运行期间不通过其他客户端创建/重试研究，不改代码或环境。
+实际矩阵、凭据、HITL正文和原始产物留在忽略区。测试使用模拟服务与合成保留形状，不读取真实保留题。
 
 ## 当前可复用能力
 
@@ -19,7 +63,7 @@
 
 新开发请求及必答项见 `quality-selection-development-v1.json`（版本1.0.0；SHA-256 `e230c6e28e117a7e1216e6e507431a90712013dd2a51655f2396ea0525bfc3b0`）。
 新保留集由独立评审封存；实现者在候选锁定前只接触其类别、版本和哈希，
-不得在本工具说明中展开题目。新路线先复用现有collector和数据结构；仅增加确有缺口的薄适配，不新增通用评估平台。
+不得在本工具说明中展开题目。新入口复用现有collector和数据结构，并补充本协议的绑定、调度和准入检查。
 必须在首次外呼前检查新场景是否被旧case allowlist、旧停止规则或源hash锁定；有差异先
 离线验收再执行，不能把新协议JSON直接交给旧CLI。不要声称不存在的新命令已经可用。
 

@@ -237,12 +237,10 @@ registry 与 source health `not_run`/`degraded`。此测试只验证确定性代
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
 ```
 
-项目支持 Python 3.11/3.12。最近代码验收为 2026-09-24、Windows/Python 3.12 的
-**1941 passed**（217.02 秒）；官方深链 intake/capture/review/seed 132项聚焦、smoke-v1 12/12、
-静态/依赖检查及独立复审通过。单例执行入口与边界见 [评估工具](benchmarks/README.md)。
-详细证据见 [开发集诊断与修复记录](docs/product-optimization-s0-review.md)。
-事务入口取消会在持锁时排空并回滚已派发的BEGIN；可观测性读快照仍使用deferred事务。
-这修复取消后连接残留事务的缺陷，不承诺数据库/worker硬故障下无需恢复。
+项目支持 Python 3.11/3.12。当前工程验证及测量结果见 [当前状态](docs/o1-execution-status.md)。
+质量评估已有串行4/24格采集适配，冻结生产/采集器身份、请求和环境，共享保守研究账本，
+并核对报告/API快照/Markdown正文一致性；操作见 [评估工具](benchmarks/README.md)。
+实际开发对照和最终重复验收尚未完成，工程通过不代表报告内容通过。
 smoke-v1 是离线 fixture 验证；自动化测试不证明报告语义质量或并发效果。
 不要使用混装其他项目依赖的全局 Python 环境。
 
