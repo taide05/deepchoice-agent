@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record repaired development comparison without quality promotion
+
+On 2026-09-30, quality-selection-development-v1 / 1.0.0 completed all four control
+and four synthesis-v18 candidate cells with matching report/snapshot/export artifacts.
+Both locked assistant content reviews found 0/4 usable-and-supported reports in each
+variant. One candidate P01 report has a confirmed decisive condition reversal; a
+control P04 severity disagreement was resolved as an important gap with original
+reviews retained. The candidate did not advance; holdout remains sealed and the
+final 24-cell matrix has not started. Eight new admissions bring the ledger to 127/156.
+Both services exited normally and both database pairs passed integrity checks.
+No budget admission denial occurred, including three candidate corrective synthesis
+calls; this does not prove report quality or future capacity. Recorded source
+failures remain visible. Production/tests are unchanged; the 2608-test result remains
+valid. README now correctly states that the current first self-review ends the run
+without automatic research retry. Detailed evidence and remaining scope live in the
+maintained execution status; raw reports and review records stay local.
+
 ### Restore audited evaluation inputs and reduce synthesis reservation overhead
 
 Quality-selection preparation now requires chroma/, learned_docs.json, chunks.json
