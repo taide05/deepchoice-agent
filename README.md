@@ -29,7 +29,7 @@ DeepChoice 展示信源评分、冲突处理、引用状态和未知项，方便
 
 ## 核心特性
 
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；Chroma v5 保留原始比较维度、限制查询维度/候选池、按 URL 合并并给适配查询保留结果容量，针对明确原始场景需求增加有界本地查询，并只在冻结正文身份核验通过时选用受审官方正文；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
+- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；Chroma v6 保留原始比较维度、限制查询维度/候选池、按 URL 合并并给适配查询保留结果容量，针对明确原始场景需求增加有界本地查询，并只在冻结正文身份核验通过时选用受审官方正文；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
 - **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
 - **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
 - **两阶段冲突仲裁**：先用规则与 DeepSeek Flash 仲裁矛盾对，再对低置信度的一对补充取证，并用同一 DeepSeek Flash 重新裁决
@@ -201,6 +201,9 @@ hash、length、usage 和 error type。报告继续提供 Markdown，并由服�
 反证也不能被局部正句掩盖。每段窗口最多 6,000 字符，仍要求整份来源事实的每句通过才保留依赖分析。
 其他模型断言沿用原核验规则；这只核对文本出处与词法支持，不证明推理正确或来源语义完整。
 历史引用 v1–v11 manifest 可读，但不兼容同 run 恢复。该改动尚未获得真实报告质量验证。
+受审 Chroma 片段在原 500 字符边界后，最多延至 800 字符内首个有句末标点的行尾或完整 EOF，
+避免将排版换行直接当作句尾；找不到时保留原前缀，不能据此声称完整。该启发式不证明限定条件
+或推理正确，来源事实仍须经过上述核验。旧 Chroma v1–v5 可读，但须新 run。
 
 Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等价 URL 规范化后每轮最多安全
 抓取一次，额外请求先预留 `http_calls`；检查结果随 immutable run snapshot 持久化，并由报告

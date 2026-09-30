@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Preserve line-wrapped source qualifications within the existing bound
+
+Chroma retriever v6 extends an exactly audited source prefix to the first line end
+or complete EOF with sentence punctuation between 500 and 800 characters. A bare
+layout newline or ellipsis no longer ends the extension. Without a suitable boundary,
+the original 500-character prefix remains; text is never cut back to drop an unfinished
+qualification. Source binding, citation v12 checks and existing limits still apply.
+Historical Chroma v1–v5 manifests remain readable but require a new run; manifest
+identity also isolates retrieval cache entries. This does not add external calls or
+change the frozen seed, original reports or quality scores. Historical offline replay
+retains 12/12 previously verified fact occurrences and completes six more out of 21;
+three remain unknown. This is mechanism evidence, not report-quality acceptance.
+Validated on 2026-09-30 with 2643 tests, 246 focused tests, smoke-v1 12/12,
+pyflakes/vulture and independent review. No new paid measurements.
+
 ### Locate copied source facts in bounded complete text blocks
 
 Citation policy v12 fetches at most 128 KiB per URL while retaining a 65,536-character extracted-text

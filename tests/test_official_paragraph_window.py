@@ -97,7 +97,47 @@ def test_unreviewed_chunks_keep_original_500_character_limit(metadata):
 
 def test_long_line_is_not_spliced_or_called_complete():
     document = "A" * 850 + "\nA late qualification."
-    assert _bounded_snippet(document, OFFICIAL_META) == document[:500]
+    assert _audited_snippet(document) == document[:500]
+
+
+def _audited_snippet(document):
+    metadata = {**OFFICIAL_META, "url": FASTAPI_URL}
+    index = {"chunk": (metadata["target_id"], FASTAPI_URL,
+                       hashlib.sha256(document.encode()).hexdigest())}
+    return _bounded_snippet(document, metadata, doc_id="chunk", index=index)
+
+
+def test_wrapped_qualifier_reaches_sentence_end_without_cutting_back():
+    lead = "General mechanism. " * 24
+    text = (lead + "Nevertheless, " + "limited scope " * 5 +
+            "\nthis does not establish universal safety" +
+            "\nwithout checking the deployment conditions.\nUnrelated next section.")
+    first_line = text.index("\n", 500)
+    assert not text[:first_line].endswith(".")
+    expected = text.split("\nUnrelated", 1)[0]
+    assert 500 < len(expected) <= 800
+    assert _audited_snippet(text) == expected
+    assert "does not establish universal safety" in _audited_snippet(text)
+
+
+@pytest.mark.parametrize("ending", ['complete."', '完整。', 'complete!)'])
+def test_complete_bounded_eof_can_finish_wrapped_source(ending):
+    text = "Source context " * 36 + "\n" + ending
+    assert 500 < len(text) < 800
+    assert _audited_snippet(text) == text
+
+
+@pytest.mark.parametrize("boundary", [800, 801])
+def test_sentence_line_end_respects_exact_800_character_cap(boundary):
+    text = "Context " * 62 + "x" * (boundary - 497) + ".\nMore context."
+    assert text.index("\n") == boundary
+    assert _audited_snippet(text) == (text[:800] if boundary == 800 else text[:500])
+
+
+def test_ellipsis_or_unfinished_tail_does_not_hide_missing_condition():
+    text = "Complete earlier statement. " * 17 + "Only if " + "x" * 44 + "...\n" + "y" * 400
+    assert text.index("\n") > 500
+    assert _audited_snippet(text) == text[:500]
 
 
 @pytest.mark.parametrize("url", [

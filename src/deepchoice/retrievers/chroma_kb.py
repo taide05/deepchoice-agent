@@ -126,12 +126,13 @@ def _bounded_snippet(
     document: str, metadata: dict, *, doc_id: str | None = None,
     index: dict[str, tuple[str, str, str]] | None = None,
 ) -> str:
-    """Finish one bounded source line only for the frozen official seed.
+    """Extend the frozen seed's prefix past line-wrapped sentence fragments.
 
-    The original 500-character prefix remains the fallback. A larger prefix is
-    emitted only when its first post-boundary newline occurs within 800 chars.
-    A line ending is not a semantic proof that all conditions were captured;
-    the function never splices disconnected text or changes source authority.
+    Within 800 characters, require sentence punctuation at a line end or EOF.
+    If no such boundary is available, retain the original 500-character prefix;
+    never cut back to an earlier sentence and discard an unfinished qualifier.
+    Punctuation is only a selection heuristic. Citation verification still
+    checks the full surrounding source window and does not infer applicability.
     """
     if not isinstance(document, str):
         return ""
@@ -139,8 +140,13 @@ def _bounded_snippet(
     if (len(document) <= _SNIPPET_CHARS
             or not _verified_seed_chunk(document, metadata, doc_id, index)):
         return prefix
-    end = document.find("\n", _SNIPPET_CHARS, _MAX_AUDITED_LINE_CHARS + 1)
-    return document[:end] if end >= 0 else prefix
+    for end in range(_SNIPPET_CHARS, min(len(document), _MAX_AUDITED_LINE_CHARS) + 1):
+        if end < len(document) and document[end] != "\n":
+            continue
+        tail = document[:end].rstrip().rstrip("\"'’”)]}」』】")
+        if tail.endswith((".", "!", "?", "。", "！", "？")) and not tail.endswith("..."):
+            return document[:end]
+    return prefix
 
 
 def _audited_fts5_overview(
