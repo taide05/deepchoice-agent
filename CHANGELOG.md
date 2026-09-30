@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record stopped development comparison and seed preparation fault
+
+The 2026-09-30 quality-selection-v1 batch completed four baseline reports and one
+restricted candidate report; the remaining three candidate cells were not submitted
+following a budget admission denial. Both services closed normally and database
+pair integrity checks passed. Five admissions remain charged (119/156 total).
+Both assistant content reviews rejected the five available reports; missing cells
+remain unassessable. This is not a valid completed candidate comparison.
+Preparation omitted chunks.json and seed-manifest.json while adapting a historical
+seed to the old copy helper. These are runtime audit inputs: the prepared audited
+index had zero entries instead of 234. Corpus bytes alone did not preserve retrieval
+behavior, so the results do not represent the intended audited-seed environment.
+Historical artifacts and failed cells are preserved; no quality promotion or holdout
+exposure occurred. Repair is required before another frozen comparison.
+
 ### Bind decision analysis to saved source sentences
 
 Synthesis v17 selects bounded fact/sentence addresses for each analysis instead of

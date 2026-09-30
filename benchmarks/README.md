@@ -3,7 +3,8 @@
 更新：2026-09-30。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 判据见[quality-selection-v1](../docs/product-effectiveness-optimization.md)，实际预算与结果见
 [当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存。
-新串行运行适配与离线故障测试已实现；实际批次尚未冻结或执行。
+新串行运行适配已执行首批开发对照，但发现准备过程遗漏运行时种子审定文件，且候选触发预算停止。
+实际结果与119/156账本见当前状态；复制契约修复并核对审定行为前，不启动新的审定种子对照。
 
 ## quality-selection-v1 操作接口
 
