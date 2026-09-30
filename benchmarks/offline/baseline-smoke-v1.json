@@ -6,13 +6,13 @@
     "freeze_date": "2026-09-15",
     "file_sha256": "e9cdbcc650e93eee38ed891a89ac8eaecc23b1b3419a431adcc8e7bead2113cd"
   },
-  "evaluated_at": "2026-09-29T12:32:14.079273+00:00",
+  "evaluated_at": "2026-09-30T02:13:36.533236+00:00",
   "case_count": 12,
   "evaluated_case_count": 12,
   "execution_mode": "fixture_replay",
   "judge": "none",
-  "current_manifest_id": "62a61be59f3d86cf1d14181aacbadba1833e147bf9acd6b0b5f06ea38d74eee7",
-  "core_asset_registry_id": "e6aa93b3fa73d17d7a074ff162d67ee0e4202678f173c0b0c1c9f4a7d7ef5f12",
+  "current_manifest_id": "b6fd79bd316667130e123da04656a8e3c13f0b39d954d07dfa8f2654fcddb4db",
+  "core_asset_registry_id": "790ada82bfb527f27d8669cdbf7052924bec53fcbe995484f99cceb22f2dde27",
   "source_health": {
     "status": "not_run",
     "default_sources": {
@@ -210,5 +210,5 @@
       }
     }
   ],
-  "artifact_fingerprint": "6c2ab4bcce3906ac121d88c03a39462a44a774c0b66e785277b7a4aaa0e08656"
+  "artifact_fingerprint": "10fccc45289230486b25f8de75dc659288f1d7d0e04b72e9ee43b00e9f93f331"
 }

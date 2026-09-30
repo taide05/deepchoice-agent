@@ -179,7 +179,7 @@ def test_limited_report_cannot_promote_deployment_or_selection_evidence():
 
 
 def test_p04_shaped_chinese_five_obligations_keep_selection_separate_from_four_stage_rehearsal():
-    query = "后台长任务应继续用进程内任务还是 Celery？讨论故障恢复和阶段性迁移。"
+    query = "后台长任务应继续用进程内任务还是 Celery？讨论故障恢复，制定迁移步骤和回退方案。"
     requirements, overflow = synth._decision_requirements(
         query, ["不得把队列描述为天然 exactly-once"], [], [], [],
     )

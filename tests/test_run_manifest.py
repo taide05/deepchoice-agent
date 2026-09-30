@@ -143,7 +143,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v11"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v15",
+    expected_versions = {"conclusion_synthesizer.synthesis_prompt": "v16",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -695,7 +695,8 @@ async def test_resume_passes_none_input_to_langgraph(monkeypatch):
     assert captured["config"]["configurable"]["thread_id"] == "thread-1"
 
 
-def test_structure_correction_assets_are_frozen_and_v14_cannot_resume(monkeypatch):
+@pytest.mark.parametrize("old_version", ["v14", "v15"])
+def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(monkeypatch, old_version):
     import hashlib
     from deepchoice.contracts import manifest as module
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
@@ -703,7 +704,7 @@ def test_structure_correction_assets_are_frozen_and_v14_cannot_resume(monkeypatc
     current = build_run_manifest({})
     synthesis = next(row for row in current.prompts if row.prompt_id == "conclusion_synthesizer.synthesis_prompt")
     historical = current.model_copy(update={"prompts": tuple(
-        row.model_copy(update={"version": "v14", "sha256": hashlib.sha256(cs_mod.SYNTHESIS_PROMPT.encode()).hexdigest()})
+        row.model_copy(update={"version": old_version, "sha256": hashlib.sha256(cs_mod.SYNTHESIS_PROMPT.encode()).hexdigest()})
         if row == synthesis else row for row in current.prompts)})
     historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
     restored = RunManifest.model_validate_json(historical.model_dump_json())

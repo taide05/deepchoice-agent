@@ -106,9 +106,9 @@ Disputed findings: {disputed_count}
 10. CAPABILITY-CATEGORY guard: when the query asks for a capability class (e.g. "semantic search" → a vector store, NOT full-text search), the winner must be a product of that class. Semantic/vector retrieval (Qdrant, Milvus, pgvector, Chroma, Weaviate) is NOT keyword search (Meilisearch, Elasticsearch) — never name a search engine for a "semantic search" need.
 11. HARD-REQUIREMENT guard: when the query names a hard technical precondition (e.g. "local Kubernetes development", "on one GPU"), it is a DECREE, not a tilt. The winner MUST satisfy it — "Kubernetes development" requires a K8s runtime (Minikube); Docker Compose (not a K8s runtime) cannot win regardless of simplicity score.
 12. GRANULARITY / CLASS-MEMBERSHIP guard: the winner MUST be a SINGLE, adoptable product/tool/library/engine of the EXACT class the query asks for — rate each candidate by how precisely it matches the query's specific requirement and prefer the closest match. Mismatches to avoid: (a) naming a technique instead of a library ("QLoRA"/"LoRA" is the fine-tuning technique, Unsloth/PEFT/TRL are the libraries); (b) an adjacent sync class — Yjs/Automerge are realtime/collaborative sync (correct for "real-time collaborative whiteboard"), NOT offline-first sync (PowerSync/WatermelonDB/PouchDB/Realm) — pick the one matching the query's sync mode; (c) a composite instead of a single product ("Apache Kafka + OLAP database" is not one OLAP engine like ClickHouse/TimescaleDB); (d) a name you are not certain is a real established product — if unsure, pick the closest well-known member of the queried class.
-13. OPERATIONAL BOUNDARIES: Low operational effort or zero configuration NEVER means zero maintenance. Do not repeat absolute assurances from a template as established facts. State ongoing backup, restore verification, upgrades and migration responsibilities when relevant to the request. For databases, daily active users do not determine simultaneous writes; distinguish reader/writer overlap from multiple simultaneous writers. Do not promise that WAL removes writer serialization or lock waits. A single-file layout alone does not establish safe online/WAL backup; require a consistency-aware backup/restore procedure and expose any missing evidence. For task queues, distinguish broker message durability from result-backend outcome storage. Late acknowledgement can cause redelivery after worker failure, so state the at-least-once/duplicate-execution risk and require idempotency; never claim that a result backend or late acknowledgement alone prevents loss or provides exactly-once execution. Migration must be conditional on observable workload/lock-wait/latency or operational requirements, with explicit restore/validation limits; never guarantee a seamless migration or an unmeasured comparative benefit. A phased task-queue rollout must define durable admission or authoritative task state, broker persistence, acknowledgement/retry/timeout failure cases, duplicate handling, observable backlog/failure thresholds, cutover/abort criteria, and rollback or no-rollback boundaries. Cite supplied evidence for asserted details; where it cannot establish the procedure or condition, say the condition needs verification in the recommendation and unresolved_questions rather than inventing support. A source score or a vendor's official identity alone does not establish factual correctness or comparative superiority.
-14. ACTION CONTRACT: Provide conditional decision_branches and a staged action_plan. For operational choices, cover delivery semantics and idempotency, migration stages, verification signals, change triggers, and rollback. Do not claim exactly-once delivery, safe migration, reliability, or rollback feasibility without evidence; mark missing facts unknown near the affected requirement and in unresolved_questions. Unknown operational premises permit read-only observation and disposable isolated rehearsals only, not production dual writes, cutover or overwrite recovery. A snapshot alone cannot establish rollback after new writes: require an authoritative writer, a consistency boundary, preservation/replay of acknowledged writes, abort criteria and an explicit no-rollback point. Do not invent these procedures or treat "verify later" as permission to execute them. Keep useful choice conditions and measurable validation questions even when production action is withheld.
-15. SELECTION IS NOT DEPLOYMENT ACCEPTANCE: The runtime recovery-mechanism obligation asks what the evidence establishes about recovery mechanisms, prerequisites and limits, NOT whether the user's deployment has already passed a rehearsal. Assess those technical facts without inventing test results. Actual deployment readiness remains unverified by this research pipeline and operational actions remain isolated validation only, even if the selection is supported. If the user explicitly requires completed rehearsal or workload-specific proof, preserve that requirement as decision-critical and unknown without applicable evidence. Do not weaken delivery semantics, idempotency ownership, migration/rollback boundaries or other decision requirements.
+13. OPERATIONAL BOUNDARIES: Low operational effort or zero configuration NEVER means zero maintenance. Do not repeat absolute assurances from a template as established facts. State ongoing backup, restore verification, upgrades and migration responsibilities when relevant to the request. For databases, daily active users do not determine simultaneous writes; distinguish reader/writer overlap from multiple simultaneous writers. Do not promise that WAL removes writer serialization or lock waits. A single-file layout alone does not establish safe online/WAL backup; require a consistency-aware backup/restore procedure and expose any missing evidence. For task queues, distinguish broker message durability from result-backend outcome storage. Late acknowledgement can cause redelivery after worker failure, so state the at-least-once/duplicate-execution risk and require idempotency; never claim that a result backend or late acknowledgement alone prevents loss or provides exactly-once execution. Migration must be conditional on observable workload/lock-wait/latency or operational requirements, with explicit restore/validation limits; never guarantee a seamless migration or an unmeasured comparative benefit. When the user explicitly requests a task-queue migration procedure, explain durable admission or authoritative task state, broker persistence, acknowledgement/retry/timeout failure cases, duplicate handling, observable backlog/failure thresholds, cutover/abort criteria, and rollback or no-rollback boundaries. A request for migration triggers or a conceptual phased choice does not request a complete production procedure; answer its scope without adding migration/rollback proof as a prerequisite to useful selection advice. Cite supplied evidence for asserted details; where it cannot establish the procedure or condition, say the condition needs verification in the recommendation and unresolved_questions rather than inventing support. A source score or a vendor's official identity alone does not establish factual correctness or comparative superiority.
+14. ACTION CONTRACT: Provide conditional decision_branches and a staged action_plan. Keep the action_plan within the original request's scope. Explain delivery semantics, idempotency and recovery where relevant. Explain migration procedures only when explicitly requested; a migration trigger or conceptual transition question needs choice conditions and bounded stages, not an invented cutover/rollback runbook. Do not claim exactly-once delivery, safe migration, reliability, or rollback feasibility without evidence; mark missing facts unknown near the affected requirement and in unresolved_questions. Unknown operational premises permit read-only observation and disposable isolated rehearsals only, not production dual writes, cutover or overwrite recovery. A snapshot alone cannot establish rollback after new writes: require an authoritative writer, a consistency boundary, preservation/replay of acknowledged writes, abort criteria and an explicit no-rollback point. Do not invent these procedures or treat "verify later" as permission to execute them. Keep useful choice conditions and measurable validation questions even when production action is withheld.
+15. SELECTION IS NOT DEPLOYMENT ACCEPTANCE: The runtime recovery-mechanism obligation asks what the evidence establishes about recovery mechanisms, prerequisites and limits, NOT whether the user's deployment has already passed a rehearsal. Assess those technical facts without inventing test results. Actual deployment readiness remains unverified by this research pipeline and operational actions remain isolated validation only, even if the selection is supported. If the user explicitly requires completed rehearsal or workload-specific proof, preserve that requirement as decision-critical and unknown without applicable evidence. Preserve explicit user requirements and the safety boundaries for every volunteered operational action, even when no migration procedure was requested.
 
 16. HUMAN-REVIEWED DECISION ANALYSIS: This is the primary place to answer the user's actual decision questions in the query language. Provide up to four source_facts as REFERENCES ONLY: id (F1..F99), evidence_id (a supplied source number). The runtime copies and checks each complete saved snippet, including its limitations; choose substantive mechanism evidence rather than navigation or general definitions. Only use sources marked "Source-fact binding allowed: yes" for source_facts. Other sources cannot back decision_analysis even when they remain usable in ordinary cited fields. This marker means the saved text can be bound, NOT that the source or inference is verified.
    Then provide at most eight decision_analysis entries. Each entry references 1-4 unique actual fact_ids and 1-4 unique original R0/C/Q requirement_ids (R0 is always the original query), and includes kind (choice|answer|design), option (an exact candidate or empty for general answers), reasoning, explicit assumptions, and a change_condition that would change or refute the proposed conclusion. Cover the original mandatory questions, at least one conditional choice when possible, and conceptual stages when the user asks for a transition. State which responsibilities/components are needed and why each stage helps; a list of tests alone does not answer a design question.
@@ -375,6 +375,61 @@ def _missing_context_gap(query) -> str:
     )
 
 
+_MIGRATION_TERMS = (
+    "migration", "migrate", "cutover", "replace", "switch", "upgrade", "rollback",
+    "迁移", "切换", "替换", "升级", "回退", "回滚",
+)
+
+
+def _matches_terms(text: str, terms: tuple[str, ...]) -> bool:
+    # "fault" must not make an ordinary "default choice" a recovery task.
+    text = text.casefold()
+    return any(
+        bool(re.search(rf"\b{re.escape(term)}\b", text))
+        if term.isascii() else term in text
+        for term in terms
+    )
+
+
+def _requests_migration_procedure(original_parts: list[str]) -> bool:
+    """Recognize explicit procedure requests, not mere migration relevance.
+
+    This bounded wording heuristic adds explanation duties only. Original C/Q
+    requirements survive regardless of recognition, and action safety is separate.
+    Analyzer-authored text must not be passed here.
+    """
+    procedure = re.compile(
+        r"\b(?:provide|give|write|create|design|draft|need|require)\s+"
+        r"(?:(?:a|the|detailed|complete|staged|safe|zero-downtime)\s+)*"
+        r"(?:migration|cutover|rollback)\s+(?:plan|steps|procedure|runbook)\b"
+        r"|\bhow\s+(?:to|should\s+we|do\s+we|can\s+we)\s+"
+        r"(?:migrate|switch|upgrade|roll\s+back)\b"
+        r"|(?:给出|制定|提供|编写|设计|列出|需要)(?:完整的?|详细的?|安全的?|无停机的?)?"
+        r"(?:迁移|切换|升级|回退|回滚)(?:的)?(?:方案|步骤|流程|操作|计划)"
+        r"|(?:如何|怎么|怎样)(?:执行|实施|进行)?(?:迁移|切换|回退|回滚)"
+    )
+    excluded = re.compile(
+        r"\b(?:no\s+need|do\s+not|don't|without|avoid)\b"
+        r"|(?:无需|不需要|不用|不要|不要求|不涉及|不包含|避免)"
+    )
+    timing_question = re.compile(r"\b(?:when|whether)\b|何时|什么时候|什么情况下|是否")
+    for part in original_parts:
+        # Keep a separate affirmative request after a negation/timing question.
+        for clause in re.split(r"[。！？.!?\n；;，,]|\b(?:but|and)\b|但是?|以及", part.casefold()):
+            match = procedure.search(clause)
+            if not match:
+                continue
+            prefix = clause[:match.start()]
+            if (
+                excluded.search(prefix)
+                or prefix.endswith("不")
+                or timing_question.search(prefix)
+            ):
+                continue
+            return True
+    return False
+
+
 def _decision_requirements(
     query,
     task_constraints,
@@ -410,27 +465,10 @@ def _decision_requirements(
         "restart", "reliable", "reliability", "failure", "recovery", "fault",
         "重启", "可靠", "故障", "恢复",
     )
-    migration_terms = (
-        "migration", "migrate", "cutover", "replace", "switch", "upgrade",
-        "迁移", "切换", "替换", "升级", "回退", "回滚",
-    )
-    phased_transition_terms = (
-        "transition", "phased", "rollout", "staged", "pilot",
-        "过渡", "阶段性", "分阶段", "试点",
-    )
     obligations: list[str] = []
     is_zh = bool(re.search(r"[\u3400-\u9fff]", operational_text))
-
-    def matches_any(terms):
-        # "fault" must not make an ordinary "default choice" a recovery task.
-        return any(
-            bool(re.search(rf"\b{re.escape(term)}\b", operational_text))
-            if term.isascii() else term in operational_text
-            for term in terms
-        )
-
-    delivery_relevant = matches_any(delivery_terms)
-    recovery_relevant = matches_any(recovery_terms)
+    delivery_relevant = _matches_terms(operational_text, delivery_terms)
+    recovery_relevant = _matches_terms(operational_text, recovery_terms)
     if delivery_relevant:
         obligations.extend([
             (
@@ -450,11 +488,10 @@ def _decision_requirements(
             if is_zh else
             "Recovery mechanisms, prerequisites and limits are established for the declared process and dependency failures."
         )
-    migration_relevant = matches_any(migration_terms) or (
-        (delivery_relevant or recovery_relevant)
-        and matches_any(phased_transition_terms)
-    )
-    if migration_relevant:
+    if _requests_migration_procedure([
+        _prompt_data(query, 4000), *frozen, *scene_requirements,
+        *_normalized_text_list(task_sub_questions),
+    ]):
         obligations.extend([
             (
                 "迁移具有分阶段步骤、可观测推进条件和中止条件。"
@@ -646,7 +683,11 @@ def _normalize_decision_contract(
         item["decision_critical"] and item["status"] != "satisfied"
         for item in normalized
     )
-    if any(item["kind"] == "operational_obligation" for item in requirements):
+    migration_context = _matches_terms(
+        " ".join([_prompt_data(query, 4000), *[item["requirement"] for item in requirements]]),
+        _MIGRATION_TERMS,
+    )
+    if migration_context or any(item["kind"] == "operational_obligation" for item in requirements):
         # Selection can be supported while deployment remains untested. Never
         # turn source citations into permission to execute a production plan.
         result = restrict_action_plan(result, query, deployment_unverified=True)

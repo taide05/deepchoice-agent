@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Preserve selection scope without granting deployment authority
+
+Synthesis v16 stops turning migration-trigger or conceptual-transition questions
+into mandatory full migration and rollback procedures. Bounded explicit procedure
+wording is read from the original request, while original constraints/questions
+and delivery/recovery duties remain. Migration action isolation is enforced
+separately, including when no synthetic procedure duties are added. Historical
+v15 manifests remain readable and cannot resume under the new behavior.
+Offline controls cover the four frozen development requests and synthetic
+synthesis/citation/render paths; this is not a real-model quality result.
+Verified on 2026-09-30 with Python 3.12: 2525 full-suite tests, 157 focused tests,
+smoke-v1 12/12, static checks and independent review. Smoke case outputs and
+metrics are unchanged; only four reviewed asset/time fields were refreshed.
+
 ### Overall selection quality roadmap and documentation reset
 
 Replaced the closed single-case demonstration scope with a multi-scenario quality

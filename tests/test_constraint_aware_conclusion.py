@@ -209,7 +209,7 @@ def test_complete_bound_requirements_keep_conditional_winner(monkeypatch):
 
     assert recommendation["winner"] == "RabbitMQ"
     assert [item["id"] for item in recommendation["requirement_assessments"]] == [
-        "C1", "A1", "A2", "A3", "A4", "A5", "A6", "Q1", "Q2",
+        "C1", "A1", "A2", "A3", "A4", "Q1", "Q2",
     ]
     assert recommendation["requirement_assessments"][0]["decision_critical"] is True
     assert recommendation["requirement_assessments"][1]["decision_critical"] is True
@@ -225,7 +225,7 @@ def test_complete_bound_requirements_keep_conditional_winner(monkeypatch):
     assert "Q1 [frozen-sub-question]: Which delivery guarantee is required?" in prompt_text
     assert "Q2 [analysis-sub-question]: How will rollback be verified?" in prompt_text
     assert "Idempotency ownership and verification" in prompt_text
-    assert "Rollback procedure and restored-state verification" in prompt_text
+    assert "Rollback procedure and restored-state verification" not in prompt_text
 
 
 def test_explicit_missing_context_prevents_overconfident_p08_winner(monkeypatch):
@@ -464,7 +464,7 @@ def test_malformed_nested_model_fields_do_not_raise(monkeypatch):
         ("Our team wants feature flags with gradual rollout", 0),
         ("Compare reliable storage", 1),
         ("Choose a queue with retry support", 3),
-        ("比较任务队列的重试与迁移", 5),
+        ("比较任务队列的重试与迁移", 3),
     ],
 )
 def test_operational_obligations_match_words_not_accidental_substrings(query, expected):
@@ -473,7 +473,7 @@ def test_operational_obligations_match_words_not_accidental_substrings(query, ex
     assert sum(item["kind"] == "operational_obligation" for item in requirements) == expected
 
 
-def test_p04_phased_transition_adds_migration_and_rollback_obligations():
+def test_p04_phased_choice_keeps_delivery_recovery_without_full_migration_duties():
     requirements, overflow = cs_mod._decision_requirements(
         "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
         [
@@ -496,13 +496,12 @@ def test_p04_phased_transition_adds_migration_and_rollback_obligations():
         if item["kind"] == "operational_obligation"
     ]
     assert not overflow
-    assert len(obligations) == 5
-    assert any("推进条件和中止条件" in item for item in obligations)
-    assert any("回退步骤" in item for item in obligations)
+    assert len(obligations) == 3
+    assert not any("推进条件和中止条件" in item or "回退步骤" in item for item in obligations)
     assert "result backend or late acknowledgement alone" in cs_mod.SYNTHESIS_PROMPT
 
 
-def test_p04_missing_transition_obligations_withdraws_winner_and_unsafe_plan(monkeypatch):
+def test_p04_missing_original_recovery_requirement_withdraws_winner_and_unsafe_plan(monkeypatch):
     state = _p08_state()
     state["task"] = {
         "query": "需要执行 5 到 30 分钟任务的 Web 产品，应继续使用进程内后台任务还是引入 Celery？",
@@ -579,8 +578,9 @@ def test_p04_missing_transition_obligations_withdraws_winner_and_unsafe_plan(mon
     }
 
     assert recommendation["winner"] == "context_dependent"
-    assert assessments["A4"]["status"] == "unknown"
-    assert assessments["A5"]["status"] == "unknown"
+    assert assessments["C4"]["status"] == "unknown"
+    assert assessments["C4"]["decision_critical"]
+    assert "A4" not in assessments and "A5" not in assessments
     assert recommendation["action_plan_mode"] == "validation_only"
     assert "直接开启 acks_late" not in str(recommendation["action_plan"])
     assert recommendation["decision_branches"]
