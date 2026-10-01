@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Preserve ellipses and historical analysis quotations
+
+Citation v14 keeps punctuation runs intact without transferring citation markers between assertions.
+Exact whole-excerpt location remains required; omitted webpage content cannot be bridged. Pure
+punctuation tails remain unknown. Rebinding a saved analysis now rejects a changed source-sentence
+projection instead of silently interpreting historical sentence numbers under the new policy.
+Historical v13 manifests remain readable but require a new run. Public P02 saved-text controls
+isolate 13 punctuation fragments among 34 old checks; the corrected synthetic control has 21/21
+substantive checks. This is not live-page verification or a quality regrade. Final24 remains forbidden
+pending eight-scenario quality/stability evidence; no new research or holdout exposure.
+Validation: 2834 full tests, 291 affected plus 41 final source-window checks, smoke-v1 12/12,
+pyflakes/vulture and independent review passed.
+
 ### Cover provisional explanations and cross-source attribution in the existing review
 
 Self-review v4 admits at most eight shared analysis/requirement slots from current, rebound saved

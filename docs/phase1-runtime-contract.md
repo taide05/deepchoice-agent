@@ -19,7 +19,7 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-01 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v13、
+2026-10-01 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v14、
 self-review v4，三模板 what-why-how-v15 / evidence-first-v14 / comparison-matrix-v13。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
@@ -242,8 +242,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
-  `deterministic-citation-v13` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
-  citation-policy v1–v12 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v14` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
+  citation-policy v1–v13 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
@@ -818,7 +818,13 @@ registry，且只能负向排除跨场景页面；正向命中仍须通过可见
 
 ## 2026-10-01 分析交付与可用性不确定
 
-citation v13不改变四种公开引用状态。保存来源的每句检查、title/canonical URL身份必须
+citation v14保留v13的四种公开引用状态与网络不确定性边界。连续句末标点及方括号省略号
+保持完整；含引用的纯标点段不能把引用转给下一断言，尾部纯标点仍产生未知检查。
+来源窗口仍要求原样、唯一、完整定位，省略号不授权跨越网页缺失内容。历史v13及以前
+manifest可读但不能同run恢复；历史分析重渲染须比对保存的source_sentences与重算原句，
+不一致则隐藏分析，不能仅按旧编号换成另一句。原存储报告不改写。
+
+当前策略保存来源的每句检查、title/canonical URL身份必须
 完整匹配，且没有整份溢出；全部结果仅为verified/lexical_support或unknown/network_uncertain
 且至少一项为network_uncertain时，可赋予来源`review_availability=network_unconfirmed`。
 unknown不会升级成verified。

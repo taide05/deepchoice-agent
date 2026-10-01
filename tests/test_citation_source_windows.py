@@ -181,3 +181,66 @@ async def test_both_numeric_variants_in_same_page_remain_uncertain(monkeypatch):
     bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
     assert bound['source_facts'][0]['status'] == 'unknown'
     assert verification.checks[0].reason.value == 'numeric_mismatch'
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('Scaling [...] Qdrant supports filtering.', ['Scaling [...]', 'Qdrant supports filtering.']),
+    ('Uncited assertion... Cited assertion. [Source: example]',
+     ['Uncited assertion...', 'Cited assertion. [Source: example]']),
+    ('X. [...] [Source: A] Y', ['X.', '[...] [Source: A]', 'Y']),
+    ('X. ... [Source: A] Y.', ['X.', '... [Source: A]', 'Y.']),
+    ('X. [...] Y.', ['X.', '[...] Y.']),
+    ('X. [.', ['X.', '[.']),
+    ('X. [...]', ['X.', '[...]']),
+    ('Value 1.25 works. [Source: A. B?!] Next.',
+     ['Value 1.25 works. [Source: A. B?!]', 'Next.']),
+    ('the. assertion.', ['the.', 'assertion.']),
+    ('缓存……可保留。！？下一句。', ['缓存……可保留。！？', '下一句。']),
+])
+def test_punctuation_preserves_assertion_and_citation_boundaries(text, expected):
+    from deepchoice.citations.verifier import _split_sentences
+    assert _split_sentences(text) == expected
+    assert ''.join(''.join(_split_sentences(text)).split()) == ''.join(text.split())
+
+
+@pytest.mark.asyncio
+async def test_literal_ellipsis_source_can_verify_without_punctuation_checks(monkeypatch):
+    excerpt = 'Queue overview [...] The queue supports durable messages. [...] Recovery requires a journal.'
+    bound, verification, _ = await verify_page(monkeypatch, f'<p>{excerpt}</p>', excerpt=excerpt)
+    assert bound['source_facts'][0]['status'] == 'verified'
+    assert len(verification.checks) == 3
+    assert all(any(char.isalnum() for char in check.claim_text) for check in verification.checks)
+
+
+@pytest.mark.asyncio
+async def test_ellipsis_does_not_bridge_omitted_source_content(monkeypatch):
+    excerpt = 'The queue supports durable messages. [...] Recovery requires a journal.'
+    body = '<p>The queue supports durable messages. Additional conditions apply. Recovery requires a journal.</p>'
+    bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
+    assert bound['source_facts'][0]['status'] == 'unknown'
+    assert all(check.reason.value == 'content_insufficient' for check in verification.checks)
+
+
+
+def test_ellipsis_claim_extraction_keeps_uncited_and_bounded_fields():
+    from deepchoice.citations.verifier import _extract_claims, MAX_FIELD_SENTENCES, MAX_CLAIM_TEXT
+    claims, truncated = _extract_claims({'winner_rationale': 'Uncited... [...] [Source: A] Still uncited.'})
+    assert [claim.source_title for claim in claims] == [None, 'A', None]
+    assert [claim.text for claim in claims] == ['Uncited...', '[...]', 'Still uncited.']
+    assert not truncated
+    claims, truncated = _extract_claims({'winner_rationale': 'A substantive assertion... ' * (MAX_FIELD_SENTENCES + 1)})
+    assert truncated and len(claims) == MAX_FIELD_SENTENCES
+    claims, _ = _extract_claims({'winner_rationale': 'a' * (MAX_CLAIM_TEXT + 1) + '...'})
+    assert len(claims) == 1 and len(claims[0].text) == MAX_CLAIM_TEXT
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tail', ['[.', '[...]'])
+async def test_punctuation_only_tail_still_prevents_source_verification(monkeypatch, tail):
+    excerpt = 'The queue supports durable messages. ' + tail
+    bound, verification, _ = await verify_page(monkeypatch, f'<p>{excerpt}</p>', excerpt=excerpt)
+    assert bound['source_facts'][0]['status'] == 'unknown'
+    assert verification.checks[-1].claim_text == tail
+    assert verification.checks[-1].status.value == 'unknown'
+    assert verification.checks[-1].reason.value == 'content_insufficient'

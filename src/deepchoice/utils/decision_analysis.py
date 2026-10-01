@@ -75,9 +75,14 @@ def bind_analysis_basis(raw, facts):
                 or any(type(index) is not int or not 1 <= index <= len(sentences) for index in indexes)
                 or len(set(indexes)) != len(indexes)):
             return None, "basis_invalid_sentences"
+        source_sentences = [sentences[index - 1] for index in indexes]
+        # Saved projections can outlive a sentence policy. Never reinterpret
+        # their old numeric addresses as a different quotation during rendering.
+        if "source_sentences" in item and item["source_sentences"] != source_sentences:
+            return None, "basis_source_sentences_mismatch"
         seen.add(key)
         selected.append({"fact_id": key, "sentence_ids": list(indexes),
-                         "source_sentences": [sentences[index - 1] for index in indexes]})
+                         "source_sentences": source_sentences})
     return selected, None
 
 

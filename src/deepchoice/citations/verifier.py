@@ -255,6 +255,12 @@ def _split_sentences(value: str) -> list[str]:
             index += 1
             continue
         end = index + 1
+        # Keep ellipses and bracketed omission marks intact. They are literal
+        # source text, never permission to bridge missing webpage content.
+        while end < len(value) and value[end] in ".!?。！？；;":
+            end += 1
+        if end < len(value) and value[end] == "]":
+            end += 1
         cursor = end
         while cursor < len(value) and value[cursor].isspace():
             cursor += 1
@@ -264,6 +270,13 @@ def _split_sentences(value: str) -> list[str]:
                 cursor += 1
             end = cursor
         chunk = value[start:end].strip()
+        if (chunk and not any(char.isalnum() for char in _strip_citations(chunk))
+                and not _citation_spans(chunk)):
+            # Carry an intermediate punctuation span without discarding it.
+            # A marker-bearing span must never donate its citation to the next
+            # assertion. A punctuation-only tail remains an unknown check.
+            index = end
+            continue
         if chunk:
             output.append(chunk)
         start = end

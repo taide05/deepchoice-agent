@@ -30,7 +30,7 @@ def proposal():
     return {"winner": "context_dependent", "source_facts": deepcopy(FACTS), "decision_analysis": [{
         "kind": "answer", "option": "", "requirement_ids": ["Q1"],
         "fact_ids": ["F1", "F2"],  # A stale coarse list cannot override explicit source addresses.
-        "basis": [{"fact_id": "F3", "sentence_ids": [1, 2], "source_sentences": ["FORGED_QUOTE"]}],
+        "basis": [{"fact_id": "F3", "sentence_ids": [1, 2]}],
         "reasoning": "A consistent backup mechanism is available; validate its integration before use.",
         "assumptions": ["The application can use that interface."],
         "change_condition": "Reconsider if integration or restore validation fails.",
@@ -84,7 +84,7 @@ def test_prompt_sentence_addresses_match_runtime_and_keep_qualifiers():
 
 
 
-def test_calibration_keeps_source_uncertainty_and_renderer_ignores_forged_quote():
+def test_calibration_keeps_source_uncertainty_and_renderer_rejects_forged_quote():
     bound = bind_decision_analysis(proposal(), REQS, [], require_basis=True)
     bound["source_facts"][2]["status"] = "unknown"
     assert calibrate_decision_analysis(bound)["decision_analysis"] == []
@@ -92,7 +92,7 @@ def test_calibration_keeps_source_uncertainty_and_renderer_ignores_forged_quote(
     bound["decision_analysis"][0]["basis"][0]["source_sentences"] = ["<img src=x onerror=alert(1)>"]
     rendered = "\n".join(render_decision_details(bound, "zh"))
     assert "<img" not in render_safe_report_html(rendered)
-    assert "The backup interface" in rendered
+    assert "A consistent backup mechanism is available" not in rendered
     bound["decision_analysis"][0]["basis"][0]["sentence_ids"] = [99]
     assert "A consistent backup mechanism is available" not in "\n".join(render_decision_details(bound, "en"))
 
@@ -110,3 +110,26 @@ async def test_missing_basis_gets_only_existing_bounded_correction(monkeypatch):
     signal = result["quality_signals"][0]["structure_correction"]
     assert signal["outcome"] == "invalid" and signal["attempted"] == 1
     assert "consistent backup" not in json.dumps(signal)
+
+
+@pytest.mark.parametrize('saved_quote,visible', [
+    (['.'], False),  # v13 s2 was a single dot; v14 s2 is the following sentence.
+    (['The backup interface copies a consistent database image.'], True),
+    (['FORGED_QUOTE'], False),
+])
+def test_historical_sentence_addresses_cannot_silently_change_quote(saved_quote, visible):
+    rec = proposal()
+    rec['source_facts'][2]['saved_text'] = (
+        'Uncoordinated copying is unsafe... The backup interface copies a consistent database image.')
+    item = rec['decision_analysis'][0]
+    item.update(fact_ids=['F3'], review_status='human_review_required')
+    item['basis'] = [{'fact_id': 'F3', 'sentence_ids': [2], 'source_sentences': saved_quote}]
+    original = deepcopy(rec)
+    rendered = '\n'.join(render_decision_details(rec, 'en'))
+    assert ('A consistent backup mechanism is available' in rendered) is visible
+    assert rec == original
+    stats = {}
+    bound = bind_decision_analysis(rec, REQS, [], require_basis=True, diagnostics=stats)
+    assert bool(bound['decision_analysis']) is visible
+    if not visible:
+        assert stats['rejected'] == {'basis_source_sentences_mismatch': 1}
