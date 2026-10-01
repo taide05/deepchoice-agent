@@ -20,18 +20,30 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 ## 2. 身份、状态与版本
 
 2026-10-01 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v13、
-self-review v3，三模板 what-why-how-v14 / evidence-first-v13 / comparison-matrix-v12。
+self-review v4，三模板 what-why-how-v15 / evidence-first-v14 / comparison-matrix-v13。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
 旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。
 
-自审对每个运行时 A 槽位返回 keep/revise/withdraw，输入包含原请求、私有补充上下文、
-已保留分析、准确绑定原句和完整保存来源。六项检查仅覆盖这些分析/来源及标题摘要，
-不代表完整需求解释、分支或行动方案的审查。revise 只允许 reasoning/assumptions/
-change_condition，绑定与校准再次执行，来源事实、citation 状态、Winner和行动权威不变。
-缺失/重复/非法回应按槽位撤回，保留其他合格项；无法解析/服务失败时撤回未审分析，
-保存来源仍可核对。结果只保存固定状态/计数及固定公开缺口，不保存自由自审评语；
-模型修订仍是 human_review_required 推断，不是语义验证。置信度只降不升。
+自审使用共享最多 8 个槽位：先保留有效 A 分析槽，再接纳原请求中未知需求的 R 解释槽。
+R 按原行号、需求 ID/文字、claim_path、完整 claim_text/title 多重集合、canonical URL 和
+当前重绑来源核对；仅 verified 或 network_uncertain 可进入，其他未知原因不能借自审提权。
+原/历史 provisional_explanation 没有本轮有效审阅时不显示，原结果存储正文不改写。
+
+输入包含原请求、私有补充上下文、准确绑定原句和全部至多 4 个完整可审保存来源。
+每个保留项必须对这些来源返回有界 stance/句号；漏项、错句、重复或 qualify/conflict 后
+仍 keep 均拒绝该项。运行时还检查标题、推理、假设和改变条件中明示候选的名称在本项依据
+原文/标题中出现；这是词面覆盖，会漏掉别名，也不能证明来源真正支持该断言。
+A revise 可改推理/假设/改变条件；optional additional_basis 仅追加当前可审来源的确切句子，
+原依据原序不动、总来源至多 4，新增句子须覆盖本项 qualifies/conflicts 指定的反例句，
+且推理必须变化。模型仍可能误判 stance 或写出错误修订，不能称为语义验证。
+R revise 只改至多 200 字解释，不增来源；仅本轮明确保留的解释以字面文本显示，并附运行时
+来源原文和真实核验状态。来源状态、需求状态、Winner、计划和操作权威不因自审升级。
+
+无法解析/服务失败时撤回未审文字，其他合格项按项保留；存储固定计数/状态及固定公开缺口，
+不保存自由自审评语。六项检查只覆盖上述输入和标题摘要，不代表整个报告或方案安全验收。
+模型修订仍需人工审阅，置信度只降不升。仍只有一次调用、4096 输出 token；最多 8 项并不
+保证任意长修订都能装入输出，截断或缺项按相同门撤回，外呼仍受完整输入预算准入限制。
 
 普通研究轮仍调用自审一次；过去先暂停/limited_report/cancel而跳过自审的分支，现在
 会先调用一次并可能预算拒绝。pending 检查点重启与 limited_report 恢复不重复自审；

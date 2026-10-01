@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Cover provisional explanations and cross-source attribution in the existing review
+
+Self-review v4 admits at most eight shared analysis/requirement slots from current, rebound saved
+sources. Requirement explanations must match the original row/question and complete citation checks;
+content-insufficient and unreviewed prose is withheld. Each retained slot must address all eligible
+sources; named candidate coverage is checked against its own basis, including titles and assumptions.
+Revisions may append exact challenge sentences from existing sources without replacing original
+basis or changing citation status, winner or action authority. Templates advance to 15/14/13.
+These are provenance/review coverage controls, not semantic proof or measured quality improvement.
+Validation: 2815 full tests, 197 focused, smoke-v1 12/12, static checks and independent review.
+No new external research was run; the latest real development result remains 0/4, with final24 gated.
+
 ### Record the analysis-delivery development result
 
 On2026-10-01, candidate bdfc2b5 completed all4 quality-selection-development-v1/1.0.0 cases with

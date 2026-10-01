@@ -16,7 +16,7 @@ from deepchoice.utils.decision_analysis import bind_decision_analysis, calibrate
 from deepchoice.utils.evidence_choices import bind_evidence_choices
 
 SOURCE = ("If multiple writers cannot queue, a separate server is recommended. "
-          "Other requirements can also justify a separate server.")
+          "Other requirements can also justify a separate server instead of Local storage.")
 BAD = "A separate server is necessary only when writers cannot queue. This workload can queue, so no separate server is needed."
 CORRECTED = ("The source recommends a separate server when writers cannot queue; it does not make this the only reason. "
              "Queuing tolerance is unknown here. If queuing is acceptable, local storage remains an option to evaluate, not an established fit.")
@@ -62,6 +62,10 @@ def make_state(*, maximum=False):
 
 
 def reviewed(rows):
+    rows = deepcopy(rows)
+    for row in rows:
+        if row.get("action") in {"keep", "revise"}:
+            row.setdefault("source_checks", [["F1", "supports", [1]]])
     return {"checks": [{"item": i, "passed": True} for i in range(1, 7)], "confidence": "high",
             "knowledge_gaps": [], "critical_gaps": [], "analysis_reviews": rows}
 

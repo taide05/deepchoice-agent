@@ -24,6 +24,8 @@ async def unavailable_state(monkeypatch):
         raise httpx.ConnectError("PRIVATE_NETWORK_MESSAGE")
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fail)
     state = {"task": deepcopy(TASK), "evidence_chains": deepcopy(CHAINS)}
+    # Name the fixture product so this test isolates network eligibility rather than missing attribution.
+    state["evidence_chains"][0]["sources"][0]["title"] = "ExampleQueue documentation"
     state.update(await synth.ConclusionSynthesizerAgent().run(state))
     state.update(await CitationValidatorAgent().run(state))
     return state

@@ -245,6 +245,7 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             "contradicted": "不满足" if lang == "zh" else "Contradicted",
             "unknown": "未知" if lang == "zh" else "Unknown",
         }
+        reviewed_facts = {}
         for item in assessments:
             requirement = _text(item.get("requirement"))
             if not requirement:
@@ -258,16 +259,37 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             suffix = f" — {explanation}" if explanation else ""
             lines.append(f"- **{requirement}**{critical}: **{status_label}**{suffix}")
             analysis = _text(item.get("provisional_explanation"))
-            if status == "unknown" and analysis:
+            ids = item.get("provisional_fact_ids")
+            reviewed = (item.get("provisional_review_status") == "human_review_required"
+                        and isinstance(recommendation.get("provisional_review"), dict)
+                        and recommendation["provisional_review"].get("retained", 0) > 0
+                        and isinstance(ids, list) and 0 < len(ids) <= 4
+                        and all(isinstance(key, str) and key in facts for key in ids))
+            if reviewed:
+                from ..utils.decision_analysis import reviewable_source_fact
+                reviewed = all(reviewable_source_fact(facts[key]) for key in ids)
+            if status == "unknown" and analysis and reviewed:
                 label = (
                     "待独立核验的分析（不代表需求已满足）"
                     if lang == "zh" else
                     "Analysis awaiting independent verification (not a satisfied requirement)"
                 )
-                lines.append(f"  - **{label}:** {analysis}")
+                lines.append(f"  - **{label}:** {_plain_analysis(analysis)}")
+                lines.append("  - " + ("保存来源（自审不代表语义验证）：" if lang == "zh" else "Saved sources (review is not semantic verification): ")
+                             + " / ".join(_code(facts[key]["source_title"]) for key in ids))
+                reviewed_facts.update({key: facts[key] for key in ids})
+            elif status == "unknown" and (analysis or item.get("provisional_review_status") == "withheld"):
+                lines.append("  - " + ("未获得可用审阅的模型解释已撤回；该需求仍未知。" if lang == "zh" else
+                                        "Model explanation withheld without usable review; this requirement remains unknown."))
             if status == "unknown":
                 lines.extend(_render_saved_excerpts(item, lang))
         lines.append("")
+
+        for fact in reviewed_facts.values():
+            lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{"title": fact["source_title"], "text": fact["saved_text"]}]}, lang))
+            lines.append("  - " + ("来源核验状态：" if lang == "zh" else "Source check status: ") + _code(fact["status"]))
+        if reviewed_facts:
+            lines.append("")
 
     if branches:
         lines.extend(

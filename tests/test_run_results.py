@@ -64,7 +64,8 @@ def _result(run_id: str, *, report_format: str = "what_why_how"):
     )
 
 
-def test_provisional_analysis_survives_public_result_roundtrip_with_warning():
+@pytest.mark.parametrize("reviewed", [False, True])
+def test_provisional_analysis_roundtrip_preserves_review_display_boundary(reviewed):
     from deepchoice.formats.what_why_how import render
 
     task, run = _records()
@@ -77,14 +78,27 @@ def test_provisional_analysis_survives_public_result_roundtrip_with_warning():
             "provisional_explanation": analysis, "lease_owner": "private-worker",
         }],
     }}
+    if reviewed:
+        analysis = "SQLite allows only one writer."
+        recommendation = state["final_recommendation"]
+        recommendation["requirement_assessments"][0].update(
+            provisional_explanation=analysis, provisional_review_status="human_review_required",
+            provisional_fact_ids=["F1"],
+        )
+        recommendation["source_facts"] = [{"id": "F1", "source_title": "SQLite Docs",
+            "saved_text": analysis, "status": "unknown", "review_availability": "network_unconfirmed"}]
+        recommendation["provisional_review"] = {"status": "complete", "submitted": 1,
+            "reviewed": 1, "retained": 1, "revised": 0, "withdrawn": 0}
     state["report"] = render(state)
     result = build_public_run_result(run, task.request.model_dump(), state, created_at=run.created_at)
     restored = RunResultRecord.model_validate_json(result.model_dump_json())
     row = restored.snapshot["final_recommendation"]["requirement_assessments"][0]
     assert row["provisional_explanation"] == analysis and row["status"] == "unknown"
     assert "lease_owner" not in row and "private-worker" not in restored.model_dump_json()
-    assert "Analysis awaiting independent verification (not a satisfied requirement)" in restored.report
-    assert analysis in restored.report
+    assert ("Analysis awaiting independent verification (not a satisfied requirement)" in restored.report) is reviewed
+    assert (analysis in restored.report) is reviewed
+    assert ("Model explanation withheld" in restored.report) is (not reviewed)
+    assert render(restored.snapshot) == restored.report
 
 
 def test_validation_only_plan_survives_public_result_without_original_operations():

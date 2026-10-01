@@ -114,7 +114,8 @@ async def test_all_reports_keep_analysis_warning_and_conditional_plan(monkeypatc
     state["task"]["query"] = query
     state.update(await CitationValidatorAgent().run(state))
     report = render(state)
-    assert label in report and CLAIM in report
+    assert label not in report and CLAIM not in report
+    assert ("已撤回" if "选择" in query else "withheld") in report
     assert "#1" not in report and "Winner: SQLite" not in report
     assert state["final_recommendation"]["action_plan_mode"] == "validation_only"
     assert "Rehearse backup and recovery" not in report
