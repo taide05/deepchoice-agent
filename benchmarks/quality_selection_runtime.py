@@ -192,7 +192,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     if repair_control is not None:
         _require(commit == repair_control["identity"]["production_commit"], "repair control production drift")
     ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
-    ledger.require_unused_phase(phase, PHASE_LIMITS[phase], budget_extension=spec.get("budget_extension"))
+    ledger.require_unused_phase(phase, PHASE_LIMITS[phase], budget_extension=spec.get("budget_extension"), coverage_authorization=spec.get("coverage_authorization"))
     if phase == "reviewed_candidate":
         validate_development_authorization(spec.get("development_authorization"), ledger.identity)
     extended = spec.get("budget_extension") is not None
@@ -231,7 +231,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     environment = {**source_environment, "knowledge_root": str(knowledge.resolve())}
     started = datetime.now(UTC)
     until = min(started + timedelta(days=7), _time(preflight["ended_at"]) + timedelta(days=7))
-    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate"}:
+    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate", "coverage_candidate"}:
         baseline = load_binding(Path(spec["baseline_binding_path"]), require_current=False)[0]
         until = min(until, _time(baseline["frozen_at"]) + timedelta(days=7))
         _require(started < until, "comparison baseline window expired")
@@ -252,7 +252,9 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
         binding["comparison_mode"] = "historical-baseline-different-collector-v1"
     if extended:
         binding["budget_extension"] = spec["budget_extension"]
-    if phase == "delivery_candidate":
+    if phase == "coverage_candidate":
+        binding["coverage_authorization"] = spec["coverage_authorization"]
+    if phase in {"delivery_candidate", "coverage_candidate"}:
         binding["comparison_mode"] = "historical-baseline-different-collector-v1"
     if phase == "repair_baseline":
         binding["repair_purpose"] = spec["repair_purpose"]
@@ -272,7 +274,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
                 "manifest_id": build_run_manifest(ResearchRequest.model_validate(case["request"]).model_dump(exclude_none=True)).manifest_id,
                 "hitl": hitl,
             })
-    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate"}:
+    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate", "coverage_candidate"}:
         baseline_path = Path(spec["baseline_binding_path"]).resolve()
         binding["baseline_binding"] = {"path": str(baseline_path), "sha256": file_digest(baseline_path)}
     write_json(destination, binding, exclusive=True)
@@ -345,7 +347,7 @@ def serve(binding_path: Path, cfg, port: int) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["init-ledger", "authorize-extension", "freeze", "serve"])
+    parser.add_argument("command", choices=["init-ledger", "authorize-extension", "authorize-coverage", "freeze", "serve"])
     parser.add_argument("--binding", type=Path)
     parser.add_argument("--reconciliation", type=Path)
     parser.add_argument("--authorization", type=Path)
@@ -361,14 +363,15 @@ def main(argv=None) -> int:
                                            args.reconciliation)
         print(json.dumps({"used": ledger.used(), "research_submitted": 0}))
         return 0
-    if args.command == "authorize-extension":
+    if args.command in {"authorize-extension", "authorize-coverage"}:
         if args.authorization is None:
             parser.error("authorize-extension requires --authorization")
         from benchmarks.quality_selection import ResearchLedger, file_digest
         path = args.authorization.resolve()
         ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
-        ledger.authorize_extension({"path": str(path), "sha256": file_digest(path)})
-        print(json.dumps({"used": ledger.used(), "authorized_hard_total": 159, "research_submitted": 0}))
+        install = ledger.authorize_coverage if args.command == "authorize-coverage" else ledger.authorize_extension
+        install({"path": str(path), "sha256": file_digest(path)})
+        print(json.dumps({"used": ledger.used(), "authorized_hard_total": 163 if args.command == "authorize-coverage" else 159, "research_submitted": 0}))
         return 0
     if args.binding is None:
         parser.error("--binding is required")

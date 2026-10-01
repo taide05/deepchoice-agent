@@ -121,3 +121,15 @@ PR2B及旧串并发compare的运行/阈值只绑定各自历史身份。保留�
 
 详细历史参数和使用条件见[旧工具指南](../docs/archive/quality-direction-20260929/benchmark-guide-history.md)。
 旧数据/哈希/评分保持原义；本轮quality-selection-v1与300-case、smoke-v1和旧O1分母分开。
+
+
+### 2026-10-01追加开发准入
+
+`quality_selection_runtime authorize-coverage --authorization <file>`只安装明确批准的
+coverage_candidate四例授权。它绑定原ledger identity、extension及135前全部准入；通过
+独立表/见证追加，不改历史identity或extension。freeze/collect必须携带同一
+coverage_authorization引用；仅135→139，最终24及旧相位均拒绝。此相位不支持生成最终
+晋级锁。授权不等于测量完成，实际结果和163上限见维护状态；另四题仍封存。
+
+最终禁启不依赖该授权是否已安装；当前acceptance加载、freeze、collect及reserve均拒绝。历史
+binding仅可用require_current=False校验，不授予执行权。163为账面授权上限，当前只可新增4次。

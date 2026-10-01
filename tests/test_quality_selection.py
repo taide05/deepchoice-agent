@@ -170,7 +170,7 @@ def test_synthetic_holdout_requires_review_and_preserves_full_matrix(frozen, tmp
     binding["datasets"].append({"split": "holdout", "path": str(dataset), "sha256": q.file_digest(dataset)})
     q.write_json(path, binding)
     with pytest.raises(ValueError, match="candidate/review lock"):
-        q.load_binding(path)
+        q.load_binding(path, require_current=False)
     lock = tmp_path / "review.json"
     q.write_json(lock, {"accepted": True, "candidate_commit": binding["identity"]["production_commit"],
                         "candidate_binding": {"path": str(candidate_path), "sha256": q.file_digest(candidate_path)}})
@@ -182,13 +182,13 @@ def test_synthetic_holdout_requires_review_and_preserves_full_matrix(frozen, tmp
                           "hitl": {"action": "limited_report"}}
                          for rep in range(1, 4) for key, case in all_cases.items()]
     q.write_json(path, binding)
-    assert len(q.load_binding(path)[0]["cells"]) == 24
+    assert len(q.load_binding(path, require_current=False)[0]["cells"]) == 24
     historical_start = binding["starting_used"]
     for current_start in (127, 131):
         binding["starting_used"] = current_start
         q.write_json(path, binding)
         with pytest.raises(ValueError, match="newly reviewed"):
-            q.load_binding(path)
+            q.load_binding(path, require_current=False)
     binding["starting_used"] = historical_start
     q.write_json(path, binding)
     stable = deepcopy(binding)
@@ -196,17 +196,17 @@ def test_synthetic_holdout_requires_review_and_preserves_full_matrix(frozen, tmp
     binding["identity"]["source_policy_sha256"] = q.digest(binding["source_policy"])
     q.write_json(path, binding)
     with pytest.raises(ValueError, match="comparison environment drift"):
-        q.load_binding(path)
+        q.load_binding(path, require_current=False)
     binding = deepcopy(stable)
     binding["cells"][8]["hitl"] = {"action": "cancel"}
     q.write_json(path, binding)
     with pytest.raises(ValueError, match="HITL drift|HITL policy drift"):
-        q.load_binding(path)
+        q.load_binding(path, require_current=False)
     binding = deepcopy(stable)
     binding["cells"][0], binding["cells"][8] = binding["cells"][8], binding["cells"][0]
     q.write_json(path, binding)
     with pytest.raises(ValueError, match="interleave"):
-        q.load_binding(path)
+        q.load_binding(path, require_current=False)
 
 
 def test_ledger_missing_or_rewound_database_fails_closed(ledger):
@@ -716,13 +716,13 @@ def test_one_repair_batch_never_refunds_old_calls_or_consumes_final_allocation(l
         ledger.reserve("repair", "fifth", "repair_baseline", expected_used=123)
     for i in range(4):
         ledger.reserve("followup", str(i), "followup", expected_used=123 + i)
-    with pytest.raises(ValueError, match="incomplete"):
+    with pytest.raises(ValueError, match="prohibited"):
         ledger.reserve("acceptance", "old-lock", "acceptance", expected_used=127)
     for i in range(4):
         ledger.reserve("reviewed", str(i), "reviewed_candidate", expected_used=127 + i)
-    for i in range(24):
-        ledger.reserve("acceptance", str(i), "acceptance", expected_used=131 + i)
-    assert ledger.used() == 155
+    with pytest.raises(ValueError, match="prohibited"):
+        ledger.reserve("acceptance", "one", "acceptance", expected_used=131)
+    assert ledger.used() == 131
     with closing(sqlite3.connect(ledger.path)) as db:
         assert db.execute("SELECT COUNT(*) FROM admissions WHERE batch LIKE 'old-%'").fetchone() == (5,)
 
@@ -793,7 +793,7 @@ def test_reviewed_allocation_requires_exact_history_and_preserves_final24(ledger
         ledger.reserve("reviewed", "early", "reviewed_candidate", expected_used=114)
     fill_reviewed_history(ledger)
     before = ledger.path.with_suffix(".admissions.jsonl").read_bytes()
-    with pytest.raises(ValueError, match="incomplete"):
+    with pytest.raises(ValueError, match="prohibited"):
         ledger.require_unused_phase("acceptance", 24)
     ledger.require_unused_phase("reviewed_candidate", 4)
     def claim(i):
@@ -808,18 +808,18 @@ def test_reviewed_allocation_requires_exact_history_and_preserves_final24(ledger
         ledger.reserve("other", "other", "reviewed_candidate", expected_used=128)
     with pytest.raises(ValueError, match="frozen batch"):
         ledger.require_unused_phase("reviewed_candidate", 4)
-    with pytest.raises(ValueError, match="incomplete"):
+    with pytest.raises(ValueError, match="prohibited"):
         ledger.require_unused_phase("acceptance", 24)
-    with pytest.raises(ValueError, match="incomplete"):
+    with pytest.raises(ValueError, match="prohibited"):
         ledger.reserve("final", "premature", "acceptance", expected_used=128)
     for i in range(3):
         ledger.reserve("reviewed", f"next-{i}", "reviewed_candidate", expected_used=128+i)
     assert ledger.used() == 131
     with pytest.raises(ValueError, match="exhausted"):
         ledger.reserve("reviewed", "fifth", "reviewed_candidate", expected_used=131)
-    for i in range(24):
-        ledger.reserve("final", str(i), "acceptance", expected_used=131+i)
-    assert ledger.used() == 155
+    with pytest.raises(ValueError, match="prohibited"):
+        ledger.reserve("final", "one", "acceptance", expected_used=131)
+    assert ledger.used() == 131
     assert ledger.path.with_suffix(".admissions.jsonl").read_bytes().startswith(before)
 
 
@@ -1004,7 +1004,7 @@ def test_extension_serialized_install_and_admission_preserves_original_history(l
         assert list(pool.map(install, range(4))).count(True) == 1
     assert ledger.identity["hard_total"] == 156
     assert ledger.path.with_suffix(".identity.json").read_bytes() == identity
-    with pytest.raises(ValueError, match="incomplete"):
+    with pytest.raises(ValueError, match="prohibited"):
         ledger.require_unused_phase("acceptance",24,budget_extension=ref)
     with pytest.raises(ValueError, match="extension"):
         ledger.reserve("old", "new", "reviewed_candidate", expected_used=131, budget_extension=ref)
@@ -1018,9 +1018,10 @@ def test_extension_serialized_install_and_admission_preserves_original_history(l
     for i in range(3): ledger.reserve("delivery",f"next-{i}","delivery_candidate",expected_used=132+i,budget_extension=ref)
     with pytest.raises(ValueError, match="exhausted"):
         ledger.reserve("delivery","fifth","delivery_candidate",expected_used=135,budget_extension=ref)
-    for i in range(24): ledger.reserve("final",str(i),"acceptance",expected_used=135+i,budget_extension=ref)
-    assert ledger.used() == 159
-    with pytest.raises(ValueError,match="exhausted"):
+    with pytest.raises(ValueError,match="prohibited"):
+        ledger.reserve("final","one","acceptance",expected_used=135,budget_extension=ref)
+    assert ledger.used() == 135
+    with pytest.raises(ValueError,match="prohibited"):
         ledger.reserve("final","25","acceptance",expected_used=159,budget_extension=ref)
     assert ledger.path.with_suffix(".admissions.jsonl").read_bytes().startswith(journal)
 
@@ -1078,7 +1079,7 @@ async def test_delivery_collect_uses_extended_ledger_and_same_stop_policy(frozen
 @pytest.mark.parametrize("fault",["missing","old-baseline","order","start","authority","old-lock"])
 def test_delivery_binding_and_lock_reject_drift(frozen,ledger,tmp_path,fault):
     candidate,_,path,ref=delivery_binding(frozen,ledger,tmp_path)
-    assert q.load_binding(path)[0]==candidate
+    assert q.load_binding(path, require_current=False)[0]==candidate
     if fault=="missing": candidate.pop("budget_extension")
     elif fault=="old-baseline":
         prior=json.loads(Path(candidate["baseline_binding"]["path"]).read_text(encoding="utf-8"))
@@ -1100,7 +1101,7 @@ def test_delivery_binding_and_lock_reject_drift(frozen,ledger,tmp_path,fault):
         candidate.update(phase="acceptance",starting_used=135,candidate_lock={"path":str(review),
             "production_commit":old["identity"]["production_commit"],"development_review_sha256":q.file_digest(review)})
     q.write_json(path,candidate)
-    with pytest.raises(ValueError): q.load_binding(path)
+    with pytest.raises(ValueError): q.load_binding(path, require_current=False)
 
 
 
@@ -1159,6 +1160,181 @@ def test_extended_acceptance_roundtrip_requires_new_lock_and_same_runner(frozen,
        "request_sha256":case["request_sha256"],"hitl":policies.get(key,{"action":"limited_report"})}
        for rep in range(1,4) for key,case in all_cases.items()]
     output=tmp_path/"final.json";q.write_json(output,final)
-    assert len(q.load_binding(output)[0]["cells"])==24
+    assert len(q.load_binding(output, require_current=False)[0]["cells"])==24
     final["identity"]["runner_commit"]="0"*40;q.write_json(output,final)
-    with pytest.raises(ValueError,match="runner drift"):q.load_binding(output)
+    with pytest.raises(ValueError,match="runner drift"):q.load_binding(output, require_current=False)
+
+
+
+def coverage_authority(ledger, tmp_path, extension):
+    rows = [json.loads(line) for line in ledger.path.with_suffix('.admissions.jsonl').read_text().splitlines()]
+    grant = {'protocol': q.PROTOCOL, 'phase': 'coverage_candidate', 'approved': True,
+             'starting_used': 135, 'maximum_new_research_admissions': 4,
+             'maximum_after_development': 139, 'conditional_final_cells': 24,
+             'previous_hard_total': 159, 'maximum_with_final': 163,
+             'final_acceptance_authorized': False, 'ledger_identity_sha256': q.digest(ledger.identity),
+             'prior_extension_sha256': q.digest(extension), 'prior_admissions_sha256': q.digest(rows),
+             'case_order': ['P01', 'P04', 'P08', 'P02'], 'user_confirmation': '授权通过'}
+    path = tmp_path / 'coverage-authorization.json'
+    q.write_json(path, grant)
+    return {'path': str(path), 'sha256': q.file_digest(path)}
+
+
+def coverage_binding(frozen, ledger, tmp_path):
+    prior, cases, prior_path, extension = delivery_binding(frozen, ledger, tmp_path)
+    for i in range(4):
+        ledger.reserve('delivery', str(i), 'delivery_candidate', expected_used=131+i, budget_extension=extension)
+    ref = coverage_authority(ledger, tmp_path, extension)
+    ledger.authorize_coverage(ref)
+    candidate = deepcopy(prior)
+    candidate.update(phase='coverage_candidate', starting_used=135, coverage_authorization=ref,
+                     baseline_binding={'path': str(prior_path), 'sha256': q.file_digest(prior_path)})
+    candidate['identity']['runner_commit'] = 'b'*40
+    for cell in candidate['cells']:
+        cell['cell_id'] = 'coverage-' + cell['case_id']
+    path = tmp_path / 'coverage.json'
+    q.write_json(path, candidate)
+    return candidate, cases, path, extension, ref
+
+
+def test_coverage_serialized_admission_preserves_history_and_blocks_final(frozen, ledger, tmp_path):
+    candidate, _, _, extension, ref = coverage_binding(frozen, ledger, tmp_path)
+    original = ledger.path.with_suffix('.admissions.jsonl').read_bytes()
+    ledger.require_unused_phase('coverage_candidate', 4, budget_extension=extension, coverage_authorization=ref)
+    def claim(i):
+        try:
+            return ledger.reserve('coverage', str(i), 'coverage_candidate', expected_used=135,
+                                  budget_extension=extension, coverage_authorization=ref)
+        except ValueError:
+            return None
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        assert list(pool.map(claim, range(8))).count(136) == 1
+    with pytest.raises(ValueError, match='one frozen batch'):
+        ledger.reserve('other', 'extra', 'coverage_candidate', expected_used=136,
+                       budget_extension=extension, coverage_authorization=ref)
+    for i in range(3):
+        ledger.reserve('coverage', f'next-{i}', 'coverage_candidate', expected_used=136+i,
+                       budget_extension=extension, coverage_authorization=ref)
+    assert ledger.used() == 139
+    for phase in ['coverage_candidate', 'acceptance', 'delivery_candidate', 'reviewed_candidate']:
+        with pytest.raises(ValueError):
+            ledger.reserve('new', 'one', phase, expected_used=139,
+                           budget_extension=extension, coverage_authorization=ref)
+    with pytest.raises(ValueError):
+        ledger.require_unused_phase('acceptance', 24, budget_extension=extension)
+    assert ledger.path.with_suffix('.admissions.jsonl').read_bytes().startswith(original)
+    assert candidate['starting_used'] == 135 and ledger.identity['hard_total'] == 156
+
+
+@pytest.mark.parametrize('fault', ['cap', 'final', 'extension', 'history', 'confirmation', 'approval'])
+def test_coverage_bad_authority_never_installs(frozen, ledger, tmp_path, fault):
+    _, _, _, extension = delivery_binding(frozen, ledger, tmp_path)
+    for i in range(4):
+        ledger.reserve('delivery', str(i), 'delivery_candidate', expected_used=131+i, budget_extension=extension)
+    ref = coverage_authority(ledger, tmp_path, extension)
+    path = Path(ref['path']); grant = json.loads(path.read_text(encoding='utf-8'))
+    key, value = {'cap': ('maximum_with_final',164), 'final': ('final_acceptance_authorized', True),
+                  'extension': ('prior_extension_sha256','0'*64), 'history': ('prior_admissions_sha256','0'*64),
+                  'confirmation': ('user_confirmation',''), 'approval': ('approved',False)}[fault]
+    grant[key] = value; q.write_json(path, grant); ref['sha256'] = q.file_digest(path)
+    with pytest.raises(ValueError): ledger.authorize_coverage(ref)
+    assert ledger.used() == 135 and ledger.coverage_ref() is None
+
+
+@pytest.mark.parametrize('fault', ['witness', 'table', 'grant', 'orphan', 'commit'])
+def test_coverage_damaged_authority_fails_closed(frozen, ledger, tmp_path, monkeypatch, fault):
+    _, _, _, extension = delivery_binding(frozen, ledger, tmp_path)
+    for i in range(4):
+        ledger.reserve('delivery', str(i), 'delivery_candidate', expected_used=131+i, budget_extension=extension)
+    ref = coverage_authority(ledger, tmp_path, extension)
+    original = ledger.path.with_suffix('.admissions.jsonl').read_bytes()
+    if fault == 'commit':
+        write = q.write_json
+        def fail_after_witness(path, value, **kwargs):
+            write(path, value, **kwargs)
+            raise OSError('synthetic failure')
+        monkeypatch.setattr(q, 'write_json', fail_after_witness)
+        with pytest.raises(OSError): ledger.authorize_coverage(ref)
+    elif fault == 'orphan':
+        q.write_json(ledger.path.with_suffix('.coverage.json'), ref)
+    else:
+        ledger.authorize_coverage(ref)
+        if fault == 'witness': ledger.path.with_suffix('.coverage.json').unlink()
+        elif fault == 'table':
+            with sqlite3.connect(ledger.path) as db: db.execute('DROP TABLE coverage_authorizations')
+        else: Path(ref['path']).write_text('{}',encoding='utf-8')
+    with pytest.raises(ValueError):
+        ledger.reserve('coverage','one','coverage_candidate',expected_used=135,
+                       budget_extension=extension,coverage_authorization=ref)
+    assert ledger.path.with_suffix('.admissions.jsonl').read_bytes() == original
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('mode,admitted', [('success',4),('uncertain',1),('budget',1)])
+async def test_coverage_collector_retains_stop_contract(frozen, ledger, tmp_path, mode, admitted):
+    candidate, cases, path, extension, ref = coverage_binding(frozen, ledger, tmp_path)
+    assert q.load_binding(path)[0] == candidate
+    service = FakeService(candidate, mode)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(service),base_url='http://test') as client:
+        result = await q.collect_batch(candidate,cases,tmp_path/'coverage-output',ledger,client)
+    assert ledger.used() == 135 + admitted and len(service.posts) == admitted
+    assert result['quality_review'] == 'not_evaluated'
+
+
+@pytest.mark.parametrize('fault', ['missing', 'order', 'start', 'baseline', 'final'])
+def test_coverage_binding_rejects_drift_before_case_loading(frozen, ledger, tmp_path, fault):
+    candidate, _, path, _, _ = coverage_binding(frozen, ledger, tmp_path)
+    if fault == 'missing': candidate.pop('coverage_authorization')
+    elif fault == 'order': candidate['cells'].reverse()
+    elif fault == 'start': candidate['starting_used'] = 134
+    elif fault == 'baseline': candidate['baseline_binding'] = frozen[0].get('baseline_binding', {})
+    else: candidate['phase'] = 'acceptance'
+    q.write_json(path,candidate)
+    with pytest.raises((ValueError, KeyError)): q.load_binding(path)
+
+
+def test_coverage_runtime_freeze_refuses_final_and_missing_authority(frozen, ledger, tmp_path, monkeypatch):
+    candidate, _, prior, extension, ref = coverage_binding(frozen, ledger, tmp_path)
+    monkeypatch.setattr(runtime,'runner_root',lambda:tmp_path)
+    monkeypatch.setattr(q,'ResearchLedger',lambda _:ledger)
+    monkeypatch.setattr(runtime,'clean_commit',lambda _:'b'*40)
+    env = deepcopy(candidate['environment'])
+    monkeypatch.setattr(runtime,'environment_identity',lambda *_:env)
+    monkeypatch.setattr(runtime,'_preflight_compatible',lambda *_:{'ended_at':datetime.now(UTC).isoformat()})
+    copies=[]
+    monkeypatch.setattr(runtime,'copy_audited_seed',lambda *args:copies.append(args) or env['knowledge_audit'])
+    receipt=tmp_path/'receipt.json';q.write_json(receipt,{})
+    spec={'phase':'coverage_candidate','production_root':str(tmp_path),'seed_path':str(tmp_path/'seed'),
+          'seed_sha256':env['knowledge_sha256'],'preflight_path':str(receipt),'datasets':candidate['datasets'],
+          'source_policy':candidate['source_policy'],'hitl':{c['case_id']:c['hitl'] for c in candidate['cells']},
+          'baseline_binding_path':candidate['baseline_binding']['path'],'budget_extension':extension}
+    path=tmp_path/'spec.json';destination=tmp_path/'new-coverage/binding.json'
+    q.write_json(path,spec)
+    with pytest.raises(ValueError):runtime.freeze(path,destination,object())
+    assert not copies and not destination.parent.exists()
+    spec['coverage_authorization']=ref;spec['phase']='acceptance';q.write_json(path,spec)
+    with pytest.raises(ValueError):runtime.freeze(path,destination,object())
+    assert not copies and not destination.parent.exists()
+    spec['phase']='coverage_candidate';q.write_json(path,spec)
+    result=runtime.freeze(path,destination,object())
+    assert result['starting_used']==135 and ledger.used()==135 and len(copies)==1
+    assert q.load_binding(destination)[0]==result
+
+
+@pytest.mark.asyncio
+async def test_final_is_prohibited_before_new_authorization_without_reading_holdout(frozen, ledger, tmp_path, monkeypatch):
+    candidate, cases, path, extension = delivery_binding(frozen, ledger, tmp_path)
+    for i in range(4):
+        ledger.reserve('delivery', str(i), 'delivery_candidate', expected_used=131+i, budget_extension=extension)
+    candidate['phase'] = 'acceptance'
+    q.write_json(path, candidate)
+    def forbidden(*args, **kwargs): raise AssertionError('must not load cases')
+    monkeypatch.setattr(q, 'load_cases', forbidden)
+    with pytest.raises(ValueError, match='prohibited'): q.load_binding(path)
+    with pytest.raises(ValueError, match='prohibited'):
+        ledger.require_unused_phase('acceptance',24,budget_extension=extension)
+    service = FakeService(candidate,'success')
+    async with httpx.AsyncClient(transport=httpx.MockTransport(service),base_url='http://test') as client:
+        with pytest.raises(ValueError, match='prohibited'):
+            await q.collect_batch(candidate,cases,tmp_path/'forbidden-final',ledger,client)
+    assert not service.posts and ledger.used()==135 and not (tmp_path/'forbidden-final').exists()

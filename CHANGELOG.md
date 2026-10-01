@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Add the approved four-case development allocation
+
+Append a separate coverage authorization and witness bound to the original ledger, prior extension
+and first21 admissions. The approved135→139 development batch raises the total cap159→163 while
+keeping final24 prohibited at current-binding, freeze, collect and reserve entry points even before
+installation. The installed grant permits only its four-case, single-use phase;
+missing/mismatched authority and uncertain dispatch fail closed. Historical grants remain unchanged.
+No holdout access or final promotion is added. Real report quality remains to be measured.
+Validation: 2856 full tests (526.32s), 134 focused, smoke-v1 12/12, static checks and independent review.
+
 ### Preserve ellipses and historical analysis quotations
 
 Citation v14 keeps punctuation runs intact without transferring citation markers between assertions.
