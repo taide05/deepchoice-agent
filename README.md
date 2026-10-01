@@ -22,7 +22,9 @@ DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型
 
 评估工具支持独立的四例开发追加批次，授权凭据、共享账本与候选晋级矩阵共同约束准入；
 旧批次不可重开，最终24格须锁定新候选。具体当前分配见[执行状态](docs/o1-execution-status.md)，
-入口与身份比较边界见[评估工具说明](benchmarks/README.md)。这不是产品质量已通过的声明。
+入口与身份比较边界见[评估工具说明](benchmarks/README.md)。2026-10-01四例开发集
+`quality-selection-development-v1` / `1.0.0`测量为4/4完整产出、0/4内容通过，未晋级；
+工程验证不等于产品质量已通过。
 
 ## 为什么值得关注
 

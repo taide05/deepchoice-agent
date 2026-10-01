@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record the 2026-10-01 development measurement
+
+Frozen candidate a571021 completed all4 quality-selection-development-v1 /1.0.0 cases with
+consistent exports. Primary and independent assistant reviews found0/4 useful and supported,
+with0 confirmed critical errors; the candidate did not meet the3/4 promotion gate. All four
+self-review inputs contained zero bound analyses. Authorized read-only node diagnostics localized
+loss to synthesis binding and citation calibration; counts do not prove pre-filter content correct.
+Preserve the failed outcome; final24 and the holdout remain unrun/sealed. Reconciled study usage is131/156.
+
 ### Bind the newly authorized four-case development allocation
 
 Add one reviewed_candidate batch at reconciled usage127, with an explicit four-case authorization
