@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record the analysis-delivery development result
+
+On2026-10-01, candidate bdfc2b5 completed all4 quality-selection-development-v1/1.0.0 cases with
+consistent report/snapshot/export. Primary and independent unblinded assistant review found0/4
+usable-and-supported and1 critical report(P08: absolute restart-loss claim contradicts the saved
+Memcached warm-restart exception). P04/P08 gained conditional analysis, whileP01/P02 remain deficient;
+P02 also misattributes pgvector+pgvectorscale performance. Ledger135/159; candidate not promoted,
+final24 not run, holdout sealed. Preserve original reports and prior results.
+
 ### Extend the explicitly authorized development allocation
 
 Add one delivery_candidate batch (131→135) and conditional final acceptance (135→159), following the
