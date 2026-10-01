@@ -1,7 +1,7 @@
 import json
 import re
 
-from ..utils.decision_analysis import inspect_synthesis_bindings, original_analysis_requirements
+from ..utils.decision_analysis import inspect_synthesis_bindings, original_analysis_requirements, prefer_corrected_projection
 from ..utils.call_diagnostics import output_shape_valid
 
 from ..budget_errors import BudgetError
@@ -28,7 +28,7 @@ from ..utils.evidence_choices import MAX_SOURCE_TEXT, eligible_source_fact_ids, 
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
 
 # Included with the feedback template in the immutable synthesis prompt asset.
-SYNTHESIS_STRUCTURE_POLICY = "sentence-basis-correction-v2:max_corrections=1"
+SYNTHESIS_STRUCTURE_POLICY = "sentence-basis-correction-v3:max_corrections=1"
 SYNTHESIS_CORRECTION_TEMPLATE = """A local binding-contract check rejected part of the previous JSON response.
 Regenerate the COMPLETE response for exactly the original request, candidates, hard constraints and evidence above.
 Only one corrective generation is allowed. Do not invent sources or relax constraints.
@@ -37,6 +37,10 @@ Empty lists are valid if there is no usable basis. Assign unique F1..F99 IDs to 
 Each analysis needs basis items with fact_id and 1-based sentence_ids from that source's numbered snippet.
 Do not supply copied prose or a second fact_ids list; runtime derives references and copies the sentences.
 Use only original R0/C/Q requirement IDs. Recheck the original text limits.
+For prose_reference, remove inline citation markers/links from reasoning, assumptions and
+change_condition; references belong only in basis. For prose_empty/type supply nonempty plain
+strings; for prose_length obey the original character limits. For basis_invalid_sentences use
+only the printed sentence numbers of that selected source, not evidence source numbers.
 This check does not establish factual support or authorize operations. Do not repeat the malformed response.
 Runtime-computed error counts and eligible identifiers: {feedback_json}
 """
@@ -1082,11 +1086,12 @@ class ConclusionSynthesizerAgent:
                 if not complete:
                     revised_binding["errors"]["incomplete_response"] = 1
                 correction["corrected"] = revised_binding
-                if revised_binding["errors"]:
-                    correction["outcome"] = "invalid"
-                else:
+                partial = bool(revised_binding["errors"])
+                if complete and prefer_corrected_projection(result, revised, revised_binding, require_gain=partial):
                     result, binding = revised, revised_binding
-                    correction["outcome"] = "corrected"
+                    correction["outcome"] = "partial_corrected" if partial else "corrected"
+                else:
+                    correction["outcome"] = "invalid"
         for field in ("ranked_options", "trade_offs"):
             value = result.get(field)
             result[field] = (
@@ -1138,6 +1143,10 @@ class ConclusionSynthesizerAgent:
                 )
             )
             result = abstain_recommendation(result, task.get("query", ""), reason)
+        if correction["outcome"] in {"corrected", "partial_corrected"}:
+            # Apply after normalization, which otherwise resets action_plan_mode.
+            result = restrict_action_plan(result, task.get("query", ""))
+            result["confidence"] = "low"
         _sanitize_citations(result, evidence_chains)
         _bind_citations(result, cite_map)
 

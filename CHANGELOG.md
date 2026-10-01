@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Preserve reviewable conditional analysis through bounded delivery
+
+Classify prose binding failures without retaining model text. Synthesis v19 selects an independently
+bound correction only when original question/source-sentence coverage and authority are preserved;
+partial correction additionally requires greater valid coverage. Adopted corrections remain low
+confidence with validation-only actions after normalization. Citation v13 permits complete,
+identity-matched network-only unknown source checks to supply the existing self-review, while
+keeping the source unknown and withholding the analysis until a valid slot review. Self-review v3
+rechecks all source statuses; templates v14/v13/v12 display the availability limitation explicitly.
+Validated locally on Python3.12:2756 full tests,215 focused tests,12/12 offline smoke, static checks
+and independent review. This is an engineering candidate; the measured four-case0/4 outcome remains unchanged.
+
 ### Record the 2026-10-01 development measurement
 
 Frozen candidate a571021 completed all4 quality-selection-development-v1 /1.0.0 cases with

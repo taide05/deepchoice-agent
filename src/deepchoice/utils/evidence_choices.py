@@ -166,6 +166,14 @@ def calibrate_evidence_choices(recommendation, verification):
                   else "unsupported" if "unsupported" in values
                   else "unreachable" if "unreachable" in values else "unknown")
         fact["status"] = status
+        fact.pop("review_availability", None)
+        if (status == "unknown" and checks and complete_binding and not overflow
+                and all((check.status.value, check.reason.value) in {
+                    ("verified", "lexical_support"), ("unknown", "network_uncertain"),
+                } for check in checks)):
+            # Availability uncertainty is not a contradiction of the exact saved text.
+            # This grants review eligibility only, never citation/decision authority.
+            fact["review_availability"] = "network_unconfirmed"
         statuses[fact["id"]] = status
     for choice in recommendation.get("conditional_choices", []):
         choice["basis_status"] = (

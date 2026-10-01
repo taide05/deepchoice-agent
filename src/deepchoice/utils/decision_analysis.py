@@ -10,6 +10,18 @@ MAX_ANALYSES = 8
 KINDS = frozenset({"choice", "answer", "design"})
 
 
+def _prose_error(value, limit):
+    if not isinstance(value, str):
+        return "prose_type"
+    if len(value) > limit:
+        return "prose_length"
+    if re.search(r"https?://|\[\[|\[source\s*:", value, re.I):
+        return "prose_reference"
+    if not " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", value).split()):
+        return "prose_empty"
+    return None
+
+
 def _text(value, limit):
     if not isinstance(value, str) or len(value) > limit:
         return ""
@@ -72,8 +84,8 @@ def bind_analysis_basis(raw, facts):
 def bind_decision_analysis(recommendation, requirements, candidates, query="", *, diagnostics=None, require_basis=False):
     """Rebuild model output from original C/Q requirements and bound fact IDs.
 
-    This first pass does not grant display permission. Citation calibration must
-    subsequently establish complete source-text support in this same pass.
+    This first pass does not grant display permission. Citation calibration and
+    review eligibility are evaluated separately in this same pass.
     """
     result = deepcopy(recommendation)
     raw = result.pop("decision_analysis", None)
@@ -130,7 +142,11 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
             continue
         assumptions = [_text(value, 300) for value in raw_assumptions]
         if not (reasoning and change_condition and all(assumptions)):
-            reject("invalid_prose")
+            errors = [_prose_error(item.get("reasoning"), 1500),
+                      _prose_error(item.get("change_condition"), 600)]
+            errors.extend(_prose_error(value, 300) for value in raw_assumptions)
+            # Exactly one fixed category per rejected analysis, never model text.
+            reject(next(error for error in errors if error))
             continue
         result["decision_analysis"].append({
             "kind": item["kind"], "option": option,
@@ -178,8 +194,50 @@ def inspect_synthesis_bindings(recommendation, chains, requirements, candidates,
     }
 
 
+def reviewable_source_fact(fact):
+    return fact.get("status") == "verified" or (
+        fact.get("status") == "unknown"
+        and fact.get("review_availability") == "network_unconfirmed"
+    )
+
+
+def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain=True):
+    """Choose one independently bound response; never splice model generations."""
+    allowed = {"facts_binding_loss"}
+    if any(key not in allowed and not key.startswith("analysis_") for key in diagnostic["errors"]):
+        return False
+    if any(key in diagnostic["errors"] for key in ("analysis_invalid_list", "analysis_item_limit")):
+        return False
+    def coverage(value):
+        return {(row["kind"], row["option"], requirement)
+                for row in value.get("decision_analysis", [])
+                for requirement in row["requirement_ids"]}
+    before, after = coverage(original), coverage(corrected)
+    def addressed(value):
+        facts = {f["id"]: f for f in value.get("source_facts", [])}
+        return {(row["kind"], row["option"], req,
+                 facts[b["fact_id"]]["canonical_url"], facts[b["fact_id"]]["saved_text"], tuple(b["sentence_ids"]))
+                for row in value.get("decision_analysis", []) for req in row["requirement_ids"]
+                for b in row.get("basis", [])}
+    sources = lambda value: {(f["source_title"], f["canonical_url"], f["saved_text"])
+                             for f in value.get("source_facts", [])}
+    statuses = lambda value: {row.get("id"): row.get("status")
+                              for row in value.get("requirement_assessments", [])
+                              if isinstance(row, dict) and isinstance(row.get("id"), str)}
+    previous_statuses = statuses(original)
+    no_upgrade = all(status == "unknown" or previous_statuses.get(key) == status
+                     for key, status in statuses(corrected).items())
+    gains = (before < after and len(corrected.get("decision_analysis", [])) > len(original.get("decision_analysis", [])))
+    return (before <= after and (gains or not require_gain) and addressed(original) <= addressed(corrected)
+            and sources(original) <= sources(corrected)
+            and original.get("winner") == corrected.get("winner") == "context_dependent"
+            and not corrected.get("ranked_options") and no_upgrade)
+
+
 def calibrate_decision_analysis(recommendation):
     """Permit review only against facts calibrated by this citation pass.
+
+    Network-only uncertainty grants pending review, never display or authority.
 
     No inference is assigned a citation status. Even a completely supported
     source does not verify the model's translation, application or design.
@@ -189,8 +247,11 @@ def calibrate_decision_analysis(recommendation):
     facts = {row["id"]: row for row in recommendation.get("source_facts", [])}
     accepted = []
     for item in recommendation["decision_analysis"]:
-        if item["fact_ids"] and all(facts[key]["status"] == "verified" for key in item["fact_ids"]):
-            item["review_status"] = "human_review_required"
+        if item["fact_ids"] and all(key in facts and reviewable_source_fact(facts[key]) for key in item["fact_ids"]):
+            item["review_status"] = (
+                "human_review_required" if all(facts[key]["status"] == "verified" for key in item["fact_ids"])
+                else "network_unconfirmed_pending_review"
+            )
             accepted.append(item)
     recommendation["decision_analysis"] = accepted
     return recommendation

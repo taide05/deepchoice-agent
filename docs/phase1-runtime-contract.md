@@ -19,8 +19,8 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-09-30 当前运行使用 `research-v4` / state schema v3、synthesis v18、citation v12、
-self-review v2，三模板 what-why-how-v13 / evidence-first-v12 / comparison-matrix-v11。
+2026-10-01 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v13、
+self-review v3，三模板 what-why-how-v14 / evidence-first-v13 / comparison-matrix-v12。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
 旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。
@@ -230,8 +230,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
-  `deterministic-citation-v12` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
-  citation-policy v1–v11 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v13` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
+  citation-policy v1–v12 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
@@ -804,9 +804,31 @@ registry，且只能负向排除跨场景页面；正向命中仍须通过可见
 每次初始字节相同的新副本；Chroma 运行副本物理可变，不能复用或声称整个数据库只读。
 后续文档提交不替换候选代码身份；正式批次/HITL 动作和预算仍须按冻结协议另行授权。
 
+## 2026-10-01 分析交付与可用性不确定
+
+citation v13不改变四种公开引用状态。保存来源的每句检查、title/canonical URL身份必须
+完整匹配，且没有整份溢出；全部结果仅为verified/lexical_support或unknown/network_uncertain
+且至少一项为network_uncertain时，可赋予来源`review_availability=network_unconfirmed`。
+unknown不会升级成verified。
+缺失/重复检查、identity不符、unsupported/unreachable、文本不足、跨语言或限定不明，均不
+满足这个窄范围例外。其他引用与来源安全规则保持。
+
+依赖此类来源的分析只获得`network_unconfirmed_pending_review`，渲染前不可展示。
+自审从本次citation检查再次核对来源状态与资格、重新绑定原句；keep/revise有效时才成为
+`network_unconfirmed_human_review_required`。三模板逐项和逐源显示unknown及保存片段限制，
+不把模型解释计作verified。自审失败/缺项撤回对应分析；此路径确定性降至low并保留固定缺口。
+Winner、需求状态、行动方案和唯一HITL门不读取此资格作为权威；预算/HITL受限报告仍移除
+分析投影，没有新调用或自动补搜。历史产物不重写，旧身份可读但须新run。
+
+synthesis v19把文本拒绝细分为类型、长度、空值、引用/链接四类，反馈只含固定类别与数量。
+完整或部分纠正都需保留原已覆盖R0/C/Q、候选及来源原句地址，不提升需求/赢家权威。
+部分纠正另需有效分析数量和问题覆盖严格增加；只选择一份独立绑定的响应，不拼接、不
+恢复无效行。选中纠正后在通用归一化结束再限制为validation_only/low，防止后续归一化
+覆盖安全标记。该结构择优不证明语义质量，新增真实测量仍按开发评审门槛执行。
+
 ## 2026-09-29 人审分析
 
-用户已授权模型推断供人工审阅。新synthesis v13 / citation v10 /模板v11/v10/v9把
+以下为2026-09-29历史边界；当前网络可用性例外见上一节。用户已授权模型推断供人工审阅。synthesis v13 / citation v10 /模板v11/v10/v9把
 `decision_analysis`作为无决定权限的投影：原问题R0及冻结C/Q从请求重建，来源fact_ids仅可
 绑定本次完整核验的source_facts。模型提交的状态、需求标签、URL和额外权限字段不可信；
 运行时重建绑定并固定人审状态。释义、假设和概念设计没有语义验证状态，不计入verified；

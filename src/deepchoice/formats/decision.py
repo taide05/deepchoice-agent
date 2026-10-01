@@ -63,16 +63,21 @@ def _plain_analysis(value: Any) -> str:
 
 
 def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
-    from ..utils.decision_analysis import bind_analysis_basis
+    from ..utils.decision_analysis import bind_analysis_basis, reviewable_source_fact
     facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 4)
              if isinstance(item.get("id"), str)}
     accepted = []
     for item in _dict_items(recommendation.get("decision_analysis"), 8):
         ids = item.get("fact_ids")
-        if (item.get("review_status") == "human_review_required"
-                and isinstance(ids, list) and 0 < len(ids) <= 4
+        reviewed_unknown = (item.get("review_status") == "network_unconfirmed_human_review_required"
+                            and "basis" in item
+                            and isinstance(recommendation.get("analysis_review"), dict)
+                            and recommendation["analysis_review"].get("retained", 0) > 0)
+        if (item.get("review_status") == "human_review_required" or reviewed_unknown) and (
+                isinstance(ids, list) and 0 < len(ids) <= 4
                 and all(isinstance(key, str) and key in facts
-                        and facts[key].get("status") == "verified" for key in ids)):
+                        and (facts[key].get("status") == "verified"
+                             or reviewed_unknown and reviewable_source_fact(facts[key])) for key in ids)):
             if "basis" in item:
                 basis, error = bind_analysis_basis(item["basis"], facts)
                 if error or [row["fact_id"] for row in basis] != ids:
@@ -108,6 +113,9 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
         if item.get("option"):
             title += " — " + _plain_analysis(item["option"])
         lines.extend([f"#### {title}", ""])
+        if item.get("review_status") == "network_unconfirmed_human_review_required":
+            lines.extend(["来源页面本次未能核验（unknown）。以下仅为基于保存片段、待人工审阅的条件分析；未确认来源当前内容与适用性。"
+                          if zh else "Live source verification was unavailable (unknown). This is a conditional analysis of saved excerpts for human review; current source content and applicability remain unconfirmed.", ""])
         requirements = item.get("requirements", [])
         if isinstance(requirements, list):
             lines.append(("对应问题：" if zh else "Addresses: ") + " / ".join(_plain_analysis(v) for v in requirements[:4]))
@@ -131,7 +139,10 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
     lines.extend(["#### 来源原文与核验状态" if zh else "#### Source text and check status", ""])
     for fact in used.values():
         lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{"title": fact.get("source_title"), "text": fact.get("saved_text")}]}, lang))
-        lines.append("  - " + ("原文词法核验：verified；不验证上方模型推断。" if zh else "Source lexical check: verified; this does not verify the model inferences above."))
+        if fact.get("status") == "verified":
+            lines.append("  - " + ("原文词法核验：verified；不验证上方模型推断。" if zh else "Source lexical check: verified; this does not verify the model inferences above."))
+        else:
+            lines.append("  - " + ("原文核验：unknown（本次网络核验未完成）；保存片段与模型分析均需人工核对。" if zh else "Source check: unknown (network verification unavailable); saved excerpts and model analysis require human checking."))
     return lines + [""]
 
 

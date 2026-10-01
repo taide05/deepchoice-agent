@@ -48,8 +48,17 @@ def make_state(*, maximum=False):
     for fact in rec["source_facts"]:
         fact["status"] = "verified"
     rec = calibrate_decision_analysis(rec)
+    from deepchoice.citations.contracts import CITATION_POLICY_VERSION
+    from deepchoice.citations.verifier import _split_sentences, _strip_citations
+    checks = []
+    for i, fact in enumerate(rec["source_facts"]):
+        for sentence in _split_sentences(fact["saved_text"]):
+            checks.append({"claim_id": f"check-{len(checks)}", "claim_path": f"final_recommendation.source_facts[{i}].text",
+                           "claim_text": _strip_citations(sentence), "source_title": fact["source_title"],
+                           "canonical_url": fact["canonical_url"], "status": "verified", "reason": "lexical_support"})
     return {"task": task, "final_recommendation": rec, "evidence_chains": chains, "retry_count": 0,
-            "citation_verification": {"status_counts": {"verified": count}}, "quality_signals": []}
+            "citation_verification": {"schema_version": 1, "policy_version": CITATION_POLICY_VERSION,
+                                      "status_counts": {"verified": len(checks)}, "checks": checks}, "quality_signals": []}
 
 
 def reviewed(rows):

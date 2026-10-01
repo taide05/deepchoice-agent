@@ -3,10 +3,11 @@
 A model review is a second inference, never semantic verification or authority.
 """
 from collections import Counter
+import json
 from copy import deepcopy
 from dataclasses import dataclass
 
-from .decision_analysis import MAX_ANALYSES, bind_decision_analysis, calibrate_decision_analysis
+from .decision_analysis import MAX_ANALYSES, bind_decision_analysis, calibrate_decision_analysis, reviewable_source_fact
 from .evidence_choices import bind_evidence_choices
 
 
@@ -42,11 +43,24 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
         recommendation, state.get("evidence_chains", []), candidates, requirements,
     )
     bound_facts = {row["id"]: row for row in rebound.get("source_facts", [])}
+    from ..citations.contracts import CitationVerification
+    from .evidence_choices import calibrate_evidence_choices
+    try:
+        verification = CitationVerification.model_validate_json(json.dumps(state.get("citation_verification", {})))
+    except (TypeError, ValueError):
+        verification = None
+    if verification is not None:
+        rebound = calibrate_evidence_choices(rebound, verification)
+        bound_facts = {row["id"]: row for row in rebound.get("source_facts", [])}
     facts = []
     for fact in recommendation.get("source_facts", []):
-        if not isinstance(fact, dict) or fact.get("status") != "verified":
+        if not isinstance(fact, dict) or not reviewable_source_fact(fact):
             continue
         bound = bound_facts.get(fact.get("id"))
+        if (verification is None or not bound or not reviewable_source_fact(bound)
+                or fact.get("status") != bound.get("status")
+                or fact.get("review_availability") != bound.get("review_availability")):
+            continue
         if bound and all(fact.get(key) == bound.get(key) for key in (
             "id", "evidence_id", "source_title", "canonical_url", "saved_text", "text",
         )):
@@ -76,7 +90,7 @@ def analysis_review_input(context: AnalysisReviewContext) -> dict:
                       for row in item["basis"]],
         } for key, item in context.slots.items()],
         "complete_saved_sources": [{
-            key: fact[key] for key in ("id", "source_title", "saved_text", "status")
+            key: fact.get(key) for key in ("id", "source_title", "saved_text", "status", "review_availability")
         } for fact in context.facts if fact["id"] in used],
     }
 
@@ -115,6 +129,8 @@ def apply_analysis_review(context: AnalysisReviewContext, response: dict | None)
         accepted = calibrate_decision_analysis(bound)["decision_analysis"]
         if len(accepted) != 1:
             continue
+        if accepted[0]["review_status"] == "network_unconfirmed_pending_review":
+            accepted[0]["review_status"] = "network_unconfirmed_human_review_required"
         kept.append(accepted[0])
         reviewed += 1
         revised += action == "revise"

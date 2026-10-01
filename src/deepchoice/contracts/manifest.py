@@ -45,15 +45,15 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v13",
-    "evidence_first": "evidence-first-v12",
-    "comparison_matrix": "comparison-matrix-v11",
+    "what_why_how": "what-why-how-v14",
+    "evidence_first": "evidence-first-v13",
+    "comparison_matrix": "comparison-matrix-v12",
 }
 PROMPT_VERSIONS = {
-    "self_reviewer.review_system": "v2",
+    "self_reviewer.review_system": "v3",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
-    "conclusion_synthesizer.synthesis_prompt": "v18",
+    "conclusion_synthesizer.synthesis_prompt": "v19",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -78,7 +78,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19"] = "v1"
     sha256: str
 
 
@@ -134,7 +134,7 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v8",
         "deterministic-citation-v9",
         "deterministic-citation-v10", "deterministic-citation-v11",
-        "deterministic-citation-v12",
+        "deterministic-citation-v12", "deterministic-citation-v13",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     gather_evidence: bool
@@ -150,7 +150,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v4"] = "research-v4"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v12"]
+    citation_policy_version: Literal["deterministic-citation-v13"]
     hitl_policy_version: Literal["evidence-insufficient-v1"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -343,7 +343,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "scoring_policy_version": "source-score-v6",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v12",
+        "citation_policy_version": "deterministic-citation-v13",
         "hitl_policy_version": "evidence-insufficient-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(
