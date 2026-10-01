@@ -29,7 +29,7 @@ from deepchoice.contracts.api import ResearchRequest
 PROTOCOL = "quality-selection-v1"
 BASE_USED = 114
 HARD_TOTAL = 156
-PHASE_LIMITS = {"baseline": 4, "candidate": 4, "followup": 4, "repair_baseline": 4, "acceptance": 24}
+PHASE_LIMITS = {"baseline": 4, "candidate": 4, "followup": 4, "repair_baseline": 4, "reviewed_candidate": 4, "acceptance": 24}
 REPAIR_PURPOSE = "restore-audited-seed-runtime-files"
 DATASETS = {
     "development": ("quality-selection-development-v1", "e230c6e28e117a7e1216e6e507431a90712013dd2a51655f2396ea0525bfc3b0"),
@@ -157,6 +157,32 @@ def validate_repair_purpose(value: dict | None) -> dict:
     _require(raw.get("phase") == "baseline", "repair must reference the original baseline")
     return load_binding(control_path, require_current=False)[0]
 
+def validate_development_authorization(ref: dict | None, ledger_identity: dict) -> dict:
+    """Audit the explicit one-time four-case grant; never infer it from capacity."""
+    _require(isinstance(ref, dict) and isinstance(ref.get("path"), str) and _hash(ref.get("sha256")),
+             "development authorization is required")
+    path = Path(ref["path"])
+    _require(file_digest(path) == ref["sha256"], "development authorization drift")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    required = {"protocol": PROTOCOL, "phase": "reviewed_candidate", "approved": True,
+                "starting_used": 127, "maximum_new_research_admissions": 4,
+                "maximum_after_development": 131, "conditional_final_cells": 24,
+                "maximum_with_final": 155, "ledger_identity_sha256": digest(ledger_identity),
+                "case_order": ["P01", "P04", "P08", "P02"]}
+    _require(all(type(value.get(key)) is type(expected) and value[key] == expected
+                 for key, expected in required.items()), "development authorization scope mismatch")
+    _require(value.get("user_confirmation") == "明确授权", "explicit user confirmation is missing")
+    return value
+
+
+def _reviewed_allocation(rows: list) -> None:
+    prior = {phase: sum(row[3] == phase for row in rows) for phase in PHASE_LIMITS
+             if phase != "reviewed_candidate"}
+    _require(prior == {"baseline": 4, "candidate": 1, "followup": 4,
+                       "repair_baseline": 4, "acceptance": 0},
+             "reviewed development requires the reconciled 127-admission history")
+
+
 def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dict[str, dict]]:
     binding = json.loads(path.read_text(encoding="utf-8"))
     _require(binding.get("schema_version") == 1 and binding.get("protocol") == PROTOCOL, "invalid binding")
@@ -171,6 +197,11 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
         _require(_hash(identity.get(field)), "missing frozen environment/asset identity")
     _require(identity["environment_sha256"] == digest(binding.get("environment"))
              and identity["source_policy_sha256"] == digest(binding.get("source_policy")), "frozen metadata drift")
+    if phase == "reviewed_candidate":
+        validate_development_authorization(binding.get("development_authorization"), binding.get("ledger_identity", {}))
+        _require(binding.get("starting_used") == 127
+                 and binding.get("comparison_mode") == "historical-baseline-different-collector-v1",
+                 "reviewed development allocation/comparison mismatch")
     repair_control = None
     if phase == "repair_baseline":
         repair_control = validate_repair_purpose(binding.get("repair_purpose"))
@@ -181,6 +212,9 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
     locked_candidate = None
     if phase == "acceptance":
         locked_candidate = load_candidate_lock(binding.get("candidate_lock"), identity["production_commit"])
+        if binding.get("starting_used", 0) >= 127:
+            _require(binding["starting_used"] == 131 and locked_candidate["phase"] == "reviewed_candidate",
+                     "acceptance must lock the newly reviewed four-case candidate")
         verify_comparison(binding, locked_candidate)
         _require(identity["core_asset_registry_id"] == locked_candidate["identity"]["core_asset_registry_id"],
                  "locked candidate assets drift")
@@ -232,17 +266,21 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
              and binding.get("ledger_identity", {}).get("protocol") == PROTOCOL
              and binding["ledger_identity"].get("base_used") == BASE_USED
              and binding["ledger_identity"].get("hard_total") == HARD_TOTAL, "invalid ledger binding")
-    if phase in {"candidate", "followup"}:
+    if phase in {"candidate", "followup", "reviewed_candidate"}:
         ref = binding["baseline_binding"]
         baseline_path = Path(ref["path"])
         _require(file_digest(baseline_path) == ref["sha256"], "baseline binding drift")
         # Check phase before recursion; a malformed reference cannot form a cycle.
         baseline_raw = json.loads(baseline_path.read_text(encoding="utf-8"))
         _require(baseline_raw.get("phase") == "baseline"
-                 or phase == "followup" and baseline_raw.get("phase") == "repair_baseline",
+                 or phase in {"followup", "reviewed_candidate"} and baseline_raw.get("phase") == "repair_baseline",
                  "comparison requires a baseline binding")
         baseline, _ = load_binding(baseline_path, require_current=False)
         verify_comparison(binding, baseline)
+        if phase == "reviewed_candidate":
+            _require(baseline_raw.get("phase") == "repair_baseline", "reviewed development requires the repair baseline")
+            _require(binding["ledger_identity"] == baseline["ledger_identity"], "reviewed development ledger drift")
+            _require([c["case_id"] for c in schedule] == ["P01", "P04", "P08", "P02"], "reviewed development order drift")
         _require(end <= _time(baseline["frozen_at"]) + timedelta(days=7),
                  "comparison window exceeds baseline window")
         prior_cells = {c["case_id"]: c for c in baseline["cells"]}
@@ -268,7 +306,10 @@ def verify_comparison(binding: dict, baseline: dict) -> None:
             "embedding_revision", "settings", "model_id", "endpoint_sha256")
     _require(Path(binding["environment"]["tavily_state_path"]).resolve()
              == Path(baseline["environment"]["tavily_state_path"]).resolve(), "shared key-state path drift")
-    _require(binding["identity"]["runner_commit"] == baseline["identity"]["runner_commit"],
+    historical = (binding.get("phase") == "reviewed_candidate"
+                  and baseline.get("phase") == "repair_baseline"
+                  and binding.get("comparison_mode") == "historical-baseline-different-collector-v1")
+    _require(historical or binding["identity"]["runner_commit"] == baseline["identity"]["runner_commit"],
              "comparison runner drift")
     _require(binding["environment"].get("knowledge_audit") == baseline["environment"].get("knowledge_audit"),
              "comparison audit identity drift")
@@ -288,9 +329,28 @@ def load_candidate_lock(lock: dict | None, production_commit: str) -> dict:
     candidate_path = Path(ref["path"])
     _require(file_digest(candidate_path) == ref["sha256"], "reviewed candidate binding drift")
     raw = json.loads(candidate_path.read_text(encoding="utf-8"))
-    _require(raw.get("phase") in {"candidate", "followup"}, "review requires a development candidate")
+    _require(raw.get("phase") in {"candidate", "followup", "reviewed_candidate"}, "review requires a development candidate")
     candidate, _ = load_binding(candidate_path, require_current=False)
     _require(candidate["identity"]["production_commit"] == production_commit, "reviewed candidate identity drift")
+    if candidate["phase"] == "reviewed_candidate":
+        ref = review.get("development_matrix", {})
+        _require(isinstance(ref.get("path"), str) and _hash(ref.get("sha256")), "closed development matrix is required")
+        matrix_path = Path(ref["path"])
+        _require(file_digest(matrix_path) == ref["sha256"], "development matrix drift")
+        matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+        _require(matrix.get("binding_sha256") == digest(candidate) and matrix.get("state") == "closed"
+                 and matrix.get("planned") == matrix.get("admitted_or_uncertain") == 4
+                 and matrix.get("stop_reason") is None, "development matrix is not complete and safe")
+        cells = matrix.get("cells", [])
+        _require(len(cells) == 4 and [c.get("cell_id") for c in cells] == [c["cell_id"] for c in candidate["cells"]]
+                 and all(c.get("status") in TERMINAL_STATUSES for c in cells), "development matrix cells drift")
+        summary = review.get("development_summary", {})
+        usable = summary.get("usable_and_supported")
+        _require(type(usable) is int and 3 <= usable <= 4
+                 and type(matrix.get("completed_consistent")) is int and usable <= matrix["completed_consistent"] <= 4
+                 and type(summary.get("critical_errors")) is int and summary["critical_errors"] == 0
+                 and summary.get("no_material_regression") is True
+                 and summary.get("independent_review_passed") is True, "development promotion gate not met")
     return candidate
 
 
@@ -362,7 +422,11 @@ class ResearchLedger:
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             rows = self._checked_rows(db)
+            if phase == "acceptance":
+                _require(sum(r[3] == "reviewed_candidate" for r in rows) == 4, "reviewed development is incomplete")
             _require(phase in PHASE_LIMITS and count == PHASE_LIMITS[phase], "invalid phase allocation")
+            if phase == "reviewed_candidate":
+                _reviewed_allocation(rows)
             _require(not any(row[3] == phase for row in rows), "phase already belongs to a frozen batch")
             _require(BASE_USED + len(rows) + count <= HARD_TOTAL, "research allocation exhausted")
 
@@ -372,11 +436,17 @@ class ResearchLedger:
             rows = self._checked_rows(db)
             used = BASE_USED + len(rows)
             phase_used = sum(row[3] == phase for row in rows)
+            if phase == "acceptance":
+                _require(sum(r[3] == "reviewed_candidate" for r in rows) == 4
+                         and used == 131 + phase_used, "reviewed development is incomplete")
             _require(phase in PHASE_LIMITS, "unallocated research phase")
             _require(used == expected_used, "research ledger changed; reconcile before admission")
             _require(used < HARD_TOTAL and phase_used < PHASE_LIMITS[phase], "research allocation exhausted")
             _require(all(row[1] == batch for row in rows if row[3] == phase),
                      "phase allocation is limited to one frozen batch")
+            if phase == "reviewed_candidate":
+                _reviewed_allocation(rows)
+                _require(used + (4 - phase_used) + 24 <= 155, "final acceptance allocation must remain reserved")
             if phase == "repair_baseline":
                 _require(used >= 119, "repair requires a reconciled batch")
             row = (used + 1, batch, cell, phase, datetime.now(UTC).isoformat())
@@ -508,6 +578,8 @@ class QualityCollector(DurableBaselineCollector):
 async def collect_batch(binding: dict, cases: dict[str, dict], root: Path,
                         ledger: ResearchLedger, client: httpx.AsyncClient) -> dict:
     """One serial pass. A claimed directory is never resumed or overwritten."""
+    if binding["phase"] == "reviewed_candidate":
+        validate_development_authorization(binding.get("development_authorization"), binding["ledger_identity"])
     binding_hash = digest(binding)
     _require(ledger.identity == binding["ledger_identity"], "research ledger identity drift")
     _require(ledger.used() == binding["starting_used"], "stale starting research ledger")
@@ -532,6 +604,8 @@ async def collect_batch(binding: dict, cases: dict[str, dict], root: Path,
                                         concurrency=1, poll_interval_seconds=1, case_timeout_seconds=1800,
                                         expected_manifest_id=cell["manifest_id"])
             def claim():
+                if binding["phase"] == "reviewed_candidate":
+                    validate_development_authorization(binding.get("development_authorization"), ledger.identity)
                 ordinal = ledger.reserve(binding_hash, cell["cell_id"], binding["phase"],
                                          expected_used=binding["starting_used"] + index)
                 # Persist uncertainty before allowing the POST, including cancellation.

@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Bind the newly authorized four-case development allocation
+
+Add one reviewed_candidate batch at reconciled usage127, with an explicit four-case authorization
+receipt, unchanged append-only ledger/witness checks and single-binding admission. Existing
+batches cannot reopen. Only this batch may compare with the repair baseline under an explicit
+historical different-collector mode; all other frozen comparison fields and the seven-day window
+remain checked. Final acceptance requires usage131, all four new admissions, a closed safe matrix
+and a passing independent development review, using the same candidate/collector identity.
+The maximum planned cumulative use is155/156; no quality threshold or retry allowance changes.
+Validation (2026-09-30):89 focused and2722 full-suite tests passed; smoke-v1 remained12/12,
+with static checks and independent boundary review passing. No new paid admission is implied.
+
 ### Review bound decision analyses before rendering
 
 Research-v4 moves the existing reviewer between deterministic citations and the single

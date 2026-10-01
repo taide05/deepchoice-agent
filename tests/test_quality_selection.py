@@ -183,6 +183,14 @@ def test_synthetic_holdout_requires_review_and_preserves_full_matrix(frozen, tmp
                          for rep in range(1, 4) for key, case in all_cases.items()]
     q.write_json(path, binding)
     assert len(q.load_binding(path)[0]["cells"]) == 24
+    historical_start = binding["starting_used"]
+    for current_start in (127, 131):
+        binding["starting_used"] = current_start
+        q.write_json(path, binding)
+        with pytest.raises(ValueError, match="newly reviewed"):
+            q.load_binding(path)
+    binding["starting_used"] = historical_start
+    q.write_json(path, binding)
     stable = deepcopy(binding)
     binding["source_policy"]["development_exposure"] = "changed"
     binding["identity"]["source_policy_sha256"] = q.digest(binding["source_policy"])
@@ -708,9 +716,13 @@ def test_one_repair_batch_never_refunds_old_calls_or_consumes_final_allocation(l
         ledger.reserve("repair", "fifth", "repair_baseline", expected_used=123)
     for i in range(4):
         ledger.reserve("followup", str(i), "followup", expected_used=123 + i)
+    with pytest.raises(ValueError, match="incomplete"):
+        ledger.reserve("acceptance", "old-lock", "acceptance", expected_used=127)
+    for i in range(4):
+        ledger.reserve("reviewed", str(i), "reviewed_candidate", expected_used=127 + i)
     for i in range(24):
-        ledger.reserve("acceptance", str(i), "acceptance", expected_used=127 + i)
-    assert ledger.used() == 151
+        ledger.reserve("acceptance", str(i), "acceptance", expected_used=131 + i)
+    assert ledger.used() == 155
     with closing(sqlite3.connect(ledger.path)) as db:
         assert db.execute("SELECT COUNT(*) FROM admissions WHERE batch LIKE 'old-%'").fetchone() == (5,)
 
@@ -742,3 +754,201 @@ def test_old_partly_used_phase_cannot_be_reallocated(ledger):
     with pytest.raises(ValueError, match="one frozen batch"):
         ledger.reserve("new-candidate", "two", "candidate", expected_used=115)
     assert ledger.used() == 115
+
+
+def fill_reviewed_history(ledger):
+    for phase, count in (("baseline", 4), ("candidate", 1), ("repair_baseline", 4), ("followup", 4)):
+        for index in range(count):
+            ledger.reserve(phase, str(index), phase, expected_used=ledger.used())
+    assert ledger.used() == 127
+
+
+def reviewed_binding(frozen, tmp_path):
+    baseline, cases, baseline_path = frozen
+    repair_binding(baseline, tmp_path)
+    q.write_json(baseline_path, baseline)
+    candidate = deepcopy(baseline)
+    candidate.pop("repair_purpose")
+    auth = {"protocol": q.PROTOCOL, "phase": "reviewed_candidate", "approved": True,
+            "starting_used": 127, "maximum_new_research_admissions": 4,
+            "maximum_after_development": 131, "conditional_final_cells": 24,
+            "maximum_with_final": 155, "ledger_identity_sha256": q.digest(candidate["ledger_identity"]),
+            "case_order": ["P01", "P04", "P08", "P02"], "user_confirmation": "明确授权"}
+    auth_path = tmp_path / "authorization.json"
+    q.write_json(auth_path, auth)
+    candidate.update(phase="reviewed_candidate", starting_used=127,
+        comparison_mode="historical-baseline-different-collector-v1",
+        baseline_binding={"path": str(baseline_path), "sha256": q.file_digest(baseline_path)},
+        development_authorization={"path": str(auth_path), "sha256": q.file_digest(auth_path)})
+    candidate["identity"]["runner_commit"] = "f" * 40
+    path = tmp_path / "reviewed.json"
+    q.write_json(path, candidate)
+    return candidate, cases, path, auth_path
+
+
+def test_reviewed_allocation_requires_exact_history_and_preserves_final24(ledger):
+    with pytest.raises(ValueError, match="127-admission"):
+        ledger.require_unused_phase("reviewed_candidate", 4)
+    with pytest.raises(ValueError, match="127-admission"):
+        ledger.reserve("reviewed", "early", "reviewed_candidate", expected_used=114)
+    fill_reviewed_history(ledger)
+    before = ledger.path.with_suffix(".admissions.jsonl").read_bytes()
+    with pytest.raises(ValueError, match="incomplete"):
+        ledger.require_unused_phase("acceptance", 24)
+    ledger.require_unused_phase("reviewed_candidate", 4)
+    def claim(i):
+        try:
+            return ledger.reserve("reviewed", str(i), "reviewed_candidate", expected_used=127)
+        except ValueError:
+            return None
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(claim, range(8)))
+    assert results.count(128) == 1
+    with pytest.raises(ValueError, match="one frozen batch"):
+        ledger.reserve("other", "other", "reviewed_candidate", expected_used=128)
+    with pytest.raises(ValueError, match="frozen batch"):
+        ledger.require_unused_phase("reviewed_candidate", 4)
+    with pytest.raises(ValueError, match="incomplete"):
+        ledger.require_unused_phase("acceptance", 24)
+    with pytest.raises(ValueError, match="incomplete"):
+        ledger.reserve("final", "premature", "acceptance", expected_used=128)
+    for i in range(3):
+        ledger.reserve("reviewed", f"next-{i}", "reviewed_candidate", expected_used=128+i)
+    assert ledger.used() == 131
+    with pytest.raises(ValueError, match="exhausted"):
+        ledger.reserve("reviewed", "fifth", "reviewed_candidate", expected_used=131)
+    for i in range(24):
+        ledger.reserve("final", str(i), "acceptance", expected_used=131+i)
+    assert ledger.used() == 155
+    assert ledger.path.with_suffix(".admissions.jsonl").read_bytes().startswith(before)
+
+
+@pytest.mark.parametrize("fault", ["missing", "tamper", "unapproved", "scope", "ledger", "order", "mode", "config", "hitl"])
+def test_reviewed_binding_refuses_authorization_or_comparison_drift(frozen, tmp_path, fault):
+    candidate, _, path, auth_path = reviewed_binding(frozen, tmp_path)
+    assert q.load_binding(path)[0] == candidate
+    if fault == "missing":
+        candidate.pop("development_authorization")
+    elif fault in {"tamper", "unapproved", "scope", "ledger"}:
+        auth = json.loads(auth_path.read_text(encoding="utf-8"))
+        if fault in {"tamper", "unapproved"}: auth["approved"] = False
+        elif fault == "scope": auth["maximum_new_research_admissions"] = 5
+        else: auth["ledger_identity_sha256"] = "0" * 64
+        q.write_json(auth_path, auth)
+        if fault != "tamper": candidate["development_authorization"]["sha256"] = q.file_digest(auth_path)
+    elif fault == "order": candidate["cells"].reverse()
+    elif fault == "mode": candidate["comparison_mode"] = "concurrent-paired"
+    elif fault == "config":
+        candidate["environment"]["configuration_sha256"] = "0" * 64
+        candidate["identity"]["environment_sha256"] = q.digest(candidate["environment"])
+    else: candidate["cells"][0]["hitl"] = {"action": "cancel"}
+    q.write_json(path, candidate)
+    with pytest.raises(ValueError):
+        q.load_binding(path)
+
+
+def test_reviewed_candidate_can_lock_but_acceptance_still_requires_same_runner(frozen, tmp_path):
+    candidate, _, path, _ = reviewed_binding(frozen, tmp_path)
+    review = tmp_path / "accepted.json"
+    matrix = tmp_path / "closed-matrix.json"
+    q.write_json(matrix, {"binding_sha256": q.digest(candidate), "state": "closed", "planned": 4,
+        "admitted_or_uncertain": 4, "completed_consistent": 4, "stop_reason": None,
+        "cells": [{"cell_id": c["cell_id"], "status": "completed"} for c in candidate["cells"]]})
+    q.write_json(review, {"accepted": True, "candidate_commit": candidate["identity"]["production_commit"],
+        "development_matrix": {"path": str(matrix), "sha256": q.file_digest(matrix)},
+        "development_summary": {"usable_and_supported": 3, "critical_errors": 0,
+                                "no_material_regression": True, "independent_review_passed": True},
+        "candidate_binding": {"path": str(path), "sha256": q.file_digest(path)}})
+    lock = {"path": str(review), "development_review_sha256": q.file_digest(review),
+            "production_commit": candidate["identity"]["production_commit"]}
+    assert q.load_candidate_lock(lock, candidate["identity"]["production_commit"]) == candidate
+    changed = deepcopy(candidate)
+    changed["identity"]["runner_commit"] = "e" * 40
+    with pytest.raises(ValueError, match="runner drift"):
+        q.verify_comparison(changed, candidate)
+
+
+@pytest.mark.parametrize("mode,admitted", [("success", 4), ("uncertain", 1), ("budget", 1)])
+async def test_reviewed_candidate_uses_real_ledger_and_existing_stop_contract(frozen, ledger, tmp_path, mode, admitted):
+    fill_reviewed_history(ledger)
+    candidate, cases, path, _ = reviewed_binding(frozen, tmp_path)
+    candidate, _ = q.load_binding(path)
+    service = FakeService(candidate, mode)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(service), base_url="http://test") as client:
+        result = await q.collect_batch(candidate, cases, tmp_path / "reviewed-output", ledger, client)
+    assert len(service.posts) == admitted and ledger.used() == 127 + admitted
+    assert result["planned"] == 4 and result["quality_review"] == "not_evaluated"
+    assert all(c["status"] == "not_submitted" for c in result["cells"][admitted:])
+
+
+@pytest.mark.parametrize("fault", ["absent", "running", "short", "unsafe", "wrong-binding", "critical", "two-pass", "no-independent"])
+def test_reviewed_promotion_refuses_incomplete_or_failed_evidence(frozen, tmp_path, fault):
+    candidate, _, path, _ = reviewed_binding(frozen, tmp_path)
+    matrix = {"binding_sha256": q.digest(candidate), "state": "closed", "planned": 4,
+        "admitted_or_uncertain": 4, "completed_consistent": 4, "stop_reason": None,
+        "cells": [{"cell_id": c["cell_id"], "status": "completed"} for c in candidate["cells"]]}
+    summary = {"usable_and_supported": 3, "critical_errors": 0, "no_material_regression": True, "independent_review_passed": True}
+    if fault == "running": matrix["state"] = "running"
+    elif fault == "short": matrix["admitted_or_uncertain"] = 3
+    elif fault == "unsafe": matrix["stop_reason"] = "BUDGET_STATE_UNVERIFIED"
+    elif fault == "wrong-binding": matrix["binding_sha256"] = "0"*64
+    elif fault == "critical": summary["critical_errors"] = 1
+    elif fault == "two-pass": summary["usable_and_supported"] = 2
+    elif fault == "no-independent": summary["independent_review_passed"] = False
+    matrix_path = tmp_path / "matrix.json"
+    q.write_json(matrix_path, matrix)
+    review = {"accepted": True, "candidate_commit": candidate["identity"]["production_commit"],
+              "candidate_binding": {"path": str(path), "sha256": q.file_digest(path)}, "development_summary": summary}
+    if fault != "absent": review["development_matrix"] = {"path": str(matrix_path), "sha256": q.file_digest(matrix_path)}
+    review_path = tmp_path / "review.json"
+    q.write_json(review_path, review)
+    lock = {"path": str(review_path), "development_review_sha256": q.file_digest(review_path), "production_commit": candidate["identity"]["production_commit"]}
+    with pytest.raises(ValueError): q.load_candidate_lock(lock, candidate["identity"]["production_commit"])
+
+
+def test_reviewed_runtime_freeze_checks_authorization_before_copy_and_roundtrips(frozen, tmp_path, monkeypatch):
+    candidate, cases, _, auth_path = reviewed_binding(frozen, tmp_path)
+    runner = tmp_path / "runner"
+    runner.mkdir()
+    new_ledger = q.ResearchLedger.initialize(runner / "outputs/quality-selection-v1-ledger.sqlite3", tmp_path / "reconciliation.json")
+    fill_reviewed_history(new_ledger)
+    auth = json.loads(auth_path.read_text(encoding="utf-8"))
+    # Real execution reuses one ledger. Align this isolated runner fixture and baseline.
+    baseline_path = Path(candidate["baseline_binding"]["path"])
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    original_path = Path(baseline["repair_purpose"]["original_baseline_binding"]["path"])
+    original = json.loads(original_path.read_text(encoding="utf-8"))
+    original["ledger_identity"] = new_ledger.identity
+    q.write_json(original_path, original)
+    baseline["ledger_identity"] = new_ledger.identity
+    baseline["repair_purpose"]["original_baseline_binding"]["sha256"] = q.file_digest(original_path)
+    q.write_json(baseline_path, baseline)
+    auth["ledger_identity_sha256"] = q.digest(new_ledger.identity)
+    q.write_json(auth_path, auth)
+    environment = deepcopy(candidate["environment"])
+    copies = []
+    monkeypatch.setattr(runtime, "runner_root", lambda: runner)
+    monkeypatch.setattr(runtime, "clean_commit", lambda _: "f" * 40)
+    monkeypatch.setattr(runtime, "environment_identity", lambda *_: environment)
+    monkeypatch.setattr(runtime, "_preflight_compatible", lambda *_: {"ended_at": datetime.now(UTC).isoformat()})
+    monkeypatch.setattr(runtime, "copy_audited_seed", lambda *args: copies.append(args) or environment["knowledge_audit"])
+    preflight = tmp_path / "preflight.json"
+    q.write_json(preflight, {})
+    spec = {"phase": "reviewed_candidate", "production_root": str(runner), "seed_path": str(tmp_path / "seed"),
+        "seed_sha256": environment["knowledge_sha256"], "preflight_path": str(preflight),
+        "source_policy": candidate["source_policy"], "datasets": candidate["datasets"],
+        "hitl": {c["case_id"]: c["hitl"] for c in candidate["cells"]},
+        "baseline_binding_path": str(baseline_path),
+        "development_authorization": {"path": str(auth_path), "sha256": "0"*64}}
+    spec_path = tmp_path / "spec.json"
+    q.write_json(spec_path, spec)
+    destination = tmp_path / "new-batch/binding.json"
+    with pytest.raises(ValueError, match="authorization drift"):
+        runtime.freeze(spec_path, destination, object())
+    assert not copies and not destination.parent.exists()
+    spec["development_authorization"]["sha256"] = q.file_digest(auth_path)
+    q.write_json(spec_path, spec)
+    result = runtime.freeze(spec_path, destination, object())
+    assert len(copies) == 1 and result["starting_used"] == 127
+    assert result["comparison_mode"] == "historical-baseline-different-collector-v1"
+    assert q.load_binding(destination)[0] == result and new_ledger.used() == 127

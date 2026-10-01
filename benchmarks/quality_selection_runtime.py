@@ -178,7 +178,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     from benchmarks.quality_selection import (
         BASE_USED, PHASE_LIMITS, PROTOCOL, RUN_LIMITS, STOP_POLICY, ResearchLedger,
         _require, _time, digest, file_digest, load_binding, load_cases, write_json,
-        load_candidate_lock, verify_comparison, validate_repair_purpose,
+        load_candidate_lock, verify_comparison, validate_repair_purpose, validate_development_authorization,
     )
     from deepchoice.contracts.api import ResearchRequest
     from deepchoice.contracts.manifest import build_core_asset_registry, build_run_manifest
@@ -193,8 +193,11 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
         _require(commit == repair_control["identity"]["production_commit"], "repair control production drift")
     ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
     ledger.require_unused_phase(phase, PHASE_LIMITS[phase])
+    if phase == "reviewed_candidate":
+        validate_development_authorization(spec.get("development_authorization"), ledger.identity)
     lock = None
     if phase == "acceptance":
+        _require(ledger.used() == 131, "acceptance requires the completed reviewed development allocation")
         lock_path = Path(spec["candidate_lock_path"])
         lock_value = json.loads(lock_path.read_text(encoding="utf-8"))
         _require(lock_value.get("accepted") is True and lock_value.get("candidate_commit") == commit,
@@ -214,6 +217,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
              and bool(source_policy["development_exposure"]), "source policy disclosure is required")
     if lock is not None:
         candidate = load_candidate_lock(lock, commit)
+        _require(candidate["phase"] == "reviewed_candidate", "acceptance must lock the newly reviewed candidate")
         verify_comparison({"identity": {"runner_commit": runner_commit},
                            "environment": source_environment, "source_policy": source_policy}, candidate)
     # Environment and review lock are checked before exposing holdout inputs.
@@ -225,6 +229,10 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     environment = {**source_environment, "knowledge_root": str(knowledge.resolve())}
     started = datetime.now(UTC)
     until = min(started + timedelta(days=7), _time(preflight["ended_at"]) + timedelta(days=7))
+    if phase in {"candidate", "followup", "reviewed_candidate"}:
+        baseline = load_binding(Path(spec["baseline_binding_path"]), require_current=False)[0]
+        until = min(until, _time(baseline["frozen_at"]) + timedelta(days=7))
+        _require(started < until, "comparison baseline window expired")
     binding = {
         "schema_version": 1, "protocol": PROTOCOL, "phase": phase,
         "frozen_at": started.isoformat(), "valid_until": until.isoformat(),
@@ -237,6 +245,9 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
         "stop_policy": STOP_POLICY, "starting_used": ledger.used(), "ledger_base_used": BASE_USED,
         "ledger_identity": ledger.identity, "cells": [],
     }
+    if phase == "reviewed_candidate":
+        binding["development_authorization"] = spec["development_authorization"]
+        binding["comparison_mode"] = "historical-baseline-different-collector-v1"
     if phase == "repair_baseline":
         binding["repair_purpose"] = spec["repair_purpose"]
     order = list(cases)
@@ -255,7 +266,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
                 "manifest_id": build_run_manifest(ResearchRequest.model_validate(case["request"]).model_dump(exclude_none=True)).manifest_id,
                 "hitl": hitl,
             })
-    if phase in {"candidate", "followup"}:
+    if phase in {"candidate", "followup", "reviewed_candidate"}:
         baseline_path = Path(spec["baseline_binding_path"]).resolve()
         binding["baseline_binding"] = {"path": str(baseline_path), "sha256": file_digest(baseline_path)}
     write_json(destination, binding, exclusive=True)

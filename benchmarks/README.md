@@ -25,7 +25,7 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   必须先核实历史累计及新协议尚无准入；不能编造凭据以重置额度。固定账本位于采集器
   checkout 的 `outputs/quality-selection-v1-ledger.sqlite3`，另有身份及逐笔准入见证文件；
   一起保存。冻结/采集不会自动建库，缺文件、身份不符或两份准入记录不一致均须先对账。
-- spec 包含 `phase`（`baseline/candidate/followup/repair_baseline/acceptance`）、`production_root`、
+- spec 包含 `phase`（`baseline/candidate/followup/repair_baseline/reviewed_candidate/acceptance`）、`production_root`、
   `seed_path`/`seed_sha256`、`preflight_path`、`datasets`、`source_policy` 和开发例 `hitl`。
   dataset 项为 `split/path/sha256`，只能引用已冻结版本。来源政策必须声明
   `holdout_reference_ingestion:false`，并用 `development_exposure` 说明开发材料与知识种子的关系。
@@ -40,6 +40,19 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   `original_baseline_binding` 各提供 `path/sha256`。必须匹配已关闭事故、原控制组生产提交、
   四格请求/manifest/HITL、配置与账本；修复允许知识身份改变，并要求234项审定索引。
   新 `followup` 可以比较该维修基线；原 `candidate` 不能借此重开。实际分配仍受156总上限。
+- `reviewed_candidate` 是2026-09-30新增明确授权的独立4格：P01/P04/P08/P02各一次，
+  起点必须为127，旧相位计数必须是baseline4/candidate1/repair_baseline4/followup4，
+  不能重开旧followup。spec/binding 的 `development_authorization` 提供本地凭据path/SHA；
+  核对approved、相位、顺序、127→131及晋级后24→155，并在每格准入前复核文件。
+  该相位对维修基线使用 `historical-baseline-different-collector-v1`：在原须相同的对照字段中，
+  仅放宽runner_commit；生产提交与核心资产按各自binding分别冻结。请求、HITL、模型、
+  配置、依赖、种子、来源政策和七天窗口仍须一致。历史基线与新候选
+  不同时运行，不能称为同期配对实验；冻结截止取前置凭据和基线七天窗口的较早者。
+  当前acceptance必须从131起点、四格新开发均已准入且锁定此候选。新评审锁另需
+  `development_matrix` path/SHA，绑定同一候选的closed/4 planned/4 admitted/无安全停止
+  矩阵和四个终态；`development_summary` 明示usable_and_supported≥3、critical_errors=0、
+  no_material_regression=true、independent_review_passed=true。原始评分不由运行器推断。
+  新候选与最终验收仍严格相同采集器提交；未完成或未晋级不得挪用最终24格。
 - 知识种子恰含 `chroma/`、`learned_docs.json`、`chunks.json`、`seed-manifest.json`。
   审定文件参与检索行为，不能当作可丢弃的构建附件。复制前后和启动时校验整树字节身份、
   审定索引数量/哈希、侧车文件哈希、SQLite完整性与文件边界；链接、待处理WAL等拒绝。
@@ -48,7 +61,8 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   freeze 会复制停止状态的知识种子；serve 在导入工作流前设置隔离路径。耗尽的 Tavily key
   状态沿用同一绝对路径并核对启动前哈希，禁止强制 reprobe，不重置供应商配额。
 - 每批单 worker、串行、新产品/检查点库，停止根不续跑。每格在提交前保守占用额度；
-  未知提交和取消不退款。开发三批各最多4次，最终最多24次；专项6次中的4次仅供上述维修基线。
+  未知提交和取消不退款。原开发相位和维修基线各最多4次；新增reviewed_candidate最多4次，最终最多24次。
+  新分配后累计最多155/156；旧准入不退款、旧未提交格不重开。
   每相位只允许一个获得准入的binding：已有准入后拒绝再冻结，准入事务拒绝跨binding续记。
   所有格先写入 `matrix.json`，未提交格保留原因；`runs.jsonl`、准入、正文/快照/Markdown
   导出均分格保存。运行异常立即关闭本批，新批次先对账，不重试未知 POST。
