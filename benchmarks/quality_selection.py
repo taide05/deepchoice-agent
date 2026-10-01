@@ -29,7 +29,7 @@ from deepchoice.contracts.api import ResearchRequest
 PROTOCOL = "quality-selection-v1"
 BASE_USED = 114
 HARD_TOTAL = 156
-PHASE_LIMITS = {"baseline": 4, "candidate": 4, "followup": 4, "repair_baseline": 4, "reviewed_candidate": 4, "acceptance": 24}
+PHASE_LIMITS = {"baseline": 4, "candidate": 4, "followup": 4, "repair_baseline": 4, "reviewed_candidate": 4, "delivery_candidate": 4, "acceptance": 24}
 REPAIR_PURPOSE = "restore-audited-seed-runtime-files"
 DATASETS = {
     "development": ("quality-selection-development-v1", "e230c6e28e117a7e1216e6e507431a90712013dd2a51655f2396ea0525bfc3b0"),
@@ -175,9 +175,37 @@ def validate_development_authorization(ref: dict | None, ledger_identity: dict) 
     return value
 
 
+def validate_budget_extension(ref: dict | None, ledger_identity: dict) -> dict:
+    """One explicit 2026-10-01 grant, independent of the immutable v1 identity."""
+    _require(isinstance(ref, dict) and isinstance(ref.get("path"), str) and _hash(ref.get("sha256")),
+             "budget extension authorization is required")
+    path = Path(ref["path"])
+    _require(file_digest(path) == ref["sha256"], "budget extension authorization drift")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    required = {"protocol": PROTOCOL, "phase": "delivery_candidate", "approved": True,
+                "starting_used": 131, "maximum_new_research_admissions": 4,
+                "maximum_after_development": 135, "conditional_final_cells": 24,
+                "previous_hard_total": 156, "maximum_with_final": 159,
+                "ledger_identity_sha256": digest(ledger_identity),
+                "case_order": ["P01", "P04", "P08", "P02"],
+                "user_confirmation": "确认。以及解释为什么最终是24次？"}
+    _require(all(type(value.get(key)) is type(expected) and value[key] == expected
+                 for key, expected in required.items()) and _hash(value.get("prior_admissions_sha256")),
+             "budget extension authorization scope mismatch")
+    return value
+
+
+def _delivery_allocation(rows: list) -> None:
+    prior = {phase: sum(row[3] == phase for row in rows)
+             for phase in PHASE_LIMITS if phase not in {"delivery_candidate", "acceptance"}}
+    _require(prior == {"baseline": 4, "candidate": 1, "followup": 4,
+                       "repair_baseline": 4, "reviewed_candidate": 4},
+             "delivery development requires the reconciled 131-admission history")
+
+
 def _reviewed_allocation(rows: list) -> None:
     prior = {phase: sum(row[3] == phase for row in rows) for phase in PHASE_LIMITS
-             if phase != "reviewed_candidate"}
+             if phase not in {"reviewed_candidate", "delivery_candidate"}}
     _require(prior == {"baseline": 4, "candidate": 1, "followup": 4,
                        "repair_baseline": 4, "acceptance": 0},
              "reviewed development requires the reconciled 127-admission history")
@@ -202,6 +230,15 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
         _require(binding.get("starting_used") == 127
                  and binding.get("comparison_mode") == "historical-baseline-different-collector-v1",
                  "reviewed development allocation/comparison mismatch")
+    extended = phase == "delivery_candidate" or binding.get("budget_extension") is not None
+    if extended:
+        _require(phase in {"delivery_candidate", "acceptance"}, "extension cannot reopen an old phase")
+        validate_budget_extension(binding.get("budget_extension"), binding.get("ledger_identity", {}))
+        _require(binding.get("starting_used") == (131 if phase == "delivery_candidate" else 135),
+                 "extended allocation starting count mismatch")
+    if phase == "delivery_candidate":
+        _require(binding.get("comparison_mode") == "historical-baseline-different-collector-v1",
+                 "delivery comparison mode mismatch")
     repair_control = None
     if phase == "repair_baseline":
         repair_control = validate_repair_purpose(binding.get("repair_purpose"))
@@ -213,7 +250,9 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
     if phase == "acceptance":
         locked_candidate = load_candidate_lock(binding.get("candidate_lock"), identity["production_commit"])
         if binding.get("starting_used", 0) >= 127:
-            _require(binding["starting_used"] == 131 and locked_candidate["phase"] == "reviewed_candidate",
+            _require(binding["starting_used"] == (135 if extended else 131)
+                     and locked_candidate["phase"] == ("delivery_candidate" if extended else "reviewed_candidate")
+                     and binding.get("budget_extension") == locked_candidate.get("budget_extension"),
                      "acceptance must lock the newly reviewed four-case candidate")
         verify_comparison(binding, locked_candidate)
         _require(identity["core_asset_registry_id"] == locked_candidate["identity"]["core_asset_registry_id"],
@@ -260,25 +299,27 @@ def load_binding(path: Path, *, require_current: bool = True) -> tuple[dict, dic
     _require(0 < (end - start).total_seconds() <= 7 * 86400, "comparison window exceeds seven days")
     if require_current:
         _require(start <= datetime.now(UTC) <= end, "binding is outside its frozen window")
-    _require(type(binding.get("starting_used")) is int and BASE_USED <= binding["starting_used"] <= HARD_TOTAL - len(schedule),
+    _require(type(binding.get("starting_used")) is int and BASE_USED <= binding["starting_used"] <= (159 if extended else HARD_TOTAL) - len(schedule),
              "research ledger would exceed hard cap")
     _require(binding.get("ledger_base_used") == BASE_USED
              and binding.get("ledger_identity", {}).get("protocol") == PROTOCOL
              and binding["ledger_identity"].get("base_used") == BASE_USED
              and binding["ledger_identity"].get("hard_total") == HARD_TOTAL, "invalid ledger binding")
-    if phase in {"candidate", "followup", "reviewed_candidate"}:
+    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate"}:
         ref = binding["baseline_binding"]
         baseline_path = Path(ref["path"])
         _require(file_digest(baseline_path) == ref["sha256"], "baseline binding drift")
         # Check phase before recursion; a malformed reference cannot form a cycle.
         baseline_raw = json.loads(baseline_path.read_text(encoding="utf-8"))
-        _require(baseline_raw.get("phase") == "baseline"
-                 or phase in {"followup", "reviewed_candidate"} and baseline_raw.get("phase") == "repair_baseline",
-                 "comparison requires a baseline binding")
+        _require((phase == "delivery_candidate" and baseline_raw.get("phase") == "reviewed_candidate")
+                 or (phase != "delivery_candidate" and (baseline_raw.get("phase") == "baseline"
+                     or phase in {"followup", "reviewed_candidate"} and baseline_raw.get("phase") == "repair_baseline")),
+                 "comparison requires the correct historical baseline binding")
         baseline, _ = load_binding(baseline_path, require_current=False)
         verify_comparison(binding, baseline)
-        if phase == "reviewed_candidate":
-            _require(baseline_raw.get("phase") == "repair_baseline", "reviewed development requires the repair baseline")
+        if phase in {"reviewed_candidate", "delivery_candidate"}:
+            expected_baseline = "reviewed_candidate" if phase == "delivery_candidate" else "repair_baseline"
+            _require(baseline_raw.get("phase") == expected_baseline, "development requires the correct historical baseline")
             _require(binding["ledger_identity"] == baseline["ledger_identity"], "reviewed development ledger drift")
             _require([c["case_id"] for c in schedule] == ["P01", "P04", "P08", "P02"], "reviewed development order drift")
         _require(end <= _time(baseline["frozen_at"]) + timedelta(days=7),
@@ -306,8 +347,8 @@ def verify_comparison(binding: dict, baseline: dict) -> None:
             "embedding_revision", "settings", "model_id", "endpoint_sha256")
     _require(Path(binding["environment"]["tavily_state_path"]).resolve()
              == Path(baseline["environment"]["tavily_state_path"]).resolve(), "shared key-state path drift")
-    historical = (binding.get("phase") == "reviewed_candidate"
-                  and baseline.get("phase") == "repair_baseline"
+    historical = ((binding.get("phase"), baseline.get("phase")) in {
+                    ("reviewed_candidate", "repair_baseline"), ("delivery_candidate", "reviewed_candidate")}
                   and binding.get("comparison_mode") == "historical-baseline-different-collector-v1")
     _require(historical or binding["identity"]["runner_commit"] == baseline["identity"]["runner_commit"],
              "comparison runner drift")
@@ -329,10 +370,10 @@ def load_candidate_lock(lock: dict | None, production_commit: str) -> dict:
     candidate_path = Path(ref["path"])
     _require(file_digest(candidate_path) == ref["sha256"], "reviewed candidate binding drift")
     raw = json.loads(candidate_path.read_text(encoding="utf-8"))
-    _require(raw.get("phase") in {"candidate", "followup", "reviewed_candidate"}, "review requires a development candidate")
+    _require(raw.get("phase") in {"candidate", "followup", "reviewed_candidate", "delivery_candidate"}, "review requires a development candidate")
     candidate, _ = load_binding(candidate_path, require_current=False)
     _require(candidate["identity"]["production_commit"] == production_commit, "reviewed candidate identity drift")
-    if candidate["phase"] == "reviewed_candidate":
+    if candidate["phase"] in {"reviewed_candidate", "delivery_candidate"}:
         ref = review.get("development_matrix", {})
         _require(isinstance(ref.get("path"), str) and _hash(ref.get("sha256")), "closed development matrix is required")
         matrix_path = Path(ref["path"])
@@ -400,6 +441,38 @@ class ResearchLedger:
         with closing(sqlite3.connect(self.path.as_uri() + "?mode=rw", uri=True, timeout=5)) as db, db:
             yield db
 
+    def _extension(self, db) -> dict | None:
+        table = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='budget_extensions'").fetchone()
+        rows = db.execute("SELECT value FROM budget_extensions").fetchall() if table else []
+        witness = self.path.with_suffix(".extension.json")
+        if not table and not witness.exists():
+            return None
+        _require(len(rows) == 1 and witness.exists(), "budget extension witness mismatch")
+        ref = json.loads(rows[0][0])
+        _require(json.loads(witness.read_text(encoding="utf-8")) == ref, "budget extension witness mismatch")
+        validate_budget_extension(ref, self.identity)
+        return ref
+
+    def authorize_extension(self, ref: dict) -> None:
+        """Explicit grant installation; never called automatically by freeze/collect."""
+        grant = validate_budget_extension(ref, self.identity)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = self._checked_rows(db)
+            _require(self._extension(db) is None, "budget extension already installed")
+            _delivery_allocation(rows)
+            _require(BASE_USED + len(rows) == 131 and digest(rows) == grant["prior_admissions_sha256"],
+                     "budget extension historical admissions mismatch")
+            db.execute("CREATE TABLE IF NOT EXISTS budget_extensions (value TEXT NOT NULL)")
+            db.execute("INSERT INTO budget_extensions VALUES (?)", (json.dumps(ref, sort_keys=True),))
+            write_json(self.path.with_suffix(".extension.json"), ref, exclusive=True)
+
+    def extension_ref(self) -> dict | None:
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._checked_rows(db)
+            return self._extension(db)
+
     def _checked_rows(self, db) -> list:
         identities = db.execute("SELECT value FROM identity").fetchall()
         _require(len(identities) == 1 and json.loads(identities[0][0]) == self.identity,
@@ -410,6 +483,15 @@ class ResearchLedger:
         _require([list(row) for row in rows] == journal
                  and [row[0] for row in rows] == list(range(BASE_USED + 1, BASE_USED + len(rows) + 1)),
                  "research ledger/journal mismatch; reconcile before admission")
+        extension = self._extension(db)
+        _require(all(row[3] in PHASE_LIMITS for row in rows), "unknown research phase")
+        if extension is None:
+            _require(not any(row[3] == "delivery_candidate" for row in rows)
+                     and BASE_USED + len(rows) <= HARD_TOTAL, "budget extension is missing")
+        else:
+            grant = validate_budget_extension(extension, self.identity)
+            _require(len(rows) >= 17 and digest(rows[:17]) == grant["prior_admissions_sha256"]
+                     and BASE_USED + len(rows) <= 159, "budget extension history drift")
         return rows
 
     def used(self) -> int:
@@ -417,31 +499,47 @@ class ResearchLedger:
             db.execute("BEGIN IMMEDIATE")
             return BASE_USED + len(self._checked_rows(db))
 
-    def require_unused_phase(self, phase: str, count: int) -> None:
+    def require_unused_phase(self, phase: str, count: int, *, budget_extension: dict | None = None) -> None:
         """Preparation only; actual admission remains serialized in reserve()."""
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             rows = self._checked_rows(db)
+            extension = self._extension(db)
+            if phase == "delivery_candidate" or extension is not None:
+                _require(extension is not None and budget_extension == extension, "budget extension binding mismatch")
+                _require(phase in {"delivery_candidate", "acceptance"}, "extension cannot reopen an old phase")
+                _delivery_allocation(rows)
             if phase == "acceptance":
-                _require(sum(r[3] == "reviewed_candidate" for r in rows) == 4, "reviewed development is incomplete")
+                candidate_phase = "delivery_candidate" if extension else "reviewed_candidate"
+                _require(sum(r[3] == candidate_phase for r in rows) == 4, "reviewed development is incomplete")
             _require(phase in PHASE_LIMITS and count == PHASE_LIMITS[phase], "invalid phase allocation")
             if phase == "reviewed_candidate":
                 _reviewed_allocation(rows)
             _require(not any(row[3] == phase for row in rows), "phase already belongs to a frozen batch")
-            _require(BASE_USED + len(rows) + count <= HARD_TOTAL, "research allocation exhausted")
+            _require(BASE_USED + len(rows) + count <= (159 if extension else HARD_TOTAL), "research allocation exhausted")
 
-    def reserve(self, batch: str, cell: str, phase: str, *, expected_used: int) -> int:
+    def reserve(self, batch: str, cell: str, phase: str, *, expected_used: int,
+                budget_extension: dict | None = None) -> int:
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             rows = self._checked_rows(db)
             used = BASE_USED + len(rows)
             phase_used = sum(row[3] == phase for row in rows)
+            extension = self._extension(db)
+            if phase == "delivery_candidate" or extension is not None:
+                _require(extension is not None and budget_extension == extension, "budget extension binding mismatch")
+                _require(phase in {"delivery_candidate", "acceptance"}, "extension cannot reopen an old phase")
+                _delivery_allocation(rows)
+                if phase == "delivery_candidate":
+                    _require(used == 131 + phase_used, "delivery allocation history mismatch")
             if phase == "acceptance":
-                _require(sum(r[3] == "reviewed_candidate" for r in rows) == 4
-                         and used == 131 + phase_used, "reviewed development is incomplete")
+                candidate_phase = "delivery_candidate" if extension else "reviewed_candidate"
+                start = 135 if extension else 131
+                _require(sum(r[3] == candidate_phase for r in rows) == 4
+                         and used == start + phase_used, "reviewed development is incomplete")
             _require(phase in PHASE_LIMITS, "unallocated research phase")
             _require(used == expected_used, "research ledger changed; reconcile before admission")
-            _require(used < HARD_TOTAL and phase_used < PHASE_LIMITS[phase], "research allocation exhausted")
+            _require(used < (159 if extension else HARD_TOTAL) and phase_used < PHASE_LIMITS[phase], "research allocation exhausted")
             _require(all(row[1] == batch for row in rows if row[3] == phase),
                      "phase allocation is limited to one frozen batch")
             if phase == "reviewed_candidate":
@@ -580,6 +678,9 @@ async def collect_batch(binding: dict, cases: dict[str, dict], root: Path,
     """One serial pass. A claimed directory is never resumed or overwritten."""
     if binding["phase"] == "reviewed_candidate":
         validate_development_authorization(binding.get("development_authorization"), binding["ledger_identity"])
+    if binding["phase"] == "delivery_candidate" or binding.get("budget_extension") is not None:
+        validate_budget_extension(binding.get("budget_extension"), binding["ledger_identity"])
+    _require(ledger.extension_ref() == binding.get("budget_extension"), "budget extension binding mismatch")
     binding_hash = digest(binding)
     _require(ledger.identity == binding["ledger_identity"], "research ledger identity drift")
     _require(ledger.used() == binding["starting_used"], "stale starting research ledger")
@@ -607,7 +708,8 @@ async def collect_batch(binding: dict, cases: dict[str, dict], root: Path,
                 if binding["phase"] == "reviewed_candidate":
                     validate_development_authorization(binding.get("development_authorization"), ledger.identity)
                 ordinal = ledger.reserve(binding_hash, cell["cell_id"], binding["phase"],
-                                         expected_used=binding["starting_used"] + index)
+                                         expected_used=binding["starting_used"] + index,
+                                         budget_extension=binding.get("budget_extension"))
                 # Persist uncertainty before allowing the POST, including cancellation.
                 summary["cells"][index].update(status="admitted_or_uncertain",
                                                reason="submission_requires_reconciliation",

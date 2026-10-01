@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Extend the explicitly authorized development allocation
+
+Add one delivery_candidate batch (131→135) and conditional final acceptance (135→159), following the
+2026-10-01 user confirmation. Preserve the original156 ledger identity and admissions; install a
+hash-bound grant as an additive database record with a separate write-ahead witness. Every admission
+checks both records and exact phase counts. Compare the recent reviewed_candidate batch under the
+same frozen inputs; final acceptance requires the new candidate's promotion and unchanged runner.
+Validation:2779 full tests,112 focused tests,12/12 offline smoke, static checks and independent review.
+
 ### Preserve reviewable conditional analysis through bounded delivery
 
 Classify prose binding failures without retaining model text. Synthesis v19 selects an independently

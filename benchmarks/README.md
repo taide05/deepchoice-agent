@@ -1,6 +1,6 @@
 # 评估工具入口
 
-更新：2026-09-30。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
+更新：2026-10-01。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 判据见[quality-selection-v1](../docs/product-effectiveness-optimization.md)，实际预算与结果见
 [当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存。
 新串行运行适配已执行首批开发对照，但发现准备过程遗漏运行时种子审定文件，且候选触发预算停止。
@@ -25,7 +25,7 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   必须先核实历史累计及新协议尚无准入；不能编造凭据以重置额度。固定账本位于采集器
   checkout 的 `outputs/quality-selection-v1-ledger.sqlite3`，另有身份及逐笔准入见证文件；
   一起保存。冻结/采集不会自动建库，缺文件、身份不符或两份准入记录不一致均须先对账。
-- spec 包含 `phase`（`baseline/candidate/followup/repair_baseline/reviewed_candidate/acceptance`）、`production_root`、
+- spec 包含 `phase`（`baseline/candidate/followup/repair_baseline/reviewed_candidate/delivery_candidate/acceptance`）、`production_root`、
   `seed_path`/`seed_sha256`、`preflight_path`、`datasets`、`source_policy` 和开发例 `hitl`。
   dataset 项为 `split/path/sha256`，只能引用已冻结版本。来源政策必须声明
   `holdout_reference_ingestion:false`，并用 `development_exposure` 说明开发材料与知识种子的关系。
@@ -48,11 +48,21 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   仅放宽runner_commit；生产提交与核心资产按各自binding分别冻结。请求、HITL、模型、
   配置、依赖、种子、来源政策和七天窗口仍须一致。历史基线与新候选
   不同时运行，不能称为同期配对实验；冻结截止取前置凭据和基线七天窗口的较早者。
-  当前acceptance必须从131起点、四格新开发均已准入且锁定此候选。新评审锁另需
+  该历史分配的acceptance从131起点、四格新开发均已准入且锁定此候选。新评审锁另需
   `development_matrix` path/SHA，绑定同一候选的closed/4 planned/4 admitted/无安全停止
   矩阵和四个终态；`development_summary` 明示usable_and_supported≥3、critical_errors=0、
   no_material_regression=true、independent_review_passed=true。原始评分不由运行器推断。
   新候选与最终验收仍严格相同采集器提交；未完成或未晋级不得挪用最终24格。
+- `delivery_candidate`是2026-10-01确认的新增4格，131→135；晋级后的最终24格为135→159。
+  先用`python -m benchmarks.quality_selection_runtime authorize-extension --authorization <grant.json>`
+  显式安装一次授权。固定字段包含旧/新上限156/159、起点131、开发4格、条件最终24格、
+  原ledger identity摘要、前17条准入摘要和用户确认；安装核对实际历史，不据文件自称重置额度。
+  账本追加`budget_extensions`单条记录，`.extension.json`保存独立写前见证，两者缺失/不符、
+  授权文件hash变化或提交中断均停止。原identity中的156及历史binding保持可读。
+  spec/binding须提供同一`budget_extension` path/SHA，freeze、collect和每格串行准入均核对。
+  新开发只可比较最近reviewed_candidate的4例，历史比较仅允许runner_commit不同；其余身份、
+  原请求/HITL/种子、来源政策和七天窗口不变。最终必须锁定新delivery候选、完整四格评审及
+  相同生产/采集器身份；不能借旧reviewed候选锁跳过新开发。旧批次不得重开。
 - 知识种子恰含 `chroma/`、`learned_docs.json`、`chunks.json`、`seed-manifest.json`。
   审定文件参与检索行为，不能当作可丢弃的构建附件。复制前后和启动时校验整树字节身份、
   审定索引数量/哈希、侧车文件哈希、SQLite完整性与文件边界；链接、待处理WAL等拒绝。
@@ -62,7 +72,7 @@ python -m benchmarks.quality_selection collect --binding <fresh-root/binding.jso
   状态沿用同一绝对路径并核对启动前哈希，禁止强制 reprobe，不重置供应商配额。
 - 每批单 worker、串行、新产品/检查点库，停止根不续跑。每格在提交前保守占用额度；
   未知提交和取消不退款。原开发相位和维修基线各最多4次；新增reviewed_candidate最多4次，最终最多24次。
-  新分配后累计最多155/156；旧准入不退款、旧未提交格不重开。
+  原reviewed分配累计最多155/156；2026-10-01扩展后最多159，旧准入不退款、旧未提交格不重开。
   每相位只允许一个获得准入的binding：已有准入后拒绝再冻结，准入事务拒绝跨binding续记。
   所有格先写入 `matrix.json`，未提交格保留原因；`runs.jsonl`、准入、正文/快照/Markdown
   导出均分格保存。运行异常立即关闭本批，新批次先对账，不重试未知 POST。

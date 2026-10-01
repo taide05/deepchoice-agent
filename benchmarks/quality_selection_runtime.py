@@ -192,12 +192,13 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     if repair_control is not None:
         _require(commit == repair_control["identity"]["production_commit"], "repair control production drift")
     ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
-    ledger.require_unused_phase(phase, PHASE_LIMITS[phase])
+    ledger.require_unused_phase(phase, PHASE_LIMITS[phase], budget_extension=spec.get("budget_extension"))
     if phase == "reviewed_candidate":
         validate_development_authorization(spec.get("development_authorization"), ledger.identity)
+    extended = spec.get("budget_extension") is not None
     lock = None
     if phase == "acceptance":
-        _require(ledger.used() == 131, "acceptance requires the completed reviewed development allocation")
+        _require(ledger.used() == (135 if extended else 131), "acceptance requires the completed reviewed development allocation")
         lock_path = Path(spec["candidate_lock_path"])
         lock_value = json.loads(lock_path.read_text(encoding="utf-8"))
         _require(lock_value.get("accepted") is True and lock_value.get("candidate_commit") == commit,
@@ -217,7 +218,8 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
              and bool(source_policy["development_exposure"]), "source policy disclosure is required")
     if lock is not None:
         candidate = load_candidate_lock(lock, commit)
-        _require(candidate["phase"] == "reviewed_candidate", "acceptance must lock the newly reviewed candidate")
+        _require(candidate["phase"] == ("delivery_candidate" if extended else "reviewed_candidate")
+                 and candidate.get("budget_extension") == spec.get("budget_extension"), "acceptance must lock the newly reviewed candidate")
         verify_comparison({"identity": {"runner_commit": runner_commit},
                            "environment": source_environment, "source_policy": source_policy}, candidate)
     # Environment and review lock are checked before exposing holdout inputs.
@@ -229,7 +231,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     environment = {**source_environment, "knowledge_root": str(knowledge.resolve())}
     started = datetime.now(UTC)
     until = min(started + timedelta(days=7), _time(preflight["ended_at"]) + timedelta(days=7))
-    if phase in {"candidate", "followup", "reviewed_candidate"}:
+    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate"}:
         baseline = load_binding(Path(spec["baseline_binding_path"]), require_current=False)[0]
         until = min(until, _time(baseline["frozen_at"]) + timedelta(days=7))
         _require(started < until, "comparison baseline window expired")
@@ -247,6 +249,10 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
     }
     if phase == "reviewed_candidate":
         binding["development_authorization"] = spec["development_authorization"]
+        binding["comparison_mode"] = "historical-baseline-different-collector-v1"
+    if extended:
+        binding["budget_extension"] = spec["budget_extension"]
+    if phase == "delivery_candidate":
         binding["comparison_mode"] = "historical-baseline-different-collector-v1"
     if phase == "repair_baseline":
         binding["repair_purpose"] = spec["repair_purpose"]
@@ -266,7 +272,7 @@ def freeze(spec_path: Path, destination: Path, cfg) -> dict:
                 "manifest_id": build_run_manifest(ResearchRequest.model_validate(case["request"]).model_dump(exclude_none=True)).manifest_id,
                 "hitl": hitl,
             })
-    if phase in {"candidate", "followup", "reviewed_candidate"}:
+    if phase in {"candidate", "followup", "reviewed_candidate", "delivery_candidate"}:
         baseline_path = Path(spec["baseline_binding_path"]).resolve()
         binding["baseline_binding"] = {"path": str(baseline_path), "sha256": file_digest(baseline_path)}
     write_json(destination, binding, exclusive=True)
@@ -339,9 +345,10 @@ def serve(binding_path: Path, cfg, port: int) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["init-ledger", "freeze", "serve"])
+    parser.add_argument("command", choices=["init-ledger", "authorize-extension", "freeze", "serve"])
     parser.add_argument("--binding", type=Path)
     parser.add_argument("--reconciliation", type=Path)
+    parser.add_argument("--authorization", type=Path)
     parser.add_argument("--spec", type=Path)
     parser.add_argument("--env-file", type=Path)
     parser.add_argument("--port", type=int, default=8000)
@@ -353,6 +360,15 @@ def main(argv=None) -> int:
         ledger = ResearchLedger.initialize(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3",
                                            args.reconciliation)
         print(json.dumps({"used": ledger.used(), "research_submitted": 0}))
+        return 0
+    if args.command == "authorize-extension":
+        if args.authorization is None:
+            parser.error("authorize-extension requires --authorization")
+        from benchmarks.quality_selection import ResearchLedger, file_digest
+        path = args.authorization.resolve()
+        ledger = ResearchLedger(runner_root() / "outputs/quality-selection-v1-ledger.sqlite3")
+        ledger.authorize_extension({"path": str(path), "sha256": file_digest(path)})
+        print(json.dumps({"used": ledger.used(), "authorized_hard_total": 159, "research_submitted": 0}))
         return 0
     if args.binding is None:
         parser.error("--binding is required")
