@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
@@ -27,6 +28,8 @@ action-plan step. Do not claim whole-report coverage, safety or operational acce
 Return one item 1..6 with passed true/false for each. Confidence is high/medium/low;
 critical missing evidence or a decisive reasoning error requires low confidence.
 
+A follow-up may contain just one previously unreviewed analysis_id; apply the same checks
+and return only that ID. Never revisit an analysis already explicitly withdrawn.
 Review EVERY supplied analysis_id against its addressed source sentences AND the complete
 saved source context, original request, assumptions and change condition. Treat an if/when
 condition as sufficient only in its stated scope; do not turn it into an only-if condition,
@@ -79,6 +82,52 @@ Return ONLY JSON:
  "knowledge_gaps":["question"],"critical_gaps":["gap"],
  "analysis_reviews":[{"analysis_id":"A1","action":"keep","source_checks":[["F1","supports",[1]]]}],
  "provisional_reviews":[]}"""
+
+
+REVIEW_REPAIR_LIMIT = 3
+
+
+async def _repair_unreviewed(context, initial, payload, usage):
+    """Retry only unadjudicated A slots; every result passes the original binder."""
+    from ..utils.analysis_review import analysis_review_input, apply_analysis_review
+
+    accepted, adjudicated = {}, set()
+    revised = 0
+    pending = []
+    for key, item in context.slots.items():
+        one = replace(context, slots={key: item}, submitted=1,
+                      provisional_slots={}, provisional_submitted=0)
+        candidate, verdict = apply_analysis_review(one, initial)
+        if verdict["reviewed"] == 1:
+            adjudicated.add(key)
+            if verdict["retained"] == 1:
+                accepted[key] = candidate["decision_analysis"][0]
+                revised += verdict["revised"]
+        else:
+            pending.append((key, one))
+    attempted = 0
+    for key, one in pending[:REVIEW_REPAIR_LIMIT]:
+        one_payload = {**payload, **analysis_review_input(one)}
+        prompt = [{"role": "system", "content": REVIEW_SYSTEM},
+                  {"role": "user", "content": json.dumps(one_payload, ensure_ascii=False)}]
+        attempted += 1
+        try:
+            response = await call_model(prompt, model="deepseek-flash", response_format="json",
+                                        tag="self_reviewer", usage=usage)
+        except BudgetError:
+            raise
+        except Exception:
+            break
+        if not isinstance(response, dict):
+            continue
+        candidate, verdict = apply_analysis_review(one, response)
+        if verdict["reviewed"] != 1:
+            continue
+        adjudicated.add(key)
+        if verdict["retained"] == 1:
+            accepted[key] = candidate["decision_analysis"][0]
+            revised += verdict["revised"]
+    return accepted, adjudicated, revised, attempted
 
 
 _CITATION_FIELDS = ("recommendation", "winner_rationale", "evidence_summary",
@@ -166,6 +215,23 @@ class SelfReviewerAgent:
         if not isinstance(result, dict):
             result = None
         recommendation, summary = apply_analysis_review(context, result)
+        repair_attempts = 0
+        if context.slots and summary["status"] != "complete":
+            accepted, adjudicated, revised, repair_attempts = await _repair_unreviewed(
+                context, result, payload, local_usage,
+            )
+            if repair_attempts:
+                recommendation["decision_analysis"] = [
+                    accepted[key] for key in context.slots if key in accepted
+                ]
+                summary = {
+                    "status": ("complete" if len(adjudicated) == context.submitted else
+                               "unavailable" if result is None and not adjudicated else "incomplete"),
+                    "submitted": context.submitted, "reviewed": len(adjudicated),
+                    "retained": len(accepted), "revised": revised,
+                    "withdrawn": context.submitted - len(accepted),
+                }
+                recommendation["analysis_review"] = summary
         result = result or {}
         confidence = result.get("confidence")
         levels = {"low": 0, "medium": 1, "high": 2}
@@ -179,6 +245,11 @@ class SelfReviewerAgent:
         passed = sum(valid.values()) if len(valid) == 6 else 0
         check_confidence = "high" if passed >= 5 else "medium" if passed >= 3 else "low"
         confidence = min((confidence, check_confidence), key=levels.get)
+        # A targeted response is validated for its own slot, but its broad checks
+        # are not aggregated into the first response's six-check summary.
+        if repair_attempts:
+            passed = 0
+            confidence = "low"
         critical = result.get("critical_gaps")
         network_unconfirmed = any(fact.get("status") == "unknown" for fact in context.facts)
         if (network_unconfirmed or critical or (context.submitted and (summary["status"] != "complete" or summary["withdrawn"]))):
@@ -203,7 +274,7 @@ class SelfReviewerAgent:
         # only a runtime-owned public question; model prose is not a gap API.
         gaps = (["What evidence or assumptions still need independent checking? Without that check, treat the analysis as provisional."]
                 if network_unconfirmed or has_gaps or critical or summary["status"] != "complete"
-                or provisional.get("withdrawn") else [])
+                or provisional.get("withdrawn") or repair_attempts else [])
         return {
             "final_recommendation": recommendation,
             "confidence": confidence,
@@ -211,7 +282,8 @@ class SelfReviewerAgent:
             "retry_count": research_state.get("retry_count", 0) + 1,
             "quality_signals": [{"agent": "self_reviewer", "passed_count": passed,
                                  "total_checks": 6, "confidence": confidence,
-                                 "gaps_found": len(gaps), "analysis_review": summary}],
+                                 "gaps_found": len(gaps), "analysis_review": summary,
+                                 "targeted_review_attempts": repair_attempts}],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],
         }

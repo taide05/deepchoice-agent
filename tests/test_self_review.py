@@ -112,6 +112,52 @@ async def test_review_sees_whole_basis_and_original_unknown_then_revises_only_ow
 
 
 @pytest.mark.asyncio
+async def test_missing_review_slot_gets_one_strict_targeted_repair(monkeypatch):
+    state = make_state()
+    calls = []
+
+    async def model(messages, **kwargs):
+        payload = json.loads(messages[1]["content"])
+        calls.append([row["analysis_id"] for row in payload["analyses"]])
+        if len(calls) == 1:
+            return reviewed([revision()])
+        assert payload["requirement_explanations"] == []
+        assert len(payload["complete_saved_sources"]) == 1
+        return reviewed([{"analysis_id": "A2", "action": "keep"}])
+
+    monkeypatch.setattr(module, "call_model", model)
+    update = await module.SelfReviewerAgent().run(state)
+    assert calls == [["A1", "A2"], ["A2"]]
+    rec = update["final_recommendation"]
+    assert [row["reasoning"] for row in rec["decision_analysis"]] == [CORRECTED, GOOD]
+    assert rec["analysis_review"] == {"status": "complete", "submitted": 2,
+                                      "reviewed": 2, "retained": 2, "revised": 1,
+                                      "withdrawn": 0}
+    assert update["quality_signals"][0]["targeted_review_attempts"] == 1
+    assert update["quality_signals"][0]["passed_count"] == 0
+    assert update["confidence"] == "low" and update["knowledge_gaps"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_withdrawal_is_never_retried_and_repair_budget_denial_propagates(monkeypatch):
+    state = make_state()
+    calls = []
+
+    async def model(messages, **kwargs):
+        payload = json.loads(messages[1]["content"])
+        calls.append([row["analysis_id"] for row in payload["analyses"]])
+        if len(calls) == 1:
+            return reviewed([{"analysis_id": "A1", "action": "withdraw"}])
+        raise BudgetExceededError(BudgetResource.TOTAL_TOKENS, limit=1, consumed=1, requested=1)
+
+    monkeypatch.setattr(module, "call_model", model)
+    with pytest.raises(BudgetExceededError):
+        await module.SelfReviewerAgent().run(state)
+    assert calls == [["A1", "A2"], ["A2"]]
+    assert state["final_recommendation"]["decision_analysis"][0]["reasoning"] == BAD
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("bad", ["missing", "duplicate", "foreign", "unhashable", "identity", "oversize", "injection", "truncated"])
 async def test_bad_review_cannot_change_identity_or_authority_and_preserves_other_good_slot(monkeypatch, bad):
     state = make_state()

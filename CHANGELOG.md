@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Recover missing self-review analysis slots with bounded follow-up
+
+The self-review node now gives at most three unadjudicated analysis slots one separate
+follow-up each. Explicit withdrawals stay final; all follow-up responses pass the same
+source-sentence, candidate-attribution and authority checks before inclusion. A follow-up
+keeps aggregate six-check scoring and confidence conservative, and its LLM calls remain
+subject to the run budget. The prompt asset is v6 and the 12-case offline smoke baseline
+has a new manifest/registry identity. This is an engineering mechanism following the
+142nd P08 diagnostic; it has not yet produced a new real-model quality result. Final24
+and the holdout remain sealed. Validation: 274 affected tests, 2,875 full tests
+(477.08 seconds), smoke-v1 12/12 with matching asset baseline, pyflakes and pip check.
+
 ### Record P08 v20 development probe and isolate self-review loss
 
 On 2026-10-02 candidate `4b97579` completed one frozen P08 development case as research
