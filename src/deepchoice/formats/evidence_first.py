@@ -12,6 +12,10 @@ def _link(text: str, src: dict) -> str:
 
 
 def render(state: dict) -> str:
+    from deepchoice.utils.answer_delivery import is_answer_delivery
+    from deepchoice.formats.decision import render_answer_report
+    if is_answer_delivery(state.get("final_recommendation")):
+        return render_answer_report(state, _lang(state.get("task", {}).get("query", "")), "evidence_first")
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
     chains = state.get("evidence_chains", [])

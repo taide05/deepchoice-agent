@@ -52,6 +52,8 @@ async def test_corrected_response_still_requires_citations_and_cannot_gain_autho
     fetch = AsyncMock(return_value=httpx.Response(200 if source_ok else 503, text=SNIPPET,
         headers={"content-type": "text/plain"}, request=httpx.Request("GET", "https://example.org/recovery")))
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    first["answer_contract"] = "question-analysis-v1"
+    revised["answer_contract"] = "question-analysis-v1"
     manifest = build_run_manifest(TASK)
     state = {"task": deepcopy(TASK), "evidence_chains": deepcopy(CHAINS)}
     state.update(await synth.ConclusionSynthesizerAgent(run_manifest=manifest).run(state))
@@ -72,7 +74,7 @@ async def test_corrected_response_still_requires_citations_and_cannot_gain_autho
     assert signal["initial"]["errors"] == {"facts_item_limit": 1}
     assert signal["attempted"] == 1 and signal["outcome"] == "corrected"
     assert "PRIVATE" not in json.dumps(signal) and "REVIEWABLE" not in json.dumps(signal)
-    assert first == overflowing()  # no rewriting/truncating the first model response
+    assert first == {**overflowing(), "answer_contract": "question-analysis-v1"}  # no mutation
     assert state["final_recommendation"]["source_facts"][0]["status"] == "unknown"
     state.update(await CitationValidatorAgent().run(state))
     rec = state["final_recommendation"]

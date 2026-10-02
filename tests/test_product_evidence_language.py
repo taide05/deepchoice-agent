@@ -301,9 +301,12 @@ async def test_unknown_technical_assertion_is_removed_from_report(monkeypatch):
 
 
 def test_prompt_preserves_language_qualifications_and_primary_source_preference():
-    for rule in ("SOURCE-LANGUAGE EXCEPTION", "translation equivalence", "negation",
-                 "prefer applicable original documentation", "never imply a deployment test has already passed"):
+    for rule in ("SOURCE-LANGUAGE EXCEPTION", "Translation equivalence", "negation",
+                 "Prefer applicable original documentation", "Never imply a deployment test has already passed"):
         assert rule in SYNTHESIS_PROMPT
+    assert "daily active users are not concurrent writers" in SYNTHESIS_PROMPT
+    assert "WAL does not remove SQLite's one-writer serialization" in SYNTHESIS_PROMPT
+    assert "a single file does not prove online or WAL-consistent backup" in SYNTHESIS_PROMPT
 
 
 @pytest.mark.parametrize("checks", [

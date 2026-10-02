@@ -499,6 +499,7 @@ def test_p04_phased_choice_keeps_delivery_recovery_without_full_migration_duties
     assert len(obligations) == 3
     assert not any("推进条件和中止条件" in item or "回退步骤" in item for item in obligations)
     assert "result backend or late acknowledgement alone" in cs_mod.SYNTHESIS_PROMPT
+    assert "broker message durability and result backend result storage are distinct" in cs_mod.SYNTHESIS_PROMPT
 
 
 def test_p04_missing_original_recovery_requirement_withdraws_winner_and_unsafe_plan(monkeypatch):

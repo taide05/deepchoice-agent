@@ -62,11 +62,16 @@ def _plain_analysis(value: Any) -> str:
     return re.sub(r"([\\`*_{}\[\]#!|])", r"\\\1", text)
 
 
-def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
+def _displayable_analyses(recommendation: dict) -> list[dict]:
     from ..utils.decision_analysis import analysis_fact_reviewable, bind_analysis_basis
     facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
              if isinstance(item.get("id"), str)}
     accepted = []
+    from ..utils.answer_delivery import is_answer_delivery
+    if is_answer_delivery(recommendation):
+        review = recommendation.get("analysis_review")
+        if not isinstance(review, dict) or not isinstance(review.get("retained"), int) or review["retained"] <= 0:
+            return []
     for item in _dict_items(recommendation.get("decision_analysis"), 8):
         ids = item.get("fact_ids")
         reviewed_unknown = (item.get("review_status") in {
@@ -91,6 +96,13 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
                     continue
                 item = {**item, "basis": basis}
             accepted.append(item)
+    return accepted
+
+
+def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
+    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
+             if isinstance(item.get("id"), str)}
+    accepted = _displayable_analyses(recommendation)
     zh = lang == "zh"
     review = recommendation.get("analysis_review")
     note = ""
@@ -106,9 +118,15 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
                     if zh else "Some model analyses were withdrawn after review. Saved sources remain available for inspection. Retained or revised analyses still require human review.")
     if not accepted and not note:
         return []
+    from ..utils.answer_delivery import is_answer_delivery
+    if is_answer_delivery(recommendation):
+        caveat = ("以下是待人工审阅的模型推断。来源词法核验不证明判断或场景适用性；如需操作，先在隔离环境验证，本报告不授权生产变更。"
+                  if zh else "These model inferences require human review. Lexical checks do not prove the judgment or applicability. Validate any operation in isolation; this report does not authorize production changes.")
+    else:
+        caveat = ("以下释义、适用性判断与概念设计是模型推断，尚未经过语义验证。假设仍需确认，来源词法核验不证明建议正确；实际操作仅限下方隔离验证计划。"
+                  if zh else "The paraphrases, applicability judgments and conceptual designs below are model inferences, not semantically verified conclusions. Assumptions need confirmation. Source lexical checks do not prove the proposals; operations remain limited to the isolated validation plan below.")
     lines = ["### 模型分析 · 待人工审阅" if zh else "### Model analysis · Human review required", "",
-             "以下释义、适用性判断与概念设计是模型推断，尚未经过语义验证。假设仍需确认，来源词法核验不证明建议正确；实际操作仅限下方隔离验证计划。"
-             if zh else "The paraphrases, applicability judgments and conceptual designs below are model inferences, not semantically verified conclusions. Assumptions need confirmation. Source lexical checks do not prove the proposals; operations remain limited to the isolated validation plan below.", ""]
+             caveat, ""]
     labels = {"choice": "条件选择" if zh else "Conditional choice",
               "answer": "问题解答" if zh else "Question analysis",
               "design": "概念方案" if zh else "Conceptual design"}
@@ -168,6 +186,10 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
     branches = _dict_items(recommendation.get("decision_branches"), 20)
     action_plan = _dict_items(recommendation.get("action_plan"), 20)
     lines: list[str] = []
+
+    from ..utils.answer_delivery import is_answer_delivery
+    if is_answer_delivery(recommendation):
+        return _render_answer_delivery(recommendation, lang)
 
     lines.extend(_render_model_analysis(recommendation, lang))
 
@@ -351,3 +373,109 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
         lines.append("")
 
     return lines
+
+
+def _render_answer_delivery(recommendation: dict, lang: str) -> list[str]:
+    """A single answer channel; source status is never question satisfaction."""
+    zh = lang == "zh"
+    lines = _render_model_analysis(recommendation, lang)
+    visible = _displayable_analyses(recommendation)
+    addressed = {key for item in visible for key in item.get("requirement_ids", [])}
+    inventory = recommendation["answer_delivery"]["requirements"]
+    missing = [(key, text) for key, text in inventory.items()
+               if isinstance(key, str) and (key.startswith("Q") or key == "R0")
+               and isinstance(text, str) and key not in addressed
+               and (key != "R0" or not any(item.get("kind") == "choice" for item in visible))]
+    if missing:
+        lines.extend(["### 尚无保留分析的问题" if zh else "### Questions without retained analysis", "",
+                      "以下问题尚无来源支持的分析。已触及的问题也可能只得到部分回答，仍须逐项核对原提问；缺口不证明候选不具备能力。"
+                      if zh else "No source-bound analysis was retained for these questions. Other questions may have only partial answers; check every part of the original request. A gap does not show that a candidate lacks a capability.", ""])
+        for _, text in missing[:40]:
+            lines.append("- " + _plain_analysis(text))
+        lines.append("")
+    elif visible:
+        lines.extend(["已触及原问题，但各问题是否完整回答仍需人工核对。" if zh else
+                      "Original questions were addressed; a human must still check whether each answer is complete.", ""])
+    # The runtime retains its fixed validation-only plan as structured safety
+    # state. The compact report states its boundary without a long procedure.
+    lines.extend(["### 下一步" if zh else "### Next step", "",
+                  "补全上述原问题及场景前提；需要实际操作时，先在隔离环境验证并独立审查。" if zh else
+                  "Complete the original questions and scene assumptions; validate any operation in isolation and obtain independent review.", ""])
+    return lines
+
+
+def render_answer_report(state: dict, lang: str, format_name: str = "what_why_how") -> str:
+    """One reviewed answer channel with the selected public presentation."""
+    from urllib.parse import quote
+    from ..citations import canonicalize_source_url
+    from .citations import citation_verification_section
+
+    task = state.get("task", {})
+    rec = state["final_recommendation"]
+    zh = lang == "zh"
+    title = _plain_analysis(task.get("query", "Technology Selection"))
+    suffix = {
+        "what_why_how": " — 技术决策简报" if zh else " — Decision Brief",
+        "evidence_first": " — 证据简报" if zh else " — Evidence Brief",
+        "comparison_matrix": " — 问题对比矩阵" if zh else " — Question Comparison Matrix",
+    }.get(format_name, "")
+    lines = ["# " + title + suffix, "",
+             "以下按原问题给出条件分析；来源核验不证明推理正确，也不代表部署已验收。" if zh else
+             "The analysis below answers the original questions conditionally. Source checks do not prove the reasoning or deployment readiness.", ""]
+    if state.get("data_source_note"):
+        lines.extend(["> " + _plain_analysis(state["data_source_note"]), ""])
+
+    # The reviewer's public gap is a fixed safe projection. Do not copy arbitrary
+    # state prose or a model-authored confidence rationale into this report.
+    if state.get("knowledge_gaps"):
+        lines.extend(["**自审提示：关键依据或假设仍需独立核对；以下分析仅作低置信条件判断。**"
+                      if zh else
+                      "**Review warning: key evidence or assumptions still need independent checking; treat the analysis as low-confidence and conditional.**", ""])
+
+    facts = _dict_items(rec.get("source_facts"), 5)
+    source_lines: list[str] = []
+    if facts:
+        source_lines = ["### 来源索引" if zh else "### Source index", ""]
+        for fact in facts:
+            url = canonicalize_source_url(fact.get("canonical_url", ""))
+            if url:
+                source_lines.append("- [" + _plain_analysis(fact.get("source_title")) + "](" +
+                                    quote(url, safe="/:?=&%#-._~+") + ") — " +
+                                    _plain_analysis(fact.get("status")))
+        source_lines.append("")
+
+    answer_lines = _render_answer_delivery(rec, lang)
+    if format_name == "evidence_first":
+        lines.extend(source_lines)
+        lines.extend(["## 条件回答" if zh else "## Conditional answers", ""])
+        lines.extend(answer_lines)
+    elif format_name == "comparison_matrix":
+        visible = _displayable_analyses(rec)
+        inventory = rec["answer_delivery"]["requirements"]
+        lines.extend(["## 原问题覆盖" if zh else "## Original question coverage", "",
+                      "| 原问题 | 当前状态 |" if zh else "| Original question | Current status |",
+                      "| --- | --- |"])
+        for key, question in inventory.items():
+            if not isinstance(key, str) or not (key.startswith("Q") or key == "R0"):
+                continue
+            if key == "R0" and any(item.get("kind") == "choice" for item in visible):
+                has_answer = True
+            else:
+                has_answer = any(key in item.get("requirement_ids", []) for item in visible)
+            status = ("有待人工复核的条件分析" if zh else "Conditional analysis for human review") if has_answer else (
+                "待答" if zh else "Unanswered")
+            lines.append("| " + _plain_analysis(question) + " | " + status + " |")
+        lines.extend(["", "## 判断与依据" if zh else "## Judgment and basis", ""])
+        lines.extend(answer_lines)
+        lines.extend(source_lines)
+    else:
+        lines.extend(["## What：来源事实" if zh else "## What: source facts", ""])
+        lines.extend(source_lines or ["尚无可列出的来源事实。" if zh else "No source facts to list.", ""])
+        lines.extend(["## Why：条件判断" if zh else "## Why: conditional judgment", ""])
+        next_heading = "### 下一步" if zh else "### Next step"
+        split = answer_lines.index(next_heading) if next_heading in answer_lines else len(answer_lines)
+        lines.extend(answer_lines[:split])
+        lines.extend(["## How：核对与验证" if zh else "## How: checks and validation", ""])
+        lines.extend(answer_lines[split:])
+    lines.extend(citation_verification_section(state, lang))
+    return "\n".join(lines)

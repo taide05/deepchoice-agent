@@ -119,6 +119,15 @@ _SHAPES = {
 
 def output_shape_valid(tag: str, value: Any) -> bool:
     """Check the existing content shape without recording or trusting its prose."""
+    if tag == "conclusion_synthesizer" and isinstance(value, dict) and "answer_contract" in value:
+        return _matches(value, {
+            "answer_contract": ("question-analysis-v1",),
+            "source_facts": [{"id": str, "evidence_id": int}],
+            "decision_analysis": [{"kind": ("choice", "answer", "design"), "option": str,
+                                   "requirement_ids": [str],
+                                   "basis": [{"fact_id": str, "sentence_ids": [int]}],
+                                   "reasoning": str, "assumptions": [str], "change_condition": str}],
+        })
     shape = _SHAPES.get(tag)
     return shape is not None and _matches(value, shape)
 

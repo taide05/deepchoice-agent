@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Simplify conditional-answer delivery for current runs
+
+Current runs now request source facts and bounded analysis tied to the original
+questions. Citation and self-review still gate each analysis; reports expose
+unanswered questions, partial-answer limits and public review warnings. The
+three report formats retain distinct reading orders. Invalid compact responses
+use the existing single correction, and safety-limit overflow withholds analysis.
+Historical results remain readable under their original identity. A four-case
+public-snapshot fixture replay probes the mechanism; real-model quality remains
+unmeasured for this candidate. The final 24 runs remain sealed.
+Frozen Python 3.12 suite: 2,891 passed; smoke-v1 12/12 matched its refreshed
+asset baseline. Independent engineering review found no blocking issue.
+
 ### Record five-source P08 result and locate audited excerpt loss
 
 The five-source candidate `1df9dbc` completed one frozen P08 development run on

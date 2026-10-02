@@ -350,6 +350,7 @@ def restrict_recommendation(recommendation: Any, query: Any) -> dict[str, Any]:
     """Limit a report even when budget exhaustion preceded citation checks."""
     result = abstain_recommendation(recommendation, query)
     # Early/limited results cannot publish unchecked conditional-choice extensions.
+    result.pop("answer_delivery", None)
     result.pop("source_facts", None)
     result.pop("conditional_choices", None)
     result.pop("decision_analysis", None)

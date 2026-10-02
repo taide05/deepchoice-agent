@@ -136,12 +136,12 @@ def test_previous_synthesis_prompt_revision_is_readable_but_not_resumable():
 
 
 @pytest.mark.asyncio
-async def test_synthesis_clause_instruction_does_not_auto_fill_missing_citations(monkeypatch):
+async def test_legacy_synthesis_clause_does_not_auto_fill_missing_citations(monkeypatch):
     from deepchoice.agents import conclusion_synthesizer as synthesis
 
     async def model(prompt, **kwargs):
         content = prompt[0]["content"]
-        assert "each independent semicolon clause needs its own [[N]]" in content
+        assert "including one after a semicolon, needs its own appropriate basis sentence" in content
         assert "A nearby citation cannot support a different assertion" in content
         return {"winner": "SQLite", "recommendation": "SQLite is simple; PostgreSQL scales [[1]]."}
 

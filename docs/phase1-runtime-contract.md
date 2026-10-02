@@ -19,9 +19,18 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-02 当前运行使用 `research-v4` / state schema v3、synthesis v21、citation v16、
-self-review v7，三模板 what-why-how-v17 / evidence-first-v16 / comparison-matrix-v15。
+2026-10-02 当前运行使用 `research-v4` / state schema v3、synthesis v22、citation v16、
+self-review v7，三模板 what-why-how-v18 / evidence-first-v17 / comparison-matrix-v16。
 来源事实最多5条，单项分析仍最多4条；旧manifest身份可读但不能同run续跑。
+
+当前有 manifest 的运行使用 question-analysis-v1 合成输出：模型只交付来源事实与
+针对原问题的条件分析，不交付可采信的 Winner、逐项满意状态、正式分支或操作许可。缺
+必需字段触发既有最多一次结构纠正；显式空列表允许作为真实缺答。来源原句、引用核验、
+自审和原有预算/HITL 门控逐项生效；受限报告移除该交付模式。三种报告格式保留各自
+阅读顺序并只展示已保留分析，未触及的问题明确列出；触及原问题不宣称完整回答。
+自审留下的公开关键缺口以固定提示显示，长操作计划在紧凑报告中只保留安全边界说明。
+超出需求上限时不发表新分析。旧结果读取及无 manifest 的直接调用保留旧投影路径；
+/research 启动时也生成当前 manifest，因此新运行采用当前紧凑契约。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
 旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。

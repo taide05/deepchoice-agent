@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v16"
+    assert first.report.template_version == "evidence-first-v17"
     assert first.scoring_policy_version == "source-score-v6"
     assert {
         retriever.retriever_id: retriever.version
@@ -161,7 +161,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v16"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v21",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v22",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -173,9 +173,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v17",
-        "evidence_first": "evidence-first-v16",
-        "comparison_matrix": "comparison-matrix-v15",
+        "what_why_how": "what-why-how-v18",
+        "evidence_first": "evidence-first-v17",
+        "comparison_matrix": "comparison-matrix-v16",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 

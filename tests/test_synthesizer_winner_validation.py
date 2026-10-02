@@ -46,7 +46,11 @@ class TestPromptGuards:
     def test_synthesis_prompt_forbids_research_paper_winners(self):
         """Regression (OS-0035 FedMon): the prompt must forbid research papers
         and prototypes as winners — the code-side validator cannot detect them."""
-        assert "NEVER recommend a research paper" in cs_mod.SYNTHESIS_PROMPT
+        assert "Use kind=choice only for an established, adoptable product" in cs_mod.SYNTHESIS_PROMPT
+        for excluded in ("research paper", "prototype", "sample repository",
+                         "technique", "vendor feature", "composite architecture"):
+            assert excluded in cs_mod.SYNTHESIS_PROMPT
+        assert "Do not generate requirement_assessments, decision_branches, rankings" in cs_mod.SYNTHESIS_PROMPT
 
     def test_synthesis_prompt_requires_explicit_constraint_assessment(self):
         assert "CONSTRAINT ASSESSMENT" in cs_mod.SYNTHESIS_PROMPT
@@ -54,14 +58,15 @@ class TestPromptGuards:
 
     def test_synthesis_prompt_clarifies_established_not_mainstream(self):
         assert "established, adoptable" in cs_mod.SYNTHESIS_PROMPT
-        assert "mainstream" in cs_mod.SYNTHESIS_PROMPT
+        assert "mainstream" in cs_mod.SYNTHESIS_PROMPT.lower()
 
     def test_synthesis_prompt_requires_verbatim_titles(self):
         assert "VERBATIM" in cs_mod.SYNTHESIS_PROMPT
 
-    def test_synthesis_prompt_requires_every_sentence_cited(self):
-        assert "EVERY sentence" in cs_mod.SYNTHESIS_PROMPT
-        assert "no sentence or field may be left uncited" in cs_mod.SYNTHESIS_PROMPT
+    def test_synthesis_prompt_requires_every_decisive_premise_bound(self):
+        assert "Every independent decisive factual premise" in cs_mod.SYNTHESIS_PROMPT
+        assert "A nearby citation cannot support a different assertion" in cs_mod.SYNTHESIS_PROMPT
+        assert "References belong ONLY in basis" in cs_mod.SYNTHESIS_PROMPT
 
     def test_summarize_chains_includes_up_to_four_titles(self):
         chains = [{"evidence_strength": "strong", "conclusion": "c",
@@ -72,10 +77,11 @@ class TestPromptGuards:
         assert mapping == {1: "T0", 2: "T1", 3: "T2", 4: "T3"}
         assert "[[1]]" in text and "[[4]]" in text
 
-    def test_synthesis_prompt_covers_all_claim_fields(self):
-        assert "winner_rationale" in cs_mod.SYNTHESIS_PROMPT
-        assert "key_strength" in cs_mod.SYNTHESIS_PROMPT
-        assert "scene_fit_note" in cs_mod.SYNTHESIS_PROMPT
+    def test_synthesis_prompt_has_only_bound_answer_fields(self):
+        prompt = cs_mod.SYNTHESIS_PROMPT
+        assert "Return ONLY answer_contract, source_facts and decision_analysis" in prompt
+        assert "requirement_ids" in prompt and "sentence_ids" in prompt
+        assert "Do not generate requirement_assessments, decision_branches, rankings" in prompt
 
 
 class TestWinnerValidation:
