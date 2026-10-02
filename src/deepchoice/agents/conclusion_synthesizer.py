@@ -32,7 +32,7 @@ SYNTHESIS_STRUCTURE_POLICY = "sentence-basis-correction-v4:max_corrections=1"
 SYNTHESIS_CORRECTION_TEMPLATE = """A local binding-contract check rejected part of the previous JSON response.
 Regenerate the COMPLETE response for exactly the original request, candidates, hard constraints and evidence above.
 Only one corrective generation is allowed. Do not invent sources or relax constraints.
-Return both source_facts (at most 4) and decision_analysis (at most 8) as lists, plus every other required response field.
+Return both source_facts (at most 5) and decision_analysis (at most 8) as lists, plus every other required response field.
 Empty lists are valid if there is no usable basis. Assign unique F1..F99 IDs to selected eligible source numbers;
 Each analysis needs basis items with fact_id and 1-based sentence_ids from that source's numbered snippet.
 Do not supply copied prose or a second fact_ids list; runtime derives references and copies the sentences.
@@ -118,7 +118,7 @@ Disputed findings: {disputed_count}
 
 ## Decision analysis: source basis and model proposal
 This is the primary place to answer the original questions in the query language.
-- source_facts: at most 4 reference objects, unique id F1..F99 and evidence_id from a supplied source marked "Source-fact binding allowed: yes". Choose substantive mechanism text, not navigation. Runtime copies and checks the complete saved snippet. Eligibility is addressing permission, not verification.
+- source_facts: at most 5 reference objects, unique id F1..F99 and evidence_id from a supplied source marked "Source-fact binding allowed: yes". Choose substantive mechanism text, not navigation. Runtime copies and checks the complete saved snippet. Eligibility is addressing permission, not verification.
 - decision_analysis: at most 8 entries. Each addresses ONE judgment dimension or mechanism, kind choice|answer|design, option an exact candidate or empty, 1-4 unique original R0/C/Q requirement_ids, basis, reasoning, assumptions and change_condition. R0 denotes the original query; analysis-derived A IDs cannot substitute for original questions.
 - basis: 1-4 unique fact_id items, each with 1-3 distinct 1-based sentence_ids from its numbered snippet. Runtime copies those sentences and derives references. Do not output quote text or a separate fact_ids list. Each decisive mechanism/comparative reason must have its own selected premise; a related product name is insufficient. Split unrelated mechanisms. Include limiting sentences; a truncated fragment cannot establish a universal rule.
 - Distinguish source facts, supplied user context and inference. Explain how the mechanism applies under explicit assumptions; preserve IF versus ONLY IF and sufficient versus necessary conditions. A source workload is not this workload. If a decisive premise is absent, identify it in assumptions/unresolved_questions and make the choice conditional on verification, instead of claiming an established advantage.

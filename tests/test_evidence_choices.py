@@ -149,3 +149,50 @@ def test_model_sees_trailing_prerequisite_of_whole_bounded_fact():
     assert [line.split(": ", 1)[0] for line in numbered] == [f"s{i}" for i in range(1, 14)]
     assert " ".join(line.split(": ", 1)[1] for line in numbered) == snippet
     assert numbered[-1] == "s13: This requires an independently durable journal."
+
+
+@pytest.mark.asyncio
+async def test_five_distinct_source_facts_survive_binding_verification_and_report(monkeypatch):
+    from deepchoice.formats.decision import render_decision_details
+
+    chains = [
+        {"sources": [{"title": f"Fixture {i}", "url": f"https://example.org/fact-{i}",
+                      "snippet": f"Fixture {i} documents mechanism {i}. This mechanism requires an explicit workload check."}]}
+        for i in range(1, 6)
+    ]
+    rec = {
+        "decision_basis_version": "constraint-aware-v1",
+        "winner": "context_dependent",
+        "source_facts": [{"id": f"F{i}", "evidence_id": i} for i in range(1, 6)],
+        "conditional_choices": [
+            {"option": "ExampleQueue", "relation": "consider",
+             "fact_ids": ["F5"], "requirement_ids": ["C1"]}
+        ],
+    }
+    bound = bind_evidence_choices(rec, chains, TASK["candidate_techs"], [
+        {"id": "C1", "kind": "frozen_constraint", "requirement": TASK["constraints"][0]}
+    ])
+    assert [fact["id"] for fact in bound["source_facts"]] == [f"F{i}" for i in range(1, 6)]
+
+    async def fetch(channel, url, *args, **kwargs):
+        assert channel == "official"
+        number = int(url.rsplit("-", 1)[1])
+        return httpx.Response(
+            200, text=f"Fixture {number} documents mechanism {number}. This mechanism requires an explicit workload check.",
+            headers={"content-type": "text/plain"}, request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    result = await CitationValidatorAgent().run({
+        "task": TASK, "evidence_chains": chains, "final_recommendation": bound,
+    })
+    verified = result["final_recommendation"]
+    assert [fact["status"] for fact in verified["source_facts"]] == ["verified"] * 5
+    assert verified["conditional_choices"][0]["basis_status"] == "verified"
+    report = "\n".join(render_decision_details(verified, "zh"))
+    assert "Fixture 5" in report and "优先考虑" not in report
+    assert "可以考虑" in report
+
+    too_many = deepcopy(rec)
+    too_many["source_facts"].append({"id": "F6", "evidence_id": 6})
+    assert bind_evidence_choices(too_many, chains, TASK["candidate_techs"], [])["source_facts"] == []

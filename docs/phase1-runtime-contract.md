@@ -19,8 +19,9 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-02 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v15、
-self-review v5，三模板 what-why-how-v16 / evidence-first-v15 / comparison-matrix-v14。
+2026-10-02 当前运行使用 `research-v4` / state schema v3、synthesis v21、citation v16、
+self-review v7，三模板 what-why-how-v17 / evidence-first-v16 / comparison-matrix-v15。
+来源事实最多5条，单项分析仍最多4条；旧manifest身份可读但不能同run续跑。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
 旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。

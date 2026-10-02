@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Expand bounded source-fact evidence to five entries
+
+The P08 development report at admission 144/168 retained four of five self-reviewed
+analyses but still left four formal answers unknown and both formal branches generic.
+One decisive data-structure condition lacked its own bound source, although the
+retrieved evidence included a relevant source. Initial non-blind review rates this
+report 0/1 usable and supported; no independent content review or human calibration
+has occurred. The new candidate raises the source-fact cap from four to five across
+binding, citation verification, rendering and synthesis instructions, with historical
+identity preserved. Each analysis remains limited to four facts; lexical and self-review
+checks retain their prior meaning. This change requires a fresh real-report check and
+does not establish quality or unlock the final24 or holdout. Affected tests: 317 passed;
+full suite: 2,878 passed (470.90 seconds); offline smoke: 12/12 with the refreshed
+asset identity; pyflakes and pip check passed.
+
 ### Clarify single-slot self-review and record fixed rejection categories
 
 The targeted self-review prompt now requires exactly one adjudication for the supplied A ID

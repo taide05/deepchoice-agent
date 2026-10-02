@@ -10,7 +10,7 @@ import re
 from .citation_markers import citation_spans, marker_titles
 from .evidence import conclusion_source_allowed, is_navigation_placeholder
 
-MAX_SOURCE_FACTS = 4
+MAX_SOURCE_FACTS = 5
 MAX_CONDITIONAL_CHOICES = 4
 MAX_SOURCE_TEXT = 1200
 RELATIONS = frozenset({"consider", "prefer", "insufficient_alone"})
@@ -132,7 +132,7 @@ def eligible_source_fact_ids(chains):
     """Use the binding contract itself to advertise admissible source numbers.
 
     Eligibility concerns complete saved text and identity, not live citation
-    verification. Batches retain the same four-fact limit as model output.
+    verification. Batches retain the same five-fact limit as model output.
     """
     count = sum(len(chain.get("sources", [])[:4]) for chain in chains)
     eligible = set()

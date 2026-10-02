@@ -64,7 +64,7 @@ def _plain_analysis(value: Any) -> str:
 
 def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
     from ..utils.decision_analysis import analysis_fact_reviewable, bind_analysis_basis
-    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 4)
+    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
              if isinstance(item.get("id"), str)}
     accepted = []
     for item in _dict_items(recommendation.get("decision_analysis"), 8):
@@ -185,7 +185,7 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             "",
         ])
 
-    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 4)
+    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
              if isinstance(item.get("id"), str)}
     choices = _dict_items(recommendation.get("conditional_choices"), 4)
     if choices:
