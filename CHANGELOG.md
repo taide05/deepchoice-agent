@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Measure bounded self-review follow-up on development P08
+
+Candidate `82f7c93` completed P08 once on 2026-10-02 as admission 143/167. The isolated
+report/export/snapshot agree; 24 LLM and six retrieval calls included one failed arXiv
+source. The self-review node made three targeted follow-up calls and retained two of four
+submitted analyses, versus one of four in the preceding candidate; its status remains
+incomplete. All four formal requirements are unknown and both formal decision branches
+remain placeholders. Initial non-blind content review rates the case 0/1 usable and
+supported; no independent content review or human calibration has occurred. The final24
+and holdout remain sealed. This result motivates work on formal requirement/branch delivery
+without treating citation lexical checks as semantic proof.
+
 ### Recover missing self-review analysis slots with bounded follow-up
 
 The self-review node now gives at most three unadjudicated analysis slots one separate
