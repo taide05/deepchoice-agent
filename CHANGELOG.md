@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record five-source P08 result and locate audited excerpt loss
+
+The five-source candidate `1df9dbc` completed one frozen P08 development run on
+2026-10-02 as admission 145/169 (22 LLM, six retrieval calls, no failed external
+calls). Report, export and public snapshot agree. Five source facts bound, but the
+Redis data-types fact had six `content_insufficient` citation checks; the saved
+excerpt begins in a navigation section. Two of four analyses survived review,
+while all four formal answers and both branches remain generic or unknown.
+Initial non-blind content review is 0/1 usable and supported. A local audited
+Chroma replay found a substantive overview chunk for the same URL in the same
+candidate pool. This diagnoses excerpt selection, not live citation success.
+The isolated service stopped; final24 and holdout remain sealed.
+
 ### Expand bounded source-fact evidence to five entries
 
 The P08 development report at admission 144/168 retained four of five self-reviewed
