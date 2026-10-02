@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record the coverage development result
+
+On 2026-10-01, candidate d8f649a completed the four development cases
+(`quality-selection-development-v1` 1.0.0, frozen 2026-09-29). Report, snapshot and
+export were consistent in 4/4. Primary and independent nonblind assistant review found
+0/4 usable-and-supported, with zero confirmed critical reports. P02 performance attribution
+was corrected and P04 retained a useful staged concept; P01/P08 had no analysis at self-review
+entry, and decisive selection gaps remain across all four. The historical delivery comparison
+also scored 0/4, with a different runner commit. No candidate promotion or eight-scenario
+stability claim follows. Ledger 139/163; remaining 24 are final-only and prohibited pending
+readiness. Holdout sealed. Product/checkpoint stores passed read-only integrity and hash checks;
+no checkpoint payload was read. Evidence is indexed in the maintained status and local closeout.
+
 ### Add the approved four-case development allocation
 
 Append a separate coverage authorization and witness bound to the original ledger, prior extension
@@ -9,7 +22,7 @@ and first21 admissions. The approved135→139 development batch raises the total
 keeping final24 prohibited at current-binding, freeze, collect and reserve entry points even before
 installation. The installed grant permits only its four-case, single-use phase;
 missing/mismatched authority and uncertain dispatch fail closed. Historical grants remain unchanged.
-No holdout access or final promotion is added. Real report quality remains to be measured.
+No holdout access or final promotion is added. Subsequent live quality result is recorded above.
 Validation: 2856 full tests (526.32s), 134 focused, smoke-v1 12/12, static checks and independent review.
 
 ### Preserve ellipses and historical analysis quotations
