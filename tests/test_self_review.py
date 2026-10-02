@@ -134,8 +134,43 @@ async def test_missing_review_slot_gets_one_strict_targeted_repair(monkeypatch):
                                       "reviewed": 2, "retained": 2, "revised": 1,
                                       "withdrawn": 0}
     assert update["quality_signals"][0]["targeted_review_attempts"] == 1
+    assert update["quality_signals"][0]["targeted_review_rejections"] == {}
     assert update["quality_signals"][0]["passed_count"] == 0
     assert update["confidence"] == "low" and update["knowledge_gaps"]
+
+
+@pytest.mark.asyncio
+async def test_targeted_review_rejects_incomplete_source_challenge_with_fixed_category(monkeypatch):
+    state = make_state()
+    replies = [reviewed([revision()]), reviewed([{
+        "analysis_id": "A2", "action": "keep", "source_checks": [],
+    }])]
+    monkeypatch.setattr(module, "call_model", AsyncMock(side_effect=replies))
+    update = await module.SelfReviewerAgent().run(state)
+    rec = update["final_recommendation"]
+    assert len(rec["decision_analysis"]) == 1
+    assert rec["decision_analysis"][0]["reasoning"] == CORRECTED
+    assert rec["analysis_review"] == {"status": "incomplete", "submitted": 2,
+                                      "reviewed": 1, "retained": 1, "revised": 1,
+                                      "withdrawn": 1}
+    signal = update["quality_signals"][0]
+    assert signal["targeted_review_attempts"] == 1
+    assert signal["targeted_review_rejections"] == {"source_checks": 1}
+    assert SOURCE not in json.dumps(signal)
+
+
+@pytest.mark.asyncio
+async def test_targeted_review_malformed_action_is_fixed_field_rejection(monkeypatch):
+    state = make_state()
+    malformed = reviewed([])
+    malformed["analysis_reviews"] = [{
+        "analysis_id": "A2", "action": ["keep"], "source_checks": [["F1", "supports", [1]]],
+    }]
+    replies = [reviewed([revision()]), malformed]
+    monkeypatch.setattr(module, "call_model", AsyncMock(side_effect=replies))
+    update = await module.SelfReviewerAgent().run(state)
+    assert update["final_recommendation"]["analysis_review"]["retained"] == 1
+    assert update["quality_signals"][0]["targeted_review_rejections"] == {"fields": 1}
 
 
 @pytest.mark.asyncio

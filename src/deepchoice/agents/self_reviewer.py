@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from dataclasses import replace
 
 from ..budget_errors import BudgetError
@@ -28,8 +29,10 @@ action-plan step. Do not claim whole-report coverage, safety or operational acce
 Return one item 1..6 with passed true/false for each. Confidence is high/medium/low;
 critical missing evidence or a decisive reasoning error requires low confidence.
 
-A follow-up may contain just one previously unreviewed analysis_id; apply the same checks
-and return only that ID. Never revisit an analysis already explicitly withdrawn.
+A follow-up may contain just one previously unreviewed analysis_id. Return exactly one
+analysis_reviews row for that ID (keep/revise with every challenge_fact_id exactly once in
+source_checks, or withdraw), and no other A or R rows. Never revisit an analysis already
+explicitly withdrawn. The same evidence, source-context and field rules apply.
 Review EVERY supplied analysis_id against its addressed source sentences AND the complete
 saved source context, original request, assumptions and change condition. Treat an if/when
 condition as sufficient only in its stated scope; do not turn it into an only-if condition,
@@ -87,12 +90,46 @@ Return ONLY JSON:
 REVIEW_REPAIR_LIMIT = 3
 
 
+def _review_rejection(one, response):
+    """Fixed category only; never persist model text or saved source content."""
+    from ..utils.analysis_review import _challenge_valid
+    from ..utils.decision_analysis import MAX_ANALYSES
+
+    if not isinstance(response, dict):
+        return "response_shape"
+    rows = response.get("analysis_reviews")
+    if not isinstance(rows, list) or len(rows) > MAX_ANALYSES:
+        return "list_shape"
+    key = next(iter(one.slots))
+    matching = [row for row in rows if isinstance(row, dict)
+                and row.get("analysis_id") == key]
+    if not matching:
+        return "missing"
+    if len(matching) != 1:
+        return "duplicate"
+    row = matching[0]
+    action = row.get("action")
+    fields = {"analysis_id", "action"} if action == "withdraw" else {
+        "analysis_id", "action", "source_checks",
+    }
+    if action == "revise":
+        fields |= {"reasoning", "assumptions", "change_condition"}
+        if "additional_basis" in row:
+            fields.add("additional_basis")
+    if not isinstance(action, str) or action not in {"keep", "revise", "withdraw"} or set(row) != fields:
+        return "fields"
+    if action != "withdraw" and not _challenge_valid(row, one.facts):
+        return "source_checks"
+    return "binding"
+
+
 async def _repair_unreviewed(context, initial, payload, usage):
     """Retry only unadjudicated A slots; every result passes the original binder."""
     from ..utils.analysis_review import analysis_review_input, apply_analysis_review
 
     accepted, adjudicated = {}, set()
     revised = 0
+    rejections = Counter()
     pending = []
     for key, item in context.slots.items():
         one = replace(context, slots={key: item}, submitted=1,
@@ -117,17 +154,20 @@ async def _repair_unreviewed(context, initial, payload, usage):
         except BudgetError:
             raise
         except Exception:
+            rejections["provider_error"] += 1
             break
         if not isinstance(response, dict):
+            rejections["response_shape"] += 1
             continue
         candidate, verdict = apply_analysis_review(one, response)
         if verdict["reviewed"] != 1:
+            rejections[_review_rejection(one, response)] += 1
             continue
         adjudicated.add(key)
         if verdict["retained"] == 1:
             accepted[key] = candidate["decision_analysis"][0]
             revised += verdict["revised"]
-    return accepted, adjudicated, revised, attempted
+    return accepted, adjudicated, revised, attempted, dict(sorted(rejections.items()))
 
 
 _CITATION_FIELDS = ("recommendation", "winner_rationale", "evidence_summary",
@@ -216,8 +256,9 @@ class SelfReviewerAgent:
             result = None
         recommendation, summary = apply_analysis_review(context, result)
         repair_attempts = 0
+        repair_rejections = {}
         if context.slots and summary["status"] != "complete":
-            accepted, adjudicated, revised, repair_attempts = await _repair_unreviewed(
+            accepted, adjudicated, revised, repair_attempts, repair_rejections = await _repair_unreviewed(
                 context, result, payload, local_usage,
             )
             if repair_attempts:
@@ -283,7 +324,8 @@ class SelfReviewerAgent:
             "quality_signals": [{"agent": "self_reviewer", "passed_count": passed,
                                  "total_checks": 6, "confidence": confidence,
                                  "gaps_found": len(gaps), "analysis_review": summary,
-                                 "targeted_review_attempts": repair_attempts}],
+                                 "targeted_review_attempts": repair_attempts,
+                                 "targeted_review_rejections": repair_rejections}],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],
         }

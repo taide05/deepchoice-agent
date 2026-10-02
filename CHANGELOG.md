@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Clarify single-slot self-review and record fixed rejection categories
+
+The targeted self-review prompt now requires exactly one adjudication for the supplied A ID
+and complete source checks for every challenge fact. Failed targeted answers remain withheld;
+only fixed categories and counts (missing, duplicate, fields, source_checks, binding,
+response/list shape or provider error) enter the quality signal, with no model/source prose.
+This preserves the original strict binder and budget gate while making future incomplete
+reviews diagnosable. Prompt asset v7 refreshes the fixture-only 12-case smoke identity.
+The change has not yet been measured on a real report; final24 and holdout remain sealed.
+Validation on 2026-10-02: 276 affected and 2,877 full tests (474.83 seconds),
+smoke-v1 12/12 with matching asset baseline, pyflakes and pip check passed.
+
 ### Measure bounded self-review follow-up on development P08
 
 Candidate `82f7c93` completed P08 once on 2026-10-02 as admission 143/167. The isolated
