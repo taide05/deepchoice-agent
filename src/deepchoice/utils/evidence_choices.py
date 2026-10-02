@@ -167,13 +167,28 @@ def calibrate_evidence_choices(recommendation, verification):
                   else "unreachable" if "unreachable" in values else "unknown")
         fact["status"] = status
         fact.pop("review_availability", None)
-        if (status == "unknown" and checks and complete_binding and not overflow
-                and all((check.status.value, check.reason.value) in {
-                    ("verified", "lexical_support"), ("unknown", "network_uncertain"),
-                } for check in checks)):
-            # Availability uncertainty is not a contradiction of the exact saved text.
-            # This grants review eligibility only, never citation/decision authority.
-            fact["review_availability"] = "network_unconfirmed"
+        fact.pop("reviewable_sentence_ids", None)
+        if status == "unknown" and checks and complete_binding and not overflow:
+            outcomes = {(check.status.value, check.reason.value) for check in checks}
+            if outcomes <= {("verified", "lexical_support"), ("unknown", "network_uncertain")}:
+                # Availability uncertainty is not a contradiction of the exact saved text.
+                # This grants review eligibility only, never citation/decision authority.
+                fact["review_availability"] = "network_unconfirmed"
+            elif (outcomes <= {("verified", "lexical_support"),
+                               ("unknown", "qualifier_unverified")}
+                  and ("verified", "lexical_support") in outcomes
+                  and ("unknown", "qualifier_unverified") in outcomes):
+                # A whole fact stays unknown. Only uniquely addressed, verified
+                # sentences may be considered for a bounded analysis review.
+                sentences = [_strip_citations(text) for text in _split_sentences(fact["saved_text"])]
+                if len(set(sentences)) == len(sentences):
+                    by_text = {check.claim_text: check for check in checks}
+                    fact["review_availability"] = "sentence_scoped"
+                    fact["reviewable_sentence_ids"] = [
+                        index for index, sentence in enumerate(sentences, 1)
+                        if (by_text[sentence].status.value, by_text[sentence].reason.value)
+                        == ("verified", "lexical_support")
+                    ]
         statuses[fact["id"]] = status
     for choice in recommendation.get("conditional_choices", []):
         choice["basis_status"] = (

@@ -19,13 +19,16 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-01 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v14、
-self-review v4，三模板 what-why-how-v15 / evidence-first-v14 / comparison-matrix-v13。
+2026-10-02 当前运行使用 `research-v4` / state schema v3、synthesis v19、citation v15、
+self-review v5，三模板 what-why-how-v16 / evidence-first-v15 / comparison-matrix-v14。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
 旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。
 
 自审使用共享最多 8 个槽位：先保留有效 A 分析槽，再接纳原请求中未知需求的 R 解释槽。
+对仅因另一个句子的限定条件未核实而保持unknown的完整来源，新策略只允许其已通过
+词法检查的原句作为A分析依据；自审仍检查完整保存来源，未审分析不可展示。R解释沿用
+原完整来源资格；来源整体status、Winner、行动权限和引用四状态不变。
 R 按原行号、需求 ID/文字、claim_path、完整 claim_text/title 多重集合、canonical URL 和
 当前重绑来源核对；仅 verified 或 network_uncertain 可进入，其他未知原因不能借自审提权。
 原/历史 provisional_explanation 没有本轮有效审阅时不显示，原结果存储正文不改写。
@@ -242,8 +245,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
-  `deterministic-citation-v14` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
-  citation-policy v1–v13 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v15` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
+  citation-policy v1–v14 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
@@ -837,6 +840,15 @@ unknown不会升级成verified。
 不把模型解释计作verified。自审失败/缺项撤回对应分析；此路径确定性降至low并保留固定缺口。
 Winner、需求状态、行动方案和唯一HITL门不读取此资格作为权威；预算/HITL受限报告仍移除
 分析投影，没有新调用或自动补搜。历史产物不重写，旧身份可读但须新run。
+
+2026-10-02 citation v15新增另一条仅限A分析的句子级审阅资格：整份来源若因其他句子的
+`qualifier_unverified`保持unknown，可从身份及逐句检查完整匹配的来源中标出已获
+`verified/lexical_support`的原句编号。A分析只有自身完整basis仅使用这些编号才可进入
+现有一次自审；完整保存来源及未核实限定句仍在自审挑战输入中。R解释不使用这个资格；
+来源status不变，缺失、重复、身份错配、溢出、负面和其他unknown原因不适用。
+通过自审后报告仍明确标出整份来源unknown，模型推断待人工核对；Winner和行动权限不提升。
+旧v14 manifest可读但不能按v15语义同run恢复。本机制当前仅完成离线结构回放，
+没有新的真实报告质量结论。
 
 synthesis v19把文本拒绝细分为类型、长度、空值、引用/链接四类，反馈只含固定类别与数量。
 完整或部分纠正都需保留原已覆盖R0/C/Q、候选及来源原句地址，不提升需求/赢家权威。

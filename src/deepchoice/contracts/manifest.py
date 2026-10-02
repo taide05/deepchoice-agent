@@ -45,12 +45,12 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v15",
-    "evidence_first": "evidence-first-v14",
-    "comparison_matrix": "comparison-matrix-v13",
+    "what_why_how": "what-why-how-v16",
+    "evidence_first": "evidence-first-v15",
+    "comparison_matrix": "comparison-matrix-v14",
 }
 PROMPT_VERSIONS = {
-    "self_reviewer.review_system": "v4",
+    "self_reviewer.review_system": "v5",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
     "conclusion_synthesizer.synthesis_prompt": "v19",
@@ -135,6 +135,7 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v9",
         "deterministic-citation-v10", "deterministic-citation-v11",
         "deterministic-citation-v12", "deterministic-citation-v13", "deterministic-citation-v14",
+        "deterministic-citation-v15",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     gather_evidence: bool
@@ -150,7 +151,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v4"] = "research-v4"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v14"]
+    citation_policy_version: Literal["deterministic-citation-v15"]
     hitl_policy_version: Literal["evidence-insufficient-v1"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -343,7 +344,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "scoring_policy_version": "source-score-v6",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v14",
+        "citation_policy_version": "deterministic-citation-v15",
         "hitl_policy_version": "evidence-insufficient-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(

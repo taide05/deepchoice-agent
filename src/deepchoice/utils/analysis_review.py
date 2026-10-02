@@ -8,7 +8,10 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 
-from .decision_analysis import MAX_ANALYSES, bind_decision_analysis, calibrate_decision_analysis, reviewable_source_fact
+from .decision_analysis import (
+    MAX_ANALYSES, bind_decision_analysis, calibrate_decision_analysis,
+    reviewable_source_fact, sentence_scoped_source_fact,
+)
 from .evidence_choices import bind_evidence_choices
 
 
@@ -58,12 +61,15 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
         bound_facts = {row["id"]: row for row in rebound.get("source_facts", [])}
     facts = []
     for fact in recommendation.get("source_facts", []):
-        if not isinstance(fact, dict) or not reviewable_source_fact(fact):
+        if (not isinstance(fact, dict)
+                or not (reviewable_source_fact(fact) or sentence_scoped_source_fact(fact))):
             continue
         bound = bound_facts.get(fact.get("id"))
-        if (verification is None or not bound or not reviewable_source_fact(bound)
+        if (verification is None or not bound
+                or not (reviewable_source_fact(bound) or sentence_scoped_source_fact(bound))
                 or fact.get("status") != bound.get("status")
-                or fact.get("review_availability") != bound.get("review_availability")):
+                or fact.get("review_availability") != bound.get("review_availability")
+                or fact.get("reviewable_sentence_ids") != bound.get("reviewable_sentence_ids")):
             continue
         if bound and all(fact.get(key) == bound.get(key) for key in (
             "id", "evidence_id", "source_title", "canonical_url", "saved_text", "text",
@@ -79,7 +85,8 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
         if len(calibrated) == 1:
             slots[f"A{index}"] = calibrated[0]
     provisional_slots, provisional_submitted = _prepare_provisional(
-        recommendation, verification, facts, requirements, query, MAX_ANALYSES - len(slots),
+        recommendation, verification, [fact for fact in facts if reviewable_source_fact(fact)],
+        requirements, query, MAX_ANALYSES - len(slots),
     )
     return AnalysisReviewContext(recommendation, slots, facts, requirements, candidates, query,
                                  submitted, provisional_slots, provisional_submitted)
@@ -102,7 +109,7 @@ def analysis_review_input(context: AnalysisReviewContext) -> dict:
         } for key, item in context.provisional_slots.items()],
         "challenge_fact_ids": [fact["id"] for fact in context.facts],
         "complete_saved_sources": [{
-            key: fact.get(key) for key in ("id", "source_title", "saved_text", "status", "review_availability")
+            key: fact.get(key) for key in ("id", "source_title", "saved_text", "status", "review_availability", "reviewable_sentence_ids")
         } | {"sentences": _sentences(fact)} for fact in context.facts],
     }
 
@@ -167,6 +174,8 @@ def apply_analysis_review(context: AnalysisReviewContext, response: dict | None)
             continue
         if accepted[0]["review_status"] == "network_unconfirmed_pending_review":
             accepted[0]["review_status"] = "network_unconfirmed_human_review_required"
+        elif accepted[0]["review_status"] == "sentence_scoped_pending_review":
+            accepted[0]["review_status"] = "sentence_scoped_human_review_required"
         kept.append(accepted[0])
         reviewed += 1
         revised += action == "revise"

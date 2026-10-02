@@ -33,3 +33,8 @@ core_asset_registry_id 和 artifact_fingerprint 四项不同，因此只更新�
 2026-09-23 行动安全修复再次核对：仍只有上述四项身份/时间/fingerprint变化，12个案例
 输出/hash、指标、数据集和 source_health 不变。更新对应四项基准记录；专门的行动安全
 反例由自动化测试覆盖，不把 smoke-v1 冒充本次全部行为覆盖或真实质量证明。
+
+2026-10-02 citation v15、self-review v5 与报告模板身份更新时逐字段复核基线：固定12例的
+逐例结果、指标、数据集和来源健康均不变；仅 evaluated_at、current_manifest_id、
+core_asset_registry_id、artifact_fingerprint 变化。更新这四项记录并通过 `--check-baseline`；
+新的句子级自审行为由专门的离线回归覆盖，smoke 分数不代表真实报告质量。

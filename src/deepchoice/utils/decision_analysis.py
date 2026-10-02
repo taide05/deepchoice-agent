@@ -206,6 +206,27 @@ def reviewable_source_fact(fact):
     )
 
 
+def sentence_scoped_source_fact(fact):
+    from ..citations.verifier import MAX_FIELD_SENTENCES
+
+    indexes = fact.get("reviewable_sentence_ids")
+    return (fact.get("status") == "unknown"
+            and fact.get("review_availability") == "sentence_scoped"
+            and isinstance(indexes, list) and bool(indexes)
+            and all(type(index) is int and 1 <= index <= MAX_FIELD_SENTENCES for index in indexes)
+            and len(set(indexes)) == len(indexes))
+
+
+def analysis_fact_reviewable(fact, basis):
+    if reviewable_source_fact(fact):
+        return True
+    return (sentence_scoped_source_fact(fact) and isinstance(basis, dict)
+            and isinstance(basis.get("sentence_ids"), list)
+            and bool(basis["sentence_ids"])
+            and all(type(index) is int for index in basis["sentence_ids"])
+            and set(basis["sentence_ids"]) <= set(fact["reviewable_sentence_ids"]))
+
+
 def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain=True):
     """Choose one independently bound response; never splice model generations."""
     allowed = {"facts_binding_loss"}
@@ -252,10 +273,18 @@ def calibrate_decision_analysis(recommendation):
     facts = {row["id"]: row for row in recommendation.get("source_facts", [])}
     accepted = []
     for item in recommendation["decision_analysis"]:
-        if item["fact_ids"] and all(key in facts and reviewable_source_fact(facts[key]) for key in item["fact_ids"]):
+        basis = item.get("basis")
+        addressed = {row["fact_id"]: row for row in basis} if isinstance(basis, list) else {}
+        if item["fact_ids"] and all(
+            key in facts and analysis_fact_reviewable(facts[key], addressed.get(key))
+            for key in item["fact_ids"]
+        ):
             item["review_status"] = (
-                "human_review_required" if all(facts[key]["status"] == "verified" for key in item["fact_ids"])
-                else "network_unconfirmed_pending_review"
+                "sentence_scoped_pending_review" if any(
+                    sentence_scoped_source_fact(facts[key]) for key in item["fact_ids"]
+                ) else "human_review_required" if all(
+                    facts[key]["status"] == "verified" for key in item["fact_ids"]
+                ) else "network_unconfirmed_pending_review"
             )
             accepted.append(item)
     recommendation["decision_analysis"] = accepted

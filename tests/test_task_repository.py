@@ -448,7 +448,7 @@ async def test_interrupted_checkpoint_checks_full_manifest_before_resume(reposit
     assert resumed.latest_run.manifest.workflow_version == "research-v4"
     assert resumed.latest_run.manifest.state_schema_version == 3
     assert resumed.latest_run.manifest.citation_policy_version == (
-        "deterministic-citation-v14"
+        "deterministic-citation-v15"
     )
     assert resumed.latest_run.manifest.hitl_policy_version == "evidence-insufficient-v1"
     assert {call.tier for call in resumed.latest_run.manifest.llm_calls} == {"deepseek-flash"}

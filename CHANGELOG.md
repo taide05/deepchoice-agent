@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Bound analysis review to verified source sentences
+
+Citation v15 keeps a whole source unknown when an unrelated sentence has an unverified
+qualifier, but may admit an analysis whose exact addressed sentences passed bounded lexical
+checks and whose complete source identity is intact. The existing self-review sees and challenges
+the full saved source before the analysis can appear with an explicit unknown-source warning.
+Missing, duplicated, mismatched, unsupported, cross-language and content-insufficient checks
+remain excluded. Provisional requirement explanations, winner and action authority are unchanged.
+Self-review prompt v5 and the three report templates advance to 16/15/14. An offline replay of
+coverage P08 restores four structural review slots from zero; P01 and P02 remain zero/one,
+respectively. This is not a new model report or quality pass. Final24 stays forbidden.
+Validation on 2026-10-02: 94 focused and 2872 full tests (472.02s), offline smoke 12/12
+with matching reviewed asset baseline, static checks and independent read-only review passed.
+
 ### Record the coverage development result
 
 On 2026-10-01, candidate d8f649a completed the four development cases
@@ -13,7 +27,12 @@ entry, and decisive selection gaps remain across all four. The historical delive
 also scored 0/4, with a different runner commit. No candidate promotion or eight-scenario
 stability claim follows. Ledger 139/163; remaining 24 are final-only and prohibited pending
 readiness. Holdout sealed. Product/checkpoint stores passed read-only integrity and hash checks;
-no checkpoint payload was read. Evidence is indexed in the maintained status and local closeout.
+no checkpoint payload was read during collection. The separately authorized read-only Saver
+check located losses at synthesis binding (P01), citation calibration (P08/P02), and self-review
+(P04/P02). P08's four analyses all depended on one source fact with one nonverified qualifier
+sentence outside their addressed basis; this identifies a sentence-versus-source granularity gap,
+not validated report quality. No further research or holdout access followed the diagnosis.
+Evidence is indexed in the maintained status and local closeouts.
 
 ### Add the approved four-case development allocation
 
