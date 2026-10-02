@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Preserve accepted coordinates in synthesis correction
+
+Synthesis prompt v20 tells the single corrective generation which previously bound source
+IDs, requirement IDs and sentence coordinates must survive. It sends no model reasoning or
+source prose in this feedback and leaves whole-response adoption, citation checks, self-review
+and operational authority unchanged. The 2026-10-02 development P08 single-case result on
+candidate 3937140 passed 0/1 usable-and-supported in primary review: the report retained
+one conditional analysis but its four requirement rows became unknown and both decision
+branches generic. Independent review confirmed one unsupported decisive exclusion, revising
+the primary rating of zero critical errors; all five checks failed. The new prompt has not yet
+been measured on a real report; no quality gain or stability claim follows. Research admissions are 141/165, with final24 sealed.
+Validation on 2026-10-02: 2873 full tests (470.26s), 146 focused tests, smoke-v1
+12/12 with matching asset baseline, pyflakes and dependency checks passed; independent
+read-only engineering review found no blocking issue. Real-report impact remains unmeasured.
+
 ### Bound analysis review to verified source sentences
 
 Citation v15 keeps a whole source unknown when an unrelated sentence has an unverified

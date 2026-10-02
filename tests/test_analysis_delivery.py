@@ -108,8 +108,15 @@ async def test_partial_correction_selects_whole_bound_response_without_promoting
     second["decision_analysis"][0]["reasoning"] = "SECOND_EXISTING_DIMENSION"
     second["action_plan"] = [{"step": "UNSAFE_PROCEDURE", "verification": "", "rollback": "", "change_trigger": ""}]
     second["confidence"] = "high"
-    monkeypatch.setattr(synth, "call_model", AsyncMock(side_effect=[first, second]))
+    model = AsyncMock(side_effect=[first, second])
+    monkeypatch.setattr(synth, "call_model", model)
     result = await synth.ConclusionSynthesizerAgent().run({"task": TASK, "evidence_chains": CHAINS})
+    feedback = model.await_args_list[1].args[0][-1]["content"]
+    coordinates = json.loads(feedback.split("Runtime-computed error counts and eligible identifiers: ", 1)[1])
+    assert coordinates["accepted_source_facts"] == [{"id": "F1", "evidence_id": 1}]
+    assert coordinates["accepted_analyses"] == [{"kind": "answer", "option": "ExampleQueue",
+        "requirement_ids": ["Q1"], "basis": [{"fact_id": "F1", "sentence_ids": [1]}]}]
+    assert "FIRST_PRIVATE_REASON" not in feedback and "F2" not in feedback
     rec = result["final_recommendation"]
     assert len(rec["decision_analysis"]) == 2
     assert rec["confidence"] == "low" and rec["winner"] == "context_dependent"

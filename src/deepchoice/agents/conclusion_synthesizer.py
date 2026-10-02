@@ -28,7 +28,7 @@ from ..utils.evidence_choices import MAX_SOURCE_TEXT, eligible_source_fact_ids, 
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
 
 # Included with the feedback template in the immutable synthesis prompt asset.
-SYNTHESIS_STRUCTURE_POLICY = "sentence-basis-correction-v3:max_corrections=1"
+SYNTHESIS_STRUCTURE_POLICY = "sentence-basis-correction-v4:max_corrections=1"
 SYNTHESIS_CORRECTION_TEMPLATE = """A local binding-contract check rejected part of the previous JSON response.
 Regenerate the COMPLETE response for exactly the original request, candidates, hard constraints and evidence above.
 Only one corrective generation is allowed. Do not invent sources or relax constraints.
@@ -36,6 +36,10 @@ Return both source_facts (at most 4) and decision_analysis (at most 8) as lists,
 Empty lists are valid if there is no usable basis. Assign unique F1..F99 IDs to selected eligible source numbers;
 Each analysis needs basis items with fact_id and 1-based sentence_ids from that source's numbered snippet.
 Do not supply copied prose or a second fact_ids list; runtime derives references and copies the sentences.
+Preserve every accepted_source_fact ID and evidence_id pair. Preserve every accepted_analysis
+kind, option, requirement_ids and basis coordinate exactly; rewrite its prose if needed.
+These coordinates already passed structural binding, but are not factually verified. Add
+new analyses only with valid basis; omit malformed rows rather than reintroducing them.
 Use only original R0/C/Q requirement IDs. Recheck the original text limits.
 For prose_reference, remove inline citation markers/links from reasoning, assumptions and
 change_condition; references belong only in basis. For prose_empty/type supply nonempty plain
@@ -1056,6 +1060,18 @@ class ConclusionSynthesizerAgent:
                 "source_facts_received": binding["source_facts_received"],
                 "source_facts_bound": binding["source_facts_bound"],
                 "analysis_received": binding["analysis_binding"]["received"],
+                "accepted_source_facts": [
+                    {"id": fact["id"], "evidence_id": fact["evidence_id"]}
+                    for fact in result.get("source_facts", [])
+                ],
+                "accepted_analyses": [
+                    {"kind": row["kind"], "option": row["option"],
+                     "requirement_ids": row["requirement_ids"],
+                     "basis": [{"fact_id": basis["fact_id"],
+                                "sentence_ids": basis["sentence_ids"]}
+                               for basis in row.get("basis", [])]}
+                    for row in result.get("decision_analysis", [])
+                ],
                 "eligible_source_numbers": sorted(eligible_source_fact_ids(evidence_chains)),
                 "original_requirement_ids": list(original_analysis_requirements(
                     requirements, task.get("query", ""),
