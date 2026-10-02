@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Record P08 v20 development probe and isolate self-review loss
+
+On 2026-10-02 candidate `4b97579` completed one frozen P08 development case as research
+admission 142/166 (17 DeepSeek Flash LLM calls, six retrieval calls, no failed outbound
+calls). The report/export/snapshot agree, but all four required answers remain unknown and
+both formal branches are placeholders: initial non-blind review rates it 0/1 usable and
+supported. A separately user-authorized read-only LangGraph Saver count diagnostic found
+five corrected analyses bound, four retained after citation and eligible for self-review,
+but only one reviewed and retained; self-review status is incomplete. Database/WAL hashes
+were unchanged. This locates another delivery loss without making a semantic quality claim.
+The user removed per-case development quota authorization requests; future measurements
+still need a frozen identity, stop line, exact admission ledger and the sealed final24 gate.
+
 ### Preserve accepted coordinates in synthesis correction
 
 Synthesis prompt v20 tells the single corrective generation which previously bound source
