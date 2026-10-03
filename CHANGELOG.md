@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Add direction checks to the continuous engineering loop
+
+Each round and handoff now checks its contribution to the core user outcome,
+self-imposed blockers, the smallest safe next action, and the exit from auxiliary
+repairs. Existing evaluation, safety, budget and holdout boundaries remain in force.
+The native candidate first admission stopped on a mutable-cache identity mismatch;
+no report-quality result is inferred from that cancelled run.
+
 ### Freeze and qualify optional native synthesis reasoning
 
 New runs with DEEPCHOICE_SYNTH_THINKING=1 freeze native thinking and high effort
