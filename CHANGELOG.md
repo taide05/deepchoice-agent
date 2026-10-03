@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Freeze and qualify optional native synthesis reasoning
+
+New runs with DEEPCHOICE_SYNTH_THINKING=1 freeze native thinking and high effort
+explicitly; historical runs retain their saved synthesis parameters. Disabled
+thinking remains the default. Candidate tooling requires explicit opt-in and a
+matching third JSON probe at the unchanged 4096-token limit. The probe rejects
+truncation and missing reasoning, stores only reasoning length plus existing
+safe diagnostics/usage, and leaves research and final-batch admission separate.
+No report-quality improvement is claimed before the frozen four-case comparison.
+2026-10-03 Python 3.12 validation: 2,902 passed; smoke-v1 12/12 matched its
+asset baseline; pyflakes/vulture passed. Independent engineering review closed
+the prerequisite-compatibility and admission-identity findings.
+
 ### Simplify conditional-answer delivery for current runs
 
 Current runs now request source facts and bounded analysis tied to the original
@@ -10,8 +23,10 @@ unanswered questions, partial-answer limits and public review warnings. The
 three report formats retain distinct reading orders. Invalid compact responses
 use the existing single correction, and safety-limit overflow withholds analysis.
 Historical results remain readable under their original identity. A four-case
-public-snapshot fixture replay probes the mechanism; real-model quality remains
-unmeasured for this candidate. The final 24 runs remain sealed.
+public-snapshot fixture replay probes the mechanism. The 2026-10-02 development
+comparison on quality-selection-development-v1 1.0.0 completed 4/4 reports but
+independent content review accepted 0/4, with one critical P04 report.
+The final 24 runs remain sealed.
 Frozen Python 3.12 suite: 2,891 passed; smoke-v1 12/12 matched its refreshed
 asset baseline. Independent engineering review found no blocking issue.
 

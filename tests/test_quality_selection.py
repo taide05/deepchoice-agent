@@ -487,9 +487,15 @@ def test_preflight_reuse_checks_bounds_age_environment_and_probe_code(tmp_path, 
     path = tmp_path / "preflight.json"
     q.write_json(path, evidence)
     def git(args, **kwargs):
+        # The new native-only module did not exist at the legacy receipt commit.
+        native_path = "benchmarks/quality_synthesis_preflight.py"
         if "ls-files" in args:
-            return "src/deepchoice/utils/llm.py\n"
-        return b"" if "diff" in args else b"same probe"
+            return "src/deepchoice/utils/llm.py\n" + (native_path + "\n" if native_path in args else "")
+        if "diff" in args:
+            return native_path.encode() if native_path in args else b""
+        if args[-1] == evidence["git_commit"] + ":" + native_path:
+            raise runtime.subprocess.CalledProcessError(128, args)
+        return b"same probe"
     monkeypatch.setattr(runtime.subprocess, "check_output", git)
     assert runtime._preflight_compatible(path, env)["passed"]
     for key, value in [("llm_attempts", 5), ("research_runs_submitted", 1),
@@ -616,6 +622,14 @@ def test_environment_identity_uses_loaded_code_and_shared_key_state(tmp_path, mo
     second = runtime.environment_identity(production, seed, object())
     assert second["tavily_state_sha256"] == q.file_digest(state)
     assert first["knowledge_sha256"] == second["knowledge_sha256"]
+    monkeypatch.setenv("DEEPCHOICE_SYNTH_THINKING", "1")
+    with pytest.raises(ValueError, match="settings drift"):
+        runtime.environment_identity(production, seed, object())
+    native = runtime.environment_identity(production, seed, object(), synthesis_thinking=True)
+    assert native["settings"]["DEEPCHOICE_SYNTH_THINKING"] == "1"
+    assert native["knowledge_sha256"] == first["knowledge_sha256"]
+    with pytest.raises(ValueError, match="explicit boolean"):
+        runtime.environment_identity(production, seed, object(), synthesis_thinking="1")
     with pytest.raises(ValueError, match="loaded production"):
         runtime.environment_identity(tmp_path / "other-code", seed, object())
 
@@ -1338,3 +1352,94 @@ async def test_final_is_prohibited_before_new_authorization_without_reading_hold
         with pytest.raises(ValueError, match='prohibited'):
             await q.collect_batch(candidate,cases,tmp_path/'forbidden-final',ledger,client)
     assert not service.posts and ledger.used()==135 and not (tmp_path/'forbidden-final').exists()
+
+
+def test_native_prerequisite_cannot_reuse_disabled_or_mismatched_receipt(tmp_path, monkeypatch):
+    from benchmarks.quality_synthesis_preflight import synthesis_probe_contract
+    env = {key: "fixture" for key in ("configuration_sha256", "dependency_snapshot_sha256",
+                                    "model_id", "endpoint_sha256")}
+    env.update(production_root=str(tmp_path), settings={"DEEPCHOICE_SYNTH_THINKING": "1"})
+    evidence = {**env, "passed": True, "llm_compatibility": True, "tavily_post_status": 200,
+                "research_runs_submitted": 0, "llm_attempts": 3, "http_attempts": 5,
+                "tavily_post_attempts": 1, "ended_at": datetime.now(UTC).isoformat(),
+                "git_commit": "a" * 40}
+    path = tmp_path / "preflight.json"
+    native_changed = False
+    def git(args, **kwargs):
+        native_path = "benchmarks/quality_synthesis_preflight.py"
+        if "ls-files" in args:
+            return "src/deepchoice/utils/llm.py\n" + (native_path + "\n" if native_path in args else "")
+        if "diff" in args:
+            return native_path.encode() if native_changed and native_path in args else b""
+        return b"same probe"
+    monkeypatch.setattr(runtime.subprocess, "check_output", git)
+    q.write_json(path, evidence)
+    with pytest.raises(ValueError, match="native synthesis prerequisite"):
+        runtime._preflight_compatible(path, env)
+    details = {"passed": True, "model_id": env["model_id"], "research_runs_submitted": 0,
+               "results": [{"probe": "json", "passed": True}, {"probe": "tools", "passed": True},
+                           {"probe": "synthesis", "passed": True, "reasoning_chars": 10,
+                            "call_contract": synthesis_probe_contract(),
+                            "diagnostics": {"truncated": False, "json_status": "strict", "schema_status": "valid"}}]}
+    detail_path = tmp_path / "llm-preflight.json"
+    q.write_json(detail_path, details)
+    native = {**evidence, "synthesis_call": synthesis_probe_contract(),
+              "llm_preflight_sha256": q.file_digest(detail_path)}
+    q.write_json(path, native)
+    assert runtime._preflight_compatible(path, env)["passed"]
+    native_changed = True
+    with pytest.raises(ValueError, match="calling code changed"):
+        runtime._preflight_compatible(path, env)
+    native_changed = False
+    for change in ({"llm_attempts": 2},
+                   {"synthesis_call": {**synthesis_probe_contract(), "max_tokens": 128}}):
+        q.write_json(path, {**native, **change})
+        with pytest.raises(ValueError):
+            runtime._preflight_compatible(path, env)
+    q.write_json(path, native)
+    with pytest.raises(ValueError, match="synthesis mode drift"):
+        runtime._preflight_compatible(path, {**env, "settings": {"DEEPCHOICE_SYNTH_THINKING": "0"}})
+
+async def test_native_preflight_receipt_roundtrip_and_tamper_rejection(tmp_path, monkeypatch):
+    import httpx
+    from benchmarks import quality_synthesis_preflight as qualification
+    from deepchoice import outbound
+    from deepchoice.outbound.channels import OutboundConfig
+    from deepchoice.outbound.resolver import ChannelResolver
+    from deepchoice.retrievers import tavily_keypool as pool
+    from tests.test_quality_synthesis_preflight import sdk_fixture
+    monkeypatch.setenv("DEEPCHOICE_SYNTH_THINKING", "1")
+    sdk_fixture(monkeypatch)
+    async def health(_self):
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200))) as client:
+            await client.head("https://example.com")
+        return {"ok": True, "sources": {}}
+    async def client(_source):
+        return httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": []})))
+    monkeypatch.setattr(ChannelResolver, "health_check", health)
+    monkeypatch.setattr(outbound, "make_client", client)
+    monkeypatch.setattr(pool, "_load_state", lambda: {})
+    monkeypatch.setattr(pool, "_load_keys", lambda: ["fixture-key"])
+    monkeypatch.setattr(qualification, "dependency_records", lambda: [("fixture", "1")])
+    result = await qualification.preflight(tmp_path / "native", OutboundConfig(), commit="fixture",
+                                          synthesis_thinking=True)
+    assert result["passed"] and result["llm_attempts"] == 3
+    assert result["tavily_post_attempts"] == 1
+    env = {key: result[key] for key in ("configuration_sha256", "dependency_snapshot_sha256",
+                                      "model_id", "endpoint_sha256")}
+    env.update(production_root=str(tmp_path), settings={"DEEPCHOICE_SYNTH_THINKING": "1"})
+    def git(args, **kwargs):
+        return "src/deepchoice/utils/llm.py\n" if "ls-files" in args else b"" if "diff" in args else b"same"
+    monkeypatch.setattr(runtime.subprocess, "check_output", git)
+    summary = tmp_path / "native/preflight-summary.json"
+    assert runtime._preflight_compatible(summary, env)["passed"]
+    detail_path = tmp_path / "native/llm-preflight.json"
+    detail = json.loads(detail_path.read_text())
+    detail["results"][-1]["reasoning_chars"] = 0
+    q.write_json(detail_path, detail)
+    with pytest.raises(ValueError, match="detail drift"):
+        runtime._preflight_compatible(summary, env)
+    result["llm_preflight_sha256"] = q.file_digest(detail_path)
+    q.write_json(summary, result)
+    with pytest.raises(ValueError, match="output is not qualified"):
+        runtime._preflight_compatible(summary, env)

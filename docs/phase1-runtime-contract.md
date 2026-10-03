@@ -19,6 +19,12 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-03：开启 `DEEPCHOICE_SYNTH_THINKING=1` 的新 manifest 显式保存
+`thinking.type=enabled` 与 `reasoning_effort=high`；默认仍关闭，输出上限仍4096。
+思考模式下供应商忽略 temperature，不据此声称生成确定性。当前工作流/资产兼容的历史
+manifest 若只有 enabled 而无显式 effort，仍按其原身份校验和保存的 body 调用，恢复时不
+补写新参数。本次参数明示不改变 workflow/state schema、提示版本或生命周期/预算边界。
+
 2026-10-02 当前运行使用 `research-v4` / state schema v3、synthesis v22、citation v16、
 self-review v7，三模板 what-why-how-v18 / evidence-first-v17 / comparison-matrix-v16。
 来源事实最多5条，单项分析仍最多4条；旧manifest身份可读但不能同run续跑。

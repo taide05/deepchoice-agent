@@ -85,4 +85,4 @@ async def test_synthesis_without_manifest_uses_deepseek_native_option(monkeypatc
     monkeypatch.setattr(synthesis, "call_model", call)
     await synthesis.ConclusionSynthesizerAgent().run({"task": {"query": "A vs B"}})
     assert call.await_args.kwargs["model"] == "deepseek-flash"
-    assert call.await_args.kwargs["extra_body"] == {"thinking": {"type": "enabled"}}
+    assert call.await_args.kwargs["extra_body"] == {"thinking": {"type": "enabled"}, "reasoning_effort": "high"}

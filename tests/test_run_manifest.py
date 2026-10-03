@@ -488,14 +488,22 @@ def test_manifest_freezes_dynamic_synthesis_parameters(monkeypatch):
     assert synthesis.tier == "deepseek-flash"
     assert synthesis.timeout_s == 900.0
     assert synthesis.seed == 0
-    assert synthesis.extra_body_json == '{"thinking":{"type":"enabled"}}'
+    assert synthesis.extra_body_json == '{"reasoning_effort":"high","thinking":{"type":"enabled"}}'
 
 
 @pytest.mark.asyncio
-async def test_synthesizer_uses_frozen_call_parameters(monkeypatch):
+@pytest.mark.parametrize("historical_default", [False, True])
+async def test_synthesizer_uses_frozen_call_parameters(monkeypatch, historical_default):
     monkeypatch.setenv("DEEPCHOICE_SYNTH_THINKING", "1")
     manifest = build_run_manifest({"query": "A vs B"})
+    if historical_default:
+        from deepchoice.contracts.manifest import _expected_manifest_id
+        calls = tuple(call.model_copy(update={"extra_body_json": '{"thinking":{"type":"enabled"}}'})
+                      if call.call_id == "conclusion_synthesizer" else call for call in manifest.llm_calls)
+        manifest = manifest.model_copy(update={"llm_calls": calls})
+        manifest = manifest.model_copy(update={"manifest_id": _expected_manifest_id(manifest)})
     monkeypatch.setenv("DEEPCHOICE_SYNTH_THINKING", "0")
+    ensure_run_manifest_compatible(manifest, {"query": "A vs B"})
     captured = {}
 
     async def fake_call_model(_prompt, **kwargs):
@@ -525,7 +533,8 @@ async def test_synthesizer_uses_frozen_call_parameters(monkeypatch):
     assert captured["response_format"] == "json"
     assert captured["timeout"] == 900.0
     assert captured["seed"] == 0
-    assert captured["extra_body"] == {"thinking": {"type": "enabled"}}
+    assert captured["extra_body"] == ({"thinking": {"type": "enabled"}} if historical_default else
+                                      {"thinking": {"type": "enabled"}, "reasoning_effort": "high"})
 
 
 def test_new_manifest_has_only_deepseek_and_rejects_identity_valid_qwen_history():

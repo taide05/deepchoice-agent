@@ -101,9 +101,10 @@ TIERS = {
 
 def synthesis_extra_body() -> dict:
     """Resolve the synthesis option once when freezing a new run."""
-    return {"thinking": {
-        "type": "enabled" if os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1" else "disabled",
-    }}
+    if os.environ.get("DEEPCHOICE_SYNTH_THINKING", "0") == "1":
+        # Freeze the provider's effective effort instead of inheriting its default.
+        return {"thinking": {"type": "enabled"}, "reasoning_effort": "high"}
+    return {"thinking": {"type": "disabled"}}
 
 
 def deepseek_extra_body(extra_body: dict | None = None) -> dict:

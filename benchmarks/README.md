@@ -1,10 +1,29 @@
 # 评估工具入口
 
-更新：2026-10-01。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
+更新：2026-10-03。本页仅说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 判据见[quality-selection-v1](../docs/product-effectiveness-optimization.md)，实际预算与结果见
 [当前状态](../docs/o1-execution-status.md)。四例开发清单已冻结，四例新保留集独立封存。
 新串行运行适配已执行首批开发对照，但发现准备过程遗漏运行时种子审定文件，且候选触发预算停止。
 实际结果与账本见当前状态。修复后的准备接口强制保留四项运行输入，并为已记录的事故提供一次性维修基线入口。
+
+## 原生合成思考候选预检
+
+默认工具仍限定关闭思考。候选适配器须显式对配置、环境身份和preflight传入
+synthesis_thinking=True，进程环境同时为DEEPCHOICE_SYNTH_THINKING=1；普通freeze
+入口没有自动升级为新候选的权限。已有关闭模式凭据不能用于开启模式。显式预检入口为：
+
+```powershell
+python -m benchmarks.quality_synthesis_preflight --output-dir <fresh-preflight> --trust-current-local-proxy --execute-paid-probes
+```
+
+该模块只做预检，不提供prepare或研究提交；四例候选仍需要独立冻结的运行适配器和准入记录。
+
+预检仍先检查外呼路由及一次Tavily POST，再依次验证关闭模式JSON、关闭模式工具调用
+和开启模式JSON。额外一条请求固定thinking=enabled、reasoning_effort=high、seed=0、
+max_tokens=4096，不重试；总LLM上限仍为4次。只记录推理字符数、用量和脱敏诊断，
+不保存推理正文。开启模式须返回非空推理及未截断的有效JSON；失败即停止预检。
+预检只证明接口兼容，不证明报告容量或语义质量。temperature在该模式被供应商忽略。
+参数依据：[DeepSeek原生思考文档](https://api-docs.deepseek.com/guides/thinking_mode/)。
 
 ## quality-selection-v1 操作接口
 

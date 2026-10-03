@@ -35,7 +35,7 @@ def verify_runner(binding: dict) -> None:
         raise ValueError("runner identity drift")
 
 
-def _configure(env_file: Path | None):
+def _configure(env_file: Path | None, *, synthesis_thinking: bool = False):
     from dotenv import load_dotenv
     if env_file is not None:
         load_dotenv(env_file, override=False)
@@ -45,6 +45,9 @@ def _configure(env_file: Path | None):
     os.environ["TAVILY_KEY_STATE_PATH"] = str(Path(os.getenv("TAVILY_KEY_STATE_PATH", "tavily_key_state.json")).resolve())
     if os.getenv("TAVILY_REPROBE", "0") != "0":
         raise ValueError("evaluation must preserve exhausted-key state")
+    if synthesis_thinking:
+        from benchmarks.quality_synthesis_preflight import trusted_configuration as native_configuration
+        return native_configuration()
     return trusted_configuration()
 
 
@@ -111,7 +114,7 @@ def copy_audited_seed(seed: Path, destination: Path, expected: str) -> dict:
              "audited knowledge changed while copying")
     return audit
 
-def environment_identity(production_root: Path, knowledge: Path, cfg) -> dict:
+def environment_identity(production_root: Path, knowledge: Path, cfg, *, synthesis_thinking: bool = False) -> dict:
     import deepchoice
     from benchmarks.product_baseline_experiment import RESOURCE_SETTINGS, embedding_revision, tree_hash
     from benchmarks.product_baseline_qualification import configuration_sha256, dependency_records
@@ -119,7 +122,9 @@ def environment_identity(production_root: Path, knowledge: Path, cfg) -> dict:
     actual = Path(next(iter(deepchoice.__path__))).resolve()
     if actual != (production_root / "src/deepchoice").resolve():
         raise ValueError("loaded production code differs from the frozen checkout")
-    settings = {**RESOURCE_SETTINGS, "DEEPCHOICE_SYNTH_THINKING": "0",
+    if type(synthesis_thinking) is not bool:
+        raise ValueError("synthesis mode must be explicit boolean")
+    settings = {**RESOURCE_SETTINGS, "DEEPCHOICE_SYNTH_THINKING": "1" if synthesis_thinking else "0",
                 "LLM_DS_CONCURRENCY": os.getenv("LLM_DS_CONCURRENCY", "80")}
     if any(os.getenv(k) != v for k, v in settings.items()):
         raise ValueError("runtime resource settings drift")
@@ -145,6 +150,35 @@ def environment_identity(production_root: Path, knowledge: Path, cfg) -> dict:
 def _preflight_compatible(path: Path, environment: dict) -> dict:
     from benchmarks.quality_selection import _require, _time
     evidence = json.loads(path.read_text(encoding="utf-8"))
+    thinking = environment.get("settings", {}).get("DEEPCHOICE_SYNTH_THINKING", "0")
+    _require(thinking in {"0", "1"}, "invalid synthesis mode")
+    if thinking == "1":
+        from benchmarks.quality_synthesis_preflight import synthesis_probe_contract
+        _require(evidence.get("synthesis_call") == synthesis_probe_contract(),
+                 "native synthesis prerequisite missing or incompatible")
+        _require(evidence.get("llm_attempts") == 3, "native prerequisite requires all three probes")
+        from benchmarks.quality_selection import file_digest
+        detail_path = path.parent / "llm-preflight.json"
+        _require(detail_path.is_file() and evidence.get("llm_preflight_sha256") == file_digest(detail_path),
+                 "native prerequisite detail drift")
+        detail = json.loads(detail_path.read_text(encoding="utf-8"))
+        rows = detail.get("results", [])
+        _require(detail.get("passed") is True and detail.get("research_runs_submitted") == 0
+                 and detail.get("model_id") == environment["model_id"]
+                 and isinstance(rows, list) and len(rows) == 3
+                 and all(isinstance(row, dict) for row in rows)
+                 and [row.get("probe") for row in rows] == ["json", "tools", "synthesis"]
+                 and all(row.get("passed") is True for row in rows),
+                 "native prerequisite detail is incomplete")
+        native = rows[-1]
+        diagnostic = native.get("diagnostics", {})
+        _require(native.get("call_contract") == synthesis_probe_contract()
+                 and type(native.get("reasoning_chars")) is int and native["reasoning_chars"] > 0
+                 and isinstance(diagnostic, dict) and diagnostic.get("truncated") is False
+                 and diagnostic.get("json_status") == "strict" and diagnostic.get("schema_status") == "valid",
+                 "native prerequisite output is not qualified")
+    else:
+        _require("synthesis_call" not in evidence, "prerequisite synthesis mode drift")
     _require(evidence.get("passed") is True and evidence.get("llm_compatibility") is True
              and evidence.get("tavily_post_status") == 200 and evidence.get("research_runs_submitted") == 0,
              "bounded prerequisite evidence is not ready")
@@ -157,15 +191,16 @@ def _preflight_compatible(path: Path, environment: dict) -> dict:
     # Probe code compatibility, independent of synthesis prompt/report changes.
     root = Path(environment["production_root"])
     old_commit = evidence["git_commit"]
-    files = subprocess.check_output(["git", "-C", str(root), "ls-files",
-        "src/deepchoice/outbound", "src/deepchoice/utils/llm.py",
-        "src/deepchoice/retrievers/tavily_keypool.py", "benchmarks/product_baseline_preflight.py",
-        "benchmarks/product_baseline_qualification.py"], text=True).splitlines()
+    probe_paths = ["src/deepchoice/outbound", "src/deepchoice/utils/llm.py",
+                   "src/deepchoice/retrievers/tavily_keypool.py", "benchmarks/product_baseline_preflight.py",
+                   "benchmarks/product_baseline_qualification.py"]
+    if thinking == "1":
+        probe_paths.append("benchmarks/quality_synthesis_preflight.py")
+    files = subprocess.check_output(
+        ["git", "-C", str(root), "ls-files", *probe_paths], text=True).splitlines()
     _require(bool(files), "prerequisite source inventory is missing")
     _require(not subprocess.check_output(["git", "-C", str(root), "diff", "--name-only",
-                 old_commit, "HEAD", "--", "src/deepchoice/outbound", "src/deepchoice/utils/llm.py",
-                 "src/deepchoice/retrievers/tavily_keypool.py", "benchmarks/product_baseline_preflight.py",
-                 "benchmarks/product_baseline_qualification.py"]).strip(), "prerequisite calling code changed")
+                 old_commit, "HEAD", "--", *probe_paths]).strip(), "prerequisite calling code changed")
     for relative in files:
         before = subprocess.check_output(["git", "-C", str(root), "show", f"{old_commit}:{relative}"])
         # Compare Git blobs; checkout CRLF must not look like a behavior change.
