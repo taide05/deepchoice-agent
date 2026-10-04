@@ -2,16 +2,25 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Retire isolated overall-choice candidate after public review
+
+The v24 isolated-choice treatment was measured on the four public development
+cases and retired after 0/4 usable, supported reports and a critical P04
+acknowledgment/idempotency inference. The current default is v23; v24 remains
+readable as historical run identity but cannot resume on the current runtime.
+Both source-to-judgment candidates lacked cross-scenario net quality gain.
+The final 24 runs remain sealed.
+
 ### Stage source facts and original-question judgments
 
 Durable synthesis now binds up to five saved source facts before generating a
-isolated overall-choice judgment and a bounded batch of original subquestion judgments. The overall choice uses separate candidate-specific moderate/strong saved chains. Candidate title mentions are routing
+short judgment for each original question. Candidate title mentions are routing
 hints only; clearly one-sided packets withhold the overall choice. Every stage
 uses the frozen model parameters and budget admission. Citation verification and
 the existing self-review gate still validate analyses. Legacy direct calls retain the prior
-single-call correction. Prompt identity v24 prevents incompatible same-run
-resume. This is an engineering candidate; no real-report quality gain is claimed
-before a frozen four-case development comparison. The final 24 remain sealed.
+single-call correction. Prompt identity v23 prevents incompatible same-run
+resume. The frozen public four-case comparison returned 0/4 usable and supported
+reports; this remains an unaccepted engineering candidate. The final 24 remain sealed.
 
 ### Add direction checks to the continuous engineering loop
 

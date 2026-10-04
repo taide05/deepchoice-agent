@@ -161,7 +161,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v16"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v24",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v23",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -770,4 +770,26 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
     assert restored.manifest_id == _expected_manifest_id(restored)
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_retired_v24_manifest_identity_is_readable_but_cannot_resume():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    task = {"query": "A vs B"}
+    current = build_run_manifest(task)
+    retired = current.model_copy(update={
+        "prompts": tuple(
+            prompt.model_copy(update={"version": "v24", "sha256": "a" * 64})
+            if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt" else prompt
+            for prompt in current.prompts
+        ),
+    })
+    retired = retired.model_copy(update={"manifest_id": _expected_manifest_id(retired)})
+    restored = RunManifest.model_validate_json(retired.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    assert next(prompt.version for prompt in restored.prompts
+                if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt") == "v24"
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, task)
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

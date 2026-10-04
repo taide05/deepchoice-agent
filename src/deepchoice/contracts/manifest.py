@@ -54,7 +54,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v7",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
-    "conclusion_synthesizer.synthesis_prompt": "v24",
+    "conclusion_synthesizer.synthesis_prompt": "v23",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
