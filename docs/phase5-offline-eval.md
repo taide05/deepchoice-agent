@@ -14,7 +14,7 @@
 .\.venv\Scripts\python.exe -m benchmarks.run_offline_eval --check-baseline
 ```
 
-`--check-baseline` 会比较稳定 artifact fingerprint；`evaluated_at`、`current_manifest_id` 和 fingerprint 字段本身不参与指纹计算。`current_manifest_id` 仍保留在 artifact 中作为本次运行的配置溯源，但它包含未被 fixture 执行的模型、端点和推理配置，因此不应让相同离线结果误报漂移。需要评估另一份数据文件时可用 `--dataset PATH`，但它仍须满足 smoke-v1 的固定契约。只有在审阅过数据集或预期输出的有意变更后才更新 checked-in baseline；不要把 `--write-baseline` 当作普通验证命令。
+`--check-baseline` 会比较稳定 artifact fingerprint；`evaluated_at`、`current_manifest_id` 和 fingerprint 字段本身不参与指纹计算。`current_manifest_id` 仍保留在 artifact 中作为本次运行的配置溯源，但它包含未被 fixture 执行的模型、端点和推理配置，因此不应让相同离线结果误报漂移。需要评估另一份数据文件时可用 `--dataset PATH`，但它仍须满足 smoke-v1 的固定契约。只有在审阅过数据集、预期输出或有意变更的核心资产身份后才更新 checked-in baseline；资产身份单独变化时，先逐字段确认12例输出、指标、数据集和来源健康未变。不要把 `--write-baseline` 当作普通验证命令。
 
 Artifact 包含数据集 ID、版本、冻结日期和文件 SHA-256，评估时间、逐阶段分子/分母、manifest ID、core asset registry ID、逐例结果和 fingerprint。来源健康标记为 `not_run`，各默认来源显示 `degraded/unmeasured`，因为该评估刻意不做真实网络探测。
 
@@ -38,3 +38,7 @@ core_asset_registry_id 和 artifact_fingerprint 四项不同，因此只更新�
 逐例结果、指标、数据集和来源健康均不变；仅 evaluated_at、current_manifest_id、
 core_asset_registry_id、artifact_fingerprint 变化。更新这四项记录并通过 `--check-baseline`；
 新的句子级自审行为由专门的离线回归覆盖，smoke 分数不代表真实报告质量。
+
+2026-10-04 synthesis v25 身份记录：原12例逐例输出与指标、冻结数据集和来源健康逐字段
+一致，只有 evaluated_at、current_manifest_id、core_asset_registry_id、artifact_fingerprint
+更新。smoke-v1 仍为12/12 fixture-replay 通过，未访问 LLM/网络，不构成新报告质量证据。
