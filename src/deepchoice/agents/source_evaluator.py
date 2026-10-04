@@ -4,6 +4,7 @@ import re
 from urllib.parse import unquote, urlsplit
 
 from ..utils.evidence import is_navigation_placeholder, source_title
+from ..utils.evidence_choices import bounded_source_passages
 from ..utils.official_catalog import (
     AUDITED_PRODUCT_SEED_IDENTITY,
     AUDITED_SNIPPET_WINDOW,
@@ -305,6 +306,20 @@ class SourceEvaluatorAgent:
 
         source_scores = []
         for result in all_results:
+            if "passages" in result:
+                # Public retriever fields cannot assert already-checked passages.
+                excluded += 1
+                continue
+            if "_source_passages" in result:
+                passages = bounded_source_passages({
+                    "snippet": result.get("snippet"),
+                    "passages": result["_source_passages"],
+                })
+            else:
+                passages = ()
+            if passages is None:
+                excluded += 1
+                continue
             url = result.get("url", "")
             source = result.get("_source", "unknown")
             source_type = classify_source_type(url, source)
@@ -328,6 +343,8 @@ class SourceEvaluatorAgent:
                 "total_score": total,
                 "supporting_sources": [],
             }
+            if passages:
+                scored["passages"] = list(passages)
             if (source == "chroma"
                     and result.get("_seed_excerpt_window") == AUDITED_SNIPPET_WINDOW
                     and _audited_seed_scope_covers_candidate(result, source, candidates) is True):

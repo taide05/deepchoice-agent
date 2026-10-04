@@ -42,8 +42,8 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v17"
-    assert first.scoring_policy_version == "source-score-v6"
+    assert first.report.template_version == "evidence-first-v18"
+    assert first.scoring_policy_version == "source-score-v7"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
@@ -55,7 +55,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v2"
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v16"
+    assert first.citation_policy_version == "deterministic-citation-v17"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -109,6 +109,7 @@ def test_historical_official_directory_manifest_cannot_resume_body_retrieval():
     "deterministic-citation-v7", "deterministic-citation-v8",
     "deterministic-citation-v9", "deterministic-citation-v10", "deterministic-citation-v12",
     "deterministic-citation-v13", "deterministic-citation-v14",
+    "deterministic-citation-v15", "deterministic-citation-v16",
 ])
 def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
@@ -123,6 +124,21 @@ def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version
 
     restored = RunManifest.model_validate_json(historical.model_dump_json())
     assert restored.citation_policy_version == policy_version
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_previous_source_score_policy_remains_readable_but_incompatible():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    current = build_run_manifest({})
+    historical = current.model_copy(update={"scoring_policy_version": "source-score-v6"})
+    historical = historical.model_copy(update={
+        "manifest_id": _expected_manifest_id(historical),
+    })
+    restored = RunManifest.model_validate_json(historical.model_dump_json())
+    assert restored.scoring_policy_version == "source-score-v6"
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
@@ -158,10 +174,10 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v4"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v16"
+    assert registry.citation_policy_version == "deterministic-citation-v17"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v23",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v26",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -173,9 +189,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v18",
-        "evidence_first": "evidence-first-v17",
-        "comparison_matrix": "comparison-matrix-v16",
+        "what_why_how": "what-why-how-v19",
+        "evidence_first": "evidence-first-v18",
+        "comparison_matrix": "comparison-matrix-v17",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 

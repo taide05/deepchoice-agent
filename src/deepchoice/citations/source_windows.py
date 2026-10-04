@@ -156,3 +156,34 @@ def locate_source_window(excerpt: str, document: SourceDocument) -> SourceWindow
     if len(text) > MAX_SOURCE_WINDOW:
         return None
     return SourceWindow(text, document.blocks[:left] + document.blocks[right:])
+
+
+def locate_source_windows(excerpts: tuple[str, ...], document: SourceDocument) -> tuple[SourceWindow, ...] | None:
+    """Locate separate, ordered excerpts in one saved source document.
+
+    Each excerpt retains the existing complete-boundary and ambiguity checks.
+    This proves location only; it does not grant semantic support or allow a
+    joined excerpt to masquerade as contiguous page text.
+    """
+    if not isinstance(excerpts, tuple) or not 1 <= len(excerpts) <= 3:
+        return None
+    whole = " ".join(document.blocks)
+    previous_end = 0
+    total = 0
+    windows: list[SourceWindow] = []
+    for excerpt in excerpts:
+        if not isinstance(excerpt, str):
+            return None
+        clean = " ".join(excerpt.split())
+        total += len(clean)
+        if not clean or total + 2 * (len(windows)) > 1200:
+            return None
+        start = whole.find(clean)
+        if start < previous_end:
+            return None
+        window = locate_source_window(clean, document)
+        if window is None:
+            return None
+        windows.append(window)
+        previous_end = start + len(clean)
+    return tuple(windows)

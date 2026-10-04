@@ -36,6 +36,7 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
 def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
     """Show full saved, bound sentences and fact IDs; no model-authored source prose."""
     from ..citations.verifier import _split_sentences
+    from .evidence_choices import bounded_source_passages
 
     lines = []
     for fact in facts[:5]:
@@ -43,9 +44,24 @@ def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
         text = fact.get("saved_text", "")
         if not isinstance(title, str) or not isinstance(text, str):
             continue
+        passages = ()
+        if "saved_passages" in fact:
+            passages = bounded_source_passages({
+                "snippet": text, "passages": fact["saved_passages"],
+            })
+            if not passages:
+                continue
         mentions = candidate_mentions(title, candidates)
         lines.append(f'{fact["id"]} | title: {title} | title mentions: {mentions or "none"}')
-        lines.extend(f'  s{index}: {sentence}' for index, sentence in enumerate(_split_sentences(text), 1))
+        if passages:
+            sentence_index = 1
+            for passage_index, passage in enumerate(passages, 1):
+                lines.append(f'  Passage {passage_index}/{len(passages)} (same source, separate location):')
+                for sentence in _split_sentences(passage):
+                    lines.append(f'  s{sentence_index}: {sentence}')
+                    sentence_index += 1
+        else:
+            lines.extend(f'  s{index}: {sentence}' for index, sentence in enumerate(_split_sentences(text), 1))
     return "\n".join(lines) if lines else "No bound source facts."
 
 

@@ -1,4 +1,5 @@
 from ..utils.evidence import is_navigation_placeholder
+from ..utils.evidence_choices import bounded_source_passages
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW
 from ..utils.views import print_agent_output
 
@@ -11,7 +12,9 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
 
     chains = []
     for s in source_scores:
-        if s["total_score"] < 4.0 or is_navigation_placeholder(s.get("snippet")):
+        passages = bounded_source_passages(s)
+        if (passages is None or s["total_score"] < 4.0
+                or is_navigation_placeholder(s.get("snippet"))):
             continue
 
         evidence_sources = [{
@@ -20,6 +23,8 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
             "snippet": s.get("snippet", ""),
             "score": s["total_score"],
         }]
+        if passages:
+            evidence_sources[0]["passages"] = list(passages)
         if s.get("_seed_excerpt_window") == AUDITED_SNIPPET_WINDOW:
             evidence_sources[0]["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
 

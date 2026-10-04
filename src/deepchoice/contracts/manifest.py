@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from ..agents.conclusion_synthesizer import (
     SYNTHESIS_CALL_TIMEOUT_S, SYNTHESIS_CORRECTION_TEMPLATE, SYNTHESIS_PROMPT,
     FACT_SELECTION_PROMPT, QUESTION_JUDGMENT_PROMPT,
-    SYNTHESIS_STRUCTURE_POLICY,
+    SYNTHESIS_STRUCTURE_POLICY, SOURCE_PASSAGE_DISPLAY_POLICY,
 )
 from ..agents.conflict_detector import (
     ARBITRATION_SYSTEM,
@@ -46,15 +46,15 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v18",
-    "evidence_first": "evidence-first-v17",
-    "comparison_matrix": "comparison-matrix-v16",
+    "what_why_how": "what-why-how-v19",
+    "evidence_first": "evidence-first-v18",
+    "comparison_matrix": "comparison-matrix-v17",
 }
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v7",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
-    "conclusion_synthesizer.synthesis_prompt": "v23",
+    "conclusion_synthesizer.synthesis_prompt": "v26",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -79,7 +79,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26"] = "v1"
     sha256: str
 
 
@@ -122,7 +122,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6"] = "source-score-v6"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7"] = "source-score-v7"
     security_policy_version: Literal[
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4", "outbound-url-v5"
     ] = "outbound-url-v5"
@@ -137,6 +137,7 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v10", "deterministic-citation-v11",
         "deterministic-citation-v12", "deterministic-citation-v13", "deterministic-citation-v14",
         "deterministic-citation-v15", "deterministic-citation-v16",
+        "deterministic-citation-v17",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     gather_evidence: bool
@@ -152,7 +153,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v4"] = "research-v4"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v16"]
+    citation_policy_version: Literal["deterministic-citation-v17"]
     hitl_policy_version: Literal["evidence-insufficient-v1"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -242,7 +243,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         ),
         ("conclusion_synthesizer.synthesis_prompt",
          SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE
-         + "\n" + FACT_SELECTION_PROMPT + "\n" + QUESTION_JUDGMENT_PROMPT),
+         + "\n" + FACT_SELECTION_PROMPT + "\n" + QUESTION_JUDGMENT_PROMPT
+         + "\n" + SOURCE_PASSAGE_DISPLAY_POLICY),
         ("self_reviewer.review_system", REVIEW_SYSTEM),
     )
     report_format = task.get("report_format", "what_why_how")
@@ -343,10 +345,10 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             )
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v6",
+        "scoring_policy_version": "source-score-v7",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v16",
+        "citation_policy_version": "deterministic-citation-v17",
         "hitl_policy_version": "evidence-insufficient-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(

@@ -20,7 +20,7 @@ from ..utils.decision_contract import (
 )
 from ..utils.evidence import is_navigation_placeholder
 from ..utils.views import print_agent_output
-from ..utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+from ..utils.evidence_choices import bind_evidence_choices, bounded_source_passages, calibrate_evidence_choices
 from ..utils.decision_analysis import bind_decision_analysis, calibrate_decision_analysis
 from .conclusion_synthesizer import _decision_requirements
 
@@ -29,7 +29,7 @@ _MAX_SAVED_EXCERPT_CHARS = 1200
 _MAX_DISPLAY_EXCERPTS = 4
 
 
-def _saved_excerpts(checks, evidence_chains: list[dict], limit: int) -> list[dict[str, str]]:
+def _saved_excerpts(checks, evidence_chains: list[dict], limit: int) -> list[dict]:
     """Show bounded saved source text, never a model-selected or live-verified quote.
 
     Resolve through the same registry as citation checks.  Refuse an oversized
@@ -38,7 +38,7 @@ def _saved_excerpts(checks, evidence_chains: list[dict], limit: int) -> list[dic
     if limit <= 0:
         return []
     registry, _ = _source_registry(evidence_chains)
-    excerpts: list[dict[str, str]] = []
+    excerpts: list[dict] = []
     seen: set[tuple[int, int]] = set()
     for check in checks:
         if not check.source_title or not check.canonical_url:
@@ -51,15 +51,20 @@ def _saved_excerpts(checks, evidence_chains: list[dict], limit: int) -> list[dic
         seen.add(source.position)
         chain_index, source_index = source.position
         try:
-            snippet = evidence_chains[chain_index]["sources"][source_index]["snippet"]
+            chain_source = evidence_chains[chain_index]["sources"][source_index]
+            snippet = chain_source["snippet"]
         except (IndexError, KeyError, TypeError):
             continue
         if not isinstance(snippet, str) or is_navigation_placeholder(snippet):
             continue
         clean = " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", snippet).split())
-        if not clean or len(clean) > _MAX_SAVED_EXCERPT_CHARS:
+        passages = bounded_source_passages(chain_source)
+        if not clean or len(clean) > _MAX_SAVED_EXCERPT_CHARS or passages is None:
             continue
-        excerpts.append({"title": source.title, "text": clean})
+        excerpt = {"title": source.title, "text": clean}
+        if passages:
+            excerpt["passages"] = list(passages)
+        excerpts.append(excerpt)
         if len(excerpts) >= limit:
             break
     return excerpts

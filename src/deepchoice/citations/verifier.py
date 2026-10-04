@@ -30,7 +30,7 @@ from deepchoice.outbound.throttle import ProviderAdmissionError, ProviderRateLim
 from deepchoice.security.redaction import redact_text
 from deepchoice.security.urls import ALLOWED_PORTS, MAX_URL_LENGTH, UnsafeUrlError
 
-from .source_windows import SourceDocument, extract_source_document, locate_source_window
+from .source_windows import SourceDocument, extract_source_document, locate_source_window, locate_source_windows
 
 from .contracts import (
     CITATION_POLICY_VERSION,
@@ -249,9 +249,13 @@ def _split_sentences(value: str) -> list[str]:
             value[index] == "."
             and index > 0
             and index + 1 < len(value)
-            and value[index - 1].isdigit()
-            and value[index + 1].isdigit()
+            and value[index - 1].isascii()
+            and value[index + 1].isascii()
+            and (value[index - 1].isalnum() or value[index - 1] == "_")
+            and (value[index + 1].isalnum() or value[index + 1] == "_")
         ):
+            # Preserve decimals and technical identifiers such as sys.exit()
+            # or package.module; a split would fabricate an incomplete clause.
             index += 1
             continue
         end = index + 1
@@ -593,7 +597,7 @@ def _qualifier_unverified(claim: str, evidence: str, claim_tokens: set[str]) -> 
     elsewhere on a long page cannot license a stronger local assertion.
     """
     candidates = []
-    for sentence in re.split(r"[.!?。！？；;\n]+", evidence):
+    for sentence in _split_sentences(evidence):
         overlap = len(claim_tokens & _tokens(sentence))
         if overlap >= 2 and overlap / len(claim_tokens) >= 0.4:
             candidates.append((overlap, sentence))
@@ -666,7 +670,7 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
     if _qualifier_unverified(claim, evidence, claim_tokens):
         return CitationStatus.UNKNOWN, CitationReason.QUALIFIER_UNVERIFIED
 
-    for sentence in re.split(r"[.!?。！？；;\n]+", evidence):
+    for sentence in _split_sentences(evidence):
         sentence_tokens = _tokens(sentence)
         if not sentence_tokens:
             continue
@@ -694,7 +698,7 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
     if overlap >= 0.55 and (matched >= 2 or len(claim_tokens) == 1):
         if any(
             len(claim_tokens & _tokens(sentence)) / len(claim_tokens) >= 0.55
-            for sentence in re.split(r"[.!?。！？；;\n]+", evidence)
+            for sentence in _split_sentences(evidence)
         ):
             return CitationStatus.VERIFIED, CitationReason.LEXICAL_SUPPORT
         return CitationStatus.UNKNOWN, CitationReason.CONTENT_INSUFFICIENT
@@ -704,12 +708,12 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
 
 
 def _source_fact_support(claim, source, recommendation, evidence_chains, outcome):
-    """Apply local checks only to a runtime-reconstructible complete excerpt.
+    """Verify each copied source-fact sentence against its own page location.
 
-    Model-authored claims retain the ordinary page checks. A claimed source-fact
-    field cannot use this path to smuggle rewritten or partially quoted prose.
+    Separate passages share one source identity. Every passage must be found
+    in order on the same fetched page before any sentence can be verified.
     """
-    from ..utils.evidence_choices import whole_source_text
+    from ..utils.evidence_choices import bounded_source_passages, whole_source_text
 
     match = re.fullmatch(r"final_recommendation\.source_facts\[(\d+)\]\.text", claim.path)
     if match is None:
@@ -718,8 +722,12 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
     try:
         fact = recommendation["source_facts"][int(match[1])]
         chain_index, source_index = source.position
-        snippet = whole_source_text(evidence_chains[chain_index]["sources"][source_index].get("snippet"))
+        chain_source = evidence_chains[chain_index]["sources"][source_index]
+        snippet = whole_source_text(chain_source.get("snippet"))
+        passages = bounded_source_passages(chain_source)
     except (KeyError, IndexError, TypeError):
+        return unknown
+    if passages is None:
         return unknown
     number = 0
     expected_number = None
@@ -736,9 +744,25 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
             or fact.get("source_title") != source.title
             or fact.get("canonical_url") != source.canonical_url or outcome.document is None):
         return unknown
-    window = locate_source_window(snippet, outcome.document)
-    if window is None:
-        return unknown
+    if passages:
+        if fact.get("saved_passages") != list(passages):
+            return unknown
+        windows = locate_source_windows(passages, outcome.document)
+        if windows is None:
+            return unknown
+        matches = [
+            index for index, passage in enumerate(passages)
+            if claim.text in _split_sentences(passage)
+        ]
+        if len(matches) != 1:
+            return unknown
+        window = windows[matches[0]]
+    else:
+        if "saved_passages" in fact:
+            return unknown
+        window = locate_source_window(snippet, outcome.document)
+        if window is None:
+            return unknown
     status, reason = _support_status(claim.text, window.text)
     if status is not CitationStatus.VERIFIED:
         if reason in {CitationReason.NEGATION_CONFLICT, CitationReason.NUMERIC_MISMATCH}:
@@ -746,17 +770,13 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         return status, reason
     # A local exact match cannot hide a strongly matching contrary statement
     # inside OR outside the window, including tied matches whose order differs.
-    # Lower-overlap paragraphs about different
-    # acknowledgement modes, for example, are not this source-text occurrence.
     tokens = _tokens(claim.text)
     for block in (window.text,) + window.outside:
-        for sentence in re.split(r"[.!?。！？；;\n]+", block):
+        for sentence in _split_sentences(block):
             if not tokens or len(tokens & _tokens(sentence)) / len(tokens) < 0.9:
                 continue
             other_status, other_reason = _support_status(claim.text, sentence)
             if other_reason in {CitationReason.NEGATION_CONFLICT, CitationReason.NUMERIC_MISMATCH}:
-                # Both the copied wording and a strong contrary statement are
-                # present. Their applicability is uncertain, not proved false.
                 return CitationStatus.UNKNOWN, other_reason
             if other_reason is CitationReason.QUALIFIER_UNVERIFIED:
                 return other_status, other_reason

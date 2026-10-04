@@ -39,6 +39,31 @@ def whole_source_text(snippet):
     return text
 
 
+def bounded_source_passages(source):
+    """Return complete bounded passages from one source, or None if malformed.
+
+    An absent field retains the historical single-snippet path. The ordered
+    passages must reproduce the visible snippet exactly after whitespace
+    normalization; citation validation later locates each passage on the page.
+    """
+    if not isinstance(source, dict) or "passages" not in source:
+        return ()
+    values = source["passages"]
+    if not isinstance(values, list) or not 1 <= len(values) <= 3:
+        return None
+    passages = []
+    for value in values:
+        clean = whole_source_text(value)
+        if not clean or clean[-1] not in ".!?。！？；;" or clean in passages:
+            return None
+        passages.append(clean)
+    aggregate = " ".join(passages)
+    if (len(aggregate) > MAX_SOURCE_TEXT
+            or whole_source_text(source.get("snippet")) != aggregate):
+        return None
+    return tuple(passages)
+
+
 def bind_evidence_choices(recommendation, chains, candidates, requirements):
     """Discard model text/status; rebuild from this request and unique sources."""
     from ..citations.verifier import (
@@ -86,15 +111,19 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
                 or marker_titles(spans[0][2]) != [resolved.title]):
             continue
         text = whole_source_text(source.get("snippet"))
-        if not text:
+        passages = bounded_source_passages(source)
+        if not text or passages is None:
             continue
         sentences = _split_sentences(text)
-        result["source_facts"].append({
+        fact = {
             "id": identifier, "evidence_id": evidence_id,
             "text": " ".join(f"{sentence} [Source: {resolved.title}]" for sentence in sentences),
             "source_title": resolved.title, "canonical_url": resolved.canonical_url,
             "saved_text": text, "status": "unknown",
-        })
+        }
+        if passages:
+            fact["saved_passages"] = list(passages)
+        result["source_facts"].append(fact)
     identifiers = [item.get("id") for item in raw_facts if isinstance(item, dict)]
     if len(identifiers) != len(set(str(item) for item in identifiers)):
         result["source_facts"] = []

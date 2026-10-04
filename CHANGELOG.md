@@ -1,6 +1,19 @@
 # Changelog
 
-## [Unreleased] - 2026-09-21
+## [Unreleased] - 2026-10-04
+
+### Establish source-scope passage verification contract
+
+Bounded separate passages from one URL now survive source scoring and synthesis
+as one source, and citation verification locates each passage in order on one
+fetched page before checking any copied fact sentence. Reports label those
+passages separately, including uncertainty excerpts and the original-question
+judgment packet. Missing, reordered, duplicated or forged passages fail closed. Dotted technical identifiers such as
+`sys.exit()` remain whole sentences. New manifests freeze source-score v7,
+synthesis prompt v26, report templates v19/v18/v17 and deterministic citation
+v17; historical identities stay readable and cannot resume on the current runtime. No default retriever emits
+separate passages yet, so this is engineering capacity, not a real-report quality
+claim. The final 24 runs remain sealed.
 
 ### Retire official two-sided fact pool after public development review
 

@@ -44,6 +44,21 @@ def test_packet_keeps_complete_sentence_addresses_and_title_tags():
     assert has_multi_candidate_coverage([{"source_title": "Unclassified comparison"}], TASK["candidate_techs"])
 
 
+
+def test_packet_marks_separate_passages_without_changing_sentence_addresses():
+    first = "If writers cannot queue, a server database is appropriate."
+    second = "A local database needs no configuration or maintenance."
+    fact = {"id": "F1", "source_title": "Alpha guide",
+            "saved_text": first + " " + second,
+            "saved_passages": [first, second]}
+    packet = bounded_fact_packet([fact], TASK["candidate_techs"])
+    assert "Passage 1/2 (same source, separate location):" in packet
+    assert "Passage 2/2 (same source, separate location):" in packet
+    assert f"s1: {first}" in packet and f"s2: {second}" in packet
+    assert packet.index(f"s1: {first}") < packet.index("Passage 2/2") < packet.index(f"s2: {second}")
+    invalid = {**fact, "saved_passages": [first, first]}
+    assert bounded_fact_packet([invalid], TASK["candidate_techs"]) == "No bound source facts."
+
 def test_only_original_question_rows_are_planned():
     rows = question_rows(TASK["query"], [
         {"id": "C1", "kind": "frozen_constraint", "requirement": "Hard"},

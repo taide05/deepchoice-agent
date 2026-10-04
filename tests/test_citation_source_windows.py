@@ -1,14 +1,20 @@
 """Source-window regressions use synthetic pages; no network or model calls."""
 from copy import deepcopy
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
+from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
+from deepchoice.agents.evidence_chain import build_evidence_chain
+from deepchoice.agents.conclusion_synthesizer import _summarize_chains
+from deepchoice.agents.citation_validator import _saved_excerpts
 from deepchoice.citations.source_windows import (
-    MAX_DOCUMENT_TEXT, extract_source_document, locate_source_window,
+    MAX_DOCUMENT_TEXT, extract_source_document, locate_source_window, locate_source_windows,
 )
-from deepchoice.citations.verifier import verify_citations
+from deepchoice.citations.verifier import _split_sentences, verify_citations
 from deepchoice.utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+from deepchoice.formats.decision import _render_saved_excerpts, _saved_fact_excerpt
 
 URL = 'https://example.org/queue'
 TEXT = ('A task message is not removed from the queue until that message has been acknowledged by a worker. '
@@ -244,3 +250,190 @@ async def test_punctuation_only_tail_still_prevents_source_verification(monkeypa
     assert verification.checks[-1].claim_text == tail
     assert verification.checks[-1].status.value == 'unknown'
     assert verification.checks[-1].reason.value == 'content_insufficient'
+
+
+def test_disjoint_passages_require_individual_source_windows():
+    first = "If writers cannot queue, a client/server database is appropriate."
+    second = "SQLite needs no configuration or maintenance for local storage."
+    document = extract_source_document(
+        f"<p>{first}</p><p>An unrelated deployment section.</p><p>{second}</p>",
+        truncated=False,
+    )
+    assert locate_source_window(first + " " + second, document) is None
+    windows = locate_source_windows((first, second), document)
+    assert windows is not None and len(windows) == 2
+    assert first in windows[0].text and second in windows[1].text
+    assert locate_source_windows((second, first), document) is None
+    assert locate_source_windows((first, first), document) is None
+    assert locate_source_windows((first, "a forged capability."), document) is None
+    assert locate_source_windows((first, second, first, second), document) is None
+
+
+def test_disjoint_passages_keep_total_bound_and_incomplete_edge():
+    first = "A" * 550 + "."
+    second = "B" * 550 + "."
+    third = "C" * 110 + "."
+    document = extract_source_document(
+        f"<p>{first}</p><p>{second}</p><p>{third}</p>", truncated=False,
+    )
+    assert locate_source_windows((first, second), document) is not None
+    assert locate_source_windows((first, second, third), document) is None
+    unfinished = extract_source_document(
+        f"<p>{first}</p><p>{second}</p>", truncated=True,
+    )
+    assert locate_source_windows((first, second), unfinished) is None
+
+
+def test_technical_identifier_stays_inside_complete_source_sentence():
+    text = ("The worker acknowledges a terminated child even if sys.exit() "
+            "was called and acks_late is enabled. The operator can inspect logs.")
+    assert _split_sentences(text) == [
+        "The worker acknowledges a terminated child even if sys.exit() "
+        "was called and acks_late is enabled.",
+        "The operator can inspect logs.",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dotted_technical_identifier_qualifier_verifies_as_one_sentence(monkeypatch):
+    excerpt = ("The worker acknowledges a terminated child if the task calls "
+               "sys.exit(), even when acks_late is enabled.")
+    bound, chains = bound_fact(excerpt)
+    async def fetch(channel, url, **kwargs):
+        return httpx.Response(200, text=f"<p>{excerpt}</p>",
+                              headers={"content-type": "text/html"})
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    verification, _ = await verify_citations(bound, deepcopy(chains))
+    calibrated = calibrate_evidence_choices(bound, verification)
+    assert len(verification.checks) == 1
+    assert calibrated["source_facts"][0]["status"] == "verified"
+
+
+@pytest.mark.asyncio
+async def test_separate_passages_bind_and_verify_once_against_one_page(monkeypatch):
+    first = "If writers cannot queue, a client/server database is appropriate."
+    second = "SQLite needs no configuration or maintenance for local storage."
+    source = {
+        "title": "Queue source", "url": URL,
+        "snippet": first + "\n\n" + second,
+        "passages": [first, second],
+    }
+    chains = [{"sources": [source]}]
+    bound = bind_evidence_choices(
+        {"source_facts": [{"id": "F1", "evidence_id": 1}]}, chains, [], [],
+    )
+    assert len(bound["source_facts"]) == 1
+    assert bound["source_facts"][0]["saved_passages"] == [first, second]
+    calls = []
+    async def fetch(channel, url, **kwargs):
+        calls.append((channel, url))
+        body = f"<p>{first}</p><p>Unrelated deployment content.</p><p>{second}</p>"
+        return httpx.Response(200, text=body, headers={"content-type": "text/html"})
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    verification, _ = await verify_citations(bound, deepcopy(chains))
+    calibrated = calibrate_evidence_choices(bound, verification)
+    assert calibrated["source_facts"][0]["status"] == "verified"
+    assert len(calls) == 1 and len(verification.checks) == 2
+    assert all(check.canonical_url == URL for check in verification.checks)
+    rendered = _render_saved_excerpts({
+        "saved_source_excerpts": [_saved_fact_excerpt(calibrated["source_facts"][0])],
+    }, "zh")
+    assert len(rendered) == 2
+    assert "1/2" in rendered[0] and "2/2" in rendered[1]
+    assert first in rendered[0] and second in rendered[1]
+    assert first + " " + second not in "\n".join(rendered)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["missing", "reversed", "forged_fact"])
+async def test_separate_passage_failure_cannot_grant_source_fact(monkeypatch, mutation):
+    first = "The queue persists work after restart."
+    second = "Restart recovery requires an enabled journal."
+    passages = [first, second]
+    if mutation == "missing":
+        passages[1] = "Restart recovery is always automatic."
+    elif mutation == "reversed":
+        passages.reverse()
+    source = {
+        "title": "Queue source", "url": URL,
+        "snippet": "\n\n".join(passages), "passages": passages,
+    }
+    chains = [{"sources": [source]}]
+    bound = bind_evidence_choices(
+        {"source_facts": [{"id": "F1", "evidence_id": 1}]}, chains, [], [],
+    )
+    assert len(bound["source_facts"]) == 1
+    if mutation == "forged_fact":
+        bound["source_facts"][0]["saved_passages"][1] = "Forged."
+    async def fetch(channel, url, **kwargs):
+        return httpx.Response(200, text=f"<p>{first}</p><p>{second}</p>",
+                              headers={"content-type": "text/html"})
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    verification, _ = await verify_citations(bound, deepcopy(chains))
+    calibrated = calibrate_evidence_choices(bound, verification)
+    assert calibrated["source_facts"][0]["status"] == "unknown"
+
+
+def test_invalid_passage_bundle_does_not_bind_or_multiply_sources():
+    first = "A source statement with a complete condition."
+    source = {"title": "Queue source", "url": URL,
+              "snippet": first + "\n\n" + first,
+              "passages": [first, first]}
+    chains = [{"sources": [source]}]
+    bound = bind_evidence_choices(
+        {"source_facts": [{"id": "F1", "evidence_id": 1}]}, chains, [], [],
+    )
+    assert bound["source_facts"] == []
+
+
+@pytest.mark.asyncio
+async def test_separate_passages_remain_one_source_through_scoring_and_prompt():
+    first = "If writers cannot queue, a client/server database is appropriate."
+    second = "SQLite needs no configuration or maintenance for local storage."
+    result = {
+        "url": URL, "title": "Queue source",
+        "snippet": first + "\n\n" + second,
+        "_source_passages": [first, second],
+    }
+    state = {
+        "task": {"candidate_techs": []},
+        "search_results": [{"source": "official", "status": "success", "results": [result]}],
+    }
+    scored = (await SourceEvaluatorAgent().run(state))["source_scores"]
+    chains = build_evidence_chain(scored, [])
+    prompt, mapping = _summarize_chains(chains)
+    assert len(scored) == len(chains) == len(mapping) == 1
+    assert chains[0]["sources"][0]["passages"] == [first, second]
+    assert "Passage 1:" in prompt and "Passage 2:" in prompt
+    assert "s1: " + first in prompt and "s2: " + second in prompt
+    from deepchoice.runtime.coordinator import sanitize_public_json
+    assert "_source_passages" not in str(sanitize_public_json(state["search_results"]))
+    public_claim = {**result, "passages": result["_source_passages"]}
+    assert (await SourceEvaluatorAgent().run({
+        **state,
+        "search_results": [{"source": "official", "status": "success",
+                            "results": [public_claim]}],
+    }))["source_scores"] == []
+
+
+def test_saved_uncertainty_excerpt_preserves_separate_passage_provenance():
+    first = "If writers cannot queue, a client/server database is appropriate."
+    second = "SQLite needs no configuration or maintenance for local storage."
+    source = {
+        "title": "Queue source", "url": URL,
+        "snippet": first + "\n\n" + second,
+        "passages": [first, second],
+    }
+    check = SimpleNamespace(source_title="Queue source", canonical_url=URL)
+    excerpts = _saved_excerpts([check], [{"sources": [source]}], 1)
+    assert excerpts == [{
+        "title": "Queue source", "text": first + " " + second,
+        "passages": [first, second],
+    }]
+    rendered = _render_saved_excerpts({"saved_source_excerpts": excerpts}, "en")
+    assert len(rendered) == 2
+    assert "separate location" in rendered[0]
+    assert first + " " + second not in "\n".join(rendered)
+
+    malformed = {**source, "passages": [first, first]}
+    assert _saved_excerpts([check], [{"sources": [malformed]}], 1) == []

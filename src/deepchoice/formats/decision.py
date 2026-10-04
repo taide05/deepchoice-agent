@@ -39,6 +39,13 @@ def _code(value: str) -> str:
     return f"{fence}{value}{fence}"
 
 
+def _saved_fact_excerpt(fact: dict[str, Any]) -> dict[str, Any]:
+    excerpt = {"title": fact.get("source_title"), "text": fact.get("saved_text")}
+    if "saved_passages" in fact:
+        excerpt["passages"] = fact["saved_passages"]
+    return excerpt
+
+
 def _render_saved_excerpts(item: dict[str, Any], lang: str) -> list[str]:
     lines: list[str] = []
     for excerpt in _dict_items(item.get("saved_source_excerpts"), 2):
@@ -51,7 +58,23 @@ def _render_saved_excerpts(item: dict[str, Any], lang: str) -> list[str]:
             if lang == "zh" else
             "Saved source excerpt (whitespace normalized; not proof of full-page context or applicability)"
         )
-        lines.append(f"  - {label}：{_code(title)} — {_code(content)}")
+        if "passages" in excerpt:
+            from ..utils.evidence_choices import bounded_source_passages
+            passages = bounded_source_passages({
+                "snippet": content, "passages": excerpt["passages"],
+            })
+            if not passages:
+                continue
+            for index, passage in enumerate(passages, 1):
+                separate = (
+                    f"保存的来源片段 {index}/{len(passages)}（同一来源、非连续；不证明适用性）"
+                    if lang == "zh" else
+                    f"Saved source passage {index}/{len(passages)} "
+                    "(same source, separate location; not proof of applicability)"
+                )
+                lines.append(f"  - {separate}：{_code(title)} — {_code(passage)}")
+        else:
+            lines.append(f"  - {label}：{_code(title)} — {_code(content)}")
     return lines
 
 
@@ -166,7 +189,7 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
         used.update({key: facts[key] for key in item["fact_ids"]})
     lines.extend(["#### 来源原文与核验状态" if zh else "#### Source text and check status", ""])
     for fact in used.values():
-        lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{"title": fact.get("source_title"), "text": fact.get("saved_text")}]}, lang))
+        lines.extend(_render_saved_excerpts({"saved_source_excerpts": [_saved_fact_excerpt(fact)]}, lang))
         if fact.get("status") == "verified":
             lines.append("  - " + ("原文词法核验：verified；不验证上方模型推断。" if zh else "Source lexical check: verified; this does not verify the model inferences above."))
         elif fact.get("review_availability") == "sentence_scoped":
@@ -254,9 +277,7 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
                          + " / ".join(_code(_text(facts[key].get("source_title"))) for key in identifiers))
             displayed_facts.update({key: facts[key] for key in identifiers})
         for fact in displayed_facts.values():
-            lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{
-                "title": fact.get("source_title"), "text": fact.get("saved_text"),
-            }]}, lang))
+            lines.extend(_render_saved_excerpts({"saved_source_excerpts": [_saved_fact_excerpt(fact)]}, lang))
             lines.append("    " + ("引用状态：" if lang == "zh" else "Citation status: ")
                          + _code(_text(fact.get("status"))))
         lines.append("")
@@ -320,7 +341,7 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
         lines.append("")
 
         for fact in reviewed_facts.values():
-            lines.extend(_render_saved_excerpts({"saved_source_excerpts": [{"title": fact["source_title"], "text": fact["saved_text"]}]}, lang))
+            lines.extend(_render_saved_excerpts({"saved_source_excerpts": [_saved_fact_excerpt(fact)]}, lang))
             lines.append("  - " + ("来源核验状态：" if lang == "zh" else "Source check status: ") + _code(fact["status"]))
         if reviewed_facts:
             lines.append("")

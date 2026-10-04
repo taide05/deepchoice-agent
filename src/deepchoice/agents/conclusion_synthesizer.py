@@ -23,7 +23,7 @@ from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholde
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
-from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, eligible_source_fact_ids, whole_source_text
+from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, bounded_source_passages, eligible_source_fact_ids, whole_source_text
 from ..utils.question_packet import bounded_fact_packet, has_multi_candidate_coverage, question_rows
 
 # Preserve the existing timeout while the optional thinking mode is measured.
@@ -31,6 +31,7 @@ SYNTHESIS_CALL_TIMEOUT_S = 900.0
 
 # Included with the feedback template in the immutable synthesis prompt asset.
 SYNTHESIS_STRUCTURE_POLICY = "sentence-basis-correction-v5:max_corrections=1"
+SOURCE_PASSAGE_DISPLAY_POLICY = "separate-source-passages-v1:one-url-one-source"
 SYNTHESIS_CORRECTION_TEMPLATE = """A local binding-contract check rejected part of the previous JSON response.
 Regenerate the COMPLETE response for exactly the original request, candidates, hard constraints and evidence above.
 Only one corrective generation is allowed. Do not invent sources or relax constraints.
@@ -290,9 +291,19 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
             if snippet:
                 if n in eligible_facts and whole_snippet:
                     from ..citations.verifier import _split_sentences
-                    lines.append("       Untrusted snippet (complete saved text, 1-based sentences):")
-                    lines.extend(f"       s{index}: {sentence}" for index, sentence in
-                                 enumerate(_split_sentences(whole_snippet), 1))
+                    passages = bounded_source_passages(src)
+                    if passages:
+                        lines.append("       Untrusted separate passages from one source (1-based sentences):")
+                        sentence_index = 1
+                        for passage_index, passage in enumerate(passages, 1):
+                            lines.append(f"       Passage {passage_index}:")
+                            for sentence in _split_sentences(passage):
+                                lines.append(f"       s{sentence_index}: {sentence}")
+                                sentence_index += 1
+                    else:
+                        lines.append("       Untrusted snippet (complete saved text, 1-based sentences):")
+                        lines.extend(f"       s{index}: {sentence}" for index, sentence in
+                                     enumerate(_split_sentences(whole_snippet), 1))
                 else:
                     lines.append(f"       Untrusted snippet: {snippet}")
         lines.append("")
