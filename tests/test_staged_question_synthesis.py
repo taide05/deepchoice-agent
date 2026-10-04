@@ -7,7 +7,8 @@ from deepchoice.agents import conclusion_synthesizer as synth
 from deepchoice.budget_errors import BudgetPersistenceError
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.utils.question_packet import (
-    bounded_fact_packet, candidate_mentions, has_multi_candidate_coverage, question_rows,
+    bounded_fact_packet, candidate_mentions, has_multi_candidate_coverage,
+    preferred_official_fact_ids, question_rows,
 )
 
 TASK = {"query": "Choose Alpha or Beta under restart constraints?",
@@ -141,3 +142,79 @@ async def test_invalid_question_output_isolated_and_budget_loss_propagates(monke
         await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
             {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
+
+
+def _official_pool_chains():
+    rows = [
+        ("SQLite uses", "https://sqlite.org/whentouse.html", "SQLite permits one writer at a time."),
+        ("SQLite backup", "https://sqlite.org/backup.html", "SQLite offers an online backup API."),
+        ("SQLite search", "https://sqlite.org/fts5.html", "SQLite FTS5 supports full-text search."),
+        ("PostgreSQL backup", "https://www.postgresql.org/docs/18/backup.html",
+         "PostgreSQL documents several backup approaches."),
+        ("PostgreSQL search", "https://www.postgresql.org/docs/18/textsearch-intro.html",
+         "PostgreSQL supports full text searching."),
+        ("SQLite vs PostgreSQL opinion", "https://example.net/compare",
+         "An unverified comparison asserts that SQLite is always faster."),
+    ]
+    return [
+        {"evidence_strength": "moderate", "sources": [
+            {"title": title, "url": url, "snippet": snippet, "score": 7.0}
+        ]}
+        for title, url, snippet in rows
+    ]
+
+
+def test_preferred_official_pool_preserves_original_source_numbers():
+    chains = _official_pool_chains()
+    candidates = ["SQLite", "PostgreSQL"]
+    pool = preferred_official_fact_ids(chains, candidates)
+    assert pool == {1, 2, 3, 4, 5}
+    selection, mapping = synth._summarize_chains(chains, include_numbers=pool)
+    assert "[[5]]" in selection and "[[6]]" not in selection
+    assert set(mapping) == pool
+    full, full_mapping = synth._summarize_chains(chains)
+    assert "[[6]]" in full and 6 in full_mapping
+
+
+def test_preferred_pool_falls_back_for_mixed_one_sided_or_composite_evidence():
+    candidates = ["SQLite", "PostgreSQL"]
+    chains = _official_pool_chains()
+    chains[4]["sources"][0]["url"] = "https://example.net/postgres"
+    assert preferred_official_fact_ids(chains, candidates) is None
+    chains = _official_pool_chains()
+    chains[4]["sources"][0]["title"] = "SQLite search two"
+    assert preferred_official_fact_ids(chains, candidates) is None
+    chains = _official_pool_chains()
+    chains[4]["sources"][0]["url"] = chains[3]["sources"][0]["url"]
+    assert preferred_official_fact_ids(chains, candidates) is None
+    assert preferred_official_fact_ids(_official_pool_chains(),
+                                       ["PostgreSQL + pgvector", "SQLite"]) is None
+
+
+def test_memcached_docs_exact_alias_can_enter_two_sided_official_pool():
+    from deepchoice.utils.official_catalog import is_catalog_official_url
+    chains = _official_pool_chains()
+    for row, title, url in zip(chains[:5],
+                               ["Redis eviction", "Redis persistence", "Redis data types",
+                                "Memcached overview", "Memcached FAQ"],
+                               ["https://redis.io/docs/latest/eviction/",
+                                "https://redis.io/docs/latest/persistence/",
+                                "https://redis.io/docs/latest/data-types/",
+                                "https://docs.memcached.org/",
+                                "https://docs.memcached.org/userguide/faq/"]):
+        row["sources"][0].update(title=title, url=url)
+    assert is_catalog_official_url("https://docs.memcached.org/userguide/faq/")
+    assert not is_catalog_official_url("https://docs.memcached.org.evil.example/faq/")
+    assert preferred_official_fact_ids(chains, ["Redis", "Memcached"]) == {1, 2, 3, 4, 5}
+
+
+async def test_stage_rejects_facts_outside_preferred_pool(monkeypatch):
+    model = AsyncMock(return_value={"source_facts": [{"id": "F1", "evidence_id": 6}]})
+    monkeypatch.setattr(synth, "call_model", model)
+    task = {**TASK, "candidate_techs": ["SQLite", "PostgreSQL"]}
+    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
+        {"task": task, "evidence_chains": _official_pool_chains()})
+    assert model.await_count == 1
+    assert "[[6]]" not in model.await_args_list[0].args[0][0]["content"]
+    assert not state["final_recommendation"].get("source_facts", [])
+    assert state["quality_signals"][0]["staged_generation"]["official_pool_preferred"]

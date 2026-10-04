@@ -126,7 +126,7 @@ TECH_DOCS: dict[str, dict[str, str]] = {
 }
 
 
-_EXPLICIT_HOST_ALIASES = {"www.sqlite.org": "sqlite.org"}
+_EXPLICIT_HOST_ALIASES = {"www.sqlite.org": "sqlite.org", "docs.memcached.org": "memcached.org"}
 _HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 

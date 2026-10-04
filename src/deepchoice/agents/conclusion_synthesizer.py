@@ -24,7 +24,9 @@ from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
 from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, eligible_source_fact_ids, whole_source_text
-from ..utils.question_packet import bounded_fact_packet, has_multi_candidate_coverage, question_rows
+from ..utils.question_packet import (
+    bounded_fact_packet, has_multi_candidate_coverage, preferred_official_fact_ids, question_rows,
+)
 
 # Preserve the existing timeout while the optional thinking mode is measured.
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
@@ -167,6 +169,11 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
     common = dict(model=model, response_format=response_format,
                   tag="conclusion_synthesizer", usage=usage, extra_body=extra_body,
                   timeout=timeout, seed=seed)
+    preferred_ids = preferred_official_fact_ids(evidence_chains, candidates)
+    selection_text = (
+        _summarize_chains(evidence_chains, include_numbers=preferred_ids)[0]
+        if preferred_ids is not None else evidence_text
+    )
     selection_prompt = [{"role": "user", "content": FACT_SELECTION_PROMPT.format(
         query=_prompt_data(task.get("query", ""), 4000),
         candidates=_prompt_data(json.dumps(candidates, ensure_ascii=False), 4000),
@@ -174,7 +181,7 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
         constraints=_format_requirements(requirements, "C"),
         supplemental=_prompt_data(research_state.get("_supplemental_input"), 4000) or "none",
         questions="\n".join(f"{key}: {value}" for key, value in questions),
-        evidence=evidence_text,
+        evidence=selection_text,
     )}]
     diagnostic = {"questions_planned": len(questions), "judgment_calls": 0,
                   "rows_received": 0, "rows_selected": 0,
@@ -188,11 +195,17 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
         diagnostic["provider_errors"] += 1
         selected = {}
     selected = selected if isinstance(selected, dict) else {}
-    bound = bind_evidence_choices({"source_facts": selected.get("source_facts", [])},
+    raw_selection = selected.get("source_facts", [])
+    if preferred_ids is not None and isinstance(raw_selection, list):
+        if any(not isinstance(item, dict) or type(item.get("evidence_id")) is not int
+               or item["evidence_id"] not in preferred_ids for item in raw_selection):
+            raw_selection = []
+    bound = bind_evidence_choices({"source_facts": raw_selection},
                                   evidence_chains, candidates, requirements)
     facts = bound.get("source_facts", [])
     raw_facts = [{"id": fact["id"], "evidence_id": fact["evidence_id"]} for fact in facts]
     diagnostic["facts_bound"] = len(facts)
+    diagnostic["official_pool_preferred"] = preferred_ids is not None
     analyses = []
     if facts and questions:
         allowed = list(questions)
@@ -242,7 +255,8 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
              "decision_analysis": analyses}, diagnostic)
 
 
-def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]:
+def _summarize_chains(evidence_chains: list[dict], *,
+                      include_numbers: set[int] | None = None) -> tuple[str, dict[int, str]]:
     """Format evidence chains for the prompt, assigning each source a stable
     number ([[N]]) that the model cites instead of a verbatim title. Returns
     the rendered text plus the number -> title mapping used to bind citations
@@ -264,15 +278,17 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
         conclusion = c.get('conclusion', 'Untitled')
         if any(not conclusion_source_allowed(src) for src in sources):
             conclusion = "Mixed/excluded-source summary omitted; evaluate allowed snippets only."
-        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {conclusion}")
+        chain_lines = []
         for src in sources:
             n += 1
+            if include_numbers is not None and n not in include_numbers:
+                continue
             if not conclusion_source_allowed(src):
                 continue  # Keep source numbering stable across all consumers.
             title = source_title(src.get("title"), src.get("url"))
             mapping[n] = title
-            lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
-            lines.append("       Source-fact binding allowed: " + ("yes" if n in eligible_facts else "no"))
+            chain_lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
+            chain_lines.append("       Source-fact binding allowed: " + ("yes" if n in eligible_facts else "no"))
             # A reviewed official-seed snippet can now include a source line
             # ending just after the old 500-char cutoff. Keep that qualification
             # visible to synthesis; ordinary sources retain their 600-char cap.
@@ -290,12 +306,15 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
             if snippet:
                 if n in eligible_facts and whole_snippet:
                     from ..citations.verifier import _split_sentences
-                    lines.append("       Untrusted snippet (complete saved text, 1-based sentences):")
-                    lines.extend(f"       s{index}: {sentence}" for index, sentence in
-                                 enumerate(_split_sentences(whole_snippet), 1))
+                    chain_lines.append("       Untrusted snippet (complete saved text, 1-based sentences):")
+                    chain_lines.extend(f"       s{index}: {sentence}" for index, sentence in
+                                       enumerate(_split_sentences(whole_snippet), 1))
                 else:
-                    lines.append(f"       Untrusted snippet: {snippet}")
-        lines.append("")
+                    chain_lines.append(f"       Untrusted snippet: {snippet}")
+        if chain_lines:
+            lines.append(f"Chain {i + 1} [{strength}]{disputed}: {conclusion}")
+            lines.extend(chain_lines)
+            lines.append("")
     return "\n".join(lines), mapping
 
 

@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Prefer a bounded two-sided official source pool when it is complete
+
+When the highest-ranked five bindable sources are distinct official documents
+owned by both exact catalog candidates, durable fact selection sees that pool
+and rejects an out-of-pool source number. Mixed, one-sided, disputed, and
+composite-candidate evidence keeps the prior path. The exact Memcached docs
+subdomain is registered as an official catalog alias. This is a routing rule,
+not semantic applicability or a quality claim. Public P01/P08 saved evidence
+projects to the official pool; P04/P02 remain on the prior path. No new paid
+research or holdout access has occurred. Python 3.12 validation on 2026-10-04:
+2,914 passed; pyflakes/vulture passed. Final 24 runs remain sealed.
+
 ### Retire isolated overall-choice candidate after public review
 
 The v24 isolated-choice treatment was measured on the four public development
