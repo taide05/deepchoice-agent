@@ -33,55 +33,6 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     return mentions
 
 
-def preferred_official_fact_ids(chains: list[dict], candidates: list[str]) -> set[int] | None:
-    """Prefer the top five only when each candidate owns part of that pool.
-
-    A catalog host and source title are routing hints, not semantic proof.
-    Sparse, mixed, disputed, or composite-candidate pools keep all sources.
-    """
-    from .evidence_choices import MAX_SOURCE_FACTS, eligible_source_fact_ids
-    from .official_catalog import (
-        TECH_DOCS, catalog_scope_contains, is_catalog_official_url, normalized_hostname,
-    )
-
-    if not isinstance(candidates, list) or len(candidates) < 2:
-        return None
-    owners = {}
-    for candidate in candidates:
-        if not isinstance(candidate, str):
-            return None
-        entry = TECH_DOCS.get(candidate.casefold())
-        host = normalized_hostname(entry["url"]) if entry else None
-        # A shared repository host cannot identify which project owns a page.
-        if not host or host == "github.com":
-            return None
-        owners[candidate] = entry["url"]
-    eligible = eligible_source_fact_ids(chains)
-    top = sorted(eligible)[:MAX_SOURCE_FACTS]
-    if len(top) < MAX_SOURCE_FACTS:
-        return None
-    covered = set()
-    seen_urls = set()
-    number = 0
-    for chain in chains:
-        for source in chain.get("sources", [])[:4]:
-            number += 1
-            if number not in top:
-                continue
-            url = source.get("url", "")
-            if chain.get("disputed") or not is_catalog_official_url(url) or url in seen_urls:
-                return None
-            seen_urls.add(url)
-            mentions = candidate_mentions(source.get("title", ""), candidates)
-            owners_here = {
-                candidate for candidate, root_url in owners.items()
-                if candidate in mentions and catalog_scope_contains(root_url, source["url"])
-            }
-            if len(owners_here) != 1:
-                return None
-            covered.update(owners_here)
-    return set(top) if len(covered) == len(owners) else None
-
 def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
     """Show full saved, bound sentences and fact IDs; no model-authored source prose."""
     from ..citations.verifier import _split_sentences

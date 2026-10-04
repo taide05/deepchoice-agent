@@ -38,7 +38,3 @@ core_asset_registry_id 和 artifact_fingerprint 四项不同，因此只更新�
 逐例结果、指标、数据集和来源健康均不变；仅 evaluated_at、current_manifest_id、
 core_asset_registry_id、artifact_fingerprint 变化。更新这四项记录并通过 `--check-baseline`；
 新的句子级自审行为由专门的离线回归覆盖，smoke 分数不代表真实报告质量。
-
-2026-10-04 synthesis v25 身份记录：原12例逐例输出与指标、冻结数据集和来源健康逐字段
-一致，只有 evaluated_at、current_manifest_id、core_asset_registry_id、artifact_fingerprint
-更新。smoke-v1 仍为12/12 fixture-replay 通过，未访问 LLM/网络，不构成新报告质量证据。

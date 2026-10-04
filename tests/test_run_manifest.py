@@ -161,7 +161,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v16"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v25",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v23",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "conflict_detector.contradiction_scan_system": "v2",
@@ -773,15 +773,15 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("historical_version", ["v23", "v24"])
-def test_historical_synthesis_manifest_identity_is_readable_but_cannot_resume(historical_version):
+@pytest.mark.parametrize("retired_version", ["v24", "v25"])
+def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     task = {"query": "A vs B"}
     current = build_run_manifest(task)
     retired = current.model_copy(update={
         "prompts": tuple(
-            prompt.model_copy(update={"version": historical_version, "sha256": "a" * 64})
+            prompt.model_copy(update={"version": retired_version, "sha256": "a" * 64})
             if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt" else prompt
             for prompt in current.prompts
         ),
@@ -790,7 +790,7 @@ def test_historical_synthesis_manifest_identity_is_readable_but_cannot_resume(hi
     restored = RunManifest.model_validate_json(retired.model_dump_json())
     assert restored.manifest_id == _expected_manifest_id(restored)
     assert next(prompt.version for prompt in restored.prompts
-                if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt") == historical_version
+                if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt") == retired_version
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, task)
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
