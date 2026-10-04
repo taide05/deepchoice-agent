@@ -7,7 +7,8 @@ from deepchoice.agents import conclusion_synthesizer as synth
 from deepchoice.budget_errors import BudgetPersistenceError
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.utils.question_packet import (
-    bounded_fact_packet, candidate_mentions, has_multi_candidate_coverage, question_rows,
+    bounded_fact_packet, candidate_mentions, has_distinct_candidate_sources,
+    has_multi_candidate_coverage, moderate_bound_facts, question_rows,
 )
 
 TASK = {"query": "Choose Alpha or Beta under restart constraints?",
@@ -39,6 +40,8 @@ def test_packet_keeps_complete_sentence_addresses_and_title_tags():
     assert "s2: Alpha does not guarantee restart recovery" in packet
     assert "s2: If the service fails" in packet
     assert has_multi_candidate_coverage(facts, TASK["candidate_techs"])
+    assert has_distinct_candidate_sources(facts, TASK["candidate_techs"])
+    assert not has_distinct_candidate_sources([{"source_title": "Alpha vs Beta"}], TASK["candidate_techs"])
     assert not has_multi_candidate_coverage(facts[1:], TASK["candidate_techs"])
     assert candidate_mentions("Alpha vs Beta", TASK["candidate_techs"]) == ["Alpha", "Beta"]
     assert has_multi_candidate_coverage([{"source_title": "Unclassified comparison"}], TASK["candidate_techs"])
@@ -57,13 +60,12 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     model = AsyncMock(side_effect=[
         {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}],
          "winner": "FORGED"},
-        {"decision_analysis": [answer("R0", "F1")["decision_analysis"][0],
-                               answer("Q1", "F2", 2)["decision_analysis"][0]]},
+        answer("R0", "F1"), answer("Q1", "F2", 2),
     ])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
         {"task": TASK, "evidence_chains": CHAINS})
-    assert model.await_count == 2
+    assert model.await_count == 3
     rec = state["final_recommendation"]
     assert rec["winner"] == "context_dependent"
     assert len(rec["source_facts"]) == 2
@@ -72,10 +74,11 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
         "If the service fails, results need a durable store."]
     assert state["quality_signals"][0]["structure_correction"]["attempted"] == 0
     assert "FORGED" not in str(state)
-    selection, judgment = model.await_args_list
+    selection, overall, specific = model.await_args_list
     assert "[[1]]" in selection.args[0][0]["content"]
-    assert "s2: If the service fails" in judgment.args[0][0]["content"]
-    assert "R0:" in judgment.args[0][0]["content"] and "Q1:" in judgment.args[0][0]["content"]
+    assert "s2: If the service fails" in specific.args[0][0]["content"]
+    assert "R0:" in overall.args[0][0]["content"] and "Q1:" not in overall.args[0][0]["content"]
+    assert "Q1:" in specific.args[0][0]["content"] and "R0:" not in specific.args[0][0]["content"]
     assert all(call.kwargs["seed"] == 0 for call in model.await_args_list)
 
 
@@ -95,8 +98,7 @@ async def test_subquestion_cannot_create_a_second_choice(monkeypatch):
     choice["decision_analysis"][0].update(kind="choice", option="Beta")
     model = AsyncMock(side_effect=[
         {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
-        {"decision_analysis": [answer("R0", "F1")["decision_analysis"][0],
-                               choice["decision_analysis"][0]]},
+        answer("R0", "F1"), {"decision_analysis": [choice["decision_analysis"][0]]},
     ])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
@@ -104,7 +106,7 @@ async def test_subquestion_cannot_create_a_second_choice(monkeypatch):
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["R0"]]
     stage = state["quality_signals"][0]["staged_generation"]
     assert stage["rows_received"] == 2 and stage["rows_selected"] == 1
-    assert stage["judgment_calls"] == 1
+    assert stage["judgment_calls"] == 2
 
 
 async def test_malformed_requirement_ids_cannot_crash_or_enter_output(monkeypatch):
@@ -112,7 +114,7 @@ async def test_malformed_requirement_ids_cannot_crash_or_enter_output(monkeypatc
     malformed["requirement_ids"] = [{"not": "an ID"}]
     model = AsyncMock(side_effect=[
         {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
-        {"decision_analysis": [malformed, answer("Q1", "F2")["decision_analysis"][0]]},
+        {"decision_analysis": [malformed]}, answer("Q1", "F2"),
     ])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
@@ -123,12 +125,8 @@ async def test_malformed_requirement_ids_cannot_crash_or_enter_output(monkeypatc
 async def test_invalid_question_output_isolated_and_budget_loss_propagates(monkeypatch):
     model = AsyncMock(side_effect=[
         {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
-        {"decision_analysis": [
-            answer("Q1", "F1")["decision_analysis"][0],
-            {**answer("R0", "F1")["decision_analysis"][0],
-             "requirement_ids": ["R0", "Q1"]},
-
-        ]}])
+        {"decision_analysis": [{**answer("R0", "F1")["decision_analysis"][0],
+             "requirement_ids": ["R0", "Q1"]}]}, answer("Q1", "F1")])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
         {"task": TASK, "evidence_chains": CHAINS})
@@ -141,3 +139,21 @@ async def test_invalid_question_output_isolated_and_budget_loss_propagates(monke
         await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
             {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
+
+
+async def test_overall_choice_excludes_weak_comparison_and_rejects_hidden_basis(monkeypatch):
+    chains = CHAINS + [{"evidence_strength": "weak", "sources": [{"title": "Alpha vs Beta",
+        "url": "https://third.example/compare", "snippet": "Alpha always beats Beta."}]}]
+    forged = answer("R0", "F3")
+    model = AsyncMock(side_effect=[
+        {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2},
+                          {"id": "F3", "evidence_id": 3}]},
+        forged, answer("Q1", "F2"),
+    ])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+        {"task": TASK, "evidence_chains": chains})
+    assert [fact["id"] for fact in moderate_bound_facts(
+        state["final_recommendation"]["source_facts"], chains)] == ["F1", "F2"]
+    assert "F3 |" not in model.await_args_list[1].args[0][0]["content"]
+    assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]

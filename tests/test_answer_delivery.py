@@ -177,10 +177,11 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
     model = AsyncMock(side_effect=[
         {"source_facts": [{"id": "F1", "evidence_id": 1}]},
         {"decision_analysis": malformed["decision_analysis"]},
+        {},
     ])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
         "task": TASK, "evidence_chains": CHAINS})
-    assert model.await_count == 2
+    assert model.await_count == 3
     assert state["final_recommendation"]["decision_analysis"] == []
     assert "different assertion" not in FORMAT_RENDERERS["what_why_how"](state)

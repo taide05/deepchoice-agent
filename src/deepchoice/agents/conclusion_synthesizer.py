@@ -24,7 +24,9 @@ from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
 from ..utils.evidence_choices import MAX_SOURCE_TEXT, bind_evidence_choices, eligible_source_fact_ids, whole_source_text
-from ..utils.question_packet import bounded_fact_packet, has_multi_candidate_coverage, question_rows
+from ..utils.question_packet import (
+    bounded_fact_packet, has_distinct_candidate_sources, moderate_bound_facts, question_rows,
+)
 
 # Preserve the existing timeout while the optional thinking mode is measured.
 SYNTHESIS_CALL_TIMEOUT_S = 900.0
@@ -130,7 +132,9 @@ be grounded in these facts. Do not answer an omitted question.
 The response is a proposal for human review, never verified semantic truth or permission to operate.
 Keep source wording and its if/except/workload limits; a sufficient condition is not a necessary one.
 A title mention is only a routing hint, not proof that a source applies to a candidate.
-Every independent factual premise needs its own basis coordinate, including qualifications. No
+For the original choice, use moderate/strong saved facts from distinct candidate-specific sources;
+a single comparison article cannot establish both sides. Every independent factual premise needs its
+own basis coordinate, including qualifications. No
 performance, recovery, persistence, exactly-once, or comparative guarantee without applicable basis.
 For R0 use kind choice and an exact candidate name only when supported, otherwise kind answer with
 empty option for a conditional comparison. For subquestions use kind answer or design; do not create
@@ -195,12 +199,20 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
     diagnostic["facts_bound"] = len(facts)
     analyses = []
     if facts and questions:
-        allowed = list(questions)
-        if not has_multi_candidate_coverage(facts, candidates):
-            allowed = [item for item in allowed if item[0] != "R0"]
-            diagnostic["r0_withheld_one_sided"] = True
-        if allowed:
-            packet = bounded_fact_packet(facts, candidates)
+        batches = []
+        original = next((item for item in questions if item[0] == "R0"), None)
+        decisive = moderate_bound_facts(facts, evidence_chains)
+        if original:
+            if has_distinct_candidate_sources(decisive, candidates):
+                batches.append(([original], decisive))
+            else:
+                diagnostic["r0_withheld_one_sided"] = True
+        remaining = [item for item in questions if item[0] != "R0"]
+        if remaining:
+            batches.append((remaining, facts))
+        all_ids = {key for key, _ in questions}
+        seen = set()
+        for allowed, batch_facts in batches:
             prompt = [{"role": "user", "content": QUESTION_JUDGMENT_PROMPT.format(
                 query=_prompt_data(task.get("query", ""), 4000),
                 candidates=_prompt_data(json.dumps(candidates, ensure_ascii=False), 4000),
@@ -208,9 +220,9 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
                 constraints=_format_requirements(requirements, "C"),
                 supplemental=_prompt_data(research_state.get("_supplemental_input"), 4000) or "none",
                 questions="\n".join(f"{key}: {value}" for key, value in allowed),
-                first_id=allowed[0][0], facts=packet,
+                first_id=allowed[0][0], facts=bounded_fact_packet(batch_facts, candidates),
             )}]
-            diagnostic["judgment_calls"] = 1
+            diagnostic["judgment_calls"] += 1
             try:
                 answer = await call_model(prompt, **common)
             except BudgetError:
@@ -220,24 +232,30 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
                 diagnostic["provider_errors"] += 1
                 answer = {}
             rows = answer.get("decision_analysis") if isinstance(answer, dict) else None
-            if isinstance(rows, list):
-                diagnostic["rows_received"] = len(rows)
-                if len(rows) <= len(allowed):
-                    all_ids = {key for key, _ in questions}
-                    allowed_ids = {key for key, _ in allowed}
-                    seen = set()
-                    for row in rows:
-                        if (not isinstance(row, dict)
-                                or not isinstance(row.get("requirement_ids"), list)
-                                or any(not isinstance(value, str) for value in row["requirement_ids"])):
-                            continue
-                        targets = set(row["requirement_ids"]) & all_ids
-                        if (len(targets) != 1 or not targets <= allowed_ids or targets & seen
-                                or ("R0" not in targets and row.get("kind") == "choice")):
-                            continue
-                        analyses.append(row)
-                        seen.update(targets)
-                    diagnostic["rows_selected"] = len(analyses)
+            if not isinstance(rows, list):
+                continue
+            diagnostic["rows_received"] += len(rows)
+            if len(rows) > len(allowed):
+                continue
+            allowed_ids = {key for key, _ in allowed}
+            allowed_fact_ids = {fact["id"] for fact in batch_facts}
+            for row in rows:
+                if (not isinstance(row, dict)
+                        or not isinstance(row.get("requirement_ids"), list)
+                        or any(not isinstance(value, str) for value in row["requirement_ids"])):
+                    continue
+                basis = row.get("basis")
+                if (not isinstance(basis, list) or not basis
+                        or any(not isinstance(item, dict) or item.get("fact_id") not in allowed_fact_ids
+                               for item in basis)):
+                    continue
+                targets = set(row["requirement_ids"]) & all_ids
+                if (len(targets) != 1 or not targets <= allowed_ids or targets & seen
+                        or ("R0" not in targets and row.get("kind") == "choice")):
+                    continue
+                analyses.append(row)
+                seen.update(targets)
+        diagnostic["rows_selected"] = len(analyses)
     return ({"answer_contract": ANSWER_CONTRACT, "source_facts": raw_facts,
              "decision_analysis": analyses}, diagnostic)
 

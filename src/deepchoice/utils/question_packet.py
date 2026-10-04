@@ -64,3 +64,27 @@ def has_multi_candidate_coverage(facts: list[dict], candidates: list[str]) -> bo
             return True
         covered.update(mentions)
     return set(candidates) <= covered
+
+
+def moderate_bound_facts(facts: list[dict], chains: list[dict]) -> list[dict]:
+    """Limit overall-choice material to undisputed moderate/strong saved chains."""
+    eligible = set()
+    number = 0
+    for chain in chains:
+        for _source in chain.get("sources", [])[:4]:
+            number += 1
+            if not chain.get("disputed") and chain.get("evidence_strength") in {"moderate", "strong"}:
+                eligible.add(number)
+    return [fact for fact in facts if fact.get("evidence_id") in eligible]
+
+
+def has_distinct_candidate_sources(facts: list[dict], candidates: list[str]) -> bool:
+    """A comparison article alone cannot establish both sides' independent basis."""
+    if len(candidates) < 2:
+        return True
+    exclusive = set()
+    for fact in facts:
+        mentions = candidate_mentions(fact.get("source_title", ""), candidates)
+        if len(mentions) == 1:
+            exclusive.add(mentions[0])
+    return set(candidates) <= exclusive
