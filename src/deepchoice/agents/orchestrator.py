@@ -76,7 +76,10 @@ class ChiefEditorAgent:
             "query_analyzer": QueryAnalyzerAgent(self.websocket, self.stream_output, self.headers),
             "query_adapter": QueryAdapterAgent(self.websocket, self.stream_output, self.headers),
             "multi_retriever": MultiRetrieverAgent(self.websocket, self.stream_output, self.headers),
-            "source_evaluator": SourceEvaluatorAgent(self.websocket, self.stream_output, self.headers),
+            "source_evaluator": SourceEvaluatorAgent(
+                self.websocket, self.stream_output, self.headers,
+                run_manifest=self.run_manifest,
+            ),
             "conflict_detector": ConflictDetectorAgent(
                 self.websocket, self.stream_output, self.headers,
                 gather_evidence=self.run_manifest.gather_evidence,

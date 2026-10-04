@@ -137,6 +137,8 @@ async def test_verified_late_body_replaces_wrong_section_and_reaches_synthesis(m
     assert calls == 2
     assert len(response.results) == 1
     assert response.results[0]["snippet"].startswith(ANCHOR)
+    assert "idempotent" in " ".join(response.results[0]["_source_scope_sentences"])
+    assert "Synchronous subtasks" not in " ".join(response.results[0]["_source_scope_sentences"])
     scored = (await SourceEvaluatorAgent().run({
         "task": {"candidate_techs": ["FastAPI", "Celery"]},
         "search_results": [response.model_dump()],
@@ -181,3 +183,35 @@ async def test_unverified_selected_chunk_cannot_borrow_verified_same_url_body(mo
     )
     assert results[0]["snippet"] == NAV[:500]
     assert "_seed_excerpt_window" not in results[0]
+    assert "_source_scope_sentences" not in results[0]
+
+
+@pytest.mark.asyncio
+async def test_replaced_audited_excerpt_clears_unavailable_new_chunk_scope(monkeypatch):
+    monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: SimpleNamespace(
+        encode=lambda _query: SimpleNamespace(tolist=lambda: [0.1, 0.2])
+    ))
+    large_body = BODY + " Additional documented conditions." * 90
+    large_digest = hashlib.sha256(large_body.encode()).hexdigest()
+    index = {
+        "nav": _index()["nav"],
+        "large-body": (CELERY_TARGET, CELERY_URL, large_digest),
+    }
+    calls = 0
+
+    def query(**_kwargs):
+        nonlocal calls
+        calls += 1
+        doc_id, document = ("nav", NAV) if calls == 1 else ("large-body", large_body)
+        return {"ids": [[doc_id]], "documents": [[document]], "metadatas": [[_meta()]]}
+
+    retriever = object.__new__(chroma_kb.ChromaKB)
+    retriever.collection = SimpleNamespace(query=query)
+    retriever._audited_index = index
+    results = await retriever._do_search(
+        "FastAPI versus Celery", [], 1,
+        adapted_queries=["model search hint"], local_scene_needs=("task_recovery",),
+    )
+    assert len(results) == 1
+    assert results[0]["snippet"].startswith(ANCHOR)
+    assert "_source_scope_sentences" not in results[0]

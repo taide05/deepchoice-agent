@@ -2,6 +2,24 @@
 
 ## [Unreleased] - 2026-10-04
 
+### Propose bounded source sentence ranges from original request
+
+New durable runs offer bounded, verified Chroma chunks and already fetched
+official-page blocks to one DeepSeek Flash range selector. The selector sees
+the original scene, candidate comparison, source URL path and numbered
+sentences; runtime code reconstructs only ordered source text within the
+existing three-passage/1200-character fact limit. Distinct candidate sources
+are attempted first, shortest input first; official and Chroma sources then
+share a deterministic quota. The serialized prompt is capped at
+12,000 UTF-8 bytes, malformed proposals fall back to the original snippet,
+and budget or lease authority failures still propagate. Frozen identities
+advance Chroma to v7, official retrieval to v3 and source scoring to v8.
+Engineering tests and offline sentence-range checks do not establish a
+real-report quality gain; public development comparison is still required.
+Focused 194 tests, the full Python 3.12 suite (2,944 passed), smoke-v1 12/12,
+pyflakes, vulture and independent read-only review passed. The final 24 runs
+remain sealed.
+
 ### Establish source-scope passage verification contract
 
 Bounded separate passages from one URL now survive source scoring and synthesis

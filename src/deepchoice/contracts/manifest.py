@@ -26,6 +26,7 @@ from .errors import DeepChoiceError, ErrorCategory
 from ..agents.query_adapter import ADAPT_SYSTEM
 from ..agents.query_analyzer import DECOMPOSITION_SYSTEM
 from ..agents.self_reviewer import REVIEW_SYSTEM
+from ..agents.source_evaluator import SOURCE_SCOPE_SELECTION_PROMPT
 from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS, max_output_tokens_for, synthesis_extra_body
 
 
@@ -55,6 +56,7 @@ PROMPT_VERSIONS = {
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
     "conclusion_synthesizer.synthesis_prompt": "v26",
+    "source_evaluator.source_scope_selection": "v1",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -102,7 +104,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -122,7 +124,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7"] = "source-score-v7"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8"] = "source-score-v8"
     security_policy_version: Literal[
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4", "outbound-url-v5"
     ] = "outbound-url-v5"
@@ -235,6 +237,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
     prompts = (
         ("query_analyzer.decomposition_system", DECOMPOSITION_SYSTEM),
         ("query_adapter.adapt_system", ADAPT_SYSTEM),
+        ("source_evaluator.source_scope_selection", SOURCE_SCOPE_SELECTION_PROMPT),
         ("conflict_detector.contradiction_scan_system", CONTRADICTION_SCAN_SYSTEM),
         ("conflict_detector.arbitration_system", ARBITRATION_SYSTEM),
         (
@@ -293,6 +296,13 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 max_output_tokens=MAX_OUTPUT_TOKENS,
             ),
             LLMCallSnapshot(
+                call_id="source_scope_selector",
+                tier="deepseek-flash",
+                prompt_id="source_evaluator.source_scope_selection",
+                seed=0,
+                max_output_tokens=max_output_tokens_for("source_scope_selector"),
+            ),
+            LLMCallSnapshot(
                 call_id="conflict_scan",
                 tier="deepseek-flash",
                 prompt_id="conflict_detector.contradiction_scan_system",
@@ -341,11 +351,11 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v6" if retriever_id == "chroma" else "v2" if retriever_id == "official" else "v1",
+                version="v7" if retriever_id == "chroma" else "v3" if retriever_id == "official" else "v1",
             )
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v7",
+        "scoring_policy_version": "source-score-v8",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v17",

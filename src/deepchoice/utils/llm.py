@@ -128,7 +128,11 @@ MAX_OUTPUT_TOKENS = 4096
 
 def max_output_tokens_for(tag: str) -> int:
     """One source of truth for dispatch, reservation, and manifest identity."""
-    return 512 if tag == "conflict_scan" else MAX_OUTPUT_TOKENS
+    if tag == "conflict_scan":
+        return 512
+    if tag == "source_scope_selector":
+        return 1024
+    return MAX_OUTPUT_TOKENS
 
 
 async def _retry_sleep(delay: float) -> None:

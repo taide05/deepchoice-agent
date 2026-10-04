@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta
+import json
+from unittest.mock import AsyncMock
 
 import pytest
+
+from deepchoice.budget_errors import BudgetPersistenceError
+from deepchoice.contracts.manifest import build_run_manifest
+from deepchoice.utils.source_scope import scope_sentences
 
 from deepchoice.agents.source_evaluator import (
     SourceEvaluatorAgent,
@@ -187,3 +193,204 @@ class TestSourceEvaluatorAgent:
         agent = SourceEvaluatorAgent()
         result = await agent.run({"search_results": []})
         assert result["source_scores"] == []
+
+
+_SCOPE_FIRST = "Alpha persists jobs only when the journal is enabled."
+_SCOPE_MIDDLE = "An unrelated deployment note describes startup logs."
+_SCOPE_LAST = "After a worker crash, a child-exit exception still acknowledges the job."
+_SCOPE_DOCUMENT = " ".join((_SCOPE_FIRST, _SCOPE_MIDDLE, _SCOPE_LAST))
+
+
+def _scoped_source_state():
+    return {
+        "task": {
+            "query": "Choose Alpha or Beta for jobs that must recover after restart?",
+            "candidate_techs": ["Alpha", "Beta"],
+            "constraints": ["Do not promise recovery without conditions"],
+            "sub_questions": ["What happens after a worker exits?"],
+        },
+        "search_results": [{
+            "source": "chroma", "status": "success", "results": [{
+                "url": "https://example.org/alpha",
+                "title": "Alpha guide",
+                "snippet": _SCOPE_FIRST,
+                "_source_scope_sentences": list(scope_sentences(_SCOPE_DOCUMENT)),
+            }],
+        }],
+    }
+
+
+@pytest.mark.asyncio
+async def test_durable_scope_proposal_uses_original_question_and_exact_ranges(monkeypatch):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    calls = []
+
+    async def select(prompt, **kwargs):
+        calls.append((prompt, kwargs))
+        kwargs["usage"].append({"model": "deepseek-flash", "prompt_tokens": 9,
+                                "completion_tokens": 5, "total_tokens": 14})
+        return {"sources": [{"id": "S1", "ranges": [[0, 1], [2, 3]]}]}
+
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
+    output = await SourceEvaluatorAgent(
+        run_manifest=build_run_manifest({}),
+    ).run(_scoped_source_state())
+    assert len(calls) == 1
+    assert "jobs that must recover after restart" in calls[0][0][0]["content"]
+    assert calls[0][1]["tag"] == "source_scope_selector"
+    assert output["source_scores"][0]["passages"] == [_SCOPE_FIRST, _SCOPE_LAST]
+    assert output["source_scores"][0]["snippet"] == _SCOPE_FIRST + "\n\n" + _SCOPE_LAST
+    assert output["quality_signals"][0]["source_scope_proposal"] == {
+        "offered": 1, "accepted": 1, "status": "completed",
+    }
+    assert output["token_usage"][-1]["total_tokens"] == 14
+    assert "_source_scope_sentences" not in output["source_scores"][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model_result", [
+    {"sources": [{"id": "S1", "ranges": [[2, 3], [0, 1]]}]},
+    {"sources": [{"id": "S1", "ranges": [[0, 1], [1, 99]]}]},
+    {"sources": [{"id": "S1", "ranges": [[True, 1]]}]},
+    {"sources": [{"id": "S1", "ranges": [[0, 1], [0, 1]]}]},
+    {"sources": [{"id": [], "ranges": [[0, 1]]}]},
+    {"sources": [{"id": {}, "ranges": [[0, 1]]}]},
+])
+async def test_invalid_scope_proposal_preserves_original_snippet(monkeypatch, model_result):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    monkeypatch.setattr(
+        "deepchoice.utils.llm.call_model",
+        AsyncMock(return_value=model_result),
+    )
+    output = await SourceEvaluatorAgent(
+        run_manifest=build_run_manifest({}),
+    ).run(_scoped_source_state())
+    assert output["source_scores"][0]["snippet"] == _SCOPE_FIRST
+    assert "passages" not in output["source_scores"][0]
+    assert output["quality_signals"][0]["source_scope_proposal"]["accepted"] == 0
+
+
+@pytest.mark.asyncio
+async def test_scope_selection_budget_failure_propagates_and_legacy_skips(monkeypatch):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    selector = AsyncMock(side_effect=BudgetPersistenceError("budget store unavailable"))
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    with pytest.raises(BudgetPersistenceError):
+        await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(
+            _scoped_source_state()
+        )
+    output = await SourceEvaluatorAgent().run(_scoped_source_state())
+    assert output["source_scores"][0]["snippet"] == _SCOPE_FIRST
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: None)
+    direct = await SourceEvaluatorAgent(
+        run_manifest=build_run_manifest({}),
+    ).run(_scoped_source_state())
+    assert direct["source_scores"][0]["snippet"] == _SCOPE_FIRST
+    assert selector.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_scope_prompt_retains_scene_and_versioned_source_paths(monkeypatch):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    seen = []
+
+    async def select(messages, **_kwargs):
+        seen.append(json.loads(messages[0]["content"].split("\n")[-1]))
+        return {"sources": []}
+
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
+    state = _scoped_source_state()
+    state["task"]["query"] = "Choose Alpha or Beta"
+    state["task"]["scene_context"] = "Must preserve jobs after restart on version 2."
+    state["search_results"] = [{
+        "source": "official", "status": "success",
+        "results": [
+            {
+                "url": f"https://docs.example.org/v{version}/jobs?token=private",
+                "title": "Alpha manual",
+                "snippet": _SCOPE_FIRST,
+                "_source_scope_sentences": list(scope_sentences(_SCOPE_DOCUMENT)),
+            }
+            for version in (1, 2)
+        ],
+    }]
+    await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    assert len(seen) == 1
+    assert seen[0]["request"]["scene_context"] == state["task"]["scene_context"]
+    assert [row["source_url"] for row in seen[0]["sources"]] == [
+        "https://docs.example.org/v1/jobs",
+        "https://docs.example.org/v2/jobs",
+    ]
+    assert "private" not in json.dumps(seen[0])
+
+
+@pytest.mark.asyncio
+async def test_scope_prompt_balances_late_official_source_and_utf8_bytes(monkeypatch):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    seen = []
+
+    async def select(messages, **_kwargs):
+        seen.append(messages[0]["content"])
+        return {"sources": []}
+
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
+    long_text = "Alpha 中文约束" + "条件" * 60 + "。"
+    sentences = scope_sentences(" ".join([long_text] * 12))
+    assert sentences is not None
+    state = _scoped_source_state()
+    state["search_results"] = [
+        {"source": "chroma", "status": "success", "results": [
+            {
+                "url": f"https://docs.example.org/alpha/{index}",
+                "title": "Alpha guide",
+                "snippet": long_text,
+                "_source_scope_sentences": list(sentences),
+            }
+            for index in range(10)
+        ]},
+        {"source": "official", "status": "success", "results": [{
+            "url": "https://docs.example.org/beta/current",
+            "title": "Beta guide",
+            "snippet": "Beta requires a durable broker.",
+            "_source_scope_sentences": ["Beta requires a durable broker."],
+        }]},
+    ]
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    assert len(seen) == 1
+    assert len(seen[0].encode("utf-8")) <= 12000
+    payload = json.loads(seen[0].split("\n")[-1])
+    assert payload["sources"][0]["source_url"].endswith("/beta/current")
+    assert output["quality_signals"][0]["source_scope_proposal"]["offered"] < 8
+
+
+@pytest.mark.asyncio
+async def test_scope_prompt_reserves_late_distinct_candidate(monkeypatch):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    seen = []
+
+    async def select(messages, **_kwargs):
+        seen.append(json.loads(messages[0]["content"].split("\n")[-1]))
+        return {"sources": []}
+
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
+    alpha = {
+        "title": "Alpha guide", "snippet": "Alpha stores jobs.",
+        "_source_scope_sentences": ["Alpha stores jobs."],
+    }
+    beta = {
+        "title": "Beta guide", "snippet": "Beta requires a broker.",
+        "_source_scope_sentences": ["Beta requires a broker."],
+    }
+    state = _scoped_source_state()
+    state["search_results"] = [{
+        "source": "chroma", "status": "success",
+        "results": [
+            {**alpha, "url": f"https://docs.example.org/alpha/{index}"}
+            for index in range(10)
+        ] + [{**beta, "url": "https://docs.example.org/beta"}],
+    }]
+    await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    assert len(seen) == 1
+    urls = [row["source_url"] for row in seen[0]["sources"]]
+    assert "https://docs.example.org/beta" in urls
+    assert len(urls) == 8

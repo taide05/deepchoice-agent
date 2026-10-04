@@ -7,6 +7,7 @@ from .. import outbound
 from ..budget_errors import BudgetPersistenceError
 from ..utils.evidence import source_title
 from ..utils.evidence_choices import whole_source_text
+from ..utils.source_scope import MAX_SCOPE_CHARS, scope_sentences
 from ..utils.official_catalog import catalog_scope_contains, parse_http_identity
 
 MAX_ROOTS = 2
@@ -131,6 +132,36 @@ def _snippet(document, terms: set[str]) -> tuple[str, int]:
     return text, score
 
 
+def _scope_near_snippet(document, snippet: str) -> list[str] | None:
+    """Expose at most one extra neighboring block from an already fetched page."""
+    if not snippet or document.incomplete:
+        return None
+    blocks = document.blocks
+    whole = " ".join(blocks)
+    start = whole.find(snippet)
+    if start < 0 or whole.find(snippet, start + 1) >= 0:
+        return None
+    end = start + len(snippet)
+    positions = []
+    cursor = 0
+    for index, block in enumerate(blocks):
+        if cursor < end and cursor + len(block) > start:
+            positions.append(index)
+        cursor += len(block) + 1
+    if not positions:
+        return None
+    left, right = positions[0], positions[-1] + 1
+    # Prefer the following block, where a nearby exception often follows the
+    # main claim. Then admit one preceding block only if the total remains
+    # bounded. Neither block earns citation status without a later live fetch.
+    if right < len(blocks) and len(" ".join(blocks[left:right + 1])) <= MAX_SCOPE_CHARS:
+        right += 1
+    if left > 0 and len(" ".join(blocks[left - 1:right])) <= MAX_SCOPE_CHARS:
+        left -= 1
+    sentences = scope_sentences(" ".join(blocks[left:right]))
+    return list(sentences) if sentences else None
+
+
 async def _read_page(root: str, url: str, terms: set[str]):
     from ..citations.source_windows import extract_source_document
 
@@ -159,6 +190,10 @@ async def _read_page(root: str, url: str, terms: set[str]):
     snippet, score = _snippet(document, terms)
     title = source_title(" ".join(parsed.title_parts), final_url)
     result = {"url": final_url, "title": title, "snippet": snippet, "date": ""} if snippet else None
+    if result is not None:
+        scope = _scope_near_snippet(document, snippet)
+        if scope:
+            result["_source_scope_sentences"] = scope
     links = []
     seen = {final_url, url}
     for href, label in parsed.links:

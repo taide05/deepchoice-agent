@@ -36,30 +36,30 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.workflow_version == "research-v4"
     assert first.workflow_nodes == WORKFLOW_NODES
     assert first.state_schema_version == 3
-    assert len(first.prompts) == 7
-    assert len(first.llm_calls) == 8
+    assert len(first.prompts) == 8
+    assert len(first.llm_calls) == 9
     assert all(
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v18"
-    assert first.scoring_policy_version == "source-score-v7"
+    assert first.scoring_policy_version == "source-score-v8"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
-    }["chroma"] == "v6"
+    }["chroma"] == "v7"
     assert all(
         retriever.version == "v1"
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v2"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v3"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v17"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
-@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5"])
+@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6"])
 def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
@@ -85,12 +85,13 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-def test_historical_official_directory_manifest_cannot_resume_body_retrieval():
+@pytest.mark.parametrize("old_version", ["v1", "v2"])
+def test_historical_official_retriever_manifest_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     current = build_run_manifest({})
     historical = current.model_copy(update={"retrievers": tuple(
-        row.model_copy(update={"version": "v1"}) if row.retriever_id == "official" else row
+        row.model_copy(update={"version": old_version}) if row.retriever_id == "official" else row
         for row in current.retrievers
     )})
     historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
@@ -149,6 +150,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     expected_prompt_ids = (
         "query_analyzer.decomposition_system",
         "query_adapter.adapt_system",
+        "source_evaluator.source_scope_selection",
         "conflict_detector.contradiction_scan_system",
         "conflict_detector.arbitration_system",
         "conflict_detector.evidence_gather",
@@ -180,6 +182,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v26",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
+                         "source_evaluator.source_scope_selection": "v1",
                          "conflict_detector.contradiction_scan_system": "v2",
                          "conflict_detector.arbitration_system": "v2"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {

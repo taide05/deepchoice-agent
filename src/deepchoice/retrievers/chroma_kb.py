@@ -8,6 +8,7 @@ import chromadb
 from chromadb.config import Settings
 
 from ..utils.embedding import get_embedding_model
+from ..utils.source_scope import scope_sentences
 from ..utils.official_catalog import (
     AUDITED_PRODUCT_SEED_IDENTITY,
     AUDITED_SNIPPET_WINDOW,
@@ -204,6 +205,25 @@ def _audited_body_excerpts(
     return selected
 
 
+def _audited_excerpt_scope(
+    results: dict, url: str, excerpt: str,
+    index: dict[str, tuple[str, str, str]],
+) -> list[str] | None:
+    """Keep the exact verified chunk behind an audited snippet replacement."""
+    ids = results.get("ids", [[]])[0]
+    documents = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    for doc_id, document, metadata in zip(ids, documents, metadatas):
+        if (not isinstance(metadata, dict) or not isinstance(document, str)
+                or metadata.get("url") != url or excerpt not in document
+                or not _verified_seed_chunk(document, metadata, doc_id, index)):
+            continue
+        sentences = scope_sentences(document)
+        if sentences:
+            return list(sentences)
+    return None
+
+
 def _query_dimensions(
     query: str,
     sub_questions: list[str],
@@ -327,6 +347,7 @@ class ChromaKB(BaseRetriever):
         dimensions: list[list[dict]] = []
         audited_overviews: dict[str, str] = {}
         audited_bodies: dict[str, str] = {}
+        audited_scopes: dict[str, list[str]] = {}
 
         # Retrieve enough chunks to diversify after URL de-duplication.  The
         # frozen development seed demonstrated that a three-chunk pool could
@@ -348,8 +369,14 @@ class ChromaKB(BaseRetriever):
             overview = _audited_fts5_overview(results, local_scene_needs, index)
             if overview is not None:
                 audited_overviews[overview[0]] = overview[1]
+                scope = _audited_excerpt_scope(results, overview[0], overview[1], index)
+                if scope:
+                    audited_scopes[overview[0]] = scope
             for url, excerpt in _audited_body_excerpts(results, local_scene_needs, index).items():
                 audited_bodies.setdefault(url, excerpt)
+                scope = _audited_excerpt_scope(results, url, excerpt, index)
+                if scope:
+                    audited_scopes[url] = scope
             dimension: list[dict] = []
             seen_dimension_urls: set[str] = set()
             for i, doc_id in enumerate(results.get("ids", [[]])[0]):
@@ -375,6 +402,11 @@ class ChromaKB(BaseRetriever):
                     result["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
                 if verified_chunk:
                     result["_seed_verified_chunk"] = True
+                    sentences = scope_sentences(document)
+                    if sentences:
+                        # Only bounded source text, not a model response, enters
+                        # the retrieval envelope and its versioned cache.
+                        result["_source_scope_sentences"] = list(sentences)
                 # Keep only the bounded internal provenance needed to enforce
                 # scope for an audited official seed.  Leading-underscore keys
                 # are removed by the durable public-result sanitizer; raw
@@ -397,6 +429,9 @@ class ChromaKB(BaseRetriever):
                     and result.get("_seed_source_type") == "official"
                     and result.get("_seed_seed_identity_sha256") == AUDITED_PRODUCT_SEED_IDENTITY):
                 result["snippet"] = audited_overviews[result["url"]]
+                result.pop("_source_scope_sentences", None)
+                if result["url"] in audited_scopes:
+                    result["_source_scope_sentences"] = audited_scopes[result["url"]]
                 result.pop("_seed_excerpt_window", None)
             if (result["url"] in audited_bodies
                     and result.get("_seed_verified_chunk") is True
@@ -404,6 +439,9 @@ class ChromaKB(BaseRetriever):
                     and result.get("_seed_source_type") == "official"
                     and result.get("_seed_seed_identity_sha256") == AUDITED_PRODUCT_SEED_IDENTITY):
                 result["snippet"] = audited_bodies[result["url"]]
+                result.pop("_source_scope_sentences", None)
+                if result["url"] in audited_scopes:
+                    result["_source_scope_sentences"] = audited_scopes[result["url"]]
                 if len(result["snippet"]) > _SNIPPET_CHARS:
                     result["_seed_excerpt_window"] = AUDITED_SNIPPET_WINDOW
                 else:

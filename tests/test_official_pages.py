@@ -143,6 +143,23 @@ def test_navigation_code_and_incomplete_or_oversized_context_are_not_prose():
     assert pages._snippet(oversized, {"filtering"}) == ("", 0)
 
 
+def test_bounded_official_scope_keeps_one_extra_exception_block():
+    intro = "This guide describes the product and its deployment lifecycle in general terms."
+    main = "Filtering can narrow the result set under the configured index and query conditions."
+    adjacent = "This behavior depends on the selected query path and the data already indexed."
+    exception = "However, an unindexed field requires a different path and may change the choice."
+    document = extract_source_document(
+        f"<p>{intro}</p><p>{main}</p><p>{adjacent}</p><p>{exception}</p>",
+        truncated=False, skip_navigation=True,
+    )
+    snippet, _ = pages._snippet(document, {"filtering"})
+    assert main in snippet and exception not in snippet
+    scope = pages._scope_near_snippet(document, snippet)
+    assert scope is not None
+    assert exception in " ".join(scope)
+    assert len(" ".join(scope)) <= pages.MAX_SCOPE_CHARS
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [404, 429, "timeout", "cancel"])
 async def test_child_failure_is_atomic_and_uncertain_spend_is_not_zero(setup, failure):
