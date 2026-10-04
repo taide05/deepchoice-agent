@@ -10,7 +10,6 @@ import pytest
 from deepchoice.agents import conclusion_synthesizer as synth
 from deepchoice.agents.citation_validator import CitationValidatorAgent
 from deepchoice.budget_errors import BudgetPersistenceError, StaleBudgetAuthorityError
-from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.persistence.repository import RunLeaseLostError
 from deepchoice.runtime.instance_guard import RuntimeInstanceLeaseLostError
 from deepchoice.utils.decision_analysis import inspect_synthesis_bindings
@@ -54,15 +53,15 @@ async def test_corrected_response_still_requires_citations_and_cannot_gain_autho
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
     first["answer_contract"] = "question-analysis-v1"
     revised["answer_contract"] = "question-analysis-v1"
-    manifest = build_run_manifest(TASK)
+    # The compatibility path retains its one structural correction. Durable
+    # runs use the staged source/question path covered separately.
     state = {"task": deepcopy(TASK), "evidence_chains": deepcopy(CHAINS)}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=manifest).run(state))
+    state.update(await synth.ConclusionSynthesizerAgent().run(state))
     assert model.await_count == 2
     initial_call, corrective_call = model.await_args_list
     assert initial_call.kwargs == corrective_call.kwargs
-    frozen = next(call for call in manifest.llm_calls if call.call_id == "conclusion_synthesizer")
-    assert corrective_call.kwargs["seed"] == frozen.seed
-    assert corrective_call.kwargs["timeout"] == frozen.timeout_s
+    assert corrective_call.kwargs["seed"] == initial_call.kwargs["seed"] == 0
+    assert corrective_call.kwargs["timeout"] == initial_call.kwargs["timeout"]
     assert corrective_call.args[0][0] == initial_call.args[0][0]
     assert "FIRST_PRIVATE_REASON" not in json.dumps(corrective_call.args)
     feedback = corrective_call.args[0][-1]["content"]

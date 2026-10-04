@@ -108,15 +108,17 @@ def test_compact_diagnostics_and_runtime_metadata_are_not_model_authority():
 async def test_durable_synthesis_cannot_fall_back_to_legacy_response(monkeypatch):
     from deepchoice.contracts.manifest import build_run_manifest
     from tests.test_synthesis_structure import response, TASK, CHAINS
-    model = AsyncMock(return_value=response())
+    legacy = response()
+    legacy.pop("source_facts")
+    model = AsyncMock(return_value=legacy)
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
         "task": TASK, "evidence_chains": CHAINS})
-    assert model.await_count == 2  # the existing one correction, never a new loop
+    model.assert_awaited_once()  # no bound facts, so no question generation
     rec = state["final_recommendation"]
     assert rec["winner"] == "context_dependent" and not rec["decision_analysis"]
     assert rec["answer_delivery"]["version"] == ANSWER_CONTRACT
-    assert state["quality_signals"][0]["structure_correction"]["outcome"] == "invalid"
+    assert state["quality_signals"][0]["structure_correction"]["outcome"] == "not_applicable"
     for render in FORMAT_RENDERERS.values():
         assert "FIRST_PRIVATE_REASON" not in render(state)
 
@@ -141,28 +143,17 @@ async def test_public_formats_keep_distinct_reading_orders(monkeypatch):
     assert any("证据简报" in report for report in reports.values())
 
 
-async def test_missing_compact_fields_use_existing_single_correction(monkeypatch):
+async def test_missing_staged_fact_fields_fail_closed_without_extra_generation(monkeypatch):
     from deepchoice.contracts.manifest import build_run_manifest
     from tests.test_synthesis_structure import TASK, CHAINS
 
-    model = AsyncMock(side_effect=[
-        {"answer_contract": ANSWER_CONTRACT},
-        {"answer_contract": ANSWER_CONTRACT, "source_facts": [], "decision_analysis": []},
-    ])
+    model = AsyncMock(return_value={"answer_contract": ANSWER_CONTRACT})
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
         "task": TASK, "evidence_chains": CHAINS})
-    assert model.await_count == 2
-    signal = state["quality_signals"][0]["structure_correction"]
-    assert signal["initial"]["errors"]["incomplete_response"] == 1
-
-    model = AsyncMock(return_value={
-        "answer_contract": ANSWER_CONTRACT, "source_facts": [], "decision_analysis": []})
-    monkeypatch.setattr(synth, "call_model", model)
-    valid_empty = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
-        "task": TASK, "evidence_chains": CHAINS})
     model.assert_awaited_once()
-    assert valid_empty["quality_signals"][0]["structure_correction"]["outcome"] == "not_needed"
+    assert not state["final_recommendation"]["decision_analysis"]
+    assert state["quality_signals"][0]["structure_correction"]["attempted"] == 0
 
 
 def test_overflow_withholds_compact_analysis():
@@ -183,7 +174,10 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
     from tests.test_synthesis_structure import TASK, CHAINS
 
     malformed = payload("The source supports recovery; a different assertion [[2]] is uncited.")
-    model = AsyncMock(return_value=malformed)
+    model = AsyncMock(side_effect=[
+        {"source_facts": [{"id": "F1", "evidence_id": 1}]},
+        {"decision_analysis": malformed["decision_analysis"]},
+    ])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
         "task": TASK, "evidence_chains": CHAINS})

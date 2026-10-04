@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-09-21
 
+### Stage source facts and original-question judgments
+
+Durable synthesis now binds up to five saved source facts before generating a
+short judgment for each original question. Candidate title mentions are routing
+hints only; clearly one-sided packets withhold the overall choice. Every stage
+uses the frozen model parameters and budget admission. Citation verification and
+the existing self-review gate still validate analyses. Legacy direct calls retain the prior
+single-call correction. Prompt identity v23 prevents incompatible same-run
+resume. This is an engineering candidate; no real-report quality gain is claimed
+before a frozen four-case development comparison. The final 24 remain sealed.
+
 ### Add direction checks to the continuous engineering loop
 
 Each round and handoff now checks its contribution to the core user outcome,

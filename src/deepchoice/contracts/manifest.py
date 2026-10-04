@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..agents.conclusion_synthesizer import (
     SYNTHESIS_CALL_TIMEOUT_S, SYNTHESIS_CORRECTION_TEMPLATE, SYNTHESIS_PROMPT,
+    FACT_SELECTION_PROMPT, QUESTION_JUDGMENT_PROMPT,
     SYNTHESIS_STRUCTURE_POLICY,
 )
 from ..agents.conflict_detector import (
@@ -53,7 +54,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v7",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v2",
-    "conclusion_synthesizer.synthesis_prompt": "v22",
+    "conclusion_synthesizer.synthesis_prompt": "v23",
     "conflict_detector.contradiction_scan_system": "v2",
     "conflict_detector.arbitration_system": "v2",
 }
@@ -78,7 +79,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23"] = "v1"
     sha256: str
 
 
@@ -240,7 +241,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE,
         ),
         ("conclusion_synthesizer.synthesis_prompt",
-         SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE),
+         SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE
+         + "\n" + FACT_SELECTION_PROMPT + "\n" + QUESTION_JUDGMENT_PROMPT),
         ("self_reviewer.review_system", REVIEW_SYSTEM),
     )
     report_format = task.get("report_format", "what_why_how")
