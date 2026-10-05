@@ -455,5 +455,4 @@ benchmarks/
 MIT
 
 
-当前质量测量的最新授权和账本见[状态](docs/o1-execution-status.md)。新增四例开发使用
-独立追加授权；采集器只准入获授权开发相位，最终24次在新授权安装前后均禁止，开发通过不自动解锁。
+当前质量测量的事实与下一成果见[状态](docs/o1-execution-status.md)，跨类别开发准入与保留集边界见[协议](docs/product-effectiveness-optimization.md)。旧四例采集相位和晋级锁不能授权新样本；最终24次仍封存。

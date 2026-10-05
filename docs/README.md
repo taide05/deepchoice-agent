@@ -11,7 +11,7 @@
 | 2 | [评估协议](product-effectiveness-optimization.md) | 现行跨场景开发测量、历史分母与封存验收边界 |
 | 3 | [推进与维修](optimization-execution.md) | 实现粒度、验证节奏、无收益后的调整、持续授权 |
 | 4 | [当前状态](o1-execution-status.md) | 已验证候选、实际账本、当前缺口和下一成果 |
-| 按阶段 | [Q0开发冻结与诊断](quality-selection-q0.md) | 现有报告共性缺陷、开发请求/rubric与评审锚点 |
+| 历史按需 | [旧Q0四例诊断](quality-selection-q0.md) | 旧冻结附件入口，仅供定向回归和查证 |
 | 按需 | [运行契约](phase1-runtime-contract.md) | durable、预算/Trace、引用、安全、HITL和恢复边界 |
 | 按需 | [评估工具](../benchmarks/README.md) | 已有工具能做什么、哪些入口只供历史复算 |
 
@@ -34,9 +34,8 @@
 
 ## 归档与兼容入口
 
-[本次归档](archive/README.md)收录旧单场景路线、执行规则、评估历史、1417行执行流水、
-S0诊断、旧资格、README交付历史和旧工具指南。归档正文标明来源提交/原文件hash，保留
-原判断；只调整相对链接。S0和资格旧路径保留短跳转，当前入口不再要求读历史全文。
+[选择性归档](archive/quality-direction-20261005/README.md)保存旧Q0四例、混合评估协议和截至2026-10-05的逐轮流水原文。[旧归档索引](archive/README.md)收录单场景路线、执行规则、评估历史、旧执行流水、
+S0诊断、旧资格、README交付历史和旧工具指南。索引标明来源提交或原文件hash；本次三份快照原字节保留，相对链接按原路径解读。S0和资格旧路径保留短跳转，当前入口不再要求读历史全文。
 既有PRD/设计、O1拆分和历史handoff跳转继续失效。默认不递归加载archive或notes。
 
 会话交接、临时方案、执行明细与原始报告放忽略区notes/outputs；不用每轮创建新长期文档。
