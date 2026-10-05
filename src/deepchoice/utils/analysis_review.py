@@ -73,6 +73,7 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
             continue
         if bound and all(fact.get(key) == bound.get(key) for key in (
             "id", "evidence_id", "source_title", "canonical_url", "saved_text", "text",
+            "saved_passages", "source_ranges",
         )):
             facts.append(deepcopy(fact))
     slots = {}

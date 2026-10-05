@@ -23,7 +23,7 @@ class CallDiagnostics(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     policy: Literal["node-shape-v1", "node-shape-v2"] = "node-shape-v1"
-    profile: Literal["fact-selection-v1", "question-judgment-v1", "self-review-v2", "self-review-targeted-v1"] | None = None
+    profile: Literal["fact-selection-v1", "fact-selection-v2", "question-judgment-v1", "self-review-v2", "self-review-targeted-v1"] | None = None
     finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None = None
     truncated: StrictBool | None = None
     json_status: Literal["strict", "repaired", "invalid", "non_object", "not_requested"] | None = None
@@ -127,6 +127,9 @@ _PROFILES = {
     "fact-selection-v1": ("conclusion_synthesizer", {
         "source_facts": [{"id": str, "evidence_id": int}],
     }),
+    "fact-selection-v2": ("conclusion_synthesizer", {
+        "source_facts": [{"id": str, "evidence_id": int}],
+    }),
     "question-judgment-v1": ("conclusion_synthesizer", {
         "decision_analysis": [_ANALYSIS_SHAPE],
     }),
@@ -151,7 +154,18 @@ def output_shape_valid(tag: str, value: Any, *, profile: str | None = None) -> b
     """Check the existing content shape without recording or trusting its prose."""
     if profile is not None:
         validate_diagnostic_profile(tag, profile)
-        return _matches(value, _PROFILES[profile][1])
+        valid = _matches(value, _PROFILES[profile][1])
+        if valid and profile == "fact-selection-v2":
+            for fact in value["source_facts"]:
+                if "source_ranges" not in fact:
+                    continue
+                ranges = fact["source_ranges"]
+                if (not isinstance(ranges, list) or not 1 <= len(ranges) <= 3
+                        or any(not isinstance(pair, list) or len(pair) != 2
+                               or any(type(index) is not int for index in pair)
+                               or not 0 <= pair[0] < pair[1] for pair in ranges)):
+                    return False
+        return valid
     if tag == "conclusion_synthesizer" and isinstance(value, dict) and "answer_contract" in value:
         return _matches(value, {
             "answer_contract": ("question-analysis-v1",),

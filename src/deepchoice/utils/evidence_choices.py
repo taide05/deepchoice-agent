@@ -64,6 +64,16 @@ def bounded_source_passages(source):
     return tuple(passages)
 
 
+def selected_source_text(source, fact):
+    """Re-derive the fact view from original source coordinates, never model text."""
+    if "source_ranges" not in fact:
+        return whole_source_text(source.get("snippet")), bounded_source_passages(source)
+    from .fact_selection import selected_passages
+
+    passages = selected_passages(source, fact["source_ranges"])
+    return (" ".join(passages), passages) if passages else ("", None)
+
+
 def bind_evidence_choices(recommendation, chains, candidates, requirements):
     """Discard model text/status; rebuild from this request and unique sources."""
     from ..citations.verifier import (
@@ -88,6 +98,7 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
                 continue
             numbered[number] = (chain_index, source_index, source)
     seen = set()
+    offered = None
     for item in raw_facts:
         if not isinstance(item, dict):
             continue
@@ -110,8 +121,13 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
         if (len(spans) != 1 or spans[0][:2] != (0, len(marker))
                 or marker_titles(spans[0][2]) != [resolved.title]):
             continue
-        text = whole_source_text(source.get("snippet"))
-        passages = bounded_source_passages(source)
+        if "source_ranges" in item:
+            if offered is None:
+                from .fact_selection import selection_packet
+                _, offered = selection_packet(chains)
+            if evidence_id not in offered:
+                continue
+        text, passages = selected_source_text(source, item)
         if not text or passages is None:
             continue
         sentences = _split_sentences(text)
@@ -123,6 +139,8 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
         }
         if passages:
             fact["saved_passages"] = list(passages)
+        if "source_ranges" in item:
+            fact["source_ranges"] = deepcopy(item["source_ranges"])
         result["source_facts"].append(fact)
     identifiers = [item.get("id") for item in raw_facts if isinstance(item, dict)]
     if len(identifiers) != len(set(str(item) for item in identifiers)):

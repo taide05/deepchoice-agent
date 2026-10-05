@@ -144,9 +144,9 @@ def locate_source_window(excerpt: str, document: SourceDocument) -> SourceWindow
         return None
     if after and excerpt[-1] not in '.!?。！？;；':
         return None
-    if start > block_start and not whole[start - 1].isspace():
+    if start > block_start and not (whole[start - 1].isspace() or whole[start - 1] in '。！？；'):
         return None
-    if end < block_end and not whole[end].isspace():
+    if end < block_end and not (whole[end].isspace() or excerpt[-1] in '。！？；'):
         return None
     # A following complete block is necessary at an incomplete response edge.
     if document.incomplete and positions[-1] == len(document.blocks) - 1:

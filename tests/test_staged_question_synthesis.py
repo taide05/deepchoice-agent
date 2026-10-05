@@ -88,7 +88,7 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     assert state["quality_signals"][0]["structure_correction"]["attempted"] == 0
     assert "FORGED" not in str(state)
     selection, judgment = model.await_args_list
-    assert selection.kwargs["diagnostic_profile"] == "fact-selection-v1"
+    assert selection.kwargs["diagnostic_profile"] == "fact-selection-v2"
     assert judgment.kwargs["diagnostic_profile"] == "question-judgment-v1"
     assert "[[1]]" in selection.args[0][0]["content"]
     assert "s2: If the service fails" in judgment.args[0][0]["content"]

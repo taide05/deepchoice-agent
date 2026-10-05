@@ -2,6 +2,25 @@
 
 ## [Unreleased] - 2026-10-05
 
+### Select bounded source ranges within the existing fact-selection call
+
+Offer complete bounded source text instead of only whole-snippet eligible facts.
+A selected fact may carry zero-based, end-exclusive source_ranges; every binding,
+citation pass and review reconstructs its passages from the original evidence chain.
+Original retrieval results/chains remain unchanged. Reject invalid, overlapping,
+ambiguous, incomplete or omission-crossing ranges. Copy one intact adjacent sentence
+on each side of every focus, reject omission-bearing neighbors, and merge overlapping
+context windows within the existing output limits. Preserve focus coordinates for
+idempotent reconstruction; this does not prove distant conditions are complete.
+Chinese sentence boundaries preserve original characters without adding
+spaces. Live page location, citation uncertainty and review remain independent.
+Freeze synthesis v28 and citation v18; historical identities remain readable but
+cannot resume under the changed policy. The bounded selection uses the existing
+call/budget path, five-fact limit and 1200-character/16-sentence output limits.
+Offline replay exposes previously ineligible materials; it does not establish
+model selection, semantic quality or cross-scenario improvement.
+
+
 ### Preserve explicitly named short candidates in question routing
 
 Match complete explicit candidate names before the existing long-token title hints,

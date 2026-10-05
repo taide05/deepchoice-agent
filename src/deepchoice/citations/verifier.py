@@ -707,13 +707,13 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
     return CitationStatus.UNSUPPORTED, CitationReason.LEXICAL_MISMATCH
 
 
-def _source_fact_support(claim, source, recommendation, evidence_chains, outcome):
+def _source_fact_support(claim, source, recommendation, evidence_chains, outcome, offered_selection_ids):
     """Verify each copied source-fact sentence against its own page location.
 
     Separate passages share one source identity. Every passage must be found
     in order on the same fetched page before any sentence can be verified.
     """
-    from ..utils.evidence_choices import bounded_source_passages, whole_source_text
+    from ..utils.evidence_choices import selected_source_text
 
     match = re.fullmatch(r"final_recommendation\.source_facts\[(\d+)\]\.text", claim.path)
     if match is None:
@@ -723,8 +723,7 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         fact = recommendation["source_facts"][int(match[1])]
         chain_index, source_index = source.position
         chain_source = evidence_chains[chain_index]["sources"][source_index]
-        snippet = whole_source_text(chain_source.get("snippet"))
-        passages = bounded_source_passages(chain_source)
+        snippet, passages = selected_source_text(chain_source, fact)
     except (KeyError, IndexError, TypeError):
         return unknown
     if passages is None:
@@ -737,6 +736,8 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
             number += 1
             if source.position == (chain_index, source_index):
                 expected_number = number
+    if "source_ranges" in fact and expected_number not in offered_selection_ids:
+        return unknown
     expected = " ".join(f"{sentence} [Source: {source.title}]" for sentence in _split_sentences(snippet))
     if (not snippet or not isinstance(fact, dict)
             or fact.get("saved_text") != snippet or fact.get("text") != expected
@@ -902,6 +903,13 @@ async def verify_citations(
     """Verify cited critical claims and project aggregate status onto sources."""
 
     registry, registry_truncated = _source_registry(evidence_chains)
+    offered_selection_ids = set()
+    source_facts = recommendation.get("source_facts")
+    if isinstance(source_facts, list) and any(
+        isinstance(fact, dict) and "source_ranges" in fact for fact in source_facts
+    ):
+        from ..utils.fact_selection import selection_packet
+        _, offered_selection_ids = selection_packet(evidence_chains)
     claims, claims_truncated = _extract_claims(recommendation)
     resolved: list[tuple[_Claim, _RegistrySource | None, CitationReason | None]] = []
     for claim in claims:
@@ -957,7 +965,7 @@ async def verify_citations(
             if outcome.status is CitationStatus.VERIFIED:
                 # Search snippets are useful synthesis input but may be stale;
                 # only the bounded live response can earn ``verified``.
-                local = _source_fact_support(claim, source, recommendation, evidence_chains, outcome)
+                local = _source_fact_support(claim, source, recommendation, evidence_chains, outcome, offered_selection_ids)
                 status, reason = local if local is not None else _support_status(claim.text, outcome.text)
                 if outcome.truncated and reason in {
                     CitationReason.NUMERIC_MISMATCH,

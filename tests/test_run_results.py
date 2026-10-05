@@ -497,3 +497,24 @@ def test_lost_runtime_lease_blocks_mutations_but_keeps_reads(durable_client):
             assert response.json()["error"]["code"] == "RUNTIME_INSTANCE_LEASE_LOST"
     finally:
         app_module.app.state.runtime_instance_status = "active"
+
+
+def test_public_fact_ranges_survive_result_serialization_without_private_source_data():
+    from deepchoice.utils.evidence_choices import bind_evidence_choices
+
+    task, run = _records()
+    source = {"title": "Guide", "url": "https://example.org/guide",
+              "snippet": "A service stores records. Consumers replay retained records.",
+              "_source_scope_sentences": ["private retriever data"]}
+    chains = [{"sources": [source]}]
+    bound = bind_evidence_choices({"source_facts": [{"id": "F1", "evidence_id": 1,
+                                  "source_ranges": [[0, 2]]}]}, chains, [], [])
+    result = build_public_run_result(run, task.request.model_dump(), {
+        "evidence_chains": chains, "final_recommendation": bound, "report": "# Report",
+    }, created_at=run.created_at)
+    restored = RunResultRecord.model_validate_json(result.model_dump_json())
+    fact = restored.snapshot["final_recommendation"]["source_facts"][0]
+    assert fact["source_ranges"] == [[0, 2]]
+    assert fact["saved_passages"] == [source["snippet"]]
+    assert "private retriever data" not in restored.model_dump_json()
+    assert restored.snapshot["evidence_chains"][0]["sources"][0]["snippet"] == source["snippet"]
