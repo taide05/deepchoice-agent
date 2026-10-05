@@ -2,6 +2,22 @@
 
 ## [Unreleased] - 2026-10-05
 
+### Record failed cross-scenario development comparison
+
+Complete the frozen quality-cross-scene-development-v1/1.0.1 comparison on
+2026-10-05: four public cases, one run per arm, eight durable results. Two
+independent assistant reviewers reject all eight reports against the original
+questions (baseline 0/4, candidate 0/4); no cross-scenario net gain is established.
+The candidate retains a narrow P03 async-deployment detail, while the major
+choice questions remain unanswered. Trace records the new source-range call in
+only one of four candidate runs, and live retrieval differed between arms.
+Sanitized result metadata preserves identities, hashes and limitations; raw
+reports and paired databases remain in local ignored output directories.
+The next work targets evidence-to-answer information loss before more paid
+sampling. No product runtime code changed in this measurement closeout.
+Preparation passed 2,773 tests on Windows/Python 3.12 (554.60 seconds), 20 local
+collector fault tests, smoke-v1 12/12 and static checks; this is not quality proof.
+
 ### Freeze public cross-scenario development probes
 
 Freeze quality-cross-scene-development-v1/1.0.1 on 2026-10-05 with P03, P06, P11

@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "dataset_id": "quality-cross-scene-development-v1",
+  "dataset_version": "1.0.1",
+  "dataset_sha256": "137b2f61f3a8cced1500248db5ca0bdd807d269fbec554b022b3d7f7529604e6",
+  "dataset_frozen_at": "2026-10-05",
+  "evaluated_at": "2026-10-05T05:19:38.961689+00:00",
+  "purpose": "public development comparison, not holdout or product-wide acceptance",
+  "case_denominator_per_arm": 4,
+  "research_denominator": 8,
+  "source_health": "degraded",
+  "preparation": "reused compatible bounded preflight; no fresh paid preflight",
+  "arms": {
+    "baseline": {
+      "identity": {
+        "production_commit": "2a8e617296a8e9ebca2a47149d2f447c30e0a529",
+        "runner_commit": "4b6193bd99f5fea9940858d8e37ff7566336835f",
+        "core_asset_registry_id": "cf5540e60d9f71a9698d9b7bcc148643ca55bfc24e3ed133c7dc03bf38b67da1"
+      },
+      "manifest_ids": {
+        "P03": "51860f527d24240cba1b5f2a8aeb8d76a10c40108289f62c219bd7af55683e7c",
+        "P06": "43d5a9fa2c1fe4f49d55bbf4503c0b07b215aa24044de8bf1caedcb248674163",
+        "P11": "43d5a9fa2c1fe4f49d55bbf4503c0b07b215aa24044de8bf1caedcb248674163",
+        "P12": "51860f527d24240cba1b5f2a8aeb8d76a10c40108289f62c219bd7af55683e7c"
+      },
+      "binding_sha256": "c4d09d770c945565456544d3c3623e83875bf1b69bac1184e8e5b9751937dc27"
+    },
+    "candidate": {
+      "identity": {
+        "production_commit": "f3d62d8fabc862f5d1b9a450f98b34a2e9154fdf",
+        "runner_commit": "4b6193bd99f5fea9940858d8e37ff7566336835f",
+        "core_asset_registry_id": "02f31265fd3af982789d9b6f7fd61b0670307e3f4c0fd4f35ffb332a17870ec3"
+      },
+      "manifest_ids": {
+        "P03": "a169c481f9fd769e56cf7687ad6a100c4509854c49c4cc53335c74c0c0b00559",
+        "P06": "2d0a273cfe746140aa5112229763c6f2713ed78b147c83ba1f6ef850d22f3be2",
+        "P11": "2d0a273cfe746140aa5112229763c6f2713ed78b147c83ba1f6ef850d22f3be2",
+        "P12": "a169c481f9fd769e56cf7687ad6a100c4509854c49c4cc53335c74c0c0b00559"
+      },
+      "binding_sha256": "8d7c82b62078348ff8508d33b61adbe92630c528eeac76c4478bdb6e64943a16"
+    }
+  },
+  "shared_environment": {
+    "model_id": "deepseek-v4-flash",
+    "dependency_snapshot_sha256": "c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b",
+    "knowledge_sha256": "bf5cc356c3196b19e6886565ec456c3cb38901d6f903ddc819cbf15171b362f7",
+    "configuration_sha256": "4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474",
+    "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181"
+  },
+  "protocol": {
+    "serial_order": [
+      {
+        "ordinal": 168,
+        "arm": "baseline",
+        "case_id": "P03"
+      },
+      {
+        "ordinal": 169,
+        "arm": "candidate",
+        "case_id": "P03"
+      },
+      {
+        "ordinal": 170,
+        "arm": "candidate",
+        "case_id": "P06"
+      },
+      {
+        "ordinal": 171,
+        "arm": "baseline",
+        "case_id": "P06"
+      },
+      {
+        "ordinal": 172,
+        "arm": "baseline",
+        "case_id": "P11"
+      },
+      {
+        "ordinal": 173,
+        "arm": "candidate",
+        "case_id": "P11"
+      },
+      {
+        "ordinal": 174,
+        "arm": "candidate",
+        "case_id": "P12"
+      },
+      {
+        "ordinal": 175,
+        "arm": "baseline",
+        "case_id": "P12"
+      }
+    ],
+    "cache_enabled": true,
+    "learned_documents_readonly": true,
+    "hitl_action": "limited_report",
+    "stop_on_authority_identity_budget_unknown_submission_or_artifact_failure": true,
+    "repeats": 0
+  },
+  "content_acceptance": {
+    "baseline_passed": 0,
+    "candidate_passed": 0,
+    "cases_per_arm": 4,
+    "cross_scene_gain": false,
+    "critical_new_fact_errors_observed": 0,
+    "narrow_gain": "Candidate P03 retains ASGI/WSGI detail; main choice still unanswered and retrieval differs",
+    "presentation_regression": "Candidate P11 calls evidence-gap statements conditional analyses"
+  },
+  "cells": [
+    {
+      "ordinal": 168,
+      "arm": "baseline",
+      "case_id": "P03",
+      "verdict": "fail",
+      "tokens": 9789,
+      "llm_calls": 11,
+      "retrieval_calls": 6,
+      "wall_time_ms": 123797,
+      "source_scope_calls": 0,
+      "report_sha256": "ec2f2854e5d8cfb3fcae258c3e5336b1fa5d8e52e7828dbf7eae15821c367e7d",
+      "record_sha256": "183400feb0b048a0f82e8fc6f00c042f1a0d8f6c3ac84be054f80ee159040f08"
+    },
+    {
+      "ordinal": 169,
+      "arm": "candidate",
+      "case_id": "P03",
+      "verdict": "fail",
+      "tokens": 19789,
+      "llm_calls": 23,
+      "retrieval_calls": 6,
+      "wall_time_ms": 88359,
+      "source_scope_calls": 1,
+      "report_sha256": "04d863b67029b344196a33dedb4e751e3d26a042376b96c90e396038489ad74e",
+      "record_sha256": "941a2daf93a67fde06ff9dcf60b1d3f46f47384988e2096047f85c9ef383fbfd"
+    },
+    {
+      "ordinal": 170,
+      "arm": "candidate",
+      "case_id": "P06",
+      "verdict": "fail",
+      "tokens": 17128,
+      "llm_calls": 22,
+      "retrieval_calls": 6,
+      "wall_time_ms": 69093,
+      "source_scope_calls": 0,
+      "report_sha256": "e16af249b251e397e037f81ab1416e3ef3629f4713d66ce0541c4d8020921c6f",
+      "record_sha256": "abc790c48f9f3f227619c4022c52910af2579ebc6764caf1e63f19623bf7c7a4"
+    },
+    {
+      "ordinal": 171,
+      "arm": "baseline",
+      "case_id": "P06",
+      "verdict": "fail",
+      "tokens": 16756,
+      "llm_calls": 22,
+      "retrieval_calls": 6,
+      "wall_time_ms": 64766,
+      "source_scope_calls": 0,
+      "report_sha256": "28faa6554c31537adc4541125a82336d2329d6ec219cc087c03e63cf1a702e99",
+      "record_sha256": "d394eec2806664ede3e3f8f94ff140c0e217f810a4f0b80c2e3026b6ed812d0e"
+    },
+    {
+      "ordinal": 172,
+      "arm": "baseline",
+      "case_id": "P11",
+      "verdict": "fail",
+      "tokens": 18533,
+      "llm_calls": 22,
+      "retrieval_calls": 6,
+      "wall_time_ms": 53219,
+      "source_scope_calls": 0,
+      "report_sha256": "aa25d295a810bcbd7885910905ce289a1a6f59f01ec763024c8a4a071753f1cd",
+      "record_sha256": "e92c0a6df48b0ff3ee98d5dc3a55be71d15f6f3b13e1929859f100858ca3cc93"
+    },
+    {
+      "ordinal": 173,
+      "arm": "candidate",
+      "case_id": "P11",
+      "verdict": "fail",
+      "tokens": 20447,
+      "llm_calls": 22,
+      "retrieval_calls": 6,
+      "wall_time_ms": 48610,
+      "source_scope_calls": 0,
+      "report_sha256": "63398ab44175ff60b2700a6658492985ac9252ce4ac7648a14bc7b6b87cb8b65",
+      "record_sha256": "57394c513c16e44807c670fbc750aacc92cc05aefa979a9ad300cee0a029d129"
+    },
+    {
+      "ordinal": 174,
+      "arm": "candidate",
+      "case_id": "P12",
+      "verdict": "fail",
+      "tokens": 4026,
+      "llm_calls": 6,
+      "retrieval_calls": 6,
+      "wall_time_ms": 23406,
+      "source_scope_calls": 0,
+      "report_sha256": "869f828d19646c6db0d68d4f3bfd2754687d515654580bec5abf3fa488a0bbab",
+      "record_sha256": "71552b83a96ff9c49154f6259e868f8460790325e43d10f4db9be43c28a54335"
+    },
+    {
+      "ordinal": 175,
+      "arm": "baseline",
+      "case_id": "P12",
+      "verdict": "fail",
+      "tokens": 5951,
+      "llm_calls": 7,
+      "retrieval_calls": 6,
+      "wall_time_ms": 30188,
+      "source_scope_calls": 0,
+      "report_sha256": "c9ebbbc9283fe5dfba7b384c79319ec606ccd110bfaa1958cd2c068fbfdcb0e0",
+      "record_sha256": "d9661181ebbb7b85bb4efd79d02ac77345996b1f402e82ef9a4ac5e30ab4a368"
+    }
+  ],
+  "observed_resource_totals": {
+    "baseline": {
+      "total_tokens": 51029,
+      "llm_calls": 62,
+      "retrieval_calls": 24,
+      "http_calls": 0,
+      "wall_time_ms": 271970
+    },
+    "candidate": {
+      "total_tokens": 61390,
+      "llm_calls": 73,
+      "retrieval_calls": 24,
+      "http_calls": 0,
+      "wall_time_ms": 229468
+    }
+  },
+  "price_availability": "unavailable",
+  "review": {
+    "independent_assistant_reviewers": 2,
+    "labels_hidden_until_content_lock": true,
+    "human_calibration": false,
+    "agreement": "Both independent reviewers and root reject all eight reports; partial coverage labels differ without affecting verdicts",
+    "minor_disagreements": [
+      "P03 background-task discussion counted partial by independent reviewer and missing for broader audit/scheduling requirement by root",
+      "P12 title counted partial scene coverage by independent reviewer; root requires numeric/request constraints and records missing"
+    ]
+  },
+  "limitations": [
+    "One run per arm per public case",
+    "Assistant-only independently labeled content review, no human calibration",
+    "Live retrieval varied; no identical-evidence causal attribution",
+    "Scope proposal ran only in candidate P03",
+    "Intermediate full synthesis unavailable, exact content-loss node not established",
+    "Trace schema diagnostics use current node-shape policy and must not alone be treated as provider failure",
+    "No claim of zero total HTTP traffic from the collector HTTP counter",
+    "Original runtime pairs, report exports, labeled packets and binding/collector receipts remain in ignored outputs; this file preserves identities and result hashes, not a portable replay bundle"
+  ],
+  "decision": "Do not advance source-range proposal on this evidence. Diagnose evidence selection, analysis binding/calibration and information loss offline before another paid batch; final 24 remain sealed."
+}

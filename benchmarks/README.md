@@ -3,7 +3,7 @@
 更新：2026-10-05。本页说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 现行开发规则见[评估协议](../docs/product-effectiveness-optimization.md)，实际准入与结果见
 [当前状态](../docs/o1-execution-status.md)。quality-selection-v1采集器及下列运行示例
-仍绑定旧四例和历史授权；跨类别新开发样本的适配与运行身份尚未冻结，不能把新案例
+仍绑定旧四例和历史授权；本次跨类别开发通过单独冻结的本地薄适配执行，不能把新案例
 直接交给旧命令，或用旧晋级锁启动最终24次。历史卡和账本保持原样。
 
 ## 当前公开跨场景开发探针
@@ -17,6 +17,8 @@
 基线/候选先冻结同条件运行身份，再复用DurableBaselineCollector/QualityCollector
 采集；旧quality-selection相位、晋级锁和固定案例加载器不能直接接收本集。
 本地实验适配器及原始产物按哈希保存在忽略区，尚未形成新公开CLI。
+2026-10-05已完成四场景各一对：[结果元数据](quality-cross-scene-development-v1-result-20261005.json)
+记录两臂各0/4、身份、报告hash、资源和助手独立复核限制；没有后续质量晋级。
 
 ## 原生合成思考候选预检
 
