@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "dataset_id": "quality-fact-range-development-v1",
+  "dataset_version": "1.0.0",
+  "dataset_sha256": "79627246469f6bf14ba5ea809b24a71fff553836f468433b9a55a38594798f6e",
+  "dataset_frozen_at": "2026-10-05",
+  "evaluated_at": "2026-10-05T11:13:57.987442+00:00",
+  "purpose": "public development comparison, not holdout/stability/product-wide acceptance",
+  "case_denominator_per_arm": 4,
+  "research_denominator": 8,
+  "source_health": "degraded",
+  "arms": {
+    "baseline": {
+      "identity": {
+        "production_commit": "7c99cef8ce3809b573f2a1d7f8bcd3690fa95a3b",
+        "runner_commit": "dc43b300fa1cdb006c7df530401c502c460f9d6f",
+        "core_asset_registry_id": "e125ccb5cda40485b6ad54ac7473294bed2066a89c87a945f98ec6f8a856d93c"
+      },
+      "manifest_ids": {
+        "P05": "7364e57e4831ef71f0b1bda6670c2047dddf9e4f5b13fb6b7e91d33dc1150b8c",
+        "P06": "d46233d8d780eb5358bcc037dac26bbee1b1adf22465b5eaf409301a8029f060",
+        "P07": "082bd5c3ce9f8fe6832d9f1b51c40505e9213114863a47e35cc50f2e393b553c",
+        "P11": "d46233d8d780eb5358bcc037dac26bbee1b1adf22465b5eaf409301a8029f060"
+      },
+      "binding_sha256": "b897a25def6cac9b2715353dcbd997f46db6308e41e888a82ec92276b35d38aa",
+      "research_usage": {
+        "total_tokens": 56752,
+        "llm_calls": 71,
+        "retrieval_calls": 24,
+        "failed_calls": 1
+      },
+      "wall_time_ms": 294782
+    },
+    "candidate": {
+      "identity": {
+        "production_commit": "8ca1a783d89734751897c347c640bcf048f97007",
+        "runner_commit": "dc43b300fa1cdb006c7df530401c502c460f9d6f",
+        "core_asset_registry_id": "a83cbd05b557044a0677128e47676e58971775d4ad2a911094b4073039909560"
+      },
+      "manifest_ids": {
+        "P05": "05fcdc06821ddbf779f4963b625f4578647d815ef08d2ebcbe8437936307f61e",
+        "P06": "c0b9ca50c9fe92be27e50225ad8660fb18ef81ba872703e9994be132fd5511e9",
+        "P07": "a3ba4cfb77d233f2ced2c7b014b4fe9e865d2257852ee0c51b226af8b9e95c7d",
+        "P11": "c0b9ca50c9fe92be27e50225ad8660fb18ef81ba872703e9994be132fd5511e9"
+      },
+      "binding_sha256": "5118ccd7c1264ed69e09d7a19cf8c42e29acc2a9d822a0dd62d2d5a280975d17",
+      "research_usage": {
+        "total_tokens": 60034,
+        "llm_calls": 73,
+        "retrieval_calls": 24,
+        "failed_calls": 2
+      },
+      "wall_time_ms": 207734
+    }
+  },
+  "shared_environment": {
+    "model_id": "deepseek-v4-flash",
+    "dependency_snapshot_sha256": "c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b",
+    "knowledge_sha256": "bf5cc356c3196b19e6886565ec456c3cb38901d6f903ddc819cbf15171b362f7",
+    "configuration_sha256": "4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474",
+    "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181"
+  },
+  "protocol": {
+    "batch_sha256": "6afbd863f97324b78e2ef49f7961562f641999ee32ec4bd86c16daa8c6056483",
+    "adapter_sha256": "95e2e895f97d5cb7b13941b8996e070214c5967a102e1601f760d767ab3f3eeb",
+    "run_limits": {
+      "total_tokens": 60000,
+      "llm_calls": 96,
+      "retrieval_calls": 72,
+      "active_milliseconds": 900000
+    },
+    "serial_order": [
+      {
+        "ordinal": 178,
+        "arm": "baseline",
+        "case_id": "P05"
+      },
+      {
+        "ordinal": 179,
+        "arm": "candidate",
+        "case_id": "P05"
+      },
+      {
+        "ordinal": 180,
+        "arm": "candidate",
+        "case_id": "P06"
+      },
+      {
+        "ordinal": 181,
+        "arm": "baseline",
+        "case_id": "P06"
+      },
+      {
+        "ordinal": 182,
+        "arm": "baseline",
+        "case_id": "P07"
+      },
+      {
+        "ordinal": 183,
+        "arm": "candidate",
+        "case_id": "P07"
+      },
+      {
+        "ordinal": 184,
+        "arm": "candidate",
+        "case_id": "P11"
+      },
+      {
+        "ordinal": 185,
+        "arm": "baseline",
+        "case_id": "P11"
+      }
+    ],
+    "repeats": 0,
+    "hitl_action": "limited_report",
+    "preflight": "reused compatible bounded 2026-10-05 diagnostic preflight; no additional paid preflight"
+  },
+  "content_acceptance": {
+    "baseline_passed": 0,
+    "candidate_passed": 0,
+    "cases_per_arm": 4,
+    "cross_scene_gain": false,
+    "critical_new_fact_errors_observed": 0,
+    "limited_gain": "Candidate P06 preserves official compatibility and database-I/O trial subanswers; original selection unanswered and user-stated premises mislabeled unconfirmed. Not complete decision improvement.",
+    "mechanism_decision": "Second source-range scheme without cross-scene net gain; stop iterating this mechanism and conduct whole-repository module/parameter/simplification audit per user direction."
+  },
+  "cells": [
+    {
+      "ordinal": 178,
+      "arm": "baseline",
+      "case_id": "P05",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "report_sha256": "7b7aafc8535353ab3054edb0d667061e00856fd98c9c1c883dfbe4692615a575",
+      "content_pass": false
+    },
+    {
+      "ordinal": 179,
+      "arm": "candidate",
+      "case_id": "P05",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_sha256": "e37fc3142c32797dbf32f3acb41031e9c448f24c153d914da3cbbce221db4471",
+      "content_pass": false
+    },
+    {
+      "ordinal": 180,
+      "arm": "candidate",
+      "case_id": "P06",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "report_sha256": "9dbff812f6cdbe31dfb38c2a096a53435d4735f783ae9f881d71e4524bf9d8be",
+      "content_pass": false
+    },
+    {
+      "ordinal": 181,
+      "arm": "baseline",
+      "case_id": "P06",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "report_sha256": "da5db00a5c799ed1f246cc63520b4201ea1f435cad181eded3f406b746962d8f",
+      "content_pass": false
+    },
+    {
+      "ordinal": 182,
+      "arm": "baseline",
+      "case_id": "P07",
+      "status": "completed_with_warnings",
+      "runtime_category": "restricted_or_degraded",
+      "report_sha256": "00e006e6e30fd0080c84f4f22880bde04a70ce6b903ed7153b31ee3d09a7a8c1",
+      "content_pass": false
+    },
+    {
+      "ordinal": 183,
+      "arm": "candidate",
+      "case_id": "P07",
+      "status": "completed_with_warnings",
+      "runtime_category": "restricted_or_degraded",
+      "report_sha256": "00e006e6e30fd0080c84f4f22880bde04a70ce6b903ed7153b31ee3d09a7a8c1",
+      "content_pass": false
+    },
+    {
+      "ordinal": 184,
+      "arm": "candidate",
+      "case_id": "P11",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_sha256": "d4888b5e71cf302cc1c48212fa9e684abae411ebf67590f31431083ddebd3b28",
+      "content_pass": false
+    },
+    {
+      "ordinal": 185,
+      "arm": "baseline",
+      "case_id": "P11",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_sha256": "1ffac3d6004659da5bdb7eda90fc141d6e4af6fca6f2d447396c9ad100b4b77d",
+      "content_pass": false
+    }
+  ],
+  "independent_review": {
+    "reviewers": 2,
+    "coverage": "one label-hidden independent reviewer per case pair, all eight reports; primary reviewed all",
+    "human_calibration": false,
+    "limitations": [
+      "Treatment may be inferred from evidence shape.",
+      "Only one run per arm/case; retrieval and model variation confound attribution.",
+      "Saved sources only; no live re-fetch for content review.",
+      "Primary saw execution status and first-cell usage before content; primary was not fully blind."
+    ],
+    "review_sha256": [
+      "81e96b64987cd551bd6fcc80c66120c99b7a3bf758f30b0cbe0b775d6ed2b79f",
+      "d2fe047513a7fbd20bed79540008e0fa7dfa3cab5f26307829a1e373b7c60003"
+    ]
+  },
+  "closeout": {
+    "actual_cumulative_admissions": 185,
+    "batch_remaining": 0,
+    "final_reserved": 24,
+    "active_runs": 0,
+    "ports_closed": true,
+    "database_pairs_quick_check": "ok",
+    "service_tool_exit_codes": [
+      1,
+      1
+    ],
+    "service_stop": "Ctrl-C after terminal/lease reconciliation; not claimed graceful exit0",
+    "monetary_cost": null
+  },
+  "local_evidence_root": "outputs/fact-range-development-20261005-v1"
+}
