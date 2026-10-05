@@ -171,6 +171,7 @@ class ObservabilityNodeAttemptResponse(BaseModel):
     started_at: datetime
     ended_at: datetime | None = None
     duration_ms: int | None = None
+    stage_counts: dict[str, int] | None = None
 
 
 class ObservabilityExternalCallResponse(BaseModel):

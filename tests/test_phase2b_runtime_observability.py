@@ -528,3 +528,77 @@ async def test_conflict_tools_trace_structured_provider_errors_as_failed(
         assert "Tavily" not in json.dumps(rows)
     finally:
         await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_node_stage_counts_survive_signal_replacement_in_trace_without_lifecycle_writes(tmp_path):
+    from deepchoice.observability.query import SQLiteObservabilityQuery
+
+    connection, repository, run, recorder = await _running_trace(tmp_path)
+    class Cancellation:
+        async def raise_if_cancelled(self):
+            return None
+
+    context = RunContext.from_run_record(
+        run, cancellation=Cancellation(), trace=recorder, budget=DeferredBudgetManager())
+    editor = ChiefEditorAgent(run.manifest.model_dump(), run_manifest=run.manifest)
+    async def synthesis(_state):
+        return {"quality_signals": [{
+            "agent": "conclusion_synthesizer",
+            "staged_generation": {"facts_received": 3, "rows_received": 2, "rows_selected": 1},
+            "analysis_binding": {"received": 1, "retained": 1},
+            "raw": "PRIVATE response",
+        }], "final_recommendation": {"decision_analysis": [{"reasoning": "PRIVATE prose"}]}}
+    async def review(_state):
+        return {"quality_signals": [{
+            "agent": "self_reviewer",
+            "analysis_review": {"submitted": 1, "reviewed": 1, "retained": 0, "withdrawn": 1},
+        }], "final_recommendation": {"decision_analysis": []}}
+    try:
+        before = await repository.list_task_events(run.task_id)
+        state = {}
+        with bind_run_context(context):
+            state.update(await editor._timed_node("conclusion_synthesizer", synthesis)(state))
+            state.update(await editor._timed_node("self_reviewer", review)(state))
+        assert [s["agent"] for s in state["quality_signals"]] == ["self_reviewer"]
+        public = (await SQLiteObservabilityQuery(connection, asyncio.Lock()).for_task(run.task_id)).model_dump(mode="json")
+        counts = {node["node_name"]: node["stage_counts"] for node in public["nodes"]}
+        assert counts["conclusion_synthesizer"] == {
+            "facts_received": 3, "rows_received": 2, "rows_selected": 1,
+            "analyses_received": 1, "analyses_bound": 1, "analyses_returned": 1}
+        assert counts["self_reviewer"] == {
+            "submitted": 1, "reviewed": 1, "retained": 0, "withdrawn": 1, "analyses_returned": 0}
+        assert await repository.list_task_events(run.task_id) == before
+        stored = await _rows(connection, "SELECT summary_json FROM node_attempts")
+        assert "PRIVATE" not in json.dumps(stored)
+        assert "PRIVATE" not in json.dumps(public)
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_stage_trace_write_does_not_change_node_result_or_task_events(tmp_path, monkeypatch):
+    connection, repository, run, recorder = await _running_trace(tmp_path)
+    class Cancellation:
+        async def raise_if_cancelled(self):
+            return None
+    context = RunContext.from_run_record(
+        run, cancellation=Cancellation(), trace=recorder, budget=DeferredBudgetManager())
+    editor = ChiefEditorAgent({}, run_manifest=run.manifest)
+    payload = {"quality_signals": [{"agent": "citation_validator", "analyses_received": 2,
+                                   "analyses_rebound": 1}],
+               "final_recommendation": {"decision_analysis": []}}
+    async def node(_state):
+        return dict(payload)
+    monkeypatch.setattr(recorder.sink, "finish_node_attempt", AsyncMock(side_effect=OSError("PRIVATE fault")))
+    try:
+        before = await repository.list_task_events(run.task_id)
+        with bind_run_context(context):
+            result = await editor._timed_node("citation_validator", node)({})
+        assert result["quality_signals"] == payload["quality_signals"]
+        assert result["final_recommendation"] == payload["final_recommendation"]
+        assert await repository.list_task_events(run.task_id) == before
+        assert (await repository.get_run(run.run_id)).status is RunStatus.RUNNING
+        assert await _rows(connection, "SELECT status FROM node_attempts") == [("started",)]
+    finally:
+        await connection.close()

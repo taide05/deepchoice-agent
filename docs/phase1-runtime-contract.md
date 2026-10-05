@@ -561,7 +561,23 @@ run_failure_category；只公开 finish_reason、截断、严格/修复 JSON、�
 结构状态，拒绝存储摘要中的任意其他字段。Trace 仍 best-effort，token/预算不改；成功传输可
 同时存在输出异常，不能单用 failed_calls 判结构可用。历史不回填，缺失保持 unknown。
 
-json_repair 兼容返回/重试不改，node-shape-v1 仅观测、不增加路由门；澄清多结构为 not_configured。
+json_repair 兼容返回/重试不改；新调用观察器为 node-shape-v2，仍读取历史 v1。
+本地 diagnostic_profile 分别选择事实选择、问题判断、主审和定向补审的浅层格式，
+不写入模型请求、不改变 call tag、manifest、输出上限、预算、解析返回或重试。
+主审与定向补审分别验证，缺少后者未要求的主审字段不再误报；空对象仍无效。
+格式有效不等于事实正确、引用绑定合格或审查完整。澄清多结构仍为 not_configured。
+
+2026-10-05 增补 nodes[].stage_counts，复用产品库每次成功 node attempt 的 summary，
+与 latest-run 状态/Trace 在同一读快照公开。仅投影 source_evaluator、evidence_chain、
+conclusion_synthesizer、citation_validator、self_reviewer 的固定计数键，严格整数
+0–10000，拒绝 bool、负数、字符串、任意新键与原始摘要；历史或无有效观察返回 null。
+计数包含来源过滤、范围提议、选取/绑定事实、问题行接收/筛选及固定拒绝分类、
+分析绑定拒绝分类、引用前/重绑/校准后分析数、自审提交/保留/撤下数。
+analyses_returned 是该节点返回的行数，analyses_rebound 是引用节点完成重新绑定、
+尚未校准时的行数；缺失字段不推成零。每次尝试独立记录，不把跨重试计数直接当分母。
+这些计数在 Trace 中保留，不改变 graph quality_signals 覆盖、state schema、HITL、
+报告准入或 lifecycle/SSE。Trace 写失败仍只造成观测缺失，不保存模型响应全文，也不
+回填旧快照或据现有计数反推历史丢弃环节。
 评测逐调用与已知分母输出、旧探测资格、冷启动模式、离线故障与边界详见
 [O1-B 记录](o1b-prebatch-observability.md)。不因此批准真实 case 或批次、不证明蓝屏根因。
 

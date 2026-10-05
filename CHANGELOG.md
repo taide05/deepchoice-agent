@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-05
 
+### Correct output diagnostics and retain evidence-flow counters
+
+Use explicit local diagnostic profiles for split fact selection, question judgments,
+main review and targeted review. New node-shape-v2 observations preserve legacy v1
+readability without changing model requests, call identities, parsing or budgets.
+Persist bounded content-free stage counts in existing best-effort node Trace and
+expose them through latest-run observability; historical absence remains null.
+This separates generated, selected, bound, calibrated and reviewed analysis counts
+without storing model prose or changing answer/safety gates. It is diagnostic
+repair, not evidence of improved report quality; no paid research is added.
+
 ### Record failed cross-scenario development comparison
 
 Complete the frozen quality-cross-scene-development-v1/1.0.1 comparison on

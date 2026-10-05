@@ -187,6 +187,11 @@ Streamlit 展示 durable 节点、调用、重试、失败及已知 token；查�
 snapshot panels。Trace 写入仍是 best-effort，不影响 task lifecycle/SSE；`task_events` 仍是
 状态与 SSE 正确性的唯一事实源。Phase 2-B 已通过完整测试和独立 Review。
 
+节点摘要还提供固定白名单的 `stage_counts`：来源准入、事实选择、问题行筛选、绑定、
+引用校准和自审保留数。只记录计数，历史缺失为 null，不保存模型原文。
+调用诊断 `node-shape-v2` 区分分步综合、主审和定向补审格式，旧 v1 记录保持可读；
+格式合格与计数只能辅助定位信息损失，不能证明答案质量。
+
 Phase 2-C 已在默认 durable 路径接入 fenced、append-only 的预算预留与结算：每次实际 LLM
 重试、每个 Retriever 来源和冲突证据工具调用都先通过原子预算门，并发不能超发；未知用量按
 预留上界记为 `unknown_spend`。标准档为 60,000 total token、96 次 LLM、72 次检索和 900 秒

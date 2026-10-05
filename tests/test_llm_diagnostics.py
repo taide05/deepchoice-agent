@@ -245,3 +245,54 @@ def test_synthesis_diagnostics_reject_malformed_decision_structures(field, inval
     payload[field] = invalid_value
 
     assert _synthesis_diagnostics(payload)["schema_status"] == "invalid"
+
+
+@pytest.mark.parametrize(("profile", "tag", "payload", "bad"), [
+    ("fact-selection-v1", "conclusion_synthesizer",
+     {"source_facts": [{"id": "F1", "evidence_id": 1}]},
+     {"source_facts": [{"id": "F1", "evidence_id": True}]}),
+    ("question-judgment-v1", "conclusion_synthesizer",
+     {"decision_analysis": []}, {"decision_analysis": [{}]}),
+    ("self-review-targeted-v1", "self_reviewer",
+     {"analysis_reviews": [{"analysis_id": "A1", "action": "withdraw"}]}, {}),
+    ("self-review-v2", "self_reviewer",
+     {"checks": [{"item": 1, "passed": True}], "confidence": "low",
+      "knowledge_gaps": [], "critical_gaps": [], "analysis_reviews": [], "provisional_reviews": []},
+     {"checks": [], "confidence": "low", "knowledge_gaps": [], "critical_gaps": []}),
+])
+async def test_current_profiles_observe_valid_and_malformed_without_changing_return(profile, tag, payload, bad):
+    from deepchoice.utils.call_diagnostics import public_call_result
+    from deepchoice.utils.llm import max_output_tokens_for
+
+    for value, expected in ((payload, "valid"), (bad, "invalid")):
+        diagnostics, usage = [], []
+        client = _CaptureClient(_resp(json.dumps(value)))
+        with patch("deepchoice.utils.llm._get_client", return_value=client):
+            result = await call_model(
+                [{"role": "user", "content": "PRIVATE JSON"}], tag=tag,
+                response_format="json", diagnostic_profile=profile,
+                diagnostics=diagnostics, usage=usage,
+            )
+        assert result == value
+        assert client.kwargs["max_tokens"] == max_output_tokens_for(tag)
+        assert "diagnostic_profile" not in client.kwargs
+        assert usage[0]["total_tokens"] == 15
+        record = diagnostics[0]
+        assert record["tag"] == tag
+        assert record["diagnostics"]["policy"] == "node-shape-v2"
+        assert record["diagnostics"]["profile"] == profile
+        assert record["diagnostics"]["schema_status"] == expected
+        assert record["failure_category"] == (None if expected == "valid" else "json_schema_error")
+        public = public_call_result(json.dumps({"diagnostics": record["diagnostics"], "raw": "PRIVATE"}))
+        assert public["diagnostics"] == record["diagnostics"]
+        assert "PRIVATE" not in json.dumps(record)
+    historical = public_call_result('{"diagnostics":{"policy":"node-shape-v1","schema_status":"invalid"}}')
+    assert historical["diagnostics"]["policy"] == "node-shape-v1"
+    assert historical["diagnostics"]["schema_status"] == "invalid"
+
+
+async def test_diagnostic_profile_cannot_change_call_identity():
+    with patch("deepchoice.utils.llm._get_client") as factory:
+        with pytest.raises(ValueError, match="Unknown diagnostic profile"):
+            await call_model([], tag="query_analyzer", diagnostic_profile="fact-selection-v1")
+    factory.assert_not_called()

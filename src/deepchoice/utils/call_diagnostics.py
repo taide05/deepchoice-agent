@@ -22,7 +22,8 @@ FAILURE_CATEGORIES = frozenset({
 class CallDiagnostics(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    policy: Literal["node-shape-v1"] = "node-shape-v1"
+    policy: Literal["node-shape-v1", "node-shape-v2"] = "node-shape-v1"
+    profile: Literal["fact-selection-v1", "question-judgment-v1", "self-review-v2", "self-review-targeted-v1"] | None = None
     finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None = None
     truncated: StrictBool | None = None
     json_status: Literal["strict", "repaired", "invalid", "non_object", "not_requested"] | None = None
@@ -117,8 +118,40 @@ _SHAPES = {
 }
 
 
-def output_shape_valid(tag: str, value: Any) -> bool:
+_ANALYSIS_SHAPE = {
+    "kind": ("choice", "answer", "design"), "option": str, "requirement_ids": [str],
+    "basis": [{"fact_id": str, "sentence_ids": [int]}], "reasoning": str,
+    "assumptions": [str], "change_condition": str,
+}
+_PROFILES = {
+    "fact-selection-v1": ("conclusion_synthesizer", {
+        "source_facts": [{"id": str, "evidence_id": int}],
+    }),
+    "question-judgment-v1": ("conclusion_synthesizer", {
+        "decision_analysis": [_ANALYSIS_SHAPE],
+    }),
+    "self-review-targeted-v1": ("self_reviewer", {
+        "analysis_reviews": [{"analysis_id": str, "action": ("keep", "revise", "withdraw")}],
+    }),
+    "self-review-v2": ("self_reviewer", {
+        "checks": [{"item": int, "passed": bool}], "confidence": _CONFIDENCE,
+        "knowledge_gaps": [str], "critical_gaps": [str],
+        "analysis_reviews": [{"analysis_id": str, "action": ("keep", "revise", "withdraw")}],
+        "provisional_reviews": [{"analysis_id": str, "action": ("keep", "revise", "withdraw")}],
+    }),
+}
+
+
+def validate_diagnostic_profile(tag: str, profile: str | None) -> None:
+    if profile is not None and (profile not in _PROFILES or _PROFILES[profile][0] != tag):
+        raise ValueError("Unknown diagnostic profile for call tag.")
+
+
+def output_shape_valid(tag: str, value: Any, *, profile: str | None = None) -> bool:
     """Check the existing content shape without recording or trusting its prose."""
+    if profile is not None:
+        validate_diagnostic_profile(tag, profile)
+        return _matches(value, _PROFILES[profile][1])
     if tag == "conclusion_synthesizer" and isinstance(value, dict) and "answer_contract" in value:
         return _matches(value, {
             "answer_contract": ("question-analysis-v1",),
@@ -134,11 +167,14 @@ def output_shape_valid(tag: str, value: Any) -> bool:
 
 def observe_output(choice: Any, *, json_requested: bool = False, content: Any = None,
                    parsed: Any = None, parse_ok: bool | None = None,
-                   repair_attempts: int = 0, tag: str = "") -> dict:
+                   repair_attempts: int = 0, tag: str = "",
+                   profile: str | None = None) -> dict:
+    validate_diagnostic_profile(tag, profile)
     reason = getattr(choice, "finish_reason", None)
     if not isinstance(reason, str) or reason not in {"stop", "length", "tool_calls", "content_filter", "function_call"}:
         reason = None
     diagnostic = CallDiagnostics(
+        policy="node-shape-v2", profile=profile,
         finish_reason=reason, truncated=None if reason is None else reason == "length",
         json_status="not_requested", schema_status="not_applicable",
     )
@@ -153,10 +189,10 @@ def observe_output(choice: Any, *, json_requested: bool = False, content: Any = 
         diagnostic.json_status = status
         diagnostic.repair_attempts = repair_attempts
         diagnostic.parse_ok = parse_ok
-        shape = _SHAPES.get(tag)
+        shape = _PROFILES[profile][1] if profile is not None else _SHAPES.get(tag)
         diagnostic.schema_status = (
             "not_configured" if shape is None
-            else "valid" if parse_ok and output_shape_valid(tag, parsed) else "invalid"
+            else "valid" if parse_ok and output_shape_valid(tag, parsed, profile=profile) else "invalid"
         )
         if shape is not None and tag.startswith("search_") and isinstance(parsed, dict):
             maximum = parsed.get("max_results", 3)

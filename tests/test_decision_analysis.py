@@ -61,6 +61,11 @@ async def test_analysis_survives_normal_abstention_without_upgrading_authority(m
     assert rec["action_plan_mode"] == "validation_only"
     if not query_only:
         assert next(row for row in rec["requirement_assessments"] if row["id"] == "C2")["status"] == "unknown"
+    from deepchoice.utils.stage_diagnostics import node_stage_counts
+    counts = node_stage_counts("citation_validator", state)
+    assert counts["analyses_received"] == 1
+    assert counts["analyses_rebound"] == 1
+    assert counts["analyses_returned"] == int(source_ok)
     assert bool(rec["decision_analysis"]) is source_ok
     if source_ok:
         item = rec["decision_analysis"][0]

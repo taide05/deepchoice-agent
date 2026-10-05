@@ -150,7 +150,7 @@ async def _repair_unreviewed(context, initial, payload, usage):
         attempted += 1
         try:
             response = await call_model(prompt, model="deepseek-flash", response_format="json",
-                                        tag="self_reviewer", usage=usage)
+                                        tag="self_reviewer", diagnostic_profile="self-review-targeted-v1", usage=usage)
         except BudgetError:
             raise
         except Exception:
@@ -246,7 +246,7 @@ class SelfReviewerAgent:
         local_usage: list = []
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json",
-                                      tag="self_reviewer", usage=local_usage)
+                                      tag="self_reviewer", diagnostic_profile="self-review-v2", usage=local_usage)
         except BudgetError:
             raise
         except Exception:

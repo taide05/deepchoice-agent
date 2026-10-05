@@ -13,7 +13,7 @@ from langchain_core.utils.json import parse_json_markdown
 from openai import APIConnectionError, AsyncOpenAI
 
 from deepchoice.security.redaction import redact_text
-from deepchoice.utils.call_diagnostics import exception_category, observe_output, output_failure
+from deepchoice.utils.call_diagnostics import exception_category, observe_output, output_failure, validate_diagnostic_profile
 from deepchoice.utils.token_usage import cache_totals, provider_usage, trace_usage
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
@@ -197,6 +197,7 @@ async def call_model(
     extra_body: dict | None = None,
     seed: int | None = None,
     diagnostics: list | None = None,
+    diagnostic_profile: str | None = None,
 ) -> dict | str:
     # Lazy to keep the historic agent/manifest import graph acyclic.
     from deepchoice.observability import (
@@ -206,6 +207,7 @@ async def call_model(
     )
     from deepchoice.runtime.context import classify_cancelled_trace_status
 
+    validate_diagnostic_profile(tag, diagnostic_profile)
     tier = model if model in TIERS else "deepseek-flash"
     cfg = TIERS[tier]
     model = cfg["model"]
@@ -376,7 +378,7 @@ async def call_model(
                 observation = observe_output(
                     response.choices[0], json_requested=response_format == "json",
                     content=content, parsed=parsed, parse_ok=parse_ok,
-                    repair_attempts=repair_attempts, tag=tag,
+                    repair_attempts=repair_attempts, tag=tag, profile=diagnostic_profile,
                 )
                 if trace is not None:
                     await trace.finish_external_call(

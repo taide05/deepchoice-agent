@@ -291,6 +291,8 @@ class CitationValidatorAgent:
 
     async def run(self, research_state: dict) -> dict:
         recommendation = research_state.get("final_recommendation", {})
+        raw_analyses = recommendation.get("decision_analysis") if isinstance(recommendation, dict) else None
+        analyses_received = len(raw_analyses) if isinstance(raw_analyses, list) else None
         evidence_chains = research_state.get("evidence_chains", [])
         query = str(research_state.get("task", {}).get("query", ""))
         task = research_state.get("task", {})
@@ -327,6 +329,9 @@ class CitationValidatorAgent:
             "evidence_chains": projected_chains,
             "quality_signals": [{
                 "agent": "citation_validator",
+                "analyses_received": analyses_received,
+                "analyses_rebound": (len(recommendation["decision_analysis"])
+                    if isinstance(recommendation, dict) and isinstance(recommendation.get("decision_analysis"), list) else None),
                 "verified": counts.verified,
                 "unsupported": counts.unsupported,
                 "unreachable": counts.unreachable,

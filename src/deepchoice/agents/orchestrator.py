@@ -22,6 +22,7 @@ from ..runtime.context import (
     classify_cancelled_trace_status,
     get_run_context,
 )
+from ..utils.stage_diagnostics import node_stage_counts
 from ..utils.views import print_agent_output
 from .citation_validator import CitationValidatorAgent
 from .conclusion_synthesizer import ConclusionSynthesizerAgent
@@ -180,7 +181,7 @@ class ChiefEditorAgent:
                 await trace.finish_node_attempt(
                     attempt,
                     status=TraceStatus.SUCCEEDED,
-                    summary={"elapsed_ms": elapsed_ms},
+                    summary={"elapsed_ms": elapsed_ms, "stage_counts": node_stage_counts(name, result)},
                 )
             elapsed = round(elapsed_ms / 1000, 2)
             timing = dict(state.get("agent_timing", {}))

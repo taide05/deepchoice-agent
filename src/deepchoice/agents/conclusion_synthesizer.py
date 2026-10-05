@@ -179,9 +179,10 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
     )}]
     diagnostic = {"questions_planned": len(questions), "judgment_calls": 0,
                   "rows_received": 0, "rows_selected": 0,
+                  "rows_rejected_shape": 0, "rows_rejected_question": 0, "rows_rejected_limit": 0,
                   "r0_withheld_one_sided": False, "provider_errors": 0}
     try:
-        selected = await call_model(selection_prompt, **common)
+        selected = await call_model(selection_prompt, diagnostic_profile="fact-selection-v1", **common)
     except BudgetError:
         raise
     except Exception as exc:
@@ -189,6 +190,8 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
         diagnostic["provider_errors"] += 1
         selected = {}
     selected = selected if isinstance(selected, dict) else {}
+    raw_selection = selected.get("source_facts")
+    diagnostic["facts_received"] = len(raw_selection) if isinstance(raw_selection, list) else None
     bound = bind_evidence_choices({"source_facts": selected.get("source_facts", [])},
                                   evidence_chains, candidates, requirements)
     facts = bound.get("source_facts", [])
@@ -213,7 +216,7 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
             )}]
             diagnostic["judgment_calls"] = 1
             try:
-                answer = await call_model(prompt, **common)
+                answer = await call_model(prompt, diagnostic_profile="question-judgment-v1", **common)
             except BudgetError:
                 raise
             except Exception as exc:
@@ -231,14 +234,18 @@ async def _staged_answer(task, research_state, requirements, evidence_chains, ev
                         if (not isinstance(row, dict)
                                 or not isinstance(row.get("requirement_ids"), list)
                                 or any(not isinstance(value, str) for value in row["requirement_ids"])):
+                            diagnostic["rows_rejected_shape"] += 1
                             continue
                         targets = set(row["requirement_ids"]) & all_ids
                         if (len(targets) != 1 or not targets <= allowed_ids or targets & seen
                                 or ("R0" not in targets and row.get("kind") == "choice")):
+                            diagnostic["rows_rejected_question"] += 1
                             continue
                         analyses.append(row)
                         seen.update(targets)
                     diagnostic["rows_selected"] = len(analyses)
+                else:
+                    diagnostic["rows_rejected_limit"] = len(rows)
     return ({"answer_contract": ANSWER_CONTRACT, "source_facts": raw_facts,
              "decision_analysis": analyses}, diagnostic)
 

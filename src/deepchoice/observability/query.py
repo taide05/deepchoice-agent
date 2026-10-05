@@ -21,6 +21,7 @@ from deepchoice.persistence.database import _await_cleanup, _begin_transaction
 from deepchoice.persistence.repository import TaskNotFoundError
 from deepchoice.utils.token_usage import CACHE_FIELDS, cache_totals, public_usage
 from deepchoice.utils.call_diagnostics import public_call_result, run_failure
+from deepchoice.utils.stage_diagnostics import public_stage_counts
 
 
 _TOKEN_FIELDS = ("input_tokens", "output_tokens", "total_tokens")
@@ -376,7 +377,7 @@ class SQLiteObservabilityQuery:
                 cursor = await self._connection.execute(
                     """
                     SELECT node_attempt_id, execution_epoch, node_name, status,
-                           started_at, ended_at
+                           started_at, ended_at, summary_json
                     FROM node_attempts
                     WHERE run_id = ?
                     ORDER BY execution_epoch, started_at, node_name, attempt_no
@@ -426,6 +427,7 @@ class SQLiteObservabilityQuery:
             nodes.append(
                 ObservabilityNodeAttemptResponse(
                     node_name=name,
+                    stage_counts=public_stage_counts(name, row[6]),
                     attempt_no=seen_attempts[name],
                     status=_project_status(
                         str(row[3]),

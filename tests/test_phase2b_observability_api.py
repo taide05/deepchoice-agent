@@ -137,6 +137,7 @@ def test_latest_run_observability_aggregates_and_exposes_only_allowlist(
         "prompt_cache_hit_ratio": None,
     }
     assert [node["attempt_no"] for node in body["nodes"]] == [1, 2]
+    assert all(node["stage_counts"] is None for node in body["nodes"])
     assert body["calls"][1]["node_name"] == "query_analyzer"
     assert body["calls"][1]["node_attempt_no"] == 2
     assert body["calls"][1]["retry_no"] == 1
