@@ -12,6 +12,7 @@
 | 3 | [推进与维修](optimization-execution.md) | 实现粒度、验证节奏、无收益后的调整、持续授权 |
 | 4 | [当前状态](o1-execution-status.md) | 已验证候选、实际账本、当前缺口和下一成果 |
 | 历史按需 | [旧Q0四例诊断](quality-selection-q0.md) | 旧冻结附件入口，仅供定向回归和查证 |
+| 当前先行 | [全仓审计与精简地图](codebase-audit.md) | 模块覆盖、代码根因、参数影响及结构修复依赖 |
 | 按需 | [运行契约](phase1-runtime-contract.md) | durable、预算/Trace、引用、安全、HITL和恢复边界 |
 | 按需 | [评估工具](../benchmarks/README.md) | 已有工具能做什么、哪些入口只供历史复算 |
 
