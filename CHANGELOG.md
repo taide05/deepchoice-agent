@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-05
 
+### Freeze public cross-scenario development probes
+
+Freeze quality-cross-scene-development-v1/1.0.1 on 2026-10-05 with P03, P06, P11
+and P12 from product-baseline-v1/1.0.0. Requests and HITL remain exact copies.
+Independent assistant review narrowed mandatory criteria to the original questions;
+versioned source-applicability notes are review-only and never injected into research.
+All four are public development material, including the exposed former P11/P12
+holdouts. The fixture supports a prospective paired comparison of source-range
+selection; no new research or quality improvement is claimed by this freeze.
+
 ### Refocus development measurement and retire obsolete controller tests
 
 Development comparisons now select a small, preregistered mix of technology

@@ -9,13 +9,15 @@ DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型
 2026-10-04 的 quality-selection-development-v1（1.0.0，固定P01/P04/P08/P02四例）
 已完成 v23、v24、v25 三轮公开开发测量，每轮均 0/4“可用且有据”；v24 有一份
 关键错误，v25 的 P08 相对 v23 实质退化，均已撤回。当前生成决策路径沿用 v23；
-多段来源核验契约另已实现，但默认检索尚不产出多段。工程能力和局部分析不代表
+多段来源核验和原请求驱动的有界句子范围提议已实现，尚未证明跨场景收益。工程能力和局部分析不代表
 稳定选型质量。最终24次仍封存。测量日期、成本与分母见
 [当前状态](docs/o1-execution-status.md)。
 
 后续按[整体质量路线](docs/current-roadmap.md)改进证据组织、条件推理和报告完整性，
 用多场景对照与固定候选重复运行验收。验收方法和实际进展分别见
 [质量协议](docs/product-effectiveness-optimization.md)与[当前状态](docs/o1-execution-status.md)。
+公开跨场景开发输入现已冻结为[四例探针](benchmarks/quality-cross-scene-development-v1.json)
+（1.0.1，2026-10-05）；它是开发测量材料，尚无新对照结果。
 文档角色见[阅读入口](docs/README.md)；旧逐轮优化记录移至[归档](docs/archive/README.md)。
 
 引用verified只表示确定性检查结果，不证明语义或场景适用性。模型分析需要使用者核对

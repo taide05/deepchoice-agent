@@ -1,0 +1,377 @@
+{
+  "dataset_id": "quality-cross-scene-development-v1",
+  "version": "1.0.1",
+  "status": "frozen",
+  "freeze_date": "2026-10-05",
+  "protocol": "docs/product-effectiveness-optimization.md",
+  "parent": {
+    "path": "benchmarks/product-baseline-v1.json",
+    "dataset_id": "product-baseline-v1",
+    "version": "1.0.0",
+    "freeze_date": "2026-09-16",
+    "byte_sha256": "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef",
+    "canonical_sha256": "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
+  },
+  "selection": "All four publicly proposed probes, four distinct tradeoffs; no output-based exclusion. Original requests/HITL unchanged. Historical holdout labels retained only as provenance.",
+  "assessment": {
+    "pass": "All five maintained content checks pass and no critical error; unresolved disagreement cannot pass.",
+    "severity": "Critical: decision-changing false capability, causal/applicability reversal, fabricated source/measurement, hard-constraint violation or unsafe guarantee. Important gap: prevents understanding choice or next test. Minor presentation alone does not fail.",
+    "comparison": "At least two different tradeoffs improve supported answers, no new critical error and no material regression of an already passing case. Do not count lexical verified, longer prose or cheaper calls as quality gains.",
+    "review": "Independent assistant read-only review; conceal arm identity and cost until content decisions are locked where possible; disclose exposure and lack of human calibration.",
+    "source_policy": "Assess original saved cited passages and versions. New review references do not repair missing report evidence. Unreachable or insufficiently scoped evidence remains unknown.",
+    "measurements": [
+      "original-question answers",
+      "decisive saved-source applicability",
+      "critical errors and important gaps",
+      "retrieval/evidence/synthesis/citation/rendering information loss where public artifacts permit",
+      "tokens, calls, wall time and unknown usage"
+    ],
+    "holdout_scope": "No new sealed holdout opened. This public fixture is development evidence only."
+  },
+  "cases": [
+    {
+      "case_id": "P03",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "public-development; not a fresh holdout; not used to design f3d62d8 according to recorded candidate history",
+      "tradeoff": "framework_delivery_completeness",
+      "request": {
+        "query": "新建 Python 业务 API 时，团队应选择 FastAPI 还是 Django？",
+        "scene_context": "6 人团队，需要 REST API、后台管理、权限、审计和定时任务；团队有 Django 经验，交付周期 10 周。",
+        "constraints": [
+          "首版必须有可用后台",
+          "不能把单项吞吐当作唯一标准",
+          "需要评估生态和培训成本"
+        ],
+        "candidate_techs": [
+          "FastAPI",
+          "Django"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "后台和权限需求如何影响选择？",
+          "异步能力是否为当前业务关键？",
+          "团队经验的机会成本是什么？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "fc9745ade76b90ccc8b603778eca0859845966e7d6a3dbd3eae8022aea5f6e30",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "覆盖后台、权限和团队经验",
+          "区分框架能力与第三方组件",
+          "说明什么条件会反转结论"
+        ],
+        "acceptable_outcomes": [
+          "倾向 Django 并说明 API 实现方式",
+          "若明确拆分后台或异步 I/O 为核心，可条件性选择 FastAPI"
+        ],
+        "major_errors": [
+          "以 hello-world 基准直接决定业务框架",
+          "声称 Django 不支持异步",
+          "遗漏交付周期"
+        ],
+        "conflict_points": [
+          "开发完整性与轻量异步 API 体验之间的权衡"
+        ],
+        "reference_sources": [
+          "https://docs.djangoproject.com/en/stable/",
+          "https://fastapi.tiangolo.com/"
+        ]
+      },
+      "must_answer": [
+        "把首版后台、权限、10周交付和已有Django经验纳入选择",
+        "区分框架内建、第三方组件和应用实现；覆盖审计与定时任务的职责",
+        "解释异步是否为已知业务关键及其部署/组件边界",
+        "给出有理由的条件建议及足以反转选择的条件"
+      ],
+      "source_applicability": [
+        "Django 6.0 admin 是可信用户使用的内部模型管理界面，不能直接等同任意业务后台。",
+        "Django 6.0 有异步能力，端到端异步涉及ASGI/中间件等条件，不能宣称完全不支持。",
+        "FastAPI安全组件不自动证明完整权限、后台、审计和调度已实现；缺失资料不能推出这些能力绝对不可实现。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://docs.djangoproject.com/en/6.0/ref/contrib/admin/",
+          "version_scope": "6.0",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://docs.djangoproject.com/en/6.0/topics/async/",
+          "version_scope": "6.0",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://fastapi.tiangolo.com/features/",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P06",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "public-development; not a fresh holdout; not used to design f3d62d8 according to recorded candidate history",
+      "tradeoff": "runtime_performance_and_compatibility",
+      "request": {
+        "query": "Bun 和 Node.js 的性能资料结论冲突时，2026 年新建 TypeScript API 应如何选择？",
+        "scene_context": "团队已有 Node.js 经验，服务以数据库 I/O 为主，要求生态稳定；供应方 HTTP 性能宣传与本项目负载条件不同，尚无本项目的配对实测。",
+        "constraints": [
+          "必须解释 benchmark 条件",
+          "不能把运行时微基准外推为业务吞吐",
+          "需要区分版本与兼容性"
+        ],
+        "candidate_techs": [
+          "Bun",
+          "Node.js"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "宣传 benchmark 与本项目的测试条件有何不同？",
+          "生态兼容和团队经验如何计权？",
+          "怎样设计自己的验证？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "772ec8809eafdcd5256b517a7eb974489c99a885543689be99f3381c256affe0",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "识别版本、硬件、负载差异",
+          "避免把微基准直接等同业务收益",
+          "给出面向实际工作负载的试验方案"
+        ],
+        "acceptable_outcomes": [
+          "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+          "若兼容性已验证且收益可复现，可条件性选择 Bun"
+        ],
+        "major_errors": [
+          "无条件宣称固定倍数性能优势",
+          "混用不同版本数据",
+          "忽略数据库 I/O 主导条件"
+        ],
+        "conflict_points": [
+          "供应方微基准优势与数据库 I/O 业务负载之间的外推边界；不预设已有相反实测"
+        ],
+        "reference_sources": [
+          "https://bun.sh/docs",
+          "https://nodejs.org/docs/latest/api/"
+        ]
+      },
+      "must_answer": [
+        "保留数据库I/O主导、Node经验、生态稳定和没有本项目配对实测的输入",
+        "比较性能资料的版本、硬件、负载和测量口径；缺项明确未知",
+        "把版本、兼容性和团队经验纳入选择；依赖未给定时可提出条件性核验，若据具体API、包或原生扩展作决定性主张则核对其适用范围",
+        "给出针对代表性业务负载和实际依赖的受控试验，以及结果改变选择的条件"
+      ],
+      "source_applicability": [
+        "Bun兼容资料是API与限制清单；Node-API支持与任意原生扩展无条件兼容不能混同。",
+        "Node latest API页面不能单独证明生产适用版本或本场景性能收益；报告如推荐具体版本，应核对其支持状态。",
+        "供应方HTTP测试不是数据库I/O业务配对实测；不得捏造已有相反测试或固定业务收益。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://bun.com/docs/runtime/nodejs-compat",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://nodejs.org/en/about/previous-releases",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://nodejs.org/docs/latest/api/",
+          "version_scope": "version must be captured if cited",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P11",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "public-development; not a fresh holdout; not used to design f3d62d8 according to recorded candidate history",
+      "tradeoff": "event_replay_and_message_retry_semantics",
+      "request": {
+        "query": "订单事件处理系统应选 Kafka 还是 RabbitMQ？",
+        "scene_context": "峰值每秒 5000 条消息，需要消费者重放部分历史事件、单消息重试和死信处理；团队只运维过 RabbitMQ。",
+        "constraints": [
+          "区分事件日志与任务队列语义",
+          "考虑重放和顺序要求",
+          "计入运维经验"
+        ],
+        "candidate_techs": [
+          "Apache Kafka",
+          "RabbitMQ"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "重放需求如何影响选择？",
+          "路由、重试和死信能力如何比较？",
+          "团队经验是否足以改变结论？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "dca9c25b4bc0daf7beae0bb843eea5b2f9ac32a9325cbc84fd6fab7f65d64137",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "解释日志保留与队列确认模型，包括 RabbitMQ Streams 可重放而经典队列消费语义不同",
+          "覆盖重放、顺序、重试和死信",
+          "说明运维迁移成本"
+        ],
+        "acceptable_outcomes": [
+          "按保留与分区需求条件性选择 Kafka",
+          "基于已验证的 Streams 重放及团队经验条件性保留 RabbitMQ",
+          "若重放另行可靠实现且路由优先，可条件性保留 RabbitMQ 队列"
+        ],
+        "major_errors": [
+          "声称两者交付语义天然 exactly-once",
+          "忽略分区对顺序的影响",
+          "只按峰值数字选择",
+          "声称 RabbitMQ 所有类型都不支持重放"
+        ],
+        "conflict_points": [
+          "历史重放与灵活队列路由能力之间的权衡"
+        ],
+        "reference_sources": [
+          "https://kafka.apache.org/documentation/",
+          "https://www.rabbitmq.com/docs"
+        ]
+      },
+      "must_answer": [
+        "区分Kafka日志与RabbitMQ队列确认模型，并包含Streams的重放边界；若依据具体队列类型作决定性主张，再核对该类型条件",
+        "说明历史重放需求；不得以RabbitMQ品牌名排除其Streams重放",
+        "同时处理顺序、单消息重试和死信，不把不同模式能力无条件相加",
+        "将RabbitMQ运维经验与新增组件/模式成本纳入有理由的条件选择",
+        "不按5000条每秒直接决定，不保证天然端到端exactly-once"
+      ],
+      "source_applicability": [
+        "Kafka 4.2介绍限定顺序在分区内；其日志可以保留并重读。",
+        "RabbitMQ Streams是持久可重复读取的日志；同页经典队列与Stream对照列出Stream没有dead-letter exchanges。",
+        "支持重放不等于同时拥有经典队列全部重试/死信功能；业务所需组合须给依据或明确待验证。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://kafka.apache.org/42/getting-started/introduction/",
+          "version_scope": "4.2",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://www.rabbitmq.com/docs/streams",
+          "version_scope": "rolling; capture page version at report review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P12",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "public-development; not a fresh holdout; not used to design f3d62d8 according to recorded candidate history",
+      "tradeoff": "deployment_idle_cost_and_latency",
+      "request": {
+        "query": "突发流量明显的新 SaaS API 应部署为云函数还是长期运行的容器服务？",
+        "scene_context": "平时每秒 5 次请求，活动时可到每秒 800 次；请求需要访问数据库，P95 延迟目标 500ms，团队希望降低空闲成本。",
+        "constraints": [
+          "云厂商尚未确定",
+          "必须考虑冷启动和数据库连接",
+          "价格未知时不能伪造成本结论"
+        ],
+        "candidate_techs": [
+          "Serverless Functions",
+          "Container Service"
+        ],
+        "complexity": "high",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "突发扩缩容和冷启动如何影响延迟？",
+          "数据库连接如何治理？",
+          "怎样用负载试验决定？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "d8d05b9ad509eb2be10911190c9f05ae62378d2be56bec189a479e558ebe15a8",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "把冷启动、并发配额和连接池纳入分析",
+          "成本未知时给出测量模型而非数字",
+          "设计代表性负载测试"
+        ],
+        "acceptable_outcomes": [
+          "按延迟与突发模式提出条件性架构",
+          "建议先做两种部署的受控压测"
+        ],
+        "major_errors": [
+          "假设云函数无冷启动",
+          "忽略数据库连接风暴",
+          "在无厂商和区域信息时给出精确成本"
+        ],
+        "conflict_points": [
+          "低空闲成本与延迟可预测性之间的权衡"
+        ],
+        "reference_sources": [
+          "https://docs.aws.amazon.com/lambda/latest/dg/welcome.html",
+          "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+        ]
+      },
+      "must_answer": [
+        "保留5→800请求每秒、数据库访问、P95 500ms和厂商未定，不伪造峰值时长/区域",
+        "比较冷启动、扩缩容/并发限制和数据库连接治理及其适用条件",
+        "比较长期容器服务的运维与延迟取舍；厂商未定时允许条件性分析，若据某托管产品能力作决定性主张则核对其适用范围",
+        "价格未知时给成本变量/测量方法，不给确定账单或必然省钱结论",
+        "提出覆盖冷/热、突发、连接和P95的代表性比较试验及条件选择"
+      ],
+      "source_applicability": [
+        "AWS Lambda资料只支持该服务的连接复用、闲置连接、并发/下游容量等条件，不能代表所有云函数。",
+        "Kubernetes Deployment描述副本与更新控制，不能证明所有托管容器的价格、SLA或自动扩容。",
+        "未知厂商/区域、请求时长、资源规格、突发持续时长时，成本结论应保持条件性；无需完成实际部署演练才答题。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    }
+  ],
+  "preparation_revision": {
+    "prior_draft_byte_sha256": "be5afe722b848cb07d63884e871ca11fe114f92c80f7a888b1a61c9c12ee696f",
+    "reason": "Independent premeasurement review removed unsolicited mandatory dependency/queue/deployment details; no reports observed and no research admitted."
+  }
+}
