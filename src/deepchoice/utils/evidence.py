@@ -5,6 +5,19 @@ import re
 from urllib.parse import urlsplit
 
 
+def candidate_name_pattern(candidate: object) -> re.Pattern | None:
+    """Match an explicit product name in casefolded text, including short names.
+
+    ASCII identifier boundaries allow mixed Chinese/Latin prose while excluding
+    embedded identifiers and extensions such as C++++ for C++. A literal name
+    is a lexical hint only, never proof of source applicability.
+    """
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    name = r"\s+".join(re.escape(word) for word in candidate.casefold().split())
+    return re.compile(r"(?<![a-z0-9_+#])" + name + r"(?![a-z0-9_+#])")
+
+
 def conclusion_source_allowed(source: dict) -> bool:
     """Exclude paste-host evidence from new conclusions, not from retrieval.
 

@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-10-05
 
+### Preserve explicitly named short candidates in question routing
+
+Match complete explicit candidate names before the existing long-token title hints,
+using the same identifier boundaries as source admission. This fixes a reproduced
+Bun/Node.js false one-sided result that withheld the original question. Source
+admission behavior, one-sided protection, citation calibration and review remain
+unchanged. Freeze synthesis asset v27; historical v26 remains readable but cannot
+resume under the new identity. Offline smoke case outputs and metrics are unchanged;
+its baseline updates only asset/provenance identity and the derived fingerprint.
+Two exposed development diagnostics on 2026-10-05 located this routing error and an
+upstream source-binding eligibility bottleneck. Both reports still fail content
+review, and one contains overbroad compatibility percentages. Neither diagnostic
+counts nor the routing correction establish cross-scenario quality improvement.
+
+
 ### Correct output diagnostics and retain evidence-flow counters
 
 Use explicit local diagnostic profiles for split fact selection, question judgments,

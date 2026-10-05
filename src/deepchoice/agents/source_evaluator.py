@@ -4,7 +4,7 @@ import posixpath
 import re
 from urllib.parse import unquote, urlsplit
 
-from ..utils.evidence import is_navigation_placeholder, source_title
+from ..utils.evidence import candidate_name_pattern, is_navigation_placeholder, source_title
 from ..utils.evidence_choices import bounded_source_passages
 from ..utils.query_context import query_request_context
 from ..utils.source_scope import (
@@ -60,16 +60,8 @@ def _candidate_patterns(task: dict) -> list[re.Pattern]:
     candidates = task.get("candidate_techs", [])
     if not isinstance(candidates, (list, tuple)):
         return []
-    patterns = []
-    for candidate in candidates:
-        if not isinstance(candidate, str) or not candidate.strip():
-            continue
-        words = candidate.casefold().split()
-        name = r"\s+".join(re.escape(word) for word in words)
-        # ASCII identifier boundaries retain Chinese/Latin mixed prose while
-        # rejecting e.g. 'React' inside 'reactor' or 'C++' inside 'C++++'.
-        patterns.append(re.compile(r"(?<![a-z0-9_+#])" + name + r"(?![a-z0-9_+#])"))
-    return patterns
+    return [pattern for candidate in candidates
+            if (pattern := candidate_name_pattern(candidate)) is not None]
 
 
 def _mentions_candidate(result: dict, patterns: list[re.Pattern]) -> bool:

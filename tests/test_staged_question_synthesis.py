@@ -160,3 +160,37 @@ async def test_invalid_question_output_isolated_and_budget_loss_propagates(monke
         await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
             {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
+
+
+@pytest.mark.parametrize("title,candidates,expected", [
+    ("Bun vs Node.js", ["Bun", "Node.js"], ["Bun", "Node.js"]),
+    ("比较Go和Rust", ["Go", "Rust"], ["Go", "Rust"]),
+    ("R / C++ / C# / Qt", ["R", "C++", "C#", "Qt"], ["R", "C++", "C#", "Qt"]),
+    ("BUN / node.js", ["Bun", "Node.js"], ["Bun", "Node.js"]),
+    ("Bunny Golang CR C++++ C## QtWidgets _Bun Bun_", ["Bun", "Go", "R", "C++", "C#", "Qt"], []),
+    ("Kafka versus RabbitMQ", ["Apache Kafka", "RabbitMQ"], ["Apache Kafka", "RabbitMQ"]),
+    ("甲乙对比丙丁", ["甲乙", "丙丁"], ["甲乙", "丙丁"]),
+])
+def test_title_mentions_preserve_short_names_and_identifier_boundaries(title, candidates, expected):
+    assert candidate_mentions(title, candidates) == expected
+
+
+async def test_explicit_short_candidate_in_comparison_title_keeps_original_question(monkeypatch):
+    task = {**TASK, "query": "Choose Bun or Node.js?", "candidate_techs": ["Bun", "Node.js"]}
+    chains = [{"evidence_strength": "moderate", "sources": [{
+        "title": "Node.js Compatibility | Bun Docs", "url": "https://bun.example/compat",
+        "snippet": "Bun has compatibility limits when using Node.js packages.",
+    }]}]
+    model = AsyncMock(side_effect=[
+        {"source_facts": [{"id": "F1", "evidence_id": 1}]}, answer("R0", "F1")])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
+        {"task": task, "evidence_chains": chains})
+    rec = state["final_recommendation"]
+    assert [row["requirement_ids"] for row in rec["decision_analysis"]] == [["R0"]]
+    assert "R0:" in model.await_args_list[1].args[0][0]["content"]
+    assert state["quality_signals"][0]["staged_generation"]["r0_withheld_one_sided"] == 0
+    assert rec["winner"] == "context_dependent"
+    assert rec["source_facts"][0]["status"] == "unknown"
+    assert rec["decision_analysis"][0]["review_status"] == "not_checked"
+    assert not has_multi_candidate_coverage([{"source_title": "Node.js guide"}], task["candidate_techs"])

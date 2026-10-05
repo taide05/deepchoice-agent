@@ -179,7 +179,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v17"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v26",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v27",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v2",
                          "source_evaluator.source_scope_selection": "v1",
@@ -792,7 +792,7 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("retired_version", ["v24", "v25"])
+@pytest.mark.parametrize("retired_version", ["v24", "v25", "v26"])
 def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
@@ -800,7 +800,7 @@ def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version
     current = build_run_manifest(task)
     retired = current.model_copy(update={
         "prompts": tuple(
-            prompt.model_copy(update={"version": retired_version, "sha256": "a" * 64})
+            prompt.model_copy(update={"version": retired_version})
             if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt" else prompt
             for prompt in current.prompts
         ),
