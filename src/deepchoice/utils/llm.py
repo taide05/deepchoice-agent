@@ -124,6 +124,7 @@ def deepseek_extra_body(extra_body: dict | None = None) -> dict:
 _MAX_RETRIES = 2
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 MAX_OUTPUT_TOKENS = 4096
+SDK_MAX_RETRIES = 0
 
 
 def max_output_tokens_for(tag: str) -> int:
@@ -213,7 +214,7 @@ async def call_model(
     model = cfg["model"]
     if isinstance(prompt, list):
         prompt = list(prompt)
-    client = _get_client(timeout=timeout, tier=tier, max_retries=0)
+    client = _get_client(timeout=timeout, tier=tier, max_retries=SDK_MAX_RETRIES)
     output_limit = max_output_tokens_for(tag)
     kwargs = {
         "model": model,

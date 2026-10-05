@@ -19,6 +19,15 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-05：新 schema v1 manifest 的每个 LLM call 显式冻结 `sdk_max_retries=0`。
+普通 `call_model` 的重试仍由共享帮助函数逐次预算准入；冲突证据补搜每轮只执行一次 SDK
+请求，关闭 SDK 隐式重试。补搜遇到限流、5xx 或连接异常沿现有失败路径结束，未知 token
+按 unknown_spend 保守记账，已知 LLM 调用计为一次；不因失败重置费用或暗中再发送。
+历史 v1 manifest 缺少该字段时仍按原 hash 可读，但不能在当前代码上同 run 恢复；新身份
+不修改 prompt、workflow/state schema 或迁移，旧结果仍可查询。每轮补搜预算拒绝仍必须在
+dispatch 前传播，不得由普通来源降级吞掉。HTTP/retrieval 的逻辑调用计量边界没有改变。
+
+
 2026-10-03：开启 `DEEPCHOICE_SYNTH_THINKING=1` 的新 manifest 显式保存
 `thinking.type=enabled` 与 `reasoning_effort=high`；默认仍关闭，输出上限仍4096。
 思考模式下供应商忽略 temperature，不据此声称生成确定性。当前工作流/资产兼容的历史

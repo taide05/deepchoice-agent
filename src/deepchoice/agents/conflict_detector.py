@@ -269,7 +269,7 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     Returns a plain-text summary of collected evidence suitable for
     enriching claim descriptions in the arbitration prompt.
     """
-    from ..utils.llm import TIERS, _get_client
+    from ..utils.llm import SDK_MAX_RETRIES, TIERS, _get_client
     from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
     from ..runtime.context import classify_cancelled_trace_status
     from ..budget import (
@@ -282,7 +282,10 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         unknown_call,
     )
 
-    client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash")
+    # A gather turn has one reservation. Hidden SDK retries would dispatch
+    # additional requests without fresh admission or Trace records.
+    client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash",
+                         max_retries=SDK_MAX_RETRIES)
 
     messages = [
         {"role": "system", "content": EVIDENCE_GATHER_SYSTEM},

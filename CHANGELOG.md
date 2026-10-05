@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-05
 
+### Account for every conflict evidence-gather dispatch
+
+Disable SDK-internal retries in direct tool-calling evidence gathering. A gather turn
+now dispatches once under its existing reservation and Trace record; retryable HTTP
+and connection errors finish as failures with conservative unknown token spend.
+Shared call_model retries still reserve each attempt independently. New schema-v1
+manifests freeze sdk_max_retries=0 for every LLM call. Pre-field manifests preserve
+historical hashes/readability and fail same-run resume compatibility safely.
+Real SDK/in-memory transport tests reproduce the previous two-dispatch/one-admission
+failure and cover success, 429, 503 and connection errors against SQLite budget/Trace.
+This closes a budget boundary; it does not establish report-quality improvement.
+Windows/Python 3.12 validation: 120 budget/manifest and 47 related tests passed;
+full suite 2847 passed in 466.08s, smoke-v1 12/12 with unchanged baseline, pyflakes,
+vulture 100 and diff checks passed. Independent read-only review found no blockers;
+Linux/Python 3.11 and live-provider behavior were not validated.
+
+
 ### Select bounded source ranges within the existing fact-selection call
 
 Offer complete bounded source text instead of only whole-snippet eligible facts.

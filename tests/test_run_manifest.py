@@ -813,3 +813,25 @@ def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, task)
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_sdk_retry_policy_is_frozen_and_previous_identity_remains_readable():
+    import hashlib
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    current = build_run_manifest({})
+    assert all(call.sdk_max_retries == 0 for call in current.llm_calls)
+    historical_json = current.model_dump(mode="json")
+    for call in historical_json["llm_calls"]:
+        call.pop("sdk_max_retries")
+    identity = {key: value for key, value in historical_json.items()
+                if key not in {"manifest_id", "created_at"}}
+    historical_json["manifest_id"] = hashlib.sha256(json.dumps(
+        identity, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")).hexdigest()
+    restored = RunManifest.model_validate(historical_json)
+    assert all(call.sdk_max_retries is None for call in restored.llm_calls)
+    assert _expected_manifest_id(restored) == historical_json["manifest_id"]
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

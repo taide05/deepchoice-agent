@@ -27,7 +27,7 @@ from ..agents.query_adapter import ADAPT_SYSTEM
 from ..agents.query_analyzer import DECOMPOSITION_SYSTEM
 from ..agents.self_reviewer import REVIEW_SYSTEM
 from ..agents.source_evaluator import SOURCE_SCOPE_SELECTION_PROMPT
-from ..utils.llm import MAX_OUTPUT_TOKENS, TIERS, max_output_tokens_for, synthesis_extra_body
+from ..utils.llm import MAX_OUTPUT_TOKENS, SDK_MAX_RETRIES, TIERS, max_output_tokens_for, synthesis_extra_body
 
 
 CURRENT_WORKFLOW_VERSION = "research-v4"
@@ -100,6 +100,8 @@ class LLMCallSnapshot(FrozenModel):
     # manifests always freeze an explicit value and compatibility rejects old
     # snapshots before same-run resume.
     max_output_tokens: int | None = None
+    # Absent in historical v1 identities; current calls disable implicit retries.
+    sdk_max_retries: Literal[0] | None = None
 
 
 class RetrieverSnapshot(FrozenModel):
@@ -254,7 +256,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
     if report_format not in REPORT_TEMPLATE_VERSIONS:
         report_format = "what_why_how"
 
-    return {
+    content = {
         "manifest_schema_version": 1,
         "app_version": APP_VERSION,
         "workflow_version": CURRENT_WORKFLOW_VERSION,
@@ -366,6 +368,11 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             template_version=REPORT_TEMPLATE_VERSIONS[report_format],
         ),
     }
+    content["llm_calls"] = tuple(
+        call.model_copy(update={"sdk_max_retries": SDK_MAX_RETRIES})
+        for call in content["llm_calls"]
+    )
+    return content
 
 
 def build_run_manifest(task: dict) -> RunManifest:
@@ -395,6 +402,8 @@ def _expected_manifest_id(manifest: RunManifest) -> str:
     for call in content["llm_calls"]:
         if call.get("max_output_tokens") is None:
             call.pop("max_output_tokens", None)
+        if call.get("sdk_max_retries") is None:
+            call.pop("sdk_max_retries", None)
     if content.get("citation_policy_version") is None:
         content.pop("citation_policy_version", None)
     if content.get("hitl_policy_version") is None:

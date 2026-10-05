@@ -955,3 +955,80 @@ async def test_official_body_real_ledger_admission_and_cancellation(tmp_path, mo
                 pending.cancel()
             await asyncio.gather(pending, return_exceptions=True)
         await connection.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [None, "rate_limit", "server_error", "connection"])
+async def test_evidence_gather_sdk_dispatch_matches_budget_and_trace(tmp_path, monkeypatch, failure):
+    """Exercise real SDK retries through an in-memory transport, not mocked create()."""
+    import json
+    import httpx
+    from openai import AsyncOpenAI
+    from deepchoice.observability import RuntimeTraceRecorder, SQLiteTraceStore
+    from deepchoice.runtime.context import bind_node_attempt
+
+    connection, lock, manager, _, clock = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(llm_calls=1, total_tokens=20000))
+    trace = RuntimeTraceRecorder(SQLiteTraceStore(connection, lock, clock=clock).bind(
+        run_id="run-1", execution_epoch=1, lease_owner="worker"), task_id="task-1")
+    node = await trace.start_node_attempt("conflict_detector")
+    assert node is not None
+    clients = []
+    dispatches = []
+
+    async def handle(request):
+        # The real admission must already be committed before any transport dispatch.
+        assert await _count(connection, "WHERE status='reserved'") == 2
+        dispatches.append(request)
+        if len(dispatches) == 1 and failure:
+            if failure == "connection":
+                raise httpx.ConnectError("fixture unavailable", request=request)
+            return httpx.Response(429 if failure == "rate_limit" else 503,
+                headers={"retry-after-ms": "1"},
+                json={"error": {"message": "fixture unavailable", "type": "fixture_error"}})
+        return httpx.Response(200, json={
+            "id": "fixture", "object": "chat.completion", "created": 0,
+            "model": "fixture", "choices": [{"index": 0, "finish_reason": "stop",
+                "message": {"role": "assistant", "content": "bounded evidence"}}],
+            "usage": {"prompt_tokens": 120, "completion_tokens": 30, "total_tokens": 150},
+        })
+
+    def client_factory(**kwargs):
+        client = AsyncOpenAI(**kwargs,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)))
+        clients.append(client)
+        return client
+
+    monkeypatch.setitem(llm_module.TIERS, "deepseek-flash", {
+        **llm_module.TIERS["deepseek-flash"], "key": "fixture-only", "base": "https://fixture.invalid/v1"})
+    monkeypatch.setattr(llm_module, "AsyncOpenAI", client_factory)
+    usage = []
+    try:
+        with bind_run_context(_context(manager, trace)), bind_node_attempt(node.node_attempt_id):
+            result = await conflict_module._gather_evidence(
+                "generic topic", "claim a", "claim b", usage=usage)
+        assert len(dispatches) == 1
+        assert result == ("" if failure else "bounded evidence")
+        assert (await manager._usage())[BudgetResource.LLM_CALLS] == 1
+        cursor = await connection.execute(
+            "SELECT count(DISTINCT reservation_id) FROM budget_ledger WHERE resource='llm_calls'")
+        assert (await cursor.fetchone())[0] == 1
+        await cursor.close()
+        cursor = await connection.execute(
+            "SELECT status, result_summary_json FROM external_calls WHERE kind='llm'")
+        rows = await cursor.fetchall()
+        await cursor.close()
+        assert len(rows) == 1
+        assert rows[0][0] == ("failed" if failure else "succeeded")
+        if failure:
+            assert not usage
+            assert await _count(connection, "WHERE status='unknown_spend'") == 1
+            assert json.loads(rows[0][1])["failure_category"]
+        else:
+            assert usage[0]["total_tokens"] == 150
+            assert (await manager._usage())[BudgetResource.TOTAL_TOKENS] == 150
+            assert await _count(connection, "WHERE status='unknown_spend'") == 0
+    finally:
+        for client in clients:
+            await client.close()
+        await connection.close()
