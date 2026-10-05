@@ -1,6 +1,6 @@
 # Codex文档入口与效力
 
-更新：2026-09-29。用户当前指令优先；代码、manifest构建器、pyproject.toml和可执行测试
+更新：2026-10-05。用户当前指令优先；代码、manifest构建器、pyproject.toml和可执行测试
 描述已实现行为。路线描述目标，不能把尚未实现的计划当成代码事实。
 
 ## 默认阅读顺序
@@ -8,7 +8,7 @@
 | 顺序 | 文档 | 唯一职责 |
 |---|---|---|
 | 1 | [质量路线](current-roadmap.md) | 支持范围、优化优先级、Q0–Q3成果与总边界 |
-| 2 | [评估协议](product-effectiveness-optimization.md) | quality-selection-v1数据/分母/严重性/稳定性门槛 |
+| 2 | [评估协议](product-effectiveness-optimization.md) | 现行跨场景开发测量、历史分母与封存验收边界 |
 | 3 | [推进与维修](optimization-execution.md) | 实现粒度、验证节奏、无收益后的调整、持续授权 |
 | 4 | [当前状态](o1-execution-status.md) | 已验证候选、实际账本、当前缺口和下一成果 |
 | 按阶段 | [Q0开发冻结与诊断](quality-selection-q0.md) | 现有报告共性缺陷、开发请求/rubric与评审锚点 |

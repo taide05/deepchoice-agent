@@ -1,6 +1,26 @@
 # Changelog
 
-## [Unreleased] - 2026-10-04
+## [Unreleased] - 2026-10-05
+
+### Refocus development measurement and retire obsolete controller tests
+
+Development comparisons now select a small, preregistered mix of technology
+selection scenarios. The repeatedly used P01/P04/P08/P02 cases remain targeted
+regressions; they no longer gate every candidate. The prior eight-scenario
+prevalidation design is superseded, while the final 24 research runs stay sealed.
+The active breadth and stability design requires a new frozen identity and
+allocation before any research submission.
+
+Five test modules dedicated to retired repair-pair and serial-check v1-v4
+controllers were removed from the repository test suite (171 collected cases). In a
+fresh worktree, 17 of those cases required ignored predecessor artifacts;
+several were among the slowest tests. Frozen cards, scripts, and historical
+outputs remain unchanged. Current quality-selection admission tests and
+product lifecycle, safety, and budget tests remain in the suite. This test
+maintenance does not establish report-quality improvement. The retained
+quality-selection tests pass (136), and the complete Python 3.12 suite passes
+(2,773 in 146.30 seconds); before pruning, a fresh-worktree audit ran
+2,927 passing and 17 failing tests in 416.60 seconds.
 
 ### Propose bounded source sentence ranges from original request
 
