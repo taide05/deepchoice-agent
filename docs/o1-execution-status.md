@@ -1,6 +1,6 @@
 # 当前质量状态
 
-更新：2026-10-05。目标与范围见[路线](current-roadmap.md)，测量边界见[评估协议](product-effectiveness-optimization.md)，推进方式见[执行规则](optimization-execution.md)。本页只保留当前可核事实和下一成果。至2026-10-05的旧逐轮流水按原字节保存在[历史快照](archive/quality-direction-20261005/execution-status-snapshot.md)；其中任何“下一步”都不授权新运行。
+更新：2026-10-06。目标与范围见[路线](current-roadmap.md)，测量边界见[评估协议](product-effectiveness-optimization.md)，推进方式见[执行规则](optimization-execution.md)。本页只保留当前可核事实和下一成果。至2026-10-05的旧逐轮流水按原字节保存在[历史快照](archive/quality-direction-20261005/execution-status-snapshot.md)；其中任何“下一步”都不授权新运行。
 
 ## 本次对照结论与当前主线（2026-10-05）
 
@@ -30,6 +30,24 @@
 已收窄新旧结构转换的因果判断并补入种子耦合边界，修正后无阻断性事实错误；
 R1隐藏SDK重试已修复，验证与独立复核完成，详见下节。下一成果是统一需求—查询—证据—回答的传递契约。
 工程安全边界保留；工程测试不能证明上述产品输出可用。
+
+## R2a查询传递修复（2026-10-06，已验证）
+
+用户已取消暂停，整体目标继续。当前实现保留适配目标索引，对缺项、无效变体和重复索引
+逐目标回退；Tavily/GitHub按查询批次轮流取不重复URL；GitHub完整仓库搜索表达式直接
+传入既有接口，保留4次搜索上限和原查询回退。适配v3、Tavily/GitHub v2隔离旧续跑及缓存身份。
+没有追加模型纠错调用、节点、provider、状态字段或迁移。
+
+修复前离线反例6失败/1通过；修复后查询、检索、manifest、cache和端口契约205项通过，
+预算/离线等补充188项通过。固定smoke-v1为12/12；同步四个身份/元数据字段前逐项确认
+数据集、逐例结果和指标完全不变。pyflakes、vulture 100与diff检查通过；完整套件
+**2859 passed / 487.06秒**，无跳过（Windows/Python 3.12）。未执行Linux/Python 3.11矩阵。
+独立只读复核未发现本包新增阻断问题，未重跑测试或验证live API；GitHub repo限定符
+已对照当前[官方仓库搜索语法](https://docs.github.com/en/search-github/searching-on-github/searching-for-repositories)核对。
+
+这只修复查询传递和已返回批次的分配，不宣称逐目标完整检索或报告改善。GitHub4次上限、
+arxiv/community首条选择仍存在；检索阶段在适配后补入原题时也没有相应适配槽，列入后续覆盖契约。
+动作型候选词法准入与官方发现没有正文的缺陷尚未修复。研究累计185、最终24封存，无新增付费研究。
 
 ## R1完成与暂停检查点（2026-10-05）
 

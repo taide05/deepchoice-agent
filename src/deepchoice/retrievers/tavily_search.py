@@ -2,6 +2,7 @@ import asyncio
 
 from .. import outbound as _outbound
 from .base import BaseRetriever
+from .query_results import merge_query_results
 from ..budget_errors import BudgetError
 from .tavily_keypool import post_with_failover
 
@@ -44,12 +45,4 @@ class TavilySearch(BaseRetriever):
             for batch in batches:
                 if isinstance(batch, BaseException):
                     raise batch
-            all_results = []
-            seen_urls = set()
-            for b in batches:
-                for r in b:
-                    url = r.get("url", "")
-                    if url and url not in seen_urls:
-                        seen_urls.add(url)
-                        all_results.append(r)
-            return all_results[:max_results]
+            return merge_query_results(batches, max_results)

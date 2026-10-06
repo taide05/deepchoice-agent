@@ -49,7 +49,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
     }["chroma"] == "v7"
     assert all(
-        retriever.version == "v1"
+        retriever.version == ("v2" if retriever.retriever_id in {"tavily", "github"} else "v1")
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
@@ -181,7 +181,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v28",
                          "query_analyzer.decomposition_system": "v2",
-                         "query_adapter.adapt_system": "v2",
+                         "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
                          "conflict_detector.contradiction_scan_system": "v2",
                          "conflict_detector.arbitration_system": "v2"}
@@ -832,6 +832,26 @@ def test_sdk_retry_policy_is_frozen_and_previous_identity_remains_readable():
     restored = RunManifest.model_validate(historical_json)
     assert all(call.sdk_max_retries is None for call in restored.llm_calls)
     assert _expected_manifest_id(restored) == historical_json["manifest_id"]
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+@pytest.mark.parametrize("component", ["query_adapter", "tavily", "github"])
+def test_previous_query_allocation_identity_remains_readable_but_cannot_resume(component):
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+    current = build_run_manifest({})
+    if component == "query_adapter":
+        previous = current.model_copy(update={"prompts": tuple(
+            p.model_copy(update={"version": "v2", "sha256": "1" * 64})
+            if p.prompt_id == "query_adapter.adapt_system" else p for p in current.prompts)})
+    else:
+        previous = current.model_copy(update={"retrievers": tuple(
+            r.model_copy(update={"version": "v1"}) if r.retriever_id == component else r
+            for r in current.retrievers)})
+    previous = previous.model_copy(update={"manifest_id": _expected_manifest_id(previous)})
+    restored = RunManifest.model_validate_json(previous.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

@@ -6,7 +6,8 @@ class ResearchState(TypedDict):
     run_manifest: NotRequired[dict]
     sub_questions: list[str]
     constraints: NotRequired[list[str]]
-    adapted_queries: dict
+    # Adapter output uses current-target order with per-slot raw fallback.
+    adapted_queries: dict[str, list[str]]
     search_results: list[dict]
     source_scores: list[dict]
     conflicts: list[dict]

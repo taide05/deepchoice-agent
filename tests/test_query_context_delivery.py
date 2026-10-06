@@ -75,7 +75,7 @@ async def test_adapter_retains_frozen_context_independently_of_current_targets(m
         {"sub_question_index": i, "sub_question": text} for i, text in enumerate(expected_targets)
     ]
     assert payload["coarse_scene_classification"] == state.get("scene_context")
-    assert result["adapted_queries"]["chroma"] == ["SQLite PostgreSQL operations"]
+    assert result["adapted_queries"]["chroma"] == ["SQLite PostgreSQL operations", *expected_targets[1:]]
     assert result["adapted_queries"]["tavily"] == expected_targets  # Existing fallback, no extra dimension.
     assert "task" not in result and "constraints" not in result
 
@@ -152,3 +152,45 @@ def test_prompt_v1_identity_stays_readable_but_cannot_resume(prompt_id):
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+@pytest.mark.asyncio
+async def test_adapter_keeps_target_slots_and_falls_back_per_missing_or_invalid_variant(monkeypatch):
+    targets = ["Alpha durability", "Beta isolation", "Gamma recovery", "Delta rollout"]
+    async def call(*args, **kwargs):
+        return {"adapted": [
+            {"sub_question_index": 2, "tavily": "Gamma recovery guide", "github": "repo:acme/gamma recovery in:readme"},
+            {"sub_question_index": 0, "tavily": "Alpha durability guide", "github": ["invalid"]},
+            {"sub_question_index": 1, "tavily": "Beta first"},
+            {"sub_question_index": 1, "tavily": "Beta conflicting duplicate"},
+            {"sub_question_index": True, "tavily": "Boolean is not target one"},
+            {"sub_question_index": 40, "tavily": "Out of range"},
+            "invalid row",
+        ]}
+    monkeypatch.setattr(query_adapter, "call_model", call)
+    state = {"task": {"query": "Alpha versus Beta"}, "sub_questions": targets}
+    result = await query_adapter.QueryAdapterAgent().run(state)
+    assert result["adapted_queries"]["tavily"] == [
+        "Alpha durability guide", targets[1], "Gamma recovery guide", targets[3]]
+    assert result["adapted_queries"]["github"] == [
+        targets[0], targets[1], "repo:acme/gamma recovery in:readme", targets[3]]
+    assert result["adapted_queries"]["official"] == targets
+    signal = result["quality_signals"][0]
+    assert signal["fallback_target_counts"]["tavily"] == 2
+    assert signal["fallback_target_counts"]["github"] == 3
+    assert signal["fallback_target_counts"]["official"] == 4
+    assert set(signal["fallback_retrievers"]) == set(query_adapter.RETRIEVER_KEYS)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("response", [None, {"adapted": None}, {"adapted": [None]},
+    {"adapted": [{"sub_question_index": 0, "tavily": "x" * 1001}]}])
+async def test_adapter_invalid_response_uses_original_targets_without_extra_calls(monkeypatch, response):
+    from unittest.mock import AsyncMock
+    call = AsyncMock(return_value=response)
+    monkeypatch.setattr(query_adapter, "call_model", call)
+    targets = ["Alpha consistency", "Beta recovery"]
+    result = await query_adapter.QueryAdapterAgent().run({
+        "task": {"query": "Compare Alpha and Beta"}, "sub_questions": targets})
+    assert all(values == targets for values in result["adapted_queries"].values())
+    call.assert_awaited_once()

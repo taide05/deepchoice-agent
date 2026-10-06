@@ -1,6 +1,22 @@
 # Changelog
 
-## [Unreleased] - 2026-10-05
+## [Unreleased] - 2026-10-06
+
+### Preserve adaptation targets and distribute query result slots
+
+Keep each current target in its indexed query slot, with raw-target fallback for
+missing/invalid variants or duplicate indices. Merge Tavily and GitHub batches
+round by round with URL deduplication. Pass complete adapted repository-search
+expressions to GitHub's existing endpoint; retain its four-search limit and raw
+fallback. Freeze adapter v3 and Tavily/GitHub v2, isolating old same-run resumes
+and cache identities. No extra model call, provider, state field or migration.
+This fixes deterministic transfer defects, not evidence relevance or report quality;
+arxiv/community selection, candidate admission and official-body gaps remain.
+Windows/Python 3.12: 205 related and 188 supplemental checks passed; full suite
+2859 passed in 487.06s, smoke-v1 12/12 with unchanged cases/results/metrics and
+updated asset identity. pyflakes/vulture100/diff passed; independent read-only
+review found no new blockers. Live API semantics and Linux/3.11 were not tested.
+
 
 ### Account for every conflict evidence-gather dispatch
 

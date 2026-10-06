@@ -6,6 +6,7 @@ from .. import outbound as _outbound
 from ..outbound.throttle import ProviderRateLimitError, is_limited
 from . import github_rate
 from .base import BaseRetriever
+from .query_results import merge_query_results
 
 
 def _extract_tech_names(query: str, sub_questions: list[str]) -> list[str]:
@@ -58,29 +59,19 @@ class GitHubSearch(BaseRetriever):
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
-        # Strategy 1: Extract technology names and search for them
-        tech_names = _extract_tech_names(query, sub_questions)
-
-        # Strategy 2: If adapted_queries exists, extract additional search terms
-        adapted_terms = []
         if adapted_queries:
-            for aq in adapted_queries[:2]:
-                # GitHub-adapted queries often contain search syntax
-                for word in aq.replace("org:", "").replace("repo:", "").split():
-                    clean = word.strip(",:;")
-                    if len(clean) >= 3 and clean not in {"search", "find", "topic"}:
-                        adapted_terms.append(clean)
-
-        # Combine and deduplicate
-        all_terms = tech_names + [t.lower() for t in adapted_terms if t.lower() not in set(tech_names)]
-        if not all_terms:
-            # Fallback: use original query keywords
-            all_terms = [w.lower() for w in query.replace(" vs ", " ").split()
-                        if len(w) >= 3 and w.lower() not in {"for", "and", "the", "with", "using"}]
+            # Qualifiers, quoted phrases and negation are one expression.
+            # Never reinterpret a repository query as independent keywords.
+            all_terms = list(dict.fromkeys(adapted_queries))
+        else:
+            # Preserve the deprecated search() and raw-query fallback path.
+            all_terms = _extract_tech_names(query, sub_questions)
+            if not all_terms:
+                all_terms = [w.lower() for w in query.replace(" vs ", " ").split()
+                             if len(w) >= 3 and w.lower() not in {"for", "and", "the", "with", "using"}]
 
         headers = self._auth_headers()
-        results: list[dict] = []
-        seen_full_names: set[str] = set()
+        batches: list[list[dict]] = []
         errors: list[str] = []
 
         async with await _outbound.make_client("github") as client:
@@ -98,11 +89,9 @@ class GitHubSearch(BaseRetriever):
                         errors.append(f"{term}: HTTP {resp.status_code}")
                         continue
                     data = resp.json()
+                    results = []
                     for item in data.get("items", []):
                         full_name = item.get("full_name", "")
-                        if full_name in seen_full_names:
-                            continue
-                        seen_full_names.add(full_name)
                         results.append({
                             "url": item.get("html_url", ""),
                             "title": full_name,
@@ -114,6 +103,7 @@ class GitHubSearch(BaseRetriever):
                             ),
                             "date": item.get("updated_at", ""),
                         })
+                    batches.append(results)
                 except httpx.HTTPError as exc:
                     errors.append(f"{term}: {exc.__class__.__name__}")
 
@@ -121,4 +111,4 @@ class GitHubSearch(BaseRetriever):
         # failed query visible; an HTTP 200 with zero items is still success.
         if errors:
             raise RuntimeError("GitHub search failed: " + "; ".join(errors[:3]))
-        return results[:max_results]
+        return merge_query_results(batches, max_results)

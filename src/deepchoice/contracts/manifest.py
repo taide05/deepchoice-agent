@@ -54,7 +54,7 @@ REPORT_TEMPLATE_VERSIONS = {
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v7",
     "query_analyzer.decomposition_system": "v2",
-    "query_adapter.adapt_system": "v2",
+    "query_adapter.adapt_system": "v3",
     "conclusion_synthesizer.synthesis_prompt": "v28",
     "source_evaluator.source_scope_selection": "v1",
     "conflict_detector.contradiction_scan_system": "v2",
@@ -353,7 +353,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v7" if retriever_id == "chroma" else "v3" if retriever_id == "official" else "v1",
+                version="v7" if retriever_id == "chroma" else "v3" if retriever_id == "official"
+                        else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS
         ),

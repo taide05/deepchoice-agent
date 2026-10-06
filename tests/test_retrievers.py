@@ -695,3 +695,82 @@ def test_tech_aliases_target_existing_keys():
     from deepchoice.retrievers.official import _TECH_ALIASES, TECH_DOCS
     for alias, target in _TECH_ALIASES.items():
         assert target in TECH_DOCS, f"alias {alias!r} -> missing target {target!r}"
+
+
+@pytest.mark.asyncio
+async def test_tavily_merges_query_ranks_without_starving_later_targets(monkeypatch):
+    async def post(_post, payload):
+        i = int(payload["query"].removeprefix("target-"))
+        response = MagicMock()
+        response.json.return_value = {"results": [
+            {"url": f"https://fixture.example/{i}/{j}", "title": f"Target {i}", "content": "Evidence"}
+            for j in range(3)]}
+        return response, None
+    monkeypatch.setattr("deepchoice.retrievers.tavily_search.post_with_failover", post)
+    with _patch_outbound(_FakeClient()):
+        result = await TavilySearch().search("original", [], max_results=7,
+            adapted_queries=[f"target-{i}" for i in range(5)])
+    assert [r["url"] for r in result["results"]] == [
+        *[f"https://fixture.example/{i}/0" for i in range(5)],
+        "https://fixture.example/0/1", "https://fixture.example/1/1"]
+
+
+@pytest.mark.asyncio
+async def test_github_preserves_complete_queries_and_balances_results(monkeypatch):
+    queries = ['repo:acme/alpha "transaction recovery" in:readme',
+               'org:acme beta language:Python', 'gamma fork:false', 'delta', 'not-dispatched']
+    async def get(client, url, *, params, headers):
+        i = queries.index(params["q"])
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"items": [
+            {"full_name": f"acme/{i}-{j}", "html_url": f"https://github.com/acme/{i}-{j}"}
+            for j in range(3)]}
+        return response
+    mock_get = AsyncMock(side_effect=get)
+    monkeypatch.setattr("deepchoice.retrievers.github_api.github_rate.get_with_throttle", mock_get)
+    with _patch_outbound(_FakeClient()):
+        result = await GitHubSearch().search("Original Alpha vs Beta", [], max_results=5,
+            adapted_queries=queries)
+    assert [call.kwargs["params"]["q"] for call in mock_get.await_args_list] == queries[:4]
+    assert [r["url"] for r in result["results"]] == [
+        *[f"https://github.com/acme/{i}-0" for i in range(4)], "https://github.com/acme/0-1"]
+
+
+def test_query_merge_skips_shared_urls_and_redistributes_empty_batch_slots():
+    from deepchoice.retrievers.query_results import merge_query_results
+    def item(name):
+        return {"url": f"https://fixture.example/{name}", "title": name}
+    assert merge_query_results([
+        [item("shared"), item("a")], [],
+        [item("shared"), item("shared"), item("b")],
+        [{"url": ""}, item("c"), item("d")],
+    ], 5) == [item("shared"), item("b"), item("c"), item("a"), item("d")]
+    assert merge_query_results([[], []], 7) == []
+
+
+@pytest.mark.asyncio
+async def test_adapter_slots_reach_actual_tavily_dispatch_and_bounded_result(monkeypatch):
+    from deepchoice.agents.query_adapter import QueryAdapterAgent
+    from deepchoice.agents import query_adapter
+    targets = ["Alpha durability", "Beta isolation", "Gamma recovery"]
+    monkeypatch.setattr(query_adapter, "call_model", AsyncMock(return_value={"adapted": [
+        {"sub_question_index": 2, "tavily": "Gamma recovery guide"},
+        {"sub_question_index": 0, "tavily": "Alpha durability guide"}]}))
+    adaptation = await QueryAdapterAgent().run({"task": {"query": "Alpha versus Beta"},
+                                               "sub_questions": targets})
+    dispatched = []
+    async def post(_post, payload):
+        query = payload["query"]
+        dispatched.append(query)
+        i = adaptation["adapted_queries"]["tavily"].index(query)
+        response = MagicMock()
+        response.json.return_value = {"results": [
+            {"url": f"https://fixture.example/{i}/{j}", "title": query, "content": "Evidence"}
+            for j in range(3)]}
+        return response, None
+    monkeypatch.setattr("deepchoice.retrievers.tavily_search.post_with_failover", post)
+    with _patch_outbound(_FakeClient()):
+        result = await TavilySearch().search("Alpha versus Beta", targets, max_results=3,
+            adapted_queries=adaptation["adapted_queries"]["tavily"])
+    assert dispatched == ["Alpha durability guide", "Beta isolation", "Gamma recovery guide"]
+    assert [r["url"] for r in result["results"]] == [f"https://fixture.example/{i}/0" for i in range(3)]
