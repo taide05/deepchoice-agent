@@ -1,0 +1,626 @@
+{
+  "schema_version": 1,
+  "dataset_id": "quality-code-audit-development-v1",
+  "dataset_version": "1.0.0",
+  "dataset_sha256": "08f76fad0a26165e3a93fee54fa7f90a48d316ce9022690b77fa4b50ffef0e8f",
+  "dataset_frozen_at": "2026-10-06",
+  "evaluated_at": "2026-10-06T13:55:27.018262+00:00",
+  "purpose": "public four-scene development comparison of code-audit structural package; not sealed holdout, stability or product-wide acceptance",
+  "case_denominator_per_arm": 4,
+  "research_denominator": 8,
+  "source_health": "degraded",
+  "source_health_note": "Live retrieval envelopes succeeded; community empty in all cells and official empty for P10. Citation availability/qualification includes unknown; no fixture replay implied live health. No new source was injected during content review.",
+  "arms": {
+    "baseline": {
+      "identity": {
+        "production_commit": "8ca1a783d89734751897c347c640bcf048f97007",
+        "runner_commit": "a36d89f48b872df687e89386f2e6acb079bcf520",
+        "core_asset_registry_id": "a83cbd05b557044a0677128e47676e58971775d4ad2a911094b4073039909560"
+      },
+      "manifest_ids": {
+        "P03": "a3ba4cfb77d233f2ced2c7b014b4fe9e865d2257852ee0c51b226af8b9e95c7d",
+        "P06": "c0b9ca50c9fe92be27e50225ad8660fb18ef81ba872703e9994be132fd5511e9",
+        "P09": "c0b9ca50c9fe92be27e50225ad8660fb18ef81ba872703e9994be132fd5511e9",
+        "P10": "05fcdc06821ddbf779f4963b625f4578647d815ef08d2ebcbe8437936307f61e"
+      },
+      "resume_binding_sha256": "0a63b3156b788d1d936f855d7a528ffc11ae69518f4101868483ff18ce8b76f1",
+      "research_usage": {
+        "total_tokens": 71342,
+        "llm_calls": 82,
+        "retrieval_calls": 24,
+        "failed_calls": 0,
+        "active_milliseconds": 354156,
+        "monetary_cost": null
+      }
+    },
+    "candidate": {
+      "identity": {
+        "production_commit": "95a9ca4045c7ee28af076fa240d618680f2ecc5d",
+        "runner_commit": "a36d89f48b872df687e89386f2e6acb079bcf520",
+        "core_asset_registry_id": "21a461d6d1439910e405c473e606c937f89d14881f1772308ef3ad0ba7f273ec"
+      },
+      "manifest_ids": {
+        "P03": "0c07d272acb18942e62d8b02a4544dc41d19f86971a8b0bee07e4dcc1eb2e174",
+        "P06": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+        "P09": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+        "P10": "5832ff4bbd8ca2c0d09a8ae23558cbd90ce15b38beeefbe18361e2e06a6d565d"
+      },
+      "resume_binding_sha256": "a6b035e8fbb7e74f8944ee32a3399ceb7bf68f99b974af7c4af32c5ca022fd81",
+      "research_usage": {
+        "total_tokens": 63069,
+        "llm_calls": 79,
+        "retrieval_calls": 24,
+        "failed_calls": 0,
+        "active_milliseconds": 288036,
+        "monetary_cost": null
+      }
+    }
+  },
+  "shared_environment": {
+    "model_id": "deepseek-v4-flash",
+    "dependency_snapshot_sha256": "c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b",
+    "knowledge_sha256": "bf5cc356c3196b19e6886565ec456c3cb38901d6f903ddc819cbf15171b362f7",
+    "configuration_sha256": "4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474",
+    "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181"
+  },
+  "protocol": {
+    "original_batch_sha256": "96e23fc3013e79b0210c43383fbdd7c0fe9ce709c2cdb070cf8c596814b20a92",
+    "resume_batch_sha256": "9fdbeb1c66cf3edb9bfc8dd54ad0eedfb19cecf602769c34b89883946b8a7642",
+    "original_adapter_sha256": "ed6efa994e3e0acb24f18ee3a09230c227b2c2a831e6afdb9844200ba8450a31",
+    "resume_adapter_sha256": "188d8efcaecb84f233d912201b6a975f05f8a25e39520cd9b8dae24579841a68",
+    "original_runner_commit": "cb0ffc3d22992942211d0a21467c4676a8644a46",
+    "resume_runner_commit": "a36d89f48b872df687e89386f2e6acb079bcf520",
+    "serial_order": [
+      {
+        "ordinal": 186,
+        "arm": "baseline",
+        "case_id": "P03"
+      },
+      {
+        "ordinal": 187,
+        "arm": "candidate",
+        "case_id": "P03"
+      },
+      {
+        "ordinal": 188,
+        "arm": "candidate",
+        "case_id": "P06"
+      },
+      {
+        "ordinal": 189,
+        "arm": "baseline",
+        "case_id": "P06"
+      },
+      {
+        "ordinal": 190,
+        "arm": "baseline",
+        "case_id": "P09"
+      },
+      {
+        "ordinal": 191,
+        "arm": "candidate",
+        "case_id": "P09"
+      },
+      {
+        "ordinal": 192,
+        "arm": "candidate",
+        "case_id": "P10"
+      },
+      {
+        "ordinal": 193,
+        "arm": "baseline",
+        "case_id": "P10"
+      }
+    ],
+    "run_limits": {
+      "total_tokens": 60000,
+      "llm_calls": 96,
+      "retrieval_calls": 72,
+      "active_milliseconds": 900000
+    },
+    "same_request_and_hitl": true,
+    "hitl_policy_action": "limited_report",
+    "repeats": 0,
+    "resume": {
+      "original_186_carried_not_reexecuted": true,
+      "new_admissions": 7,
+      "pause_gap": "baseline P03 ended 09:41:48Z, candidate P03 started 13:32:31Z on 2026-10-06; both within frozen compatible window",
+      "original_report_sha256": "60af3b577e64edce2c43403b9c9c786c857e254e58c035778d42a3941173fe10",
+      "carry_receipt_sha256": "c5a444389613ab7836a2a7f9847b197c133be648cae54295ccc455f248029d6c",
+      "environment_note": "Same immutable production/model/dependencies/seed/requests and manifest IDs. Fresh independent seed copies/cold local caches on resume; Tavily mutable exhaustion ledger preserved. Collector documentation identity and root changed. Do not treat observed time/token differences as controlled mechanism performance."
+    },
+    "preflight": {
+      "new_candidate_date": "2026-10-06",
+      "new_candidate_llm_calls": 2,
+      "new_candidate_http_calls": 9,
+      "tavily_post_included": 1,
+      "research_admissions": 0,
+      "baseline_and_resume": "compatible bounded receipts reused after identity checks",
+      "monetary_cost": null
+    }
+  },
+  "content_acceptance": {
+    "baseline_passed": 0,
+    "candidate_passed": 0,
+    "cases_per_arm": 4,
+    "countable_scene_improvements": 0,
+    "cross_scene_gain": false,
+    "critical_new_fact_errors_observed": 0,
+    "important_errors": [
+      "Candidate P03 substitutes background-task facts for admin/auth and API async questions.",
+      "Candidate P06 benchmark-condition answer cites compatibility text, not performance measurement conditions."
+    ],
+    "local_gain": "Candidate P06 retains official compatibility limitations and representative database-I/O paired validation; neither it nor P03 answers the original current choice. P09/P10 wholly unanswered.",
+    "decision": "Engineering repairs remain verified; their hypothesized cross-scene quality gain was not observed. Close this batch, investigate fact-selection output/binding loss with bounded offline contract counterexamples; do not restart failed range-only mechanisms or draw stability claims."
+  },
+  "cells": [
+    {
+      "ordinal": 186,
+      "arm": "baseline",
+      "case_id": "P03",
+      "status": "completed",
+      "manifest_id": "a3ba4cfb77d233f2ced2c7b014b4fe9e865d2257852ee0c51b226af8b9e95c7d",
+      "report_utf8_sha256": "60af3b577e64edce2c43403b9c9c786c857e254e58c035778d42a3941173fe10",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 0,
+      "decision_analysis_final": 0,
+      "stage_counts": {
+        "source_evaluator": {
+          "scope_offered": 3,
+          "scope_accepted": 1,
+          "candidate_excluded_count": 22,
+          "sources_scored": 12
+        },
+        "conclusion_synthesizer": {
+          "r0_withheld_one_sided": 0,
+          "source_facts_received": 0,
+          "analyses_returned": 0,
+          "facts_bound": 0,
+          "source_facts_bound": 0,
+          "analyses_received": 0,
+          "judgment_calls": 0,
+          "facts_received": 5,
+          "analyses_bound": 0
+        },
+        "citation_validator": {
+          "analyses_received": 0,
+          "unknown": 0,
+          "analyses_returned": 0,
+          "verified": 0
+        },
+        "self_reviewer": {
+          "withdrawn": 0,
+          "retained": 0,
+          "submitted": 0
+        }
+      },
+      "usage": {
+        "total_tokens": 14532,
+        "llm_calls": 18,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 141084
+      },
+      "collector_wall_time_ms": null,
+      "artifact_note": "carried immutable DB/API report; original HTTP export capture invalid, no export success claimed"
+    },
+    {
+      "ordinal": 187,
+      "arm": "candidate",
+      "case_id": "P03",
+      "status": "completed",
+      "manifest_id": "0c07d272acb18942e62d8b02a4544dc41d19f86971a8b0bee07e4dcc1eb2e174",
+      "report_utf8_sha256": "a2244198c09aa3f75ad0a8ed560a718de4bbcb43dd769b97653f9eaf6cac9d9e",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 1,
+      "decision_analysis_final": 3,
+      "stage_counts": {
+        "source_evaluator": {
+          "scope_accepted": 1,
+          "scope_offered": 3,
+          "sources_scored": 14,
+          "candidate_excluded_count": 18
+        },
+        "conclusion_synthesizer": {
+          "analyses_returned": 3,
+          "r0_withheld_one_sided": 1,
+          "source_facts_bound": 1,
+          "analyses_bound": 3,
+          "source_facts_received": 1,
+          "analyses_received": 3,
+          "facts_bound": 1,
+          "facts_received": 5,
+          "judgment_calls": 1
+        },
+        "citation_validator": {
+          "analyses_returned": 3,
+          "analyses_received": 3,
+          "verified": 3,
+          "unknown": 0
+        },
+        "self_reviewer": {
+          "withdrawn": 0,
+          "retained": 3,
+          "submitted": 3
+        }
+      },
+      "usage": {
+        "total_tokens": 20527,
+        "llm_calls": 21,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 139294
+      },
+      "collector_wall_time_ms": 140031,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    },
+    {
+      "ordinal": 188,
+      "arm": "candidate",
+      "case_id": "P06",
+      "status": "completed",
+      "manifest_id": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+      "report_utf8_sha256": "6755e3d120e39143b8a9faea47fa2e5327506d7dd5def26e3db34167826078f0",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 1,
+      "decision_analysis_final": 3,
+      "stage_counts": {
+        "source_evaluator": {
+          "scope_accepted": 0,
+          "scope_offered": 0,
+          "sources_scored": 8,
+          "candidate_excluded_count": 20
+        },
+        "conclusion_synthesizer": {
+          "analyses_returned": 3,
+          "r0_withheld_one_sided": 0,
+          "source_facts_bound": 1,
+          "analyses_bound": 3,
+          "source_facts_received": 1,
+          "binding_rejected_invalid_requirement_ids": 1,
+          "analyses_received": 4,
+          "facts_bound": 1,
+          "facts_received": 5,
+          "judgment_calls": 1
+        },
+        "citation_validator": {
+          "analyses_returned": 3,
+          "analyses_received": 3,
+          "verified": 5,
+          "unknown": 0
+        },
+        "self_reviewer": {
+          "withdrawn": 0,
+          "retained": 3,
+          "submitted": 3
+        }
+      },
+      "usage": {
+        "total_tokens": 17540,
+        "llm_calls": 22,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 76399
+      },
+      "collector_wall_time_ms": 77125,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    },
+    {
+      "ordinal": 189,
+      "arm": "baseline",
+      "case_id": "P06",
+      "status": "completed",
+      "manifest_id": "c0b9ca50c9fe92be27e50225ad8660fb18ef81ba872703e9994be132fd5511e9",
+      "report_utf8_sha256": "2eff2849b235ebb7f88dc055e25484027346a5d864b425add82ed7b7b43452c4",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 3,
+      "decision_analysis_final": 0,
+      "stage_counts": {
+        "source_evaluator": {
+          "candidate_excluded_count": 15,
+          "sources_scored": 15,
+          "scope_offered": 0,
+          "scope_accepted": 0
+        },
+        "conclusion_synthesizer": {
+          "judgment_calls": 1,
+          "source_facts_bound": 3,
+          "analyses_returned": 3,
+          "r0_withheld_one_sided": 0,
+          "facts_received": 5,
+          "source_facts_received": 3,
+          "binding_rejected_invalid_requirement_ids": 1,
+          "facts_bound": 3,
+          "analyses_received": 4,
+          "analyses_bound": 3
+        },
+        "citation_validator": {
+          "verified": 5,
+          "unknown": 14,
+          "analyses_received": 3,
+          "analyses_returned": 1
+        },
+        "self_reviewer": {
+          "retained": 0,
+          "withdrawn": 1,
+          "submitted": 1
+        }
+      },
+      "usage": {
+        "total_tokens": 24383,
+        "llm_calls": 23,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 101364
+      },
+      "collector_wall_time_ms": 103360,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    },
+    {
+      "ordinal": 190,
+      "arm": "baseline",
+      "case_id": "P09",
+      "status": "completed",
+      "manifest_id": "c0b9ca50c9fe92be27e50225ad8660fb18ef81ba872703e9994be132fd5511e9",
+      "report_utf8_sha256": "05588896886fbc78e82a353b42326d066d52587cc5cac6348a9de8722b193c7a",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 4,
+      "decision_analysis_final": 0,
+      "stage_counts": {
+        "source_evaluator": {
+          "candidate_excluded_count": 16,
+          "sources_scored": 14,
+          "scope_offered": 2,
+          "scope_accepted": 2
+        },
+        "conclusion_synthesizer": {
+          "judgment_calls": 1,
+          "source_facts_bound": 4,
+          "analyses_returned": 3,
+          "r0_withheld_one_sided": 0,
+          "facts_received": 5,
+          "source_facts_received": 4,
+          "facts_bound": 4,
+          "binding_rejected_basis_invalid_sentences": 1,
+          "analyses_received": 4,
+          "analyses_bound": 3
+        },
+        "citation_validator": {
+          "verified": 10,
+          "unknown": 7,
+          "analyses_received": 3,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "retained": 0,
+          "withdrawn": 0,
+          "submitted": 0
+        }
+      },
+      "usage": {
+        "total_tokens": 18377,
+        "llm_calls": 23,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 59264
+      },
+      "collector_wall_time_ms": 60313,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    },
+    {
+      "ordinal": 191,
+      "arm": "candidate",
+      "case_id": "P09",
+      "status": "completed",
+      "manifest_id": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+      "report_utf8_sha256": "247786614ae5118801f5fb928eb4d9c12fb6f248484902e45f0074fdbb1c22e5",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 0,
+      "decision_analysis_final": 0,
+      "stage_counts": {
+        "source_evaluator": {
+          "scope_accepted": 2,
+          "scope_offered": 2,
+          "sources_scored": 10,
+          "candidate_excluded_count": 20
+        },
+        "conclusion_synthesizer": {
+          "analyses_returned": 0,
+          "r0_withheld_one_sided": 0,
+          "source_facts_bound": 0,
+          "analyses_bound": 0,
+          "source_facts_received": 0,
+          "analyses_received": 0,
+          "facts_bound": 0,
+          "facts_received": 5,
+          "judgment_calls": 0
+        },
+        "citation_validator": {
+          "analyses_returned": 0,
+          "analyses_received": 0,
+          "verified": 0,
+          "unknown": 0
+        },
+        "self_reviewer": {
+          "withdrawn": 0,
+          "retained": 0,
+          "submitted": 0
+        }
+      },
+      "usage": {
+        "total_tokens": 11356,
+        "llm_calls": 16,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 38962
+      },
+      "collector_wall_time_ms": 41438,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    },
+    {
+      "ordinal": 192,
+      "arm": "candidate",
+      "case_id": "P10",
+      "status": "completed",
+      "manifest_id": "5832ff4bbd8ca2c0d09a8ae23558cbd90ce15b38beeefbe18361e2e06a6d565d",
+      "report_utf8_sha256": "b13c7dc465cd3bfc5150c7236c7987dcc7e8e383acfb2f91d7e17d58e89ba62d",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 0,
+      "decision_analysis_final": 0,
+      "stage_counts": {
+        "source_evaluator": {
+          "scope_accepted": 0,
+          "scope_offered": 0,
+          "sources_scored": 10,
+          "candidate_excluded_count": 18
+        },
+        "conclusion_synthesizer": {
+          "analyses_returned": 0,
+          "r0_withheld_one_sided": 0,
+          "source_facts_bound": 0,
+          "analyses_bound": 0,
+          "source_facts_received": 0,
+          "analyses_received": 0,
+          "facts_bound": 0,
+          "facts_received": 5,
+          "judgment_calls": 0
+        },
+        "citation_validator": {
+          "analyses_returned": 0,
+          "analyses_received": 0,
+          "verified": 0,
+          "unknown": 0
+        },
+        "self_reviewer": {
+          "withdrawn": 0,
+          "retained": 0,
+          "submitted": 0
+        }
+      },
+      "usage": {
+        "total_tokens": 13646,
+        "llm_calls": 20,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 33381
+      },
+      "collector_wall_time_ms": 34109,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    },
+    {
+      "ordinal": 193,
+      "arm": "baseline",
+      "case_id": "P10",
+      "status": "completed",
+      "manifest_id": "05fcdc06821ddbf779f4963b625f4578647d815ef08d2ebcbe8437936307f61e",
+      "report_utf8_sha256": "2c734a9fc8f3b00833a51d21a67f0f847b67188ea7c3d98f6fda50eae3a57f22",
+      "content_pass": false,
+      "critical_errors_observed": 0,
+      "source_facts_final": 1,
+      "decision_analysis_final": 0,
+      "stage_counts": {
+        "source_evaluator": {
+          "candidate_excluded_count": 19,
+          "sources_scored": 9,
+          "scope_offered": 0,
+          "scope_accepted": 0
+        },
+        "conclusion_synthesizer": {
+          "judgment_calls": 1,
+          "source_facts_bound": 1,
+          "analyses_returned": 2,
+          "r0_withheld_one_sided": 0,
+          "facts_received": 5,
+          "source_facts_received": 1,
+          "facts_bound": 1,
+          "binding_rejected_basis_invalid_sentences": 2,
+          "analyses_received": 4,
+          "analyses_bound": 2
+        },
+        "citation_validator": {
+          "verified": 0,
+          "unknown": 8,
+          "analyses_received": 2,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "retained": 0,
+          "withdrawn": 0,
+          "submitted": 0
+        }
+      },
+      "usage": {
+        "total_tokens": 14050,
+        "llm_calls": 18,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "token_usage_complete": true,
+        "active_milliseconds": 52444
+      },
+      "collector_wall_time_ms": 54046,
+      "artifact_note": "API immutable report/snapshot/export bytes equal; collector CRLF files equal after newline normalization"
+    }
+  ],
+  "independent_review": {
+    "reviewers": 2,
+    "coverage": "one fresh independent reviewer per anonymized case pair, all eight reports; primary reviewed all",
+    "order_anonymized": true,
+    "strict_blind": false,
+    "human_calibration": false,
+    "read_only": true,
+    "network_calls": 0,
+    "remaining_disagreements": [],
+    "criterion_revisions": "Empty-report uncertainty pass revised fail; empty report initially called critical by one reviewer corrected important_gap. P03/P06 misanswers not decisive recommendations; important rather than critical. No report pass conclusion changed.",
+    "limitations": [
+      "Report structure can reveal treatment.",
+      "Primary saw machine-emitted usage/status before full content lock; primary not blind.",
+      "One run per arm/case, changed live retrieval/model output and pause/cold-cache history confound attribution.",
+      "Public saved sources only; raw model outputs intentionally absent, malformed selection field unknown."
+    ],
+    "review_sha256": [
+      "6343463b221a4be91c37ba43393ddb871db50024e4db5e8256de7b046152d2aa",
+      "8c4d529519d80977a7fee44eca740e2e5e60cbf96036dcac79044486dc6133d7"
+    ]
+  },
+  "closeout": {
+    "actual_cumulative_admissions": 193,
+    "batch_remaining": 0,
+    "final_reserved": 24,
+    "active_runs": 0,
+    "ports_closed": true,
+    "database_pairs_quick_check": "ok",
+    "paired_backup_and_verify_passed": true,
+    "collector_exit_code": 0,
+    "service_tool_exit_codes": [
+      1,
+      1
+    ],
+    "service_stop": "Ctrl-C after public terminal reconciliation; not claimed graceful exit0",
+    "reserved_budget_remaining": 0,
+    "monetary_cost": null,
+    "artifact_consistency": "186 DB/API snapshot/report match; original HTTP export JSON parse failure retained, no captured export claim. Seven resumed cells immutable report/snapshot/API export bytes match; collector Markdown CRLF bytes differ, newline-normalized text equal. Both hashes retained locally."
+  },
+  "local_evidence_roots": [
+    "outputs/code-audit-development-20261006-v1",
+    "outputs/code-audit-development-20261006-resume-v1"
+  ],
+  "offline_followup": {
+    "network_calls": 0,
+    "candidate_P09_P10": "Each fact-selection parse strict/complete but shape invalid, five facts received and zero bound; judgment call skipped. Public chains replay offers whole eligible sources, ruling out entirely empty source catalog, not proving adequate semantics.",
+    "counterexample": "Synthetic source_ranges=[] on otherwise valid whole-source selections binds zero in P03/P09/P10; omitted ranges binds five. This is a plausible failure mode, not recovered model output or proven historical cause."
+  }
+}
