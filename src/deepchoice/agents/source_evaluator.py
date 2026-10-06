@@ -4,7 +4,7 @@ import posixpath
 import re
 from urllib.parse import unquote, urlsplit
 
-from ..utils.evidence import candidate_name_pattern, is_navigation_placeholder, source_title
+from ..utils.evidence import candidate_name_pattern, candidate_search_name, is_navigation_placeholder, source_title
 from ..utils.evidence_choices import bounded_source_passages
 from ..utils.query_context import query_request_context
 from ..utils.source_scope import (
@@ -102,9 +102,10 @@ def _audited_seed_scope_covers_candidate(
     if not isinstance(candidates, (list, tuple)) or not candidates:
         return True
     for candidate in candidates:
-        if not isinstance(candidate, str):
+        identity = candidate_search_name(candidate)
+        if identity is None:
             continue
-        normalized = "".join(re.findall(r"[a-z0-9]+", candidate.casefold()))
+        normalized = "".join(re.findall(r"[a-z0-9]+", identity.casefold()))
         if normalized in aliases:
             return True
     return False

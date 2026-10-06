@@ -4,7 +4,7 @@ Title mentions are routing hints only. They never establish source applicability
 """
 import re
 
-from .evidence import candidate_name_pattern
+from .evidence import candidate_name_pattern, candidate_search_name
 
 MAX_QUESTION_ROWS = 8
 _COMMON_WORDS = frozenset({"and", "with", "plus", "background", "tasks", "database", "db", "vector"})
@@ -25,7 +25,8 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     lowered = title.casefold()
     mentions = []
     for candidate in candidates:
-        if not isinstance(candidate, str):
+        identity = candidate_search_name(candidate)
+        if identity is None:
             continue
         pattern = candidate_name_pattern(candidate)
         if pattern is not None and pattern.search(lowered):
@@ -33,7 +34,7 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
             continue
         # Preserve the historical long-token routing hint for compound labels
         # such as Apache Kafka. Complete short/symbol names need the path above.
-        words = [word.casefold() for word in re.findall(r"[A-Za-z][A-Za-z0-9]*", candidate)
+        words = [word.casefold() for word in re.findall(r"[A-Za-z][A-Za-z0-9]*", identity)
                  if len(word) >= 4 and word.casefold() not in _COMMON_WORDS]
         if any(re.search(r"(?<![a-z0-9])" + re.escape(word) + r"(?![a-z0-9])", lowered)
                for word in words):

@@ -128,11 +128,11 @@ def test_synthesis_binding_rejects_navigation_without_renumbering_other_sources(
 
 @pytest.mark.parametrize("previous", [
     "source-score-v1", "source-score-v2", "source-score-v3",
-    "source-score-v4", "source-score-v5",
+    "source-score-v4", "source-score-v5", "source-score-v8",
 ])
 def test_old_scoring_identity_is_readable_but_cannot_resume(previous):
     current = build_run_manifest({})
-    assert current.scoring_policy_version == "source-score-v8"
+    assert current.scoring_policy_version == "source-score-v9"
     old = current.model_copy(update={"scoring_policy_version": previous})
     old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
     restored = RunManifest.model_validate_json(old.model_dump_json())

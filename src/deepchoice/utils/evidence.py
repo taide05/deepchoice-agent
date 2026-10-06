@@ -5,6 +5,30 @@ import re
 from urllib.parse import urlsplit
 
 
+_CHOICE_ACTION_PREFIX = re.compile(
+    r"^(?:(?:continue|keep)\s+using|(?:migrate|switch|move)\s+to|stay\s+with)(?:\s+|$)|"
+    r"^(?:继续使用|继续采用|迁移到|切换到)\s*", re.IGNORECASE,
+)
+
+
+def candidate_search_name(candidate: object) -> str | None:
+    """Separate one explicit decision action from its literal product identity.
+
+    Unknown labels remain literal, including compounds and versions. This is
+    a lexical routing hint, not an inferred alias or proof of applicability.
+    The original task/choice label is never changed. Action-only labels have
+    no product identity and must not disable an explicit candidate gate.
+    """
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    label = candidate.strip()
+    prefix = _CHOICE_ACTION_PREFIX.match(label)
+    identity = label[prefix.end():].strip() if prefix is not None else label
+    # Nested actions are ambiguous, not a literal product identity.
+    action = _CHOICE_ACTION_PREFIX.match(identity)
+    return identity if identity and action is None else None
+
+
 def candidate_name_pattern(candidate: object) -> re.Pattern | None:
     """Match an explicit product name in casefolded text, including short names.
 
@@ -14,7 +38,10 @@ def candidate_name_pattern(candidate: object) -> re.Pattern | None:
     """
     if not isinstance(candidate, str) or not candidate.strip():
         return None
-    name = r"\s+".join(re.escape(word) for word in candidate.casefold().split())
+    identity = candidate_search_name(candidate)
+    if identity is None:
+        return re.compile(r"(?!)")  # Explicit action-only gate must fail closed.
+    name = r"\s+".join(re.escape(word) for word in identity.casefold().split())
     return re.compile(r"(?<![a-z0-9_+#])" + name + r"(?![a-z0-9_+#])")
 
 

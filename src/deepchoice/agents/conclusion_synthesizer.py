@@ -65,7 +65,7 @@ SYNTHESIS_PROMPT = """You are a technology selection advisor. Answer the origina
 
 ## Original Query (requirement ID R0)
 {query}
-## Exact candidate names
+## Exact candidate choice labels
 {candidate_techs}
 ## User context (not source evidence)
 {scene_context}
@@ -141,10 +141,10 @@ produce at most one row per question, at most eight rows total. Omit a row if it
 be grounded in these facts. Do not answer an omitted question.
 The response is a proposal for human review, never verified semantic truth or permission to operate.
 Keep source wording and its if/except/workload limits; a sufficient condition is not a necessary one.
-A title mention is only a routing hint, not proof that a source applies to a candidate.
+Title mentions return original candidate choice labels; a recognized leading decision action is ignored only for lexical product routing. A mention never proves source applicability.
 Every independent factual premise needs its own basis coordinate, including qualifications. No
 performance, recovery, persistence, exactly-once, or comparative guarantee without applicable basis.
-For R0 use kind choice and an exact candidate name only when supported, otherwise kind answer with
+For R0 use kind choice and an exact supplied choice label only when supported, otherwise kind answer with
 empty option for a conditional comparison. For subquestions use kind answer or design; do not create
 another choice. A design is conceptual only.
 Use 1-4 original R0/C/Q IDs per row, 1-4 unique fact IDs, and 1-3 sentence IDs per fact.

@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Route action-labelled choices through shared literal product identities
+
+Strip one explicit Chinese/English leading decision action for lexical product
+matching across source admission, audited seed scope and question packets. Keep
+original task and choice labels; preserve versions/compound names and unknown
+prefixes without invented aliases. Action-only or nested-action candidates retain a nonempty
+never-matching gate and cannot claim packet coverage. Audited seed provenance
+checks stay intact. Freeze source-score-v9 and synthesis v29, isolating old resume
+identities; no extra model call, state field or migration. Existing compound long-word
+packet hints remain routing only, not version/applicability proof. This repairs
+admission transfer and does not establish semantic report-quality improvement.
+Initial offline regressions: 14 failed / five passed. Final related 267 passed;
+Windows/Python 3.12 full suite 2916 passed in 399.82s with no skips. Smoke-v1 12/12
+keeps cases/results/metrics unchanged while updating four identity/metadata fields.
+Static/diff checks passed; independent read-only review found no blockers after
+nested-action repairs. Linux/3.11 and live-provider behavior were not validated.
+
 ### Read bounded discovered pages and invalidate changed mapping caches
 
 Official v4 reads learned/fallback document bodies on the durable path. Discovered

@@ -43,7 +43,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v18"
-    assert first.scoring_policy_version == "source-score-v8"
+    assert first.scoring_policy_version == "source-score-v9"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
@@ -179,7 +179,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v18"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v28",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v29",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
@@ -741,7 +741,7 @@ async def test_resume_passes_none_input_to_langgraph(monkeypatch):
     assert captured["config"]["configurable"]["thread_id"] == "thread-1"
 
 
-@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17", "v18", "v19"])
+@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17", "v18", "v19", "v28"])
 def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(monkeypatch, old_version):
     import hashlib
     from deepchoice.contracts import manifest as module
