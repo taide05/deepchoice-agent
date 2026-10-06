@@ -1,0 +1,386 @@
+{
+  "dataset_id": "quality-source-view-development-v1",
+  "version": "1.0.0",
+  "status": "frozen",
+  "freeze_date": "2026-10-06",
+  "protocol": "docs/product-effectiveness-optimization.md",
+  "parent": {
+    "path": "benchmarks/product-baseline-v1.json",
+    "dataset_id": "product-baseline-v1",
+    "version": "1.0.0",
+    "freeze_date": "2026-09-16",
+    "byte_sha256": "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef",
+    "canonical_sha256": "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
+  },
+  "selection": "Four public development probes across runtime performance/compatibility, durable AI orchestration, reversible dependency migration, and event replay/queue semantics. P06/P09 informed R6 design; P07/P11 did not. Every case has prior historical exposure. Selection was fixed before any R6 research output; no fresh or sealed validation claim.",
+  "candidate_design_material": "R6 design used saved public P03/P06/P09/P10 snapshots and synthetic generic counterexamples. The candidate replaces model-authored F numbers/evidence IDs/optional ranges with runtime view IDs while retaining existing source, dispute, citation, five-fact and call bounds.",
+  "candidate_hypothesis": "Runtime-assigned fact identity and bounded selectable source views may prevent malformed model coordinate/identity output from dropping otherwise eligible decisive saved evidence, improving supported original-question answers in at least two different tradeoff classes without a new critical error. View selection alone does not prove semantic applicability.",
+  "falsifiers": [
+    "Advertised views omit decisive limiting conditions or lose applicable source text before binding.",
+    "Facts bind but citation, review or report still removes useful supported analysis, or the original choice remains unanswered.",
+    "Only one tradeoff class improves supported original-question answers, or gains occur only in design-exposed probes without useful transfer evidence.",
+    "A new critical factual/safety error or a material regression of an already passing case occurs."
+  ],
+  "assessment": {
+    "pass": "All five maintained content checks pass and no critical error; unresolved disagreement cannot pass.",
+    "severity": "Critical: decision-changing false capability, causal/applicability reversal, fabricated source/measurement, hard-constraint violation or unsafe guarantee. Important gap: prevents understanding choice or next test. Minor presentation alone does not fail. Do not require a unique winner or full deployment acceptance beyond the original request.",
+    "comparison": "At least two different tradeoff classes among the four cases improve supported original-question answers, with no new critical error and no material regression of an already passing case. Design-exposed gains are development evidence only; IDs bound, more facts, lexical verified, length and cost are not quality gains.",
+    "review": "Independent read-only assistant content review; conceal arm identity and cost until content judgments are locked where possible. Record exposure, disagreements and absence of human calibration.",
+    "source_policy": "Judge decisive claims against originally saved cited passages and their versions, scope and qualifications. Parent reference URLs and historical reference-audit entries are review pointers only, never request or seed additions or proof of current truth. New review material cannot repair a missing original citation. Unreachable, insufficiently scoped or cross-language uncertain claims remain unknown.",
+    "measurements": [
+      "original-question answers and decision-changing conditions",
+      "decisive saved-source applicability and qualifiers preserved through view/binding/citation/review/report",
+      "critical errors, important gaps and uncertainty",
+      "tokens, calls, wall time and unknown usage"
+    ],
+    "holdout_scope": "Development only. P09/P11 parent holdout labels are historical provenance; all four are public and previously exposed. No new sealed holdout opened."
+  },
+  "cases": [
+    {
+      "case_id": "P06",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "R6 design-exposed regression: its saved public snapshot and prior stage losses informed this source-view-ID candidate; public development only.",
+      "tradeoff": "runtime_performance_and_compatibility",
+      "request": {
+        "query": "Bun 和 Node.js 的性能资料结论冲突时，2026 年新建 TypeScript API 应如何选择？",
+        "scene_context": "团队已有 Node.js 经验，服务以数据库 I/O 为主，要求生态稳定；供应方 HTTP 性能宣传与本项目负载条件不同，尚无本项目的配对实测。",
+        "constraints": [
+          "必须解释 benchmark 条件",
+          "不能把运行时微基准外推为业务吞吐",
+          "需要区分版本与兼容性"
+        ],
+        "candidate_techs": [
+          "Bun",
+          "Node.js"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "宣传 benchmark 与本项目的测试条件有何不同？",
+          "生态兼容和团队经验如何计权？",
+          "怎样设计自己的验证？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "772ec8809eafdcd5256b517a7eb974489c99a885543689be99f3381c256affe0",
+      "source_case_sha256": "d82f7a6c8e1a9d3185d556450adf2bf81bd647d15403fa99eb17aebc10d72161",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "识别版本、硬件、负载差异",
+          "避免把微基准直接等同业务收益",
+          "给出面向实际工作负载的试验方案"
+        ],
+        "acceptable_outcomes": [
+          "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+          "若兼容性已验证且收益可复现，可条件性选择 Bun"
+        ],
+        "major_errors": [
+          "无条件宣称固定倍数性能优势",
+          "混用不同版本数据",
+          "忽略数据库 I/O 主导条件"
+        ],
+        "conflict_points": [
+          "供应方微基准优势与数据库 I/O 业务负载之间的外推边界；不预设已有相反实测"
+        ],
+        "reference_sources": [
+          "https://bun.sh/docs",
+          "https://nodejs.org/docs/latest/api/"
+        ]
+      },
+      "must_answer": [
+        "保留数据库I/O主导、Node经验、生态稳定和没有本项目配对实测的输入",
+        "比较性能资料的版本、硬件、负载和测量口径；缺项明确未知",
+        "把版本、兼容性和团队经验纳入选择；依赖未给定时可提出条件性核验，若据具体API、包或原生扩展作决定性主张则核对其适用范围",
+        "给出针对代表性业务负载和实际依赖的受控试验，以及结果改变选择的条件"
+      ],
+      "acceptable_outcomes": [
+        "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+        "若兼容性已验证且收益可复现，可条件性选择 Bun"
+      ],
+      "source_applicability": [
+        "Bun兼容资料是API与限制清单；Node-API支持与任意原生扩展无条件兼容不能混同。",
+        "Node latest API页面不能单独证明生产适用版本或本场景性能收益；报告如推荐具体版本，应核对其支持状态。",
+        "供应方HTTP测试不是数据库I/O业务配对实测；不得捏造已有相反测试或固定业务收益。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://bun.com/docs/runtime/nodejs-compat",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://nodejs.org/en/about/previous-releases",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://nodejs.org/docs/latest/api/",
+          "version_scope": "version must be captured if cited",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P09",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "R6 design-exposed regression: its saved public snapshot and prior fact-selection failure informed this source-view-ID candidate. Parent holdout label is historical, not sealed validation.",
+      "tradeoff": "agent_orchestration_and_durable_execution",
+      "request": {
+        "query": "需要可恢复的多步骤 AI 工作流时，应选择 LangGraph 还是 Temporal？",
+        "scene_context": "4 人团队，Python 为主，工作流包含 LLM、人工审批和外部 API，运行可持续数小时并要求故障恢复。",
+        "constraints": [
+          "必须区分 Agent 编排与通用持久执行",
+          "考虑团队运维能力",
+          "不得假设两者提供相同一致性语义"
+        ],
+        "candidate_techs": [
+          "LangGraph",
+          "Temporal"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "两者的持久状态与恢复模型有什么区别？",
+          "人工审批如何实现？",
+          "运维与可观测成本如何比较？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "d51ec0f422e52f85918690f3dcbfb33a3384f9d4748bdf28acf4b610ace0941c",
+      "source_case_sha256": "2c2c883b1f5e83aedf9182bc1181cd674f027885f8e73173fbf0fc5ef2a6d40f",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "区分产品定位和持久化语义",
+          "覆盖 HITL 与恢复",
+          "把运维能力纳入选择"
+        ],
+        "acceptable_outcomes": [
+          "按 AI 状态图复杂度和通用工作流可靠性需求做条件性选择"
+        ],
+        "major_errors": [
+          "声称二者语义完全相同",
+          "忽略 worker 或 checkpoint 运维",
+          "用营销术语替代恢复边界"
+        ],
+        "conflict_points": [
+          "AI 原生编排便利性与通用 durable execution 保证之间的权衡"
+        ],
+        "reference_sources": [
+          "https://langchain-ai.github.io/langgraph/",
+          "https://docs.temporal.io/"
+        ]
+      },
+      "must_answer": [
+        "结合Python四人团队、多小时LLM/人工审批/外部API与故障恢复需求，解释两个候选的定位及当前条件选择。",
+        "按保存的适用来源分别解释持久状态、故障恢复及重试/外部副作用的边界；不能把两个候选的一致性或恢复语义直接视为相同。",
+        "说明人工审批的暂停、恢复条件与未核实边界，不把营销措辞当作已证明的恢复保证。",
+        "把worker/checkpoint/服务及可观测性等运维责任纳入取舍，提出能改变选择的具体需求或验证结果，不要求完成真实恢复演练。"
+      ],
+      "acceptable_outcomes": [
+        "按 AI 状态图复杂度和通用工作流可靠性需求做条件性选择"
+      ],
+      "source_applicability": [
+        "Decisive claims require the originally saved cited version and applicability; original reference pointers alone do not provide evidence.",
+        "User-given context is a decision premise, not technical capability evidence; unmeasured performance/recovery outcomes stay unknown."
+      ]
+    },
+    {
+      "case_id": "P07",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "Not used to design R6. Publicly exposed in the earlier fact-range development batch and diagnosis; development probe, not a fresh or sealed holdout.",
+      "tradeoff": "dependency_tool_migration_and_reversibility",
+      "request": {
+        "query": "一个两人 Python 团队是否应该把现有 Poetry 项目迁移到 uv？",
+        "scene_context": "项目约 30 个依赖，CI 安装较慢但稳定；团队看到了 uv 的速度宣传，尚无自身迁移数据，不假设 uv 的公开资料稀少。",
+        "constraints": [
+          "资料独立性不足时必须表达未知",
+          "迁移必须可回滚",
+          "不能只依赖供应方性能数字"
+        ],
+        "candidate_techs": [
+          "继续使用 Poetry",
+          "迁移到 uv"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "哪些能力和锁文件行为需要验证？",
+          "速度收益如何在本项目测量？",
+          "迁移风险与回滚方案是什么？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "3a489cb760b01d73c6941dd0a1008452368d41944a854b0faa9ce25fcce8e054",
+      "source_case_sha256": "092844b9a8f94772206f8923a2c5938df1abe5344e3b8873a90b99ce84bac674",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "区分宣传指标与项目内实测",
+          "列出兼容性和锁文件验证",
+          "给出小范围试点与回滚条件"
+        ],
+        "acceptable_outcomes": [
+          "建议先在 CI 分支试点而非直接全量迁移",
+          "证据不足时保留未知"
+        ],
+        "major_errors": [
+          "把供应方速度数字当作当前项目确定收益",
+          "忽略锁文件和发布流程",
+          "不给回滚方案"
+        ],
+        "conflict_points": [
+          "供应方速度宣传与本项目迁移收益尚未测量之间的边界"
+        ],
+        "reference_sources": [
+          "https://docs.astral.sh/uv/",
+          "https://python-poetry.org/docs/"
+        ]
+      },
+      "must_answer": [
+        "保留两人团队、约30个依赖、CI慢但稳定且无自身迁移测量的原始约束",
+        "区分 Poetry 与 uv 项目、锁文件和 CI 安装工作流的具体版本/配置条件；实际依赖兼容性未知时提出需验证项",
+        "说明供应方速度宣传不能充当该项目确定收益；给出相同环境的 CI 安装耗时、缓存状态与可复现性对照",
+        "给出小范围试点、可回滚的文件/CI切换边界和失败时恢复原锁与构建的条件",
+        "根据已证实的能力、迁移成本与测量结果给出条件建议，避免把迁移当作已完成事实"
+      ],
+      "acceptable_outcomes": [
+        "建议先在 CI 分支试点而非直接全量迁移",
+        "证据不足时保留未知"
+      ],
+      "source_applicability": [
+        "uv 官方项目资料描述 uv.lock 与 uv run/sync；不能据此推断 Poetry 锁文件可无损直接复用。",
+        "Poetry 官方资料描述 poetry.lock 及 sync/install；不同版本行为应按报告所引页面和版本核对。",
+        "供应方性能数字与本项目 CI 的真实工作负载不同，未运行项目对照时收益未知。",
+        "回滚和可复现安装是用户条件，不可仅用概念性迁移口号满足。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://docs.astral.sh/uv/guides/projects/",
+          "version_scope": "rolling; capture cited version at review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://docs.astral.sh/uv/concepts/projects/sync/",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://python-poetry.org/docs/basic-usage/",
+          "version_scope": "rolling; capture cited version at review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P11",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "Not used to design R6. Publicly exposed in earlier cross-scene/fact-range development and source diagnosis; parent holdout label is historical, not sealed validation.",
+      "tradeoff": "event_replay_and_message_retry_semantics",
+      "request": {
+        "query": "订单事件处理系统应选 Kafka 还是 RabbitMQ？",
+        "scene_context": "峰值每秒 5000 条消息，需要消费者重放部分历史事件、单消息重试和死信处理；团队只运维过 RabbitMQ。",
+        "constraints": [
+          "区分事件日志与任务队列语义",
+          "考虑重放和顺序要求",
+          "计入运维经验"
+        ],
+        "candidate_techs": [
+          "Apache Kafka",
+          "RabbitMQ"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "重放需求如何影响选择？",
+          "路由、重试和死信能力如何比较？",
+          "团队经验是否足以改变结论？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "dca9c25b4bc0daf7beae0bb843eea5b2f9ac32a9325cbc84fd6fab7f65d64137",
+      "source_case_sha256": "7a96e267b9da834296802e756cfcb0f1bfcc7dfc5a0bb316aaa2bd8d851196bc",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "解释日志保留与队列确认模型，包括 RabbitMQ Streams 可重放而经典队列消费语义不同",
+          "覆盖重放、顺序、重试和死信",
+          "说明运维迁移成本"
+        ],
+        "acceptable_outcomes": [
+          "按保留与分区需求条件性选择 Kafka",
+          "基于已验证的 Streams 重放及团队经验条件性保留 RabbitMQ",
+          "若重放另行可靠实现且路由优先，可条件性保留 RabbitMQ 队列"
+        ],
+        "major_errors": [
+          "声称两者交付语义天然 exactly-once",
+          "忽略分区对顺序的影响",
+          "只按峰值数字选择",
+          "声称 RabbitMQ 所有类型都不支持重放"
+        ],
+        "conflict_points": [
+          "历史重放与灵活队列路由能力之间的权衡"
+        ],
+        "reference_sources": [
+          "https://kafka.apache.org/documentation/",
+          "https://www.rabbitmq.com/docs"
+        ]
+      },
+      "must_answer": [
+        "区分Kafka日志与RabbitMQ队列确认模型，并包含Streams的重放边界；若依据具体队列类型作决定性主张，再核对该类型条件",
+        "说明历史重放需求；不得以RabbitMQ品牌名排除其Streams重放",
+        "同时处理顺序、单消息重试和死信，不把不同模式能力无条件相加",
+        "将RabbitMQ运维经验与新增组件/模式成本纳入有理由的条件选择",
+        "不按5000条每秒直接决定，不保证天然端到端exactly-once"
+      ],
+      "acceptable_outcomes": [
+        "按保留与分区需求条件性选择 Kafka",
+        "基于已验证的 Streams 重放及团队经验条件性保留 RabbitMQ",
+        "若重放另行可靠实现且路由优先，可条件性保留 RabbitMQ 队列"
+      ],
+      "source_applicability": [
+        "Kafka 4.2介绍限定顺序在分区内；其日志可以保留并重读。",
+        "RabbitMQ Streams是持久可重复读取的日志；同页经典队列与Stream对照列出Stream没有dead-letter exchanges。",
+        "支持重放不等于同时拥有经典队列全部重试/死信功能；业务所需组合须给依据或明确待验证。"
+      ],
+      "reference_audit": [
+        {
+          "url": "https://kafka.apache.org/42/getting-started/introduction/",
+          "version_scope": "4.2",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://www.rabbitmq.com/docs/streams",
+          "version_scope": "rolling; capture page version at report review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    }
+  ],
+  "runtime_binding": "Dataset/rubric only. No research admission or run identity is frozen. A later batch must bind clean production commits, manifest/core assets, model/dependencies, isolated immutable seed, cache/HITL, collector, compatible bounded LLM+retrieval preflight, order, independent resources and stop policy before any outbound research."
+}
