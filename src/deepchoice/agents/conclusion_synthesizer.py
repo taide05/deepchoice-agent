@@ -89,7 +89,7 @@ Return ONLY answer_contract, source_facts and decision_analysis. Do not generate
 - source_facts: at most 5 unique F1..F99 references, each with evidence_id from a source marked "Source-fact binding allowed: yes". Select substantive mechanisms covering both candidates and the decisive questions, not navigation. Runtime copies the original text; do not translate or rewrite facts.
 - decision_analysis: at most 8 entries. Each addresses one mechanism or judgment using kind choice|answer|design, option an EXACT supplied candidate or empty, 1-4 unique original R0/C/Q requirement_ids, basis, reasoning, assumptions and change_condition. Use kind choice with the candidate name for a conditional preference; answer for an explanation; design for a requested conceptual alternative.
 - basis: 1-4 unique fact_id items, each with 1-3 distinct 1-based sentence_ids from that numbered saved snippet. Every decisive premise needs the appropriate source sentences, including limiting conditions. Do not supply copied quotes or fact_ids; runtime supplies them. A product name alone does not support a comparative advantage.
-- Write reasoning in the query language. Explain how the cited mechanism and the user's known conditions lead to the conditional judgment. Explicitly separate unconfirmed assumptions from supplied context. Keep source workloads, versions and measured thresholds separate from this workload.
+- Write reasoning in the query language. Explain how the cited mechanism and the user's known conditions lead to the conditional judgment. Explicitly separate unconfirmed assumptions from supplied context. Use an explicit assumptions list of 0-4 additional unconfirmed premises; [] is valid when none are needed. Do not relabel user-supplied conditions or source-bound qualifications as unknown assumptions; user context does not prove technical facts. Keep source workloads, versions and measured thresholds separate from this workload.
 - SOURCE-LANGUAGE EXCEPTION: source_facts retain VERBATIM source wording, not translated factual quotes. Translation equivalence is uncertain; preserve negation, scope and limiting clauses. Prefer applicable original documentation for decisive facts. Never imply a deployment test has already passed.
 - Every independent decisive factual premise, including one after a semicolon, needs its own appropriate basis sentence. A nearby citation cannot support a different assertion; never borrow one fact's sentence for another claim.
 - CONSTRAINT ASSESSMENT belongs in the conditional reasoning: discuss the original hard constraints and missing conditions, and do not force a total order. Mainstream popularity alone is not evidence of fit.
@@ -101,11 +101,11 @@ Return ONLY answer_contract, source_facts and decision_analysis. Do not generate
 - No production operations, commands, cutover, dual writes or overwrite-recovery instructions. No claim that a snapshot alone permits rollback after new writes. Runtime supplies a fixed isolated-validation plan where needed.
 - No inline citations, URLs, HTML or code in reasoning, assumptions or change_condition. References belong ONLY in basis. Preserve source negation, qualifications and candidate attribution.
 
-Fit the complete JSON within 4096 output tokens. Prefer concise analyses of 100-200 Chinese characters or 60-100 English words, one explicit assumption and one observable change condition. Use multiple entries when mechanisms require different premises; avoid repeating the same explanation. Empty lists are valid when no usable evidence exists.
+Fit the complete JSON within 4096 output tokens. Prefer concise analyses of 100-200 Chinese characters or 60-100 English words, 0-4 additional unconfirmed assumptions and one observable change condition. Use multiple entries when mechanisms require different premises; avoid repeating the same explanation. Empty lists are valid when no usable evidence exists.
 {{
   "answer_contract": "question-analysis-v1",
   "source_facts": [{{"id": "F1", "evidence_id": 1}}],
-  "decision_analysis": [{{"kind": "answer", "option": "", "requirement_ids": ["Q1"], "basis": [{{"fact_id": "F1", "sentence_ids": [1]}}], "reasoning": "Conditional answer grounded in these sentences (max 1500 characters)", "assumptions": ["An unconfirmed applicability condition (max 300 characters, 1-4 items)"], "change_condition": "What observation would change this answer (max 600 characters)"}}]
+  "decision_analysis": [{{"kind": "answer", "option": "", "requirement_ids": ["Q1"], "basis": [{{"fact_id": "F1", "sentence_ids": [1]}}], "reasoning": "Conditional answer grounded in these sentences (max 1500 characters)", "assumptions": ["An unconfirmed applicability condition (max 300 characters, 0-4 items; [] when none)"], "change_condition": "What observation would change this answer (max 600 characters)"}}]
 }}"""
 
 
@@ -151,8 +151,10 @@ empty option for a conditional comparison. For subquestions use kind answer or d
 another choice. A design is conceptual only.
 Use 1-4 original R0/C/Q IDs per row, 1-4 unique fact IDs, and 1-3 sentence IDs per fact.
 No URLs, inline citations, commands, or production operations in prose. Write in query language.
-Each row needs concise reasoning (max 1500 chars), 1-4 explicit assumptions (max 300 chars each),
-and an observable change_condition (max 600 chars). Do not invent missing user workload values.
+Each row needs concise reasoning (max 1500 chars), an explicit list of 0-4 additional unconfirmed assumptions (max 300 chars each),
+and an observable change_condition (max 600 chars). Use [] when no extra unconfirmed premise is needed.
+Preserve user-supplied conditions and source-bound qualifications as such, not as unknown assumptions.
+User context does not establish technical truth; do not invent missing workload values.
 Original query: {query}
 Candidate names: {candidates}
 Scene: {scene}

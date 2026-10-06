@@ -129,7 +129,7 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
     zh = lang == "zh"
     review = recommendation.get("analysis_review")
     note = ""
-    if (isinstance(review, dict) and review.get("status") in {"complete", "incomplete", "unavailable"}
+    if (isinstance(review, dict) and review.get("status") in {"complete", "incomplete", "unavailable", "not_run"}
             and all(type(review.get(key)) is int and 0 <= review[key] <= 9
                     for key in ("submitted", "retained", "revised", "withdrawn"))
             and review["submitted"] > 0):
@@ -146,8 +146,8 @@ def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
         caveat = ("以下是待人工审阅的模型推断。来源词法核验不证明判断或场景适用性；如需操作，先在隔离环境验证，本报告不授权生产变更。"
                   if zh else "These model inferences require human review. Lexical checks do not prove the judgment or applicability. Validate any operation in isolation; this report does not authorize production changes.")
     else:
-        caveat = ("以下释义、适用性判断与概念设计是模型推断，尚未经过语义验证。假设仍需确认，来源词法核验不证明建议正确；实际操作仅限下方隔离验证计划。"
-                  if zh else "The paraphrases, applicability judgments and conceptual designs below are model inferences, not semantically verified conclusions. Assumptions need confirmation. Source lexical checks do not prove the proposals; operations remain limited to the isolated validation plan below.")
+        caveat = ("以下释义、适用性判断与概念设计是模型推断，尚未经过语义验证。如有额外未确认假设，仍需核实；来源词法核验不证明建议正确；实际操作仅限下方隔离验证计划。"
+                  if zh else "The paraphrases, applicability judgments and conceptual designs below are model inferences, not semantically verified conclusions. Any additional unconfirmed assumptions need checking. Source lexical checks do not prove the proposals; operations remain limited to the isolated validation plan below.")
     lines = ["### 模型分析 · 待人工审阅" if zh else "### Model analysis · Human review required", "",
              caveat, ""]
     labels = {"choice": "条件选择" if zh else "Conditional choice",

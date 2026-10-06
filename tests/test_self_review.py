@@ -350,3 +350,90 @@ async def test_review_never_persists_freeform_gap_echo(monkeypatch):
     assert update["knowledge_gaps"] and update["confidence"] == "low"
     assert "PRIVATE_ADDITIONAL_CONTEXT" not in json.dumps(update)
     assert "PRIVATE_SOURCE_BODY" not in json.dumps(update)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["empty", "invalid_analysis", "invalid_provisional", "network_gap"])
+async def test_no_reviewable_items_skip_dispatch_clear_untrusted_metadata_and_preserve_boundaries(monkeypatch, mode):
+    state = make_state()
+    rec = state["final_recommendation"]
+    rec["decision_analysis"] = [] if mode != "invalid_analysis" else [{"kind": "answer", "reasoning": "UNBOUND_PRIVATE_ANALYSIS"}]
+    rec["analysis_review"] = {"status": "complete", "retained": 8}
+    rec["provisional_review"] = {"status": "complete", "retained": 8}
+    if mode == "invalid_provisional":
+        rec["requirement_assessments"] = [{"id": "C1", "requirement": "Keep operations small", "status": "unknown",
+            "provisional_explanation": "PRIVATE_SUPPLEMENTAL_CONTEXT", "provisional_review_status": "human_review_required",
+            "provisional_fact_ids": ["FORGED"]}]
+    if mode == "network_gap":
+        state["citation_verification"]["status_counts"]["unknown"] = 1
+    state["knowledge_gaps"] = ["PRIVATE_SUPPLEMENTAL_CONTEXT"]
+    state["token_usage"] = [{"agent": "prior", "calls": 1, "total_tokens": 20}]
+    before = deepcopy(state)
+    call = AsyncMock(side_effect=AssertionError("no object must not call model"))
+    monkeypatch.setattr(module, "call_model", call)
+    update = await module.SelfReviewerAgent().run(state)
+    call.assert_not_awaited()
+    signal = update["quality_signals"][0]
+    assert signal["review_status"] == "not_run" and signal["review_reason"] == "no_reviewable_items"
+    assert signal["passed_count"] == signal["total_checks"] == signal["targeted_review_attempts"] == 0
+    assert update["token_usage"] == before["token_usage"] and update["retry_count"] == 1
+    final = update["final_recommendation"]
+    assert not final["decision_analysis"]
+    assert final.get("analysis_review", {}).get("retained", 0) == 0
+    assert final.get("provisional_review", {}).get("retained", 0) == 0
+    assert final["winner"] == before["final_recommendation"]["winner"]
+    assert final["deployment_readiness"] == "unverified"
+    assert final["source_facts"] == before["final_recommendation"]["source_facts"]
+    assert state == before
+    assert "PRIVATE" not in json.dumps(update)
+    assert update["confidence"] == ("high" if mode == "empty" else "low")
+    assert bool(update["knowledge_gaps"]) is (mode != "empty")
+    rendered_state = {**state, **update}
+    for render in FORMAT_RENDERERS.values():
+        report = render(rendered_state)
+        assert "PRIVATE" not in report
+        if mode == "invalid_analysis":
+            assert "withheld" in report
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["keep", "revise"])
+async def test_review_retains_analysis_without_inventing_an_unconfirmed_assumption(monkeypatch, action):
+    state = make_state()
+    state["task"]["scene_context"] = "The user confirms queuing is acceptable; one maintainer."
+    rec = state["final_recommendation"]
+    rec["decision_analysis"] = rec["decision_analysis"][1:]
+    rec["decision_analysis"][0].update(assumptions=[], reasoning=GOOD)
+    reply = {"analysis_id": "A1", "action": action}
+    if action == "revise":
+        reply.update(reasoning=GOOD, assumptions=[], change_condition="Reassess if the user requirement changes.")
+    call = AsyncMock(return_value=reviewed([reply]))
+    monkeypatch.setattr(module, "call_model", call)
+    update = await module.SelfReviewerAgent().run(state)
+    call.assert_awaited_once()
+    final = update["final_recommendation"]
+    assert len(final["decision_analysis"]) == 1 and final["decision_analysis"][0]["assumptions"] == []
+    assert final["analysis_review"]["retained"] == 1
+    assert final["winner"] == rec["winner"] and final["deployment_readiness"] == "unverified"
+    for render in FORMAT_RENDERERS.values():
+        report = render({**state, **update})
+        assert GOOD in report and "Assumptions need confirmation." not in report
+        assert "Unconfirmed assumption:" not in report
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("projection", [None, [], {}, {"status_counts": {}, "checks": []},
+    {"status_counts": {"verified": "invalid"}, "checks": []},
+    {"status_counts": {"verified": True}, "checks": []}])
+async def test_skipped_review_with_absent_or_invalid_citation_projection_stays_unknown(monkeypatch, projection):
+    state = make_state()
+    state["final_recommendation"]["decision_analysis"] = []
+    state["citation_verification"] = projection
+    state["knowledge_gaps"] = ["PRIVATE_HISTORY"]
+    call = AsyncMock(side_effect=AssertionError("no review object"))
+    monkeypatch.setattr(module, "call_model", call)
+    update = await module.SelfReviewerAgent().run(state)
+    call.assert_not_awaited()
+    assert update["confidence"] == "low" and update["knowledge_gaps"]
+    assert update["quality_signals"][0]["total_checks"] == 0
+    assert "PRIVATE_HISTORY" not in json.dumps(update)

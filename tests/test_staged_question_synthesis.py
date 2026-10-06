@@ -194,3 +194,44 @@ async def test_explicit_short_candidate_in_comparison_title_keeps_original_quest
     assert rec["source_facts"][0]["status"] == "unknown"
     assert rec["decision_analysis"][0]["review_status"] == "not_checked"
     assert not has_multi_candidate_coverage([{"source_title": "Node.js guide"}], task["candidate_techs"])
+
+
+async def test_known_conditions_with_empty_extra_assumptions_reach_reviewed_report(monkeypatch):
+    import httpx
+    from copy import deepcopy
+    from deepchoice.agents import self_reviewer as review
+    from deepchoice.agents.citation_validator import CitationValidatorAgent
+    from deepchoice.agents.report_generator import FORMAT_RENDERERS
+    task = {"query": "Can Alpha queue writes when writers can wait?", "candidate_techs": ["Alpha"],
+        "scene_context": "The user confirms queued writes are acceptable; one maintainer.",
+        "constraints": ["Queued writes are acceptable"]}
+    original = deepcopy(CHAINS[:1])
+    row = answer("R0", "F1")["decision_analysis"][0]
+    row.update(assumptions=[], basis=[{"fact_id": "F1", "sentence_ids": [1, 2]}],
+        reasoning="With the stated tolerance for queued writes, Alpha can be evaluated for queuing. This does not establish restart recovery.")
+    model = AsyncMock(side_effect=[{"source_facts": [{"id": "F1", "evidence_id": 1}]},
+                                  {"decision_analysis": [row]}])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = {"task": deepcopy(task), "evidence_chains": deepcopy(original)}
+    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    assert state["final_recommendation"]["decision_analysis"][0]["assumptions"] == []
+    assert state["task"] == task and state["evidence_chains"] == original
+    judgment = model.await_args_list[1].args[0][0]["content"]
+    assert task["scene_context"] in judgment and "0-4" in judgment
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=f"<p>{original[0]['sources'][0]['snippet']}</p>", headers={"content-type": "text/html"})
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state.update(await CitationValidatorAgent().run(state))
+    reviewer = AsyncMock(return_value={"analysis_reviews": [{"analysis_id": "A1", "action": "keep",
+        "source_checks": [["F1", "supports", [1, 2]]]}]})
+    monkeypatch.setattr(review, "call_model", reviewer)
+    state.update(await review.SelfReviewerAgent().run(state))
+    final = state["final_recommendation"]
+    assert final["source_facts"][0]["status"] == "verified" and final["decision_analysis"][0]["assumptions"] == []
+    assert final["winner"] == "context_dependent" and final["action_plan_mode"] == "validation_only"
+    assert final["deployment_readiness"] == "unverified"
+    for render in FORMAT_RENDERERS.values():
+        report = render(state)
+        assert row["reasoning"] in report and "Unconfirmed assumption:" not in report
+        assert "semantically" in report or "Lexical" in report
+    assert model.await_count == 2 and reviewer.await_count == 1

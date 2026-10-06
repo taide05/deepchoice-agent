@@ -23,7 +23,7 @@ lexical check, NOT semantic proof, scenario fit, or operational acceptance.
 Evaluate six checks ONLY for supplied analyses, requirement_explanations, saved sources and headline summary:
 (1) applicable source support, (2) answers to the original questions each analysis addresses,
 (3) faithful reading of source mechanisms and limitations, (4) sound conditional reasoning,
-(5) explicit unconfirmed assumptions, (6) consistency with the supplied headline and stated
+(5) an explicit list of additional unconfirmed assumptions (0-4; [] when none), (6) consistency with the supplied headline and stated
 authority limits. You have not received every other requirement explanation, decision branch or
 action-plan step. Do not claim whole-report coverage, safety or operational acceptance.
 Return one item 1..6 with passed true/false for each. Confidence is high/medium/low;
@@ -78,7 +78,9 @@ Unrelated sentences or unchanged reasoning cannot legitimize the old claim. Do n
 Do not return or modify source_facts, citation statuses, original basis, requirement IDs, options,
 headlines or action plans. Revisions remain unverified model inferences requiring human review.
 Fit the complete JSON in 4096 tokens. Keep revisions concise (normally 100-200 Chinese characters
-or 60-100 English words), with 1-4 short assumptions and one change condition. List gaps as
+or 60-100 English words), with 0-4 short additional unconfirmed assumptions and one change condition.
+Use [] when none are needed. Do not turn user-supplied conditions or source-bound qualifications
+into unknown assumptions; user context does not prove technical facts. List gaps as
 bounded questions, not deployment instructions. No new research will run automatically.
 Return ONLY JSON:
 {"checks":[{"item":1,"passed":true}],"confidence":"low|medium|high",
@@ -211,6 +213,54 @@ def _citation_coverage(fr: dict) -> dict:
             "uncited_fields": uncited}
 
 
+def _skip_empty_review(research_state, context):
+    """Withdraw unbound submissions without inventing a model review or score."""
+    from ..utils.analysis_review import apply_analysis_review
+
+    recommendation, summary = apply_analysis_review(context, None)
+    summary.update(status="not_run", reason="no_reviewable_items")
+    if context.submitted:
+        recommendation["analysis_review"] = summary
+    if context.provisional_submitted:
+        recommendation["provisional_review"].update(status="not_run", reason="no_reviewable_items")
+    from ..citations.contracts import CitationVerification
+    raw_verification = research_state.get("citation_verification")
+    citation_gap = True  # Missing or inconsistent historical projection is unknown.
+    try:
+        verification = CitationVerification.model_validate_json(json.dumps(raw_verification))
+        raw_counts = raw_verification["status_counts"]
+        actual = Counter(check.status.value for check in verification.checks)
+        counts = verification.status_counts.model_dump()
+        complete = (isinstance(raw_counts, dict) and bool(verification.checks)
+                    and all(type(value) is int and value >= 0 for value in raw_counts.values())
+                    and all(count == actual[key] for key, count in counts.items()))
+        citation_gap = not complete or any(counts[key] > 0 for key in ("unknown", "unsupported", "unreachable"))
+    except (KeyError, TypeError, ValueError):
+        pass
+    needs_check = bool(context.submitted or context.provisional_submitted or citation_gap)
+    levels = {"low": 0, "medium": 1, "high": 2}
+    priors = [value for value in (recommendation.get("confidence"), research_state.get("confidence"))
+              if isinstance(value, str) and value in levels]
+    confidence = "low" if needs_check or not priors else min(priors, key=levels.get)
+    if recommendation:
+        recommendation["confidence"] = confidence
+        if needs_check:
+            recommendation["confidence_rationale"] = (
+                "没有可审的分析或依据仍有缺口；未执行模型自审。" if any("一" <= ch <= "鿿" for ch in context.query)
+                else "No reviewable analysis or incomplete evidence; model review was not run."
+            )
+    # Old gap text can contain private model/checkpoint content. Project only
+    # structured uncertainty into a fixed public question, never copy the text.
+    gaps = ["What evidence or assumptions still need independent checking? Without that check, treat the analysis as provisional."] if needs_check else []
+    return {"final_recommendation": recommendation, "confidence": confidence,
+            "knowledge_gaps": gaps, "retry_count": research_state.get("retry_count", 0) + 1,
+            "quality_signals": [{"agent": "self_reviewer", "review_status": "not_run",
+                "review_reason": "no_reviewable_items", "passed_count": 0, "total_checks": 0,
+                "confidence": confidence, "gaps_found": len(gaps), "analysis_review": summary,
+                "targeted_review_attempts": 0, "targeted_review_rejections": {}}],
+            "token_usage": research_state.get("token_usage", [])}
+
+
 class SelfReviewerAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None):
         self.websocket = websocket
@@ -224,6 +274,8 @@ class SelfReviewerAgent:
 
         print_agent_output("Reviewing decision reasoning before rendering", agent="SELF_REVIEWER")
         context = prepare_analysis_review(research_state)
+        if not context.slots and not context.provisional_slots:
+            return _skip_empty_review(research_state, context)
         fr = context.recommendation
         task = research_state.get("task", {})
         payload = {

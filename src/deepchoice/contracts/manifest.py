@@ -39,15 +39,15 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v19",
-    "evidence_first": "evidence-first-v18",
-    "comparison_matrix": "comparison-matrix-v17",
+    "what_why_how": "what-why-how-v20",
+    "evidence_first": "evidence-first-v19",
+    "comparison_matrix": "comparison-matrix-v18",
 }
 PROMPT_VERSIONS = {
-    "self_reviewer.review_system": "v7",
+    "self_reviewer.review_system": "v8",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v3",
-    "conclusion_synthesizer.synthesis_prompt": "v30",
+    "conclusion_synthesizer.synthesis_prompt": "v31",
     "source_evaluator.source_scope_selection": "v1",
     "conflict_detector.contradiction_scan_system": "v4",
 }
@@ -72,7 +72,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31"] = "v1"
     sha256: str
 
 

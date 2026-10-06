@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Preserve known conditions and skip review without reviewable items
+
+Accept an explicit 0–4 extra-assumption list; missing, malformed or empty-text
+items remain rejected. Synthesis and review prompts distinguish supplied user
+conditions, bound source qualifications and additional unknown premises; user
+context still does not prove technical facts. The shared report caveat no longer
+asserts every analysis has unconfirmed assumptions.
+When both analysis and provisional slots are empty, withdraw invalid submissions
+through the existing binder, clear old review metadata and skip LLM dispatch.
+Record not_run/no_reviewable_items, zero checks and no added usage; retain node
+retry_count behavior. Missing, invalid, empty or inconsistent citation projections
+remain low-confidence with a fixed safe gap. Do not echo historical gap text.
+Freeze synthesis v31, review v8 and three templates v20/v19/v18; preserve historical
+identity readability while rejecting current resume. Citation v19, runtime, budget,
+HITL and operational authority remain unchanged. Verification recorded in current
+status; actual model behavior and real report improvement are unmeasured.
+
 ### Preserve original facts outside bounded conflict coordinates
 
 The existing scan call reads complete indexed bounded excerpts when both source

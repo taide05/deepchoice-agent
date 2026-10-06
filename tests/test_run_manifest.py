@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v18"
+    assert first.report.template_version == "evidence-first-v19"
     assert first.scoring_policy_version == "source-score-v9"
     assert {
         retriever.retriever_id: retriever.version
@@ -177,7 +177,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v19"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v30",
+    expected_versions = {"self_reviewer.review_system": "v8", "conclusion_synthesizer.synthesis_prompt": "v31",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
@@ -189,9 +189,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v19",
-        "evidence_first": "evidence-first-v18",
-        "comparison_matrix": "comparison-matrix-v17",
+        "what_why_how": "what-why-how-v20",
+        "evidence_first": "evidence-first-v19",
+        "comparison_matrix": "comparison-matrix-v18",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 
@@ -747,7 +747,7 @@ async def test_resume_passes_none_input_to_langgraph(monkeypatch):
     assert captured["config"]["configurable"]["thread_id"] == "thread-1"
 
 
-@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17", "v18", "v19", "v28"])
+@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17", "v18", "v19", "v28", "v30"])
 def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(monkeypatch, old_version):
     import hashlib
     from deepchoice.contracts import manifest as module

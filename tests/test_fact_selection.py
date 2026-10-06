@@ -167,12 +167,15 @@ async def test_live_location_and_network_uncertainty_remain_independent(monkeypa
     assert "private diagnostic" not in verification.model_dump_json()
 
 
-async def test_sqlite_checkpoint_restart_keeps_range_coordinates_and_original_sources(monkeypatch, tmp_path):
+@pytest.mark.parametrize("assumptions", [[], ["Retention is configured."]])
+async def test_sqlite_checkpoint_restart_keeps_range_coordinates_and_original_sources(monkeypatch, tmp_path, assumptions):
     from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
     from langgraph.graph import END, START, StateGraph
     from deepchoice.state import ResearchState
 
-    model = AsyncMock(side_effect=[refs(), model_answer()])
+    answer = model_answer()
+    answer["decision_analysis"][0]["assumptions"] = assumptions
+    model = AsyncMock(side_effect=[refs(), answer])
     monkeypatch.setattr(synth, "call_model", model)
     async def fetch(*args, **kwargs):
         return httpx.Response(200, text=f"<p>{TEXT}</p>", headers={"content-type": "text/html"})

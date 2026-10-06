@@ -19,8 +19,24 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-06 R4：分析的assumptions必须是显式list、0–4项额外未确认前提；[]合法，
+缺字段/None/空文本/超限仍拒绝。合成与自审提示要求保留用户给定条件及绑定来源限定，
+不把它们重写为未知；用户陈述仍不能证明技术真值，basis/引用/自审和操作限制不变。
+
+SelfReviewer仅在有可审analysis或provisional槽时调用模型。两者为空时，先通过原
+apply_analysis_review清除旧审阅元数据并撤回无效提交，再记录not_run/no_reviewable_items、
+passed_count=0、total_checks=0、targeted_attempts=0；不追加伪造的LLM usage行，仍保持
+既有node retry_count语义。任一无效提交或无有效完整引用投影均low+固定安全缺口：严格
+解析CitationVerification，要求非空checks和计数与实际check状态一致；None/数组/非法
+counts/空或缺失投影不可视作已完成核验。有效且全verified的无对象路径只保持不高于
+既有confidence，不把跳过记成六项通过。旧knowledge_gaps原文不透传，防止检查点/模型
+文本含私密输入。报告说明撤回，空额外前提不再声称必须确认假设。
+合成v31、自审v8与三模板v20/v19/v18隔离历史同run恢复；citation v19、workflow/state、
+生命周期、HITL和数据库不变。工程测试不能证明真实模型正确区分已给条件与额外未知。
+
 2026-10-06：默认 graph 与独立直接代理默认模式均采用 `scan-only-v2`；manifest schema v1
-冻结 conflict_policy_version、scan v4、合成 v30 与 deterministic-citation-v19。历史
+冻结 conflict_policy_version、scan v4、合成 v31、自审 v8、三模板v20/v19/v18与
+deterministic-citation-v19。历史
 scan-only-v1 / scan v3 / 引用 v18 及缺省字段身份可读且保持原hash，但不能当前同run恢复。
 当前核心资产只索引6个prompt与6个LLM call快照，不含已退出默认路径的 arbitration、
 evidence_gather、rearbitration。历史manifest的缺省None不进入历史hash；旧prompt/call

@@ -276,23 +276,49 @@ class TestAgentTokenUsageWiring:
 
     @pytest.mark.asyncio
     async def test_self_reviewer_accumulates_across_invocations(self):
-        state = {
-            "task": {"query": "x", "scene_context": "solo", "constraints": []},
-            "report": "# report",
-            "evidence_chains": [],
-            "sub_questions": [],
-            "quality_signals": [],
-            "retry_count": 0,
-        }
-        content = ('{"checks": [], "passed_count": 5, '
-                   '"confidence": "high", "knowledge_gaps": []}')
-        with patch("deepchoice.utils.llm._get_client",
-                   return_value=_fake_client(_fake_response(content))):
+        import json
+        from deepchoice.agents.conclusion_synthesizer import _decision_requirements
+        from deepchoice.citations.contracts import CITATION_POLICY_VERSION
+        from deepchoice.utils.decision_analysis import bind_decision_analysis, calibrate_decision_analysis
+        from deepchoice.utils.evidence_choices import bind_evidence_choices
+
+        task = {"query": "Should we evaluate Local storage?", "scene_context": "Queued writes are acceptable.",
+                "constraints": [], "candidate_techs": ["Local"]}
+        chains = [{"conclusion": "Documented condition", "evidence_strength": "moderate",
+                   "sources": [{"title": "Local documentation", "url": "https://local.example/docs",
+                                "snippet": "Local storage permits one writer at a time.", "score": 8}]}]
+        requirements, _ = _decision_requirements(task["query"], [], [], [], [], task["scene_context"])
+        recommendation = bind_evidence_choices({
+            "source_facts": [{"id": "F1", "evidence_id": 1}],
+            "decision_analysis": [{"kind": "answer", "option": "Local", "requirement_ids": ["R0"],
+                                   "basis": [{"fact_id": "F1", "sentence_ids": [1]}],
+                                   "reasoning": "Given the stated queuing tolerance, evaluate Local storage.",
+                                   "assumptions": [], "change_condition": "Reassess if writes cannot queue."}],
+            "confidence": "high",
+        }, chains, task["candidate_techs"], requirements)
+        recommendation = bind_decision_analysis(recommendation, requirements, task["candidate_techs"],
+                                                task["query"], require_basis=True)
+        fact = recommendation["source_facts"][0]
+        fact["status"] = "verified"
+        recommendation = calibrate_decision_analysis(recommendation)
+        state = {"task": task, "final_recommendation": recommendation, "evidence_chains": chains,
+                 "quality_signals": [], "retry_count": 0,
+                 "citation_verification": {"schema_version": 1, "policy_version": CITATION_POLICY_VERSION,
+                     "status_counts": {"verified": 1}, "checks": [{
+                         "claim_id": "fact-check", "claim_path": "final_recommendation.source_facts[0].text",
+                         "claim_text": fact["saved_text"], "source_title": fact["source_title"],
+                         "canonical_url": fact["canonical_url"], "status": "verified", "reason": "lexical_support",
+                     }]}}
+        content = json.dumps({"checks": [], "confidence": "high", "knowledge_gaps": [],
+                              "analysis_reviews": [{"analysis_id": "A1", "action": "withdraw"}]})
+        client = _fake_client(_fake_response(content))
+        with patch("deepchoice.utils.llm._get_client", return_value=client):
             first = await SelfReviewerAgent().run(state)
             second_state = {**state, "token_usage": first["token_usage"],
                             "retry_count": first["retry_count"]}
             second = await SelfReviewerAgent().run(second_state)
 
+        assert client.chat.completions.create.await_count == 2
         rows = second["token_usage"]
         assert [r["agent"] for r in rows] == ["self_reviewer", "self_reviewer"]
         assert [r["calls"] for r in rows] == [1, 1]

@@ -142,7 +142,7 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
         reasoning = _text(item.get("reasoning"), 1500)
         change_condition = _text(item.get("change_condition"), 600)
         raw_assumptions = item.get("assumptions")
-        if not isinstance(raw_assumptions, list) or not 0 < len(raw_assumptions) <= 4:
+        if not isinstance(raw_assumptions, list) or len(raw_assumptions) > 4:
             reject("invalid_assumptions")
             continue
         assumptions = [_text(value, 300) for value in raw_assumptions]

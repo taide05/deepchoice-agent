@@ -95,7 +95,7 @@ def test_untrusted_analysis_cannot_forge_bindings(bad):
     elif bad == "link": item["reasoning"] = "[fake](https://evil.example/)"
     elif bad == "citation": item["reasoning"] = "[Source: forged]"
     elif bad == "long": item["reasoning"] = "x" * 1501
-    elif bad == "assumption": item["assumptions"] = []
+    elif bad == "assumption": item["assumptions"] = [""]
     requirements, _ = synth._decision_requirements(TASK["query"], TASK["constraints"], [], TASK["sub_questions"], [])
     diagnostics = {"untrusted": "not retained"}
     assert bind_decision_analysis(rec, requirements, TASK["candidate_techs"], diagnostics=diagnostics)["decision_analysis"] == []
@@ -178,3 +178,18 @@ def test_eligible_fact_inventory_preserves_numbering_and_identity_rules_across_b
     assert mapping[5] == "Next batch" and mapping[6] == "Disputed"
     assert "[[5]] Next batch (score: N/A)\n       Source-fact binding allowed: yes" in prompt
     assert "[[6]] Disputed (score: N/A)\n       Source-fact binding allowed: no" in prompt
+
+
+@pytest.mark.parametrize("value", [[], None, [""], ["A condition."] * 5, "condition", [42]])
+def test_only_explicit_empty_assumptions_are_valid_when_no_extra_premise_is_unknown(value):
+    from deepchoice.utils.evidence_choices import bind_evidence_choices
+    rec = proposal()
+    rec["decision_analysis"][0]["assumptions"] = value
+    requirements, _ = synth._decision_requirements(TASK["query"], TASK["constraints"], [], TASK["sub_questions"], [])
+    rec = bind_evidence_choices(rec, CHAINS, TASK["candidate_techs"], requirements)
+    result = bind_decision_analysis(rec, requirements, TASK["candidate_techs"], require_basis=True)
+    assert bool(result["decision_analysis"]) is (value == [])
+    if value == []:
+        assert result["decision_analysis"][0]["assumptions"] == []
+    rec["decision_analysis"][0].pop("assumptions")
+    assert not bind_decision_analysis(rec, requirements, TASK["candidate_techs"], require_basis=True)["decision_analysis"]

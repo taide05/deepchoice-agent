@@ -1155,3 +1155,34 @@ async def test_scan_only_agent_reserves_and_traces_only_scan(tmp_path, monkeypat
         assert await _count(connection, "WHERE status='unknown_spend'") == 0
     finally:
         await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_empty_self_review_uses_no_llm_budget_trace_or_sdk_dispatch(tmp_path, monkeypatch):
+    from deepchoice.agents.self_reviewer import SelfReviewerAgent
+    from deepchoice.observability import RuntimeTraceRecorder, SQLiteTraceStore
+    from deepchoice.runtime.context import bind_node_attempt
+    connection, lock, manager, _, clock = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(llm_calls=1, total_tokens=20000))
+    trace = RuntimeTraceRecorder(SQLiteTraceStore(connection, lock, clock=clock).bind(
+        run_id="run-1", execution_epoch=1, lease_owner="worker"), task_id="task-1")
+    create = AsyncMock(side_effect=AssertionError("empty review cannot dispatch"))
+    monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    try:
+        node = await trace.start_node_attempt("self_reviewer")
+        assert node is not None
+        with bind_run_context(_context(manager, trace)), bind_node_attempt(node.node_attempt_id):
+            result = await SelfReviewerAgent().run({"task": {"query": "Select a store"},
+                "final_recommendation": {"decision_analysis": [], "confidence": "low"}})
+        create.assert_not_awaited()
+        assert result["quality_signals"][0]["review_status"] == "not_run"
+        assert result["token_usage"] == []
+        usage = await manager._usage()
+        assert usage.get(BudgetResource.LLM_CALLS, 0) == 0
+        assert await _count(connection) == 0
+        cursor = await connection.execute("SELECT COUNT(*) FROM external_calls")
+        assert (await cursor.fetchone())[0] == 0
+        await cursor.close()
+    finally:
+        await connection.close()
