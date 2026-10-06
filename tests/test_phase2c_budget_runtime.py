@@ -58,7 +58,7 @@ async def test_scan_preserves_budget_and_drains_admitted_work(tmp_path, monkeypa
         await release.wait()
         return SimpleNamespace(model="fixture", usage=SimpleNamespace(
             prompt_tokens=250, completion_tokens=50, total_tokens=300),
-            choices=[SimpleNamespace(message=SimpleNamespace(content='{"has_difference":false}'))])
+            choices=[SimpleNamespace(message=SimpleNamespace(content='{"has_difference":false,"type":"none","explanation":"Different conditions"}'))])
     monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
     monkeypatch.setattr(conflict_module, "get_embedding_model", lambda: SimpleNamespace(
@@ -1099,4 +1099,55 @@ async def test_discovered_page_real_ledger_dispatch_boundary(tmp_path, monkeypat
         if pending is not None and not pending.done():
             pending.cancel()
             await asyncio.gather(pending, return_exceptions=True)
+        await connection.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content,status", [
+    ('{"has_difference":true,"type":"tradeoff_disagreement","explanation":"Incompatible counts"}', "confirmed"),
+    ('{"has_difference":"true"}', "unknown"),
+])
+async def test_scan_only_agent_reserves_and_traces_only_scan(tmp_path, monkeypatch, content, status):
+    import numpy as np
+    from deepchoice.observability import RuntimeTraceRecorder, SQLiteTraceStore
+    from deepchoice.runtime.context import bind_node_attempt
+
+    connection, lock, manager, _, clock = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(llm_calls=1, total_tokens=20000))
+    trace = RuntimeTraceRecorder(SQLiteTraceStore(connection, lock, clock=clock).bind(
+        run_id="run-1", execution_epoch=1, lease_owner="worker"), task_id="task-1")
+    node = await trace.start_node_attempt("conflict_detector")
+    assert node is not None
+    async def create(**kwargs):
+        assert kwargs["max_tokens"] == 512
+        assert await _count(connection, "WHERE status='reserved'") == 2
+        return SimpleNamespace(model="fixture", usage=SimpleNamespace(
+            prompt_tokens=100, completion_tokens=20, total_tokens=120),
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+    create_mock = AsyncMock(side_effect=create)
+    monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))))
+    monkeypatch.setattr(conflict_module, "get_embedding_model", lambda: SimpleNamespace(
+        encode=lambda titles: np.ones((len(titles), 3))))
+    gather = AsyncMock(side_effect=AssertionError("no default evidence gathering"))
+    monkeypatch.setattr(conflict_module, "_gather_evidence", gather)
+    sources = [{"title": "Comparable capacity", "snippet": f"Alpha supports {i} writers.",
+                "url": f"https://source{i}.example/docs", "total_score": 7} for i in [1, 2]]
+    try:
+        with bind_run_context(_context(manager, trace)), bind_node_attempt(node.node_attempt_id):
+            result = await conflict_module.ConflictDetectorAgent(gather_evidence=True).run(
+                {"task": {"query": "Select a store"}, "source_scores": sources})
+        assert result["conflicts"][0]["scan_status"] == status
+        create_mock.assert_awaited_once()
+        gather.assert_not_awaited()
+        usage = await manager._usage()
+        assert usage[BudgetResource.LLM_CALLS] == 1
+        assert usage[BudgetResource.TOTAL_TOKENS] == 120
+        assert usage.get(BudgetResource.RETRIEVAL_CALLS, 0) == 0
+        cursor = await connection.execute("SELECT status FROM external_calls WHERE kind='llm'")
+        rows = await cursor.fetchall()
+        await cursor.close()
+        assert len(rows) == 1 and rows[0][0] == "succeeded"
+        assert await _count(connection, "WHERE status='unknown_spend'") == 0
+    finally:
         await connection.close()

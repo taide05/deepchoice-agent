@@ -68,7 +68,7 @@ async def test_evidence_rearbitration_uses_deepseek_and_same_conflict_gate(monke
         {"confidence": "high", "resolution": "A_correct"},
     ])
     monkeypatch.setattr(detector, "call_model", call)
-    result = await detector.ConflictDetectorAgent().run({"task": {"query": "A vs B"}, "source_scores": []})
+    result = await detector.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "A vs B"}, "source_scores": []})
     assert [entry.kwargs["model"] for entry in call.await_args_list] == ["deepseek-flash", "deepseek-flash"]
     assert call.await_args_list[-1].kwargs["tag"] == "conflict_rearbitration"
     assert gate.__aenter__.await_count == 2

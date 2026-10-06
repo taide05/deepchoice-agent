@@ -19,6 +19,30 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-06：默认 graph 与独立直接代理默认模式均采用 `scan-only-v1`；manifest schema v1
+新增可缺省的 conflict_policy_version，新运行冻结该值并将 scan 提示/行为版本升至v3。
+当前核心资产只索引6个prompt与6个LLM call快照，不含已退出默认路径的 arbitration、
+evidence_gather、rearbitration。历史manifest的缺省None不进入历史hash；旧prompt/call
+仍可解析并校验原身份，但不能同run恢复。workflow research-v4、state schema v3不变，
+无生命周期或产品数据库迁移，旧结果可读。
+
+扫描仍只覆盖score≥5、标题余弦≥0.65的前15对，每对最多两段前400字符，局部并发4。
+明确的false/none为否定；合法true/允许的差异类型为模型标记冲突；调用失败、无描述或
+非法/矛盾输出为unknown。unknown不声称事实矛盾，其reason只用固定枚举，不带异常正文。
+标记/未知均保存在原conflicts字段，scan_status区分confirmed/unknown；confirmed只表示
+扫描标记，不是语义证明。默认resolution为insufficient_data、confidence为low，双方URL
+保持整来源保守排除；预算最低证据门、引用核验和HITL不放宽。未扫描对不视作已验证无冲突。
+quality_signals分别统计conflicts_found与scan_unknown_count；unresolved_count包含两者。
+预算错误和取消继续传播，扫描已派发工作先drain；普通提供方/输出故障只保留未知，不泄露细节。
+
+默认取消仲裁和补搜外呼；`gather_evidence`保留请求及manifest的输入值，用于历史输入身份，
+在OpenAPI标记deprecated并说明scan-only不受此开关影响，公开质量信号记录requested及
+effective=false。这同样适用于已弃用`/research`的当前graph，不增加新的HTTP入口。
+只为旧直接代理保留显式legacy_arbitration=True与原补搜开关，SDK重试/预算/Trace契约保留。
+兼容仲裁异常必须保全扫描标记，任何赢家/高置信度仍不能解封来源；未知对不参与仲裁。
+标题筛对、短描述和整来源排除可能丢失有用信息，真实质量收益尚未测量。
+
+
 2026-10-06：source-score-v9 与 synthesis v29 冻结候选动作标签的字面产品路由。
 共享 candidate_search_name 只移除一次明确的前置动作短语：继续使用/继续采用/迁移到/
 切换到，以及 continue using/keep using/migrate to/switch to/move to/stay with。

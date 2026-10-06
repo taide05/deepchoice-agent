@@ -2,6 +2,30 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Preserve scan findings and remove default conflict arbitration
+
+The default graph and agent use scan-only-v1: retain flagged incompatible claims
+and bounded unknown scan outcomes as unresolved, instead of losing them after
+provider or output failures. Unknown is distinct in counts, synthesis input and
+reports; both sources remain conservatively excluded from factual support. Remove
+arbitration/evidence gathering from the default path and asset inventory. Keep the
+explicit legacy direct-agent adapter, its fenced budget/Trace contracts and correct
+cancellation propagation; a model winner never unblocks a source. Deprecate the
+public gather_evidence field as preserved request/manifest metadata with visible
+requested/effective status. This also applies to the current /research graph.
+Freeze scan v3 and optional conflict policy identity; historical identities remain
+readable but cannot resume. No workflow/state schema or database migration.
+Initial offline regressions: 12 failed / one passed. Related 329 passed; fixed
+smoke-v1 12/12 with unchanged cases/results/metrics, static checks passed and
+read-only review found no remaining blockers after two repairs. The resumed full
+suite passed 2943 tests in 500.39s with no skips (Windows/Python3.12); the prior
+interrupted run has no retained terminal tally and is not counted. Linux/3.11
+were not run. The actual committed predecessor remains hash-valid/readable and
+is correctly rejected for current resume.
+Short-summary/title heuristics and whole-source exclusion remain quality risks;
+no live-provider or real-report improvement claim.
+
+
 ### Route action-labelled choices through shared literal product identities
 
 Strip one explicit Chinese/English leading decision action for lexical product

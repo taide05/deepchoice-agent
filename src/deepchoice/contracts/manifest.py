@@ -12,16 +12,8 @@ from ..agents.conclusion_synthesizer import (
     FACT_SELECTION_PROMPT, QUESTION_JUDGMENT_PROMPT,
     SYNTHESIS_STRUCTURE_POLICY, SOURCE_PASSAGE_DISPLAY_POLICY,
 )
-from ..agents.conflict_detector import (
-    ARBITRATION_SYSTEM,
-    CONTRADICTION_SCAN_SYSTEM,
-    EVIDENCE_GATHER_CALL_TIMEOUT_S,
-    EVIDENCE_GATHER_MAX_ITERATIONS,
-    EVIDENCE_GATHER_SYSTEM,
-    EVIDENCE_GATHER_TOOL_TIMEOUT_S,
-    EVIDENCE_GATHER_USER_TEMPLATE,
-    SEARCH_TOOLS,
-)
+from ..agents.conflict_detector import CONTRADICTION_SCAN_SYSTEM
+
 from .errors import DeepChoiceError, ErrorCategory
 from ..agents.query_adapter import ADAPT_SYSTEM
 from ..agents.query_analyzer import DECOMPOSITION_SYSTEM
@@ -57,8 +49,7 @@ PROMPT_VERSIONS = {
     "query_adapter.adapt_system": "v3",
     "conclusion_synthesizer.synthesis_prompt": "v29",
     "source_evaluator.source_scope_selection": "v1",
-    "conflict_detector.contradiction_scan_system": "v2",
-    "conflict_detector.arbitration_system": "v2",
+    "conflict_detector.contradiction_scan_system": "v3",
 }
 try:
     APP_VERSION = version("deepchoice")
@@ -144,6 +135,8 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v17", "deterministic-citation-v18",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
+    # Missing in historical schema-v1 identities; current default is scan-only.
+    conflict_policy_version: Literal["scan-only-v1"] | None = None
     gather_evidence: bool
     report: ReportTemplateSnapshot
 
@@ -241,11 +234,6 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         ("query_adapter.adapt_system", ADAPT_SYSTEM),
         ("source_evaluator.source_scope_selection", SOURCE_SCOPE_SELECTION_PROMPT),
         ("conflict_detector.contradiction_scan_system", CONTRADICTION_SCAN_SYSTEM),
-        ("conflict_detector.arbitration_system", ARBITRATION_SYSTEM),
-        (
-            "conflict_detector.evidence_gather",
-            EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE,
-        ),
         ("conclusion_synthesizer.synthesis_prompt",
          SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE
          + "\n" + FACT_SELECTION_PROMPT + "\n" + QUESTION_JUDGMENT_PROMPT
@@ -311,30 +299,6 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 max_output_tokens=max_output_tokens_for("conflict_scan"),
             ),
             LLMCallSnapshot(
-                call_id="conflict_arbitration",
-                tier="deepseek-flash",
-                prompt_id="conflict_detector.arbitration_system",
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-            ),
-            LLMCallSnapshot(
-                call_id="conflict_evidence_gather",
-                tier="deepseek-flash",
-                prompt_id="conflict_detector.evidence_gather",
-                response_format=None,
-                timeout_s=EVIDENCE_GATHER_CALL_TIMEOUT_S,
-                tools_sha256=_sha256(_canonical_json(SEARCH_TOOLS)),
-                max_iterations=EVIDENCE_GATHER_MAX_ITERATIONS,
-                tool_timeout_s=EVIDENCE_GATHER_TOOL_TIMEOUT_S,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-            ),
-            LLMCallSnapshot(
-                call_id="conflict_rearbitration",
-                tier="deepseek-flash",
-                prompt_id="conflict_detector.arbitration_system",
-                timeout_s=300.0,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-            ),
-            LLMCallSnapshot(
                 call_id="conclusion_synthesizer",
                 tier="deepseek-flash",
                 prompt_id="conclusion_synthesizer.synthesis_prompt",
@@ -363,6 +327,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v18",
         "hitl_policy_version": "evidence-insufficient-v1",
+        "conflict_policy_version": "scan-only-v1",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(
             report_format=report_format,
@@ -405,6 +370,8 @@ def _expected_manifest_id(manifest: RunManifest) -> str:
             call.pop("max_output_tokens", None)
         if call.get("sdk_max_retries") is None:
             call.pop("sdk_max_retries", None)
+    if content.get("conflict_policy_version") is None:
+        content.pop("conflict_policy_version", None)
     if content.get("citation_policy_version") is None:
         content.pop("citation_policy_version", None)
     if content.get("hitl_policy_version") is None:

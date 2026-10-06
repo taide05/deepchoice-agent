@@ -265,7 +265,8 @@ async def test_scan_rejects_noncontradictions_and_malformed_truth_flag(monkeypat
     monkeypatch.setattr(detector, "call_model", AsyncMock(return_value=result))
     assert await detector._scan_pair_contradiction(
         _source("Alpha bulk throughput", "Bulk load throughput is high"),
-        _source("Beta low latency", "Interactive latency is low"), "Choose a store") is None
+        _source("Beta low latency", "Interactive latency is low"), "Choose a store") == {
+            "scan_status": "unknown", "scan_reason": "invalid_output"}
 
 
 @pytest.mark.asyncio
@@ -273,7 +274,8 @@ async def test_scan_missing_descriptions_cannot_turn_titles_into_claims(monkeypa
     call = AsyncMock()
     monkeypatch.setattr(detector, "call_model", call)
     assert await detector._scan_pair_contradiction(
-        _source("Pick Alpha", ""), _source("Pick Beta"), "Choose") is None
+        _source("Pick Alpha", ""), _source("Pick Beta"), "Choose") == {
+            "scan_status": "unknown", "scan_reason": "missing_description"}
     call.assert_not_awaited()
 
 
@@ -316,8 +318,12 @@ async def test_rearbitration_updates_original_close_pair_not_preceding_rule(monk
     gather = AsyncMock(return_value="Direct comparable fixture evidence")
     monkeypatch.setattr(detector, "call_model", call)
     monkeypatch.setattr(detector, "_gather_evidence", gather)
-    result = await detector.ConflictDetectorAgent().run({"task": {"query": "Choose"}})
-    rule, revised = result["conflicts"]
+    result = await detector.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "Choose"}})
+    rule, *middle, revised = result["conflicts"]
+    assert len(middle) == int(intervening_failure)
+    if middle:
+        assert middle[0]["claim_a"] == "Failed A"
+        assert middle[0]["resolution"] == "insufficient_data"
     assert rule["claim_a"] == "Rule A" and rule["claim_b"] == "Rule B"
     assert rule["resolution"] == "insufficient_data" and rule["evidence_collected"] == ""
     assert rule["arbiter_model"] == "deepseek-flash(rule)"
@@ -339,7 +345,7 @@ async def test_close_score_arbitration_receives_actual_text_and_retains_existing
     call = AsyncMock(side_effect=denial)
     monkeypatch.setattr(detector, "call_model", call)
     with pytest.raises(BudgetExceededError) as caught:
-        await detector.ConflictDetectorAgent(gather_evidence=False).run({"task": {"query": "Choose"}})
+        await detector.ConflictDetectorAgent(gather_evidence=False, legacy_arbitration=True).run({"task": {"query": "Choose"}})
     assert caught.value is denial
     messages = call.await_args.args[0]
     assert "Alpha accepts one writer" in messages[1]["content"]

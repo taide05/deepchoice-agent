@@ -578,12 +578,15 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str,
                                    usage: list | None = None) -> dict | None:
     """Ask the existing model to compare claims under matching conditions.
 
-    Returns a dict with contradiction info if detected, None otherwise.
+    Returns a bounded confirmed/unknown finding, or None for an explicit negative.
     """
-    snippet_a = src_a.get("snippet", "")[:400]
-    snippet_b = src_b.get("snippet", "")[:400]
+    snippet_a = src_a.get("snippet", "")
+    snippet_b = src_b.get("snippet", "")
+    if not isinstance(snippet_a, str) or not isinstance(snippet_b, str):
+        return {"scan_status": "unknown", "scan_reason": "missing_description"}
+    snippet_a, snippet_b = snippet_a[:400], snippet_b[:400]
     if not snippet_a.strip() or not snippet_b.strip():
-        return None
+        return {"scan_status": "unknown", "scan_reason": "missing_description"}
     prompt = [
         {"role": "system", "content": CONTRADICTION_SCAN_SYSTEM},
         {"role": "user", "content": (
@@ -609,15 +612,20 @@ Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; 
                 response_format="json",
                 usage=usage,
             )
-        if (isinstance(result, dict) and result.get("has_difference") is True
-                and result.get("type") in {"winner_disagreement", "tradeoff_disagreement"}):
-            return result
-        return None
+        if isinstance(result, dict) and isinstance(result.get("explanation"), str):
+            if result.get("has_difference") is False and result.get("type") == "none":
+                return None
+            if (result.get("has_difference") is True
+                    and result.get("type") in {"winner_disagreement", "tradeoff_disagreement"}
+                    and result["explanation"].strip()):
+                return {"scan_status": "confirmed", "type": result["type"],
+                        "explanation": result["explanation"][:200]}
+        return {"scan_status": "unknown", "scan_reason": "invalid_output"}
     except BudgetError:
         raise
     except Exception:
-        print_agent_output("Conflict scan failed", agent="CONFLICT_DETECTOR")
-        return None
+        print_agent_output("Conflict scan unavailable", agent="CONFLICT_DETECTOR")
+        return {"scan_status": "unknown", "scan_reason": "scan_unavailable"}
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
@@ -687,6 +695,8 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
                 "similarity": round(sim, 3),
                 "difference_type": info.get("type", "unknown"),
                 "difference_explanation": info.get("explanation", ""),
+                "scan_status": info.get("scan_status", "confirmed"),
+                "scan_reason": info.get("scan_reason", ""),
             })
 
     return pairs
@@ -697,13 +707,37 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
 # ---------------------------------------------------------------------------
 
 
+def _unresolved_conflict(pair: dict) -> dict:
+    """Keep both source identities; no model verdict establishes factual truth."""
+    unknown = pair.get("scan_status") == "unknown"
+    return {
+        "claim_a": pair["source_a"].get("title", ""),
+        "claim_b": pair["source_b"].get("title", ""),
+        "source_a": {"url": pair["source_a"]["url"], "score": pair["source_a"]["total_score"]},
+        "source_b": {"url": pair["source_b"]["url"], "score": pair["source_b"]["total_score"]},
+        "similarity": pair["similarity"],
+        "scan_status": "unknown" if unknown else "confirmed",
+        "scan_reason": pair.get("scan_reason", "") if unknown else "",
+        "resolution": "insufficient_data", "confidence": "low",
+        "reasoning": ("Conflict scan unknown; no contradiction has been established. Both sources remain excluded from factual support."
+                      if unknown else "The scan flagged incompatible claims; the conflict remains unresolved. Both sources remain excluded from factual support."),
+        "key_factor": "scan_unknown" if unknown else "comparable_evidence_required",
+        "arbiter_model": "none", "evidence_collected": "",
+        "difference_type": "unknown" if unknown else pair.get("difference_type", "unknown"),
+        "difference_explanation": "" if unknown else pair.get("difference_explanation", ""),
+    }
+
+
 class ConflictDetectorAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None,
-                 gather_evidence: bool = True):
+                 gather_evidence: bool = True, *, legacy_arbitration: bool = False):
         self.websocket = websocket
         self.stream_output = stream_output
         self.headers = headers
+        # Deprecated request metadata under scan-only-v1; effective only for
+        # explicit historical direct-agent arbitration adapters.
         self.gather_evidence = gather_evidence
+        self.legacy_arbitration = legacy_arbitration
 
     async def run(self, research_state: dict) -> dict:
         source_scores = research_state.get("source_scores", [])
@@ -716,16 +750,41 @@ class ConflictDetectorAgent:
         local_usage: list = []
         pairs = await find_contradictions(source_scores, query_topic=query, usage=local_usage)
         if not pairs:
-            print_agent_output("No contradictory pairs found after LLM scan", agent="CONFLICT_DETECTOR")
+            print_agent_output("No flagged pairs within the bounded scan", agent="CONFLICT_DETECTOR")
             return {
                 "conflicts": [],
-                "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
+                "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0,
+                    "resolved_count": 0, "unresolved_count": 0, "scan_unknown_count": 0,
+                    "conflict_policy": "legacy-arbitration" if self.legacy_arbitration else "scan-only-v1",
+                    "gather_evidence_requested": self.gather_evidence,
+                    "gather_evidence_effective": self.legacy_arbitration and self.gather_evidence}],
                 "token_usage": research_state.get("token_usage", [])
                 + [summarize_usage("conflict_detector", local_usage)],
             }
 
+        if not self.legacy_arbitration:
+            conflicts = [_unresolved_conflict(pair) for pair in pairs]
+            unknown_count = sum(c["scan_status"] == "unknown" for c in conflicts)
+            print_agent_output(
+                f"Scan findings: {len(conflicts) - unknown_count} flagged, {unknown_count} unknown; retained unresolved",
+                agent="CONFLICT_DETECTOR",
+            )
+            return {
+                "conflicts": conflicts,
+                "quality_signals": [{"agent": "conflict_detector",
+                    "conflicts_found": len(conflicts) - unknown_count,
+                    "scan_unknown_count": unknown_count, "resolved_count": 0,
+                    "unresolved_count": len(conflicts), "conflict_policy": "scan-only-v1",
+                    "gather_evidence_requested": self.gather_evidence,
+                    "gather_evidence_effective": False}],
+                "token_usage": research_state.get("token_usage", [])
+                    + [summarize_usage("conflict_detector", local_usage)],
+            }
+
+        unknown_conflicts = [_unresolved_conflict(p) for p in pairs if p.get("scan_status") == "unknown"]
+        pairs = [p for p in pairs if p.get("scan_status") != "unknown"]
         print_agent_output(
-            f"LLM scan confirmed {len(pairs)} contradictory pairs, running flash arbitration",
+            f"LLM scan flagged {len(pairs)} pairs, running legacy flash arbitration",
             agent="CONFLICT_DETECTOR",
         )
 
@@ -754,6 +813,7 @@ class ConflictDetectorAgent:
                 "evidence_collected": result.get("evidence_collected", ""),
                 "difference_type": pair.get("difference_type", "unknown"),
                 "difference_explanation": pair.get("difference_explanation", ""),
+                "scan_status": "confirmed",
             }
 
         # --- Stage 1: Flash arbitration (parallel) ---
@@ -775,14 +835,17 @@ class ConflictDetectorAgent:
             *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
         )
 
-        conflicts = []
+        conflicts = list(unknown_conflicts)
         low_confidence_pairs = []
         for pair, result in zip(pairs, raw_conflicts):
             if isinstance(result, BudgetError):
                 raise result
             if isinstance(result, Exception):
-                print_agent_output("Flash arbitration failed", agent="CONFLICT_DETECTOR")
+                print_agent_output("Flash arbitration unavailable; preserving scan finding", agent="CONFLICT_DETECTOR")
+                conflicts.append(_unresolved_conflict(pair))
                 continue
+            if isinstance(result, BaseException):
+                raise result
             conflicts.append(result)
             if (result["confidence"] == "low"
                     and result["arbiter_model"] != "deepseek-flash(rule)"):
@@ -859,6 +922,8 @@ class ConflictDetectorAgent:
                     raise r
                 if isinstance(r, Exception):
                     continue
+                if isinstance(r, BaseException):
+                    raise r
                 if r is not None:
                     idx, revised_conflict = r
                     if idx < len(conflicts):
@@ -877,7 +942,11 @@ class ConflictDetectorAgent:
             "conflicts": conflicts,
             "quality_signals": [{
                 "agent": "conflict_detector",
-                "conflicts_found": len(conflicts),
+                "conflicts_found": len(conflicts) - len(unknown_conflicts),
+                "scan_unknown_count": len(unknown_conflicts),
+                "conflict_policy": "legacy-arbitration",
+                "gather_evidence_requested": self.gather_evidence,
+                "gather_evidence_effective": self.gather_evidence,
                 "resolved_count": resolved_count,
                 "unresolved_count": len(conflicts) - resolved_count,
             }],

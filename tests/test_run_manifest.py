@@ -36,8 +36,8 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.workflow_version == "research-v4"
     assert first.workflow_nodes == WORKFLOW_NODES
     assert first.state_schema_version == 3
-    assert len(first.prompts) == 8
-    assert len(first.llm_calls) == 9
+    assert len(first.prompts) == 6
+    assert len(first.llm_calls) == 6
     assert all(
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
@@ -152,8 +152,6 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         "query_adapter.adapt_system",
         "source_evaluator.source_scope_selection",
         "conflict_detector.contradiction_scan_system",
-        "conflict_detector.arbitration_system",
-        "conflict_detector.evidence_gather",
         "conclusion_synthesizer.synthesis_prompt",
         "self_reviewer.review_system",
     )
@@ -183,8 +181,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
-                         "conflict_detector.contradiction_scan_system": "v2",
-                         "conflict_detector.arbitration_system": "v2"}
+                         "conflict_detector.contradiction_scan_system": "v3"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
         prompt_id: expected_versions.get(prompt_id, "v1") for prompt_id in expected_prompt_ids}
     assert all(re.fullmatch(r"[0-9a-f]{64}", prompt.sha256) for prompt in registry.prompts)
@@ -651,10 +648,18 @@ def test_saved_manifest_keeps_its_resolved_synthesis_option(monkeypatch):
 
 
 def test_manifest_covers_direct_evidence_gathering_call():
-    manifest = build_run_manifest({"query": "A vs B"})
-    call = next(
-        item for item in manifest.llm_calls if item.call_id == "conflict_evidence_gather"
+    from deepchoice.agents.conflict_detector import (
+        EVIDENCE_GATHER_CALL_TIMEOUT_S, EVIDENCE_GATHER_MAX_ITERATIONS,
+        EVIDENCE_GATHER_TOOL_TIMEOUT_S,
     )
+    from deepchoice.contracts.manifest import LLMCallSnapshot
+    # Historical DTOs remain readable although these calls are no longer frozen
+    # as default-path assets.
+    call = LLMCallSnapshot(call_id="conflict_evidence_gather", tier="deepseek-flash",
+        prompt_id="conflict_detector.evidence_gather", response_format=None,
+        timeout_s=EVIDENCE_GATHER_CALL_TIMEOUT_S, max_iterations=EVIDENCE_GATHER_MAX_ITERATIONS,
+        tool_timeout_s=EVIDENCE_GATHER_TOOL_TIMEOUT_S, tools_sha256="0" * 64,
+        max_output_tokens=4096, sdk_max_retries=0)
 
     assert call.response_format is None
     assert call.timeout_s == 30.0
@@ -668,10 +673,11 @@ def test_pre_throttle_tool_timeout_manifest_remains_readable_but_cannot_resume()
 
     task = {"query": "A vs B"}
     current = build_run_manifest(task)
-    calls = tuple(call.model_copy(update={"tool_timeout_s": 20.0})
-                  if call.call_id == "conflict_evidence_gather" else call
-                  for call in current.llm_calls)
-    old = current.model_copy(update={"llm_calls": calls})
+    from deepchoice.contracts.manifest import LLMCallSnapshot
+    legacy_call = LLMCallSnapshot(call_id="conflict_evidence_gather", tier="deepseek-flash",
+        prompt_id="conflict_detector.evidence_gather", tool_timeout_s=20.0)
+    old = current.model_copy(update={"llm_calls": (*current.llm_calls, legacy_call),
+                                     "conflict_policy_version": None})
     old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
     assert type(current).model_validate_json(old.model_dump_json()).manifest_id == old.manifest_id
     with pytest.raises(DeepChoiceError) as caught:
@@ -852,6 +858,36 @@ def test_previous_query_allocation_identity_remains_readable_but_cannot_resume(c
     previous = previous.model_copy(update={"manifest_id": _expected_manifest_id(previous)})
     restored = RunManifest.model_validate_json(previous.model_dump_json())
     assert restored.manifest_id == _expected_manifest_id(restored)
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_pre_scan_only_identity_is_readable_and_not_resumable():
+    import hashlib
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+
+    historical = build_run_manifest({}).model_dump(mode="json")
+    historical.pop("conflict_policy_version")
+    for prompt in historical["prompts"]:
+        if prompt["prompt_id"] == "conflict_detector.contradiction_scan_system":
+            prompt["version"] = "v2"
+    for prompt_id, text in [
+        ("conflict_detector.arbitration_system", ARBITRATION_SYSTEM),
+        ("conflict_detector.evidence_gather", EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE),
+    ]:
+        historical["prompts"].append({"prompt_id": prompt_id, "version": "v2" if "arbitration" in prompt_id else "v1",
+                                      "sha256": hashlib.sha256(text.encode()).hexdigest()})
+    from deepchoice.contracts.manifest import LLMCallSnapshot
+    historical["llm_calls"].append(LLMCallSnapshot(call_id="conflict_arbitration",
+        tier="deepseek-flash", prompt_id="conflict_detector.arbitration_system",
+        max_output_tokens=4096, sdk_max_retries=0).model_dump(mode="json"))
+    identity = {k: v for k, v in historical.items() if k not in {"manifest_id", "created_at"}}
+    historical["manifest_id"] = hashlib.sha256(json.dumps(identity, ensure_ascii=False,
+        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    restored = RunManifest.model_validate(historical)
+    assert restored.conflict_policy_version is None
+    assert _expected_manifest_id(restored) == historical["manifest_id"]
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

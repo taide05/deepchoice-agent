@@ -26,7 +26,7 @@ def test_legacy_report_without_explicit_candidates_uses_existing_option_labels()
     assert "Candidates:** SQLite" in what and "No strong evidence" in what
 
 
-@pytest.mark.parametrize("asset", ["scoring", "template", "synthesis", "scan", "arbitration"])
+@pytest.mark.parametrize("asset", ["scoring", "template", "synthesis", "scan"])
 def test_previous_candidate_assets_remain_readable_but_cannot_resume(asset):
     task = {"report_format": "what_why_how"}
     manifest = build_run_manifest(task)

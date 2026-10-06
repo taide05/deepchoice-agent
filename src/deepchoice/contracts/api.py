@@ -45,7 +45,8 @@ class ResearchRequest(BaseModel):
     complexity: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
     report_format: ReportFormatValue = "what_why_how"
     sub_questions: list[ShortText] = Field(default_factory=list, max_length=20)
-    gather_evidence: bool = True
+    gather_evidence: bool = Field(default=True, json_schema_extra={"deprecated": True},
+        description="Deprecated compatibility metadata. The scan-only workflow does not arbitrate or gather conflict evidence, regardless of this value.")
     language: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
 
     @model_validator(mode="after")

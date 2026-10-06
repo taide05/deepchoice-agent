@@ -835,8 +835,12 @@ def _summarize_conflicts(conflicts: list[dict]) -> str:
         return "No conflicts found."
     lines = []
     for i, c in enumerate(conflicts):
+        scan_note = ("scan unknown; contradiction not established; "
+                     if c.get("scan_status") == "unknown" else
+                     "scan flagged incompatible claims; unresolved; "
+                     if c.get("scan_status") == "confirmed" else "")
         lines.append(
-            f"{i+1}. {c.get('claim_a', '')} vs {c.get('claim_b', '')} "
+            f"{i+1}. {scan_note}{c.get('claim_a', '')} vs {c.get('claim_b', '')} "
             f"— resolution: {c.get('resolution', 'unknown')} "
             f"(confidence: {c.get('confidence', 'N/A')})"
         )

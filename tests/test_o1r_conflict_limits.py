@@ -134,6 +134,6 @@ async def test_arbitration_has_a_run_local_four_call_gate(monkeypatch):
         finally:
             active -= 1
     monkeypatch.setattr(cd, "call_model", arbitrate)
-    result = await cd.ConflictDetectorAgent().run({"task": {"query": "fixture"}, "source_scores": items})
+    result = await cd.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "fixture"}, "source_scores": items})
     assert len(result["conflicts"]) == 15
     assert calls == 15 and peak == 4 and active == 0
