@@ -6,7 +6,7 @@ from ..retrievers import RETRIEVER_REGISTRY
 from ..retrievers.base import error_text
 from ..retrievers.contracts import RetrievalRequest, RetrievalResult
 from ..retrievers.chroma_kb import chroma_collection_identity
-from ..retrievers.learned_docs import extract_terms, harvest
+from ..retrievers.learned_docs import extract_terms, harvest, official_mapping_identity
 from ..retrievers.official import TECH_DOCS
 from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
 from ..runtime.context import classify_cancelled_trace_status, get_run_context
@@ -387,6 +387,13 @@ async def _invoke_retriever(
         if name == "chroma" and cache is not None and getattr(cache, "enabled", False)
         else None
     )
+    mapping_id = (
+        await asyncio.to_thread(official_mapping_identity)
+        if name == "official" and cache is not None and getattr(cache, "enabled", False)
+        else None
+    )
+    if name == "official" and mapping_id is None:
+        cache = None
     # An unidentifiable/moving local collection must not enter persistent cache
     # or share a flight with a different collection state.
     if name == "chroma" and collection_id is None:
@@ -410,6 +417,7 @@ async def _invoke_retriever(
             adapted_queries=adapted_queries,
             local_scene_needs=local_scene_needs if name == "chroma" else (),
             local_collection_id=collection_id,
+            official_mapping_id=mapping_id,
         )
         cache_key = cache.make_key(
             source=name,
@@ -430,10 +438,12 @@ async def _invoke_retriever(
         return result, is_stable, "bypass"
 
     is_stable = callable(getattr(cls, "retrieve", None))
-    async def collection_unchanged() -> bool:
-        return name != "chroma" or (
-            await asyncio.to_thread(chroma_collection_identity)
-        ) == collection_id
+    async def local_inputs_unchanged() -> bool:
+        if name == "chroma":
+            return await asyncio.to_thread(chroma_collection_identity) == collection_id
+        if name == "official":
+            return await asyncio.to_thread(official_mapping_identity) == mapping_id
+        return True
 
     async def fresh_after_change() -> tuple[object, bool, str]:
         result, actual_is_stable = await _invoke_retriever_miss(
@@ -455,7 +465,7 @@ async def _invoke_retriever(
         except Exception:
             cached = None
         if cached is not None:
-            if not await collection_unchanged():
+            if not await local_inputs_unchanged():
                 return await fresh_after_change()
             return cached, is_stable, "coalesced" if waited else "hit"
 
@@ -500,7 +510,7 @@ async def _invoke_retriever(
                 raise shared_error
             shared_invocation = claim.invocation
             if shared_invocation is not None:
-                if not await collection_unchanged():
+                if not await local_inputs_unchanged():
                     return await fresh_after_change()
                 result, actual_is_stable = shared_invocation
                 return result, actual_is_stable, "coalesced"
@@ -518,7 +528,7 @@ async def _invoke_retriever(
             except Exception:
                 cached = None
             if cached is not None:
-                if not await collection_unchanged():
+                if not await local_inputs_unchanged():
                     return await fresh_after_change()
                 _publish_cache_flight(
                     cache,
@@ -543,12 +553,12 @@ async def _invoke_retriever(
             except Exception as exc:
                 _publish_cache_flight(cache, claim, error=exc)
                 raise
-            unchanged = await collection_unchanged()
+            unchanged = await local_inputs_unchanged()
             _publish_cache_flight(cache, claim, invocation=(result, actual_is_stable))
             if not unchanged:
-                # Chroma may itself write SQLite/HNSW files while opening or
-                # querying. The current retrieval is still a valid dispatch,
-                # but its pre-dispatch identity must never be cached.
+                # Chroma may write its collection; official fallback may learn
+                # a mapping during dispatch. Return the valid result without
+                # caching it under the stale pre-dispatch input identity.
                 return result, actual_is_stable, "miss"
             cacheable = _validated_cache_result(
                 result,
@@ -557,7 +567,7 @@ async def _invoke_retriever(
             )
             if cacheable is not None:
                 try:
-                    if await collection_unchanged():
+                    if await local_inputs_unchanged():
                         await cache.put(cache_key, cacheable, source=name)
                 except asyncio.CancelledError:
                     raise

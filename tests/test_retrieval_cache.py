@@ -691,6 +691,7 @@ async def test_cache_hit_bypasses_trace_and_budget(tmp_path, monkeypatch) -> Non
         sub_questions=("a sufficiently detailed question",),
         adapted_queries=(),
         max_results=7,
+        official_mapping_id=multi_module.official_mapping_identity(),
     )
     key = store.make_key(
         source="official", request=request, manifest_id="manifest-1"
@@ -847,5 +848,94 @@ async def test_quality_signals_report_cache_outcomes(tmp_path) -> None:
             for key in ("cache_hits", "cache_coalesced", "cache_misses")
         } == {"cache_hits": 1, "cache_coalesced": 0, "cache_misses": 0}
         assert calls == 1
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_official_learned_identity_invalidates_cached_empty_then_preserves_body_hit(tmp_path, monkeypatch):
+    import httpx
+    from unittest.mock import AsyncMock
+    from deepchoice.retrievers import learned_docs, official, official_pages
+    from deepchoice.budget import runtime as budget_runtime
+    monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", tmp_path / "learned.json")
+    monkeypatch.setattr(learned_docs, "_READONLY", False)
+    monkeypatch.setattr(official, "TECH_DOCS", {})
+    monkeypatch.setattr(official, "call_model", AsyncMock(return_value={"url": None}))
+    monkeypatch.setattr(budget_runtime, "reserve_call", AsyncMock(return_value=("fixture-reservation",)))
+    monkeypatch.setattr(budget_runtime, "settle_call", AsyncMock())
+    url = "https://docs.unlisted.example/docs/filtering"
+    async def fetch(_source, target, **kwargs):
+        return httpx.Response(200, text=("<title>Unlisted filtering</title><p>Unlisted filtering evaluates the configured fields "
+            "against a predicate before returning matching records. Access restrictions remain separate.</p>"),
+            headers={"content-type": "text/html"}, request=httpx.Request("GET", target))
+    get = AsyncMock(side_effect=fetch)
+    monkeypatch.setattr(official_pages.outbound, "safe_fetch", get)
+    connection, store = await _store(tmp_path)
+    async def invoke(run_id):
+        with bind_run_context(_context(store, run_id=run_id)):
+            return await multi_module._invoke_retriever("official", official.OfficialSearch,
+                query="unlisted filtering", sub_questions=[], adapted_queries=["unlisted filtering"])
+    try:
+        first, _, disposition = await invoke("before")
+        assert first.results == [] and disposition == "miss"
+        assert len(learned_docs.harvest(["unlisted"], [{"source": "tavily", "results": [
+            {"url": url, "title": "Unlisted docs"}]}], existing=set())) == 1
+        second, _, disposition = await invoke("after")
+        assert disposition == "miss" and len(second.results) == 1
+        third, _, disposition = await invoke("unchanged")
+        assert disposition == "hit" and third.results == second.results
+        assert get.await_count == 1
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_official_mapping_written_during_dispatch_does_not_cache_under_old_identity(tmp_path, monkeypatch):
+    from deepchoice.retrievers import learned_docs
+    path = tmp_path / "learned.json"
+    monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", path)
+    connection, store = await _store(tmp_path)
+    calls = 0
+    class Retriever:
+        async def retrieve(self, request):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                path.write_text('{"unlisted":{"url":"https://docs.unlisted.example/docs/"}}', encoding="utf-8")
+            return _success("official")
+    async def invoke():
+        with bind_run_context(_context(store)):
+            return await multi_module._invoke_retriever("official", Retriever,
+                query="unlisted", sub_questions=[], adapted_queries=[])
+    try:
+        assert (await invoke())[2] == "miss"
+        assert (await invoke())[2] == "miss"
+        assert (await invoke())[2] == "hit"
+        assert calls == 2
+        assert store._flights == {}
+    finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_invalid_official_mapping_bypasses_cache_and_singleflight(tmp_path, monkeypatch):
+    from deepchoice.retrievers import learned_docs
+    path = tmp_path / "learned.json"
+    path.write_text("invalid fixture", encoding="utf-8")
+    monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", path)
+    connection, store = await _store(tmp_path)
+    calls = 0
+    class Retriever:
+        async def retrieve(self, request):
+            nonlocal calls
+            calls += 1
+            return _success("official")
+    try:
+        with bind_run_context(_context(store)):
+            for _ in range(2):
+                assert (await multi_module._invoke_retriever("official", Retriever,
+                    query="unlisted", sub_questions=[], adapted_queries=[]))[2] == "bypass"
+        assert calls == 2 and store._flights == {}
     finally:
         await connection.close()

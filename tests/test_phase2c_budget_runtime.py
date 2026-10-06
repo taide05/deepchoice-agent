@@ -1032,3 +1032,71 @@ async def test_evidence_gather_sdk_dispatch_matches_budget_and_trace(tmp_path, m
         for client in clients:
             await client.close()
         await connection.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["success", "denied", "failed", "cancelled"])
+async def test_discovered_page_real_ledger_dispatch_boundary(tmp_path, monkeypatch, outcome):
+    import httpx
+    from types import SimpleNamespace
+    from deepchoice import outbound
+    from deepchoice.agents.multi_retriever import _invoke_retriever_miss
+    from deepchoice.retrievers import official
+    connection, _, manager, _, _ = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(retrieval_calls=1, http_calls=1))
+    url = "https://docs.unlisted.example/docs/filtering"
+    monkeypatch.setattr(official, "TECH_DOCS", {})
+    monkeypatch.setattr(official, "load_learned", lambda: {"unlisted": {"url": url, "title": "Unlisted docs"}})
+    monkeypatch.setattr(official, "call_model", AsyncMock(return_value={"url": None}))
+    monkeypatch.setattr(outbound, "get_resolver", lambda: SimpleNamespace(invalidate=AsyncMock()))
+    dispatched = []
+    entered = asyncio.Event()
+    async def fetch(_source, target, **kwargs):
+        assert kwargs["max_redirects"] == 0
+        dispatched.append(target)
+        entered.set()
+        if outcome == "cancelled":
+            await asyncio.Event().wait()
+        if outcome == "failed":
+            raise httpx.ConnectError("fixture unavailable")
+        return httpx.Response(200, text=("<p>Unlisted filtering evaluates configured fields against a predicate "
+            "before returning matching records. Access restrictions remain separate.</p>"),
+            headers={"content-type": "text/html"}, request=httpx.Request("GET", target))
+    monkeypatch.setattr(outbound, "safe_fetch", fetch)
+    async def invoke():
+        return await _invoke_retriever_miss("official", official.OfficialSearch,
+            query="unlisted filtering", sub_questions=[], adapted_queries=["unlisted"])
+    pending = None
+    try:
+        if outcome == "denied":
+            previous = await manager.reserve(
+                run_id="run-1", execution_epoch=1,
+                amount=BudgetAmount(resource=BudgetResource.HTTP_CALLS, amount=1),
+                expires_at=NOW + timedelta(minutes=1),
+            )
+            await manager.settle(previous.reservation_id,
+                actual=BudgetAmount(resource=BudgetResource.HTTP_CALLS, amount=1))
+        with bind_run_context(_context(manager)):
+            if outcome == "cancelled":
+                pending = asyncio.create_task(invoke())
+                await asyncio.wait_for(entered.wait(), timeout=3)
+                pending.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await pending
+            elif outcome == "denied":
+                with pytest.raises(BudgetExceededError):
+                    await invoke()
+            else:
+                result, _ = await invoke()
+                assert result.status == ("failed" if outcome == "failed" else "success")
+        assert dispatched == ([] if outcome == "denied" else [url])
+        usage = await manager._usage()
+        assert usage[BudgetResource.HTTP_CALLS] == 1
+        assert usage[BudgetResource.RETRIEVAL_CALLS] == 1
+        assert await _count(connection, "WHERE status='unknown_spend'") == (
+            1 if outcome in {"failed", "cancelled"} else 0)
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+        await connection.close()

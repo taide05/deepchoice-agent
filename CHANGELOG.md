@@ -2,6 +2,27 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Read bounded discovered pages and invalidate changed mapping caches
+
+Official v4 reads learned/fallback document bodies on the durable path. Discovered
+locators use exact safe-fetch HEAD/GET with zero redirects and no child traversal;
+they gain no catalog authority. Curated roots retain scoped traversal; both share
+the two-root capacity with curated priority and at most six body GETs. Budget
+admission precedes dispatch; transport failure/cancellation remains visible.
+Replace durable directory placeholders with bounded relevant prose and show
+curated/discovered origin counts, explicitly marking discovery identity unreviewed.
+Hash the bounded learned-map bytes into internal cache identity, recheck on reuse
+and write, and bypass reuse for unreadable/invalid input. Learning during dispatch
+cannot cache under the old identity. Legacy directory behavior and schema stay
+unchanged; manifests isolate earlier v3 cache/resume identities. HEAD-success
+learning still precedes body GET; failed bodies do not automatically remove maps.
+This repairs acquisition/cache transfer, not semantic report quality.
+Windows/Python 3.12: 311 intermediate related checks, 64 final official/legacy
+checks and nine budget/UI/cache checks passed; final full suite 2890 passed in
+432.40s with no skips. Smoke-v1 12/12 keeps its dataset/results/metrics/fingerprint;
+only manifest metadata changed. Static/diff checks passed; independent read-only
+review found no blockers after repairs. No live-provider or Linux/3.11 validation.
+
 ### Preserve adaptation targets and distribute query result slots
 
 Keep each current target in its indexed query slot, with raw-target fallback for

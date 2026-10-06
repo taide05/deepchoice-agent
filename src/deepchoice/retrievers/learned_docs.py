@@ -8,6 +8,7 @@ by official.py. This module maintains a separate learned lookup:
   - The official retriever consults the learned cache before falling back
     to an LLM proposal (validated: term must be a host label + URL reachable).
 """
+import hashlib
 import json
 import os
 import threading
@@ -59,6 +60,26 @@ def is_plausible_term(term: str) -> bool:
     """True if the token looks like a technology name, not a generic word."""
     t = term.lower().strip()
     return len(t) > 2 and t not in _GENERIC_TERMS
+
+
+def official_mapping_identity() -> str | None:
+    """Hash bounded persisted discovery bytes; never expose URLs in cache keys.
+
+    An unreadable/invalid/moving mapping cannot participate in cache reuse.
+    Missing files have a stable empty identity until discovery creates one.
+    """
+    try:
+        if not LEARNED_DOCS_PATH.exists():
+            raw = b"{}"
+        else:
+            if LEARNED_DOCS_PATH.stat().st_size > 512 * 1024:
+                return None
+            raw = LEARNED_DOCS_PATH.read_bytes()
+        if len(raw) > 512 * 1024 or not isinstance(json.loads(raw), dict):
+            return None
+        return hashlib.sha256(b"official-mapping-v1\0" + raw).hexdigest()
+    except (OSError, ValueError, UnicodeError):
+        return None
 
 
 def load_learned() -> dict[str, dict]:

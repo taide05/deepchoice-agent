@@ -53,7 +53,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v3"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v4"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v18"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
@@ -85,7 +85,7 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("old_version", ["v1", "v2"])
+@pytest.mark.parametrize("old_version", ["v1", "v2", "v3"])
 def test_historical_official_retriever_manifest_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 

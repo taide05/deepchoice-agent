@@ -212,9 +212,16 @@ async def test_legacy_search_keeps_directory_path_without_new_body_calls(setup, 
 @pytest.mark.asyncio
 async def test_learned_mapping_cannot_acquire_body_traversal_authority(setup, monkeypatch):
     monkeypatch.setattr(official_mod, "load_learned", lambda: {"unlisted": {"url": "https://unlisted.example/docs/", "title": "Unlisted"}})
-    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted"))
-    assert result.status == "success" and result.results[0]["snippet"].startswith("Official documentation site")
-    setup.assert_not_awaited()
+    setup.side_effect = lambda _source, url, **_kw: response(url, BODY.replace("Acme", "Unlisted").replace(
+        "</body>", '<a href="filtering-child/">Filtering child</a></body>'))
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "success" and len(result.results) == 1
+    assert "Unlisted filtering" in result.results[0]["snippet"]
+    assert result.results[0]["origin_kind"] == "discovered"
+    assert setup.await_count == 1 and setup.await_args.kwargs["max_redirects"] == 0
+    assert not catalog_scope_contains(ROOT, result.results[0]["url"])
+    from deepchoice.agents.source_evaluator import classify_source_type
+    assert classify_source_type(result.results[0]["url"], "official") == "tech_blog"
 
 
 @pytest.mark.asyncio
@@ -250,3 +257,133 @@ def test_hidden_machine_metadata_and_void_elements_do_not_replace_visible_prose(
     assert PROSE in snippet and QUALIFIER in snippet
     assert metadata not in snippet
     assert metadata in " ".join(extract_source_document(html, truncated=False).blocks)
+
+
+@pytest.mark.asyncio
+async def test_dynamic_fallback_reads_exact_page_without_learning_traversal_authority(setup, monkeypatch):
+    url = "https://docs.unlisted.example/docs/filtering"
+    monkeypatch.setattr(official_mod, "learn", lambda *args, **kwargs: {})
+    official_mod.call_model.return_value = {"url": url}
+    setup.side_effect = lambda _source, target, **_kw: response(target, BODY.replace("Acme", "Unlisted"))
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "success" and len(result.results) == 1
+    assert result.results[0]["origin_kind"] == "discovered"
+    assert [(c.kwargs["method"], c.kwargs["max_redirects"]) for c in setup.await_args_list] == [
+        ("HEAD", 0), ("GET", 0)]
+    assert all(c.args[1] == url for c in setup.await_args_list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", ["https://user:fixture@unlisted.example/docs", "http://unlisted.example:8080/docs",
+    "https://unlisted.example/docs/%2e%2e/private", "https://unlisted.example/docs?token=fixture",
+    "https://unlisted.example/docs#fragment", "https://unlisted.example/docs/../private"])
+async def test_invalid_learned_page_fails_before_any_body_dispatch(setup, monkeypatch, url):
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {"unlisted": {"url": url, "title": "Unlisted"}})
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "failed" and result.results == []
+    setup.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_discovered_redirect_fails_without_child_fetch(setup, monkeypatch):
+    url = "https://unlisted.example/docs/filtering"
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {"unlisted": {"url": url, "title": "Unlisted"}})
+    setup.side_effect = lambda _source, target, **_kw: response(target, "", status=302)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "failed" and result.results == []
+    assert setup.await_count == 1 and setup.await_args.kwargs["max_redirects"] == 0
+
+
+@pytest.mark.asyncio
+async def test_curated_roots_take_capacity_before_forged_learned_metadata(setup, monkeypatch):
+    monkeypatch.setattr(official_mod, "TECH_DOCS", {
+        "acme": {"url": ROOT, "title": "Acme docs"},
+        "beta": {"url": "https://docs.beta.example/docs/", "title": "Beta docs"}})
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {"unlisted": {
+        "url": "https://unlisted.example/docs/filtering", "title": "Unlisted",
+        "origin_kind": "curated", "allow_children": True, "via": "curated"}})
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted beta acme filtering"))
+    assert result.status == "success"
+    assert setup.await_count == 2
+    assert all("unlisted" not in c.args[1] for c in setup.await_args_list)
+    assert all(r["origin_kind"] == "curated" for r in result.results)
+
+
+@pytest.mark.asyncio
+async def test_dynamic_body_budget_rejection_never_dispatches(setup, monkeypatch):
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {"unlisted": {
+        "url": "https://unlisted.example/docs/filtering", "title": "Unlisted"}})
+    budget_runtime.reserve_call.side_effect = BudgetExceededError("http_calls", limit=0, consumed=0, requested=1)
+    with pytest.raises(BudgetExceededError):
+        await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    setup.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dynamic_body_transport_failure_is_visible_and_keeps_unknown_http_spend(setup, monkeypatch):
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {"unlisted": {
+        "url": "https://unlisted.example/docs/filtering", "title": "Unlisted"}})
+    setup.side_effect = httpx.ConnectError("fixture transport unavailable")
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "failed" and result.results == []
+    budget_runtime.unknown_call.assert_awaited_once()
+    budget_runtime.settle_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_root_without_explicit_catalog_permission_reads_only_exact_page(setup):
+    setup.side_effect = lambda _source, url, **_kw: response(
+        url, BODY.replace("</body>", '<a href="filtering-child/">Filtering child</a></body>'))
+    results = await pages.read_official_roots(
+        [{"url": ROOT, "title": "Acme documentation", "tech": "acme"}], "acme filtering")
+    assert len(results) == 1 and results[0]["origin_kind"] == "discovered"
+    assert setup.await_count == 1
+    assert setup.await_args.args[1] == ROOT
+    assert setup.await_args.kwargs["max_redirects"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["dns_uncertain", "route_unsupported", "safety_rejected", "timeout"])
+async def test_discovery_head_safety_failure_is_visible_without_private_error(setup, monkeypatch, failure):
+    from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
+    url = "https://docs.unlisted.example/docs/filtering"
+    monkeypatch.setattr(official_mod, "TECH_DOCS", {})
+    monkeypatch.setattr(official_mod, "call_model", AsyncMock(return_value={"url": url}))
+    setup.side_effect = UnsafeUrlError("private URL and DNS details", failure=SafeFetchFailure(failure))
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(
+        query="unlisted filtering", adapted_queries=("unlisted",)))
+    assert result.status == "failed" and result.results == []
+    assert result.error == "UnsafeUrlError"
+    assert setup.await_count == 1 and setup.await_args.kwargs["method"] == "HEAD"
+    budget_runtime.unknown_call.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,expected", [(404, "success"), (410, "success"), (503, "failed"), (302, "failed")])
+async def test_discovery_head_http_absence_differs_from_failed_probe(setup, monkeypatch, status, expected):
+    monkeypatch.setattr(official_mod, "TECH_DOCS", {})
+    monkeypatch.setattr(official_mod, "call_model", AsyncMock(return_value={
+        "url": "https://docs.unlisted.example/docs/filtering"}))
+    setup.side_effect = lambda _source, url, **_kw: response(url, status=status)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(
+        query="unlisted filtering", adapted_queries=("unlisted",)))
+    assert result.status == expected and result.results == []
+    assert setup.await_count == 1 and setup.await_args.kwargs["method"] == "HEAD"
+    if expected == "failed":
+        assert result.error == f"RuntimeError: HTTP {status}"
+
+
+@pytest.mark.asyncio
+async def test_discovery_range_probe_partial_response_still_reads_exact_body(setup, monkeypatch):
+    monkeypatch.setattr(official_mod, "TECH_DOCS", {})
+    url = "https://docs.unlisted.example/docs/filtering"
+    monkeypatch.setattr(official_mod, "call_model", AsyncMock(return_value={"url": url}))
+    monkeypatch.setattr(official_mod, "learn", lambda *_args, **_kw: {})
+    setup.side_effect = lambda _source, target, **kw: response(
+        target, BODY, status=206 if kw["method"] == "HEAD" else 200)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(
+        query="unlisted filtering", adapted_queries=("unlisted",)))
+    assert result.status == "success" and len(result.results) == 1
+    assert result.results[0]["origin_kind"] == "discovered"
+    assert [call.kwargs["method"] for call in setup.await_args_list] == ["HEAD", "GET"]
+    assert all(call.kwargs["max_redirects"] == 0 for call in setup.await_args_list)

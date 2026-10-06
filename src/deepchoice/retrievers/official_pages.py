@@ -44,6 +44,24 @@ def _terms(text: str) -> set[str]:
     return set(re.findall(r"[a-z][a-z0-9]{2,}", text.casefold())) - _STOP
 
 
+def exact_discovered_url(url: object) -> str | None:
+    """Validate a dynamic page locator without granting catalog/path authority."""
+    if not isinstance(url, str) or len(url) > 2048 or any(ch.isspace() for ch in url):
+        return None
+    identity = parse_http_identity(url)
+    if identity is None:
+        return None
+    parsed = urlsplit(url)
+    if parsed.query or parsed.fragment:
+        return None
+    scheme = parsed.scheme.casefold()
+    port = parsed.port
+    host = identity[0]
+    if port is not None and port != (443 if scheme == "https" else 80):
+        host += f":{port}"
+    return urlunsplit((scheme, host, parsed.path or "/", "", ""))
+
+
 def _scoped_url(root: str, base: str, href: str) -> str | None:
     if not isinstance(href, str) or not href or len(href) > 2048 or href.startswith("#"):
         return None
@@ -162,20 +180,25 @@ def _scope_near_snippet(document, snippet: str) -> list[str] | None:
     return list(sentences) if sentences else None
 
 
-async def _read_page(root: str, url: str, terms: set[str]):
+async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool = False):
     from ..citations.source_windows import extract_source_document
 
     response = await budgeted_http(
         lambda: outbound.safe_fetch(
             "official", url, method="GET",
             allowed_content_types=("text/html", "application/xhtml+xml", "text/plain"),
-            max_response_bytes=MAX_PAGE_BYTES, max_redirects=3, timeout_s=15.0,
+            max_response_bytes=MAX_PAGE_BYTES, max_redirects=0 if exact_page else 3, timeout_s=15.0,
             allow_response_truncation=True,
         ), kind="official_body", require_budget=True,
     )
     if response.status_code < 200 or response.status_code >= 300:
         raise RuntimeError(f"Official body HTTP {response.status_code}")
-    final_url = _scoped_url(root, url, str(response.url))
+    if exact_page:
+        final_url = exact_discovered_url(str(response.url))
+        if final_url != exact_discovered_url(url):
+            raise ValueError("Discovered page changed its exact locator")
+    else:
+        final_url = _scoped_url(root, url, str(response.url))
     if final_url is None:
         raise ValueError("Official body left its catalog scope")
     plain = response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain"
@@ -194,6 +217,8 @@ async def _read_page(root: str, url: str, terms: set[str]):
         scope = _scope_near_snippet(document, snippet)
         if scope:
             result["_source_scope_sentences"] = scope
+    if exact_page:
+        return result, score, []
     links = []
     seen = {final_url, url}
     for href, label in parsed.links:
@@ -209,8 +234,10 @@ async def _read_page(root: str, url: str, terms: set[str]):
 
 
 async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
-    """Read at most two curated roots and two relevant direct children each.
+    """Read at most two locators; only curated roots may expand children.
 
+    Discovered locators read one exact page with redirects disabled. They do
+    not become official authority merely by entering this acquisition channel.
     Every error propagates into the existing atomic failed source envelope.
     A successful page with no bounded relevant prose contributes no evidence.
     """
@@ -219,15 +246,17 @@ async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
     for root in roots[:MAX_ROOTS]:
         url = root["url"]
         terms = _terms(query_text) - _terms(root["title"]) - _terms(root["tech"])
-        result, score, children = await _read_page(url, url, terms)
-        group = [(score, result)] if result is not None else []
+        curated = root.get("curated") is True
+        result, score, children = await _read_page(url, url, terms, exact_page=not curated)
+        origin_kind = "curated" if curated else "discovered"
+        group = [(score, {**result, "origin_kind": origin_kind})] if result is not None else []
         for child in children:
             if child in seen:
                 continue
             seen.add(child)
             item, child_score, _ = await _read_page(url, child, terms)
             if item is not None:
-                group.append((child_score, item))
+                group.append((child_score, {**item, "origin_kind": origin_kind}))
         group.sort(key=lambda item: -item[0])
         groups.append([item for _, item in group])
     output = []

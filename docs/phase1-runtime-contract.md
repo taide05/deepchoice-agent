@@ -19,6 +19,29 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-06：official 检索版本 v4。durable 路径将已学习及模型回退发现的地址纳入
+有界正文读取；动态地址必须是无凭据、无 query/fragment 的有效 HTTP(S) 精确页面，
+端口仅80/443，沿用 SafeUrlPolicy 的 DNS/IP、响应大小、类型与时间边界。动态 HEAD
+和 GET 均 max_redirects=0，不访问子链接；HEAD 不受支持时保留安全 fetch 的 Range GET
+兼容，探测200/206视为可达，404/410视为缺页，其他状态或安全/网络异常为显式失败。
+正文 GET 返回地址必须与规范化请求地址相同。
+地址/标题/learned 元数据不能授予目录权限；仅代码 TECH_DOCS 命中可读取原有目录范围
+及最多两个子页。两类共享最多两个根名额，登记目录优先，正文 GET 总上限仍为6。
+目录占位文本不进入 durable 结果，PyPI 元数据分支保留；无 RunContext 的兼容行为不变。
+
+每次正文调用仍先取得 http_calls 预算，拒绝不得 dispatch，失败/取消保守结算。
+公开结果 origin_kind 仅为 curated/discovered；界面将该通道标为文档检索，并标注发现页
+身份未审核。source_type 权威分类仍按原静态目录校验，不按通道或此标记提升。
+动态映射的有界文件字节 SHA256 通过内部 RetrievalRequest.official_mapping_id 进入
+现有缓存 hash 键，不持久化明文查询/URL。缺文件为稳定空身份；不可读、非法 JSON、
+非对象或超过512 KiB则绕过缓存和 single-flight。hit/coalesced/write 前重核身份；若
+本次回退学习改变映射，不把结果写入旧身份键。无缓存表迁移、请求端口或状态 schema 变化。
+新 manifest 隔离旧 official v3 缓存及同run续跑，历史身份/结果仍可读。
+
+HEAD 成功后的映射学习仍先于正文 GET，正文失败不自动删除该映射；后续失败仍可见。
+精确发现页不保证有相关正文；英文词项提取、空主题及共享容量仍可能产生证据缺口。
+本变更不证明来源适用性、语义正确或真实报告质量，也不增加 provider/模型纠错调用。
+
 2026-10-06：查询适配提示版本 v3；Tavily/GitHub 检索版本 v2。适配器仍输出
 `adapted_queries: dict[str, list[str]]`，每个列表按当前目标索引排序，缺失或无效变体逐项
 回退到原目标；重复索引的目标整体回退，布尔/越界索引不采信。不追加模型纠错调用。

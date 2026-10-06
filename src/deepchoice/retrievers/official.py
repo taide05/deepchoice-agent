@@ -5,7 +5,7 @@ from ..outbound import throttle
 from ..budget_errors import BudgetError
 from ..utils.llm import call_model
 from .base import BaseRetriever
-from .official_pages import MAX_ROOTS, budgeted_http, read_official_roots
+from .official_pages import MAX_ROOTS, budgeted_http, exact_discovered_url, read_official_roots
 from .learned_docs import (
     _looks_official,
     domain_label_match,
@@ -72,27 +72,32 @@ class OfficialSearch(BaseRetriever):
             return result.get("url")
         return None
 
-    async def _verify_reachable(self, url: str) -> bool:
+    async def _verify_reachable(self, url: str, *, exact: bool = False) -> bool:
         try:
             resp = await budgeted_http(
                 lambda: _outbound.safe_fetch(
                     "official", url, method="HEAD",
                     allowed_content_types=("text/html", "application/xhtml+xml"),
-                    head_fallback_to_range_get=True,
+                    head_fallback_to_range_get=True, max_redirects=0 if exact else 3,
                 ), kind="official_reachability",
             )
             if resp.status_code == 429:
                 raise throttle.ProviderRateLimitError("official documentation rate limited")
-            return resp.status_code == 200
+            if exact and resp.status_code not in {200, 206, 404, 410}:
+                raise RuntimeError(f"Documentation reachability HTTP {resp.status_code}")
+            return resp.status_code in {200, 206} if exact else resp.status_code == 200
         except (BudgetError, throttle.ProviderAdmissionError):
             raise
         except Exception:
+            if exact:
+                raise
             return False
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
         from ..runtime.context import get_run_context
 
+        durable = get_run_context() is not None
         all_text = " ".join(adapted_queries) if adapted_queries else query
         keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
         learned = load_learned()
@@ -122,10 +127,17 @@ class OfficialSearch(BaseRetriever):
                 matched_norms.add(norm)
                 matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
                 doc = lookup[key]
-                if key in TECH_DOCS and doc["url"] not in {item["url"] for item in roots}:
-                    roots.append({"url": doc["url"], "title": doc["title"], "tech": key})
+                url = doc["url"]
+                curated = key in TECH_DOCS
+                if durable and not curated:
+                    url = exact_discovered_url(url)
+                    if url is None:
+                        raise ValueError("Invalid discovered documentation locator")
+                if url not in {item["url"] for item in roots}:
+                    # Never copy learned metadata that could claim curated scope.
+                    roots.append({"url": url, "title": doc["title"], "tech": key, "curated": curated})
                 results.append({
-                    "url": doc["url"],
+                    "url": url,
                     "title": doc["title"],
                     "snippet": f"Official documentation site for {key}",
                     "date": "",
@@ -141,11 +153,15 @@ class OfficialSearch(BaseRetriever):
                 unmapped.append(kw_clean)
         async def _resolve_fallback(kw):
             url = await self._propose_official_url(kw)
+            if durable:
+                url = exact_discovered_url(url)
             if not url or not domain_label_match(kw, url):
                 return None
             if not _looks_official(url):
                 return None
-            if not await self._verify_reachable(url):
+            reachable = (await self._verify_reachable(url, exact=True) if durable
+                         else await self._verify_reachable(url))
+            if not reachable:
                 return None
             return kw, url
 
@@ -164,6 +180,9 @@ class OfficialSearch(BaseRetriever):
             kw, url = item
             learn(kw, url, f"{kw} — Official Documentation", via="llm")
             lookup[kw] = {"url": url, "title": f"{kw} — Official Documentation"}
+            if url not in {item["url"] for item in roots}:
+                roots.append({"url": url, "title": f"{kw} — Official Documentation",
+                              "tech": kw, "curated": False})
             results.append({
                 "url": url,
                 "title": f"{kw} — Official Documentation",
@@ -195,11 +214,12 @@ class OfficialSearch(BaseRetriever):
                         "snippet": f"Version: {info.get('version', 'N/A')}, Summary: {info.get('summary', '')}",
                         "date": "",
                     })
-        if get_run_context() is not None:
-            # New body traversal is durable-only and requires real HTTP budget
-            # admission. Learned/fallback URLs retain their old directory role.
-            selected = roots[:min(MAX_ROOTS, max_results)]
+        if durable:
+            # Shared capacity; curated roots retain child traversal, while
+            # dynamic discoveries contribute only their own exact-page body.
+            selected = sorted(roots, key=lambda item: not item["curated"])[:min(MAX_ROOTS, max_results)]
             bodies = await read_official_roots(selected, " ".join([query, all_text, *sub_questions]))
             replaced = {item["url"] for item in selected}
-            results = bodies + [item for item in results if item["url"] not in replaced]
+            results = bodies + [item for item in results if item["url"] not in replaced
+                                and not item["snippet"].startswith("Official documentation site for ")]
         return results[:max_results]

@@ -27,6 +27,8 @@ class RetrievalRequest(BaseModel):
     # Hash of the local Chroma collection bytes and audited sidecars. This is
     # an internal cache identity, not a user-supplied scene or public result.
     local_collection_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # Hash-only mutable official-discovery input identity for retrieval cache.
+    official_mapping_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     _query_non_empty = field_validator("query")(_non_empty)
 

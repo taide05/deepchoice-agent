@@ -1073,3 +1073,25 @@ def test_replay_interrupted_then_auto_resume_uses_current_task_projection(monkey
     assert at.session_state["research_failed"] is False
     assert at.session_state["research_task_version"] == 9
     assert at.session_state["research_last_event_id"] == "4"
+
+
+@pytest.mark.parametrize("lang_code,expected", [
+    ("en", "Discovered pages 1 (identity not reviewed)"),
+    ("zh", "发现页面 1（身份未审核）"),
+])
+def test_document_lookup_separates_discovered_page_identity_from_catalog(monkeypatch, lang_code, expected):
+    snapshot = copy.deepcopy(SNAP)
+    snapshot["search_results"] = [{"source": "official", "status": "success", "error": None,
+        "latency_ms": 1, "results": [{"title": "Catalog", "origin_kind": "curated"},
+                                     {"title": "Discovery", "origin_kind": "discovered"}]}]
+    monkeypatch.setattr(__import__(__name__, fromlist=["SNAP"]), "SNAP", snapshot)
+    backend = _FakeBackend([], True)
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    _enter_results_phase(at)
+    at.session_state["lang"] = lang_code
+    at.run()
+    assert not at.exception
+    assert expected in _md_text(at)

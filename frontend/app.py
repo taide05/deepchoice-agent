@@ -134,6 +134,8 @@ T = {
         "obs_status_ok": "成功",
         "obs_status_error": "失败",
         "obs_results_count": "{n} 条结果",
+        "obs_document_lookup": "文档检索",
+        "obs_document_origins": "登记页面 {curated} · 发现页面 {discovered}（身份未审核）",
         "obs_latency_label": "耗时",
         "obs_error_label": "错误",
         "obs_partial_failures": "{n} 个来源部分失败：{list}",
@@ -291,6 +293,8 @@ T = {
         "obs_status_ok": "Success",
         "obs_status_error": "Failed",
         "obs_results_count": "{n} result(s)",
+        "obs_document_lookup": "Documentation lookup",
+        "obs_document_origins": "Catalog pages {curated} · Discovered pages {discovered} (identity not reviewed)",
         "obs_latency_label": "Latency",
         "obs_error_label": "Error",
         "obs_partial_failures": "{n} source(s) partially failed: {list}",
@@ -448,6 +452,8 @@ T = {
         "obs_status_ok": "成功",
         "obs_status_error": "失敗",
         "obs_results_count": "{n}件の結果",
+        "obs_document_lookup": "ドキュメント検索",
+        "obs_document_origins": "登録ページ {curated} · 発見ページ {discovered}（身元未確認）",
         "obs_latency_label": "所要時間",
         "obs_error_label": "エラー",
         "obs_partial_failures": "{n}個の情報源で部分障害: {list}",
@@ -605,6 +611,8 @@ T = {
         "obs_status_ok": "성공",
         "obs_status_error": "실패",
         "obs_results_count": "{n}개 결과",
+        "obs_document_lookup": "문서 검색",
+        "obs_document_origins": "등록 페이지 {curated} · 발견 페이지 {discovered} (신원 미검토)",
         "obs_latency_label": "소요 시간",
         "obs_error_label": "오류",
         "obs_partial_failures": "{n}개 출처 부분 실패: {list}",
@@ -2155,11 +2163,20 @@ def _render_retrieval_panel(snapshot: dict):
     for item in results:
         if not isinstance(item, dict):
             continue
-        source = _esc(item.get("source") or "?")
+        is_document_lookup = item.get("source") == "official"
+        source = _esc(t("obs_document_lookup", lang) if is_document_lookup else item.get("source") or "?")
         ok = str(item.get("status") or "").lower() == "success"
         badge_cls = "badge-success" if ok else "badge-weak"
         status_txt = t("obs_status_ok" if ok else "obs_status_error", lang)
         count = len(item.get("results") or [])
+        origin_html = ""
+        if is_document_lookup:
+            pages = [page for page in item.get("results", []) if isinstance(page, dict)]
+            origin_html = '<div style="margin-top:6px; font-size:0.78rem; color:#71717a;">' + _esc(t(
+                "obs_document_origins", lang,
+                curated=sum(page.get("origin_kind") == "curated" for page in pages),
+                discovered=sum(page.get("origin_kind") == "discovered" for page in pages),
+            )) + '</div>'
         error = item.get("error")
         error_html = (
             f'<div style="margin-top:8px; font-size:0.78rem; color:#f87171; '
@@ -2177,6 +2194,7 @@ def _render_retrieval_panel(snapshot: dict):
                 <div style="margin-top:6px; font-size:0.78rem; color:#71717a;">
                     {t("obs_results_count", lang, n=count)} · {t("obs_latency_label", lang)}: {_fmt_latency(item.get("latency_ms"))}
                 </div>
+                {origin_html}
                 {error_html}
             </div>
             """,
