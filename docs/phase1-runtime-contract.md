@@ -19,19 +19,32 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-06：默认 graph 与独立直接代理默认模式均采用 `scan-only-v1`；manifest schema v1
-新增可缺省的 conflict_policy_version，新运行冻结该值并将 scan 提示/行为版本升至v3。
+2026-10-06：默认 graph 与独立直接代理默认模式均采用 `scan-only-v2`；manifest schema v1
+冻结 conflict_policy_version、scan v4、合成 v30 与 deterministic-citation-v19。历史
+scan-only-v1 / scan v3 / 引用 v18 及缺省字段身份可读且保持原hash，但不能当前同run恢复。
 当前核心资产只索引6个prompt与6个LLM call快照，不含已退出默认路径的 arbitration、
 evidence_gather、rearbitration。历史manifest的缺省None不进入历史hash；旧prompt/call
 仍可解析并校验原身份，但不能同run恢复。workflow research-v4、state schema v3不变，
 无生命周期或产品数据库迁移，旧结果可读。
 
-扫描仍只覆盖score≥5、标题余弦≥0.65的前15对，每对最多两段前400字符，局部并发4。
+扫描仍只覆盖score≥5、标题余弦≥0.65的前15对，局部并发4。双方均有完整连续的保存文本
+（至多2000字符、40句、每句400字符，无遗漏标记、片段或多位置）时，同一次原scan调用
+提供完整索引句；否则退回两段前400字符，不能授权局部复用。单一passage必须与可见snippet
+完全一致。输出上限仍512，无新增调用。
 明确的false/none为否定；合法true/允许的差异类型为模型标记冲突；调用失败、无描述或
 非法/矛盾输出为unknown。unknown不声称事实矛盾，其reason只用固定枚举，不带异常正文。
 标记/未知均保存在原conflicts字段，scan_status区分confirmed/unknown；confirmed只表示
-扫描标记，不是语义证明。默认resolution为insufficient_data、confidence为low，双方URL
-保持整来源保守排除；预算最低证据门、引用核验和HITL不放宽。未扫描对不视作已验证无冲突。
+扫描标记，不是语义证明。默认resolution为insufficient_data、confidence为low。
+双方各1–3个有序、不重叠、整数的零基半开句范围，经唯一位置核对后产生runtime scope：
+sentence-conflict-v1、URL/完整文本/结构的hash及原范围。hash只证明同一保存视图，不证明
+模型定位完整或事实真伪。false/none带非空或非法范围为unknown；true范围缺失/任一侧非法
+仍保留confirmed并整来源排除，不丢掉扫描记录。忽略检索器输入的scope元数据。
+证据链按规范URL合并所有已知冲突；任一unknown、旧无绑定或身份失配都保持整来源排除。
+有效scope仅允许显式source_ranges事实；焦点与左右各一完整相邻句必须避开所有争议范围，
+不得整来源引用。selection、绑定、引用重新派生和自审共用校验，保存原来源与幂等事实地址。
+通过页面词法核验和自审后，局部事实可用于有前提的choice分析，不能赋予确定赢家或生产
+操作权限。chain.disputed仍true；预算最低证据门继续按整URL排除，不把局部事实计入三个
+无争议链。HITL、恢复及生命周期契约不变。未扫描对不视作已验证无冲突。
 quality_signals分别统计conflicts_found与scan_unknown_count；unresolved_count包含两者。
 预算错误和取消继续传播，扫描已派发工作先drain；普通提供方/输出故障只保留未知，不泄露细节。
 
@@ -40,7 +53,8 @@ quality_signals分别统计conflicts_found与scan_unknown_count；unresolved_cou
 effective=false。这同样适用于已弃用`/research`的当前graph，不增加新的HTTP入口。
 只为旧直接代理保留显式legacy_arbitration=True与原补搜开关，SDK重试/预算/Trace契约保留。
 兼容仲裁异常必须保全扫描标记，任何赢家/高置信度仍不能解封来源；未知对不参与仲裁。
-标题筛对、短描述和整来源排除可能丢失有用信息，真实质量收益尚未测量。
+标题筛对、未提供完整坐标的短描述、模型范围漏判与保守排除仍可能丢失或误用事实。
+词法核验、自审与hash均不是语义证明；真实质量收益尚未测量。
 
 
 2026-10-06：source-score-v9 与 synthesis v29 冻结候选动作标签的字面产品路由。

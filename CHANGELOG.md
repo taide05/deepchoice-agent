@@ -2,6 +2,27 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Preserve original facts outside bounded conflict coordinates
+
+The existing scan call reads complete indexed bounded excerpts when both source
+views qualify. Runtime-owned scopes bind original sentence ranges to canonical
+URL, text and continuous-excerpt structure; combine every conflict for that URL.
+Only explicit facts whose focus and adjacent context avoid all disputed ranges
+may pass the original binding, page verification and analysis review. Missing,
+unknown, ambiguous or mismatched scopes retain whole-source exclusion. Ignore
+retriever-supplied scopes; a scan coordinate or hash is not semantic proof.
+Keep chain.disputed, whole-URL budget minimum exclusions, conditional-only advice,
+fixed isolated validation and cancellation/budget gates. Permit recropping one
+exact continuous passage; multiple locations remain separate. Freeze scan-only-v2,
+scan v4, synthesis v30 and citation v19; historical identities remain readable but
+cannot resume. No new calls, settings, schema/migrations or provider.
+Final full suite: 2984 passed / 479.42s, no skips (Windows/Python3.12). Focused
+boundary, real SQLite budget/Trace and two-store recovery regressions passed;
+independent read-only review found no blockers. Smoke-v1 12/12 with unchanged
+case results/metrics; static checks passed. Actual predecessor hash/readability
+and resume rejection checked. Linux/3.11 and live quality remain unmeasured;
+no research admission in this package.
+
 ### Preserve scan findings and remove default conflict arbitration
 
 The default graph and agent use scan-only-v1: retain flagged incompatible claims

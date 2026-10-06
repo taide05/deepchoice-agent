@@ -5,10 +5,13 @@ from ..utils.views import print_agent_output
 
 
 def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> list[dict]:
+    from ..citations.verifier import canonicalize_source_url
+    from ..utils.conflict_scope import source_conflict_scope
+
     disputed_urls = set()
     for c in conflicts:
-        disputed_urls.add(c.get("source_a", {}).get("url", ""))
-        disputed_urls.add(c.get("source_b", {}).get("url", ""))
+        disputed_urls.add(canonicalize_source_url(c.get("source_a", {}).get("url", "")))
+        disputed_urls.add(canonicalize_source_url(c.get("source_b", {}).get("url", "")))
 
     chains = []
     for s in source_scores:
@@ -35,7 +38,11 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
         else:
             strength = "weak"
 
-        disputed = s["url"] in disputed_urls
+        disputed = canonicalize_source_url(s["url"]) in disputed_urls
+        if disputed:
+            # Never copy retriever/model scope metadata. Rebuild from every
+            # runtime scan binding for the original source identity.
+            evidence_sources[0]["conflict_scope"] = source_conflict_scope(evidence_sources[0], conflicts)
         chains.append({
             "conclusion": s.get("title", "Key finding"),
             "sources": evidence_sources,

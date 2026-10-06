@@ -1106,6 +1106,7 @@ async def test_discovered_page_real_ledger_dispatch_boundary(tmp_path, monkeypat
 @pytest.mark.parametrize("content,status", [
     ('{"has_difference":true,"type":"tradeoff_disagreement","explanation":"Incompatible counts"}', "confirmed"),
     ('{"has_difference":"true"}', "unknown"),
+    ('{"has_difference":true,"type":"tradeoff_disagreement","explanation":"Incompatible counts","ranges_a":[[0,1]],"ranges_b":[[0,1]]}', "confirmed"),
 ])
 async def test_scan_only_agent_reserves_and_traces_only_scan(tmp_path, monkeypatch, content, status):
     import numpy as np
@@ -1138,6 +1139,9 @@ async def test_scan_only_agent_reserves_and_traces_only_scan(tmp_path, monkeypat
             result = await conflict_module.ConflictDetectorAgent(gather_evidence=True).run(
                 {"task": {"query": "Select a store"}, "source_scores": sources})
         assert result["conflicts"][0]["scan_status"] == status
+        if '"ranges_a"' in content:
+            assert result["conflicts"][0]["source_a"]["conflict_scope"]["ranges"] == [[0, 1]]
+            assert result["conflicts"][0]["source_b"]["conflict_scope"]["ranges"] == [[0, 1]]
         create_mock.assert_awaited_once()
         gather.assert_not_awaited()
         usage = await manager._usage()

@@ -17,8 +17,13 @@ def _source_coordinates(source):
     """Keep original character spans, including Chinese sentence boundaries."""
     from ..citations.verifier import _split_sentences
 
-    if not isinstance(source, dict) or "passages" in source:
+    if not isinstance(source, dict):
         return None
+    if "passages" in source:
+        from .evidence_choices import bounded_source_passages
+        passages = bounded_source_passages(source)
+        if not passages or len(passages) != 1:
+            return None
     raw = source.get("snippet")
     if not isinstance(raw, str) or is_navigation_placeholder(raw):
         return None
@@ -117,8 +122,11 @@ def selection_packet(chains):
     for chain_index, chain in enumerate(chains):
         for source_index, source in enumerate(chain.get("sources", [])[:4]):
             number += 1
-            if (chain.get("disputed") or not isinstance(source, dict)
-                    or not conclusion_source_allowed(source)):
+            if not isinstance(source, dict) or not conclusion_source_allowed(source):
+                continue
+            from .conflict_scope import validated_conflict_scope
+            conflict_scope = validated_conflict_scope(source) if "conflict_scope" in source else None
+            if ((chain.get("disputed") or "conflict_scope" in source) and conflict_scope is None):
                 continue
             title = source.get("title")
             resolved, error = _resolve_title(title, registry) if isinstance(title, str) else (None, True)
@@ -132,6 +140,8 @@ def selection_packet(chains):
             row = {"title": resolved.title, "whole_allowed": whole,
                    "ranges_allowed": scope is not None,
                    "sentences": [{"index": index, "text": text} for index, text in enumerate(sentences)]}
+            if conflict_scope:
+                row["conflict_ranges"] = conflict_scope["ranges"]
             if source.get("passages"):
                 # Existing disjoint excerpts must not look like a single location.
                 row["separate_locations"] = True

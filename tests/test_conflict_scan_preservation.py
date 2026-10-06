@@ -109,7 +109,7 @@ async def test_scan_budget_denial_propagates(monkeypatch):
 def test_default_manifest_and_graph_exclude_legacy_calls(requested):
     task = {"query": "Select a store", "gather_evidence": requested}
     manifest = build_run_manifest(task)
-    assert manifest.conflict_policy_version == "scan-only-v1"
+    assert manifest.conflict_policy_version == "scan-only-v2"
     assert manifest.gather_evidence is requested
     assert {c.call_id for c in manifest.llm_calls}.isdisjoint({
         "conflict_arbitration", "conflict_evidence_gather", "conflict_rearbitration"})

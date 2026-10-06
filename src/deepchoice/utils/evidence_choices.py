@@ -66,6 +66,10 @@ def bounded_source_passages(source):
 
 def selected_source_text(source, fact):
     """Re-derive the fact view from original source coordinates, never model text."""
+    if "conflict_scope" in source:
+        from .conflict_scope import conflict_fact_allowed
+        if not conflict_fact_allowed(source, fact.get("source_ranges")):
+            return "", None
     if "source_ranges" not in fact:
         return whole_source_text(source.get("snippet")), bounded_source_passages(source)
     from .fact_selection import selected_passages
@@ -94,7 +98,9 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
     for chain_index, chain in enumerate(chains):
         for source_index, source in enumerate(chain.get("sources", [])[:4]):
             number += 1
-            if chain.get("disputed") or not conclusion_source_allowed(source):
+            from .conflict_scope import validated_conflict_scope
+            if (not conclusion_source_allowed(source)
+                    or (chain.get("disputed") and validated_conflict_scope(source) is None)):
                 continue
             numbered[number] = (chain_index, source_index, source)
     seen = set()

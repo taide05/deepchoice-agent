@@ -55,7 +55,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v4"
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v18"
+    assert first.citation_policy_version == "deterministic-citation-v19"
     assert first.hitl_policy_version == "evidence-insufficient-v1"
 
 
@@ -174,14 +174,14 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v4"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v18"
+    assert registry.citation_policy_version == "deterministic-citation-v19"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v29",
+    expected_versions = {"self_reviewer.review_system": "v7", "conclusion_synthesizer.synthesis_prompt": "v30",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
-                         "conflict_detector.contradiction_scan_system": "v3"}
+                         "conflict_detector.contradiction_scan_system": "v4"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
         prompt_id: expected_versions.get(prompt_id, "v1") for prompt_id in expected_prompt_ids}
     assert all(re.fullmatch(r"[0-9a-f]{64}", prompt.sha256) for prompt in registry.prompts)
@@ -888,6 +888,24 @@ def test_pre_scan_only_identity_is_readable_and_not_resumable():
     restored = RunManifest.model_validate(historical)
     assert restored.conflict_policy_version is None
     assert _expected_manifest_id(restored) == historical["manifest_id"]
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+@pytest.mark.parametrize("old_policy", [None, "scan-only-v1"])
+def test_historical_conflict_scope_policy_remains_readable_and_incompatible(old_policy):
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+    current = build_run_manifest({})
+    historical = current.model_copy(update={"conflict_policy_version": old_policy,
+        "citation_policy_version": "deterministic-citation-v18",
+        "prompts": tuple(prompt.model_copy(update={"version": "v3"})
+            if prompt.prompt_id == "conflict_detector.contradiction_scan_system" else prompt
+            for prompt in current.prompts)})
+    historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
+    restored = RunManifest.model_validate_json(historical.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    assert restored.conflict_policy_version == old_policy
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

@@ -118,7 +118,9 @@ both candidates when evidence exists, without filling missing premises from back
 Use only advertised evidence IDs. Omit source_ranges only for a source with whole_allowed=true.
 For ranges_allowed=true you may add source_ranges:[[start,end],...] using ZERO-based, end-exclusive
 sentence indices for the focused statements. Runtime also copies one complete neighboring sentence
-on each side within the same uninterrupted excerpt, merging overlapping context windows. The rebuilt
+on each side within the same uninterrupted excerpt, merging overlapping context windows. If conflict_ranges
+are present, the focus AND both neighboring sentences must avoid every conflict range; whole-source
+selection is forbidden. Coordinates identify a model-flagged dispute, not truth. The rebuilt
 fact (including context) must fit three passages, 1200 characters and 16 sentences. Keep complete
 statements; never touch or neighbor [...] or other omission markers, or select a fragment. Separate locations stay
 separate passages, not one quote. Later analysis sentence IDs address the rebuilt fact, not these indices.

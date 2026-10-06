@@ -78,11 +78,14 @@ def test_omission_fragments_ambiguity_and_adjacent_qualifiers_are_not_copied(tex
     assert selected_passages(chains(text)[0]["sources"][0], ranges) is None
 
 
-def test_existing_passages_cannot_be_recropped_and_limits_are_not_raised():
+def test_only_single_continuous_passage_can_be_recropped_and_limits_are_not_raised():
     source = chains(MECHANISM)[0]["sources"][0]
     source["passages"] = [MECHANISM]
-    assert selection_sentences(source) is None
-    assert selected_passages(source, [[0, 1]]) is None
+    assert selection_sentences(source) is not None
+    assert selected_passages(source, [[0, 1]]) == (MECHANISM,)
+    disjoint = dict(source, passages=[MECHANISM.split(". ")[0] + ".", MECHANISM.split(". ")[1]])
+    assert selection_sentences(disjoint) is None
+    assert selected_passages(disjoint, [[0, 1]]) is None
     packet, _ = selection_packet([{"sources": [source]}])
     assert '"separate_locations":true' in packet and '"location":1' in packet
     assert selected_passages(chains()[0]["sources"][0], [[0, 17]]) is None

@@ -722,7 +722,11 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
     try:
         fact = recommendation["source_facts"][int(match[1])]
         chain_index, source_index = source.position
-        chain_source = evidence_chains[chain_index]["sources"][source_index]
+        chain = evidence_chains[chain_index]
+        chain_source = chain["sources"][source_index]
+        from ..utils.conflict_scope import validated_conflict_scope
+        if chain.get("disputed") and validated_conflict_scope(chain_source) is None:
+            return unknown
         snippet, passages = selected_source_text(chain_source, fact)
     except (KeyError, IndexError, TypeError):
         return unknown
