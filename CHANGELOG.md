@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Freeze code-audit development probes
+
+Freeze four unchanged public requests/HITL and content criteria in
+quality-code-audit-development-v1 1.0.0 (2026-10-06). Record design exposure and
+historical holdout provenance explicitly; this is development screening.
+Dataset freeze alone provides neither research admission nor quality results.
+
 ### Preserve known conditions and skip review without reviewable items
 
 Accept an explicit 0–4 extra-assumption list; missing, malformed or empty-text

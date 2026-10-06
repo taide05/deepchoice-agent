@@ -1,0 +1,320 @@
+{
+  "dataset_id": "quality-code-audit-development-v1",
+  "version": "1.0.0",
+  "status": "frozen",
+  "freeze_date": "2026-10-06",
+  "protocol": "docs/product-effectiveness-optimization.md",
+  "parent": {
+    "path": "benchmarks/product-baseline-v1.json",
+    "dataset_id": "product-baseline-v1",
+    "version": "1.0.0",
+    "freeze_date": "2026-09-16",
+    "byte_sha256": "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef",
+    "canonical_sha256": "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
+  },
+  "selection": "Four public development probes across framework delivery, runtime compatibility, durable orchestration, and API governance. P03/P06 are exposed regression/design probes. P09/P10 were not used to design R1–R4; their public original questions were read after candidate production behavior was frozen. Original parent split is retained as provenance, but neither case is a sealed validation holdout in this measurement. No output-based selection.",
+  "candidate_hypothesis": "The audited structural package R1–R4 repairs upstream request allocation/source admission/body preservation and downstream conflict/analysis loss, while removing redundant calls. Compared with the clean pre-repair audit baseline, these general mechanisms may improve supported answers in at least two different tradeoff classes without a new critical error. This is a new code-root mechanism, not a third range-hint-only iteration.",
+  "falsifiers": [
+    "Fewer calls or richer fields without two distinct supported-answer improvements",
+    "Decisive sources remain absent or their applicable conditions are lost before the report",
+    "Fewer than two distinct tradeoff classes gain supported answers. Improvements may come from any two of the four classes, including design-exposed probes, but all remain development screening and never fresh/holdout acceptance.",
+    "New critical factual/safety error or material regression of any already passing baseline case"
+  ],
+  "assessment": {
+    "pass": "All five maintained content checks pass and no critical error; unresolved disagreement cannot pass.",
+    "severity": "Use the maintained protocol critical/important/minor anchors; do not fail a useful conditional choice for absence of a unique winner or demand a full deployment acceptance beyond the original request.",
+    "comparison": "At least two different tradeoff classes among any of the four cases improve supported answers; no new critical error and no material regression of an already passing baseline case. Gains only in P03/P06 can satisfy this development gate but cannot establish fresh or holdout validity. Test counts, lexical verified, report length and cost do not establish quality.",
+    "review": "Read-only independent assistant content review, conceal arm and cost until judgments are locked where possible. Record exposure and disagreements; no human calibration.",
+    "source_policy": "Use original saved cited passages with version/applicability. Reference URLs in the parent rubric are review pointers only, not checked current truth and never injected into requests or seed. New review material cannot repair original missing citations. Network/cross-language uncertainty remains unknown.",
+    "measurements": [
+      "original-question answers",
+      "decisive saved-source applicability",
+      "critical errors and important gaps",
+      "retrieval-to-report information loss where artifacts allow",
+      "tokens/calls/wall time/unknown usage"
+    ],
+    "holdout_scope": "Development only. P09/P10 parent holdout status is historical; future validation requires independently prepared unexposed cases."
+  },
+  "cases": [
+    {
+      "case_id": "P03",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "Design-exposed regression probe; no fresh-validation claim.",
+      "tradeoff": "framework_delivery_and_team_experience",
+      "request": {
+        "query": "新建 Python 业务 API 时，团队应选择 FastAPI 还是 Django？",
+        "scene_context": "6 人团队，需要 REST API、后台管理、权限、审计和定时任务；团队有 Django 经验，交付周期 10 周。",
+        "constraints": [
+          "首版必须有可用后台",
+          "不能把单项吞吐当作唯一标准",
+          "需要评估生态和培训成本"
+        ],
+        "candidate_techs": [
+          "FastAPI",
+          "Django"
+        ],
+        "complexity": "medium",
+        "report_format": "what_why_how",
+        "sub_questions": [
+          "后台和权限需求如何影响选择？",
+          "异步能力是否为当前业务关键？",
+          "团队经验的机会成本是什么？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "fc9745ade76b90ccc8b603778eca0859845966e7d6a3dbd3eae8022aea5f6e30",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "覆盖后台、权限和团队经验",
+          "区分框架能力与第三方组件",
+          "说明什么条件会反转结论"
+        ],
+        "acceptable_outcomes": [
+          "倾向 Django 并说明 API 实现方式",
+          "若明确拆分后台或异步 I/O 为核心，可条件性选择 FastAPI"
+        ],
+        "major_errors": [
+          "以 hello-world 基准直接决定业务框架",
+          "声称 Django 不支持异步",
+          "遗漏交付周期"
+        ],
+        "conflict_points": [
+          "开发完整性与轻量异步 API 体验之间的权衡"
+        ],
+        "reference_sources": [
+          "https://docs.djangoproject.com/en/stable/",
+          "https://fastapi.tiangolo.com/"
+        ]
+      },
+      "must_answer": [
+        "把已给的六人团队、Django经验、十周交付与首版后台作为既定条件，说明如何影响选择，不把它们全部写成待确认。",
+        "分别讨论后台、权限、审计及定时任务的框架/组件边界；关键比较依赖适用保存来源，不要求完整部署手册。",
+        "说明异步能力在本业务中是否构成决定因素及当前缺失的负载输入，不用单项吞吐直接选框架。",
+        "给出有理由的当前选择或条件分支，并说明观察到什么条件会改变选择。"
+      ],
+      "acceptable_outcomes": [
+        "倾向 Django 并说明 API 实现方式",
+        "若明确拆分后台或异步 I/O 为核心，可条件性选择 FastAPI"
+      ],
+      "source_applicability": [
+        "Decisive claims require the originally saved cited version and applicability; original reference pointers alone do not provide evidence.",
+        "User-given context is a decision premise, not technical capability evidence; unmeasured performance/recovery outcomes stay unknown."
+      ]
+    },
+    {
+      "case_id": "P06",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "Design-exposed regression probe; no fresh-validation claim.",
+      "tradeoff": "runtime_performance_and_compatibility",
+      "request": {
+        "query": "Bun 和 Node.js 的性能资料结论冲突时，2026 年新建 TypeScript API 应如何选择？",
+        "scene_context": "团队已有 Node.js 经验，服务以数据库 I/O 为主，要求生态稳定；供应方 HTTP 性能宣传与本项目负载条件不同，尚无本项目的配对实测。",
+        "constraints": [
+          "必须解释 benchmark 条件",
+          "不能把运行时微基准外推为业务吞吐",
+          "需要区分版本与兼容性"
+        ],
+        "candidate_techs": [
+          "Bun",
+          "Node.js"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "宣传 benchmark 与本项目的测试条件有何不同？",
+          "生态兼容和团队经验如何计权？",
+          "怎样设计自己的验证？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "772ec8809eafdcd5256b517a7eb974489c99a885543689be99f3381c256affe0",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "识别版本、硬件、负载差异",
+          "避免把微基准直接等同业务收益",
+          "给出面向实际工作负载的试验方案"
+        ],
+        "acceptable_outcomes": [
+          "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+          "若兼容性已验证且收益可复现，可条件性选择 Bun"
+        ],
+        "major_errors": [
+          "无条件宣称固定倍数性能优势",
+          "混用不同版本数据",
+          "忽略数据库 I/O 主导条件"
+        ],
+        "conflict_points": [
+          "供应方微基准优势与数据库 I/O 业务负载之间的外推边界；不预设已有相反实测"
+        ],
+        "reference_sources": [
+          "https://bun.sh/docs",
+          "https://nodejs.org/docs/latest/api/"
+        ]
+      },
+      "must_answer": [
+        "把已给Node经验、数据库I/O主导、生态稳定要求及尚无配对实测作为原始条件，不重新虚构相反实测或要求用户确认已给信息。",
+        "区分供应方benchmark的版本、硬件、负载与项目条件；不能把资料中的HTTP或运行时优势无条件外推为业务收益。",
+        "基于保存来源说明具体兼容性边界及经验/迁移成本如何影响当前条件选择；缺失信息要说明决策影响。",
+        "提出针对本项目负载的限定配对验证及可改变选择的观察，不编造固定提升倍数或已实现结果。"
+      ],
+      "acceptable_outcomes": [
+        "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+        "若兼容性已验证且收益可复现，可条件性选择 Bun"
+      ],
+      "source_applicability": [
+        "Decisive claims require the originally saved cited version and applicability; original reference pointers alone do not provide evidence.",
+        "User-given context is a decision premise, not technical capability evidence; unmeasured performance/recovery outcomes stay unknown."
+      ]
+    },
+    {
+      "case_id": "P09",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "Public request read after R1–R4 production behavior freeze; not used in candidate design. Parent historical holdout now exposed for development; no sealed-validation claim.",
+      "tradeoff": "agent_orchestration_and_durable_execution",
+      "request": {
+        "query": "需要可恢复的多步骤 AI 工作流时，应选择 LangGraph 还是 Temporal？",
+        "scene_context": "4 人团队，Python 为主，工作流包含 LLM、人工审批和外部 API，运行可持续数小时并要求故障恢复。",
+        "constraints": [
+          "必须区分 Agent 编排与通用持久执行",
+          "考虑团队运维能力",
+          "不得假设两者提供相同一致性语义"
+        ],
+        "candidate_techs": [
+          "LangGraph",
+          "Temporal"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "两者的持久状态与恢复模型有什么区别？",
+          "人工审批如何实现？",
+          "运维与可观测成本如何比较？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "d51ec0f422e52f85918690f3dcbfb33a3384f9d4748bdf28acf4b610ace0941c",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "区分产品定位和持久化语义",
+          "覆盖 HITL 与恢复",
+          "把运维能力纳入选择"
+        ],
+        "acceptable_outcomes": [
+          "按 AI 状态图复杂度和通用工作流可靠性需求做条件性选择"
+        ],
+        "major_errors": [
+          "声称二者语义完全相同",
+          "忽略 worker 或 checkpoint 运维",
+          "用营销术语替代恢复边界"
+        ],
+        "conflict_points": [
+          "AI 原生编排便利性与通用 durable execution 保证之间的权衡"
+        ],
+        "reference_sources": [
+          "https://langchain-ai.github.io/langgraph/",
+          "https://docs.temporal.io/"
+        ]
+      },
+      "must_answer": [
+        "结合Python四人团队、多小时LLM/人工审批/外部API与故障恢复需求，解释两个候选的定位及当前条件选择。",
+        "按保存的适用来源分别解释持久状态、故障恢复及重试/外部副作用的边界；不能把两个候选的一致性或恢复语义直接视为相同。",
+        "说明人工审批的暂停、恢复条件与未核实边界，不把营销措辞当作已证明的恢复保证。",
+        "把worker/checkpoint/服务及可观测性等运维责任纳入取舍，提出能改变选择的具体需求或验证结果，不要求完成真实恢复演练。"
+      ],
+      "acceptable_outcomes": [
+        "按 AI 状态图复杂度和通用工作流可靠性需求做条件性选择"
+      ],
+      "source_applicability": [
+        "Decisive claims require the originally saved cited version and applicability; original reference pointers alone do not provide evidence.",
+        "User-given context is a decision premise, not technical capability evidence; unmeasured performance/recovery outcomes stay unknown."
+      ]
+    },
+    {
+      "case_id": "P10",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "Public request read after R1–R4 production behavior freeze; not used in candidate design. Parent historical holdout now exposed for development; no sealed-validation claim.",
+      "tradeoff": "api_composition_and_governance",
+      "request": {
+        "query": "移动端产品的新 API 应采用 REST 还是 GraphQL？",
+        "scene_context": "客户端页面组合多、网络质量波动，后端由 5 人维护；现有服务主要是 REST，需要细粒度授权和缓存。",
+        "constraints": [
+          "考虑迁移成本和授权",
+          "不能把减少请求数等同于一定更快",
+          "必须讨论缓存和可观测性"
+        ],
+        "candidate_techs": [
+          "REST",
+          "GraphQL"
+        ],
+        "complexity": "medium",
+        "report_format": "evidence_first",
+        "sub_questions": [
+          "客户端数据组合收益是否足够？",
+          "授权和缓存复杂度如何变化？",
+          "能否渐进引入？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "2899e016828eeee3c5d34ed92ad2076888a64f14109e0d5c9bcccc2a44ff449d",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "original_rubric": {
+        "must_answer": [
+          "同时评估客户端和服务端成本",
+          "说明授权、缓存与 N+1 风险",
+          "提出渐进验证路径"
+        ],
+        "acceptable_outcomes": [
+          "维持 REST 并优化聚合端点",
+          "对特定复杂页面试点 GraphQL"
+        ],
+        "major_errors": [
+          "声称 GraphQL 自动解决性能问题",
+          "忽略字段级授权",
+          "把协议选择当作数据库选择"
+        ],
+        "conflict_points": [
+          "客户端取数灵活性与服务端治理成本之间的权衡"
+        ],
+        "reference_sources": [
+          "https://graphql.org/learn/",
+          "https://www.rfc-editor.org/rfc/rfc9110"
+        ]
+      },
+      "must_answer": [
+        "把已给五人后端、既有REST、页面组合多、网络波动、细粒度授权和缓存作为原始条件，讨论是否值得引入另一API方式。",
+        "同时评估客户端组合收益与服务端治理成本，区分减少请求数量和本负载端到端延迟改善。",
+        "按保存来源解释授权、缓存、N+1及可观测性边界；不声称GraphQL自动解决性能或授权问题。",
+        "给出保持REST/聚合优化或限定页面试点等有理由的条件分支，以及渐进验证与改变选择的观察。"
+      ],
+      "acceptable_outcomes": [
+        "维持 REST 并优化聚合端点",
+        "对特定复杂页面试点 GraphQL"
+      ],
+      "source_applicability": [
+        "Decisive claims require the originally saved cited version and applicability; original reference pointers alone do not provide evidence.",
+        "User-given context is a decision premise, not technical capability evidence; unmeasured performance/recovery outcomes stay unknown."
+      ]
+    }
+  ],
+  "frozen_at": "2026-10-06T09:28:17.197618+00:00",
+  "runtime_binding": "Dataset/rubric only. No research admission until a new batch binds clean production commits, manifest/core assets, model/dependencies, isolated immutable seed, cache/HITL, collector, compatible bounded LLM+retrieval preflight, order and independent resource/stop policy."
+}

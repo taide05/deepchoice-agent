@@ -468,4 +468,6 @@ benchmarks/
 MIT
 
 
+代码审计后的公开开发探针已冻结于[quality-code-audit-development-v1](benchmarks/quality-code-audit-development-v1.json)（1.0.0，2026-10-06，4例），仅定义开发输入与评审，不代表运行完成或质量通过。
+
 当前质量测量的事实与下一成果见[状态](docs/o1-execution-status.md)，跨类别开发准入与保留集边界见[协议](docs/product-effectiveness-optimization.md)。旧四例采集相位和晋级锁不能授权新样本；最终24次仍封存。

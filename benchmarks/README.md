@@ -1,12 +1,20 @@
 # 评估工具入口
 
-更新：2026-10-05。本页说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
+更新：2026-10-06。本页说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 现行开发规则见[评估协议](../docs/product-effectiveness-optimization.md)，实际准入与结果见
 [当前状态](../docs/o1-execution-status.md)。quality-selection-v1采集器及下列运行示例
 仍绑定旧四例和历史授权；本次跨类别开发通过单独冻结的本地薄适配执行，不能把新案例
 直接交给旧命令，或用旧晋级锁启动最终24次。历史卡和账本保持原样。
 
-## 当前公开跨场景开发探针
+## 当前代码审计后开发探针
+
+[quality-code-audit-development-v1.json](quality-code-audit-development-v1.json) / 1.0.0于
+2026-10-06冻结P03/P06/P09/P10四类取舍，保留原请求/HITL并固定必答项与内容判据。
+P03/P06是设计暴露回归；P09/P10公开题在生产行为冻结后阅读，未用于该候选设计，
+本次明确为development/exposed，历史父集holdout标记只作来源。全部是开发筛选，
+不能当作新鲜保留验证。文件不是可运行批次；绑定与实际准入只见[当前状态](../docs/o1-execution-status.md)。
+
+## 已完成的历史公开跨场景开发探针
 
 [quality-cross-scene-development-v1.json](quality-cross-scene-development-v1.json) / 1.0.1
 于2026-10-05冻结P03/P06/P11/P12四种取舍，保留父数据原请求与HITL。独立助手
