@@ -125,7 +125,7 @@ def test_range_diagnostic_observes_shape_without_granting_binding(ranges, valid)
 
 async def test_staged_coordinates_survive_citation_and_review_without_mutating_chains(monkeypatch):
     original = chains()
-    model = AsyncMock(side_effect=[refs(), model_answer()])
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1W1"]}, model_answer()])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": TASK, "evidence_chains": deepcopy(original), "search_results": {"fixture": "unchanged"}}
     update = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(state)
@@ -175,7 +175,7 @@ async def test_sqlite_checkpoint_restart_keeps_range_coordinates_and_original_so
 
     answer = model_answer()
     answer["decision_analysis"][0]["assumptions"] = assumptions
-    model = AsyncMock(side_effect=[refs(), answer])
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1W1"]}, answer])
     monkeypatch.setattr(synth, "call_model", model)
     async def fetch(*args, **kwargs):
         return httpx.Response(200, text=f"<p>{TEXT}</p>", headers={"content-type": "text/html"})

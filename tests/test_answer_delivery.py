@@ -175,7 +175,7 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
 
     malformed = payload("The source supports recovery; a different assertion [[2]] is uncited.")
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}]},
+        {"source_view_ids": ["S1"]},
         {"decision_analysis": malformed["decision_analysis"]},
     ])
     monkeypatch.setattr(synth, "call_model", model)

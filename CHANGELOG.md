@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-06
 
+### Bind runtime source views from model-selected IDs
+
+The existing staged selection call now returns only advertised source_view_ids.
+Runtime assigns factual IDs after binding and copies original saved source text.
+Whole sources and short/maximal windows retain adjacent context, source identity,
+conflict exclusions and the five-fact/1200-character/16-sentence limits.
+An invalid or oversized selection never becomes a guessed coordinate or whole source.
+Apply the final 24-source/24 KB cap to actual view rows; whole sources may refill
+unusable/oversized rows. Range sources retain the historical capped admission set
+shared by binding, citation and review. No additional calls or public state fields.
+Freeze synthesis v32 and its view policy; keep old diagnostic profiles and direct
+compatibility formats readable, while rejecting old same-run resume.
+This repairs the selection contract; real report quality remains unmeasured.
+
 ### Freeze code-audit development probes
 
 Freeze four unchanged public requests/HITL and content criteria in

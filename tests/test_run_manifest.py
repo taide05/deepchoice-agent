@@ -177,7 +177,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v19"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v8", "conclusion_synthesizer.synthesis_prompt": "v31",
+    expected_versions = {"self_reviewer.review_system": "v8", "conclusion_synthesizer.synthesis_prompt": "v32",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
@@ -747,7 +747,7 @@ async def test_resume_passes_none_input_to_langgraph(monkeypatch):
     assert captured["config"]["configurable"]["thread_id"] == "thread-1"
 
 
-@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17", "v18", "v19", "v28", "v30"])
+@pytest.mark.parametrize("old_version", ["v14", "v15", "v16", "v17", "v18", "v19", "v28", "v30", "v31"])
 def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(monkeypatch, old_version):
     import hashlib
     from deepchoice.contracts import manifest as module
@@ -764,7 +764,7 @@ def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
-    for field in ("SYNTHESIS_CORRECTION_TEMPLATE", "SYNTHESIS_STRUCTURE_POLICY"):
+    for field in ("SYNTHESIS_CORRECTION_TEMPLATE", "SYNTHESIS_STRUCTURE_POLICY", "SOURCE_VIEW_SELECTION_POLICY"):
         with monkeypatch.context() as patcher:
             patcher.setattr(module, field, getattr(module, field) + "changed")
             assert build_run_manifest({}).manifest_id != current.manifest_id

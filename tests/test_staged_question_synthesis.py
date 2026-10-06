@@ -70,7 +70,7 @@ def test_only_original_question_rows_are_planned():
 
 async def test_durable_stage_answers_each_original_question_with_bound_facts(monkeypatch):
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}],
+        {"source_view_ids": ["S1", "S2"],
          "winner": "FORGED"},
         {"decision_analysis": [answer("R0", "F1")["decision_analysis"][0],
                                answer("Q1", "F2", 2)["decision_analysis"][0]]},
@@ -88,9 +88,9 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     assert state["quality_signals"][0]["structure_correction"]["attempted"] == 0
     assert "FORGED" not in str(state)
     selection, judgment = model.await_args_list
-    assert selection.kwargs["diagnostic_profile"] == "fact-selection-v2"
+    assert selection.kwargs["diagnostic_profile"] == "fact-view-selection-v1"
     assert judgment.kwargs["diagnostic_profile"] == "question-judgment-v1"
-    assert "[[1]]" in selection.args[0][0]["content"]
+    assert '"id":"S1"' in selection.args[0][0]["content"]
     assert "s2: If the service fails" in judgment.args[0][0]["content"]
     assert "R0:" in judgment.args[0][0]["content"] and "Q1:" in judgment.args[0][0]["content"]
     assert all(call.kwargs["seed"] == 0 for call in model.await_args_list)
@@ -98,7 +98,7 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
 
 async def test_one_sided_facts_withhold_r0_but_allow_bounded_specific_answer(monkeypatch):
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 2}]}, answer("Q1", "F1")])
+        {"source_view_ids": ["S2"]}, answer("Q1", "F1")])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
         {"task": TASK, "evidence_chains": CHAINS})
@@ -111,7 +111,7 @@ async def test_subquestion_cannot_create_a_second_choice(monkeypatch):
     choice = answer("Q1", "F2")
     choice["decision_analysis"][0].update(kind="choice", option="Beta")
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
+        {"source_view_ids": ["S1", "S2"]},
         {"decision_analysis": [answer("R0", "F1")["decision_analysis"][0],
                                choice["decision_analysis"][0]]},
     ])
@@ -130,7 +130,7 @@ async def test_malformed_requirement_ids_cannot_crash_or_enter_output(monkeypatc
     malformed = answer("R0", "F1")["decision_analysis"][0]
     malformed["requirement_ids"] = [{"not": "an ID"}]
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
+        {"source_view_ids": ["S1", "S2"]},
         {"decision_analysis": [malformed, answer("Q1", "F2")["decision_analysis"][0]]},
     ])
     monkeypatch.setattr(synth, "call_model", model)
@@ -141,7 +141,7 @@ async def test_malformed_requirement_ids_cannot_crash_or_enter_output(monkeypatc
 
 async def test_invalid_question_output_isolated_and_budget_loss_propagates(monkeypatch):
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
+        {"source_view_ids": ["S1", "S2"]},
         {"decision_analysis": [
             answer("Q1", "F1")["decision_analysis"][0],
             {**answer("R0", "F1")["decision_analysis"][0],
@@ -153,7 +153,7 @@ async def test_invalid_question_output_isolated_and_budget_loss_propagates(monke
         {"task": TASK, "evidence_chains": CHAINS})
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}, {"id": "F2", "evidence_id": 2}]},
+        {"source_view_ids": ["S1", "S2"]},
         BudgetPersistenceError("private budget error")])
     monkeypatch.setattr(synth, "call_model", model)
     with pytest.raises(BudgetPersistenceError):
@@ -182,7 +182,7 @@ async def test_explicit_short_candidate_in_comparison_title_keeps_original_quest
         "snippet": "Bun has compatibility limits when using Node.js packages.",
     }]}]
     model = AsyncMock(side_effect=[
-        {"source_facts": [{"id": "F1", "evidence_id": 1}]}, answer("R0", "F1")])
+        {"source_view_ids": ["S1"]}, answer("R0", "F1")])
     monkeypatch.setattr(synth, "call_model", model)
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
         {"task": task, "evidence_chains": chains})
@@ -209,7 +209,7 @@ async def test_known_conditions_with_empty_extra_assumptions_reach_reviewed_repo
     row = answer("R0", "F1")["decision_analysis"][0]
     row.update(assumptions=[], basis=[{"fact_id": "F1", "sentence_ids": [1, 2]}],
         reasoning="With the stated tolerance for queued writes, Alpha can be evaluated for queuing. This does not establish restart recovery.")
-    model = AsyncMock(side_effect=[{"source_facts": [{"id": "F1", "evidence_id": 1}]},
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1"]},
                                   {"decision_analysis": [row]}])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": deepcopy(task), "evidence_chains": deepcopy(original)}

@@ -195,7 +195,7 @@ async def test_conditional_choice_survives_citation_and_actual_self_review_witho
     items, conflicts, chains, _ = await scanned(monkeypatch)
     original = deepcopy(chains)
     task = {"query": "Choose Atlas when encrypted snapshots are required.", "candidate_techs": ["Atlas"]}
-    selection = {"source_facts": [{"id": "F1", "evidence_id": 1, "source_ranges": [[6, 7]]}]}
+    selection = {"source_view_ids": ["S1W3"]}
     analysis = {"decision_analysis": [{"kind": "choice", "option": "Atlas", "requirement_ids": ["R0"],
         "basis": [{"fact_id": "F1", "sentence_ids": [1, 2, 3]}],
         "reasoning": "Consider Atlas for encrypted snapshots if the original encryption key is retained and isolated restoration validation is satisfactory.",

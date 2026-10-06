@@ -254,6 +254,8 @@ def test_synthesis_diagnostics_reject_malformed_decision_structures(field, inval
     ("fact-selection-v2", "conclusion_synthesizer",
      {"source_facts": [{"id": "F1", "evidence_id": 1, "source_ranges": [[0, 2]]}]},
      {"source_facts": [{"id": "F1", "evidence_id": 1, "source_ranges": [[True, 2]]}]}),
+    ("fact-view-selection-v1", "conclusion_synthesizer",
+     {"source_view_ids": ["S1", "S2W1"]}, {"source_view_ids": [True]}),
     ("question-judgment-v1", "conclusion_synthesizer",
      {"decision_analysis": []}, {"decision_analysis": [{}]}),
     ("self-review-targeted-v1", "self_reviewer",

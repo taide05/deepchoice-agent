@@ -5,6 +5,7 @@ at binding and citation time; local matches never grant a citation status.
 """
 import json
 import re
+from copy import deepcopy
 
 from .evidence import conclusion_source_allowed, is_navigation_placeholder
 from .source_scope import MAX_SCOPE_CHARS, MAX_SCOPE_SENTENCES, MAX_SENTENCE_CHARS
@@ -109,15 +110,13 @@ def selected_passages(source, ranges):
     return bounded
 
 
-def selection_packet(chains):
-    """Advertise valid identities and whole bounded source rows within one cap."""
+def _selection_rows(chains):
+    """Yield identity-valid rows before menu capacity is applied."""
     from ..citations.verifier import _resolve_title, _source_registry, _split_sentences
     from .evidence_choices import eligible_source_fact_ids, whole_source_text
 
     registry, _ = _source_registry(chains)
     whole_ids = eligible_source_fact_ids(chains)
-    lines, offered = [], set()
-    size = 0
     number = 0
     for chain_index, chain in enumerate(chains):
         for source_index, source in enumerate(chain.get("sources", [])[:4]):
@@ -149,11 +148,152 @@ def selection_packet(chains):
                              for _ in _split_sentences(passage)]
                 for sentence, location in zip(row["sentences"], locations):
                     sentence["location"] = location
-            line = f"[[{number}]] " + json.dumps(row, ensure_ascii=False, separators=(",", ":"))
-            needed = len(line.encode("utf-8")) + bool(lines)
-            if len(offered) >= MAX_PACKET_SOURCES or size + needed > MAX_PACKET_BYTES:
-                continue  # Omit the entire source, never a trailing qualifier.
-            lines.append(line)
-            offered.add(number)
-            size += needed
+            yield number, row
+
+
+def selection_packet(chains):
+    """Preserve the bounded legacy coordinate menu and range admission."""
+    lines, offered, size = [], set(), 0
+    for number, row in _selection_rows(chains):
+        line = f"[[{number}]] " + json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+        needed = len(line.encode("utf-8")) + bool(lines)
+        if len(offered) >= MAX_PACKET_SOURCES or size + needed > MAX_PACKET_BYTES:
+            continue  # Omit the entire source, never a trailing qualifier.
+        lines.append(line)
+        offered.add(number)
+        size += needed
     return "\n".join(lines), offered
+
+
+SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v1:sources=24;bytes=24000;focus=2+maximal;range-admission=legacy-menu"
+
+
+def selection_view_packet(chains):
+    """Advertise runtime-built views; models select IDs, never coordinates.
+
+    Whole bounded sources retain the compatibility binder. Longer continuous
+    sources offer short and maximal adjacent-context windows through the SAME range and
+    conflict checks. A window is a bounded excerpt, not semantic completeness.
+    Source sentences are shown once, with each view's actual included interval.
+    Range sources keep the legacy menu admission used by citation and review;
+    whole sources can refill capacity because they need no range admission.
+    """
+    from .evidence_choices import selected_source_text, bind_evidence_choices
+    from ..citations.verifier import _split_sentences
+
+    _, range_source_ids = selection_packet(chains)
+    sources = [source for chain in chains for source in chain.get("sources", [])[:4]]
+    lines, offered, size = [], {}, 0
+    for number, original in _selection_rows(chains):
+        if len(lines) >= MAX_PACKET_SOURCES:
+            break
+        source = sources[number - 1]
+        count = len(original["sentences"])
+        views, refs = [], {}
+        if original["whole_allowed"]:
+            identifier = f"S{number}"
+            views.append({"id": identifier, "included_sentence_range": [0, count]})
+            refs[identifier] = {"evidence_id": number}
+        elif original["ranges_allowed"] and number in range_source_ids:
+            focuses = []
+            # Keep small mechanisms selectable without forcing unrelated numeric
+            # material into the same fact. Also retain maximal windows for a
+            # premise needing a larger context; neither view proves semantics.
+            for maximal in (False, True):
+                start = 0
+                while start < count:
+                    best = None
+                    ends = (range(count, start, -1) if maximal
+                            else range(min(start + 2, count), count + 1))
+                    # Repeated short sentences can be ambiguous although their
+                    # longer enclosing focus is uniquely locatable.
+                    for end in ends:
+                        text, passages = selected_source_text(source, {"source_ranges": [[start, end]]})
+                        if text and passages is not None:
+                            best = end
+                            break
+                    if best is None:
+                        start += 1
+                        continue
+                    if (start, best) not in focuses:
+                        focuses.append((start, best))
+                    start = best
+            for start, end in focuses:
+                identifier = f"S{number}W{len(views) + 1}"
+                views.append({"id": identifier,
+                              "included_sentence_range": [max(0, start - 1), min(count, end + 1)]})
+                refs[identifier] = {"evidence_id": number, "source_ranges": [[start, end]]}
+        if not views:
+            continue
+        validated, bindings = [], {}
+        for view in views:
+            ref = refs[view["id"]]
+            rebound = bind_evidence_choices({"source_facts": [{"id": "F1", **ref}]}, chains, [], [])
+            facts = rebound.get("source_facts", [])
+            if not facts:
+                continue
+            fact = facts[0]
+            if original["whole_allowed"]:
+                original["sentences"] = [{"index": index, "text": text}
+                                         for index, text in enumerate(_split_sentences(fact["saved_text"]))]
+                if original.get("separate_locations"):
+                    locations = [location for location, passage in enumerate(fact.get("saved_passages", []), 1)
+                                 for _ in _split_sentences(passage)]
+                    for sentence, location in zip(original["sentences"], locations):
+                        sentence["location"] = location
+                view["included_sentence_range"] = [0, len(original["sentences"])]
+            left, right = view["included_sentence_range"]
+            shown = tuple(row["text"] for row in original["sentences"][left:right])
+            if shown != tuple(_split_sentences(fact["saved_text"])):
+                continue  # Never advertise text differing from its bound view.
+            validated.append(view)
+            bindings[view["id"]] = {"reference": ref, "source": deepcopy(source), "fact": fact}
+        views, refs = validated, bindings
+        if not views:
+            continue
+        row = {"title": original["title"], "views": views, "sentences": original["sentences"]}
+        if original.get("separate_locations"):
+            row["separate_locations"] = True
+        if original.get("conflict_ranges"):
+            row["conflict_ranges"] = original["conflict_ranges"]
+        rendered = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+        needed = len(rendered.encode("utf-8")) + bool(lines)
+        if size + needed > MAX_PACKET_BYTES:
+            continue  # Preserve the whole source row and its qualifications.
+        lines.append(rendered)
+        offered.update(refs)
+        size += needed
+    return "\n".join(lines), offered
+
+
+def bind_selected_views(selected, offered, chains, candidates, requirements):
+    """Rebuild advertised selections and assign F identities after binding.
+
+    Invalid/unknown IDs never become guessed sources. Duplicate advertised IDs
+    use one slot; an oversized response is rejected, never truncated.
+    """
+    from .evidence_choices import MAX_SOURCE_FACTS, bind_evidence_choices
+
+    values = selected.get("source_view_ids") if isinstance(selected, dict) else None
+    if not isinstance(values, list) or len(values) > MAX_SOURCE_FACTS:
+        return []
+    sources = [source for chain in chains for source in chain.get("sources", [])[:4]]
+    refs, expected, seen = [], {}, set()
+    for identifier in values:
+        if not isinstance(identifier, str) or identifier not in offered or identifier in seen:
+            continue
+        seen.add(identifier)
+        view = offered[identifier]
+        number = view["reference"]["evidence_id"]
+        if number > len(sources) or sources[number - 1] != view["source"]:
+            continue  # Menu identities freeze the full original source, not only a crop.
+        fact_id = f"F{len(refs) + 1}"
+        refs.append({"id": fact_id, **view["reference"]})
+        expected[fact_id] = view["fact"]
+    bound = bind_evidence_choices({"source_facts": refs}, chains, candidates, requirements)
+    fields = ("saved_text", "saved_passages", "source_title", "canonical_url")
+    facts = [fact for fact in bound.get("source_facts", [])
+             if all(fact.get(field) == expected[fact["id"]].get(field) for field in fields)]
+    for index, fact in enumerate(facts, 1):
+        fact["id"] = f"F{index}"
+    return facts

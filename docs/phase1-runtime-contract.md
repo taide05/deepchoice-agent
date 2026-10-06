@@ -19,6 +19,20 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-06 R6：合成v32的默认事实选择调用仅返回source_view_ids（最多五个菜单ID），
+运行时生成F编号并通过原binder复制来源。短焦点与最大窗口均保留原关注坐标及左右邻句，
+模型不能提交F编号/范围/复制正文来改变该绑定。临时ID映射冻结完整原来源并比对重绑文本、
+位置、标题和规范URL；仅实际展示的ID可用，源身份变化、未知ID、非法类型或超限不猜测。
+重复ID只占一个事实槽。事实初始unknown，页面核验及分析自审仍独立执行。
+菜单实际有视图的完整来源行限24源/24000 UTF-8字节，超限整行跳过；整源可补位，
+范围源仍只从历史selection_packet限额集合准入，binding/citation/review共用重算守卫。
+不会让历史范围门外来源因菜单补位获得权限；该限额可能继续排除后置长来源。
+公开source_facts及无manifest直接兼容格式不变；范围关注坐标始终从原文派生相邻上下文。
+不增加调用、节点、环境参数、graph state、数据库或判断权限。synthesis资产冻结视图策略，
+新观察profile为fact-view-selection-v1；旧profile与v31及更早manifest可读、身份有效，
+但不可当前同run恢复。窗口和机械邻句不能证明远处限定、语义适用或真实报告改善。
+
+
 2026-10-06 R4：分析的assumptions必须是显式list、0–4项额外未确认前提；[]合法，
 缺字段/None/空文本/超限仍拒绝。合成与自审提示要求保留用户给定条件及绑定来源限定，
 不把它们重写为未知；用户陈述仍不能证明技术真值，basis/引用/自审和操作限制不变。
@@ -35,7 +49,7 @@ counts/空或缺失投影不可视作已完成核验。有效且全verified的�
 生命周期、HITL和数据库不变。工程测试不能证明真实模型正确区分已给条件与额外未知。
 
 2026-10-06：默认 graph 与独立直接代理默认模式均采用 `scan-only-v2`；manifest schema v1
-冻结 conflict_policy_version、scan v4、合成 v31、自审 v8、三模板v20/v19/v18与
+冻结 conflict_policy_version、scan v4、合成 v32、自审 v8、三模板v20/v19/v18与
 deterministic-citation-v19。历史
 scan-only-v1 / scan v3 / 引用 v18 及缺省字段身份可读且保持原hash，但不能当前同run恢复。
 当前核心资产只索引6个prompt与6个LLM call快照，不含已退出默认路径的 arbitration、
@@ -1105,5 +1119,5 @@ content_insufficient、其他未通过状态或缺失检查都换成固定待核
 预算、外呼路由、SSE、HITL及来源事实之外的判断权威均不变化；旧v27/v17身份可读，
 但不能同run续跑到新策略。无数据库迁移或新增graph state字段。
 
-格式观察使用fact-selection-v2识别可选范围形状；旧profile保持可读。
+历史范围格式观察使用fact-selection-v2；当前默认视图选择使用fact-view-selection-v1，旧profile保持可读。
 形状通过不代表坐标、绑定、语义或内容验收通过。
