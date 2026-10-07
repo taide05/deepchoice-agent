@@ -108,6 +108,8 @@ class TestClarificationAgentSubQuestions:
         state.candidate_techs = ["FastAPI", "Flask"]
         state.scene = "solo"
         state.complexity = "simple"
+        state.constraints = ["No additional server", "Restart recovery is mandatory"]
+        state.messages = [{"role": "user", "content": "Choose for durable restart recovery"}]
 
         mock_llm = {"sub_questions": ["q1", "q2", "q3", "q4", "q5"]}
         agent = ClarificationAgent()
@@ -116,6 +118,10 @@ class TestClarificationAgentSubQuestions:
             result = await agent._generate_sub_questions(state)
 
         assert len(result) == 5
+        prompt = mock_call.await_args.args[0][0]["content"]
+        assert state.messages[0]["content"] in prompt
+        assert all(constraint in prompt for constraint in state.constraints)
+        assert mock_call.await_count == 1
 
     @pytest.mark.asyncio
     async def test_generate_sub_questions_fallback_on_error(self):
@@ -172,3 +178,40 @@ def test_distinct_original_requests_and_replies_do_not_share_clarification_promp
     assert all(first.messages[index]["content"] in first_prompt for index in (0, 3, 4))
     assert "OUTDATED QUESTION" not in first_prompt and "OLDER REPLY" not in first_prompt
     assert all(message["content"] in second_prompt for message in second.messages)
+
+
+@pytest.mark.parametrize("model_result", [
+    RuntimeError("provider error"), ["invalid JSON shape"],
+    {"scene": "solo", "complexity": "invalid", "constraints": ["must not commit"]},
+    {"message": "x" * 4000},
+])
+async def test_confirm_failure_is_atomic_and_default_notice_stays_within_message_limit(model_result):
+    state = SessionState(candidate_techs=["Zephyr"], constraints=["Keep original constraint"],
+        clarify_rounds=3, missing_required=["scene", "complexity"], messages=[
+            {"role": "user", "content": "Compare Zephyr for personal use"},
+        ])
+    with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+        if isinstance(model_result, Exception):
+            model.side_effect = model_result
+        else:
+            model.return_value = model_result
+        response = await ClarificationAgent().decide_and_respond(state)
+    assert model.await_count == 1 and response["action"] == "confirm"
+    assert state.scene == "team" and state.complexity == "medium"
+    assert state.constraints == ["Keep original constraint"]
+    assert "场景=team" in response["answer"] and "复杂度=medium" in response["answer"]
+    assert "推测" in response["answer"] and len(response["answer"]) <= 4000
+    state.append_message("assistant", response["answer"])
+    assert response["payload"]["clarified_task"]["constraints"] == ["Keep original constraint"]
+
+
+async def test_confirm_preserves_known_values_and_defaults_only_missing_fields():
+    state = SessionState(scene="solo", candidate_techs=["Zephyr"], clarify_rounds=3,
+                         missing_required=["complexity"], messages=[
+                             {"role": "user", "content": "Compare Zephyr for personal use"}])
+    with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+        model.return_value = {"scene": "enterprise", "message": "Confirm this request"}
+        response = await ClarificationAgent().decide_and_respond(state)
+    assert state.scene == "solo" and state.complexity == "medium"
+    assert "复杂度=medium" in response["answer"] and "场景=" not in response["answer"]
+    assert model.await_count == 1

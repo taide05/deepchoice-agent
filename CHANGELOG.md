@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Retain the final clarification reply before defaults
+
+Reuse the bounded clarification prompt and atomic user-only candidate merge in
+one confirmation call, before filling still-missing defaults. Append fixed default
+assumption notices within the existing message bound; reject invalid extraction
+without partial updates. Pass the original request and constraints to the existing
+subquestion call. Remove the duplicated confirmation prompt. No new call or state;
+soft-gate defaults and fixed five-dimension question generation remain limitations.
+
 ### Preserve bounded user input in clarification
 
 Include the original request and current question/reply as untrusted data in the

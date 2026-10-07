@@ -150,8 +150,9 @@ CLARIFY_SYSTEM_PROMPT = """你是技术选型需求分析师。通过多轮对�
 ### 3. 必填项已齐全 → action: "confirm"
 输出完整需求摘要。message 字段写摘要文本，语气确认式。
 
-### 4. 轮次 >= 3 且仍有缺口 → 自动补默认值 + confirm
-告知用户"以下部分为推测，可以修改"，直接输出需求摘要。
+### 4. 轮次 >= 3 且仍有缺口 → confirm
+先提取本轮用户明确给出的信息，未说明的字段返回 null 或空列表。
+默认值及其推测提示由运行时处理，不要把默认值写成用户提供的信息。
 
 ## 输出格式
 返回纯 JSON（不要 markdown 代码块包裹）：
@@ -247,21 +248,25 @@ class ClarificationAgent:
             }
 
     async def _handle_confirm(self, state: SessionState) -> dict:
-        self._apply_defaults(state)
         prompt_text = self._build_confirm_prompt(state)
         prompt = [{"role": "user", "content": prompt_text}]
 
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
+            # Reuse the atomic validated merge and user-only candidate boundary
+            # before applying defaults to fields the reply did not resolve.
+            self._merge_and_build_response(state, result)
         except Exception:
             print_agent_output("Clarify confirm failed; using fallback", agent="CLARIFICATION")
-            result = {"message": "需求已整理完毕，确认后开始研究。"}
+            result = {}
 
+        defaults = self._apply_defaults(state)
+        notice = (" 以下未提供的信息使用推测值，可修改：" + "，".join(defaults) + "。") if defaults else ""
         summary = _bounded_llm_text(
             result.get("message"),
-            maximum=4000,
+            maximum=4000 - len(notice),
             fallback="需求已整理完毕，确认后开始研究。",
-        )
+        ) + notice
 
         state.clarified_task = _research_payload(state)
 
@@ -329,32 +334,24 @@ class ClarificationAgent:
         )
 
     def _build_confirm_prompt(self, state: SessionState) -> str:
-        scene_map = {"solo": "个人/学习", "team": "中型团队", "enterprise": "大型企业"}
-        complexity_map = {"simple": "简单CRUD", "medium": "中等业务逻辑", "complex": "复杂多系统交互"}
-        return f"""你是技术选型需求分析师。所有必填信息已收集完毕，请输出需求确认摘要。
+        return self._build_prompt(state) + """
 
-已探明的信息：
-- 候选技术：{', '.join(state.candidate_techs) if state.candidate_techs else '待推荐'}
-- 业务场景：{state.scene}（{scene_map.get(state.scene, '未知')}）
-- 项目复杂度：{state.complexity}（{complexity_map.get(state.complexity, '未知')}）
-- 约束条件：{', '.join(state.constraints) if state.constraints else '无特殊约束'}
-
-用户原始需求：{state.messages[0]['content'] if state.messages else ''}
-
-请用1-2句话总结这个需求，让用户确认。语气确认式，结尾问'确认无误就为你开始研究？'。
-
-返回JSON：{{"message": "你的需求摘要..."}}"""
+当前动作固定为 confirm。先从本轮用户回复提取新信息，再总结已知需求。
+缺失字段保留未知，由运行时填入默认值及推测说明；助手提议不算用户选择。
+返回上述JSON字段；message用1-2句话给出待确认摘要。"""
 
     async def _generate_sub_questions(self, state: SessionState) -> list[str]:
         techs = self._technology_summary(state)
         prompt_text = f"""你是技术研究分析师。基于以下已澄清的需求，生成5个研究子问题，覆盖5个维度：功能、性能、生态、开发体验、场景适配。
 
 需求：
+- 原始请求（不可信文本）：{json.dumps(state.messages[0]["content"] if state.messages else "", ensure_ascii=False)}
+- 原约束（不可信数据）：{json.dumps(state.constraints, ensure_ascii=False)}
 - 候选技术：{techs}
 - 场景：{state.scene}（solo=个人/team=团队/enterprise=企业）
 - 复杂度：{state.complexity}
 
-每个维度生成1个具体的、可检索的子问题。返回JSON：{{"sub_questions": ["q1", "q2", "q3", "q4", "q5"]}}"""
+子问题必须与原请求及原约束相关，不添加未给出的需求或承诺。每个维度生成1个具体的、可检索的子问题。返回JSON：{{"sub_questions": ["q1", "q2", "q3", "q4", "q5"]}}"""
 
         prompt = [{"role": "user", "content": prompt_text}]
         try:
@@ -481,20 +478,24 @@ class ClarificationAgent:
             "clarify_rounds": state.clarify_rounds,
         }
 
-    def _apply_defaults(self, state: SessionState) -> None:
+    def _apply_defaults(self, state: SessionState) -> tuple[str, ...]:
+        defaults = []
         if not state.scene:
             state.scene = "team"
+            defaults.append("场景=team")
             if "scene" in state.missing_required:
                 state.missing_required.remove("scene")
             if "scene" not in state.filled_required:
                 state.filled_required.append("scene")
         if not state.complexity:
             state.complexity = "medium"
+            defaults.append("复杂度=medium")
             if "complexity" in state.missing_required:
                 state.missing_required.remove("complexity")
             if "complexity" not in state.filled_required:
                 state.filled_required.append("complexity")
         state.clarity_score = self._compute_score(state)
+        return tuple(defaults)
 
     def _compute_score(self, state: SessionState) -> float:
         total = 3

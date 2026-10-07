@@ -204,3 +204,45 @@ class TestActualClarificationInput:
         finally:
             if sid is not None:
                 session_manager._sessions.pop(sid, None)
+
+
+class TestActualLastRoundConfirmation:
+    def test_third_reply_is_extracted_before_defaults_and_reaches_child_questions(self):
+        original = "Need a routing library for restart recovery"
+        reply = "Compare Zephyr and Sable for enterprise use with complex processing; no new server"
+        sid = None
+        try:
+            with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+                model.side_effect = [
+                    {"action": "ask", "message": "What is the scope and complexity?"},
+                    {"action": "confirm", "message": "Confirm the enterprise recovery requirement",
+                     "scene": "enterprise", "complexity": "complex",
+                     "candidate_techs": ["Zephyr", "Sable"], "constraints": ["no new server"]},
+                    {"sub_questions": ["How is restart recovery preserved without a new server?"]},
+                ]
+                start = client.post("/clarify/start", json={"query": original})
+                assert start.status_code == 200
+                sid = start.json()["session_id"]
+                session_manager.get(sid).clarify_rounds = 2
+                response = client.post(f"/clarify/{sid}/message", json={"message": reply})
+                assert response.status_code == 200 and response.json()["next_action"] == "confirm"
+                assert response.json()["clarify_rounds"] == 3
+                state = session_manager.get(sid)
+                assert state.scene == "enterprise" and state.complexity == "complex"
+                assert state.candidate_techs == ["Zephyr", "Sable"] and state.constraints == ["no new server"]
+                assert "推测" not in response.json()["answer"]
+                confirmation_prompt = model.await_args_list[1].args[0][0]["content"]
+                assert original in confirmation_prompt and reply in confirmation_prompt
+                assert "What is the scope and complexity?" in confirmation_prompt
+                assert "业务/落地场景：未知" in confirmation_prompt
+                finalized = client.post(f"/clarify/{sid}/finalize")
+                assert finalized.status_code == 200
+                task = finalized.json()["payload"]["clarified_task"]
+                assert task["query"] == original and task["scene_context"] == "enterprise"
+                assert task["complexity"] == "complex" and task["constraints"] == ["no new server"]
+                child_prompt = model.await_args_list[2].args[0][0]["content"]
+                assert original in child_prompt and "no new server" in child_prompt
+                assert model.await_count == 3
+        finally:
+            if sid is not None:
+                session_manager._sessions.pop(sid, None)
