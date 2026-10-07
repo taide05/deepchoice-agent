@@ -177,7 +177,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v19"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v8", "conclusion_synthesizer.synthesis_prompt": "v33",
+    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v33",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
@@ -798,8 +798,11 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("retired_version", ["v24", "v25", "v26", "v27", "v32"])
-def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version):
+@pytest.mark.parametrize("retired_asset,retired_version", [
+    *[("conclusion_synthesizer.synthesis_prompt", version) for version in ("v24", "v25", "v26", "v27", "v32")],
+    ("self_reviewer.review_system", "v8"),
+])
+def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_asset, retired_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     task = {"query": "A vs B"}
@@ -807,7 +810,7 @@ def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version
     retired = current.model_copy(update={
         "prompts": tuple(
             prompt.model_copy(update={"version": retired_version})
-            if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt" else prompt
+            if prompt.prompt_id == retired_asset else prompt
             for prompt in current.prompts
         ),
     })
@@ -815,7 +818,7 @@ def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version
     restored = RunManifest.model_validate_json(retired.model_dump_json())
     assert restored.manifest_id == _expected_manifest_id(restored)
     assert next(prompt.version for prompt in restored.prompts
-                if prompt.prompt_id == "conclusion_synthesizer.synthesis_prompt") == retired_version
+                if prompt.prompt_id == retired_asset) == retired_version
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, task)
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

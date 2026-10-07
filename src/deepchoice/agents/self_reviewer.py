@@ -50,7 +50,13 @@ because it belongs to a competing option. Compare the source's actual product, e
 configuration, workload and restart/failure scope with the claim. A qualifier or contradiction
 requires revise/withdraw, never keep. Report stances about the ORIGINAL claim, before revising.
 All named candidates in the option title and retained reasoning/assumptions/change_condition need coverage in that item's OWN saved basis;
-another item's source cannot support an unbound alternative claim. Prefer a useful revision
+another item's source cannot support an unbound alternative claim.
+Candidate attribution policy literal-product-identity-v1: explicit actions such as
+continue using or switch to belong to the user's choice label. Preserve that label,
+but check technical claims against the literal product named within it. Preserve
+version, compound and symbol distinctions; a short name embedded only in a longer
+explicit candidate does not establish coverage of the short-name product. Do not
+infer product aliases or treat an action alone as a product. Prefer a useful revision
 limited to the saved evidence; never infer absence of a capability from another product's feature.
 
 For each A analysis_id return exactly one action:

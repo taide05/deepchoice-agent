@@ -46,7 +46,7 @@ REPORT_TEMPLATE_VERSIONS = {
     "comparison_matrix": "comparison-matrix-v18",
 }
 PROMPT_VERSIONS = {
-    "self_reviewer.review_system": "v8",
+    "self_reviewer.review_system": "v9",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v3",
     "conclusion_synthesizer.synthesis_prompt": "v33",

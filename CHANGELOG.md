@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Preserve literal product identity through self-review
+
+Reuse source-admission candidate normalization when checking an analysis's own
+basis, preserving the user's action label in the option. Apply the same boundary
+to retained/revised reasoning, assumptions, change conditions and provisional
+explanations. A name contained only in a longer explicit candidate cannot borrow
+that candidate's source; separate mentions and different actions for the same
+product remain valid. Freeze review v9; historical v8 identities remain readable
+but cannot resume on the new runtime. No additional model calls or persistent state.
+Generic integration regressions cover source admission through citation, review
+and all report formats; they do not establish real-model semantic quality.
+
 ### Audit cumulative logic after the implementation rounds
 
 Review the 29-file production diff and adjacent default-path contracts with two

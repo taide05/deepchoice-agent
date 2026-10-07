@@ -236,3 +236,51 @@ async def test_repair_can_only_append_bound_challenge_sentences_without_authorit
         assert new["basis"][1]["fact_id"] == "F2" and new["basis"][1]["sentence_ids"] == [2]
     for key in ("winner", "source_facts", "deployment_readiness", "action_plan_mode"):
         assert rec[key] == before[key]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["option", "reasoning", "assumptions", "change_condition"])
+@pytest.mark.parametrize("action", ["keep", "revise"])
+async def test_action_candidate_cannot_borrow_other_slots_product_basis(monkeypatch, field, action):
+    state = make_state(maximum=True)
+    state["task"]["candidate_techs"] = ["continue using Document 0", "switch to Document 1"]
+    rec = state["final_recommendation"]
+    original = rec["decision_analysis"][0]
+    original.update(kind="choice", option=state["task"]["candidate_techs"][0],
+                    reasoning="Evaluate Document 0 within the stated limits.", assumptions=[],
+                    change_condition="Reconsider after measuring the workload.")
+    rec["decision_analysis"] = [original]
+    claim = "Document 1 guarantees durable recovery."
+    if field == "option":
+        original["option"] = state["task"]["candidate_techs"][1]
+    else:
+        # Isolate bare-product leakage from the old guard's separate option-label rejection.
+        original.update(kind="answer", option="")
+        if action == "keep":
+            original[field] = [claim] if field == "assumptions" else claim
+    answer = response_for(state)
+    row = answer["analysis_reviews"][0]
+    row["action"] = action
+    if action == "revise":
+        row.update({key: original[key] for key in ("reasoning", "assumptions", "change_condition")})
+        if field != "option":
+            row[field] = [claim] if field == "assumptions" else claim
+    # All four facts are reviewable; the competing product in F2 is not in A1's basis.
+    assert len(prepare_analysis_review(state).facts) == 4
+    assert original["fact_ids"] == ["F1"]
+    monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
+    update = await review.SelfReviewerAgent().run(state)
+    assert update["final_recommendation"]["decision_analysis"] == []
+
+
+@pytest.mark.asyncio
+async def test_provisional_review_checks_bare_product_of_action_candidate(monkeypatch):
+    state = requirement_state()
+    state["task"]["candidate_techs"] = ["continue using Local", "switch to OtherProduct"]
+    answer = response_for(state)
+    claim = "OtherProduct guarantees recovery."
+    answer["provisional_reviews"][0].update(action="revise", text=claim)
+    monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
+    update = await review.SelfReviewerAgent().run(state)
+    assert "provisional_explanation" not in update["final_recommendation"]["requirement_assessments"][0]
+    assert claim not in json.dumps(update)

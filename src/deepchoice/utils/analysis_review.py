@@ -4,7 +4,6 @@ A model review is a second inference, never semantic verification or authority.
 """
 from collections import Counter
 import json
-import re
 from copy import deepcopy
 from dataclasses import dataclass
 
@@ -12,6 +11,7 @@ from .decision_analysis import (
     MAX_ANALYSES, bind_decision_analysis, calibrate_decision_analysis,
     reviewable_source_fact, sentence_scoped_source_fact,
 )
+from .evidence import candidate_name_pattern, candidate_search_name
 from .evidence_choices import bind_evidence_choices
 
 
@@ -226,19 +226,42 @@ def _candidate_attribution(text, fact_ids, context):
     """A named candidate needs lexical coverage in its own basis, not another slot.
 
     This catches an unbound alternative claim even when a model reports no conflict.
-    It does not establish subject attribution or entailment; aliases may be withheld.
+    Use the same literal product identity as source admission, preserving action
+    labels for display. This does not establish entailment or infer product aliases.
     """
     if not isinstance(text, str):
         return False
     source = " ".join(fact["source_title"] + " " + fact["saved_text"]
                       for fact in context.facts if fact["id"] in fact_ids)
+    text, source = text.casefold(), source.casefold()
+    patterns = {}
     for candidate in context.candidates if isinstance(context.candidates, list) else []:
-        if not isinstance(candidate, str) or not candidate:
+        pattern = candidate_name_pattern(candidate)
+        if pattern is None:
             continue
-        pattern = r"(?<![a-z0-9_])" + re.escape(candidate.casefold()) + r"(?![a-z0-9_])"
-        if re.search(pattern, text.casefold()) and not re.search(pattern, source.casefold()):
-            return False
-    return True
+        if candidate_search_name(candidate) is None:
+            # Action-only/nested labels cannot gain a product identity from a source.
+            if " ".join(candidate.casefold().split()) in " ".join(text.split()):
+                return False
+            continue
+        patterns[pattern.pattern] = pattern
+
+    def mentioned_products(value):
+        # A shorter explicit name inside a longer choice names only the latter.
+        # Sort spans once; identical spans may represent the same product identity.
+        spans = sorted((match.start(), -match.end(), key)
+                       for key, pattern in patterns.items() for match in pattern.finditer(value))
+        mentioned, enclosing = set(), (-1, -1)
+        for start, negative_end, key in spans:
+            end = -negative_end
+            if end > enclosing[1]:
+                enclosing = (start, end)
+                mentioned.add(key)
+            elif enclosing == (start, end):
+                mentioned.add(key)
+        return mentioned
+
+    return mentioned_products(text) <= mentioned_products(source)
 
 
 def _prepare_provisional(recommendation, verification, facts, requirements, query, capacity):
