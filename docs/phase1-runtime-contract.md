@@ -19,6 +19,18 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-07 R20：绑定/结构纠错后，runtime-owned compact回答按is_answer_delivery分流，
+终端投影保留answer_delivery原需求清单、source_facts和decision_analysis，明确写原
+constraint-aware-v1。旧具体胜者撤回为context_dependent，排名和旧平行字段清空，
+confidence保持low；正常路径保留
+原固定非空validation-only计划，需求越界清空分析与计划，unresolved_questions仍为空。
+默认不再执行旧来源数字资格、winner/constraint-fit或弃权重建。legacy路径及直接
+_normalize_decision_contract适配器保持原契约；source事实/分析绑定、引用sanitize→bind、
+自审、受限早停和公开快照边界不变。状态manifest/RunContext入口同样按运行时模式分流，
+不能由模型伪造answer_delivery。15种真实前实现/候选离线请求与节点输出相等，prompt、
+asset和manifest身份未变；没有新状态、调用类型或数据库变更。这是局部默认处理精简，
+不代表全部回答表示已统一或模型质量通过。
+
 2026-10-07 R19：新manifest冻结source-score-v10。仅ordinary official结果缺少候选
 字面名称且已有合法有界保存正文时，可据正文的实际名称暂缓排除，进入原有一次
 source_scope_selector。不得以URL、任意target元数据或预声明passages暂缓；导航、

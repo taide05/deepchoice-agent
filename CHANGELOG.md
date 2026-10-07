@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Finalize compact answers without legacy reconstruction
+
+After binding/correction, route runtime-owned compact answers through one
+terminal projection. Keep the original inventory, facts, analyses, fixed
+validation-only plan and overflow withdrawal, while clearing old authority
+channels. Leave legacy normalization and directly used adapters intact; keep
+citation processing, calls, diagnostics, prompts and manifest identity unchanged.
+
 ### Preserve saved official body through candidate admission
 
 Offer a bounded official body that explicitly names a candidate to the existing

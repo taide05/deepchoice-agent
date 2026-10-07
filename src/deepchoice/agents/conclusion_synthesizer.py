@@ -3,7 +3,10 @@ import re
 
 from ..utils.decision_analysis import inspect_synthesis_bindings, original_analysis_requirements, prefer_corrected_projection
 from ..utils.call_diagnostics import output_shape_valid
-from ..utils.answer_delivery import ANSWER_CONTRACT, expand_answer_response, is_answer_delivery, bound_answer_delivery
+from ..utils.answer_delivery import (
+    ANSWER_CONTRACT, expand_answer_response, is_answer_delivery,
+    bound_answer_delivery, finalize_answer_delivery,
+)
 
 from ..budget_errors import BudgetError
 from ..utils.citation_markers import citation_spans, marker_titles, title_key
@@ -1240,63 +1243,66 @@ class ConclusionSynthesizerAgent:
                     correction["outcome"] = "partial_corrected" if partial else "corrected"
                 else:
                     correction["outcome"] = "invalid"
-        for field in ("ranked_options", "trade_offs"):
-            value = result.get(field)
-            result[field] = (
-                [item for item in value if isinstance(item, dict)]
-                if isinstance(value, list)
-                else []
+        if is_answer_delivery(result):
+            result = finalize_answer_delivery(
+                result, task.get("query", ""), requirements_overflow=requirements_overflow,
             )
-        result, contract_requires_abstention = _normalize_decision_contract(
-            result,
-            requirements,
-            _usable_evidence_ids(evidence_chains),
-            task.get("query", ""),
-        )
-        explicit_missing_context = _explicit_missing_context_requires_abstention(
-            task,
-            research_state.get("_supplemental_input"),
-        )
-        if explicit_missing_context:
-            gap = _missing_context_gap(task.get("query", ""))
-            if gap not in result["unresolved_questions"]:
-                result["unresolved_questions"].append(gap)
-        winner_before_validation = _prompt_data(result.get("winner"), 300)
-        _validate_winner(result)
-        _validate_constraint_fit(result)
-        winner_after_validation = _prompt_data(result.get("winner"), 300)
-        winner_validation_failed = not _valid_winner_name(winner_after_validation)
-        winner_was_rewritten = bool(
-            not winner_after_validation
-            or winner_after_validation.casefold() != winner_before_validation.casefold()
-        )
-        if (
-            contract_requires_abstention
-            or explicit_missing_context
-            or winner_validation_failed
-            or winner_was_rewritten
-            or result.get("winner") == "context_dependent"
-        ):
-            reason = (
-                "The decision requirements exceeded the safety limit."
-                if requirements_overflow
-                else (
-                    _missing_context_gap(task.get("query", ""))
-                    if explicit_missing_context
+        else:
+            for field in ("ranked_options", "trade_offs"):
+                value = result.get(field)
+                result[field] = (
+                    [item for item in value if isinstance(item, dict)]
+                    if isinstance(value, list)
+                    else []
+                )
+            result, contract_requires_abstention = _normalize_decision_contract(
+                result,
+                requirements,
+                _usable_evidence_ids(evidence_chains),
+                task.get("query", ""),
+            )
+            explicit_missing_context = _explicit_missing_context_requires_abstention(
+                task,
+                research_state.get("_supplemental_input"),
+            )
+            if explicit_missing_context:
+                gap = _missing_context_gap(task.get("query", ""))
+                if gap not in result["unresolved_questions"]:
+                    result["unresolved_questions"].append(gap)
+            winner_before_validation = _prompt_data(result.get("winner"), 300)
+            _validate_winner(result)
+            _validate_constraint_fit(result)
+            winner_after_validation = _prompt_data(result.get("winner"), 300)
+            winner_validation_failed = not _valid_winner_name(winner_after_validation)
+            winner_was_rewritten = bool(
+                not winner_after_validation
+                or winner_after_validation.casefold() != winner_before_validation.casefold()
+            )
+            if (
+                contract_requires_abstention
+                or explicit_missing_context
+                or winner_validation_failed
+                or winner_was_rewritten
+                or result.get("winner") == "context_dependent"
+            ):
+                reason = (
+                    "The decision requirements exceeded the safety limit."
+                    if requirements_overflow
                     else (
-                        "The proposed winner was inconsistent with the assessed constraints."
-                        if winner_was_rewritten
-                        else "One or more decision-critical requirements remain unresolved."
+                        _missing_context_gap(task.get("query", ""))
+                        if explicit_missing_context
+                        else (
+                            "The proposed winner was inconsistent with the assessed constraints."
+                            if winner_was_rewritten
+                            else "One or more decision-critical requirements remain unresolved."
+                        )
                     )
                 )
-            )
-            result = abstain_recommendation(result, task.get("query", ""), reason)
-        if correction["outcome"] in {"corrected", "partial_corrected"}:
-            # Apply after normalization, which otherwise resets action_plan_mode.
-            result = restrict_action_plan(result, task.get("query", ""))
-            result["confidence"] = "low"
-        if is_answer_delivery(result):
-            result = bound_answer_delivery(result)
+                result = abstain_recommendation(result, task.get("query", ""), reason)
+            if correction["outcome"] in {"corrected", "partial_corrected"}:
+                # Apply after normalization, which otherwise resets action_plan_mode.
+                result = restrict_action_plan(result, task.get("query", ""))
+                result["confidence"] = "low"
         _sanitize_citations(result, evidence_chains)
         _bind_citations(result, cite_map)
 

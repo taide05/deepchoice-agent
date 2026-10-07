@@ -74,6 +74,9 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     monkeypatch.setattr(synth, "_summarize_chains", unused)
     monkeypatch.setattr(synth, "_summarize_conflicts", unused)
     monkeypatch.setattr(synth, "SYNTHESIS_PROMPT", Mock(format=unused))
+    for helper in ("_normalize_decision_contract", "_usable_evidence_ids", "_validate_winner",
+                   "_validate_constraint_fit", "abstain_recommendation"):
+        monkeypatch.setattr(synth, helper, unused)
     model = AsyncMock(side_effect=[
         {"source_view_ids": ["S1", "S2"],
          "winner": "FORGED"},

@@ -55,3 +55,24 @@ def bound_answer_delivery(value):
                   "scene_fit_note", "confidence_rationale"):
         result[field] = ""
     return result
+
+
+def finalize_answer_delivery(value, query, *, requirements_overflow=False):
+    """Apply the terminal compatibility projection once after fact/analysis binding.
+
+    The canonical answer and original inventory survive; legacy authority fields
+    remain empty. This projection does not verify citations or reasoning.
+    """
+    from .decision_contract import DECISION_BASIS_VERSION, restrict_action_plan
+
+    result = bound_answer_delivery(value)
+    result["decision_basis_version"] = DECISION_BASIS_VERSION
+    if requirements_overflow:
+        result["decision_analysis"] = []
+        result["action_plan"] = []
+    else:
+        result = restrict_action_plan(result, query, deployment_unverified=True)
+        # Original question gaps are rendered from the runtime inventory, not
+        # from parallel legacy uncertainty prose produced by this plan adapter.
+        result["unresolved_questions"] = []
+    return result

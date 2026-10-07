@@ -185,3 +185,31 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
     assert model.await_count == 2
     assert state["final_recommendation"]["decision_analysis"] == []
     assert "different assertion" not in FORMAT_RENDERERS["what_why_how"](state)
+
+
+@pytest.mark.parametrize("query", ["Choose Alpha", "选择 Alpha"])
+@pytest.mark.parametrize("overflow", [False, True])
+def test_terminal_delivery_keeps_canonical_answer_and_withdraws_parallel_authority(query, overflow):
+    from deepchoice.utils.answer_delivery import finalize_answer_delivery
+    from deepchoice.utils.decision_contract import DECISION_BASIS_VERSION, is_fixed_validation_only_plan
+
+    value = expand_answer_response(payload("Bound conditional reasoning"), [], query)
+    value.update(winner="FORGED_WINNER", confidence="high", ranked_options=[{"name": "FORGED_WINNER"}],
+                 requirement_assessments=[{"status": "satisfied"}], action_plan=[{"step": "UNSAFE_STEP"}],
+                 decision_branches=[{"option": "FORGED_WINNER"}], recommendation="UNSAFE_STEP",
+                 unresolved_questions=["PARALLEL_UNKNOWN"], winner_rationale="FORGED_RATIONALE")
+    original = deepcopy(value)
+    result = finalize_answer_delivery(value, query, requirements_overflow=overflow)
+    assert value == original
+    assert result["answer_delivery"] == original["answer_delivery"]
+    assert result["source_facts"] == original["source_facts"]
+    assert result["decision_analysis"] == ([] if overflow else original["decision_analysis"])
+    assert result["decision_basis_version"] == DECISION_BASIS_VERSION
+    assert result["winner"] == "context_dependent" and result["confidence"] == "low"
+    assert result["unresolved_questions"] == result["ranked_options"] == result["requirement_assessments"] == result["decision_branches"] == []
+    assert "UNSAFE_STEP" not in str(result) and "FORGED_" not in str(result)
+    assert result["deployment_readiness"] == "unverified"
+    if overflow:
+        assert result["action_plan"] == []
+    else:
+        assert is_fixed_validation_only_plan(result, query)
