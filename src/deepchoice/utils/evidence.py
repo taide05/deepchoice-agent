@@ -45,6 +45,32 @@ def candidate_name_pattern(candidate: object) -> re.Pattern | None:
     return re.compile(r"(?<![a-z0-9_+#])" + name + r"(?![a-z0-9_+#])")
 
 
+def candidate_product_mentions(text, candidates):
+    """Return literal product identities, excluding names contained in longer ones.
+
+    Choice actions do not change a product identity; no aliases are inferred.
+    A mention is a routing hint, not evidence of applicability or claim support.
+    """
+    if not isinstance(text, str) or not isinstance(candidates, (list, tuple)):
+        return set()
+    patterns = {}
+    for candidate in candidates:
+        if candidate_search_name(candidate) is not None:
+            pattern = candidate_name_pattern(candidate)
+            patterns[pattern.pattern] = pattern
+    spans = sorted((match.start(), -match.end(), key)
+                   for key, pattern in patterns.items() for match in pattern.finditer(text.casefold()))
+    mentioned, enclosing = set(), (-1, -1)
+    for start, negative_end, key in spans:
+        end = -negative_end
+        if end > enclosing[1]:
+            enclosing = (start, end)
+            mentioned.add(key)
+        elif enclosing == (start, end):
+            mentioned.add(key)
+    return mentioned
+
+
 def conclusion_source_allowed(source: dict) -> bool:
     """Exclude paste-host evidence from new conclusions, not from retrieval.
 

@@ -7,7 +7,7 @@ import json
 import re
 from copy import deepcopy
 
-from .evidence import conclusion_source_allowed, is_navigation_placeholder
+from .evidence import candidate_product_mentions, is_navigation_placeholder
 from .source_scope import MAX_SCOPE_CHARS, MAX_SCOPE_SENTENCES, MAX_SENTENCE_CHARS
 
 MAX_PACKET_BYTES = 24000
@@ -110,91 +110,49 @@ def selected_passages(source, ranges):
     return bounded
 
 
-def _selection_rows(chains):
+def _selection_rows(bindings):
     """Yield identity-valid rows before menu capacity is applied."""
-    from ..citations.verifier import _resolve_title, _source_registry, _split_sentences
-    from .evidence_choices import eligible_source_fact_ids, whole_source_text
+    from ..citations.verifier import _split_sentences
+    from .evidence_choices import bind_source_fact
 
-    registry, _ = _source_registry(chains)
-    whole_ids = eligible_source_fact_ids(chains)
-    number = 0
-    for chain_index, chain in enumerate(chains):
-        for source_index, source in enumerate(chain.get("sources", [])[:4]):
-            number += 1
-            if not isinstance(source, dict) or not conclusion_source_allowed(source):
-                continue
-            from .conflict_scope import validated_conflict_scope
-            conflict_scope = validated_conflict_scope(source) if "conflict_scope" in source else None
-            if ((chain.get("disputed") or "conflict_scope" in source) and conflict_scope is None):
-                continue
-            title = source.get("title")
-            resolved, error = _resolve_title(title, registry) if isinstance(title, str) else (None, True)
-            if error or resolved is None or not resolved.canonical_url or resolved.position != (chain_index, source_index):
-                continue
-            scope = selection_sentences(source)
-            whole = number in whole_ids
-            if scope is None and not whole:
-                continue
-            sentences = scope or tuple(_split_sentences(whole_source_text(source.get("snippet"))))
-            row = {"title": resolved.title, "whole_allowed": whole,
-                   "ranges_allowed": scope is not None,
-                   "sentences": [{"index": index, "text": text} for index, text in enumerate(sentences)]}
-            if conflict_scope:
-                row["conflict_ranges"] = conflict_scope["ranges"]
-            if source.get("passages"):
-                # Existing disjoint excerpts must not look like a single location.
-                row["separate_locations"] = True
-                locations = [location for location, passage in enumerate(source["passages"], 1)
-                             for _ in _split_sentences(passage)]
-                for sentence, location in zip(row["sentences"], locations):
-                    sentence["location"] = location
-            yield number, row
+    for number, binding in bindings.items():
+        source, resolved = binding
+        fact = bind_source_fact({"id": "F1", "evidence_id": number}, binding)
+        scope = selection_sentences(source)
+        if scope is None and fact is None:
+            continue
+        sentences = tuple(_split_sentences(fact["saved_text"])) if fact is not None else scope
+        row = {"title": resolved.title, "whole_allowed": fact is not None,
+               "ranges_allowed": scope is not None,
+               "sentences": [{"index": index, "text": text} for index, text in enumerate(sentences)]}
+        if "conflict_scope" in source:
+            row["conflict_ranges"] = source["conflict_scope"]["ranges"]
+        if source.get("passages"):
+            row["separate_locations"] = True
+            locations = [location for location, passage in enumerate(source["passages"], 1)
+                         for _ in _split_sentences(passage)]
+            for sentence, location in zip(row["sentences"], locations):
+                sentence["location"] = location
+        yield number, row
 
 
-def selection_packet(chains):
-    """Preserve the bounded legacy coordinate menu and range admission."""
-    lines, offered, size = [], set(), 0
-    for number, row in _selection_rows(chains):
-        line = f"[[{number}]] " + json.dumps(row, ensure_ascii=False, separators=(",", ":"))
-        needed = len(line.encode("utf-8")) + bool(lines)
-        if len(offered) >= MAX_PACKET_SOURCES or size + needed > MAX_PACKET_BYTES:
-            continue  # Omit the entire source, never a trailing qualifier.
-        lines.append(line)
-        offered.add(number)
-        size += needed
-    return "\n".join(lines), offered
+SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v2:sources=24;bytes=24000;focus=2+maximal;shared-admission=max-packet-bytes;literal-candidate-first-fit;request-order"
 
 
-SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v1:sources=24;bytes=24000;focus=2+maximal;range-admission=legacy-menu"
-
-
-def selection_view_packet(chains):
-    """Advertise runtime-built views; models select IDs, never coordinates.
-
-    Whole bounded sources retain the compatibility binder. Longer continuous
-    sources offer short and maximal adjacent-context windows through the SAME range and
-    conflict checks. A window is a bounded excerpt, not semantic completeness.
-    Source sentences are shown once, with each view's actual included interval.
-    Range sources keep the legacy menu admission used by citation and review;
-    whole sources can refill capacity because they need no range admission.
-    """
-    from .evidence_choices import selected_source_text, bind_evidence_choices
+def _view_rows(bindings):
+    """Build both menu projections from the same source checks, without recursion."""
+    from .evidence_choices import selected_source_text, bind_source_fact
     from ..citations.verifier import _split_sentences
 
-    _, range_source_ids = selection_packet(chains)
-    sources = [source for chain in chains for source in chain.get("sources", [])[:4]]
-    lines, offered, size = [], {}, 0
-    for number, original in _selection_rows(chains):
-        if len(lines) >= MAX_PACKET_SOURCES:
-            break
-        source = sources[number - 1]
+    for number, original in _selection_rows(bindings):
+        source = bindings[number][0]
         count = len(original["sentences"])
         views, refs = [], {}
         if original["whole_allowed"]:
             identifier = f"S{number}"
             views.append({"id": identifier, "included_sentence_range": [0, count]})
             refs[identifier] = {"evidence_id": number}
-        elif original["ranges_allowed"] and number in range_source_ids:
+        elif original["ranges_allowed"]:
             focuses = []
             # Keep small mechanisms selectable without forcing unrelated numeric
             # material into the same fact. Also retain maximal windows for a
@@ -225,14 +183,12 @@ def selection_view_packet(chains):
                 refs[identifier] = {"evidence_id": number, "source_ranges": [[start, end]]}
         if not views:
             continue
-        validated, bindings = [], {}
+        validated, view_bindings = [], {}
         for view in views:
             ref = refs[view["id"]]
-            rebound = bind_evidence_choices({"source_facts": [{"id": "F1", **ref}]}, chains, [], [])
-            facts = rebound.get("source_facts", [])
-            if not facts:
+            fact = bind_source_fact({"id": "F1", **ref}, bindings[number])
+            if fact is None:
                 continue
-            fact = facts[0]
             if original["whole_allowed"]:
                 original["sentences"] = [{"index": index, "text": text}
                                          for index, text in enumerate(_split_sentences(fact["saved_text"]))]
@@ -247,8 +203,8 @@ def selection_view_packet(chains):
             if shown != tuple(_split_sentences(fact["saved_text"])):
                 continue  # Never advertise text differing from its bound view.
             validated.append(view)
-            bindings[view["id"]] = {"reference": ref, "source": deepcopy(source), "fact": fact}
-        views, refs = validated, bindings
+            view_bindings[view["id"]] = {"reference": ref, "source": deepcopy(source), "fact": fact}
+        views, refs = validated, view_bindings
         if not views:
             continue
         row = {"title": original["title"], "views": views, "sentences": original["sentences"]}
@@ -257,13 +213,79 @@ def selection_view_packet(chains):
         if original.get("conflict_ranges"):
             row["conflict_ranges"] = original["conflict_ranges"]
         rendered = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
-        needed = len(rendered.encode("utf-8")) + bool(lines)
-        if size + needed > MAX_PACKET_BYTES:
-            continue  # Preserve the whole source row and its qualifications.
-        lines.append(rendered)
-        offered.update(refs)
-        size += needed
-    return "\n".join(lines), offered
+        numeric = f"[[{number}]] " + json.dumps(original, ensure_ascii=False, separators=(",", ":"))
+        yield number, rendered, numeric, refs, max(len(rendered.encode("utf-8")), len(numeric.encode("utf-8")))
+
+
+def _admitted_rows(chains, candidates=(), *, bindings=None):
+    """One capacity decision for view display, numeric compatibility and ranges.
+
+    Try the first fitting row per literal candidate in request order; this is
+    best-effort coverage, not optimal packing. Ambiguous/unclassified titles
+    compete only for remaining capacity. A title
+    mention allocates an opportunity, never support. Emit in original order.
+    """
+    from .evidence_choices import source_fact_bindings
+
+    bindings = source_fact_bindings(chains) if bindings is None else bindings
+    rows = dict(_selection_rows(bindings))
+    built, selected, size = {}, set(), 0
+
+    def admit(number):
+        nonlocal size
+        if number in selected:
+            return True
+        if len(selected) >= MAX_PACKET_SOURCES:
+            return False
+        # The numeric row is a lower bound on the shared max projection cost.
+        # It contains every source sentence: skipping an impossible whole row
+        # avoids building its views, without truncation or a second allocator.
+        numeric = f"[[{number}]] " + json.dumps(rows[number], ensure_ascii=False, separators=(",", ":"))
+        if size + len(numeric.encode("utf-8")) + bool(selected) > MAX_PACKET_BYTES:
+            return False
+        if number not in built:
+            built[number] = next(_view_rows({number: bindings[number]}), None)
+        row = built[number]
+        if row is None or size + row[4] + bool(selected) > MAX_PACKET_BYTES:
+            return False
+        size += row[4] + bool(selected)
+        selected.add(number)
+        return True
+
+    groups = {}
+    for number, row in rows.items():
+        mentions = candidate_product_mentions(row["title"], candidates)
+        if len(mentions) == 1:
+            groups.setdefault(next(iter(mentions)), []).append(number)
+    # Candidate order is request order, deduplicating multiple actions for one product.
+    reserved = set()
+    for candidate in candidates if isinstance(candidates, (list, tuple)) else []:
+        for identity in sorted(candidate_product_mentions(candidate, [candidate])):
+            if identity in reserved:
+                continue
+            reserved.add(identity)
+            for number in groups.get(identity, []):
+                if admit(number):
+                    break
+    for number in rows:
+        admit(number)
+    return [built[number] for number in rows if number in selected]
+
+
+def admitted_source_ids(chains, candidates=(), *, bindings=None):
+    return {row[0] for row in _admitted_rows(chains, candidates, bindings=bindings)}
+
+
+def selection_packet(chains, candidates=()):
+    """Numeric coordinate compatibility projection of the current shared menu."""
+    rows = _admitted_rows(chains, candidates)
+    return "\n".join(row[2] for row in rows), {row[0] for row in rows}
+
+
+def selection_view_packet(chains, candidates=()):
+    """Advertise only runtime-built, capacity-admitted view IDs and exact text."""
+    rows = _admitted_rows(chains, candidates)
+    return "\n".join(row[1] for row in rows), {key: view for row in rows for key, view in row[3].items()}
 
 
 def bind_selected_views(selected, offered, chains, candidates, requirements):
@@ -272,28 +294,21 @@ def bind_selected_views(selected, offered, chains, candidates, requirements):
     Invalid/unknown IDs never become guessed sources. Duplicate advertised IDs
     use one slot; an oversized response is rejected, never truncated.
     """
-    from .evidence_choices import MAX_SOURCE_FACTS, bind_evidence_choices
+    from .evidence_choices import MAX_SOURCE_FACTS
 
     values = selected.get("source_view_ids") if isinstance(selected, dict) else None
-    if not isinstance(values, list) or len(values) > MAX_SOURCE_FACTS:
+    if not isinstance(values, list) or not values or len(values) > MAX_SOURCE_FACTS:
         return []
-    sources = [source for chain in chains for source in chain.get("sources", [])[:4]]
-    refs, expected, seen = [], {}, set()
+    _, current = selection_view_packet(chains, candidates)
+    facts, seen = [], set()
     for identifier in values:
         if not isinstance(identifier, str) or identifier not in offered or identifier in seen:
             continue
         seen.add(identifier)
         view = offered[identifier]
-        number = view["reference"]["evidence_id"]
-        if number > len(sources) or sources[number - 1] != view["source"]:
-            continue  # Menu identities freeze the full original source, not only a crop.
-        fact_id = f"F{len(refs) + 1}"
-        refs.append({"id": fact_id, **view["reference"]})
-        expected[fact_id] = view["fact"]
-    bound = bind_evidence_choices({"source_facts": refs}, chains, candidates, requirements)
-    fields = ("saved_text", "saved_passages", "source_title", "canonical_url")
-    facts = [fact for fact in bound.get("source_facts", [])
-             if all(fact.get(field) == expected[fact["id"]].get(field) for field in fields)]
-    for index, fact in enumerate(facts, 1):
-        fact["id"] = f"F{index}"
+        if identifier not in current or current[identifier] != view:
+            continue  # Recompute admission and freeze full sources, not only crops.
+        fact = deepcopy(current[identifier]["fact"])
+        fact["id"] = f"F{len(facts) + 1}"
+        facts.append(fact)
     return facts

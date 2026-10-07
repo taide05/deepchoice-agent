@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Share final source-menu admission and reduce repeated binding
+
+Use one deterministic source admission for view IDs, numeric compatibility and
+range rebinding/citation checks. Reserve the first fitting source for each literal
+candidate in request order, then fill in original order within 24 sources/24000
+UTF-8 bytes. This is best-effort coverage, not optimal packing or semantic support.
+Recheck displayed IDs, share source identity/single-fact binding, and skip building
+views whose complete row already exceeds remaining capacity. No persistent cache,
+extra calls or raised fact limits. Freeze synthesis v34 and citation v20; historical
+identities remain readable but require a new run. Keep whole-fact compatibility.
+
+
 ### Preserve literal product identity through self-review
 
 Reuse source-admission candidate normalization when checking an analysis's own

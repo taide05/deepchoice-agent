@@ -49,7 +49,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v9",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v3",
-    "conclusion_synthesizer.synthesis_prompt": "v33",
+    "conclusion_synthesizer.synthesis_prompt": "v34",
     "source_evaluator.source_scope_selection": "v1",
     "conflict_detector.contradiction_scan_system": "v4",
 }
@@ -74,7 +74,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34"] = "v1"
     sha256: str
 
 
@@ -134,7 +134,7 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v10", "deterministic-citation-v11",
         "deterministic-citation-v12", "deterministic-citation-v13", "deterministic-citation-v14",
         "deterministic-citation-v15", "deterministic-citation-v16",
-        "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19",
+        "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19", "deterministic-citation-v20",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
     # Missing in historical schema-v1 identities; current default is scan-only.
@@ -152,7 +152,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v4"] = "research-v4"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v19"]
+    citation_policy_version: Literal["deterministic-citation-v20"]
     hitl_policy_version: Literal["evidence-insufficient-v1"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -328,7 +328,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "scoring_policy_version": "source-score-v9",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v19",
+        "citation_policy_version": "deterministic-citation-v20",
         "hitl_policy_version": "evidence-insufficient-v1",
         "conflict_policy_version": "scan-only-v2",
         "gather_evidence": task.get("gather_evidence", True),

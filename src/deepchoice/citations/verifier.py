@@ -903,6 +903,7 @@ def _make_check(
 async def verify_citations(
     recommendation: dict[str, Any],
     evidence_chains: list[dict[str, Any]],
+    candidates: list[str] | tuple = (),
 ) -> tuple[CitationVerification, list[dict[str, Any]]]:
     """Verify cited critical claims and project aggregate status onto sources."""
 
@@ -912,8 +913,8 @@ async def verify_citations(
     if isinstance(source_facts, list) and any(
         isinstance(fact, dict) and "source_ranges" in fact for fact in source_facts
     ):
-        from ..utils.fact_selection import selection_packet
-        _, offered_selection_ids = selection_packet(evidence_chains)
+        from ..utils.fact_selection import admitted_source_ids
+        offered_selection_ids = admitted_source_ids(evidence_chains, candidates)
     claims, claims_truncated = _extract_claims(recommendation)
     resolved: list[tuple[_Claim, _RegistrySource | None, CitationReason | None]] = []
     for claim in claims:

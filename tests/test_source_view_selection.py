@@ -137,24 +137,160 @@ def test_unusable_legacy_row_does_not_hide_later_whole_source(monkeypatch):
     unusable = " ".join(["Storage administrators retain configuration history before changing operational requirements."] * 17)
     original = chains(unusable) + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
         "snippet": "Beta retains records. Configuration determines retention."}]}]
-    legacy_first, _ = selection.selection_packet(original[:1])
-    monkeypatch.setattr(selection, "MAX_PACKET_BYTES", len(legacy_first.encode("utf-8")))
-    assert selection.selection_packet(original)[1] == {1}
+    monkeypatch.setattr(selection, "MAX_PACKET_BYTES", 2200)
+    assert selection.selection_packet(original)[1] == {2}
     packet, menu = selection.selection_view_packet(original)
     assert set(menu) == {"S2"} and len(packet.encode("utf-8")) <= selection.MAX_PACKET_BYTES
     assert select(["S2"], menu, original)[0]["saved_text"] == original[1]["sources"][0]["snippet"]
 
 
-def test_view_metadata_overflow_allows_whole_source_replacement_but_keeps_range_admission(monkeypatch):
+def test_view_metadata_overflow_uses_one_admission_for_both_projections(monkeypatch):
     text = " ".join(f"Section {i} explains complete storage administration and recovery configuration requirements." for i in range(17))
     original = chains(text) + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
         "snippet": "Beta retains records. Configuration determines retention."}]}]
     original += [{"sources": [{"title": "Later range guide", "url": "https://later.example/docs", "snippet": text}]}]
     legacy_first, _ = selection.selection_packet(original[:1])
     monkeypatch.setattr(selection, "MAX_PACKET_BYTES", len(legacy_first.encode("utf-8")))
-    assert selection.selection_packet(original)[1] == {1}
+    assert selection.selection_packet(original)[1] == {2}
     packet, menu = selection.selection_view_packet(original)
     assert set(menu) == {"S2"} and len(packet.encode("utf-8")) <= selection.MAX_PACKET_BYTES
-    # Every later range is still subject to the historical rebind/citation menu.
+    # Range binding uses the same final admission as both displayed projections.
     assert not bind_evidence_choices({"source_facts": [{"id": "F1", "evidence_id": 3,
         "source_ranges": [[0, 2]]}]}, original, [], [])["source_facts"]
+
+
+@pytest.mark.parametrize("long_tail", [False, True])
+def test_final_menu_preserves_candidates_after_source_count_and_byte_caps(long_tail):
+    original = []
+    for index in range(25):
+        product = "Alpha" if index < 24 else "Beta"
+        text = f"{product} retains records. Retention requires configuration."
+        if long_tail:
+            text += " " + " ".join(f"Section {n} describes independent storage administration responsibilities and recovery prerequisites." for n in range(14))
+        original.append({"sources": [{"title": f"{product} guide {index}",
+            "url": f"https://docs.example/guide/{index}", "snippet": text}]})
+    candidates = ["continue using Alpha", "switch to Beta"]
+    before = deepcopy(original)
+    packet, menu = selection.selection_view_packet(original, candidates)
+    numeric_packet, numbers = selection.selection_packet(original, candidates)
+    assert 25 in numbers and 1 in numbers and len(numbers) <= 24
+    assert numbers == {view["reference"]["evidence_id"] for view in menu.values()}
+    assert max(len(packet.encode("utf-8")), len(numeric_packet.encode("utf-8"))) <= 24000
+    chosen = next(key for key, view in menu.items() if view["reference"]["evidence_id"] == 25)
+    facts = selection.bind_selected_views({"source_view_ids": [chosen]}, menu, original, candidates, [])
+    assert len(facts) == 1 and "Retention requires configuration." in facts[0]["saved_text"]
+    assert bind_evidence_choices({"source_facts": facts}, original, candidates, [])["source_facts"] == facts
+    assert original == before
+
+
+def test_unbindable_candidate_row_does_not_consume_reserved_opportunity():
+    original = [chains()[0] for _ in range(24)]
+    for i, chain in enumerate(original):
+        chain["sources"][0].update(title=f"Alpha guide {i}", url=f"https://alpha.example/{i}")
+    bad = {"disputed": True, "sources": [{"title": "Beta invalid", "url": "https://beta.example/bad",
+        "snippet": "Beta retains records."}]}
+    good = {"sources": [{"title": "Beta guide", "url": "https://beta.example/good",
+        "snippet": "Beta retains records. Configuration determines retention."}]}
+    original.extend([bad, good])
+    _, menu = selection.selection_view_packet(original, ["Alpha", "Beta"])
+    assert "S26" in menu and "S25" not in menu and len(menu) == 24
+
+
+def test_overlapping_products_and_same_product_actions_share_literal_identity(monkeypatch):
+    original = []
+    for i, title in enumerate(["Alpha Pro guide", "Alpha Pro comparison with Alpha", "Alpha guide", "Beta guide"]):
+        original.append({"sources": [{"title": title, "url": f"https://docs.example/{i}",
+            "snippet": "Retained records require configuration."}]})
+    monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 3)
+    candidates = ["continue using Alpha", "switch to Alpha", "Alpha Pro", "Beta"]
+    _, menu = selection.selection_view_packet(original, candidates)
+    assert set(menu) == {"S1", "S3", "S4"}
+
+
+def test_forged_offered_mapping_cannot_admit_a_source_outside_final_menu(monkeypatch):
+    original = chains() + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
+        "snippet": "Beta retains records. Configuration determines retention."}]}]
+    _, forged = selection.selection_view_packet(original, ["Alpha", "Beta"])
+    forged["S999"] = None
+    assert not selection.bind_selected_views({"source_view_ids": ["S999"]}, forged, original, ["Alpha", "Beta"], [])
+    monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 1)
+    assert not selection.bind_selected_views({"source_view_ids": ["S2"]}, forged, original, ["Alpha", "Beta"], [])
+
+
+@pytest.mark.parametrize("candidates", [[], ["Alpha", "Beta"], ["Alpha", "Beta", "Gamma"]])
+def test_capacity_gaps_do_not_raise_limits_or_truncate_qualifiers(candidates, monkeypatch):
+    original = chains() + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
+        "snippet": "Beta retains records. Configuration determines retention."}]}]
+    monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 1)
+    packet, menu = selection.selection_view_packet(original, candidates)
+    numeric, numbers = selection.selection_packet(original, candidates)
+    assert set(menu) == {"S1"} and numbers == {1}
+    assert original[0]["sources"][0]["snippet"].split(". ")[-1] in packet
+    assert len(numeric.encode("utf-8")) <= 24000
+
+
+async def test_default_menu_range_survives_citation_review_and_rejects_unoffered_range(monkeypatch):
+    from unittest.mock import AsyncMock
+    import httpx
+    from deepchoice.agents import conclusion_synthesizer as synth
+    from deepchoice.agents.citation_validator import CitationValidatorAgent
+    from deepchoice.citations.verifier import verify_citations
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.utils.analysis_review import prepare_analysis_review
+
+    tail = " ".join(f"Section {n} describes independent storage administration responsibilities and recovery prerequisites." for n in range(14))
+    original = []
+    for i in range(3):
+        product = "Alpha" if i < 2 else "Beta"
+        original.append({"evidence_strength": "moderate", "sources": [{"title": f"{product} guide {i}",
+            "url": f"https://docs.example/{i}",
+            "snippet": f"{product} retains records. Retention requires configuration. Administrators retain a recovery log. " + tail}]})
+    monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 2)
+    task = {"query": "Choose Alpha or Beta under retention constraints.", "candidate_techs": ["Alpha", "Beta"]}
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1W1", "S3W1"],
+        "source_facts": [{"id": "F1", "evidence_id": 2}]}, {"decision_analysis": [{
+            "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["B1", "B2"],
+            "reasoning": "Retention depends on configuration.", "assumptions": [],
+            "change_condition": "Reconsider if retention expires."}]}])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = {"task": task, "evidence_chains": deepcopy(original)}
+    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    assert model.await_count == 2
+    assert '"id":"S3W1"' in model.await_args_list[0].args[0][0]["content"]
+    assert [f["evidence_id"] for f in state["final_recommendation"]["source_facts"]] == [1, 3]
+    async def fetch(*args, **kwargs):
+        i = int(args[1].rsplit("/", 1)[1])
+        return httpx.Response(200, text=original[i]["sources"][0]["snippet"], headers={"content-type": "text/plain"})
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state.update(await CitationValidatorAgent().run(state))
+    assert {f["status"] for f in state["final_recommendation"]["source_facts"]} == {"verified"}
+    assert len(prepare_analysis_review(state).slots) == 1
+    assert all("source_ranges" in f for f in state["final_recommendation"]["source_facts"])
+    raw = {"source_facts": [{"id": "F1", "evidence_id": 2, "source_ranges": [[0, 2]]}]}
+    assert not bind_evidence_choices(raw, original, task["candidate_techs"], [])["source_facts"]
+    # A fact legitimately bound under another menu is not authority for this task menu.
+    foreign = bind_evidence_choices(raw, original, [], [])
+    assert len(foreign["source_facts"]) == 1
+    verification, _ = await verify_citations(foreign, original, candidates=task["candidate_techs"])
+    assert {c.status.value for c in verification.checks} == {"unknown"}
+    assert {c.reason.value for c in verification.checks} == {"content_insufficient"}
+    assert [c["sources"][0]["snippet"] for c in state["evidence_chains"]] == [c["sources"][0]["snippet"] for c in original]
+
+
+async def test_menu_capacity_gap_is_visible_without_inventing_candidate_support(monkeypatch):
+    from unittest.mock import AsyncMock
+    from deepchoice.agents import conclusion_synthesizer as synth
+    from deepchoice.contracts.manifest import build_run_manifest
+
+    original = chains() + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
+        "snippet": "Beta retains records. Configuration determines retention."}]}]
+    monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 1)
+    task = {"query": "Choose Alpha or Beta.", "candidate_techs": ["Alpha", "Beta"]}
+    model = AsyncMock(return_value={"source_view_ids": ["S1"]})
+    monkeypatch.setattr(synth, "call_model", model)
+    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run({"task": task, "evidence_chains": original})
+    assert model.await_count == 1
+    assert 'Candidates without a literal title mention in this menu: ["Beta"]' in model.await_args.args[0][0]["content"]
+    assert state["final_recommendation"]["winner"] == "context_dependent"
+    assert not state["final_recommendation"].get("decision_analysis")
+    assert state["quality_signals"][0]["staged_generation"]["r0_withheld_one_sided"]

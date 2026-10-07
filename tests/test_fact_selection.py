@@ -107,7 +107,8 @@ def test_packet_cap_applies_to_whole_sources_and_rebinding_rejects_unoffered(mon
     from deepchoice.utils import fact_selection as selection
     original = chains(MECHANISM) + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/guide", "snippet": MECHANISM}]}]
     first, _ = selection_packet(original[:1])
-    monkeypatch.setattr(selection, "MAX_PACKET_BYTES", len(first.encode("utf-8")))
+    views, _ = selection.selection_view_packet(original[:1])
+    monkeypatch.setattr(selection, "MAX_PACKET_BYTES", max(len(first.encode("utf-8")), len(views.encode("utf-8"))))
     packet, offered = selection_packet(original)
     assert packet == first and offered == {1}
     raw = {"source_facts": [{"id": "F1", "evidence_id": 2, "source_ranges": [[0, 2]]}]}

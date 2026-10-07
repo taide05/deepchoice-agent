@@ -322,6 +322,7 @@ class CitationValidatorAgent:
         verification, projected_chains = await verify_citations(
             verification_input if isinstance(verification_input, dict) else {},
             evidence_chains if isinstance(evidence_chains, list) else [],
+            candidates=task.get("candidate_techs", []),
         )
         counts = verification.status_counts
         output = {

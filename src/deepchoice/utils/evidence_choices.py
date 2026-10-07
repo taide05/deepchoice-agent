@@ -78,11 +78,62 @@ def selected_source_text(source, fact):
     return (" ".join(passages), passages) if passages else ("", None)
 
 
+def source_fact_bindings(chains):
+    """Index globally unambiguous sources once, retaining original source numbers."""
+    from ..citations.verifier import _resolve_title, _source_registry
+    from .conflict_scope import validated_conflict_scope
+
+    registry, _ = _source_registry(chains)
+    numbered, number = {}, 0
+    for chain_index, chain in enumerate(chains):
+        for source_index, source in enumerate(chain.get("sources", [])[:4]):
+            number += 1
+            if not isinstance(source, dict) or not conclusion_source_allowed(source):
+                continue
+            if ((chain.get("disputed") or "conflict_scope" in source)
+                    and validated_conflict_scope(source) is None):
+                continue
+            title = source.get("title")
+            resolved, error = _resolve_title(title, registry) if isinstance(title, str) else (None, "missing")
+            if (error is not None or resolved is None or not resolved.canonical_url
+                    or resolved.position != (chain_index, source_index)):
+                continue
+            marker = f"[Source: {resolved.title}]"
+            spans = citation_spans(marker)
+            if (len(spans) != 1 or spans[0][:2] != (0, len(marker))
+                    or marker_titles(spans[0][2]) != [resolved.title]):
+                continue
+            numbered[number] = (source, resolved)
+    return numbered
+
+
+def bind_source_fact(item, binding):
+    """Copy one fact from a validated registry entry; caller enforces menu/limits.
+
+    Menu construction and full recommendation binding share this pure operation.
+    No model text, status, title or URL can override the registry or saved text.
+    """
+    from ..citations.verifier import _split_sentences
+
+    source, resolved = binding
+    text, passages = selected_source_text(source, item)
+    if not text or passages is None:
+        return None
+    fact = {
+        "id": item["id"], "evidence_id": item["evidence_id"],
+        "text": " ".join(f"{sentence} [Source: {resolved.title}]" for sentence in _split_sentences(text)),
+        "source_title": resolved.title, "canonical_url": resolved.canonical_url,
+        "saved_text": text, "status": "unknown",
+    }
+    if passages:
+        fact["saved_passages"] = list(passages)
+    if "source_ranges" in item:
+        fact["source_ranges"] = deepcopy(item["source_ranges"])
+    return fact
+
+
 def bind_evidence_choices(recommendation, chains, candidates, requirements):
     """Discard model text/status; rebuild from this request and unique sources."""
-    from ..citations.verifier import (
-        _resolve_title, _source_registry, _split_sentences,
-    )
     result = deepcopy(recommendation)
     raw_facts = result.pop("source_facts", [])
     raw_choices = result.pop("conditional_choices", [])
@@ -92,17 +143,7 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
     result["conditional_choices"] = []
     if not isinstance(raw_facts, list) or len(raw_facts) > MAX_SOURCE_FACTS:
         return result
-    registry, _ = _source_registry(chains)
-    numbered = {}
-    number = 0
-    for chain_index, chain in enumerate(chains):
-        for source_index, source in enumerate(chain.get("sources", [])[:4]):
-            number += 1
-            from .conflict_scope import validated_conflict_scope
-            if (not conclusion_source_allowed(source)
-                    or (chain.get("disputed") and validated_conflict_scope(source) is None)):
-                continue
-            numbered[number] = (chain_index, source_index, source)
+    numbered = source_fact_bindings(chains)
     seen = set()
     offered = None
     for item in raw_facts:
@@ -115,38 +156,15 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
             continue
         # A duplicate identifier invalidates the entire factual projection.
         seen.add(identifier)
-        chain_index, source_index, source = numbered[evidence_id]
-        title = source.get("title")
-        resolved, error = _resolve_title(title, registry) if isinstance(title, str) else (None, "missing")
-        if error is not None or resolved is None or resolved.position != (chain_index, source_index):
-            continue
-        if not resolved.canonical_url:
-            continue
-        marker = f"[Source: {resolved.title}]"
-        spans = citation_spans(marker)
-        if (len(spans) != 1 or spans[0][:2] != (0, len(marker))
-                or marker_titles(spans[0][2]) != [resolved.title]):
+        fact = bind_source_fact(item, numbered[evidence_id])
+        if fact is None:
             continue
         if "source_ranges" in item:
             if offered is None:
-                from .fact_selection import selection_packet
-                _, offered = selection_packet(chains)
+                from .fact_selection import admitted_source_ids
+                offered = admitted_source_ids(chains, candidates, bindings=numbered)
             if evidence_id not in offered:
                 continue
-        text, passages = selected_source_text(source, item)
-        if not text or passages is None:
-            continue
-        sentences = _split_sentences(text)
-        fact = {
-            "id": identifier, "evidence_id": evidence_id,
-            "text": " ".join(f"{sentence} [Source: {resolved.title}]" for sentence in sentences),
-            "source_title": resolved.title, "canonical_url": resolved.canonical_url,
-            "saved_text": text, "status": "unknown",
-        }
-        if passages:
-            fact["saved_passages"] = list(passages)
-        if "source_ranges" in item:
-            fact["source_ranges"] = deepcopy(item["source_ranges"])
         result["source_facts"].append(fact)
     identifiers = [item.get("id") for item in raw_facts if isinstance(item, dict)]
     if len(identifiers) != len(set(str(item) for item in identifiers)):
@@ -182,19 +200,9 @@ def bind_evidence_choices(recommendation, chains, candidates, requirements):
 
 
 def eligible_source_fact_ids(chains):
-    """Use the binding contract itself to advertise admissible source numbers.
-
-    Eligibility concerns complete saved text and identity, not live citation
-    verification. Batches retain the same five-fact limit as model output.
-    """
-    count = sum(len(chain.get("sources", [])[:4]) for chain in chains)
-    eligible = set()
-    for start in range(1, count + 1, MAX_SOURCE_FACTS):
-        refs = [{"id": f"F{offset + 1}", "evidence_id": number}
-                for offset, number in enumerate(range(start, min(start + MAX_SOURCE_FACTS, count + 1)))]
-        bound = bind_evidence_choices({"source_facts": refs}, chains, [], [])
-        eligible.update(fact["evidence_id"] for fact in bound.get("source_facts", []))
-    return eligible
+    """Whole-source compatibility eligibility, sharing identity and text checks."""
+    return {number for number, binding in source_fact_bindings(chains).items()
+            if bind_source_fact({"id": "F1", "evidence_id": number}, binding) is not None}
 
 
 def calibrate_evidence_choices(recommendation, verification):
