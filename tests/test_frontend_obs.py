@@ -1095,3 +1095,50 @@ def test_document_lookup_separates_discovered_page_identity_from_catalog(monkeyp
     at.run()
     assert not at.exception
     assert expected in _md_text(at)
+
+
+@pytest.mark.parametrize("lang_code,title,intro,question,ready", [
+    ("zh", "候选示例", "请选择想比较的技术", "你希望解决什么问题", "需求信息已记录"),
+    ("en", "Candidate examples", "Select technologies to compare", "What problem or technology area", "Your requirements are recorded"),
+    ("ja", "候補の例", "比較する技術を選ぶ", "どの問題や技術分野", "要件を記録しました"),
+    ("ko", "후보 예시", "비교할 기술을 선택", "어떤 문제나 기술 분야", "요구 사항을 기록했습니다"),
+])
+def test_candidate_picker_ignores_old_claims_and_submits_only_selected_name(monkeypatch, lang_code, title, intro, question, ready):
+    posts = []
+    cards = [{"name": "Zephyr", "stars": "OLD POPULARITY", "desc": "UNVERIFIED RANKING"}, {"name": "Sable"}]
+    def post(url, **kwargs):
+        posts.append((url, kwargs["json"]))
+        # Current API uses next_action; action-only responses remain compatible.
+        action = {"next_action": "recommend"} if url.endswith("/start") else {"action": "ask"}
+        return _FakeResp({"session_id": "clarify_123456789abc", "answer": "以下仅是候选示例，尚未研究其适用性。",
+                         **action, "payload": {"candidates": cards} if url.endswith("/start") else {}})
+    monkeypatch.setattr(httpx, "post", post)
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["lang"] = lang_code
+    at.run()
+    at.chat_input(key="hero_chat").set_value("Need selection examples").run()
+    assert not at.exception and title in _md_text(at) and intro in _md_text(at)
+    assert at.session_state["clarify_messages"][-1]["action"] == "recommend"
+    assert [item.label for item in at.checkbox] == ["Zephyr", "Sable"]
+    assert "OLD POPULARITY" not in _md_text(at) and "UNVERIFIED RANKING" not in _md_text(at)
+    if lang_code != "zh":
+        assert "以下仅是候选示例" not in _md_text(at)
+    at.checkbox(key="sel_Zephyr").check().run()
+    next(button for button in at.button if button.label.endswith(": Zephyr")).click().run()
+    assert not at.exception and at.session_state["clarify_messages"][-1]["action"] == "ask"
+    assert len(posts) == 2 and posts[-1][0].endswith("/clarify/clarify_123456789abc/message")
+    assert posts[-1][1] == {"message": "Zephyr"}
+    at.session_state["clarify_messages"] = [{"role": "assistant", "action": "ask",
+        "content": "你希望解决什么问题，或属于哪个技术方向？", "payload": {"reason": "category_unknown"}}]
+    at.run()
+    assert not at.exception and question in _md_text(at) and not at.checkbox
+    if lang_code != "zh":
+        assert "你希望解决什么问题" not in _md_text(at)
+
+    at.session_state["clarify_messages"] = [{"role": "assistant", "action": "confirm",
+        "content": "需求已整理完毕，确认后开始研究。", "payload": {
+            "reason": "requirements_complete", "summary": "需求已整理完毕，确认后开始研究。",
+            "scene": "solo", "complexity": "simple", "candidate_techs": ["Zephyr", "Sable"]}}]
+    at.run()
+    assert not at.exception and ready in _md_text(at)
+    assert "需求已整理完毕" not in _md_text(at)

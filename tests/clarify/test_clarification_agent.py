@@ -19,9 +19,9 @@ class TestMatchCategories:
         cats = _match_categories("我要搭一个AI聊天机器人")
         assert "b82c4e6a" in cats
 
-    def test_defaults_to_ai_when_no_match(self):
+    def test_unknown_category_does_not_choose_ai(self):
         cats = _match_categories("asdfghjkl")
-        assert cats == ["b82c4e6a"]
+        assert cats == []
 
 
 class TestGetRecommendations:
@@ -33,6 +33,7 @@ class TestGetRecommendations:
         assert len(candidates) > 0
         names = [c["name"] for c in candidates]
         assert "LangChain" in names or "Dify" in names or "LlamaIndex" in names
+        assert all(set(candidate) == {"name"} for candidate in candidates)
 
     def test_caps_at_7_candidates(self):
         state = SessionState()
@@ -79,7 +80,8 @@ class TestClarificationAgentDecideAction:
 
 class TestClarificationAgentRecommend:
     @pytest.mark.asyncio
-    async def test_handle_recommend_returns_candidates(self):
+    @pytest.mark.parametrize("provider_fails", [False, True])
+    async def test_handle_recommend_returns_candidates(self, provider_fails):
         state = SessionState()
         state.messages = [{"role": "user", "content": "我想做个AI应用"}]
         state.missing_required = ["candidate_techs", "complexity"]
@@ -90,9 +92,14 @@ class TestClarificationAgentRecommend:
                     "candidate_techs": ["LangChain", "Dify"]}
         agent = ClarificationAgent()
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = mock_llm
+            if provider_fails:
+                mock_call.side_effect = RuntimeError("provider error")
+            else:
+                mock_call.return_value = mock_llm
             result = await agent._handle_recommend(state)
 
+        assert mock_call.await_count == 1
+        assert "候选示例" in result["answer"] and "尚未研究" in result["answer"]
         assert result["action"] == "recommend"
         assert "candidates" in result["payload"]
         assert len(result["payload"]["candidates"]) > 0
@@ -215,3 +222,31 @@ async def test_confirm_preserves_known_values_and_defaults_only_missing_fields()
     assert state.scene == "solo" and state.complexity == "medium"
     assert "复杂度=medium" in response["answer"] and "场景=" not in response["answer"]
     assert model.await_count == 1
+
+
+@pytest.mark.parametrize("query,expected", [
+    ("rapid", []), ("explain", []), ("happy", []),
+    ("use an API", ["a7b31d5f"]),
+    ("AI聊天机器人", ["b82c4e6a"]),
+    ("mobile APP", ["d04e6a8c"]),
+])
+def test_category_keywords_respect_ascii_identifier_boundaries(query, expected):
+    assert _match_categories(query) == expected
+
+
+@pytest.mark.parametrize("provider_fails", [False, True])
+async def test_unknown_category_asks_without_cards_and_preserves_reply_extraction(provider_fails):
+    state = SessionState(missing_required=["candidate_techs", "scene", "complexity"],
+        unknown_techs=True, messages=[{"role": "user", "content": "Need rapid explain happy"}])
+    with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+        if provider_fails:
+            model.side_effect = RuntimeError("provider error")
+        else:
+            model.return_value = {"action": "recommend", "scene": "solo",
+                                  "constraints": ["No new server"], "message": "Use a framework"}
+        response = await ClarificationAgent().decide_and_respond(state)
+    assert response["action"] == "ask" and response["payload"] == {"reason": "category_unknown"}
+    assert "技术方向" in response["answer"] and model.await_count == 1
+    assert state.candidate_techs == []
+    assert state.scene == (None if provider_fails else "solo")
+    assert state.constraints == ([] if provider_fails else ["No new server"])

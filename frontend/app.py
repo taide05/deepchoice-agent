@@ -37,8 +37,11 @@ T = {
         "missing": "待探明",
         "rounds_left": "剩余 {n} 轮澄清",
         "waiting": "请描述你的需求...",
-        "recommend_title": "推荐技术",
-        "recommend_caption": "点击勾选你想比较的技术",
+        "recommend_title": "候选示例",
+        "recommend_intro": "请选择想比较的技术，也可输入其他候选。",
+        "confirm_ready": "需求信息已记录，请确认后开始研究。",
+        "category_question": "你希望解决什么问题，或属于哪个技术方向？也可以直接输入想比较的候选。",
+        "recommend_caption": "尚未研究适用性；勾选想比较的技术，也可输入其他候选",
         "compare_btn": "对比所选",
         "confirm_title": "确认研究",
         "confirm_scene": "场景: {scene}  |  复杂度: {complexity}",
@@ -196,8 +199,11 @@ T = {
         "missing": "Missing",
         "rounds_left": "{n} clarification rounds remaining",
         "waiting": "Waiting for your input...",
-        "recommend_title": "Recommended technologies",
-        "recommend_caption": "Select the ones you want to compare",
+        "recommend_title": "Candidate examples",
+        "recommend_intro": "Select technologies to compare, or enter other candidates.",
+        "confirm_ready": "Your requirements are recorded. Confirm to start research.",
+        "category_question": "What problem or technology area are you considering? You can also enter candidates directly.",
+        "recommend_caption": "Suitability has not been researched. Select examples or enter other candidates.",
         "compare_btn": "Compare selected",
         "confirm_title": "Confirm your research",
         "confirm_scene": "Scene: {scene}  |  Complexity: {complexity}",
@@ -355,8 +361,11 @@ T = {
         "missing": "未収集",
         "rounds_left": "残り {n} ラウンド",
         "waiting": "入力を待っています...",
-        "recommend_title": "お勧め技術",
-        "recommend_caption": "比較したいものを選択してください",
+        "recommend_title": "候補の例",
+        "recommend_intro": "比較する技術を選ぶか、別の候補を入力してください。",
+        "confirm_ready": "要件を記録しました。確認して研究を開始してください。",
+        "category_question": "どの問題や技術分野を検討していますか？候補を直接入力することもできます。",
+        "recommend_caption": "適合性は未調査です。比較する候補を選ぶか、別の候補を入力してください。",
         "compare_btn": "選択したものを比較",
         "confirm_title": "研究確認",
         "confirm_scene": "シーン: {scene}  |  複雑さ: {complexity}",
@@ -514,8 +523,11 @@ T = {
         "missing": "부족함",
         "rounds_left": "{n}회 남은 확인 단계",
         "waiting": "입력을 기다리는 중...",
-        "recommend_title": "추천 기술",
-        "recommend_caption": "비교할 항목을 선택하세요",
+        "recommend_title": "후보 예시",
+        "recommend_intro": "비교할 기술을 선택하거나 다른 후보를 입력하세요.",
+        "confirm_ready": "요구 사항을 기록했습니다. 확인 후 조사를 시작하세요.",
+        "category_question": "어떤 문제나 기술 분야를 고려하고 있나요? 후보를 직접 입력할 수도 있습니다.",
+        "recommend_caption": "적합성은 아직 조사하지 않았습니다. 예시를 선택하거나 다른 후보를 입력하세요.",
         "compare_btn": "선택 비교",
         "confirm_title": "연구 확인",
         "confirm_scene": "장면: {scene}  |  복잡도: {complexity}",
@@ -1033,14 +1045,21 @@ def render_clarify_phase():
     with chat_col:
         for msg in st.session_state.clarify_messages:
             if msg["role"] == "assistant":
-                with st.chat_message("assistant", avatar=""):
-                    st.markdown(msg["content"])
+                with st.chat_message("assistant"):
+                    content = msg["content"]
+                    if msg.get("action") == "recommend" and msg.get("payload", {}).get("candidates"):
+                        content = t("recommend_intro", lang)
+                    elif msg.get("payload", {}).get("reason") == "requirements_complete":
+                        content = t("confirm_ready", lang)
+                    elif msg.get("payload", {}).get("reason") == "category_unknown":
+                        content = t("category_question", lang)
+                    st.markdown(content)
                     if msg.get("action") == "recommend" and msg.get("payload", {}).get("candidates"):
                         _render_tech_picker(msg["payload"]["candidates"])
                     if msg.get("action") == "confirm" and msg.get("payload"):
                         _render_confirm_section(msg["payload"])
             else:
-                with st.chat_message("user", avatar=""):
+                with st.chat_message("user"):
                     st.markdown(msg["content"])
 
         c1, c2 = st.columns([5, 1])
@@ -1120,7 +1139,7 @@ def _render_tech_picker(candidates: list[dict]):
         with cols[i % 3]:
             key = f"sel_{tech['name']}"
             is_sel = st.checkbox(
-                f"{tech['name']}  \n*{tech.get('stars', '')}*  \n{tech.get('desc', '')}",
+                tech["name"],
                 key=key,
             )
             if is_sel:
@@ -1137,7 +1156,7 @@ def _render_confirm_section(payload: dict):
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"**{t('confirm_title', lang)}**")
-        summary = payload.get("summary", "")
+        summary = t("confirm_ready", lang) if payload.get("reason") == "requirements_complete" else payload.get("summary", "")
         st.markdown(summary)
         if payload.get("candidate_techs"):
             st.markdown("Comparing: " + "**, **".join(payload["candidate_techs"]))
@@ -1161,8 +1180,9 @@ def _handle_clarify_message(text: str):
         data = resp.json()
         st.session_state.clarify_session_id = data["session_id"]
         st.session_state.clarify_messages.append({"role": "user", "content": text})
-        msg = {"role": "assistant", "content": data["answer"]}
-        for k in ("action", "payload", "clarity_score", "filled_required", "missing_required", "clarify_rounds"):
+        msg = {"role": "assistant", "content": data["answer"],
+               "action": data.get("next_action", data.get("action", "ask"))}
+        for k in ("payload", "clarity_score", "filled_required", "missing_required", "clarify_rounds"):
             if k in data:
                 msg[k] = data[k]
         st.session_state.clarify_messages.append(msg)

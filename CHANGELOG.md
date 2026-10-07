@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Treat static clarification cards as unresearched examples
+
+Remove undated stars and unsupported price/performance/suitability claims from
+static cards. Reuse the existing one-call extraction handler and identifier matcher;
+unknown categories ask for direction instead of defaulting to AI. Localize fixed
+example/unknown-direction guidance, preserve current next_action and action-only UI
+responses and name-only selection, and remove invalid empty chat avatar parameters.
+Prefer newly extracted user candidates over static examples; reuse the existing
+confirmation response with bounded fixed guidance when all fields are present.
+Keep original catalog order/caps and durable identities; no new model call or state.
+
 ### Retain the final clarification reply before defaults
 
 Reuse the bounded clarification prompt and atomic user-only candidate merge in

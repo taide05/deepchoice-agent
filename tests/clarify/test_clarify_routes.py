@@ -1,3 +1,5 @@
+import pytest
+
 from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
@@ -177,7 +179,7 @@ class TestActualClarificationInput:
                 prompts = [call.args[0][0]["content"] for call in model.await_args_list]
                 assert original in prompts[0] and prompts[0].count(original) == 1
                 assert original in prompts[1] and reply in prompts[1]
-                assert "Which candidates and deployment scope?" in prompts[1]
+                assert start.json()["answer"] in prompts[1]
                 finalized = client.post(f"/clarify/{sid}/finalize")
                 assert finalized.status_code == 200
                 task = finalized.json()["payload"]["clarified_task"]
@@ -233,7 +235,7 @@ class TestActualLastRoundConfirmation:
                 assert "推测" not in response.json()["answer"]
                 confirmation_prompt = model.await_args_list[1].args[0][0]["content"]
                 assert original in confirmation_prompt and reply in confirmation_prompt
-                assert "What is the scope and complexity?" in confirmation_prompt
+                assert start.json()["answer"] in confirmation_prompt
                 assert "业务/落地场景：未知" in confirmation_prompt
                 finalized = client.post(f"/clarify/{sid}/finalize")
                 assert finalized.status_code == 200
@@ -246,3 +248,58 @@ class TestActualLastRoundConfirmation:
         finally:
             if sid is not None:
                 session_manager._sessions.pop(sid, None)
+
+
+class TestActualStaticCandidateBoundary:
+    def test_unknown_category_then_user_category_keeps_fields_and_offers_only_names(self):
+        sid = None
+        try:
+            with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+                model.side_effect = [
+                    {"action": "recommend", "scene": "solo", "constraints": ["No new server"]},
+                    {"action": "recommend", "message": "These are best", "candidate_techs": ["React", "Vue"]},
+                ]
+                start = client.post("/clarify/start", json={"query": "Need rapid explain happy"})
+                assert start.status_code == 200 and start.json()["next_action"] == "ask"
+                assert start.json()["payload"] == {"reason": "category_unknown"}
+                sid = start.json()["session_id"]
+                response = client.post(f"/clarify/{sid}/message", json={"message": "我想做个网站"})
+                assert response.status_code == 200 and response.json()["next_action"] == "recommend"
+                cards = response.json()["payload"]["candidates"]
+                assert [card["name"] for card in cards] == ["React", "Vue", "Angular", "Svelte", "SolidJS"]
+                assert all(set(card) == {"name"} for card in cards)
+                state = session_manager.get(sid)
+                assert state.scene == "solo" and state.constraints == ["No new server"]
+                assert state.candidate_techs == [] and model.await_count == 2
+        finally:
+            if sid is not None:
+                session_manager._sessions.pop(sid, None)
+
+
+@pytest.mark.parametrize("query,scene,complexity,expected", [
+    ("Compare Atlas and Borealis for a solo simple project", "solo", "simple", "confirm"),
+    ("Compare Atlas and Borealis for a 网站", "team", "medium", "confirm"),
+    ("Compare Atlas and Borealis for a 网站", None, None, "ask"),
+])
+def test_extracted_user_candidates_take_priority_over_static_examples(query, scene, complexity, expected):
+    sid = None
+    try:
+        with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+            model.return_value = {"action": "confirm", "message": "Please provide the missing scope",
+                                  "candidate_techs": ["Atlas", "Borealis"], "scene": scene, "complexity": complexity}
+            response = client.post("/clarify/start", json={"query": query})
+            assert response.status_code == 200 and response.json()["next_action"] == expected
+            sid = response.json()["session_id"]
+            payload = response.json().get("payload", {})
+            assert "candidates" not in payload and payload.get("reason") != "category_unknown"
+            assert session_manager.get(sid).candidate_techs == ["Atlas", "Borealis"]
+            if expected == "confirm":
+                assert response.json()["answer"] == "需求已整理完毕，确认后开始研究。"
+                assert payload["reason"] == "requirements_complete"
+                assert payload["clarified_task"]["candidate_techs"] == ["Atlas", "Borealis"]
+                assert payload["clarified_task"]["scene_context"] == scene
+                assert payload["clarified_task"]["complexity"] == complexity
+            assert model.await_count == 1
+    finally:
+        if sid is not None:
+            session_manager._sessions.pop(sid, None)

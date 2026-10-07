@@ -2,7 +2,7 @@ import json
 
 from ..utils.llm import call_model
 from ..utils.views import print_agent_output
-from ..utils.evidence import candidate_product_mentions
+from ..utils.evidence import candidate_name_pattern, candidate_product_mentions
 from ..contracts.api import ResearchRequest
 from ..security.input_limits import validate_safe_text
 from .session_manager import SessionState
@@ -57,52 +57,53 @@ def _research_payload(
         exclude={"schema_version", "gather_evidence", "language", "sub_questions"}
     )
 
+# Static examples only: no popularity, performance, price, or suitability claims.
 TECH_RECOMMENDATION_MAP: dict[str, list[dict]] = {
     "fc14a2e9": [
-        {"name": "React", "stars": "225k+", "desc": "生态最大，招人最容易"},
-        {"name": "Vue", "stars": "48k+", "desc": "上手快，中文文档好"},
-        {"name": "Angular", "stars": "95k+", "desc": "企业级，TypeScript原生"},
-        {"name": "Svelte", "stars": "80k+", "desc": "编译时框架，运行时体积小"},
-        {"name": "SolidJS", "stars": "33k+", "desc": "性能极致，React 式语法"},
+        {"name": "React"},
+        {"name": "Vue"},
+        {"name": "Angular"},
+        {"name": "Svelte"},
+        {"name": "SolidJS"},
     ],
     "a7b31d5f": [
-        {"name": "FastAPI", "stars": "78k+", "desc": "异步原生，自动API文档"},
-        {"name": "Django", "stars": "80k+", "desc": "全栈框架，ORM+Admin开箱即用"},
-        {"name": "Flask", "stars": "68k+", "desc": "轻量灵活，插件丰富"},
-        {"name": "Spring Boot", "stars": "75k+", "desc": "Java生态，企业级标准"},
-        {"name": "Express", "stars": "65k+", "desc": "Node.js 标配，中间件生态"},
-        {"name": "Go-Gin", "stars": "79k+", "desc": "高性能，云原生首选"},
+        {"name": "FastAPI"},
+        {"name": "Django"},
+        {"name": "Flask"},
+        {"name": "Spring Boot"},
+        {"name": "Express"},
+        {"name": "Go-Gin"},
     ],
     "b82c4e6a": [
-        {"name": "LangChain", "stars": "95k+", "desc": "灵活度最高，生态最大"},
-        {"name": "LlamaIndex", "stars": "37k+", "desc": "数据索引强项，RAG首选"},
-        {"name": "LangGraph", "stars": "10k+", "desc": "状态图编排，复杂Agent流程"},
-        {"name": "Dify", "stars": "55k+", "desc": "低代码平台，上手最快"},
-        {"name": "Coze", "stars": "字节跳动", "desc": "国内生态好，飞书集成"},
-        {"name": "Semantic Kernel", "stars": "22k+", "desc": "微软官方，C#/Python双语言"},
-        {"name": "CrewAI", "stars": "21k+", "desc": "多Agent协作，角色扮演模式"},
-        {"name": "AutoGen", "stars": "36k+", "desc": "微软出品，对话式多Agent"},
+        {"name": "LangChain"},
+        {"name": "LlamaIndex"},
+        {"name": "LangGraph"},
+        {"name": "Dify"},
+        {"name": "Coze"},
+        {"name": "Semantic Kernel"},
+        {"name": "CrewAI"},
+        {"name": "AutoGen"},
     ],
     "c93d5f7b": [
-        {"name": "Pandas", "stars": "44k+", "desc": "Python数据分析标配"},
-        {"name": "Polars", "stars": "31k+", "desc": "Rust内核，比Pandas快10x"},
-        {"name": "Streamlit", "stars": "36k+", "desc": "纯Python写数据App"},
-        {"name": "Apache Spark", "stars": "40k+", "desc": "大数据分布式处理"},
-        {"name": "DuckDB", "stars": "25k+", "desc": "嵌入式OLAP，单机性能强"},
+        {"name": "Pandas"},
+        {"name": "Polars"},
+        {"name": "Streamlit"},
+        {"name": "Apache Spark"},
+        {"name": "DuckDB"},
     ],
     "d04e6a8c": [
-        {"name": "Flutter", "stars": "167k+", "desc": "Google出品，跨平台性能好"},
-        {"name": "React Native", "stars": "119k+", "desc": "React生态，热更新方便"},
-        {"name": "UniApp", "stars": "40k+", "desc": "国内主流，小程序兼容"},
-        {"name": "SwiftUI", "stars": "仅iOS", "desc": "Apple原生，性能最佳"},
-        {"name": "Kotlin Multiplatform", "stars": "16k+", "desc": "跨平台新势力"},
+        {"name": "Flutter"},
+        {"name": "React Native"},
+        {"name": "UniApp"},
+        {"name": "SwiftUI"},
+        {"name": "Kotlin Multiplatform"},
     ],
     "e15f7b9d": [
-        {"name": "Docker", "stars": "68k+", "desc": "容器化标准"},
-        {"name": "Kubernetes", "stars": "111k+", "desc": "容器编排，云原生标配"},
-        {"name": "GitHub Actions", "stars": "免费", "desc": "CI/CD，GitHub集成"},
-        {"name": "Vercel", "stars": "免费额度", "desc": "前端部署，Git推送即上线"},
-        {"name": "Railway", "stars": "收费", "desc": "全栈部署，比Vercel灵活"},
+        {"name": "Docker"},
+        {"name": "Kubernetes"},
+        {"name": "GitHub Actions"},
+        {"name": "Vercel"},
+        {"name": "Railway"},
     ],
 }
 
@@ -168,13 +169,13 @@ def _match_categories(query: str) -> list[str]:
     query_lower = query.lower()
     matched = []
     for kw, cat_id in CATEGORY_KEYWORDS.items():
-        if kw in query_lower and cat_id not in matched:
+        if (candidate_name_pattern(kw).search(query_lower) if kw.isascii() else kw in query_lower) and cat_id not in matched:
             matched.append(cat_id)
-    return matched if matched else ["b82c4e6a"]
+    return matched
 
 
 def _get_recommendations(state: SessionState) -> list[dict]:
-    """Query the static recommendation map based on state."""
+    """Offer bounded static examples, never ranked or researched recommendations."""
     user_messages = " ".join([
         m["content"] for m in state.messages if m["role"] == "user"
     ])
@@ -225,27 +226,25 @@ class ClarificationAgent:
             return self._fallback_response(state)
 
     async def _handle_recommend(self, state: SessionState) -> dict:
-        candidates = _get_recommendations(state)
-        prompt_text = self._build_prompt(state)
-        prompt = [{"role": "user", "content": prompt_text}]
-
-        try:
-            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
-            response = self._merge_and_build_response(state, result)
-            response["action"] = "recommend"
-            response["payload"] = {"candidates": candidates}
+        # The existing ask call already extracts and validates the current reply.
+        response = await self._handle_ask(state)
+        if state.candidate_techs:
+            if self._decide_action(state) == "confirm":
+                response = self._confirm_response(state, "需求已整理完毕，确认后开始研究。")
+                response["payload"]["reason"] = "requirements_complete"
+                return response
+            response["action"] = "ask"
             return response
-        except Exception:
-            print_agent_output("Clarify recommend failed; using fallback", agent="CLARIFICATION")
-            return {
-                "action": "recommend",
-                "answer": "根据你的描述，以下技术可能适合你的场景。你想比较哪几个？可以多选。",
-                "payload": {"candidates": candidates},
-                "clarity_score": state.clarity_score,
-                "filled_required": state.filled_required,
-                "missing_required": state.missing_required,
-                "clarify_rounds": state.clarify_rounds,
-            }
+        candidates = _get_recommendations(state)
+        if candidates:
+            response["action"] = "recommend"
+            response["answer"] = "以下仅是候选示例，尚未研究其适用性。请选择想比较的技术，也可输入其他候选。"
+            response["payload"] = {"candidates": candidates}
+        else:
+            response["action"] = "ask"
+            response["answer"] = "你希望解决什么问题，或属于哪个技术方向？也可以直接输入想比较的候选。"
+            response["payload"] = {"reason": "category_unknown"}
+        return response
 
     async def _handle_confirm(self, state: SessionState) -> dict:
         prompt_text = self._build_confirm_prompt(state)
@@ -268,8 +267,10 @@ class ClarificationAgent:
             fallback="需求已整理完毕，确认后开始研究。",
         ) + notice
 
-        state.clarified_task = _research_payload(state)
+        return self._confirm_response(state, summary)
 
+    def _confirm_response(self, state: SessionState, summary: str) -> dict:
+        state.clarified_task = _research_payload(state)
         return {
             "action": "confirm",
             "answer": summary,
