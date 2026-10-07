@@ -77,3 +77,25 @@ class TestSessionManagerTimeout:
         time.sleep(0.1)
         with pytest.raises(KeyError):
             sm.get_status(sid)
+
+
+@pytest.mark.parametrize("length", [2001, 4000])
+def test_original_request_uses_full_entry_limit_but_replies_remain_bounded(length):
+    sm = SessionManager()
+    query = "x" * length
+    sid = sm.create(query)["session_id"]
+    state = sm.get(sid)
+    assert state.messages[0]["content"] == query
+    before = state.model_dump()
+    with pytest.raises(ValueError):
+        sm.process_message(sid, "y" * 2001)
+    assert state.model_dump() == before
+    sm.process_message(sid, "y" * 2000)
+    assert len(state.messages[-1]["content"]) == 2000
+
+
+def test_original_request_over_limit_rejected_without_creating_session():
+    sm = SessionManager()
+    with pytest.raises(ValueError):
+        sm.create("x" * 4001)
+    assert sm._sessions == {}

@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Preserve bounded user input in clarification
+
+Include the original request and current question/reply as untrusted data in the
+existing ask/recommend call. Require model-extracted candidates to occur literally
+in user messages; assistant proposals alone cannot fill the selected candidates.
+Align the first session message with the 4000-character start limit while retaining
+2000-character later replies and rejecting over-limit input. No extra calls or
+state; confirmation/subquestion and static-card limitations remain open.
+
 ### Skip unused legacy synthesis preparation on the default path
 
 Build the numbered-source summary, conflict summary and legacy synthesis prompt

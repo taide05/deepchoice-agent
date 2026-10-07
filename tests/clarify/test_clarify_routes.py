@@ -151,3 +151,56 @@ class TestClarifyFinalize:
         data = resp.json()
         assert data["action"] == "finalize"
         assert "sub_questions" in data["payload"]
+
+
+class TestActualClarificationInput:
+    def test_pending_reply_reaches_model_and_selected_task(self):
+        original = "Need to compare routing libraries for restart recovery"
+        reply = "Compare Zephyr and Sable for personal use, no additional server"
+        sid = None
+        try:
+            with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+                model.side_effect = [
+                    {"action": "ask", "message": "Which candidates and deployment scope?",
+                     "candidate_techs": ["Zephyr", "Sable"]},
+                    {"action": "ask", "message": "Ready to confirm",
+                     "candidate_techs": ["Zephyr", "Sable"], "scene": "solo",
+                     "complexity": "simple", "constraints": ["no additional server"]},
+                    {"sub_questions": ["What changes after restart?"]},
+                ]
+                start = client.post("/clarify/start", json={"query": original})
+                assert start.status_code == 200
+                sid = start.json()["session_id"]
+                assert session_manager.get(sid).candidate_techs == []
+                response = client.post(f"/clarify/{sid}/message", json={"message": reply})
+                assert response.status_code == 200
+                prompts = [call.args[0][0]["content"] for call in model.await_args_list]
+                assert original in prompts[0] and prompts[0].count(original) == 1
+                assert original in prompts[1] and reply in prompts[1]
+                assert "Which candidates and deployment scope?" in prompts[1]
+                finalized = client.post(f"/clarify/{sid}/finalize")
+                assert finalized.status_code == 200
+                task = finalized.json()["payload"]["clarified_task"]
+                assert task["query"] == original and task["candidate_techs"] == ["Zephyr", "Sable"]
+                assert task["scene_context"] == "solo" and task["constraints"] == ["no additional server"]
+                assert model.await_count == 3
+        finally:
+            if sid is not None:
+                session_manager._sessions.pop(sid, None)
+
+    def test_original_request_limit_is_consistent_at_api_and_session(self):
+        sid = None
+        try:
+            with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+                model.return_value = {"message": "Please describe your requirements", "action": "ask"}
+                query = "x" * 4000
+                response = client.post("/clarify/start", json={"query": query})
+                assert response.status_code == 200
+                sid = response.json()["session_id"]
+                assert session_manager.get(sid).messages[0]["content"] == query
+                assert query in model.await_args.args[0][0]["content"]
+                rejected = client.post("/clarify/start", json={"query": query + "x"})
+                assert rejected.status_code == 422 and model.await_count == 1
+        finally:
+            if sid is not None:
+                session_manager._sessions.pop(sid, None)

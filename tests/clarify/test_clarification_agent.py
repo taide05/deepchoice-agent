@@ -86,7 +86,8 @@ class TestClarificationAgentRecommend:
         state.unknown_techs = True
         state.clarify_rounds = 1
 
-        mock_llm = {"message": "这些是推荐的框架，你看看想比较哪几个？", "action": "recommend"}
+        mock_llm = {"message": "这些是推荐的框架，你看看想比较哪几个？", "action": "recommend",
+                    "candidate_techs": ["LangChain", "Dify"]}
         agent = ClarificationAgent()
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = mock_llm
@@ -95,6 +96,9 @@ class TestClarificationAgentRecommend:
         assert result["action"] == "recommend"
         assert "candidates" in result["payload"]
         assert len(result["payload"]["candidates"]) > 0
+        assert state.candidate_techs == []
+        assert "candidate_techs" in state.missing_required
+        assert state.messages[0]["content"] in mock_call.await_args.args[0][0]["content"]
 
 
 class TestClarificationAgentSubQuestions:
@@ -126,3 +130,45 @@ class TestClarificationAgentSubQuestions:
             result = await agent._generate_sub_questions(state)
 
         assert len(result) == 5
+
+
+@pytest.mark.parametrize("reply,candidates,expected", [
+    ("Compare Zephyr and Sable", ["Zephyr", "Sable"], ["Zephyr", "Sable"]),
+    ("Compare ZephyrPro", ["Zephyr", "Sable"], []),
+    ("Please recommend something", ["Zephyr", "Sable"], []),
+    ("Compare Atlas Pro", ["Atlas", "Atlas Pro"], ["Atlas Pro"]),
+    ("Compare Atlas Pro and Atlas", ["Atlas", "Atlas Pro"], ["Atlas", "Atlas Pro"]),
+])
+def test_only_user_candidate_mentions_can_fill_selection(reply, candidates, expected):
+    state = SessionState(missing_required=["candidate_techs"], messages=[
+        {"role": "user", "content": "Need a routing library"},
+        {"role": "assistant", "content": "Perhaps Zephyr or Sable?"},
+        {"role": "user", "content": reply},
+    ])
+    ClarificationAgent()._merge_and_build_response(state, {
+        "action": "ask", "message": "Next question", "candidate_techs": candidates,
+    })
+    assert state.candidate_techs == expected
+    assert ("candidate_techs" in state.filled_required) == bool(expected)
+
+
+def test_distinct_original_requests_and_replies_do_not_share_clarification_prompt():
+    first = SessionState(candidate_techs=["Zephyr", "Sable"], messages=[
+        {"role": "user", "content": "Choose a routing library for recovery"},
+        {"role": "assistant", "content": "OUTDATED QUESTION"},
+        {"role": "user", "content": "OLDER REPLY"},
+        {"role": "assistant", "content": "Who will maintain this?"},
+        {"role": "user", "content": "Personal use, no additional server"},
+    ])
+    second = first.model_copy(deep=True)
+    second.messages = [
+        {"role": "user", "content": "Choose a routing library for throughput"},
+        {"role": "assistant", "content": "What is the deployment scope?"},
+        {"role": "user", "content": "Enterprise deployment with separate services"},
+    ]
+    agent = ClarificationAgent()
+    first_prompt, second_prompt = agent._build_prompt(first), agent._build_prompt(second)
+    assert first_prompt != second_prompt
+    assert all(first.messages[index]["content"] in first_prompt for index in (0, 3, 4))
+    assert "OUTDATED QUESTION" not in first_prompt and "OLDER REPLY" not in first_prompt
+    assert all(message["content"] in second_prompt for message in second.messages)

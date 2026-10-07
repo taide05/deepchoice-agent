@@ -60,20 +60,20 @@ class SessionState(BaseModel):
     @field_validator("messages")
     @classmethod
     def validate_messages(cls, values: list[dict[str, str]]) -> list[dict[str, str]]:
-        for message in values:
+        for index, message in enumerate(values):
             if set(message) != {"role", "content"}:
                 raise ValueError("session message shape is invalid")
             if message["role"] not in {"user", "assistant"}:
                 raise ValueError("session message role is invalid")
             validate_safe_text(message["content"])
-            maximum = 2000 if message["role"] == "user" else 4000
+            maximum = 2000 if message["role"] == "user" and index != 0 else 4000
             if not message["content"] or len(message["content"]) > maximum:
                 raise ValueError("session message length is invalid")
         return values
 
     def append_message(self, role: Literal["user", "assistant"], content: str) -> None:
         safe_content = validate_safe_text(str(content))
-        max_length = 2000 if role == "user" else 4000
+        max_length = 2000 if role == "user" and self.messages else 4000
         if not safe_content or len(safe_content) > max_length:
             raise ValueError("session message length is invalid")
         updated = [*self.messages, {"role": role, "content": safe_content}]
