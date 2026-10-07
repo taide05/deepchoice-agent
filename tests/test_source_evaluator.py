@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 import json
 from unittest.mock import AsyncMock
@@ -394,3 +395,151 @@ async def test_scope_prompt_reserves_late_distinct_candidate(monkeypatch):
     urls = [row["source_url"] for row in seen[0]["sources"]]
     assert "https://docs.example.org/beta" in urls
     assert len(urls) == 8
+
+
+# A source name outside the old snippet may be offered, but only delivered
+# runtime-copied text can satisfy the same candidate gate afterward.
+def _official_scope_only_state():
+    state = _scoped_source_state()
+    channel = state["search_results"][0]
+    channel["source"] = "official"
+    channel["results"][0].update(title="Job journal", snippet=_SCOPE_MIDDLE)
+    return state
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("proposal, admitted", [
+    ({"sources": [{"id": "S1", "ranges": [[0, 3]]}]}, True),
+    ({"sources": []}, False),
+    ({"sources": [{"id": "S1", "ranges": [[1, 3]]}]}, False),
+    ({"sources": [{"id": "S1", "ranges": [[0, 99]]}]}, False),
+    (RuntimeError("provider unavailable"), False),
+])
+async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch, proposal, admitted):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    selector = AsyncMock(side_effect=proposal) if isinstance(proposal, Exception) else AsyncMock(return_value=proposal)
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_official_scope_only_state())
+    selector.assert_awaited_once()
+    assert len(output["source_scores"]) == int(admitted)
+    assert output["quality_signals"][0]["candidate_excluded_count"] == int(not admitted)
+    if admitted:
+        item = output["source_scores"][0]
+        assert item["snippet"] == _SCOPE_DOCUMENT
+        assert item["passages"] == [_SCOPE_DOCUMENT]
+        assert "_source_scope_sentences" not in item
+        assert "_source_passages" not in item
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("variant", ["chroma", "tavily", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair"])
+async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries(monkeypatch, variant):
+    from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
+
+    state = _official_scope_only_state()
+    channel = state["search_results"][0]
+    item = channel["results"][0]
+    if variant in ("chroma", "tavily"):
+        channel["source"] = variant
+    elif variant == "nameless":
+        item["_source_scope_sentences"] = [_SCOPE_MIDDLE]
+        item["_seed_target_id"] = "Alpha"
+    elif variant == "wrong_product":
+        item["_source_scope_sentences"] = ["Gamma persists jobs only when its journal is enabled."]
+    elif variant == "oversized":
+        item["_source_scope_sentences"] = ["Alpha " + "x" * 401 + "."]
+    elif variant in ("public_passages", "private_passages"):
+        item["passages" if variant == "public_passages" else "_source_passages"] = [_SCOPE_FIRST]
+    elif variant == "navigation":
+        item["snippet"] = "Official documentation site for Alpha."
+    elif variant == "wrong_seed":
+        channel["source"] = "chroma"
+        item.update(_seed_source_type="official", _seed_seed_identity_sha256=AUDITED_PRODUCT_SEED_IDENTITY,
+                    _seed_target_id="p08-redis-persistence")
+    else:
+        channel["source"] = "chroma"
+        item.update(url="file:///knowledge/Alpha-vs-Gamma.md", title="Alpha vs Gamma")
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    selector = AsyncMock()
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    assert output["source_scores"] == []
+    selector.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", ["no_manifest", "no_context"])
+async def test_scope_only_candidate_preserves_legacy_exclusion(monkeypatch, legacy):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: None if legacy == "no_context" else object())
+    selector = AsyncMock()
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    manifest = None if legacy == "no_manifest" else build_run_manifest({})
+    output = await SourceEvaluatorAgent(run_manifest=manifest).run(_official_scope_only_state())
+    assert output["source_scores"] == []
+    assert output["quality_signals"][0]["candidate_excluded_count"] == 1
+    selector.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["budget", "lease", "cancel"])
+async def test_scope_only_candidate_keeps_authority_failures_visible(monkeypatch, failure):
+    class LostLease(RuntimeError):
+        code = "RUN_LEASE_LOST"
+
+    exc = {"budget": BudgetPersistenceError("store unavailable"), "lease": LostLease("lost"),
+           "cancel": asyncio.CancelledError()}[failure]
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    selector = AsyncMock(side_effect=exc)
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    with pytest.raises(type(exc)):
+        await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_official_scope_only_state())
+    selector.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_unoffered_scope_only_candidate_cannot_gain_admission(monkeypatch):
+    state = _official_scope_only_state()
+    item = state["search_results"][0]["results"][0]
+    state["search_results"][0]["results"] = [{**item, "url": f"https://example.org/journal/{index}"} for index in range(9)]
+    seen = []
+
+    async def select(messages, **_kwargs):
+        payload = json.loads(messages[0]["content"].split("\n")[-1])
+        seen.append(payload)
+        return {"sources": [{"id": row["id"], "ranges": [[0, 3]]} for row in payload["sources"]]}
+
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    assert len(seen) == 1 and len(seen[0]["sources"]) == 8
+    assert len(output["source_scores"]) == 8
+    assert output["quality_signals"][0]["candidate_excluded_count"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", ["official", "chroma", "audited_seed"])
+async def test_previously_admitted_source_keeps_selected_nameless_conditions(monkeypatch, source):
+    state = _official_scope_only_state()
+    state["search_results"][0]["source"] = source
+    state["search_results"][0]["results"][0]["snippet"] = _SCOPE_FIRST
+    if source == "audited_seed":
+        from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
+
+        state["task"]["candidate_techs"] = ["Redis"]
+        state["search_results"][0]["source"] = "chroma"
+        first = _SCOPE_FIRST.replace("Alpha", "Redis")
+        state["search_results"][0]["results"][0].update(
+            snippet=first, _source_scope_sentences=[first, _SCOPE_MIDDLE, _SCOPE_LAST],
+            _seed_source_type="official", _seed_seed_identity_sha256=AUDITED_PRODUCT_SEED_IDENTITY,
+            _seed_target_id="p08-redis-persistence",
+        )
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    selector = AsyncMock(return_value={"sources": [{"id": "S1", "ranges": [[1, 3]]}]})
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    selector.assert_awaited_once()
+    assert len(output["source_scores"]) == 1
+    assert output["source_scores"][0]["snippet"] == _SCOPE_MIDDLE + " " + _SCOPE_LAST
+    assert output["source_scores"][0]["passages"] == [_SCOPE_MIDDLE + " " + _SCOPE_LAST]
+    assert output["quality_signals"][0]["source_scope_proposal"]["accepted"] == 1
+    assert output["quality_signals"][0]["candidate_excluded_count"] == 0

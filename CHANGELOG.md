@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Preserve saved official body through candidate admission
+
+Offer a bounded official body that explicitly names a candidate to the existing
+single scope-selection call when its old title/snippet omits that name. Recheck
+only these provisional rows after runtime copies the selected passages; omitted,
+invalid or failed proposals retain the original exclusion. Preserve nameless
+conditions from previously admitted sources. Share the existing candidate gate,
+keep budget/authority/citation limits, and freeze source-score-v10; historical
+v9 identities remain readable but cannot resume on this runtime.
+
 ### Skip embedding work when no conflict pair can exist
 
 Load the existing embedding model only after the existing two-eligible-source

@@ -43,7 +43,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v19"
-    assert first.scoring_policy_version == "source-score-v9"
+    assert first.scoring_policy_version == "source-score-v10"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
@@ -130,16 +130,17 @@ def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-def test_previous_source_score_policy_remains_readable_but_incompatible():
+@pytest.mark.parametrize("previous_policy", ["source-score-v6", "source-score-v9"])
+def test_previous_source_score_policy_remains_readable_but_incompatible(previous_policy):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     current = build_run_manifest({})
-    historical = current.model_copy(update={"scoring_policy_version": "source-score-v6"})
+    historical = current.model_copy(update={"scoring_policy_version": previous_policy})
     historical = historical.model_copy(update={
         "manifest_id": _expected_manifest_id(historical),
     })
     restored = RunManifest.model_validate_json(historical.model_dump_json())
-    assert restored.scoring_policy_version == "source-score-v6"
+    assert restored.scoring_policy_version == previous_policy
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

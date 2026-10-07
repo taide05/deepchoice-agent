@@ -432,3 +432,42 @@ async def test_url_only_learned_entry_is_consumable_on_durable_path(setup, monke
     assert setup.await_count == 1
     assert path.read_bytes() == raw
     assert learned_docs.official_mapping_identity() is not None
+
+
+@pytest.mark.asyncio
+async def test_saved_official_body_reaches_selection_binding_and_citation(setup, monkeypatch):
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.citations.verifier import verify_citations
+    from deepchoice.utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+
+    intro = "Acme provides the transactional storage described on this page."
+    context = "Clients submit requests through a configured connection and keep the operation identifier for later checks."
+    main = "Atomic transactions apply all recorded changes together after validation. A rejected transaction leaves the preceding records unchanged."
+    limit = "If validation fails, clients must check the operation identifier before repeating a write; a timeout does not prove that no change was applied."
+    body = f"<html><head><title>Transactions</title></head><body><main><p>{intro}</p><p>{context}</p><p>{main}</p><p>{limit}</p></main></body></html>"
+    setup.side_effect = lambda _source, url, **_kw: response(url, body)
+    retrieved = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="acme atomic transactions"))
+    assert len(retrieved.results) == setup.await_count == 1
+    raw = retrieved.results[0]
+    assert "Acme" not in raw["title"] and "Acme" not in raw["snippet"]
+    assert intro in " ".join(raw["_source_scope_sentences"])
+    selector = AsyncMock(return_value={"sources": [{"id": "S1", "ranges": [[0, len(raw["_source_scope_sentences"])]]}]})
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    scored = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run({
+        "task": {"query": "Evaluate Acme transactional writes", "candidate_techs": ["Acme"]},
+        "search_results": [retrieved.model_dump()],
+    })
+    selector.assert_awaited_once()
+    assert len(scored["source_scores"]) == 1
+    item = scored["source_scores"][0]
+    assert intro in item["snippet"] and limit in item["snippet"]
+    assert "_source_scope_sentences" not in item
+    chains = [{"sources": [item]}]
+    bound = bind_evidence_choices({"source_facts": [{"id": "F1", "evidence_id": 1}]}, chains, [], [])
+    monkeypatch.setattr(run_context, "get_run_context", lambda: None)
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", setup)
+    checks, _ = await verify_citations(bound, chains)
+    checked = calibrate_evidence_choices(bound, checks)
+    assert checked["source_facts"][0]["status"] == "verified"
+    assert intro in checked["source_facts"][0]["saved_text"]
+    assert limit in checked["source_facts"][0]["saved_text"]

@@ -170,6 +170,22 @@ def _local_comparison_covers_candidates(result: dict, source: str,
     return all(pattern.search(title) or pattern.search(comparison_text)
                or pattern.search(normalized) for pattern in patterns)
 
+def _candidate_rejection(result: dict, source: str, candidates: object,
+                         patterns: list[re.Pattern]) -> str | None:
+    """Apply the same candidate scope gate before and after passage selection."""
+    seed_scope = _audited_seed_scope_covers_candidate(result, source, candidates)
+    if seed_scope is False:
+        return "seed_scope"
+    comparison_scope = _local_comparison_covers_candidates(result, source, patterns)
+    if comparison_scope is False:
+        return "comparison_scope"
+    if comparison_scope is True:
+        return None
+    lexical_match = (_audited_seed_lexically_names_target(result) if seed_scope is True
+                     else _mentions_candidate(result, patterns))
+    return None if lexical_match else "missing_candidate"
+
+
 WEIGHTS = {
     "authority": 0.35,
     "timeliness": 0.25,
@@ -460,6 +476,7 @@ class SourceEvaluatorAgent:
 
     async def run(self, research_state: dict) -> dict:
         all_results = []
+        provisional = set()
         task = research_state.get("task", {})
         patterns = _candidate_patterns(task)
         candidates = task.get("candidate_techs", []) if isinstance(task, dict) else []
@@ -473,22 +490,19 @@ class SourceEvaluatorAgent:
                     navigation_excluded += 1
                     continue
                 normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
-                seed_scope_covers = _audited_seed_scope_covers_candidate(
-                    normalized_result, source, candidates
-                )
-                if seed_scope_covers is False:
+                rejection = _candidate_rejection(normalized_result, source, candidates, patterns)
+                if rejection == "missing_candidate" and source == "official":
+                    # Only the official reader produces ordinary saved body scopes.
+                    # A name in that bounded text permits offering it to the existing
+                    # selector; it cannot grant admission for unselected text.
+                    scope = bounded_scope_sentences(r.get("_source_scope_sentences"))
+                    if (scope and "passages" not in r and "_source_passages" not in r
+                            and _mentions_candidate({"snippet": " ".join(scope)}, patterns)):
+                        rejection = None
+                        provisional.add(len(all_results))
+                if rejection is not None:
                     excluded += 1
-                    seed_scope_excluded += 1
-                    continue
-                comparison_covers = _local_comparison_covers_candidates(normalized_result, source, patterns)
-                if seed_scope_covers is True:
-                    lexical_match = _audited_seed_lexically_names_target(normalized_result)
-                else:
-                    lexical_match = _mentions_candidate(normalized_result, patterns)
-                if (comparison_covers is False
-                        or (comparison_covers is None
-                            and not lexical_match)):
-                    excluded += 1
+                    seed_scope_excluded += int(rejection == "seed_scope")
                     continue
                 all_results.append({
                     **normalized_result, "_source": source,
@@ -498,7 +512,7 @@ class SourceEvaluatorAgent:
             all_results, task if isinstance(task, dict) else {},
         )
         source_scores = []
-        for result in all_results:
+        for index, result in enumerate(all_results):
             if "passages" in result:
                 # Public retriever fields cannot assert already-checked passages.
                 excluded += 1
@@ -515,6 +529,11 @@ class SourceEvaluatorAgent:
                 continue
             url = result.get("url", "")
             source = result.get("_source", "unknown")
+            if index in provisional and _candidate_rejection(result, source, candidates, patterns) is not None:
+                # Previously admitted sources retain their original lexical identity;
+                # their selected conditions need not repeat the product name.
+                excluded += 1
+                continue
             source_type = classify_source_type(url, source)
             evidence_type = classify_evidence_type(result.get("snippet", ""))
 
