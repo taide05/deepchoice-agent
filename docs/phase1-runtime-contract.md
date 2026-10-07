@@ -435,6 +435,16 @@ MAX_CLAIM_TEXT（500 字符，含标记），任何检查溢出、缺引用、un
 包括已撤回的操作文本；它不会重新成为 final_recommendation.action_plan 或报告步骤。
 因此本契约是撤回操作建议，不是抹除整个公共快照的审计原文。
 
+2026-10-07：HITL策略 `evidence-insufficient-v2`。预算最低证据门与公开决策说明复用同一
+结构缺口函数：三条无争议可用链、两个有效HTTP(S)规范hostname、至少一条按来源分数
+导出的moderate/strong链。不同路径、大小写、尾点和IDNA等价host不增加hostname数量；
+重复来源、争议、无效URL和导航占位仍按既有链准入排除。结构缺口优先列出，再追加固定
+的知识/推理与引用提示；不转抄knowledge_gaps原文，不依赖self_reviewer标记。统一复用
+决策DTO的12项上限。已有核验对象的缺失/非法计数字段只显示固定“状态信息不可用”，不抛异常或转为支持。阈值、方向不确定判断、暂停触发、三个动作、TTL、CAS、fencing及
+checkpoint恢复保持原契约；知识/引用提示不加入结构预算门。这是结构说明，不证明主张
+正确或来源独立。旧v1 manifest保持可读/hash有效，当前同run兼容检查拒绝；旧pending
+非cancel提交仍在落库前检查兼容性并保留pending，取消及已提交同body幂等重试按原契约。
+
 单一 evidence-insufficient gate 继续同时要求结构证据不足与方向实质不确定；
 新契约的 context_dependent 不再依赖存在两条排名才识别不确定性。
 用户 limited_report 与预算触顶报告使用同一纯后处理清除具体胜者、排名及旧确定性总结，
@@ -448,8 +458,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
-  `deterministic-citation-v15` 与 `evidence-insufficient-v1` 策略；历史 workflow v1–v3 及
-  citation-policy v1–v14 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v20` 与 `evidence-insufficient-v2` 策略；历史 workflow v1–v3、HITL v1及
+  citation-policy v1–v19 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

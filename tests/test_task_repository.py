@@ -450,7 +450,7 @@ async def test_interrupted_checkpoint_checks_full_manifest_before_resume(reposit
     assert resumed.latest_run.manifest.citation_policy_version == (
         "deterministic-citation-v20"
     )
-    assert resumed.latest_run.manifest.hitl_policy_version == "evidence-insufficient-v1"
+    assert resumed.latest_run.manifest.hitl_policy_version == "evidence-insufficient-v2"
     assert {call.tier for call in resumed.latest_run.manifest.llm_calls} == {"deepseek-flash"}
     assert {model.tier for model in resumed.latest_run.manifest.models} == {"deepseek-flash"}
     assert (await repository.get_run(run.run_id)).status is RunStatus.INTERRUPTED

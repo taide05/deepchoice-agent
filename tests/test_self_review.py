@@ -308,7 +308,7 @@ def test_review_questions_do_not_leak_source_or_supplemental_text_into_hitl_gaps
     state.update(knowledge_gaps=["PRIVATE_SUPPLEMENTAL_OR_SOURCE_BODY"], quality_signals=[{"agent": "self_reviewer"}])
     gaps = _public_gaps(state)
     assert "PRIVATE_SUPPLEMENTAL_OR_SOURCE_BODY" not in str(gaps)
-    assert "Model review identified unresolved evidence or reasoning gaps." in gaps
+    assert "Additional unresolved evidence or reasoning gaps were reported." in gaps
 
 
 @pytest.mark.asyncio

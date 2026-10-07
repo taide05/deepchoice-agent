@@ -196,7 +196,9 @@ def usable_evidence_chains(state: dict[str, Any]) -> list[dict[str, Any]]:
     return usable
 
 
-def minimum_evidence_is_met(state: dict[str, Any]) -> bool:
+def minimum_evidence_gaps(state: dict[str, Any]) -> tuple[str, ...]:
+    """Fixed public reasons for structural insufficiency, not claim verification."""
+
     chains = usable_evidence_chains(state)
     hosts = {
         host
@@ -206,14 +208,18 @@ def minimum_evidence_is_met(state: dict[str, Any]) -> bool:
         if (canonical := _canonical_http_url(source.get("url"))) is not None
         if (host := canonical[1])
     }
-    return (
-        len(chains) >= MINIMUM_USABLE_CHAINS
-        and len(hosts) >= MINIMUM_DISTINCT_HOSTS
-        and any(
-            chain.get("evidence_strength") in _SUBSTANTIAL_STRENGTHS
-            for chain in chains
-        )
-    )
+    gaps: list[str] = []
+    if len(chains) < MINIMUM_USABLE_CHAINS:
+        gaps.append(f"Fewer than {MINIMUM_USABLE_CHAINS} non-disputed usable evidence chains are available.")
+    if len(hosts) < MINIMUM_DISTINCT_HOSTS:
+        gaps.append(f"Fewer than {MINIMUM_DISTINCT_HOSTS} distinct valid HTTP(S) hostnames are available in usable evidence.")
+    if not any(chain.get("evidence_strength") in _SUBSTANTIAL_STRENGTHS for chain in chains):
+        gaps.append("No usable evidence chain has moderate or strong evidence strength.")
+    return tuple(gaps)
+
+
+def minimum_evidence_is_met(state: dict[str, Any]) -> bool:
+    return not minimum_evidence_gaps(state)
 
 
 def build_budget_limited_state(
@@ -309,6 +315,7 @@ __all__ = [
     "MINIMUM_DISTINCT_HOSTS",
     "MINIMUM_USABLE_CHAINS",
     "build_budget_limited_state",
+    "minimum_evidence_gaps",
     "minimum_evidence_is_met",
     "usable_evidence_chains",
 ]

@@ -286,8 +286,11 @@ v23 的分阶段判断契约仍用于生成。v21 将文本拒绝细分为固定
 符合结构最低条件时才生成本地受限报告。本改动尚未通过新真实报告验证推理质量。
 
 Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v4`、state
-schema v3 与 `evidence-insufficient-v1`。该 gate 位于引用验证之后、报告渲染之前，只在证据
-结构不足且推荐方向实质不确定时暂停。`GET /api/v1/tasks/{task_id}/decision` 读取当前决策；
+schema v3 与 `evidence-insufficient-v2`。该 gate 位于引用验证之后、报告渲染之前，只在证据
+结构不足且推荐方向实质不确定时暂停。结构门与缺口说明共用三条判据：
+至少三条无争议可用链、两个规范化HTTP(S) hostname及一条中等/强证据链；仅属结构条件。
+说明列出未满足项，额外知识缺口仅显示固定提示，保留私人原文于内部；旧v1身份可读但需新run。
+`GET /api/v1/tasks/{task_id}/decision` 读取当前决策；
 `POST /api/v1/tasks/{task_id}/decisions/{decision_id}` 以 `If-Match` task version 提交动作。
 三个动作是 `provide_context`、`limited_report` 和 `cancel`。决定与 run、产品库接受的
 checkpoint、state schema 和暂停 epoch 绑定；相同请求幂等，冲突请求不覆盖已提交决定，7 天

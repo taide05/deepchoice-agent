@@ -527,3 +527,38 @@ async def test_default_reviewed_graph_pauses_and_resumes_without_replaying_revie
         await active.stop()
         await product.close()
         await checkpoint.close()
+
+
+@pytest.mark.asyncio
+async def test_actual_gate_checkpoint_uses_shared_safe_structural_gaps(tmp_path, monkeypatch):
+    from deepchoice.agents import evidence_decision_gate as gate
+    monkeypatch.setattr(gate, "get_run_context", lambda: object())
+    initial = {
+        "evidence_chains": [{"conclusion": f"Finding {index}", "sources": [{
+            "url": f"https://same.example/{index}", "title": "Source",
+            "snippet": "Usable evidence", "score": 8}], "disputed": False} for index in range(3)],
+        "conflicts": [], "knowledge_gaps": ["PRIVATE_SUPPLEMENTAL_SOURCE"],
+        "final_recommendation": {"decision_basis_version": "constraint-aware-v1", "winner": "context_dependent"},
+    }
+    workflow = StateGraph(dict)
+    workflow.add_node("evidence_gate", gate.EvidenceDecisionGateAgent().run)
+    workflow.add_edge(START, "evidence_gate")
+    workflow.add_edge("evidence_gate", END)
+    config = {"configurable": {"thread_id": "actual-gaps"}}
+    async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "actual-gate-checkpoints.db")) as saver:
+        graph = workflow.compile(checkpointer=saver)
+        paused = await graph.ainvoke(initial, config)
+        payload = paused["__interrupt__"][0].value
+        assert payload["gaps"] == [
+            "Fewer than 2 distinct valid HTTP(S) hostnames are available in usable evidence.",
+            "Additional unresolved evidence or reasoning gaps were reported."]
+        assert payload["allowed_actions"] == ["provide_context", "limited_report", "cancel"]
+        assert "PRIVATE_SUPPLEMENTAL_SOURCE" not in str(payload)
+        snapshot = await graph.aget_state(config)
+        assert snapshot.next == ("evidence_gate",)
+        continued = await graph.ainvoke(Command(resume={"action": "provide_context",
+                                                       "supplemental_input": "Additional private context"}), config)
+        assert continued["_evidence_decision_route"] == "provide_context"
+        assert continued["_supplemental_input"] == "Additional private context"
+        assert continued["_evidence_decision_gate_seen"] is True
+        assert (await graph.aget_state(config)).next == ()

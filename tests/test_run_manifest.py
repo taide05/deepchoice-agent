@@ -56,7 +56,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v5"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v20"
-    assert first.hitl_policy_version == "evidence-insufficient-v1"
+    assert first.hitl_policy_version == "evidence-insufficient-v2"
 
 
 @pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6"])
@@ -175,7 +175,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
     assert registry.citation_policy_version == "deterministic-citation-v20"
-    assert registry.hitl_policy_version == "evidence-insufficient-v1"
+    assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v34",
                          "query_analyzer.decomposition_system": "v2",
@@ -909,6 +909,19 @@ def test_historical_conflict_scope_policy_remains_readable_and_incompatible(old_
     restored = RunManifest.model_validate_json(historical.model_dump_json())
     assert restored.manifest_id == _expected_manifest_id(restored)
     assert restored.conflict_policy_version == old_policy
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_historical_hitl_policy_remains_readable_but_requires_new_run():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+    current = build_run_manifest({})
+    historical = current.model_copy(update={"hitl_policy_version": "evidence-insufficient-v1"})
+    historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
+    restored = RunManifest.model_validate_json(historical.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    assert restored.hitl_policy_version == "evidence-insufficient-v1"
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

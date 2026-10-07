@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from deepchoice.agents.evidence_decision_gate import should_request_evidence_decision
+from deepchoice.agents.evidence_decision_gate import _public_gaps, should_request_evidence_decision
+from deepchoice.budget.limited import minimum_evidence_gaps, minimum_evidence_is_met
 from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY
 from deepchoice.contracts.api import ResearchRequest
 from deepchoice.contracts.manifest import build_run_manifest
@@ -375,3 +376,94 @@ def test_gate_requires_structural_insufficiency_and_direction_uncertainty_once()
     seen = _uncertain_state()
     seen["_evidence_decision_gate_seen"] = True
     assert should_request_evidence_decision(seen) is False
+
+
+_CHAIN_GAP = "Fewer than 3 non-disputed usable evidence chains are available."
+_HOST_GAP = "Fewer than 2 distinct valid HTTP(S) hostnames are available in usable evidence."
+_STRENGTH_GAP = "No usable evidence chain has moderate or strong evidence strength."
+
+
+@pytest.mark.parametrize("variant, expected", [
+    ("same-host", (_HOST_GAP,)),
+    ("idna-host", (_HOST_GAP,)),
+    ("weak-only", (_STRENGTH_GAP,)),
+    ("canonical-duplicate", (_CHAIN_GAP,)),
+    ("invalid-url", (_CHAIN_GAP,)),
+    ("disputed", (_CHAIN_GAP,)),
+    ("navigation", (_CHAIN_GAP,)),
+    ("empty", (_CHAIN_GAP, _HOST_GAP, _STRENGTH_GAP)),
+    ("sufficient", ()),
+])
+def test_public_structural_gaps_match_actual_admission(variant, expected):
+    from copy import deepcopy
+    state = _uncertain_state(enough=True)
+    chains = state["evidence_chains"]
+    if variant in {"same-host", "idna-host", "canonical-duplicate"}:
+        urls = {
+            "same-host": ["https://DOCS.example./a", "https://docs.example:443/b", "http://docs.example/c"],
+            "idna-host": ["https://bücher.example/a", "https://xn--bcher-kva.example/b", "https://BÜCHER.example./c"],
+            "canonical-duplicate": ["https://source0.example/a", "https://SOURCE0.example.:443/a", "https://source2.example/c"],
+        }[variant]
+        for chain, url in zip(chains, urls):
+            chain["sources"][0]["url"] = url
+    elif variant == "weak-only":
+        for chain in chains:
+            chain["evidence_strength"] = "strong"  # Untrusted label cannot replace source score.
+            chain["sources"][0]["score"] = 5
+    elif variant == "invalid-url":
+        chains[0]["sources"][0]["url"] = "https://user:password@source0.example/a"
+    elif variant == "disputed":
+        state["conflicts"] = [{"source_a": {"url": chains[0]["sources"][0]["url"]},
+                               "source_b": {"url": "https://other.example/dispute"}}]
+    elif variant == "navigation":
+        chains[0]["sources"][0]["snippet"] = "Official documentation site for source0"
+    elif variant == "empty":
+        state["evidence_chains"] = []
+    original = deepcopy(state)
+    assert minimum_evidence_gaps(state) == expected
+    assert _public_gaps(state) == expected
+    assert minimum_evidence_is_met(state) is (not expected)
+    assert should_request_evidence_decision(state) is bool(expected)
+    assert state == original
+
+
+@pytest.mark.parametrize("quality_signals", [[], [{"agent": "self_reviewer"}], None])
+def test_public_gaps_keep_structural_reasons_and_hide_raw_state(quality_signals):
+    state = _uncertain_state(enough=True)
+    for index, chain in enumerate(state["evidence_chains"]):
+        chain["sources"][0]["url"] = f"https://same.example/{index}"
+    state["knowledge_gaps"] = [f"PRIVATE_SUPPLEMENTAL_SOURCE_{index}" for index in range(20)]
+    state["quality_signals"] = quality_signals
+    state["citation_verification"] = {"status_counts": {"unsupported": 1, "unknown": 1}}
+    gaps = _public_gaps(state)
+    assert gaps[0] == _HOST_GAP and len(gaps) == 3
+    assert "PRIVATE_SUPPLEMENTAL_SOURCE" not in str(gaps)
+    assert "Additional unresolved evidence or reasoning gaps were reported." in gaps
+    assert "One or more decision-critical citations remain unsupported or unknown." in gaps
+
+
+def test_nonstructural_gaps_do_not_change_budget_or_hitl_admission():
+    state = _uncertain_state(enough=True)
+    state["knowledge_gaps"] = ["PRIVATE_CONTENT"]
+    state["citation_verification"] = {"status_counts": {"unknown": 2}}
+    assert len(_public_gaps(state)) == 2
+    assert minimum_evidence_is_met(state)
+    assert not should_request_evidence_decision(state)
+
+
+@pytest.mark.parametrize("bad_count", ["invalid", None, -1, {}, True, 1.5])
+def test_malformed_citation_counts_degrade_only_the_public_notice(bad_count):
+    state = _uncertain_state(enough=True)
+    state["citation_verification"] = {"status_counts": {"unsupported": bad_count, "unknown": 0}}
+    assert _public_gaps(state) == ("Citation status information is unavailable.",)
+    assert minimum_evidence_is_met(state)
+    assert not should_request_evidence_decision(state)
+
+
+@pytest.mark.parametrize("counts", [None, {}, {"unknown": 0}, [], "invalid"])
+def test_missing_or_invalid_citation_counts_remain_unavailable(counts):
+    state = _uncertain_state(enough=True)
+    state["citation_verification"] = {"status_counts": counts}
+    assert _public_gaps(state) == ("Citation status information is unavailable.",)
+    assert minimum_evidence_is_met(state)
+    assert not should_request_evidence_decision(state)

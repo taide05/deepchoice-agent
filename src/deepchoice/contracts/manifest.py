@@ -136,7 +136,7 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v15", "deterministic-citation-v16",
         "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19", "deterministic-citation-v20",
     ] | None = None
-    hitl_policy_version: Literal["evidence-insufficient-v1"] | None = None
+    hitl_policy_version: Literal["evidence-insufficient-v1", "evidence-insufficient-v2"] | None = None
     # Missing in historical schema-v1 identities; current default is scan-only.
     conflict_policy_version: Literal["scan-only-v1", "scan-only-v2"] | None = None
     gather_evidence: bool
@@ -153,7 +153,7 @@ class CoreAssetRegistry(FrozenModel):
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
     citation_policy_version: Literal["deterministic-citation-v20"]
-    hitl_policy_version: Literal["evidence-insufficient-v1"]
+    hitl_policy_version: Literal["evidence-insufficient-v2"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
 
@@ -329,7 +329,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v20",
-        "hitl_policy_version": "evidence-insufficient-v1",
+        "hitl_policy_version": "evidence-insufficient-v2",
         "conflict_policy_version": "scan-only-v2",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(

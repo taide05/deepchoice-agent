@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Share minimum-evidence admission and HITL explanations
+
+Use one structural-gap calculation for budget admission and HITL explanations,
+including normalized hostname diversity and score-derived evidence strength.
+Show fixed structural reasons first and project extra knowledge gaps as a generic
+notice, keeping raw source/user text private without depending on review markers.
+Malformed citation counts produce an unavailable notice. Keep the existing gate
+conditions and decision lifecycle. Freeze HITL v2; historical
+v1 manifests remain readable but require a new run. No extra calls or graph state.
+
 ### Isolate optional official-document learning failures
 
 Share bounded mapping validation across reads, learning and cache identity. Preserve

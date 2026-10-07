@@ -9,13 +9,14 @@ from typing import Any
 from langgraph.types import interrupt
 
 from deepchoice.agents.report_generator import FORMAT_RENDERERS
-from deepchoice.budget.limited import minimum_evidence_is_met, usable_evidence_chains
+from deepchoice.budget.limited import minimum_evidence_gaps, minimum_evidence_is_met, usable_evidence_chains
 from deepchoice.hitl import ALLOWED_DECISION_ACTIONS, DECISION_TTL, DecisionResolution
+from deepchoice.hitl.contracts import MAX_DECISION_GAPS
 from deepchoice.runtime.context import get_run_context
 from deepchoice.utils.decision_contract import restrict_recommendation
 
 
-HITL_POLICY_VERSION = "evidence-insufficient-v1"
+HITL_POLICY_VERSION = "evidence-insufficient-v2"
 HITL_PARTIAL_FAILURE = "evidence_insufficient_user_limited"
 
 
@@ -60,36 +61,20 @@ def should_request_evidence_decision(state: dict[str, Any]) -> bool:
 
 
 def _public_gaps(state: dict[str, Any]) -> tuple[str, ...]:
-    gaps: list[str] = []
+    gaps = list(minimum_evidence_gaps(state))
     raw = state.get("knowledge_gaps")
-    if isinstance(raw, list):
-        # A pre-render model review may quote private source/supplemental text.
-        # Keep decision events on a fixed public projection even for historical state.
-        reviewed = any(isinstance(row, dict) and row.get("agent") == "self_reviewer"
-                       for row in state.get("quality_signals", []))
-        if reviewed and any(isinstance(item, str) and item.strip() for item in raw):
-            gaps.append("Model review identified unresolved evidence or reasoning gaps.")
-        elif not reviewed:
-            gaps.extend(item.strip()[:500] for item in raw if isinstance(item, str) and item.strip())
-    chains = usable_evidence_chains(state)
-    if len(chains) < 3:
-        gaps.append("Fewer than three non-disputed usable evidence chains are available.")
-    hosts = {
-        source.get("canonical_url") or source.get("url")
-        for chain in chains
-        for source in chain.get("sources", [])
-        if isinstance(source, dict)
-    }
-    if len(hosts) < 2:
-        gaps.append("The usable evidence does not yet provide sufficient independent source diversity.")
+    if isinstance(raw, list) and any(isinstance(item, str) and item.strip() for item in raw):
+        # Historical or model-authored gaps can contain private source/user text.
+        gaps.append("Additional unresolved evidence or reasoning gaps were reported.")
     verification = state.get("citation_verification")
     counts = verification.get("status_counts") if isinstance(verification, dict) else None
-    if isinstance(counts, dict) and (
-        int(counts.get("unsupported", 0) or 0) > 0
-        or int(counts.get("unknown", 0) or 0) > 0
-    ):
-        gaps.append("One or more decision-critical citations remain unsupported or unknown.")
-    return tuple(dict.fromkeys(gaps))[:12]
+    if isinstance(verification, dict):
+        unresolved = (counts.get("unsupported"), counts.get("unknown")) if isinstance(counts, dict) else (None, None)
+        if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in unresolved):
+            gaps.append("Citation status information is unavailable.")
+        elif any(value > 0 for value in unresolved):
+            gaps.append("One or more decision-critical citations remain unsupported or unknown.")
+    return tuple(dict.fromkeys(gaps))[:MAX_DECISION_GAPS]
 
 
 def _build_limited_report(state: dict[str, Any]) -> dict[str, Any]:
