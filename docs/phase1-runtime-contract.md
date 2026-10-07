@@ -1211,4 +1211,13 @@ create/首条会话消息统一最多4000字符，后续用户消息2000、助�
 前端将当前API的next_action映射到原会话action，保留action-only兼容；静态示例和未知
 方向/直接确认的固定引导用现有四语言翻译，旧cards的stars/desc不再显示，选择仍只提交候选名字。
 澄清聊天移除两个无效空头像参数，使用Streamlit默认头像。扫描用户历史/关键词顺序、
-其他ask/确认交接、软默认与模型语义等仍有限制；这不构成报告质量验收。
+初始已知词/改选、软默认与模型语义等仍有限制；这不构成报告质量验收。
+
+
+抽取后的响应闭合（2026-10-07）：ask/recommend的原一次抽取成功后，共用当前运行时
+缺口决定ask或confirm；模型action本身不能授权确认。齐全复用既有固定有界确认、完整
+clarified_task及requirements_complete四语言投影，缺项不提供确认payload；异常/无效
+抽取仍原子回退。recommend在有用户候选时透传同一结果，删除重复动作判断。
+首问及后续消息共用既有状态/消息/公开响应处理，confirm同步ready，GET status与之
+一致；finalize/三轮直接confirm和默认值不改。此为durable创建前的内存澄清会话，
+不改产品task/run事务或manifest。聚合32KiB、初始词典、改选/否定和模型语义仍开放。

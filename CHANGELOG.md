@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Complete clarification from the merged requirements
+
+Choose ask or complete confirmation from merged runtime requirements after the
+existing extraction call. Reuse the fixed confirmation payload and localized
+reason; remove duplicate recommendation action routing. Share first/follow-up
+response recording so first-turn confirmation and GET status agree on ready.
+Keep model failure/invalid extraction atomic, current input bounds and identities;
+no extra call or state. Aggregate limits and semantic extraction remain limitations.
+
 ### Treat static clarification cards as unresearched examples
 
 Remove undated stars and unsupported price/performance/suitability claims from

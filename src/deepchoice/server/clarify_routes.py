@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Path
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 
 from ..clarify.clarification_agent import ClarificationAgent
-from ..clarify.session_manager import SessionManager
+from ..clarify.session_manager import SessionManager, SessionState
 from ..security.input_limits import validate_safe_text
 
 router = APIRouter(prefix="/clarify", tags=["clarify"])
@@ -40,21 +40,23 @@ class MessageRequest(BaseModel):
         return validate_safe_text(value)
 
 
-@router.post("/start")
-async def start_clarify(req: StartRequest):
-    result = session_manager.create(req.query)
-    session_id = result["session_id"]
-    state = session_manager.get(session_id)
-
+async def _respond(state: SessionState) -> dict:
     agent_response = await clarify_agent.decide_and_respond(state)
+    if agent_response.get("action") == "confirm":
+        state.status = "ready"
     state.append_message("assistant", agent_response["answer"])
-
     return {
-        "session_id": session_id,
+        "session_id": state.session_id,
         "answer": agent_response["answer"],
         "next_action": agent_response["action"],
         **{k: v for k, v in agent_response.items() if k not in ("action", "answer")},
     }
+
+
+@router.post("/start")
+async def start_clarify(req: StartRequest):
+    result = session_manager.create(req.query)
+    return await _respond(session_manager.get(result["session_id"]))
 
 
 @router.post("/{session_id}/message")
@@ -63,21 +65,7 @@ async def clarify_message(session_id: SessionId, req: MessageRequest):
         session_manager.process_message(session_id, req.message)
     except KeyError:
         raise HTTPException(status_code=404, detail="Session not found or expired")
-
-    state = session_manager.get(session_id)
-    agent_response = await clarify_agent.decide_and_respond(state)
-
-    if agent_response.get("action") == "confirm":
-        state.status = "ready"
-
-    state.append_message("assistant", agent_response["answer"])
-
-    return {
-        "session_id": session_id,
-        "answer": agent_response["answer"],
-        "next_action": agent_response["action"],
-        **{k: v for k, v in agent_response.items() if k not in ("action", "answer")},
-    }
+    return await _respond(session_manager.get(session_id))
 
 
 @router.get("/{session_id}/status")

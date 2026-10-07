@@ -303,3 +303,58 @@ def test_extracted_user_candidates_take_priority_over_static_examples(query, sce
     finally:
         if sid is not None:
             session_manager._sessions.pop(sid, None)
+
+
+@pytest.mark.parametrize("model_action", ["ask", "recommend", "confirm"])
+def test_named_candidate_ask_can_complete_with_one_call_and_a_queryable_confirmation(model_action):
+    sid = None
+    query = "Evaluate FastAPI for a personal project with simple processing; No new server"
+    try:
+        with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+            model.return_value = {"action": model_action, "message": "Please tell me the scope",
+                                  "scene": "solo", "complexity": "simple", "constraints": ["No new server"]}
+            response = client.post("/clarify/start", json={"query": query})
+            assert response.status_code == 200 and response.json()["next_action"] == "confirm"
+            sid = response.json()["session_id"]
+            data = response.json()
+            assert data["answer"] == "需求已整理完毕，确认后开始研究。"
+            assert data["payload"]["reason"] == "requirements_complete"
+            task = data["payload"]["clarified_task"]
+            assert task["query"] == query and task["candidate_techs"] == ["fastapi"]
+            assert task["scene_context"] == "solo" and task["complexity"] == "simple"
+            assert task["constraints"] == ["No new server"]
+            assert session_manager.get(sid).clarified_task == task
+            status = client.get(f"/clarify/{sid}/status")
+            assert status.status_code == 200 and status.json()["status"] == "ready"
+            assert model.await_count == 1
+    finally:
+        if sid is not None:
+            session_manager._sessions.pop(sid, None)
+
+
+@pytest.mark.parametrize("model_result", [
+    {"action": "confirm", "scene": "solo", "message": "Everything is complete"},
+    {"action": "confirm", "scene": "solo", "complexity": "invalid", "constraints": ["must not commit"]},
+    RuntimeError("provider error"),
+])
+def test_named_candidate_ask_keeps_partial_or_failed_extraction_out_of_confirmation(model_result):
+    sid = None
+    try:
+        with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
+            if isinstance(model_result, Exception):
+                model.side_effect = model_result
+            else:
+                model.return_value = model_result
+            response = client.post("/clarify/start", json={"query": "Evaluate FastAPI for personal use"})
+            assert response.status_code == 200 and response.json()["next_action"] == "ask"
+            sid = response.json()["session_id"]
+            state = session_manager.get(sid)
+            assert state.clarified_task is None and "payload" not in response.json()
+            assert state.complexity is None and state.constraints == []
+            status = client.get(f"/clarify/{sid}/status")
+            assert status.status_code == 200 and status.json()["status"] == "clarifying"
+            expected_scene = "solo" if isinstance(model_result, dict) and "complexity" not in model_result else None
+            assert state.scene == expected_scene and model.await_count == 1
+    finally:
+        if sid is not None:
+            session_manager._sessions.pop(sid, None)

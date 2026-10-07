@@ -220,20 +220,23 @@ class ClarificationAgent:
 
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
-            return self._merge_and_build_response(state, result)
+            response = self._merge_and_build_response(state, result)
         except Exception:
             print_agent_output("Clarify ask failed; using fallback", agent="CLARIFICATION")
             return self._fallback_response(state)
+
+        # The merged requirements, not the model's action label, own the next UI step.
+        if self._decide_action(state) == "confirm":
+            response = self._confirm_response(state, "需求已整理完毕，确认后开始研究。")
+            response["payload"]["reason"] = "requirements_complete"
+        else:
+            response["action"] = "ask"
+        return response
 
     async def _handle_recommend(self, state: SessionState) -> dict:
         # The existing ask call already extracts and validates the current reply.
         response = await self._handle_ask(state)
         if state.candidate_techs:
-            if self._decide_action(state) == "confirm":
-                response = self._confirm_response(state, "需求已整理完毕，确认后开始研究。")
-                response["payload"]["reason"] = "requirements_complete"
-                return response
-            response["action"] = "ask"
             return response
         candidates = _get_recommendations(state)
         if candidates:
