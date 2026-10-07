@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Audit cumulative logic after the implementation rounds
+
+Review the 29-file production diff and adjacent default-path contracts with two
+independent read-only assistants and synthetic, network-free counterexamples.
+Record unresolved action-label attribution, final-menu candidate coverage, optional
+learning failure and HITL diversity projection discrepancies. Individual engineering
+checks do not establish aggregate logic acceptance or general selection quality.
+Close the unstarted question-basis comparison without research admission; prioritize
+generic contract fixes before further development examples. No production change.
+
 ### Bind original questions and complete sentence references at runtime
 
 The default staged judgment now selects one advertised original question_id and

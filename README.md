@@ -15,6 +15,10 @@ quality-source-view-development-v1（1.0.1、P06/P09/P07/P11四对）中有两�
 稳定选型质量。最终24次仍封存。测量日期、成本与分母见
 [当前状态](docs/o1-execution-status.md)。
 
+2026-10-07[累计逻辑审查](docs/codebase-audit.md#8-多轮修复后的累计逻辑审查2026-10-07)
+确认候选动作标签在自审误删/漏检、最终有界事实菜单可能丢掉另一候选等未修问题。
+当前先修通用链路，准备中的新对照已零准入关闭；全部修复与通用质量验收均未完成。
+
 后续按[整体质量路线](docs/current-roadmap.md)改进证据组织、条件推理和报告完整性，
 用多场景对照与固定候选重复运行验收。验收方法和实际进展分别见
 [质量协议](docs/product-effectiveness-optimization.md)与[当前状态](docs/o1-execution-status.md)。
