@@ -23,7 +23,7 @@ class CallDiagnostics(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     policy: Literal["node-shape-v1", "node-shape-v2"] = "node-shape-v1"
-    profile: Literal["fact-selection-v1", "fact-selection-v2", "fact-view-selection-v1", "question-judgment-v1", "self-review-v2", "self-review-targeted-v1"] | None = None
+    profile: Literal["fact-selection-v1", "fact-selection-v2", "fact-view-selection-v1", "question-judgment-v1", "question-judgment-v2", "self-review-v2", "self-review-targeted-v1"] | None = None
     finish_reason: Literal["stop", "length", "tool_calls", "content_filter", "function_call"] | None = None
     truncated: StrictBool | None = None
     json_status: Literal["strict", "repaired", "invalid", "non_object", "not_requested"] | None = None
@@ -133,6 +133,11 @@ _PROFILES = {
     "fact-view-selection-v1": ("conclusion_synthesizer", {"source_view_ids": [str]}),
     "question-judgment-v1": ("conclusion_synthesizer", {
         "decision_analysis": [_ANALYSIS_SHAPE],
+    }),
+    "question-judgment-v2": ("conclusion_synthesizer", {
+        "decision_analysis": [{"kind": ("choice", "answer", "design"), "option": str,
+                               "question_id": str, "basis_refs": [str], "reasoning": str,
+                               "assumptions": [str], "change_condition": str}],
     }),
     "self-review-targeted-v1": ("self_reviewer", {
         "analysis_reviews": [{"analysis_id": str, "action": ("keep", "revise", "withdraw")}],

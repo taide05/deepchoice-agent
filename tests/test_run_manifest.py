@@ -177,7 +177,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v19"
     assert registry.hitl_policy_version == "evidence-insufficient-v1"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v8", "conclusion_synthesizer.synthesis_prompt": "v32",
+    expected_versions = {"self_reviewer.review_system": "v8", "conclusion_synthesizer.synthesis_prompt": "v33",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v3",
                          "source_evaluator.source_scope_selection": "v1",
@@ -764,7 +764,7 @@ def test_structure_correction_assets_are_frozen_and_old_synthesis_cannot_resume(
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
-    for field in ("SYNTHESIS_CORRECTION_TEMPLATE", "SYNTHESIS_STRUCTURE_POLICY", "SOURCE_VIEW_SELECTION_POLICY"):
+    for field in ("SYNTHESIS_CORRECTION_TEMPLATE", "SYNTHESIS_STRUCTURE_POLICY", "SOURCE_VIEW_SELECTION_POLICY", "QUESTION_BASIS_POLICY"):
         with monkeypatch.context() as patcher:
             patcher.setattr(module, field, getattr(module, field) + "changed")
             assert build_run_manifest({}).manifest_id != current.manifest_id
@@ -798,7 +798,7 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("retired_version", ["v24", "v25", "v26", "v27"])
+@pytest.mark.parametrize("retired_version", ["v24", "v25", "v26", "v27", "v32"])
 def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 

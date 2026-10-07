@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Bind original questions and complete sentence references at runtime
+
+The default staged judgment now selects one advertised original question_id and
+bounded basis_refs instead of generating constraint IDs and numeric coordinates.
+Runtime copies full original sentences only when passage display matches the
+existing binder, then preserves citation and self-review checks. Reject invalid,
+duplicate or excessive references as whole rows; skip judgment with no references.
+Keep original constraints in the request inventory, prompt and self-review;
+per-row Addresses now names only the original question, without claiming C coverage.
+Freeze synthesis v33 and question-judgment-v2 diagnostics; retain old v32 identities
+and numeric compatibility formats, and reject old same-run resume.
+No new model calls, nodes, public state fields or budget authority. Engineering
+verification and saved-fact replay do not establish real-report improvement.
+
 ### Bind runtime source views from model-selected IDs
 
 The existing staged selection call now returns only advertised source_view_ids.

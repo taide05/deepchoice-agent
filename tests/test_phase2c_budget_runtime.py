@@ -1186,3 +1186,58 @@ async def test_empty_self_review_uses_no_llm_budget_trace_or_sdk_dispatch(tmp_pa
         await cursor.close()
     finally:
         await connection.close()
+
+
+@pytest.mark.parametrize("call_limit,offer_basis", [(1, True), (2, True), (1, False)])
+async def test_question_refs_use_real_admission_trace_and_no_phantom_judgment(tmp_path, monkeypatch, call_limit, offer_basis):
+    import json
+    from deepchoice.agents import conclusion_synthesizer as synth
+    from deepchoice.observability import SQLiteTraceStore, RuntimeTraceRecorder
+    from deepchoice.runtime.context import bind_node_attempt
+
+    task = {"query": "Can Alpha replay retained records?", "candidate_techs": ["Alpha"]}
+    chains = [{"sources": [{"title": "Alpha guide", "url": "https://alpha.example/guide",
+                            "snippet": "Alpha retains records. Consumers can replay retained records."}]}]
+    payloads = [{"source_view_ids": ["S1"]}, {"decision_analysis": [{
+        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["B1", "B2"],
+        "reasoning": "Replay depends on retained records.", "assumptions": [],
+        "change_condition": "Reconsider if records expire."}]}]
+    def response(payload):
+        return SimpleNamespace(model="fixture", usage=SimpleNamespace(
+            prompt_tokens=11, completion_tokens=7, total_tokens=18),
+            choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(content=json.dumps(payload)))])
+    create = AsyncMock(side_effect=[response(payload) for payload in payloads])
+    monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    if not offer_basis:
+        monkeypatch.setattr(synth, "basis_reference_packet", lambda *_: ("No bound source facts.", {}))
+    connection, lock, manager, _, clock = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(llm_calls=call_limit, total_tokens=200_000))
+    sink = SQLiteTraceStore(connection, lock, clock=clock).bind(
+        run_id="run-1", execution_epoch=1, lease_owner="worker")
+    trace = RuntimeTraceRecorder(sink, task_id="task-1")
+    try:
+        node = await trace.start_node_attempt("conclusion_synthesizer")
+        with bind_run_context(_context(manager, trace)), bind_node_attempt(node.node_attempt_id):
+            agent = synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task))
+            if call_limit == 1 and offer_basis:
+                with pytest.raises(BudgetExceededError):
+                    await agent.run({"task": task, "evidence_chains": chains})
+            else:
+                state = await agent.run({"task": task, "evidence_chains": chains})
+                assert len(state["final_recommendation"]["decision_analysis"]) == int(offer_basis)
+                assert state["token_usage"][0]["calls"] == call_limit
+                assert state["quality_signals"][0]["staged_generation"]["judgment_calls"] == int(offer_basis)
+        assert create.await_count == call_limit
+        usage = await manager._usage()
+        assert usage[BudgetResource.LLM_CALLS] == call_limit
+        assert usage[BudgetResource.TOTAL_TOKENS] == call_limit * 18
+        rows = await (await connection.execute("SELECT status, result_summary_json FROM external_calls")).fetchall()
+        assert sum(row[0] == "succeeded" for row in rows) == call_limit
+        summaries = [json.loads(row[1]) for row in rows if row[0] == "succeeded"]
+        profiles = [item["diagnostics"]["profile"] for item in summaries]
+        assert profiles == (["fact-view-selection-v1", "question-judgment-v2"] if call_limit == 2
+                            else ["fact-view-selection-v1"])
+        assert all("retained records" not in row[1] for row in rows)
+    finally:
+        await connection.close()

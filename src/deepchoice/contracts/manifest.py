@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict
 
 from ..utils.fact_selection import SOURCE_VIEW_SELECTION_POLICY
+from ..utils.question_packet import QUESTION_BASIS_POLICY
 from ..agents.conclusion_synthesizer import (
     SYNTHESIS_CALL_TIMEOUT_S, SYNTHESIS_CORRECTION_TEMPLATE, SYNTHESIS_PROMPT,
     FACT_SELECTION_PROMPT, QUESTION_JUDGMENT_PROMPT,
@@ -48,7 +49,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v8",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v3",
-    "conclusion_synthesizer.synthesis_prompt": "v32",
+    "conclusion_synthesizer.synthesis_prompt": "v33",
     "source_evaluator.source_scope_selection": "v1",
     "conflict_detector.contradiction_scan_system": "v4",
 }
@@ -73,7 +74,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33"] = "v1"
     sha256: str
 
 
@@ -238,7 +239,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         ("conclusion_synthesizer.synthesis_prompt",
          SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE
          + "\n" + FACT_SELECTION_PROMPT + "\n" + QUESTION_JUDGMENT_PROMPT
-         + "\n" + SOURCE_PASSAGE_DISPLAY_POLICY + "\n" + SOURCE_VIEW_SELECTION_POLICY),
+         + "\n" + SOURCE_PASSAGE_DISPLAY_POLICY + "\n" + SOURCE_VIEW_SELECTION_POLICY
+         + "\n" + QUESTION_BASIS_POLICY),
         ("self_reviewer.review_system", REVIEW_SYSTEM),
     )
     report_format = task.get("report_format", "what_why_how")

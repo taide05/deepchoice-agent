@@ -19,6 +19,23 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-07 R7：合成v33的默认第二次判断调用仅选择一个已展示的R0/Q question_id
+和1–12个唯一basis_refs原句ID。临时映射由运行时逐事实生成，保留独立passage位置；
+只有完整saved_text通过来源边界，且逐passage展示句序与原binder对整段分句完全一致，
+才提供该事实的引用。没有可引用原句时跳过第二调用，不产生该调用的预算消费或Trace。
+运行时仅从已展示ID复制完整原句及原fact_id/1-based sentence_ids，再经既有结构绑定、
+引用核验和自审。未知/重复/非法/超限引用整行拒绝，不猜测坐标或留下部分依据；仍限
+4个事实、每事实3句、每原问题1行/总8行。无效第一行也占用该问题，后续重复行不能替换。
+R0的单侧候选保护及子问题不得choice保持。模型旧requirement_ids/basis/复制来源/权限字段
+不透传。公共answer_contract和canonical basis格式不变，无manifest的数字引用兼容入口保留。
+逐行requirement_ids仅绑定该原问题，不推断C覆盖；完整原始C约束仍提供给合成、公共
+answer_delivery inventory和SelfReviewer original_request，报告逐行Addresses不再列C。
+这是范围明确的投影变化，不证明每约束已回答。新diagnostic profile question-judgment-v2
+只作浅层观察；旧v1仍可读。manifest冻结新prompt及runtime-question-basis-v1策略，v32及
+更早身份可读且原hash有效，但不能当前同run恢复。工作流、引用政策、状态schema、数据库
+和公共节点不变，不新增调用或判断权限。原句身份不等于语义支持；工程验证不证明模型
+选择正确、关键问题有用或质量稳定。
+
 2026-10-06 R6：合成v32的默认事实选择调用仅返回source_view_ids（最多五个菜单ID），
 运行时生成F编号并通过原binder复制来源。短焦点与最大窗口均保留原关注坐标及左右邻句，
 模型不能提交F编号/范围/复制正文来改变该绑定。临时ID映射冻结完整原来源并比对重绑文本、
@@ -49,7 +66,7 @@ counts/空或缺失投影不可视作已完成核验。有效且全verified的�
 生命周期、HITL和数据库不变。工程测试不能证明真实模型正确区分已给条件与额外未知。
 
 2026-10-06：默认 graph 与独立直接代理默认模式均采用 `scan-only-v2`；manifest schema v1
-冻结 conflict_policy_version、scan v4、合成 v32、自审 v8、三模板v20/v19/v18与
+冻结 conflict_policy_version、scan v4、合成 v33、自审 v8、三模板v20/v19/v18与
 deterministic-citation-v19。历史
 scan-only-v1 / scan v3 / 引用 v18 及缺省字段身份可读且保持原hash，但不能当前同run恢复。
 当前核心资产只索引6个prompt与6个LLM call快照，不含已退出默认路径的 arbitration、

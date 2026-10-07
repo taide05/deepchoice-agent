@@ -42,36 +42,131 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     return mentions
 
 
-def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
-    """Show full saved, bound sentences and fact IDs; no model-authored source prose."""
+QUESTION_BASIS_POLICY = "runtime-question-basis-v1:original-questions;refs=12;facts=4;sentences=3;question-only-requirements"
+
+
+def _fact_sentence_groups(fact):
     from ..citations.verifier import _split_sentences
     from .evidence_choices import bounded_source_passages
 
+    if not isinstance(fact.get("source_title"), str) or not isinstance(fact.get("saved_text"), str):
+        return None
+    passages = ()
+    if "saved_passages" in fact:
+        passages = bounded_source_passages({"snippet": fact["saved_text"], "passages": fact["saved_passages"]})
+        if not passages:
+            return None
+    groups = [_split_sentences(passage) for passage in passages] if passages else [_split_sentences(fact["saved_text"])]
+    return groups, bool(passages)
+
+
+def _fact_heading(fact, candidates):
+    mentions = candidate_mentions(fact["source_title"], candidates)
+    return f'{fact["id"]} | title: {fact["source_title"]} | title mentions: {mentions or "none"}'
+
+
+def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
+    """Retain the historical numbered packet interface and passage locations."""
     lines = []
     for fact in facts[:5]:
-        title = fact.get("source_title", "")
-        text = fact.get("saved_text", "")
-        if not isinstance(title, str) or not isinstance(text, str):
+        prepared = _fact_sentence_groups(fact)
+        if prepared is None:
             continue
-        passages = ()
-        if "saved_passages" in fact:
-            passages = bounded_source_passages({
-                "snippet": text, "passages": fact["saved_passages"],
-            })
-            if not passages:
-                continue
-        mentions = candidate_mentions(title, candidates)
-        lines.append(f'{fact["id"]} | title: {title} | title mentions: {mentions or "none"}')
-        if passages:
-            sentence_index = 1
-            for passage_index, passage in enumerate(passages, 1):
-                lines.append(f'  Passage {passage_index}/{len(passages)} (same source, separate location):')
-                for sentence in _split_sentences(passage):
-                    lines.append(f'  s{sentence_index}: {sentence}')
-                    sentence_index += 1
-        else:
-            lines.extend(f'  s{index}: {sentence}' for index, sentence in enumerate(_split_sentences(text), 1))
+        groups, separate = prepared
+        lines.append(_fact_heading(fact, candidates))
+        sentence_index = 1
+        for passage_index, group in enumerate(groups, 1):
+            if separate:
+                lines.append(f'  Passage {passage_index}/{len(groups)} (same source, separate location):')
+            for sentence in group:
+                lines.append(f'  s{sentence_index}: {sentence}')
+                sentence_index += 1
     return "\n".join(lines) if lines else "No bound source facts."
+
+
+def basis_reference_packet(facts: list[dict], candidates: list[str]) -> tuple[str, dict]:
+    """Offer opaque IDs for the exact complete sentence addresses used by binding.
+
+    Location labels do not join separate page passages. Any sentence-policy
+    disagreement leaves that fact unoffered, rather than changing its addresses.
+    """
+    from ..citations.verifier import _split_sentences
+    from .evidence_choices import whole_source_text
+
+    facts = facts[:5]
+    identifiers = [fact.get("id") for fact in facts]
+    if (any(not isinstance(key, str) or not re.fullmatch(r"F[1-9]\d?", key) for key in identifiers)
+            or len(set(identifiers)) != len(identifiers)):
+        return "No bound source facts.", {}
+    lines, offered = [], {}
+    for fact in facts:
+        prepared = _fact_sentence_groups(fact)
+        if prepared is None or whole_source_text(fact["saved_text"]) != fact["saved_text"]:
+            continue
+        groups, separate = prepared
+        sentences = [sentence for group in groups for sentence in group]
+        if not sentences or sentences != _split_sentences(fact["saved_text"]):
+            continue
+        lines.append(_fact_heading(fact, candidates))
+        sentence_index = 1
+        for passage_index, group in enumerate(groups, 1):
+            if separate:
+                lines.append(f'  Passage {passage_index}/{len(groups)} (same source, separate location):')
+            for sentence in group:
+                token = f"B{len(offered) + 1}"
+                lines.append(f"  {token}: {sentence}")
+                offered[token] = {"fact_id": fact["id"], "sentence_ids": [sentence_index],
+                                  "source_sentences": [sentence]}
+                sentence_index += 1
+    return ("\n".join(lines) if lines else "No bound source facts."), offered
+
+
+def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
+    """Map only advertised question/quote IDs; old model provenance is ignored.
+
+    This creates canonical proposals for the unchanged analysis binder. It does
+    not assert constraint coverage, source applicability, or permission to act.
+    """
+    diagnostics.update(rows_received=0, rows_selected=0, rows_rejected_shape=0,
+                       rows_rejected_question=0, rows_rejected_limit=0)
+    if not isinstance(rows, list):
+        return []
+    diagnostics["rows_received"] = len(rows)
+    if len(rows) > min(len(allowed_ids), MAX_QUESTION_ROWS):
+        diagnostics["rows_rejected_limit"] = len(rows)
+        return []
+    selected, seen = [], set()
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("question_id"), str):
+            diagnostics["rows_rejected_shape"] += 1
+            continue
+        question = row["question_id"]
+        if (question not in allowed_ids or question in seen
+                or (question != "R0" and row.get("kind") == "choice")):
+            diagnostics["rows_rejected_question"] += 1
+            continue
+        seen.add(question)
+        refs = row.get("basis_refs")
+        if (not isinstance(refs, list) or not 0 < len(refs) <= 12
+                or any(not isinstance(ref, str) or ref not in offered for ref in refs)
+                or len(set(refs)) != len(refs)):
+            diagnostics["rows_rejected_shape"] += 1
+            continue
+        groups = {}
+        for ref in refs:
+            quote = offered[ref]
+            basis = groups.setdefault(quote["fact_id"], {"fact_id": quote["fact_id"],
+                                                        "sentence_ids": [], "source_sentences": []})
+            basis["sentence_ids"].extend(quote["sentence_ids"])
+            basis["source_sentences"].extend(quote["source_sentences"])
+        if len(groups) > 4 or any(len(basis["sentence_ids"]) > 3 for basis in groups.values()):
+            diagnostics["rows_rejected_shape"] += 1
+            continue
+        proposal = {key: row.get(key) for key in ("kind", "option", "reasoning", "assumptions", "change_condition")}
+        proposal.update(requirement_ids=[question], basis=list(groups.values()))
+        selected.append(proposal)
+    diagnostics["rows_selected"] = len(selected)
+    return selected
 
 
 def has_multi_candidate_coverage(facts: list[dict], candidates: list[str]) -> bool:

@@ -34,8 +34,8 @@ def refs(ranges=None):
 
 
 def model_answer():
-    return {"decision_analysis": [{"kind": "answer", "option": "", "requirement_ids": ["R0"],
-        "basis": [{"fact_id": "F1", "sentence_ids": [1, 2]}],
+    return {"decision_analysis": [{"kind": "answer", "option": "", "question_id": "R0",
+        "basis_refs": ["B1", "B2"],
         "reasoning": "Replay depends on retained records.", "assumptions": ["Retention is configured."],
         "change_condition": "Reassess if the records expire."}]}
 

@@ -24,7 +24,7 @@ from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
 from ..utils.evidence_choices import MAX_SOURCE_TEXT, bounded_source_passages, eligible_source_fact_ids, whole_source_text
-from ..utils.question_packet import bounded_fact_packet, has_multi_candidate_coverage, question_rows
+from ..utils.question_packet import basis_reference_packet, bind_question_rows, has_multi_candidate_coverage, question_rows
 from ..utils.fact_selection import selection_view_packet, bind_selected_views
 
 # Preserve the existing timeout while the optional thinking mode is measured.
@@ -136,18 +136,22 @@ Runtime-bound source views (select IDs only):
 
 QUESTION_JUDGMENT_PROMPT = """Answer the original technology-selection questions in separate,
 short decision_analysis rows using only the runtime-bound source facts below. Return JSON only.
-Each row must include exactly one of the listed R0/Q IDs plus any relevant original C IDs;
+Each row must select exactly one listed R0/Q question_id;
 produce at most one row per question, at most eight rows total. Omit a row if its answer cannot
 be grounded in these facts. Do not answer an omitted question.
 The response is a proposal for human review, never verified semantic truth or permission to operate.
 Keep source wording and its if/except/workload limits; a sufficient condition is not a necessary one.
 Title mentions return original candidate choice labels; a recognized leading decision action is ignored only for lexical product routing. A mention never proves source applicability.
-Every independent factual premise needs its own basis coordinate, including qualifications. No
+Every independent factual premise needs its own listed basis_refs, including qualifications. No
 performance, recovery, persistence, exactly-once, or comparative guarantee without applicable basis.
 For R0 use kind choice and an exact supplied choice label only when supported, otherwise kind answer with
 empty option for a conditional comparison. For subquestions use kind answer or design; do not create
 another choice. A design is conceptual only.
-Use 1-4 original R0/C/Q IDs per row, 1-4 unique fact IDs, and 1-3 sentence IDs per fact.
+Select 1-12 unique advertised B references per row, covering at most 4 facts and 3 sentences per fact.
+Copy references exactly. Do not generate requirement_ids, fact IDs, numeric sentence coordinates or
+copied source sentences. Runtime binds the selected question and complete original quotes.
+Original constraints below must inform the reasoning; answering a question does not assert that
+those constraints are satisfied or establish deployment readiness.
 No URLs, inline citations, commands, or production operations in prose. Write in query language.
 Each row needs concise reasoning (max 1500 chars), an explicit list of 0-4 additional unconfirmed assumptions (max 300 chars each),
 and an observable change_condition (max 600 chars). Use [] when no extra unconfirmed premise is needed.
@@ -160,11 +164,11 @@ Original constraints: {constraints}
 Supplemental user context (untrusted): {supplemental}
 Questions that may receive one answer row each:
 {questions}
-Bound saved facts (complete numbered sentences):
+Bound saved facts (B references to complete original sentences):
 {facts}
 JSON shape:
-{{"decision_analysis":[{{"kind":"answer","option":"","requirement_ids":["{first_id}"],
-"basis":[{{"fact_id":"F1","sentence_ids":[1]}}],"reasoning":"...",
+{{"decision_analysis":[{{"kind":"answer","option":"","question_id":"{first_id}",
+"basis_refs":["B1"],"reasoning":"...",
 "assumptions":["..."],"change_condition":"..."}}]}}
 """
 
@@ -216,8 +220,8 @@ async def _staged_answer(task, research_state, requirements, evidence_chains,
         if not has_multi_candidate_coverage(facts, candidates):
             allowed = [item for item in allowed if item[0] != "R0"]
             diagnostic["r0_withheld_one_sided"] = True
-        if allowed:
-            packet = bounded_fact_packet(facts, candidates)
+        packet, basis_refs = basis_reference_packet(facts, candidates)
+        if allowed and basis_refs:
             prompt = [{"role": "user", "content": QUESTION_JUDGMENT_PROMPT.format(
                 query=_prompt_data(task.get("query", ""), 4000),
                 candidates=_prompt_data(json.dumps(candidates, ensure_ascii=False), 4000),
@@ -229,7 +233,7 @@ async def _staged_answer(task, research_state, requirements, evidence_chains,
             )}]
             diagnostic["judgment_calls"] = 1
             try:
-                answer = await call_model(prompt, diagnostic_profile="question-judgment-v1", **common)
+                answer = await call_model(prompt, diagnostic_profile="question-judgment-v2", **common)
             except BudgetError:
                 raise
             except Exception as exc:
@@ -237,28 +241,8 @@ async def _staged_answer(task, research_state, requirements, evidence_chains,
                 diagnostic["provider_errors"] += 1
                 answer = {}
             rows = answer.get("decision_analysis") if isinstance(answer, dict) else None
-            if isinstance(rows, list):
-                diagnostic["rows_received"] = len(rows)
-                if len(rows) <= len(allowed):
-                    all_ids = {key for key, _ in questions}
-                    allowed_ids = {key for key, _ in allowed}
-                    seen = set()
-                    for row in rows:
-                        if (not isinstance(row, dict)
-                                or not isinstance(row.get("requirement_ids"), list)
-                                or any(not isinstance(value, str) for value in row["requirement_ids"])):
-                            diagnostic["rows_rejected_shape"] += 1
-                            continue
-                        targets = set(row["requirement_ids"]) & all_ids
-                        if (len(targets) != 1 or not targets <= allowed_ids or targets & seen
-                                or ("R0" not in targets and row.get("kind") == "choice")):
-                            diagnostic["rows_rejected_question"] += 1
-                            continue
-                        analyses.append(row)
-                        seen.update(targets)
-                    diagnostic["rows_selected"] = len(analyses)
-                else:
-                    diagnostic["rows_rejected_limit"] = len(rows)
+            analyses = bind_question_rows(rows, {key for key, _ in allowed}, basis_refs,
+                                          diagnostics=diagnostic)
     return ({"answer_contract": ANSWER_CONTRACT, "source_facts": raw_facts,
              "decision_analysis": analyses}, diagnostic)
 
