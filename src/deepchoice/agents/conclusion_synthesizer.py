@@ -1062,43 +1062,47 @@ class ConclusionSynthesizerAgent:
         strong_count = sum(1 for c in evidence_chains if c.get("evidence_strength") == "strong")
         disputed_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
-        evidence_text, cite_map = _summarize_chains(evidence_chains)
-        prompt = [{
-            "role": "user",
-            "content": SYNTHESIS_PROMPT.format(
-                query=task["query"],
-                candidate_techs=_prompt_data(json.dumps(task.get("candidate_techs", []), ensure_ascii=False), 4000),
-                scene_context=task.get("scene_context", "team"),
-                supplemental_context=(
-                    _prompt_data(research_state.get("_supplemental_input"), 4000)
-                    or "none"
+        staged = self.run_manifest is not None
+        cite_map: dict[int, str] = {}
+        if not staged:
+            # Only the compatibility path sends the numbered-source prompt.
+            evidence_text, cite_map = _summarize_chains(evidence_chains)
+            prompt = [{
+                "role": "user",
+                "content": SYNTHESIS_PROMPT.format(
+                    query=task["query"],
+                    candidate_techs=_prompt_data(json.dumps(task.get("candidate_techs", []), ensure_ascii=False), 4000),
+                    scene_context=task.get("scene_context", "team"),
+                    supplemental_context=(
+                        _prompt_data(research_state.get("_supplemental_input"), 4000)
+                        or "none"
+                    ),
+                    task_constraints=(
+                        _format_requirements(requirements, "C")
+                        if not requirements_overflow
+                        else (
+                            f"{len(requirements)} total requirements exceed the "
+                            f"{MAX_REQUIREMENT_ASSESSMENTS}-item safety limit; "
+                            "return context_dependent."
+                        )
+                    ),
+                    analysis_constraints=(
+                        _format_requirements(requirements, "A")
+                        if not requirements_overflow
+                        else "Unavailable because the requirement set exceeds the safety limit."
+                    ),
+                    sub_questions=(
+                        _format_requirements(requirements, "Q")
+                        if not requirements_overflow
+                        else "Unavailable because the requirement set exceeds the safety limit."
+                    ),
+                    evidence_chains=evidence_text,
+                    conflicts=_summarize_conflicts(conflicts),
+                    source_count=len(research_state.get("source_scores", [])),
+                    strong_count=strong_count,
+                    disputed_count=disputed_count,
                 ),
-                task_constraints=(
-                    _format_requirements(requirements, "C")
-                    if not requirements_overflow
-                    else (
-                        f"{len(requirements)} total requirements exceed the "
-                        f"{MAX_REQUIREMENT_ASSESSMENTS}-item safety limit; "
-                        "return context_dependent."
-                    )
-                ),
-                analysis_constraints=(
-                    _format_requirements(requirements, "A")
-                    if not requirements_overflow
-                    else "Unavailable because the requirement set exceeds the safety limit."
-                ),
-                sub_questions=(
-                    _format_requirements(requirements, "Q")
-                    if not requirements_overflow
-                    else "Unavailable because the requirement set exceeds the safety limit."
-                ),
-                evidence_chains=evidence_text,
-                conflicts=_summarize_conflicts(conflicts),
-                source_count=len(research_state.get("source_scores", [])),
-                strong_count=strong_count,
-                disputed_count=disputed_count,
-            ),
-        }]
+            }]
 
         local_usage: list = []
         if self.run_manifest is not None:
@@ -1132,7 +1136,6 @@ class ConclusionSynthesizerAgent:
             seed = call_config.get("seed")
             extra_body_json = call_config.get("extra_body_json")
             extra_body = json.loads(extra_body_json) if extra_body_json else None
-        staged = self.run_manifest is not None
         staged_diagnostic = None
         try:
             if staged:

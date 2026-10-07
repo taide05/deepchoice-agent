@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Skip unused legacy synthesis preparation on the default path
+
+Build the numbered-source summary, conflict summary and legacy synthesis prompt
+only for compatibility execution. Default staged calls and bounded outputs retain
+their existing prompts and asset identity; numeric citation binding and the one
+legacy correction remain covered. No new calls, state or public contract.
+
 ### Share minimum-evidence admission and HITL explanations
 
 Use one structural-gap calculation for budget admission and HITL explanations,

@@ -1,5 +1,6 @@
 import asyncio
 from copy import deepcopy
+from unittest.mock import Mock
 
 import pytest
 
@@ -197,6 +198,8 @@ def _p08_overconfident_model_result() -> dict:
 
 
 def test_complete_bound_requirements_keep_conditional_winner(monkeypatch):
+    legacy_summary = Mock(wraps=cs_mod._summarize_chains)
+    monkeypatch.setattr(cs_mod, "_summarize_chains", legacy_summary)
     captured = []
     monkeypatch.setattr(
         cs_mod,
@@ -219,7 +222,10 @@ def test_complete_bound_requirements_keep_conditional_winner(monkeypatch):
     assert "[Source: Queue Operations Guide]" in (
         recommendation["requirement_assessments"][-1]["explanation"]
     )
+    legacy_summary.assert_called_once_with(_source_state()["evidence_chains"])
     prompt_text = captured[0][0]["content"]
+    assert "[[1]] Queue Operations Guide" in prompt_text
+    assert "No conflicts found." in prompt_text
     assert "C1 [frozen-constraint]: Consumers must be idempotent" in prompt_text
     assert "A1 [analysis-constraint]: Migration must be staged and reversible" in prompt_text
     assert "Q1 [frozen-sub-question]: Which delivery guarantee is required?" in prompt_text

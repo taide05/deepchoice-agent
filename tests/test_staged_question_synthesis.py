@@ -1,5 +1,5 @@
 """Staged synthesis contracts; fixtures show routing, not semantic quality."""
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -69,6 +69,11 @@ def test_only_original_question_rows_are_planned():
 
 
 async def test_durable_stage_answers_each_original_question_with_bound_facts(monkeypatch):
+    # The default path must not build an unused legacy prompt or its full bindings.
+    unused = Mock(side_effect=AssertionError("legacy preparation on durable path"))
+    monkeypatch.setattr(synth, "_summarize_chains", unused)
+    monkeypatch.setattr(synth, "_summarize_conflicts", unused)
+    monkeypatch.setattr(synth, "SYNTHESIS_PROMPT", Mock(format=unused))
     model = AsyncMock(side_effect=[
         {"source_view_ids": ["S1", "S2"],
          "winner": "FORGED"},
@@ -94,6 +99,7 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     assert "B4: If the service fails" in judgment.args[0][0]["content"]
     assert "R0:" in judgment.args[0][0]["content"] and "Q1:" in judgment.args[0][0]["content"]
     assert all(call.kwargs["seed"] == 0 for call in model.await_args_list)
+    unused.assert_not_called()
 
 
 async def test_one_sided_facts_withhold_r0_but_allow_bounded_specific_answer(monkeypatch):
