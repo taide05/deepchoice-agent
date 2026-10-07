@@ -1221,3 +1221,8 @@ clarified_task及requirements_complete四语言投影，缺项不提供确认pay
 首问及后续消息共用既有状态/消息/公开响应处理，confirm同步ready，GET status与之
 一致；finalize/三轮直接confirm和默认值不改。此为durable创建前的内存澄清会话，
 不改产品task/run事务或manifest。聚合32KiB、初始词典、改选/否定和模型语义仍开放。
+
+
+冲突扫描的无对象早退（2026-10-07）：先执行原score>=5过滤和不足两源早退，再加载原BGE。
+无配对时原conflicts/quality_signals/token_usage投影不变；有对象的加载/扫描异常继续传播，
+阈值、15对、预算和兼容仲裁不变。不改变task/run事务、状态模式或提示/manifest身份。

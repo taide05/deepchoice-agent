@@ -650,11 +650,11 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     Pipeline: BGE similarity pre-filter → LLM contradiction scan
     (replaces old negation-word matching).
     """
-    model = await asyncio.to_thread(get_embedding_model)
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
         return []
 
+    model = await asyncio.to_thread(get_embedding_model)
     titles = [s.get("title", "") for s in high_score_sources]
     embeddings = await asyncio.to_thread(model.encode, titles)
     norms = np.linalg.norm(embeddings, axis=1)

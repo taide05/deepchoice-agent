@@ -2,7 +2,7 @@
 import asyncio
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import numpy as np
 import pytest
@@ -137,3 +137,48 @@ async def test_arbitration_has_a_run_local_four_call_gate(monkeypatch):
     result = await cd.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "fixture"}, "source_scores": items})
     assert len(result["conflicts"]) == 15
     assert calls == 15 and peak == 4 and active == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scores", [[], [7], [3, 4], [7, 4]])
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_unpairable_sources_do_not_require_embedding_weights(monkeypatch, scores, legacy):
+    from copy import deepcopy
+
+    loader = Mock(side_effect=AssertionError("Unpairable sources must not load weights"))
+    call = AsyncMock(side_effect=AssertionError("Unpairable sources must not call the model"))
+    monkeypatch.setattr(cd, "get_embedding_model", loader)
+    monkeypatch.setattr(cd, "call_model", call)
+    items = [{"title": f"Source {index}", "snippet": "Complete fixture description.",
+              "url": f"https://source{index}.example/docs", "total_score": score}
+             for index, score in enumerate(scores)]
+    original = deepcopy(items)
+    previous_usage = {"agent": "previous", "total_tokens": 17}
+    result = await cd.ConflictDetectorAgent(legacy_arbitration=legacy).run({
+        "task": {"query": "Select a store"}, "source_scores": items,
+        "token_usage": [previous_usage],
+    })
+    assert result["conflicts"] == [] and items == original
+    assert result["token_usage"][0] == previous_usage
+    assert result["quality_signals"] == [{
+        "agent": "conflict_detector", "conflicts_found": 0,
+        "resolved_count": 0, "unresolved_count": 0, "scan_unknown_count": 0,
+        "conflict_policy": "legacy-arbitration" if legacy else "scan-only-v2",
+        "gather_evidence_requested": True, "gather_evidence_effective": legacy,
+    }]
+    loader.assert_not_called()
+    call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pairable_sources_keep_embedding_load_failure_visible(monkeypatch):
+    loader = Mock(side_effect=RuntimeError("Embedding unavailable"))
+    call = AsyncMock()
+    monkeypatch.setattr(cd, "get_embedding_model", loader)
+    monkeypatch.setattr(cd, "call_model", call)
+    items = [{"title": f"Source {index}", "total_score": 5}
+             for index in range(2)]
+    with pytest.raises(RuntimeError, match="Embedding unavailable"):
+        await cd.find_contradictions(items)
+    loader.assert_called_once_with()
+    call.assert_not_awaited()

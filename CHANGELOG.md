@@ -2,6 +2,13 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Skip embedding work when no conflict pair can exist
+
+Load the existing embedding model only after the existing two-eligible-source
+guard. Empty, single and filtered-out inputs retain their previous result without
+requiring model weights; needed scans still propagate loading errors and retain
+all similarity, scan, budget and compatibility limits. No new branch or identity.
+
 ### Complete clarification from the merged requirements
 
 Choose ask or complete confirmation from merged runtime requirements after the
