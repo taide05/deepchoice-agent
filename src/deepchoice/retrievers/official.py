@@ -128,6 +128,7 @@ class OfficialSearch(BaseRetriever):
                 matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
                 doc = lookup[key]
                 url = doc["url"]
+                title = doc.get("title") or key
                 curated = key in TECH_DOCS
                 if durable and not curated:
                     url = exact_discovered_url(url)
@@ -135,10 +136,10 @@ class OfficialSearch(BaseRetriever):
                         raise ValueError("Invalid discovered documentation locator")
                 if url not in {item["url"] for item in roots}:
                     # Never copy learned metadata that could claim curated scope.
-                    roots.append({"url": url, "title": doc["title"], "tech": key, "curated": curated})
+                    roots.append({"url": url, "title": title, "tech": key, "curated": curated})
                 results.append({
                     "url": url,
-                    "title": doc["title"],
+                    "title": title,
                     "snippet": f"Official documentation site for {key}",
                     "date": "",
                 })

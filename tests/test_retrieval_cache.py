@@ -939,3 +939,41 @@ async def test_invalid_official_mapping_bypasses_cache_and_singleflight(tmp_path
         assert calls == 2 and store._flights == {}
     finally:
         await connection.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["malformed", "write"])
+async def test_successful_fanout_survives_learning_failure(tmp_path, monkeypatch, failure):
+    from deepchoice.retrievers import learned_docs
+    path = tmp_path / "learned.json"
+    monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", path)
+    monkeypatch.setattr(learned_docs, "_READONLY", False)
+    if failure == "malformed":
+        path.write_bytes(b"[]")
+    else:
+        def denied(*args):
+            raise PermissionError("unwritable local mapping")
+        monkeypatch.setattr(learned_docs, "_atomic_write_text", denied)
+    calls = 0
+    items = [{"url": "https://unlisted.example/docs/", "title": "Unlisted", "snippet": "Saved evidence"}]
+    class Retriever:
+        source = "official"
+        async def retrieve(self, request):
+            nonlocal calls
+            calls += 1
+            return _success(self.source, results=items)
+    connection, store = await _store(tmp_path)
+    try:
+        agent = MultiRetrieverAgent(retriever_registry={"official": Retriever})
+        with bind_run_context(_context(store)):
+            for _ in range(2):
+                result = await agent.run({"task": {"query": "unlisted"}, "sub_questions": []})
+                assert result["search_results"][0]["results"] == items
+                assert not result["partial_failures"]
+        # Invalid mapping cannot authorize cache reuse; a failed write leaves the
+        # valid empty identity intact and its already fetched evidence reusable.
+        assert calls == (2 if failure == "malformed" else 1)
+        if failure == "malformed":
+            assert path.read_bytes() == b"[]"
+    finally:
+        await connection.close()

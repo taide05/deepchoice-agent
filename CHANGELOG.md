@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-07
 
+### Isolate optional official-document learning failures
+
+Share bounded mapping validation across reads, learning and cache identity. Preserve
+unreadable/invalid files and existing retrieval evidence on expected local failures;
+warn without content or exception details. Skip malformed harvested entries, match
+actual hostnames and reject credential-bearing locators. Keep URL-only historical
+entries readable with a fallback title. Use owned temporary files and atomic replace;
+retain readonly, locking and budget/authority/cancellation propagation. Official v5
+separates the changed behavior from historical identities; no new calls or graph state.
+
 ### Share final source-menu admission and reduce repeated binding
 
 Use one deterministic source admission for view IDs, numeric compatibility and

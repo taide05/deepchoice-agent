@@ -259,3 +259,18 @@ class TestPyPIPassRestriction:
         client = self._client_with_recorder(monkeypatch)
         asyncio.run(self._search("FastAPI vs Flask", monkeypatch))
         assert any("pypi.org" in u for u in client.called_urls)
+
+
+@pytest.mark.parametrize("failure", ["malformed", "write"])
+def test_legacy_fallback_result_survives_optional_learning_failure(monkeypatch, failure):
+    monkeypatch.setattr(learned_docs, "_READONLY", False)
+    if failure == "malformed":
+        learned_docs.LEARNED_DOCS_PATH.write_bytes(b"[]")
+    else:
+        def denied(*args):
+            raise PermissionError("unwritable local mapping")
+        monkeypatch.setattr(learned_docs, "_atomic_write_text", denied)
+    out = asyncio.run(_run_search(monkeypatch, {"url": "https://supabase.com/docs"}))
+    assert any(row["url"] == "https://supabase.com/docs" for row in out)
+    if failure == "malformed":
+        assert learned_docs.LEARNED_DOCS_PATH.read_bytes() == b"[]"

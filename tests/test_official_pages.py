@@ -387,3 +387,48 @@ async def test_discovery_range_probe_partial_response_still_reads_exact_body(set
     assert result.results[0]["origin_kind"] == "discovered"
     assert [call.kwargs["method"] for call in setup.await_args_list] == ["HEAD", "GET"]
     assert all(call.kwargs["max_redirects"] == 0 for call in setup.await_args_list)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["malformed", "write"])
+async def test_durable_discovery_retains_body_when_learning_fails(setup, monkeypatch, tmp_path, failure):
+    from deepchoice.retrievers import learned_docs
+    path = tmp_path / "learned.json"
+    monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", path)
+    monkeypatch.setattr(learned_docs, "_READONLY", False)
+    monkeypatch.setattr(official_mod, "load_learned", learned_docs.load_learned)
+    if failure == "malformed":
+        path.write_bytes(b"[]")
+    else:
+        def denied(*args):
+            raise PermissionError("unwritable local mapping")
+        monkeypatch.setattr(learned_docs, "_atomic_write_text", denied)
+    url = "https://unlisted.example/docs/filtering"
+    monkeypatch.setattr(official_mod, "call_model", AsyncMock(return_value={"url": url}))
+    setup.side_effect = lambda _source, target, **_kw: response(target, BODY)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "success" and len(result.results) == 1
+    assert PROSE in result.results[0]["snippet"] and QUALIFIER in result.results[0]["snippet"]
+    assert result.results[0]["origin_kind"] == "discovered"
+    assert [call.kwargs["method"] for call in setup.await_args_list] == ["HEAD", "GET"]
+    assert all(call.args[1] == url and call.kwargs["max_redirects"] == 0 for call in setup.await_args_list)
+    assert budget_runtime.reserve_call.await_count == budget_runtime.settle_call.await_count == 2
+    if failure == "malformed":
+        assert path.read_bytes() == b"[]"
+
+
+@pytest.mark.asyncio
+async def test_url_only_learned_entry_is_consumable_on_durable_path(setup, monkeypatch, tmp_path):
+    from deepchoice.retrievers import learned_docs
+    path = tmp_path / "learned.json"
+    raw = b'{"unlisted":{"url":"https://unlisted.example/docs/filtering"}}'
+    path.write_bytes(raw)
+    monkeypatch.setattr(learned_docs, "LEARNED_DOCS_PATH", path)
+    monkeypatch.setattr(official_mod, "load_learned", learned_docs.load_learned)
+    setup.side_effect = lambda _source, url, **_kw: response(url, BODY)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="unlisted filtering"))
+    assert result.status == "success" and PROSE in result.results[0]["snippet"]
+    assert result.results[0]["origin_kind"] == "discovered"
+    assert setup.await_count == 1
+    assert path.read_bytes() == raw
+    assert learned_docs.official_mapping_identity() is not None

@@ -320,7 +320,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v7" if retriever_id == "chroma" else "v4" if retriever_id == "official"
+                version="v7" if retriever_id == "chroma" else "v5" if retriever_id == "official"
                         else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS

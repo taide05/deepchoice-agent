@@ -10,10 +10,14 @@ by official.py. This module maintains a separate learned lookup:
 """
 import hashlib
 import json
+import logging
 import os
 import threading
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
+
+from deepchoice.security.redaction import redact_text
 
 LEARNED_DOCS_PATH = Path(os.environ.get("LEARNED_DOCS_PATH", "./learned_docs.json"))
 
@@ -28,10 +32,72 @@ _write_lock = threading.Lock()
 _READONLY = os.environ.get("LEARNED_DOCS_READONLY", "") == "1"
 
 
+_MAX_MAPPING_BYTES = 512 * 1024
+_OPTIONAL_ERRORS = (OSError, ValueError, UnicodeError, RecursionError)
+_logger = logging.getLogger(__name__)
+
+
+def _warn_unavailable() -> None:
+    # Never include paths, candidate content or the underlying exception.
+    _logger.warning(redact_text("Optional official-document learning unavailable; retrieval continues."))
+
+
+def _validate_mapping(docs: object) -> None:
+    if not isinstance(docs, dict):
+        raise ValueError("Invalid learned mapping")
+    for term, entry in docs.items():
+        if not isinstance(term, str) or not term.strip() or not isinstance(entry, dict):
+            raise ValueError("Invalid learned entry")
+        url = entry.get("url")
+        if not isinstance(url, str):
+            raise ValueError("Invalid learned URL")
+        parsed = urlparse(url)
+        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in {None, 80, 443}):
+            raise ValueError("Invalid learned URL")
+        if any(key in entry and not isinstance(entry[key], str) for key in ("title", "via")):
+            raise ValueError("Invalid learned metadata")
+
+
+def _read_mapping() -> tuple[bytes, dict]:
+    try:
+        with LEARNED_DOCS_PATH.open("rb") as stream:
+            raw = stream.read(_MAX_MAPPING_BYTES + 1)
+    except FileNotFoundError:
+        raw = b"{}"
+    if len(raw) > _MAX_MAPPING_BYTES:
+        raise ValueError("Learned mapping too large")
+    docs = json.loads(raw.decode("utf-8"))
+    _validate_mapping(docs)
+    return raw, docs
+
+
 def _atomic_write_text(path: Path, text: str) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    # A failed replacement must preserve the old mapping and remove only our temp.
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="",
+                                         dir=path.parent, prefix=path.name + ".",
+                                         suffix=".tmp", delete=False) as stream:
+            tmp = Path(stream.name)
+            stream.write(text)
+        tmp.replace(path)
+    finally:
+        if tmp is not None:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                _warn_unavailable()
+
+
+def _write_mapping(docs: dict) -> None:
+    _validate_mapping(docs)
+    text = json.dumps(docs, ensure_ascii=False, indent=2)
+    if len(text.encode("utf-8")) > _MAX_MAPPING_BYTES:
+        raise ValueError("Learned mapping too large")
+    _atomic_write_text(LEARNED_DOCS_PATH, text)
+
 
 _DOCS_SIGNALS = ("docs.", "/docs", "readthedocs", "documentation", "learn.")
 
@@ -69,25 +135,17 @@ def official_mapping_identity() -> str | None:
     Missing files have a stable empty identity until discovery creates one.
     """
     try:
-        if not LEARNED_DOCS_PATH.exists():
-            raw = b"{}"
-        else:
-            if LEARNED_DOCS_PATH.stat().st_size > 512 * 1024:
-                return None
-            raw = LEARNED_DOCS_PATH.read_bytes()
-        if len(raw) > 512 * 1024 or not isinstance(json.loads(raw), dict):
-            return None
+        raw, _ = _read_mapping()
         return hashlib.sha256(b"official-mapping-v1\0" + raw).hexdigest()
-    except (OSError, ValueError, UnicodeError):
+    except _OPTIONAL_ERRORS:
         return None
 
 
 def load_learned() -> dict[str, dict]:
-    if not LEARNED_DOCS_PATH.exists():
-        return {}
     try:
-        return json.loads(LEARNED_DOCS_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        return _read_mapping()[1]
+    except _OPTIONAL_ERRORS:
+        _warn_unavailable()
         return {}
 
 
@@ -95,13 +153,16 @@ def learn(term: str, url: str, title: str, via: str) -> dict[str, dict]:
     if _READONLY:
         return load_learned()
     with _write_lock:
-        docs = load_learned()
-        docs[term] = {"url": url, "title": title or term, "via": via}
-        _atomic_write_text(
-            LEARNED_DOCS_PATH,
-            json.dumps(docs, ensure_ascii=False, indent=2),
-        )
-        return docs
+        try:
+            _, docs = _read_mapping()
+            if not isinstance(term, str) or not isinstance(title, str):
+                raise ValueError("Invalid learned input")
+            docs[term] = {"url": url, "title": title or term, "via": via}
+            _write_mapping(docs)
+            return docs
+        except _OPTIONAL_ERRORS:
+            _warn_unavailable()
+            return {}
 
 
 def extract_terms(text: str) -> list[str]:
@@ -118,7 +179,7 @@ def extract_terms(text: str) -> list[str]:
 
 def domain_label_match(term: str, url: str) -> bool:
     """True if `term` is a full label of the URL's host (supabase.com has label 'supabase')."""
-    host = urlparse(url).netloc.lower()
+    host = (urlparse(url).hostname or "").lower()
     return bool(host) and term.lower().strip() in host.split(".")
 
 
@@ -132,31 +193,45 @@ def harvest(terms: list[str], search_results: list[dict],
     if _READONLY:
         return []
     with _write_lock:
-        docs = load_learned()
-        known = set(existing or []) | set(docs.keys())
-        learned = []
-        for term in terms:
-            if term in known or not is_plausible_term(term):
-                continue
-            for sr in search_results:
-                for item in sr.get("results", []) or []:
-                    url = item.get("url", "")
-                    if domain_label_match(term, url) and _looks_official(url):
-                        entry = {
-                            "url": url,
-                            "title": item.get("title", term),
-                            "via": f"harvest:{sr.get('source', 'unknown')}",
-                        }
-                        docs[term] = entry
-                        learned.append({"term": term, **entry})
-                        known.add(term)
-                        break
-                else:
+        try:
+            _, docs = _read_mapping()
+            known = set(existing or []) | set(docs)
+            learned = []
+            invalid = False
+            for term in terms:
+                if not isinstance(term, str):
+                    invalid = True
                     continue
-                break
-        if learned:
-            _atomic_write_text(
-                LEARNED_DOCS_PATH,
-                json.dumps(docs, ensure_ascii=False, indent=2),
-            )
-        return learned
+                if term in known or not is_plausible_term(term):
+                    continue
+                for sr in search_results:
+                    for item in sr.get("results", []) or []:
+                        source = sr.get("source", "unknown")
+                        if not isinstance(source, str):
+                            invalid = True
+                            continue
+                        entry = {"url": item.get("url", ""),
+                                 "title": item.get("title", term),
+                                 "via": f"harvest:{source}"}
+                        try:
+                            _validate_mapping({term: entry})
+                        except (ValueError, UnicodeError):
+                            invalid = True
+                            continue
+                        url = entry["url"]
+                        if domain_label_match(term, url) and _looks_official(url):
+                            docs[term] = entry
+                            learned.append({"term": term, **entry})
+                            known.add(term)
+                            break
+                    else:
+                        continue
+                    break
+            if invalid:
+                _warn_unavailable()
+            if learned:
+                _write_mapping(docs)
+            return learned
+        except _OPTIONAL_ERRORS:
+            _warn_unavailable()
+            return []
