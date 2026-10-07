@@ -1,6 +1,6 @@
 # 评估工具入口
 
-更新：2026-10-06。本页说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
+更新：2026-10-07。本页说明已实现工具。目标见[质量路线](../docs/current-roadmap.md)，
 现行开发规则见[评估协议](../docs/product-effectiveness-optimization.md)，实际准入与结果见
 [当前状态](../docs/o1-execution-status.md)。quality-selection-v1采集器及下列运行示例
 仍绑定旧四例和历史授权；本次跨类别开发通过单独冻结的本地薄适配执行，不能把新案例
@@ -13,6 +13,14 @@
 P03/P06是设计暴露回归；P09/P10公开题在生产行为冻结后阅读，未用于该候选设计，
 本次明确为development/exposed，历史父集holdout标记只作来源。全部是开发筛选，
 不能当作新鲜保留验证。文件不是可运行批次；绑定与实际准入只见[当前状态](../docs/o1-execution-status.md)。
+
+### 来源视图开发对照
+
+[quality-source-view-development-v1.0.1.json](quality-source-view-development-v1.0.1.json)
+冻结四例公开开发请求/判据（2026-10-06），保留原1.0.0字节并说明准入前的判据冲突修订。
+[2026-10-07结果](quality-source-view-development-v1-result-20261007.json)记录四对单次比较：
+两类局部有据回答改善，两臂整体均0/4。不是新鲜保留验证、稳定性或多数场景能力；
+身份/来源降级/费用未知与独立助手限制一并保留，实际研究账本只维护在当前状态。
 
 ## 已完成的历史公开跨场景开发探针
 

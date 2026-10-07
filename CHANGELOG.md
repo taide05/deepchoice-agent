@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - 2026-10-06
+## [Unreleased] - 2026-10-07
 
 ### Bind runtime source views from model-selected IDs
 
@@ -14,7 +14,11 @@ unusable/oversized rows. Range sources retain the historical capped admission se
 shared by binding, citation and review. No additional calls or public state fields.
 Freeze synthesis v32 and its view policy; keep old diagnostic profiles and direct
 compatibility formats readable, while rejecting old same-run resume.
-This repairs the selection contract; real report quality remains unmeasured.
+The 2026-10-07 source-view development dataset 1.0.1 compared four public case pairs:
+P06/P11 show supported subquestion gains; both arms remain 0/4 usable and supported.
+Independent assistant review is not human calibration or stable product acceptance.
+Record immutable identities, degraded sources, terminal artifacts and cost in the
+dated result metadata; retain important unanswered questions and sealed final runs.
 
 ### Freeze code-audit development probes
 

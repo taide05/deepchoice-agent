@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "dataset": {
+    "path": "benchmarks/quality-source-view-development-v1.0.1.json",
+    "sha256": "7f0c82252edb9da0156dfef5df977a41e13a034ec68c93ae347e4a7d8a590000",
+    "dataset_id": "quality-source-view-development-v1",
+    "version": "1.0.1",
+    "freeze_date": "2026-10-06",
+    "measurement_date": "2026-10-07"
+  },
+  "production_commits": {
+    "baseline": "95a9ca4045c7ee28af076fa240d618680f2ecc5d",
+    "candidate": "601bedee2bfa6d908e21f708c14ff7729597b179"
+  },
+  "runner_commit": "24a39e6ef1952f381ad4d9d12d063e48364e4f53",
+  "protocol": "docs/product-effectiveness-optimization.md",
+  "decision": {
+    "development_net_benefit": true,
+    "supported_gain_cases": [
+      "P06",
+      "P11"
+    ],
+    "distinct_tradeoff_classes": 2,
+    "whole_report_usable_and_supported": {
+      "baseline": "0/4",
+      "candidate": "0/4"
+    },
+    "new_confirmed_critical_error": false,
+    "already_passing_case_regression": false,
+    "stability_or_majority_claim": false,
+    "next": "Retain source-view binding improvement; target source applicability/citation and remaining question-to-basis contract losses before stability acceptance. Do not resample this batch."
+  },
+  "exposure": {
+    "P06": "R6 design-exposed regression",
+    "P09": "R6 design-exposed regression",
+    "P07": "Not R6 design material, public historical exposure",
+    "P11": "Not R6 design material, public historical exposure"
+  },
+  "review": {
+    "independent_read_only_assistant_reviewers": 2,
+    "primary_all_reports_and_saved_sources": true,
+    "version_labels_hidden_from_independent_reviewers": true,
+    "structural_arm_inference_possible": true,
+    "primary_emitted_cost_exposure": true,
+    "human_calibration": false,
+    "unresolved_pass_disagreements": 0,
+    "limits": "Single pair per public case; no fresh/sealed validation, no semantic proof from citation status or counts."
+  },
+  "accounting": {
+    "starting": 193,
+    "new_admitted": 8,
+    "actual_cumulative": 201,
+    "unused_in_batch": 0,
+    "final_reserved": 24,
+    "price": "unknown",
+    "new_paid_preflight": 0,
+    "preflight": "Reused verified compatible bounded95a9ca4 receipt for both; no current-source/quality guarantee."
+  },
+  "runtime": {
+    "completed": "8/8",
+    "immutable_api_db_report_snapshot_export_equal": true,
+    "original_requests_and_manifests_equal": true,
+    "no_execution_leases_or_reserved_budget": true,
+    "collector_exit_code": 0,
+    "server_ctrl_c_exit_codes": {
+      "baseline": 1,
+      "candidate": 1
+    },
+    "ports_closed": true,
+    "product_checkpoint_pairs_quick_check_backup_verify_passed": true,
+    "roots_closed_no_restart": true,
+    "file_note": "Collector report .md CRLF byte hash differs; normalized text equals immutable LF report. Collector export and captured actual API Markdown export LF bytes each hashed separately. Initial local reconciliation metadata misnamed export as collector .md; corrected-v2 preserves original record and hash."
+  },
+  "aggregates": {
+    "baseline": {
+      "cases": 4,
+      "usable_and_supported": 0,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gains": 0,
+      "total_tokens": 52413,
+      "llm_calls": 72,
+      "retrieval_calls": 24,
+      "failed_calls": 3,
+      "active_milliseconds": 288894,
+      "wall_time_ms": 296783,
+      "price": "unknown"
+    },
+    "candidate": {
+      "cases": 4,
+      "usable_and_supported": 0,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gains": 2,
+      "total_tokens": 80869,
+      "llm_calls": 72,
+      "retrieval_calls": 24,
+      "failed_calls": 1,
+      "active_milliseconds": 278365,
+      "wall_time_ms": 283265,
+      "price": "unknown"
+    }
+  },
+  "runs": [
+    {
+      "ordinal": 194,
+      "arm": "baseline",
+      "case_id": "P06",
+      "task_id": "543218e4-213f-49c7-8893-3be1c7b0d223",
+      "run_id": "d65a9b44-01f3-41d9-9a3b-a3f8a0bb80d1",
+      "manifest_id": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_utf8_sha256": "1bc73656a03b9f964a020a474e5591c73168c9509a7b01d1d7841b27fc89f58f",
+      "collector_markdown_file_sha256": "6c9672ad97ff2de321acb56a562a0acdff44201f5ede0ae015721cd47d72cb95",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": false,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": false,
+      "gain_scope": null,
+      "important_gap": "Node experience/ecosystem weighting and original choice unanswered; hardware/matched framework/version/control conditions incomplete.",
+      "source_limits": "Third-party numeric excerpts describe different frameworks and lack hardware context; no project performance evidence. Global-edge example was overstated as necessary condition, minor because actual SLO validation remains and no non-edge p99 exclusion is made.",
+      "final_fact_status_counts": {
+        "unknown": 1
+      },
+      "final_analysis_count": 0,
+      "citation_reason_counts": {
+        "content_insufficient": 10
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-selection-v2",
+          "json_status": "strict",
+          "schema_status": "invalid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 15061,
+        "llm_calls": 21,
+        "retrieval_calls": 6,
+        "failed_calls": 1,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 160587,
+      "wall_time_ms": 162907,
+      "collector_export_markdown_sha256": "1bc73656a03b9f964a020a474e5591c73168c9509a7b01d1d7841b27fc89f58f",
+      "api_export_markdown_sha256": "1bc73656a03b9f964a020a474e5591c73168c9509a7b01d1d7841b27fc89f58f",
+      "pipeline_counts": [
+        5,
+        1,
+        4,
+        2,
+        0,
+        0,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "ordinal": 195,
+      "arm": "candidate",
+      "case_id": "P06",
+      "task_id": "b447ffac-7589-4d60-877d-407f67878b51",
+      "run_id": "78219c8c-2530-4bbf-8097-c474ad2c2652",
+      "manifest_id": "662ac99228210cfc62c5fca5cfe290e585253b09b0b8338f86e348463374bf5e",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "report_utf8_sha256": "02f5424ecb4372e48d97b44a9f49baa19ca8962c0a086c9aa2df42bbc4e186a7",
+      "collector_markdown_file_sha256": "9ee57bc3f3036ab3e49ff75799ea44f62c51aaa7af3b3f3295f242c38a884506",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": true,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": true,
+      "gain_scope": "Saved-source-backed Q1 benchmark-vs-database-I/O applicability boundary; Q3 own-load/dependency/SLO validation dimensions partially improved.",
+      "important_gap": "Node experience/ecosystem weighting and original choice unanswered; hardware/matched framework/version/control conditions incomplete.",
+      "source_limits": "Third-party numeric excerpts describe different frameworks and lack hardware context; no project performance evidence. Global-edge example was overstated as necessary condition, minor because actual SLO validation remains and no non-edge p99 exclusion is made.",
+      "final_fact_status_counts": {
+        "verified": 4,
+        "unknown": 1
+      },
+      "final_analysis_count": 2,
+      "citation_reason_counts": {
+        "lexical_support": 12,
+        "content_insufficient": 3
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-view-selection-v1",
+          "json_status": "strict",
+          "schema_status": "valid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 20863,
+        "llm_calls": 22,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 93165,
+      "wall_time_ms": 94187,
+      "collector_export_markdown_sha256": "02f5424ecb4372e48d97b44a9f49baa19ca8962c0a086c9aa2df42bbc4e186a7",
+      "api_export_markdown_sha256": "02f5424ecb4372e48d97b44a9f49baa19ca8962c0a086c9aa2df42bbc4e186a7",
+      "pipeline_counts": [
+        5,
+        5,
+        4,
+        3,
+        2,
+        2,
+        0,
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "ordinal": 196,
+      "arm": "candidate",
+      "case_id": "P09",
+      "task_id": "a34ff58c-a402-41bc-ab27-aa48f167a46c",
+      "run_id": "5d6c7c89-b932-4801-aefe-bda82ee64066",
+      "manifest_id": "662ac99228210cfc62c5fca5cfe290e585253b09b0b8338f86e348463374bf5e",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "report_utf8_sha256": "b2b1948c1a5002c02ae88ecc1c84613e4eb23c90359fda3e7d504660b1a1803e",
+      "collector_markdown_file_sha256": "0042990c7fc7e0b2ec34b08112f3f315e31ecdd0fc00c22556a18b51b8f28a1e",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": false,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": false,
+      "gain_scope": null,
+      "important_gap": "Recovery semantics, LLM/API side effects, approval resume and team operating burden all unanswered; candidate one provisional analysis withdrawn after targeted self-review.",
+      "source_limits": "Saved LangChain supplier comparison quotations are not a supported original answer; Temporal/plugin and checkpoint excerpts unknown. No new material can repair missing report citations.",
+      "final_fact_status_counts": {
+        "unknown": 3,
+        "verified": 2
+      },
+      "final_analysis_count": 0,
+      "citation_reason_counts": {
+        "content_insufficient": 23,
+        "lexical_support": 7,
+        "network_uncertain": 3
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-view-selection-v1",
+          "json_status": "strict",
+          "schema_status": "valid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 17692,
+        "llm_calls": 16,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 73585,
+      "wall_time_ms": 75359,
+      "collector_export_markdown_sha256": "b2b1948c1a5002c02ae88ecc1c84613e4eb23c90359fda3e7d504660b1a1803e",
+      "api_export_markdown_sha256": "b2b1948c1a5002c02ae88ecc1c84613e4eb23c90359fda3e7d504660b1a1803e",
+      "pipeline_counts": [
+        5,
+        5,
+        4,
+        2,
+        1,
+        0,
+        1,
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "ordinal": 197,
+      "arm": "baseline",
+      "case_id": "P09",
+      "task_id": "6c03d4c2-4395-4c6d-8b8e-086feb4add88",
+      "run_id": "a8167019-1213-4ca4-b1e6-93d3b7e8027f",
+      "manifest_id": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_utf8_sha256": "90901e72bb94d2771319f443d8de847bffc92008ca7521bb8e7d9210487429c8",
+      "collector_markdown_file_sha256": "e77a97ef9d00a844212c2e3f66f875e1747f4e476e906e7e54c85a74cd2b0cb2",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": false,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": false,
+      "gain_scope": null,
+      "important_gap": "Recovery semantics, LLM/API side effects, approval resume and team operating burden all unanswered; candidate one provisional analysis withdrawn after targeted self-review.",
+      "source_limits": "Saved LangChain supplier comparison quotations are not a supported original answer; Temporal/plugin and checkpoint excerpts unknown. No new material can repair missing report citations.",
+      "final_fact_status_counts": {},
+      "final_analysis_count": 0,
+      "citation_reason_counts": {},
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-selection-v2",
+          "json_status": "strict",
+          "schema_status": "invalid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 12740,
+        "llm_calls": 18,
+        "retrieval_calls": 6,
+        "failed_calls": 1,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 43160,
+      "wall_time_ms": 44516,
+      "collector_export_markdown_sha256": "90901e72bb94d2771319f443d8de847bffc92008ca7521bb8e7d9210487429c8",
+      "api_export_markdown_sha256": "90901e72bb94d2771319f443d8de847bffc92008ca7521bb8e7d9210487429c8",
+      "pipeline_counts": [
+        5,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "ordinal": 198,
+      "arm": "baseline",
+      "case_id": "P07",
+      "task_id": "76d39205-93f1-4a24-9a84-9051c7437d2d",
+      "run_id": "b1b299ba-fb09-4448-ba44-553cc6e5b1b7",
+      "manifest_id": "0c07d272acb18942e62d8b02a4544dc41d19f86971a8b0bee07e4dcc1eb2e174",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_utf8_sha256": "87c23bd87eb9d7b3bfa31439b0c0a6688e6c7c17bbb61659e060b3be4b560b91",
+      "collector_markdown_file_sha256": "dfe9da13d4bedd4868d698e795b6953f135c6df4bc9e2cfdec013a11298571d9",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": false,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": false,
+      "gain_scope": null,
+      "important_gap": "Lock/version/configuration, controlled CI speed measurement, two-person stable-project trial and rollback files/CI scope unanswered.",
+      "source_limits": "Both reports only source indexes and generic verification; candidate all5 facts content_insufficient. Third-party/retrieved migration examples do not establish current project applicability.",
+      "final_fact_status_counts": {
+        "unknown": 2
+      },
+      "final_analysis_count": 0,
+      "citation_reason_counts": {
+        "content_insufficient": 5
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-selection-v2",
+          "json_status": "strict",
+          "schema_status": "invalid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 10236,
+        "llm_calls": 12,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 36014,
+      "wall_time_ms": 37922,
+      "collector_export_markdown_sha256": "87c23bd87eb9d7b3bfa31439b0c0a6688e6c7c17bbb61659e060b3be4b560b91",
+      "api_export_markdown_sha256": "87c23bd87eb9d7b3bfa31439b0c0a6688e6c7c17bbb61659e060b3be4b560b91",
+      "pipeline_counts": [
+        5,
+        2,
+        3,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "ordinal": 199,
+      "arm": "candidate",
+      "case_id": "P07",
+      "task_id": "b7d395df-d4b6-444c-9484-0d47a75de1a7",
+      "run_id": "e50e42ca-e883-4eea-ae98-0279a64b4b07",
+      "manifest_id": "a80c112f9ca9cb8121217a1fcb68bc8b8da87ef3772d80ba31f54ad0968aea0c",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "report_utf8_sha256": "344972180b05ed1be0be08933fd90e94e91473dadac3784e6b9fc26a015d6869",
+      "collector_markdown_file_sha256": "7b197022d9d56e70496dd0c8b8ac2ea130fae465cf85f9515dcca0e4375befbe",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": false,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": false,
+      "gain_scope": null,
+      "important_gap": "Lock/version/configuration, controlled CI speed measurement, two-person stable-project trial and rollback files/CI scope unanswered.",
+      "source_limits": "Both reports only source indexes and generic verification; candidate all5 facts content_insufficient. Third-party/retrieved migration examples do not establish current project applicability.",
+      "final_fact_status_counts": {
+        "unknown": 5
+      },
+      "final_analysis_count": 0,
+      "citation_reason_counts": {
+        "content_insufficient": 20
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-view-selection-v1",
+          "json_status": "strict",
+          "schema_status": "valid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 12529,
+        "llm_calls": 10,
+        "retrieval_calls": 6,
+        "failed_calls": 0,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 36051,
+      "wall_time_ms": 36797,
+      "collector_export_markdown_sha256": "344972180b05ed1be0be08933fd90e94e91473dadac3784e6b9fc26a015d6869",
+      "api_export_markdown_sha256": "344972180b05ed1be0be08933fd90e94e91473dadac3784e6b9fc26a015d6869",
+      "pipeline_counts": [
+        5,
+        5,
+        4,
+        3,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "ordinal": 200,
+      "arm": "candidate",
+      "case_id": "P11",
+      "task_id": "7072a3fb-2c50-4b08-955a-2e69809ee1ef",
+      "run_id": "32c43a61-4378-451b-b59e-5595b9952402",
+      "manifest_id": "662ac99228210cfc62c5fca5cfe290e585253b09b0b8338f86e348463374bf5e",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_utf8_sha256": "1b6f268f755e1c0bdd583b31ba12984d9af93c512c97e541747228756cf6b3b4",
+      "collector_markdown_file_sha256": "c7610e4b993eb999078bef140b81367d97ab1be4d92a1e742c9d370b87ec5187",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": true,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": true,
+      "gain_scope": "Original replay subquestion partially answered through retained log semantics and Kafka retention plus RabbitMQ durable-log qualification; team-operating conditions partly addressed.",
+      "important_gap": "RabbitMQ Streams vs classic queues, partition/order keys, retry/DLQ plus replay combination and team-specific operating cost unclosed.",
+      "source_limits": "Kafka retention and RabbitMQ durable-log statements have saved-source support; broad Kafka preference is only partially applicable and cannot exclude RabbitMQ. Given replay requirement should not be treated as unknown; missing-coverage label despite retained partial analysis is minor.",
+      "final_fact_status_counts": {
+        "unknown": 2,
+        "verified": 3
+      },
+      "final_analysis_count": 3,
+      "citation_reason_counts": {
+        "network_uncertain": 25,
+        "lexical_support": 11
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-view-selection-v1",
+          "json_status": "strict",
+          "schema_status": "valid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 29785,
+        "llm_calls": 24,
+        "retrieval_calls": 6,
+        "failed_calls": 1,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 75564,
+      "wall_time_ms": 76922,
+      "collector_export_markdown_sha256": "1b6f268f755e1c0bdd583b31ba12984d9af93c512c97e541747228756cf6b3b4",
+      "api_export_markdown_sha256": "1b6f268f755e1c0bdd583b31ba12984d9af93c512c97e541747228756cf6b3b4",
+      "pipeline_counts": [
+        5,
+        5,
+        4,
+        3,
+        3,
+        3,
+        1,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "ordinal": 201,
+      "arm": "baseline",
+      "case_id": "P11",
+      "task_id": "1e52c7f5-83f2-427d-834e-bd6770059cda",
+      "run_id": "e4ce340e-f6bf-4124-bfdb-eaa564925713",
+      "manifest_id": "185594d3fc1f0907d10101c787c77304ccf0f0297a1373d4dc4fc86c2bccf5e0",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "report_utf8_sha256": "0c0987d0c5c8f7684d576f1db02707543273755f976e1ce1d926ca1c30c7c779",
+      "collector_markdown_file_sha256": "2c2472cd4fa15701e684aaf7275c77cbda82002599cd2ba1727186c40a714a40",
+      "five_checks": {
+        "constraints_answer": false,
+        "useful_advice": false,
+        "decisive_evidence": false,
+        "uncertainty": false,
+        "consistency_safety": true
+      },
+      "usable_and_supported": false,
+      "confirmed_critical_errors": 0,
+      "supported_answer_gain": false,
+      "gain_scope": null,
+      "important_gap": "RabbitMQ Streams vs classic queues, partition/order keys, retry/DLQ plus replay combination and team-specific operating cost unclosed.",
+      "source_limits": "Kafka retention and RabbitMQ durable-log statements have saved-source support; broad Kafka preference is only partially applicable and cannot exclude RabbitMQ. Given replay requirement should not be treated as unknown; missing-coverage label despite retained partial analysis is minor.",
+      "final_fact_status_counts": {
+        "verified": 1,
+        "unknown": 1
+      },
+      "final_analysis_count": 0,
+      "citation_reason_counts": {
+        "lexical_support": 5,
+        "http_uncertain": 3
+      },
+      "llm_selection_diagnostics": [
+        {
+          "profile": "fact-selection-v2",
+          "json_status": "strict",
+          "schema_status": "invalid",
+          "truncated": false
+        }
+      ],
+      "cost": {
+        "total_tokens": 14376,
+        "llm_calls": 21,
+        "retrieval_calls": 6,
+        "failed_calls": 1,
+        "http_calls": 0,
+        "llm_retries": 0,
+        "token_usage_complete": true
+      },
+      "active_milliseconds": 49133,
+      "wall_time_ms": 51438,
+      "collector_export_markdown_sha256": "0c0987d0c5c8f7684d576f1db02707543273755f976e1ce1d926ca1c30c7c779",
+      "api_export_markdown_sha256": "0c0987d0c5c8f7684d576f1db02707543273755f976e1ce1d926ca1c30c7c779",
+      "pipeline_counts": [
+        5,
+        2,
+        4,
+        2,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "local_immutable_proof_refs": [
+    {
+      "path": "outputs/source-view-development-20261006-v1/batch.json",
+      "sha256": "3edfff394c0720a5389b2fba095acaadab4a67a54a25c4c03cd33ed44cd176d7"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/baseline/binding-v2.json",
+      "sha256": "40fbd20d85b3247388d0c884a398f2af9d373e0709c75bb5de7e0e52a500bb19"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/candidate/binding-v2.json",
+      "sha256": "32380054d5a5a65b2b43900d46ba6379354ffecd00db40613381b180abd0ff76"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/execution-closeout.json",
+      "sha256": "c9bfe443bd35f724d65208e637b578aff9a46a04d59248d4f9e6a4278a544181"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/terminal-public-reconciliation-v2.json",
+      "sha256": "0e19612f794057aa43728517f3354d825f397d47feb4186622bb6dd25da27f3b"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/closed-runtime-reconciliation.json",
+      "sha256": "a7710186b17e708192218baac3ab903bc6b4e1eda3d39d9adddfcb58a8147cf5"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/independent-content-review-locked.json",
+      "sha256": "a9aeca32e8a383aa5d2a1d3369b6c5a96a6d8d3c75f812e8ee0e1fff3b3b17a6"
+    },
+    {
+      "path": "outputs/source-view-development-20261006-v1/stage-and-cost-observations.json",
+      "sha256": "a413b8011047715e7c5617e41cb83db93aa3d0c9e84fb0b43f79206e551570ab"
+    }
+  ],
+  "limitations": [
+    "Four single controlled-request pairs, live retrieval differs; cannot attribute all answer/time/cost changes solely to view identity.",
+    "Source health degraded: three official failures and one community failure; empty successes and unknown citation remain explicit.",
+    "No original model response stored; diagnostic shape rejection does not identify exact historical malformed field.",
+    "Engineering3023passed is WindowsPython3.12 only and does not validate report quality."
+  ],
+  "pipeline_count_fields": [
+    "selection_received",
+    "facts_bound",
+    "analyses_received",
+    "analyses_bound",
+    "after_citation",
+    "after_review",
+    "invalid_basis_sentences",
+    "invalid_requirement_ids",
+    "invalid_basis_fact",
+    "targeted_review_attempts"
+  ]
+}
