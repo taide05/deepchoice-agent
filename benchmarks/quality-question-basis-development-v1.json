@@ -1,0 +1,437 @@
+{
+  "dataset_id": "quality-question-basis-development-v1",
+  "version": "1.0.0",
+  "status": "frozen",
+  "freeze_date": "2026-10-07",
+  "protocol": "docs/product-effectiveness-optimization.md",
+  "parent": {
+    "path": "benchmarks/product-baseline-v1.json",
+    "dataset_id": "product-baseline-v1",
+    "version": "1.0.0",
+    "freeze_date": "2026-09-16",
+    "byte_sha256": "d732434d1ae2e01a14b62cfe7b92499dd584703676d0caff17fe4510f647f7ef",
+    "canonical_sha256": "e0317ddeaa2b37526f5a7261d8df26217b75619d6c46bcd1bc8705895f16981f"
+  },
+  "selection": "Four public development cases across four tradeoff classes. P06/P11 are R7 design-exposed regression probes; P05/P10 were not used for this R7 design but have historical public exposure. No result-based exclusion, fresh/holdout claim, human calibration or majority-scenario inference.",
+  "candidate_hypothesis": "Selecting one advertised original R0/Q question ID and displayed basis references per judgment row, then rebuilding complete original sentence coordinates at runtime, may reduce format/binding losses and improve evidence-backed answers to original questions or subquestions across at least two tradeoff classes. Bound references alone do not prove source applicability, answer usefulness or constraint satisfaction.",
+  "candidate_scope": "R7 retains R6 source views, the existing two-stage calls and five-fact/evidence/citation/self-review limits. The second judgment model selects one original question_id plus displayed basis_refs; runtime supplies canonical whole-sentence coordinates. Original C constraints remain in the prompt and self-review, but individual rows do not claim coverage of every C. No new source, call or authority.",
+  "falsifiers": [
+    "Rows remain absent or materially wrong despite eligible displayed question and basis references; structural binding gains alone are not answer gains.",
+    "Selected references omit decisive qualifiers, cite an inapplicable version/workload/mode, or support a premise without supporting the conclusion.",
+    "The report or self-review drops useful bound analysis, or treats one selected question as proof that all original constraints were satisfied.",
+    "Fewer than two distinct tradeoff classes gain evidence-backed answers to original questions or subquestions; gains only in design-exposed cases still count for development screening but cannot establish transfer.",
+    "A new critical factual/safety error or material regression of an already passing case occurs."
+  ],
+  "assessment": {
+    "pass": "Whole-report usable-and-supported is recorded separately: all five maintained content checks pass and no critical error; unresolved disagreement cannot pass.",
+    "comparison": "Development net benefit requires evidence-backed improvement in an original question or original subquestion in at least two different tradeoff classes, with no new critical error or material regression of an already passing case. Two whole-report passes are not an added gate. Syntax-valid rows, more bound quotes, lexical citation status, length or cost alone are not content gains.",
+    "severity": "Critical: decision-changing fabricated capability/source/measurement, causal or applicability reversal, hard-constraint violation, unsupported decisive exclusion/guarantee or unsafe operation. Important gap: user cannot understand the current choice or next test. Minor formatting or repetition alone does not fail. A useful conditional choice need not name one winner or complete a deployment/recovery exercise.",
+    "review": "Independent read-only assistant review; lock request, report and saved-source content judgments before examining Trace/cost where possible. Record exposure, unresolved disagreements and assistant-only limitations; no human calibration.",
+    "source_policy": "Use only originally saved cited passages and their captured versions/conditions to judge decisive report claims. Original reference URLs and historical reference-audit entries are review pointers, never injected request/seed material or proof of current truth. New review material cannot repair missing original evidence. Unreachable, insufficiently scoped and cross-language uncertain evidence remains unknown.",
+    "question_and_constraint_policy": "Score each original question/subquestion against the request and saved support. A row bound to R0/Q does not by itself establish the answer, semantic applicability or any individual C constraint; assess all original constraints at report level and through self-review. Do not demand row-wise C coverage.",
+    "measurements": [
+      "supported answer changes to original R0 and Q questions, with decision relevance",
+      "saved-source sentence completeness, scope and applicability through judgment/binding/citation/review/report",
+      "all original constraints, conditional advice, uncertainty, critical errors and important gaps",
+      "whole-report usable-and-supported separately from partial answer gains",
+      "calls, tokens, active/wall time and unknown usage after content judgments"
+    ],
+    "holdout_scope": "All four cases are public and historically exposed development material. Parent P10/P11 holdout labels are provenance only. Unexposed transfer and stable quality require separately held cases and runs."
+  },
+  "cases": [
+    {
+      "case_id": "P06",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "R7 design-exposed: its public R6 material informed diagnosis/design; previously exposed in other development work. Not fresh validation.",
+      "tradeoff": "runtime_performance_and_compatibility",
+      "request": {
+        "query": "Bun 和 Node.js 的性能资料结论冲突时，2026 年新建 TypeScript API 应如何选择？",
+        "scene_context": "团队已有 Node.js 经验，服务以数据库 I/O 为主，要求生态稳定；供应方 HTTP 性能宣传与本项目负载条件不同，尚无本项目的配对实测。",
+        "constraints": [
+          "必须解释 benchmark 条件",
+          "不能把运行时微基准外推为业务吞吐",
+          "需要区分版本与兼容性"
+        ],
+        "candidate_techs": [
+          "Bun",
+          "Node.js"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "宣传 benchmark 与本项目的测试条件有何不同？",
+          "生态兼容和团队经验如何计权？",
+          "怎样设计自己的验证？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "772ec8809eafdcd5256b517a7eb974489c99a885543689be99f3381c256affe0",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "hitl_sha256": "9ad2bb8948f6a9ee37aeddcde5a571aec8f608f55c5ee676ca8d7eb3c934a60f",
+      "request_hitl_sha256": "a9daa6cfdb7fe102899eb06144e6c7b8580b76a5c5637c2799af92f17de65d28",
+      "source_case_sha256": "d82f7a6c8e1a9d3185d556450adf2bf81bd647d15403fa99eb17aebc10d72161",
+      "original_rubric": {
+        "must_answer": [
+          "识别版本、硬件、负载差异",
+          "避免把微基准直接等同业务收益",
+          "给出面向实际工作负载的试验方案"
+        ],
+        "acceptable_outcomes": [
+          "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+          "若兼容性已验证且收益可复现，可条件性选择 Bun"
+        ],
+        "major_errors": [
+          "无条件宣称固定倍数性能优势",
+          "混用不同版本数据",
+          "忽略数据库 I/O 主导条件"
+        ],
+        "conflict_points": [
+          "供应方微基准优势与数据库 I/O 业务负载之间的外推边界；不预设已有相反实测"
+        ],
+        "reference_sources": [
+          "https://bun.sh/docs",
+          "https://nodejs.org/docs/latest/api/"
+        ]
+      },
+      "rubric_basis": {
+        "path": "benchmarks/quality-fact-range-development-v1.json",
+        "case_id": "P06",
+        "purpose": "Previously frozen development rubric; reused before any R7 report review."
+      },
+      "must_answer": [
+        "保留数据库I/O主导、Node经验、生态稳定和没有本项目配对实测的输入",
+        "比较性能资料的版本、硬件、负载和测量口径；缺项明确未知",
+        "把版本、兼容性和团队经验纳入选择；依赖未给定时可提出条件性核验，若据具体API、包或原生扩展作决定性主张则核对其适用范围",
+        "给出针对代表性业务负载和实际依赖的受控试验，以及结果改变选择的条件"
+      ],
+      "acceptable_outcomes": [
+        "基于成熟度倾向 Node.js，同时建议限定 Bun 试验",
+        "若兼容性已验证且收益可复现，可条件性选择 Bun"
+      ],
+      "source_applicability": [
+        "Bun兼容资料是API与限制清单；Node-API支持与任意原生扩展无条件兼容不能混同。",
+        "Node latest API页面不能单独证明生产适用版本或本场景性能收益；报告如推荐具体版本，应核对其支持状态。",
+        "供应方HTTP测试不是数据库I/O业务配对实测；不得捏造已有相反测试或固定业务收益。"
+      ],
+      "uncertainty_and_severity_anchors": [
+        "No paired measurement on this database-I/O-dominated workload; supplier HTTP benchmark conditions and real package compatibility remain scoped unknowns.",
+        "A fixed business-throughput gain, mixed-version comparison or ungrounded compatibility guarantee is critical when it drives the choice.",
+        "Omitting the workload/experience tradeoff or a concrete decision-changing verification is an important gap."
+      ],
+      "reference_audit": [
+        {
+          "url": "https://bun.com/docs/runtime/nodejs-compat",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://nodejs.org/en/about/previous-releases",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://nodejs.org/docs/latest/api/",
+          "version_scope": "version must be captured if cited",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P11",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "R7 design-exposed: its public R6 material informed diagnosis/design; prior parent holdout status is historical and this is development only.",
+      "tradeoff": "event_replay_and_message_retry_semantics",
+      "request": {
+        "query": "订单事件处理系统应选 Kafka 还是 RabbitMQ？",
+        "scene_context": "峰值每秒 5000 条消息，需要消费者重放部分历史事件、单消息重试和死信处理；团队只运维过 RabbitMQ。",
+        "constraints": [
+          "区分事件日志与任务队列语义",
+          "考虑重放和顺序要求",
+          "计入运维经验"
+        ],
+        "candidate_techs": [
+          "Apache Kafka",
+          "RabbitMQ"
+        ],
+        "complexity": "high",
+        "report_format": "comparison_matrix",
+        "sub_questions": [
+          "重放需求如何影响选择？",
+          "路由、重试和死信能力如何比较？",
+          "团队经验是否足以改变结论？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "dca9c25b4bc0daf7beae0bb843eea5b2f9ac32a9325cbc84fd6fab7f65d64137",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "hitl_sha256": "9ad2bb8948f6a9ee37aeddcde5a571aec8f608f55c5ee676ca8d7eb3c934a60f",
+      "request_hitl_sha256": "87329a83f4d5809f92ff56a636abf76ba6693cff77eacd6615e152dfe05b27a7",
+      "source_case_sha256": "7a96e267b9da834296802e756cfcb0f1bfcc7dfc5a0bb316aaa2bd8d851196bc",
+      "original_rubric": {
+        "must_answer": [
+          "解释日志保留与队列确认模型，包括 RabbitMQ Streams 可重放而经典队列消费语义不同",
+          "覆盖重放、顺序、重试和死信",
+          "说明运维迁移成本"
+        ],
+        "acceptable_outcomes": [
+          "按保留与分区需求条件性选择 Kafka",
+          "基于已验证的 Streams 重放及团队经验条件性保留 RabbitMQ",
+          "若重放另行可靠实现且路由优先，可条件性保留 RabbitMQ 队列"
+        ],
+        "major_errors": [
+          "声称两者交付语义天然 exactly-once",
+          "忽略分区对顺序的影响",
+          "只按峰值数字选择",
+          "声称 RabbitMQ 所有类型都不支持重放"
+        ],
+        "conflict_points": [
+          "历史重放与灵活队列路由能力之间的权衡"
+        ],
+        "reference_sources": [
+          "https://kafka.apache.org/documentation/",
+          "https://www.rabbitmq.com/docs"
+        ]
+      },
+      "rubric_basis": {
+        "path": "benchmarks/quality-fact-range-development-v1.json",
+        "case_id": "P11",
+        "purpose": "Previously frozen development rubric; reused before any R7 report review."
+      },
+      "must_answer": [
+        "区分Kafka日志与RabbitMQ队列确认模型，并包含Streams的重放边界；若依据具体队列类型作决定性主张，再核对该类型条件",
+        "说明历史重放需求；不得以RabbitMQ品牌名排除其Streams重放",
+        "同时处理顺序、单消息重试和死信，不把不同模式能力无条件相加",
+        "将RabbitMQ运维经验与新增组件/模式成本纳入有理由的条件选择",
+        "不按5000条每秒直接决定，不保证天然端到端exactly-once"
+      ],
+      "acceptable_outcomes": [
+        "按保留与分区需求条件性选择 Kafka",
+        "基于已验证的 Streams 重放及团队经验条件性保留 RabbitMQ",
+        "若重放另行可靠实现且路由优先，可条件性保留 RabbitMQ 队列"
+      ],
+      "source_applicability": [
+        "Kafka 4.2介绍限定顺序在分区内；其日志可以保留并重读。",
+        "RabbitMQ Streams是持久可重复读取的日志；同页经典队列与Stream对照列出Stream没有dead-letter exchanges。",
+        "支持重放不等于同时拥有经典队列全部重试/死信功能；业务所需组合须给依据或明确待验证。"
+      ],
+      "uncertainty_and_severity_anchors": [
+        "Queue/stream type, retention, ordering scope and the required retry/dead-letter combination must be tied to the cited version and mode; unsupported combinations remain unknown.",
+        "Natural end-to-end exactly-once, all RabbitMQ modes lacking replay, or unconditional Kafka ordering is critical if used to decide.",
+        "Ignoring replay versus retry/dead-letter and existing operations experience is an important choice gap."
+      ],
+      "reference_audit": [
+        {
+          "url": "https://kafka.apache.org/42/getting-started/introduction/",
+          "version_scope": "4.2",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://www.rabbitmq.com/docs/streams",
+          "version_scope": "rolling; capture page version at report review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P05",
+      "split": "development",
+      "source_split": "development",
+      "exposure": "Not used to design R7; public historical development and diagnosis exposure remains. No fresh or sealed-holdout claim.",
+      "tradeoff": "cross_language_http_client_capability",
+      "request": {
+        "query": "中文团队做高并发 Python HTTP 客户端时，应选 HTTPX 还是 aiohttp？请用可核验依据回答。",
+        "scene_context": "服务需要连接池、超时、HTTP/2 可选支持和异步流式响应，核心官方资料主要是英文。",
+        "constraints": [
+          "关键中文声明必须能被引用支持",
+          "区分内置能力与额外依赖",
+          "不接受只引用中文转载"
+        ],
+        "candidate_techs": [
+          "HTTPX",
+          "aiohttp"
+        ],
+        "complexity": "medium",
+        "report_format": "evidence_first",
+        "sub_questions": [
+          "两者的同步/异步接口差异是什么？",
+          "HTTP/2 与连接池支持边界是什么？",
+          "跨语言引用是否支持中文结论？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "86f0bb4cd7a1e1310096836c24835311468c41dcfc3cb901d8ddbd3918dc17de",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "hitl_sha256": "9ad2bb8948f6a9ee37aeddcde5a571aec8f608f55c5ee676ca8d7eb3c934a60f",
+      "request_hitl_sha256": "b1a88c7e757fb74d8eb7c312fe2fc735bd4b69702298811891c13274e171460e",
+      "source_case_sha256": "e4aade94b7c2ad9e4156976b620c89a52e32f518ba4bf904cc15ecba1659d610",
+      "original_rubric": {
+        "must_answer": [
+          "准确说明同步与异步 API 范围",
+          "核对 HTTP/2 支持及条件",
+          "关键中文结论绑定英文原始资料"
+        ],
+        "acceptable_outcomes": [
+          "按团队 API 偏好和协议需求做条件性推荐"
+        ],
+        "major_errors": [
+          "把可选 HTTP/2 说成默认无条件支持",
+          "引用内容与中文声明不对应",
+          "把下载量当作技术证明"
+        ],
+        "conflict_points": [
+          "统一同步/异步体验与专用异步生态之间的权衡"
+        ],
+        "reference_sources": [
+          "https://www.python-httpx.org/",
+          "https://docs.aiohttp.org/en/stable/"
+        ]
+      },
+      "rubric_basis": {
+        "path": "benchmarks/quality-fact-range-development-v1.json",
+        "case_id": "P05",
+        "purpose": "Previously frozen development rubric; reused before any R7 report review."
+      },
+      "must_answer": [
+        "比较 HTTPX 同步/异步 API 与 aiohttp 客户端异步工作方式，并结合团队的高并发需求给出条件选择",
+        "核对连接池、超时与异步流式响应的实际 API/配置边界，不把具备某能力直接等同于本负载下更快",
+        "说明 HTTPX HTTP/2 需要可选依赖、显式启用及服务端支持；对 aiohttp 的 HTTP/2 结论仅按引用的具体版本和范围陈述",
+        "中文决定性声明与原始英文官方片段逐项对应；跨语言自动核验不确定时明确未知，不把 unknown 当作已证实",
+        "没有项目配对测量时给出可观察的试验条件及足以改变选择的结果"
+      ],
+      "acceptable_outcomes": [
+        "按团队 API 偏好和协议需求做条件性推荐"
+      ],
+      "source_applicability": [
+        "HTTPX 官方 HTTP/2 页说明可选安装、显式启用及服务端协商；启用客户端选项不证明所有请求均为 HTTP/2。",
+        "HTTPX 官方 Async Support 页描述同步及异步客户端和异步流；这不证明高并发下本场景更快。",
+        "aiohttp 官方 Client Reference 描述 ClientSession 连接池和超时；HTTP/2 支持状态不得从默认 HttpVersion11 独自外推为绝对不可能。",
+        "引用词面重合与中文技术判断的语义正确性分开核对。"
+      ],
+      "uncertainty_and_severity_anchors": [
+        "Actual workload throughput and protocol negotiation are unmeasured; English documentation does not automatically verify a Chinese technical conclusion.",
+        "Treating optional HTTP/2 as default or asserting decisive unsupported cross-language capability is critical if it changes the choice.",
+        "Missing the API, connection/timeout/streaming boundary or explaining unknown without its decision impact is an important gap."
+      ],
+      "reference_audit": [
+        {
+          "url": "https://www.python-httpx.org/http2/",
+          "version_scope": "rolling; capture cited version at review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://www.python-httpx.org/async/",
+          "version_scope": "rolling",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        },
+        {
+          "url": "https://docs.aiohttp.org/en/stable/client_reference.html",
+          "version_scope": "stable; capture cited version at review",
+          "checked_on": "2026-10-05",
+          "role": "review-only; never inject into request or knowledge seed"
+        }
+      ]
+    },
+    {
+      "case_id": "P10",
+      "split": "development",
+      "source_split": "holdout",
+      "exposure": "Not used to design R7; previously used as public development/design material for other candidates. Parent holdout status is historical, not sealed validation.",
+      "tradeoff": "api_composition_and_governance",
+      "request": {
+        "query": "移动端产品的新 API 应采用 REST 还是 GraphQL？",
+        "scene_context": "客户端页面组合多、网络质量波动，后端由 5 人维护；现有服务主要是 REST，需要细粒度授权和缓存。",
+        "constraints": [
+          "考虑迁移成本和授权",
+          "不能把减少请求数等同于一定更快",
+          "必须讨论缓存和可观测性"
+        ],
+        "candidate_techs": [
+          "REST",
+          "GraphQL"
+        ],
+        "complexity": "medium",
+        "report_format": "evidence_first",
+        "sub_questions": [
+          "客户端数据组合收益是否足够？",
+          "授权和缓存复杂度如何变化？",
+          "能否渐进引入？"
+        ],
+        "gather_evidence": true,
+        "language": "zh-CN"
+      },
+      "request_sha256": "2899e016828eeee3c5d34ed92ad2076888a64f14109e0d5c9bcccc2a44ff449d",
+      "hitl": {
+        "action": "limited_report"
+      },
+      "hitl_sha256": "9ad2bb8948f6a9ee37aeddcde5a571aec8f608f55c5ee676ca8d7eb3c934a60f",
+      "request_hitl_sha256": "cb6f70c18ed45fad164a1aa7420f2f9f05b8fd927523d3522270d138bda3394b",
+      "source_case_sha256": "b0f37cd808cfe1d61af26dfb1ced6d0be6f948521a3c4d6cc7dc64f1281eda9e",
+      "original_rubric": {
+        "must_answer": [
+          "同时评估客户端和服务端成本",
+          "说明授权、缓存与 N+1 风险",
+          "提出渐进验证路径"
+        ],
+        "acceptable_outcomes": [
+          "维持 REST 并优化聚合端点",
+          "对特定复杂页面试点 GraphQL"
+        ],
+        "major_errors": [
+          "声称 GraphQL 自动解决性能问题",
+          "忽略字段级授权",
+          "把协议选择当作数据库选择"
+        ],
+        "conflict_points": [
+          "客户端取数灵活性与服务端治理成本之间的权衡"
+        ],
+        "reference_sources": [
+          "https://graphql.org/learn/",
+          "https://www.rfc-editor.org/rfc/rfc9110"
+        ]
+      },
+      "rubric_basis": {
+        "path": "benchmarks/quality-code-audit-development-v1.json",
+        "case_id": "P10",
+        "purpose": "Previously frozen development rubric; reused before any R7 report review."
+      },
+      "must_answer": [
+        "把已给五人后端、既有REST、页面组合多、网络波动、细粒度授权和缓存作为原始条件，讨论是否值得引入另一API方式。",
+        "同时评估客户端组合收益与服务端治理成本，区分减少请求数量和本负载端到端延迟改善。",
+        "按保存来源解释授权、缓存、N+1及可观测性边界；不声称GraphQL自动解决性能或授权问题。",
+        "给出保持REST/聚合优化或限定页面试点等有理由的条件分支，以及渐进验证与改变选择的观察。"
+      ],
+      "acceptable_outcomes": [
+        "维持 REST 并优化聚合端点",
+        "对特定复杂页面试点 GraphQL"
+      ],
+      "source_applicability": [
+        "Decisive claims require the originally saved cited version and applicability; original reference pointers alone do not provide evidence.",
+        "User-given context is a decision premise, not technical capability evidence; unmeasured performance/recovery outcomes stay unknown."
+      ],
+      "uncertainty_and_severity_anchors": [
+        "Page-level latency benefit, authorization design, caching behavior and N+1 effects depend on the actual schema, implementation and workload; absent measurements remain unknown.",
+        "A guaranteed speed/security benefit or an unsupported decisive authorization claim is critical; request-count reduction alone is not latency proof.",
+        "Ignoring existing REST migration cost, field-level authorization, caching or observability is an important choice gap."
+      ]
+    }
+  ],
+  "runtime_binding": "Frozen case/rubric identity only. No research admission or executable batch is authorized by this file alone. Clean baseline/candidate commits, manifests/assets, model/dependencies, isolated seed, retrieval/cache, collector, order, independent allowance and stop lines must be bound separately before paid research."
+}

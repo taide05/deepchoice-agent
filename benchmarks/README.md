@@ -6,6 +6,15 @@
 仍绑定旧四例和历史授权；本次跨类别开发通过单独冻结的本地薄适配执行，不能把新案例
 直接交给旧命令，或用旧晋级锁启动最终24次。历史卡和账本保持原样。
 
+## 问题与原句引用开发材料（2026-10-07）
+
+[quality-question-basis-development-v1](quality-question-basis-development-v1.json) 1.0.0
+冻结P06/P11/P05/P10原请求、HITL和预先内容判据，覆盖四类取舍。
+P06/P11参与R7设计；P05/P10未用于本轮设计但有历史公开暴露。独立助手从原请求准备，
+未读取旧报告/成本/arm映射；无人工校准或新鲜保留集声明。至少两类原问题或子问题有据
+改善才满足开发比较门槛，whole-report通过单列；ID绑定和词法verified不算质量收益。
+数据集不代替干净运行身份、批次额度与停止线，冻结本身没有研究准入或质量结果。
+
 ## 当前代码审计后开发探针
 
 [quality-code-audit-development-v1.json](quality-code-audit-development-v1.json) / 1.0.0于

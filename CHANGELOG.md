@@ -16,6 +16,12 @@ and numeric compatibility formats, and reject old same-run resume.
 No new model calls, nodes, public state fields or budget authority. Engineering
 verification and saved-fact replay do not establish real-report improvement.
 
+Freeze quality-question-basis-development-v1 1.0.0 (2026-10-07): four unchanged
+public requests/HITL and independently prepared pre-output content criteria across
+four tradeoffs. P06/P11 informed R7 design; P05/P10 did not but remain historically
+exposed. Record whole-report pass separately from supported subquestion gains.
+Dataset freeze alone does not establish a batch admission or real-report quality.
+
 ### Bind runtime source views from model-selected IDs
 
 The existing staged selection call now returns only advertised source_view_ids.
