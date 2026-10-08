@@ -272,20 +272,21 @@ async def test_invalid_scope_proposal_preserves_original_snippet(monkeypatch, mo
 
 
 @pytest.mark.asyncio
-async def test_scope_selection_budget_failure_propagates_and_legacy_skips(monkeypatch):
+@pytest.mark.parametrize("failure", ["budget", "cancel"])
+async def test_scope_selection_budget_failure_propagates_and_legacy_skips(monkeypatch, failure):
     monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
-    selector = AsyncMock(side_effect=BudgetPersistenceError("budget store unavailable"))
+    error = BudgetPersistenceError("budget store unavailable") if failure == "budget" else asyncio.CancelledError()
+    selector = AsyncMock(side_effect=error)
     monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
-    with pytest.raises(BudgetPersistenceError):
-        await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(
-            _scoped_source_state()
-        )
-    output = await SourceEvaluatorAgent().run(_scoped_source_state())
+    state = {**_scoped_source_state(), "_supplemental_input": "Supplementary user condition"}
+    with pytest.raises(type(error)):
+        await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    output = await SourceEvaluatorAgent().run(state)
     assert output["source_scores"][0]["snippet"] == _SCOPE_FIRST
     monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: None)
     direct = await SourceEvaluatorAgent(
         run_manifest=build_run_manifest({}),
-    ).run(_scoped_source_state())
+    ).run(state)
     assert direct["source_scores"][0]["snippet"] == _SCOPE_FIRST
     assert selector.await_count == 1
 
@@ -565,9 +566,149 @@ async def test_blank_official_proposals_never_score_without_runtime_selection(mo
     manifest = None if failure == 'no_manifest' else build_run_manifest({})
     scored = await SourceEvaluatorAgent(run_manifest=manifest).run({
         "task": {"query": "Acme过滤能力", "candidate_techs": ["Acme"]},
+        "_supplemental_input": "Supplementary user condition",
         "search_results": [{"source": "official", "results": [row]}],
     })
     assert scored['source_scores'] == []
     assert 'private provider detail' not in json.dumps(scored)
     if failure in {'no_manifest', 'no_context', 'unoffered', 'private', 'public'}:
         provider.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("supplement", [
+    "The journal must remain disabled.",
+    "补" * 4000,
+    ('"\\\n😀' * 1000),
+    "😀" * 4000,
+], ids=["short", "cjk-4000", "json-escaping-4000", "emoji-4000"])
+async def test_scope_supplement_keeps_source_menu_and_stays_untrusted(monkeypatch, supplement):
+    from copy import deepcopy
+    from deepchoice.agents.source_evaluator import SOURCE_SCOPE_SELECTION_PROMPT
+    from deepchoice.utils.source_scope import MAX_PROPOSAL_MESSAGE_BYTES
+
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    seen = []
+
+    async def select(messages, **_kwargs):
+        content = messages[0]["content"]
+        payload = json.loads(content.split("\n")[-1])
+        seen.append((content, payload))
+        # Stub selection proves delivery/binding, not actual model understanding.
+        start = 1 if payload.get("supplemental_context_untrusted") else 0
+        return {"sources": [{"id": row["id"], "ranges": [[start, start + 1]]}
+                            for row in payload["sources"]]}
+
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
+    state = _scoped_source_state()
+    # Fill the original source menu beyond its byte limit without changing per-source bounds.
+    text = " ".join([f"Alpha condition {i} " + "x" * 275 + "." for i in range(6)])
+    sentences = list(scope_sentences(text))
+    state["search_results"][0]["results"] = [
+        {"url": f"https://example.org/alpha/{i}", "title": "Alpha guide",
+         "snippet": sentences[0], "_source_scope_sentences": sentences}
+        for i in range(8)
+    ]
+    agent = SourceEvaluatorAgent(run_manifest=build_run_manifest({}))
+    plain = await agent.run(state)
+    state["_supplemental_input"] = supplement
+    before = deepcopy(state)
+    supplemented = await agent.run(state)
+    assert state == before
+    assert len(seen) == 2
+    plain_content, plain_payload = seen[0]
+    content, payload = seen[1]
+    assert 0 < len(payload["sources"]) < 8
+    assert payload["sources"] == plain_payload["sources"]
+    assert payload["request"] == plain_payload["request"]
+    assert payload.pop("supplemental_context_untrusted") == supplement
+    assert "supplemental_context_untrusted" not in plain_payload
+    assert len(plain_content.encode("utf-8")) <= MAX_PROPOSAL_MESSAGE_BYTES
+    assert SOURCE_SCOPE_SELECTION_PROMPT + json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":")) == plain_content
+    assert len(content.encode("utf-8")) > len(plain_content.encode("utf-8"))
+    assert plain["source_scores"][0]["passages"] == [sentences[0]]
+    assert supplemented["source_scores"][0]["passages"] == [sentences[1]]
+    assert supplement not in json.dumps(supplemented, ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("supplement", ["", " \n\t", 1, {}, "x" * 4001, "private\u202e", "private\x00", "\ud800"],
+                         ids=["empty", "blank", "int", "dict", "oversize", "bidi", "control", "surrogate"])
+async def test_invalid_private_scope_supplement_skips_safely(monkeypatch, supplement):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    model = AsyncMock(return_value={"sources": []})
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", model)
+    state = _scoped_source_state()
+    state["_supplemental_input"] = supplement
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    model.assert_not_awaited()
+    assert output["source_scores"][0]["snippet"] == _SCOPE_FIRST
+    assert "passages" not in output["source_scores"][0]
+    assert output["quality_signals"][0]["source_scope_proposal"] == {
+        "offered": 0, "accepted": 0, "status": "invalid_context"}
+    assert "private" not in json.dumps(output)
+
+
+@pytest.mark.asyncio
+async def test_supplement_does_not_expand_original_request_allocation(monkeypatch):
+    monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
+    model = AsyncMock()
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", model)
+    state = _scoped_source_state()
+    state["task"]["sub_questions"] = [f"{i:02}" + "问" * 498 for i in range(20)]
+    state["_supplemental_input"] = "补" * 4000
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    model.assert_not_awaited()
+    assert output["source_scores"][0]["snippet"] == _SCOPE_FIRST
+    assert output["quality_signals"][0]["source_scope_proposal"] == {
+        "offered": 0, "accepted": 0, "status": "input_too_large"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token_limit", [60000, 10000])
+async def test_scope_budget_reserves_complete_supplement_before_dispatch(tmp_path, monkeypatch, token_limit):
+    from types import SimpleNamespace
+    from deepchoice.budget import BudgetHardLimits, BudgetExceededError, BudgetResource
+    from deepchoice.runtime.context import bind_run_context
+    from deepchoice.utils import llm
+    from tests.test_phase2c_budget_runtime import _running_budget, _context, _count
+
+    connection, _, manager, _, _ = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(total_tokens=token_limit))
+    state = _scoped_source_state()
+    state["_supplemental_input"] = "补" * 4000
+
+    async def create(**kwargs):
+        messages = kwargs["messages"]
+        payload = json.loads(messages[0]["content"].split("\n")[-1])
+        assert payload["supplemental_context_untrusted"] == state["_supplemental_input"]
+        assert kwargs["max_tokens"] == 1024
+        actual_bytes = len(json.dumps(messages, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        usage = await manager._usage()
+        assert usage[BudgetResource.TOTAL_TOKENS] == actual_bytes + 1024
+        assert usage[BudgetResource.LLM_CALLS] == 1
+        return SimpleNamespace(model="fixture", usage=SimpleNamespace(
+            prompt_tokens=100, completion_tokens=10, total_tokens=110),
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(
+                {"sources": [{"id": "S1", "ranges": [[0, 1]]}]})))])
+
+    dispatch = AsyncMock(side_effect=create)
+    monkeypatch.setattr(llm, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=dispatch))))
+    try:
+        with bind_run_context(_context(manager)):
+            if token_limit == 10000:
+                with pytest.raises(BudgetExceededError) as caught:
+                    await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+                assert caught.value.resource == BudgetResource.TOTAL_TOKENS
+                assert caught.value.requested > 12000
+                dispatch.assert_not_awaited()
+                assert await _count(connection) == 0
+            else:
+                output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+                dispatch.assert_awaited_once()
+                assert output["source_scores"][0]["passages"] == [_SCOPE_FIRST]
+                assert (await manager._usage())[BudgetResource.TOTAL_TOKENS] == 110
+    finally:
+        await connection.close()

@@ -181,7 +181,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v35",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v5",
-                         "source_evaluator.source_scope_selection": "v2",
+                         "source_evaluator.source_scope_selection": "v3",
                          "conflict_detector.contradiction_scan_system": "v4"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
         prompt_id: expected_versions.get(prompt_id, "v1") for prompt_id in expected_prompt_ids}
@@ -808,6 +808,7 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
 @pytest.mark.parametrize("retired_asset,retired_version", [
     *[("conclusion_synthesizer.synthesis_prompt", version) for version in ("v24", "v25", "v26", "v27", "v32", "v33", "v34")],
     ("self_reviewer.review_system", "v8"),
+    ("source_evaluator.source_scope_selection", "v2"),
 ])
 def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_asset, retired_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id

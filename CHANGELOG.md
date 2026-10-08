@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Pass bounded supplemental conditions to source selection
+
+Source-scope prompt v3 receives supplemental input as a separate untrusted JSON
+field after the existing 12 KB original-request/source menu is admitted. Reuse
+the HITL 4000-character and safe-text limits; reject invalid private context with
+a fixed diagnostic. The complete serialized message still reserves budget before
+dispatch. Preserve exact saved-range binding, source limits, legacy bypass and
+budget/cancellation propagation. This closes context delivery, without claiming
+model compliance or source relevance. Historical identities remain readable but
+cannot resume with this changed prompt.
+
 ### Keep supplemental context separate from bounded retrieval targets
 
 Query-adapter v5 receives supplemental input as separate untrusted context while
@@ -10,8 +21,8 @@ query; if a missing/invalid variant cannot use the long query as a bounded raw
 fallback, pass its full text through the native query field instead. Generic
 query injection now preserves all 20 targets and never creates an oversized item.
 Budget failures and cancellation propagate. This repairs request validity, not
-live source relevance; provider-specific fallback limits and the pending source
-selector context handoff remain explicit.
+live source relevance; provider-specific fallback limits remain explicit. The
+source selector context handoff is addressed by the subsequent change above.
 
 ### Offer every admitted original question to bounded synthesis
 

@@ -50,7 +50,7 @@ PROMPT_VERSIONS = {
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v5",
     "conclusion_synthesizer.synthesis_prompt": "v35",
-    "source_evaluator.source_scope_selection": "v2",
+    "source_evaluator.source_scope_selection": "v3",
     "conflict_detector.contradiction_scan_system": "v4",
 }
 try:

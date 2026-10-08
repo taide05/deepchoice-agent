@@ -13,6 +13,7 @@ MAX_SCOPE_SENTENCES = 40
 MAX_SENTENCE_CHARS = 400
 MAX_PROPOSED_SOURCES = 8
 MAX_PROPOSAL_INPUT_CHARS = 16000
+# Prompt + original request + source menu, excluding validated HITL context.
 MAX_PROPOSAL_MESSAGE_BYTES = 12000
 
 
