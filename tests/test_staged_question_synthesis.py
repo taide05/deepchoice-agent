@@ -340,7 +340,8 @@ async def test_late_questions_get_selection_judgment_and_reviewed_report_opportu
 
 @pytest.mark.parametrize("count", [9, 21])
 async def test_more_offered_questions_does_not_expand_answer_output_authority(monkeypatch, count):
-    task = {**TASK, "sub_questions": [f"Original question {i}?" for i in range(1, 21)]}
+    task = {**TASK, "constraints": [f"Maintain boundary {i}" for i in range(50)],
+            "sub_questions": [f"Original question {i}?" for i in range(1, 21)]}
     ids = ["R0"] + [f"Q{i}" for i in range(1, 21)]
     model = AsyncMock(side_effect=[{"source_view_ids": ["S1", "S2"]},
         {"decision_analysis": [answer(key)["decision_analysis"][0] for key in ids[:count]]}])
@@ -384,3 +385,92 @@ async def test_all_question_context_still_obeys_real_budget_before_model_dispatc
         assert await _count(connection) == 0
     finally:
         await connection.close()
+
+
+@pytest.mark.parametrize("constraint_count,outcome", [
+    (39, "keep"), (40, "keep"), (50, "keep"),
+    (50, "unreachable"), (50, "unsupported"), (50, "withdraw"), (50, "invalid_basis"),
+])
+async def test_many_requirements_preserve_only_bound_cited_reviewed_analysis(monkeypatch, constraint_count, outcome):
+    """Real code + model/fetch stubs exercise delivery, not semantic acceptance."""
+    import httpx
+    from copy import deepcopy
+    from deepchoice.contracts.api import ResearchRequest
+    from deepchoice.agents import self_reviewer as review
+    from deepchoice.agents.citation_validator import CitationValidatorAgent
+    from deepchoice.agents.report_generator import FORMAT_RENDERERS
+
+    task = ResearchRequest(query="Which Alpha option fits?", candidate_techs=["Alpha"],
+        constraints=[f"Maintain boundary {i}" for i in range(constraint_count)],
+        sub_questions=["What conditions affect the choice?"]).model_dump(mode="json")
+    requirements, overflow = synth._decision_requirements(
+        task["query"], task["constraints"], [], task["sub_questions"], [])
+    assert len(requirements) == constraint_count + 1
+    assert overflow is (constraint_count >= 40)
+    row = answer("Q1", "B999" if outcome == "invalid_basis" else "B1")["decision_analysis"][0]
+    row["reasoning"] = "Evaluate Alpha only when the documented queuing condition is acceptable. Other requirements still need assessment."
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1"]}, {"decision_analysis": [row]}])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = {"task": deepcopy(task), "evidence_chains": deepcopy(CHAINS[:1])}
+    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    rec = state["final_recommendation"]
+    assert model.await_count == 2
+    for call in model.await_args_list:
+        prompt = call.args[0][0]["content"]
+        assert all(f": {text}\n" in prompt for text in task["constraints"])
+    assert state["task"] == task and state["evidence_chains"] == CHAINS[:1]
+    expected_bound = 0 if outcome == "invalid_basis" else 1
+    assert state["quality_signals"][0]["staged_generation"]["rows_selected"] == expected_bound
+    assert len(rec["decision_analysis"]) == expected_bound
+    inventory = deepcopy(rec["answer_delivery"]["requirements"])
+    assert len(inventory) == constraint_count + 2
+    assert [inventory[f"C{i}"] for i in range(1, constraint_count + 1)] == task["constraints"]
+    assert inventory["R0"] == task["query"] and inventory["Q1"] == task["sub_questions"][0]
+    if overflow:
+        assert rec["action_plan"] == []
+    assert rec["requirement_assessments"] == rec["ranked_options"] == rec["decision_branches"] == []
+    for render in FORMAT_RENDERERS.values():
+        assert row["reasoning"] not in render(state)  # Binding has no publication authority.
+
+    fetch = AsyncMock(return_value=httpx.Response(200,
+        text="An unrelated document about geometry." if outcome == "unsupported" else CHAINS[0]["sources"][0]["snippet"],
+        headers={"content-type": "text/plain"}))
+    if outcome == "unreachable":
+        fetch.side_effect = httpx.ConnectError("PRIVATE_NETWORK_FAILURE")
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state.update(await CitationValidatorAgent().run(state))
+    for render in FORMAT_RENDERERS.values():
+        assert row["reasoning"] not in render(state)  # Citations alone do not approve inference.
+    review_row = {"analysis_id": "A1", "action": "withdraw" if outcome == "withdraw" else "keep"}
+    if outcome != "withdraw":
+        review_row["source_checks"] = [["F1", "supports", [1]]]
+    reviewer = AsyncMock(return_value={"analysis_reviews": [review_row]})
+    monkeypatch.setattr(review, "call_model", reviewer)
+    state.update(await review.SelfReviewerAgent().run(state))
+    rec = state["final_recommendation"]
+    retained = outcome in {"keep", "unreachable"}
+    assert len(rec["decision_analysis"]) == int(retained)
+    assert rec["answer_delivery"]["requirements"] == inventory
+    assert rec["winner"] == "context_dependent" and rec["confidence"] == "low"
+    assert rec["deployment_readiness"] == "unverified"
+    assert rec["requirement_assessments"] == rec["ranked_options"] == rec["decision_branches"] == []
+    if overflow:
+        assert rec["action_plan"] == []
+    if outcome in {"keep", "unreachable", "withdraw"}:
+        reviewer.assert_awaited_once()
+        assert all(text in str(reviewer.await_args.args[0]) for text in task["constraints"])
+    for name, render in FORMAT_RENDERERS.items():
+        report = render(state)
+        assert (row["reasoning"] in report) is retained
+        if outcome == "unreachable":
+            assert rec["source_facts"][0]["status"] == "unknown"
+            assert rec["decision_analysis"][0]["review_status"] == "network_unconfirmed_human_review_required"
+            assert "Live source verification was unavailable (unknown)" in report
+        assert task["query"] in report and task["sub_questions"][0] in report
+        assert "PRIVATE_NETWORK_FAILURE" not in report
+        if name == "comparison_matrix":
+            label = "Conditional analysis for human review" if retained else "Unanswered"
+            assert f'| {task["sub_questions"][0]} | {label} |' in report
+        else:
+            missing = report.split("Questions without retained analysis", 1)[1]
+            assert (task["sub_questions"][0] in missing) is (not retained)

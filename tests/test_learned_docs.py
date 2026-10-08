@@ -127,12 +127,33 @@ class TestConcurrentLearn:
         def worker(i):
             learn(f"tool{i}", f"https://tool{i}.dev/docs", f"Tool {i}", via="llm")
 
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(30)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        stopped = threading.Event()
+        ready = threading.Event()
+        reads = []
 
+        def reader():
+            while not stopped.is_set():
+                reads.append((load_learned(), learned_docs.official_mapping_identity()))
+                ready.set()
+                stopped.wait(0.001)
+
+        read_thread = threading.Thread(target=reader)
+        read_thread.start()
+        try:
+            assert ready.wait(5)
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(30)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        finally:
+            stopped.set()
+            read_thread.join()
+
+        for snapshot, identity in reads:
+            assert all(key.startswith("tool") and row["url"] == f"https://{key}.dev/docs"
+                       for key, row in snapshot.items())
+            assert identity is None or (len(identity) == 64 and int(identity, 16) >= 0)
         docs = load_learned()
         assert len(docs) == 30
         assert all(f"tool{i}" in docs for i in range(30))
@@ -228,20 +249,64 @@ def test_read_permission_failure_preserves_file_and_hides_details(isolated_mappi
     assert "private-path" not in caplog.text and "password" not in caplog.text
 
 
+@pytest.mark.parametrize("winerror", [None, 5, 13])
 @pytest.mark.parametrize("operation", ["learn", "harvest"])
 def test_failed_replace_preserves_original_and_cleans_only_owned_temp(
-        isolated_mapping, monkeypatch, operation):
+        isolated_mapping, monkeypatch, operation, winerror):
     isolated_mapping.write_bytes(b"{}")
     unrelated = isolated_mapping.with_suffix(".json.tmp")
     unrelated.write_bytes(b"unrelated")
-    def denied(*args, **kwargs):
-        raise PermissionError("replacement denied")
+    attempts = []
+    waits = []
+    monkeypatch.setattr(learned_docs.time, "sleep", waits.append)
+    def denied(path, target):
+        attempts.append(path)
+        error = PermissionError("replacement denied")
+        if winerror is not None:
+            error.winerror = winerror
+        raise error
     monkeypatch.setattr(Path, "replace", denied)
     result = learn("zed", "https://zed.dev/docs", "Zed", "llm") if operation == "learn" else _harvest_zed()
     assert not result
+    assert waits == ([0.01, 0.02] if winerror == 5 else [])
+    assert len(attempts) == (3 if winerror == 5 else 1)
+    assert len(set(attempts)) == 1
     assert isolated_mapping.read_bytes() == b"{}"
     assert list(isolated_mapping.parent.glob("*.tmp")) == [unrelated]
     assert unrelated.read_bytes() == b"unrelated"
+
+
+@pytest.mark.parametrize("winerror", [5, 32, 33])
+@pytest.mark.parametrize("operation", ["learn", "harvest"])
+def test_transient_replace_failure_preserves_pending_update(
+        isolated_mapping, monkeypatch, caplog, operation, winerror):
+    raw = b'{"existing":{"url":"https://existing.dev/docs"}}'
+    isolated_mapping.write_bytes(raw)
+    replace = Path.replace
+    attempts = []
+    waits = []
+    monkeypatch.setattr(learned_docs.time, "sleep", waits.append)
+
+    def temporarily_denied(path, target):
+        attempts.append(path)
+        if len(attempts) <= 2:
+            assert isolated_mapping.read_bytes() == raw
+            error = PermissionError("private-path token=secret")
+            error.winerror = winerror
+            raise error
+        return replace(path, target)
+
+    monkeypatch.setattr(Path, "replace", temporarily_denied)
+    result = (learn("zed", "https://zed.dev/docs", "Zed", "llm")
+              if operation == "learn" else _harvest_zed())
+    assert result
+    assert set(load_learned()) == {"existing", "zed"}
+    assert waits == [0.01, 0.02]
+    assert len(attempts) == 3 and len(set(attempts)) == 1
+    assert not list(isolated_mapping.parent.glob("*.tmp"))
+    assert learned_docs.official_mapping_identity() == hashlib.sha256(
+        b"official-mapping-v1\0" + isolated_mapping.read_bytes()).hexdigest()
+    assert not caplog.records
 
 
 def test_new_mapping_cannot_exceed_read_limit(isolated_mapping, monkeypatch):

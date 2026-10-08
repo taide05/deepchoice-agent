@@ -14,6 +14,7 @@ import logging
 import os
 import threading
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -82,7 +83,16 @@ def _atomic_write_text(path: Path, text: str) -> None:
                                          suffix=".tmp", delete=False) as stream:
             tmp = Path(stream.name)
             stream.write(text)
-        tmp.replace(path)
+        # Windows readers or scanners can briefly deny the atomic replacement.
+        # Retry only this closed temp; keep the caller's read-modify-write lock.
+        for attempt in range(3):
+            try:
+                tmp.replace(path)
+                break
+            except OSError as exc:
+                if getattr(exc, "winerror", None) not in {5, 32, 33} or attempt == 2:
+                    raise
+                time.sleep(0.01 * (attempt + 1))
     finally:
         if tmp is not None:
             try:

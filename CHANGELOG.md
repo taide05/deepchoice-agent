@@ -2,6 +2,26 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Preserve bounded analyses beyond the legacy assessment limit
+
+Synthesis v36 stops clearing bound compact analyses when total requirements exceed
+40. Retain the existing eight-analysis/five-fact limits, citation and review gates,
+empty overflow action plan, and removal of unconditional authority fields. Legacy
+assessment responses still abstain above their 40-item limit. The version alone
+freezes this terminal behavior; prompt bytes and model calls are unchanged.
+Tests cover legal large requests through citation, review and all three reports,
+including visible network uncertainty, unsupported sources and review withdrawal.
+They do not establish complete constraint satisfaction or live-model quality.
+
+### Bound retries for optional learned-document replacement
+
+Official retriever v10 retries Windows atomic replacement errors 5/32/33 up to
+three times with 30 ms total delay, reusing the same closed temporary file under
+the existing write lock. Other failures retain the fixed warning, old mapping
+and owned-temp cleanup. Fault injection covers learning and harvesting, bounded
+retry, permanent denial and concurrent reads/writes. Persistent access denial
+still makes optional learning unavailable; no cross-process guarantee is added.
+
 ### Pass bounded supplemental conditions to source selection
 
 Source-scope prompt v3 receives supplemental input as a separate untrusted JSON
@@ -33,8 +53,8 @@ budget admission, and explicit unanswered questions in all report formats. Large
 requests can still exhaust the existing budget before dispatch. This repairs
 context visibility, without claiming every question is answered or live-model
 prioritization is improved. Historical manifests remain readable but cannot
-resume under the changed identity; aggregate requirement and supplemental-input
-capacity defects remain open.
+resume under the changed identity. Subsequent changes above address the aggregate
+requirement clearing and supplemental-input handoffs; complete coverage remains unproven.
 
 ### Search later academic and community query targets within bounded calls
 

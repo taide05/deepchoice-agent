@@ -53,7 +53,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v9"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v10"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v20"
     assert first.hitl_policy_version == "evidence-insufficient-v2"
@@ -85,7 +85,7 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"])
+@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
 def test_historical_official_retriever_manifest_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
@@ -178,7 +178,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v20"
     assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v35",
+    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v36",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v5",
                          "source_evaluator.source_scope_selection": "v3",
@@ -806,7 +806,7 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
 
 
 @pytest.mark.parametrize("retired_asset,retired_version", [
-    *[("conclusion_synthesizer.synthesis_prompt", version) for version in ("v24", "v25", "v26", "v27", "v32", "v33", "v34")],
+    *[("conclusion_synthesizer.synthesis_prompt", version) for version in ("v24", "v25", "v26", "v27", "v32", "v33", "v34", "v35")],
     ("self_reviewer.review_system", "v8"),
     ("source_evaluator.source_scope_selection", "v2"),
 ])

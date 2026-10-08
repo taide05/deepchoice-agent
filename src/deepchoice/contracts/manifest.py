@@ -49,7 +49,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v9",
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v5",
-    "conclusion_synthesizer.synthesis_prompt": "v35",
+    "conclusion_synthesizer.synthesis_prompt": "v36",
     "source_evaluator.source_scope_selection": "v3",
     "conflict_detector.contradiction_scan_system": "v4",
 }
@@ -74,7 +74,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34", "v35"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34", "v35", "v36"] = "v1"
     sha256: str
 
 
@@ -99,7 +99,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -320,7 +320,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v8" if retriever_id == "chroma" else "v9" if retriever_id == "official"
+                version="v8" if retriever_id == "chroma" else "v10" if retriever_id == "official"
                         else "v2" if retriever_id in {"tavily", "github", "arxiv", "community"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS

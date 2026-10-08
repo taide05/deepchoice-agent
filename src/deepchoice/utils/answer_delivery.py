@@ -68,7 +68,8 @@ def finalize_answer_delivery(value, query, *, requirements_overflow=False):
     result = bound_answer_delivery(value)
     result["decision_basis_version"] = DECISION_BASIS_VERSION
     if requirements_overflow:
-        result["decision_analysis"] = []
+        # The legacy assessment limit restricts the plan, not independently
+        # bounded question analyses. Citations and review still gate each one.
         result["action_plan"] = []
     else:
         result = restrict_action_plan(result, query, deployment_unverified=True)

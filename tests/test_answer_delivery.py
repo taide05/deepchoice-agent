@@ -171,7 +171,7 @@ async def test_missing_staged_fact_fields_fail_closed_without_extra_generation(m
     assert state["quality_signals"][0]["structure_correction"]["attempted"] == 0
 
 
-def test_overflow_withholds_compact_analysis():
+def test_legacy_normalizer_overflow_withholds_compact_analysis():
     from deepchoice.agents.conclusion_synthesizer import _normalize_decision_contract
 
     requirements = [{"id": f"Q{i}", "kind": "analysis_sub_question",
@@ -218,7 +218,7 @@ def test_terminal_delivery_keeps_canonical_answer_and_withdraws_parallel_authori
     assert value == original
     assert result["answer_delivery"] == original["answer_delivery"]
     assert result["source_facts"] == original["source_facts"]
-    assert result["decision_analysis"] == ([] if overflow else original["decision_analysis"])
+    assert result["decision_analysis"] == original["decision_analysis"]
     assert result["decision_basis_version"] == DECISION_BASIS_VERSION
     assert result["winner"] == "context_dependent" and result["confidence"] == "low"
     assert result["unresolved_questions"] == result["ranked_options"] == result["requirement_assessments"] == result["decision_branches"] == []
