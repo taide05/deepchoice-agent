@@ -33,9 +33,9 @@ def payload(reason):
                 "assumptions": ["适用前提仍需确认。"], "change_condition": "实际约束改变时重新评估。"}]}
 
 
-async def pipeline(monkeypatch, case, *, source_ok=True, action="keep", corrupt=False, critical=False):
+async def pipeline(monkeypatch, case, *, source_ok=True, action="keep", corrupt=False, critical=False, query=None):
     name, snippet, question, reasoning = case
-    task = {"query": "如何作有前提的选择？", "candidate_techs": [name],
+    task = {"query": query or "如何作有前提的选择？", "candidate_techs": [name],
             "constraints": ["不得编造流量"], "sub_questions": [question, "还有哪些证据缺口？"]}
     raw = payload(reasoning)
     if corrupt:
@@ -276,3 +276,32 @@ async def test_public_report_signal_keeps_legacy_text_contract(text, expected):
         signal = generated['quality_signals'][-1]
         assert signal['has_recommendation'] is expected
         assert signal['recommendation_confidence'] == 'medium'
+
+
+@pytest.mark.parametrize('query,partial_label,unavailable_label', [
+    ('Acme持久化条件', '部分可用: official', '不可用: github'),
+    ('Acme persistence conditions', 'Partially available: official', 'Unavailable: github'),
+])
+@pytest.mark.parametrize('whole_source_failure', [False, True])
+async def test_partial_source_report_keeps_available_material_and_visible_gap(monkeypatch, query, partial_label, unavailable_label, whole_source_failure):
+    case = ('Acme', 'Acme keeps records only when journaling is enabled. Restart loses memory data.',
+            query, 'The journaling condition still needs checking in the target setup.')
+    state, _ = await pipeline(monkeypatch, case, action='keep', query=query)
+    state['search_results'] = [
+        {'schema_version': 2, 'source': 'official', 'status': 'partial', 'error': 'RuntimeError: HTTP 404',
+         'results': [{'url': 'https://docs.acme.example/', 'snippet': case[1]}], 'latency_ms': 1},
+        {'source': 'github', 'status': 'failed', 'results': [], 'error': 'TimeoutError', 'latency_ms': 1},
+    ]
+    state['partial_failures'] = ['official', 'github']
+    if not whole_source_failure:
+        state['search_results'] = state['search_results'][:1]
+        state['partial_failures'] = ['official']
+        unavailable_label = '不可用: 无' if partial_label.startswith('部分') else 'Unavailable: none'
+    for fmt in FORMAT_RENDERERS:
+        state['task']['report_format'] = fmt
+        generated = await ReportGeneratorAgent().run(deepcopy(state))
+        assert ('1/2' if whole_source_failure else '1/1') in generated['report']
+        assert 'perspectives from unavailable ones' not in generated['report']
+        assert partial_label in generated['report'] and unavailable_label in generated['report']
+        assert 'Unavailable: official' not in generated['report'] and '不可用: official' not in generated['report']
+        assert case[3] in generated['report']

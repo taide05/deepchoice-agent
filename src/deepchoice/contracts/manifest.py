@@ -41,9 +41,9 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v21",
-    "evidence_first": "evidence-first-v20",
-    "comparison_matrix": "comparison-matrix-v19",
+    "what_why_how": "what-why-how-v22",
+    "evidence_first": "evidence-first-v21",
+    "comparison_matrix": "comparison-matrix-v20",
 }
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v9",
@@ -99,7 +99,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -320,7 +320,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v8" if retriever_id == "chroma" else "v8" if retriever_id == "official"
+                version="v8" if retriever_id == "chroma" else "v9" if retriever_id == "official"
                         else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS

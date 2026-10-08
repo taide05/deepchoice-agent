@@ -63,3 +63,9 @@ def test_small_samples_not_flagged():
     runs = [_run_with([("github", "failed")])]
     health = compute_source_health(runs)
     assert health["degraded"] is False
+
+
+def test_partial_retrieval_counts_as_non_success_without_hiding_retained_material():
+    health = compute_source_health([_run_with([('official', 'partial')]) for _ in range(5)])
+    assert health['sources']['official'] == {'total': 5, 'failed': 5, 'partial': 5, 'success': 0, 'failed_rate': 1.0}
+    assert health['degraded_sources'] == ['official']

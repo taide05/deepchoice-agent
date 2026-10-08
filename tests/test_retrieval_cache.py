@@ -485,7 +485,7 @@ async def test_same_run_singleflight_coalesces_only_successful_dispatch(tmp_path
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "outcome",
-    ["failed", "invalid", "oversize", "put_false", "database_failure"],
+    ["failed", "partial", "invalid", "oversize", "put_false", "database_failure"],
 )
 async def test_singleflight_shares_non_cacheable_leader_outcome_once(
     tmp_path,
@@ -532,6 +532,10 @@ async def test_singleflight_shares_non_cacheable_leader_outcome_once(
             calls += 1
             entered.set()
             await release.wait()
+            if outcome == "partial":
+                return RetrievalResult(schema_version=2, source=self.source, status="partial",
+                                       results=[{"url": "https://example.test", "snippet": "Safe acquired material."}],
+                                       error="RuntimeError: HTTP 404", latency_ms=1)
             if outcome == "failed":
                 return RetrievalResult(
                     source=self.source,
@@ -575,6 +579,13 @@ async def test_singleflight_shares_non_cacheable_leader_outcome_once(
 
         assert calls == 1
         assert budget_calls == {"reserve": 1, "settle": 1}
+        if outcome == "partial":
+            assert first[0].status == second[0].status == "partial"
+            assert first[0].results == second[0].results
+            assert not await store.put("partial-not-cacheable", first[0], source="official")
+            cursor = await connection.execute("SELECT count(*) FROM retrieval_cache")
+            assert (await cursor.fetchone())[0] == 0
+            await cursor.close()
         assert {first[2], second[2]} == {"miss", "coalesced"}
         assert store._flights == {}
     finally:

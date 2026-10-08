@@ -300,14 +300,14 @@ async def _invoke_retriever_miss(
         else:
             trace_status = (
                 TraceStatus.FAILED
-                if result.status == "failed"
+                if result.status != "success"
                 else TraceStatus.SUCCEEDED
             )
             summary = {
                 "retrieval_status": result.status,
                 "result_count": len(result.results),
                 "latency_ms": result.latency_ms,
-                "failure_category": retrieval_failure(result.error) if result.status == "failed" else None,
+                "failure_category": retrieval_failure(result.error) if result.status != "success" else None,
             }
     if trace is not None:
         await trace.finish_external_call(
@@ -668,7 +668,8 @@ class MultiRetrieverAgent:
                     error=error_text(invocation),
                     latency_ms=0,
                 )
-                search_results.append(validated.model_dump(exclude={"schema_version"}))
+                search_results.append(validated.model_dump(
+                    exclude={"schema_version"} if validated.schema_version == 1 else set()))
                 partial_failures.append(name)
             else:
                 result, is_stable, cache_disposition = invocation
@@ -694,9 +695,10 @@ class MultiRetrieverAgent:
                     )
                     partial_failures.append(name)
                 else:
-                    if validated.status == "failed":
+                    if validated.status != "success":
                         partial_failures.append(validated.source)
-                search_results.append(validated.model_dump(exclude={"schema_version"}))
+                search_results.append(validated.model_dump(
+                    exclude={"schema_version"} if validated.schema_version == 1 else set()))
 
         # Self-updating official docs: learn term -> URL pairs from search evidence
         # (curated seed terms are never re-learned)
@@ -716,7 +718,9 @@ class MultiRetrieverAgent:
             "quality_signals": [{
                 "agent": "multi_retriever",
                 "retrievers_used": len(registry_entries),
-                "retrievers_failed": len(partial_failures),
+                "retrievers_failed": sum(item["status"] == "failed" for item in search_results),
+                **({"retrievers_partial": sum(item["status"] == "partial" for item in search_results)}
+                   if any(item["status"] == "partial" for item in search_results) else {}),
                 "total_results": sum(len(r.get("results", [])) for r in search_results),
                 "had_adapted_queries": bool(adapted_queries),
                 "cache_hits": cache_hits,

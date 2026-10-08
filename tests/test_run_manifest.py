@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v20"
+    assert first.report.template_version == "evidence-first-v21"
     assert first.scoring_policy_version == "source-score-v12"
     assert {
         retriever.retriever_id: retriever.version
@@ -53,7 +53,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v8"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v9"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v20"
     assert first.hitl_policy_version == "evidence-insufficient-v2"
@@ -85,7 +85,7 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6", "v7"])
+@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"])
 def test_historical_official_retriever_manifest_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
@@ -190,9 +190,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v21",
-        "evidence_first": "evidence-first-v20",
-        "comparison_matrix": "comparison-matrix-v19",
+        "what_why_how": "what-why-how-v22",
+        "evidence_first": "evidence-first-v21",
+        "comparison_matrix": "comparison-matrix-v20",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 
@@ -249,6 +249,9 @@ def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
         ("synthesis_v7", "what_why_how", None),
         ("synthesis_v8", "what_why_how", None),
         ("synthesis_v9", "what_why_how", None),
+        ("template", "what_why_how", "what-why-how-v21"),
+        ("template", "evidence_first", "evidence-first-v20"),
+        ("template", "comparison_matrix", "comparison-matrix-v19"),
         ("template", "what_why_how", "what-why-how-v20"),
         ("template", "evidence_first", "evidence-first-v19"),
         ("template", "comparison_matrix", "comparison-matrix-v18"),

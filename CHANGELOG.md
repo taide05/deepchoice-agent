@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Preserve acquired pages while exposing supplemental retrieval failures
+
+Official v9 explores up to two real in-scope child links when a curated root
+contains only a selection proposal. A local supplemental-page failure retains
+previously acquired pages in a schema-v2 `partial` result and stops further body
+reads. Root/matched-child and routing-authority failures remain atomic; budget
+and cancellation errors propagate. Parsing failures are explicit, while default
+citation extraction retains its historical behavior. Partial results cannot be
+cached or used to learn mappings. Trace, source-health counts, report coverage
+and four-language retrieval panels expose the incomplete outcome; legacy search
+keeps its two-state failure envelope. Freeze report identities v22/v21/v20 for
+the coverage wording. This creates bounded selection opportunities, without
+claiming semantic relevance or measured live recall improvements.
+
 ### Align public report diagnostics with displayed conditional choices
 
 For compact answers, `has_recommendation` now means a conditional `choice`

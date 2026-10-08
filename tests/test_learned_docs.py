@@ -282,3 +282,16 @@ def test_authority_budget_and_cancellation_are_never_optional(monkeypatch, error
 def test_hostname_identity_does_not_borrow_userinfo():
     assert not domain_label_match("zed", "https://zed.dev@evil.com/docs")
     assert domain_label_match("zed", "https://zed.dev:443/docs")
+
+
+def test_partial_retrieval_does_not_persist_discovered_mapping(monkeypatch, tmp_path):
+    path = tmp_path / 'learned-partial.json'
+    monkeypatch.setattr(learned_docs, 'LEARNED_DOCS_PATH', path)
+    monkeypatch.setattr(learned_docs, '_READONLY', False)
+    rows = [{'source': 'official', 'status': 'partial', 'error': 'RuntimeError',
+             'results': [{'url': 'https://supabase.com/docs', 'title': 'Supabase docs'}]}]
+    assert harvest(['supabase'], rows) == []
+    assert not path.exists()
+    rows[0].update(status='success', error=None)
+    assert len(harvest(['supabase'], rows)) == 1
+    assert path.exists()

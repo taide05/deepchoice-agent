@@ -19,6 +19,31 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-08 R26：official v9允许登记根页仅有空snippet提议时，在原两子页上限内探索
+无重叠的真实范围内链接；普通已匹配子页与发现页规则保持。补充子页局部HTTP/传输/
+解析错误，以及安全策略拒绝目标、响应拒绝、DNS不确定、超时，停止本次后续正文读取，
+保留此前独立安全获取的材料并返回显式partial。失败页面正文不进入结果；预算/租约/
+持久化与取消错误透传，路由不支持/不可用及根页、原匹配子页失败仍整源failed。
+失败路由继续按原规则invalidate，ProviderAdmissionError保留例外。每次实际GET仍先预留，
+已取得HTTP响应后解析失败仍结算已知HTTP调用；未完成请求保守unknown_spend。
+
+RetrievalResult旧schema1的success/failed继续可读；partial必须显式schema2、非空
+results及有界安全错误类型/HTTP码，不能用原始异常、URL、DNS/IP或响应正文作error。
+schema2随search_results保留以供checkpoint/公开snapshot读取，旧schema1投影不添字段；
+legacy search签名保持，partial在该边界转换为failed/空results/安全error。partial进入
+partial_failures，但质量标记区分整源retrievers_failed与retrievers_partial；Trace记
+failed并保留内部安全retrieval_status=partial，公开调用投影沿原allowlist。缓存仅接受
+success，partial同run同键等待者可共享本次结果、不另预留，不持久缓存；自动映射学习
+跳过partial。选文/空摘要准入、证据绑定和引用核验保持，不由partial授予事实权限。
+
+报告及四语言界面区分整源不可用与部分可用，来源健康指标将partial计入非成功failed
+总数并单列其子集partial，分母与原降级阈值保持；不重写历史评估产物。官网显式要求
+提取器暴露解析异常，默认引用调用仍将解析失败表示为空的不完整文档，无新正文字段。
+official v9及报告v22/v21/v20冻结行为；workflow research-v4/state3、提示、引用政策、
+数据库和生命周期/SSE保持。真实旧清单可读/hash有效，不能同run恢复，缓存身份隔离。
+有界探索仍会漏未取到的子页，局部故障会停止后续根读取；保留材料仍可能被selector
+拒绝。本轮不证明真实模型召回或报告质量。
+
 2026-10-08 R25：报告节点公开quality_signals中has_recommendation的默认compact语义
 为“报告可展示待人工审阅的choice条件选择”。渲染后复用原终端检查规则计算布尔值，
 不凭raw分析、review计数、普通answer或旧prose置位；legacy继续按旧recommendation
@@ -1097,8 +1122,8 @@ hostname/已有显式别名与路径段范围；拒绝 query、userinfo、编码
 合计最多12次逻辑HTTP；redirect/HEAD的range-GET回退可能产生更多物理请求。已知响应结算1，
 异常/取消保守记 unknown_spend；正文预留为空则fail closed，预算拒绝/持久化错误透传。
 外层 retrieval_calls 仍按来源计1；没有RunContext的既有HEAD/PyPI保留历史无预算行为。
-已发正文请求失败不返回部分成功或静默空成功，使用既有原子失败 envelope；成功网页无相关
-正文才可为空。旧 official v1 manifest 可读但不能同run恢复；manifest身份隔离缓存。
+v2当时的已发正文请求失败不返回部分成功或静默空成功，使用原子失败 envelope；成功网页无相关
+正文才可为空。当前v9仅对补充子页局部失败增加显式partial，具体边界见第2节R26。旧 official v1 manifest 可读但不能同run恢复；manifest身份隔离缓存。
 本变更不扩展目录、供应商、提示、种子、默认工作流或安全策略，也不变更历史评分。
 
 2026-09-25 后续 Q2 规则冻结 `source-score-v6` 与 Chroma retriever `v2`。Chroma 始终保留原始

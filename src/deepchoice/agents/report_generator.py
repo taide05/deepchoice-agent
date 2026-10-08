@@ -22,24 +22,34 @@ class ReportGeneratorAgent:
         fmt = research_state["task"].get("report_format", "what_why_how")
         print_agent_output(f"Generating report in format: {fmt}", agent="REPORT_GENERATOR")
 
-        # Surface partial failures so the report can note which sources were unavailable
+        # Distinguish incomplete sources with retained material from unavailable ones.
         partial_failures = research_state.get("partial_failures", [])
         if partial_failures:
             total = len(research_state.get("search_results", []))
-            available = total - len(partial_failures)
+            incomplete = [item["source"] for item in research_state.get("search_results", [])
+                          if item.get("status") == "partial" and item.get("results")]
+            unavailable = [name for name in partial_failures if name not in incomplete]
+            available = total - len(unavailable)
             query = research_state["task"].get("query", "")
             is_zh = any('一' <= c <= '鿿' for c in query)
             if is_zh:
                 research_state["data_source_note"] = (
                     f"数据覆盖: {available}/{total} 个来源可用。"
-                    f"不可用: {', '.join(partial_failures)}。"
-                    f"结论基于可用来源，可能遗漏不可用来源的视角。"
+                    f"不可用: {', '.join(unavailable) or '无'}。"
+                    f"结论基于可用来源，可能遗漏{'未取得材料中的信息' if incomplete else '不可用来源的视角'}。"
                 )
             else:
                 research_state["data_source_note"] = (
                     f"Data coverage: {available}/{total} sources available. "
-                    f"Unavailable: {', '.join(partial_failures)}. "
-                    f"Conclusions are based on the available sources and may miss perspectives from unavailable ones."
+                    f"Unavailable: {', '.join(unavailable) or 'none'}. "
+                    f"Conclusions are based on the available sources and may miss {'information from pages not acquired' if incomplete else 'perspectives from unavailable ones'}."
+                )
+
+            if incomplete:
+                research_state["data_source_note"] += (
+                    f"部分可用: {', '.join(incomplete)}；补充页面获取失败，已取得材料仍须核验。"
+                    if is_zh else
+                    f" Partially available: {', '.join(incomplete)}; supplemental pages failed, and retained material still requires verification."
                 )
 
         renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)

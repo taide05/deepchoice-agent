@@ -325,3 +325,20 @@ def test_error_status_code_must_be_a_valid_integer():
         status_code = "secret-status-value"
 
     assert error_text(MaliciousStatusError("secret-message")) == "MaliciousStatusError"
+
+
+@pytest.mark.parametrize('version,results,error', [(1, [{'url': 'https://example.test'}], 'RuntimeError'),
+    (2, [], 'RuntimeError'), (2, [{'url': 'https://example.test'}], None),
+    (2, [{'url': 'https://example.test'}], ' '),
+    (2, [{'url': 'https://example.test'}], 'private failure at http://10.0.0.1')])
+def test_partial_result_requires_version_material_and_failure(version, results, error):
+    with pytest.raises(ValidationError):
+        RetrievalResult(schema_version=version, source='official', status='partial', results=results,
+                        error=error, latency_ms=0)
+
+
+def test_historical_two_state_results_remain_readable_with_missing_or_old_version():
+    for version in ({}, {'schema_version': 1}, {'schema_version': 2}):
+        for status,results,error in [('success', [], None), ('failed', [], 'RuntimeError')]:
+            row = RetrievalResult(**version, source='official', status=status, results=results, error=error, latency_ms=0)
+            assert RetrievalResult.model_validate_json(row.model_dump_json()) == row

@@ -1,10 +1,14 @@
 """Bounded official-page reading, not a general crawler or truth classifier."""
+import httpx
+
 from html.parser import HTMLParser
 import re
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from .. import outbound
-from ..budget_errors import BudgetPersistenceError
+from ..budget_errors import BudgetError, BudgetPersistenceError
+from ..security.urls import SafeFetchFailure, UnsafeUrlError
+from .contracts import PartialRetrievalError
 from ..utils.evidence import source_title
 from ..utils.evidence_choices import whole_source_text
 from ..utils.source_scope import MAX_SCOPE_CHARS, scope_sentences
@@ -240,13 +244,18 @@ async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool =
         raise ValueError("Official body left its catalog scope")
     plain = response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain"
     parsed = _PageLinks()
-    if not plain:
-        parsed.feed(response.text)
-        parsed.close()
-    document = extract_source_document(
-        response.text, truncated=bool(response.extensions.get("deepchoice_body_truncated")),
-        plain_text=plain, skip_navigation=True,
-    )
+    try:
+        if not plain:
+            parsed.feed(response.text)
+            parsed.close()
+        document = extract_source_document(
+            response.text, truncated=bool(response.extensions.get("deepchoice_body_truncated")),
+            plain_text=plain, skip_navigation=True, raise_on_error=True,
+        )
+    except BudgetError:
+        raise
+    except Exception as exc:
+        raise RuntimeError("Official page parsing failed") from exc
     hints = terms if hints is None else hints
     snippet, score = _snippet(document, terms)
     title = source_title(" ".join(parsed.title_parts), final_url)
@@ -255,7 +264,7 @@ async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool =
     if result is not None and scope:
         result["_source_scope_sentences"] = scope
     if exact_page:
-        return result, score, []
+        return result, score, [], False
     links = []
     fallback_links = []
     seen = {final_url, url}
@@ -269,12 +278,36 @@ async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool =
         if overlap:
             links.append((overlap, child))
     links.sort(key=lambda item: -item[0])
-    # An arbitrary exploratory child must not risk an already obtained body
-    # through the atomic source failure contract. Only an empty directory root
-    # gains the bounded no-overlap fallback; matched children retain old errors.
+    # A proposal has not established relevance. Explore bounded real links even
+    # when an introductory root paragraph exists; preserve it on a local child
+    # failure through an explicit partial outcome, never silent success.
+    supplemental = bool(not links and result is not None and not snippet)
     children = ([url for _, url in links[:MAX_CHILDREN]] if links
-                else fallback_links[:MAX_CHILDREN] if result is None else [])
-    return result, score, children
+                else fallback_links[:MAX_CHILDREN] if result is None or supplemental else [])
+    return result, score, children, supplemental
+
+
+def _local_page_failure(exc: Exception) -> bool:
+    if isinstance(exc, UnsafeUrlError):
+        return exc.failure in {
+            SafeFetchFailure.SAFETY_REJECTED, SafeFetchFailure.RESPONSE_REJECTED,
+            SafeFetchFailure.DNS_UNCERTAIN, SafeFetchFailure.TIMEOUT,
+        }
+    return isinstance(exc, (RuntimeError, httpx.HTTPError, OSError))
+
+
+def _ordered_results(groups: list[list[tuple[int, dict]]]) -> list[dict]:
+    output, seen = [], set()
+    ordered = [sorted(group, key=lambda item: -item[0]) for group in groups]
+    # Keep both roots represented before one root consumes the result capacity.
+    for index in range(1 + MAX_CHILDREN):
+        for group in ordered:
+            if index < len(group):
+                item = group[index][1]
+                if item["url"] not in seen:
+                    seen.add(item["url"])
+                    output.append(item)
+    return output
 
 
 async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
@@ -282,7 +315,9 @@ async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
 
     Discovered locators read one exact page with redirects disabled. They do
     not become official authority merely by entering this acquisition channel.
-    Every error propagates into the existing atomic failed source envelope.
+    Roots and matched children retain atomic failure. A failed supplemental
+    child can preserve earlier safe pages in an explicit partial envelope;
+    no further page is dispatched after that failure.
     Unselected fallback scopes are proposals, not evidence; the evaluator must
     select bounded passages before they can enter source scoring.
     """
@@ -293,24 +328,22 @@ async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
         terms = _terms(query_text) - _terms(root["title"]) - _terms(root["tech"])
         hints = _proposal_hints(query_text) - _proposal_hints(root["title"]) - _proposal_hints(root["tech"])
         curated = root.get("curated") is True
-        result, score, children = await _read_page(url, url, terms, exact_page=not curated, hints=hints)
+        result, score, children, supplemental = await _read_page(url, url, terms, exact_page=not curated, hints=hints)
         origin_kind = "curated" if curated else "discovered"
         group = [(score, {**result, "origin_kind": origin_kind})] if result is not None else []
+        groups.append(group)
         for child in children:
             if child in seen:
                 continue
             seen.add(child)
-            item, child_score, _ = await _read_page(url, child, terms, hints=hints)
+            try:
+                item, child_score, _, _ = await _read_page(url, child, terms, hints=hints)
+            except BudgetError:
+                raise
+            except Exception as exc:
+                if not supplemental or not _local_page_failure(exc):
+                    raise
+                raise PartialRetrievalError(_ordered_results(groups), exc) from exc
             if item is not None:
                 group.append((child_score, {**item, "origin_kind": origin_kind}))
-        group.sort(key=lambda item: -item[0])
-        groups.append([item for _, item in group])
-    output = []
-    seen_results = set()
-    # Keep both roots represented before one root consumes the result capacity.
-    for index in range(1 + MAX_CHILDREN):
-        for group in groups:
-            if index < len(group) and group[index]["url"] not in seen_results:
-                seen_results.add(group[index]["url"])
-                output.append(group[index])
-    return output
+    return _ordered_results(groups)

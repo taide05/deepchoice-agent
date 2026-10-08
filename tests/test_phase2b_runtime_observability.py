@@ -602,3 +602,41 @@ async def test_failed_stage_trace_write_does_not_change_node_result_or_task_even
         assert await _rows(connection, "SELECT status FROM node_attempts") == [("started",)]
     finally:
         await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_partial_retrieval_is_failed_trace_retained_snapshot_and_separate_count(tmp_path):
+    from deepchoice.retrievers.contracts import RetrievalResult
+    from deepchoice.runtime.coordinator import sanitize_public_json
+    connection, _, run, recorder = await _running_trace(tmp_path, suffix='-partial')
+    class FakeRetriever:
+        source = 'official'
+        async def retrieve(self, request):
+            return RetrievalResult(schema_version=2, source='official', status='partial',
+                results=[{'url': 'https://docs.acme.example/', 'snippet': 'Acme retained material.'}],
+                error='RuntimeError: HTTP 404', latency_ms=1)
+    class Cancellation:
+        async def raise_if_cancelled(self):
+            return None
+    context = RunContext.from_run_record(run, cancellation=Cancellation(), trace=recorder, budget=DeferredBudgetManager())
+    node = await recorder.start_node_attempt('multi_retriever')
+    try:
+        with bind_run_context(context), bind_node_attempt(node.node_attempt_id):
+            output = await MultiRetrieverAgent(retriever_registry={'official': FakeRetriever}).run({
+                'task': {'query': 'a sufficiently detailed comparison query'},
+                'sub_questions': ['a sufficiently detailed comparison question'],
+            })
+        public = sanitize_public_json(output)
+        restored = RetrievalResult.model_validate(json.loads(json.dumps(public['search_results'][0])))
+        assert restored.schema_version == 2 and restored.status == 'partial' and restored.results
+        assert public['partial_failures'] == ['official']
+        assert public['quality_signals'][0]['retrievers_failed'] == 0
+        assert public['quality_signals'][0]['retrievers_partial'] == 1
+        rows = await _rows(connection, 'SELECT status, result_summary_json FROM external_calls')
+        assert len(rows) == 1 and rows[0][0] == 'failed'
+        summary = json.loads(rows[0][1])
+        assert summary['retrieval_status'] == 'partial' and summary['result_count'] == 1
+        assert summary['failure_category'] == 'provider_error'
+        assert 'docs.acme' not in rows[0][1]
+    finally:
+        await connection.close()

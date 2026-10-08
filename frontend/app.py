@@ -136,6 +136,7 @@ T = {
         "obs_retrieval_title": "检索明细",
         "obs_status_ok": "成功",
         "obs_status_error": "失败",
+        "obs_status_partial": "部分失败（保留已取得材料）",
         "obs_results_count": "{n} 条结果",
         "obs_document_lookup": "文档检索",
         "obs_document_origins": "登记页面 {curated} · 发现页面 {discovered}（身份未审核）",
@@ -298,6 +299,7 @@ T = {
         "obs_retrieval_title": "Retrieval Details",
         "obs_status_ok": "Success",
         "obs_status_error": "Failed",
+        "obs_status_partial": "Partially failed (acquired material retained)",
         "obs_results_count": "{n} result(s)",
         "obs_document_lookup": "Documentation lookup",
         "obs_document_origins": "Catalog pages {curated} · Discovered pages {discovered} (identity not reviewed)",
@@ -460,6 +462,7 @@ T = {
         "obs_retrieval_title": "検索詳細",
         "obs_status_ok": "成功",
         "obs_status_error": "失敗",
+        "obs_status_partial": "一部失敗（取得済み資料を保持）",
         "obs_results_count": "{n}件の結果",
         "obs_document_lookup": "ドキュメント検索",
         "obs_document_origins": "登録ページ {curated} · 発見ページ {discovered}（身元未確認）",
@@ -622,6 +625,7 @@ T = {
         "obs_retrieval_title": "검색 상세",
         "obs_status_ok": "성공",
         "obs_status_error": "실패",
+        "obs_status_partial": "일부 실패 (확보한 자료 유지)",
         "obs_results_count": "{n}개 결과",
         "obs_document_lookup": "문서 검색",
         "obs_document_origins": "등록 페이지 {curated} · 발견 페이지 {discovered} (신원 미검토)",
@@ -2187,7 +2191,9 @@ def _render_retrieval_panel(snapshot: dict):
         source = _esc(t("obs_document_lookup", lang) if is_document_lookup else item.get("source") or "?")
         ok = str(item.get("status") or "").lower() == "success"
         badge_cls = "badge-success" if ok else "badge-weak"
-        status_txt = t("obs_status_ok" if ok else "obs_status_error", lang)
+        status_key = ("obs_status_partial" if item.get("status") == "partial"
+                      else "obs_status_ok" if ok else "obs_status_error")
+        status_txt = t(status_key, lang)
         count = len(item.get("results") or [])
         origin_html = ""
         if is_document_lookup:

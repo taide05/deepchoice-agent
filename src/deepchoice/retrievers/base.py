@@ -1,7 +1,7 @@
 import re
 import time
 
-from .contracts import RetrievalRequest, RetrievalResult
+from .contracts import PartialRetrievalError, RetrievalRequest, RetrievalResult
 from .. import outbound as _outbound
 from ..budget_errors import BudgetError
 from ..outbound.throttle import ProviderAdmissionError
@@ -43,11 +43,13 @@ class BaseRetriever:
         except BudgetError:
             raise
         except Exception as e:
+            partial = isinstance(e, PartialRetrievalError)
+            failure = e.failure if partial else e
             # A failed request may mean the routed channel died after probing
             # (proxy down, forward endpoint down, network blip). Tell the
             # channel layer so the next resolve() re-probes and re-routes;
             # harmless no-op for sources outside the channel layer (tavily).
-            if not isinstance(e, ProviderAdmissionError):
+            if not isinstance(failure, ProviderAdmissionError):
                 try:
                     await _outbound.get_resolver().invalidate(self.source)
                 except Exception:
@@ -57,9 +59,10 @@ class BaseRetriever:
                     )
             return RetrievalResult(
                 source=self.source,
-                status="failed",
-                results=[],
-                error=error_text(e),
+                schema_version=2 if partial else 1,
+                status="partial" if partial else "failed",
+                results=e.results[:request.max_results] if partial else [],
+                error=error_text(failure),
                 latency_ms=round((time.monotonic() - t0) * 1000),
             )
 
@@ -71,7 +74,11 @@ class BaseRetriever:
             max_results=max_results,
             adapted_queries=adapted_queries or [],
         )
-        return (await self.retrieve(request)).model_dump(exclude={"schema_version"})
+        result = await self.retrieve(request)
+        if result.status == "partial":
+            # The deprecated port retains its original atomic two-state envelope.
+            result = result.model_copy(update={"schema_version": 1, "status": "failed", "results": []})
+        return result.model_dump(exclude={"schema_version"})
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:

@@ -1142,3 +1142,26 @@ def test_candidate_picker_ignores_old_claims_and_submits_only_selected_name(monk
     at.run()
     assert not at.exception and ready in _md_text(at)
     assert "需求已整理完毕" not in _md_text(at)
+
+
+@pytest.mark.parametrize('lang_code,label', [
+    ('zh', '部分失败（保留已取得材料）'), ('en', 'Partially failed (acquired material retained)'),
+    ('ja', '一部失敗（取得済み資料を保持）'), ('ko', '일부 실패 (확보한 자료 유지)'),
+])
+def test_partial_retrieval_panel_distinguishes_retained_material(monkeypatch, lang_code, label):
+    snapshot = copy.deepcopy(SNAP)
+    snapshot['search_results'] = [{'schema_version': 2, 'source': 'official', 'status': 'partial',
+        'error': 'RuntimeError: HTTP 404', 'latency_ms': 1,
+        'results': [{'title': 'Acme', 'origin_kind': 'curated', 'url': 'https://docs.acme.example/'}]}]
+    snapshot['partial_failures'] = ['official']
+    monkeypatch.setattr(__import__(__name__, fromlist=['SNAP']), 'SNAP', snapshot)
+    backend = _FakeBackend([], True)
+    monkeypatch.setattr(httpx, 'get', backend.get)
+    monkeypatch.setattr(httpx, 'post', backend.post)
+    monkeypatch.setattr(httpx, 'stream', backend.stream)
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    _enter_results_phase(at)
+    at.session_state['lang'] = lang_code
+    at.run()
+    assert not at.exception
+    assert label in _md_text(at) and 'RuntimeError: HTTP 404' in _md_text(at)

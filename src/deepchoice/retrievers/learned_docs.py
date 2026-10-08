@@ -205,6 +205,8 @@ def harvest(terms: list[str], search_results: list[dict],
                 if term in known or not is_plausible_term(term):
                     continue
                 for sr in search_results:
+                    if sr.get("status") == "partial":
+                        continue
                     for item in sr.get("results", []) or []:
                         source = sr.get("source", "unknown")
                         if not isinstance(source, str):

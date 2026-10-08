@@ -423,7 +423,7 @@ def compute_source_recall_by_source(
 
 
 def compute_source_health(runs: list[dict[str, Any]]) -> dict[str, Any]:
-    """Per-source availability of retrieval stages (status success/failed).
+    """Per-source availability; partial retrieval counts as non-success.
 
     Detects quietly-degraded benchmark runs: if a retriever source failed in
     the majority of runs, source_recall is not comparable to a healthy run and
@@ -436,7 +436,10 @@ def compute_source_health(runs: list[dict[str, Any]]) -> dict[str, Any]:
             if src not in per_source:
                 per_source[src] = {"total": 0, "failed": 0, "success": 0}
             per_source[src]["total"] += 1
-            if sr.get("status") == "failed":
+            if sr.get("status") == "partial":
+                per_source[src]["partial"] = per_source[src].get("partial", 0) + 1
+                per_source[src]["failed"] += 1
+            elif sr.get("status") == "failed":
                 per_source[src]["failed"] += 1
             else:
                 per_source[src]["success"] += 1

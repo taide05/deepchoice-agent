@@ -125,6 +125,7 @@ class _Blocks(HTMLParser):
 
 def extract_source_document(
     value: str, *, truncated: bool, plain_text: bool = False, skip_navigation: bool = False,
+    raise_on_error: bool = False,
 ) -> SourceDocument:
     value = value.removeprefix('\ufeff')
     if plain_text:
@@ -149,6 +150,8 @@ def extract_source_document(
         # Only block boundaries close HTML text. EOF does not establish that
         # an unclosed paragraph retained its trailing qualification.
     except Exception:
+        if raise_on_error:
+            raise
         return SourceDocument((), True)
     unfinished = bool(''.join(parser.pending).strip()) or bool(parser.ignored_depth) or bool(parser.omitted_depth)
     return SourceDocument(tuple(parser.blocks), truncated or parser.exhausted or unfinished,

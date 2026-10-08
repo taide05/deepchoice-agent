@@ -670,8 +670,9 @@ async def test_no_overlap_children_never_risk_existing_root_body(setup, query, b
     root_body = body + '<nav><a href="login/">Login</a><a href="old-guide/">Old guide</a></nav>'
     setup.side_effect = lambda _source, url, **_kw: response(url, root_body, status=200 if url == ROOT else 404)
     result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query))
-    assert result.status == 'success' and len(result.results) == 1
-    assert setup.await_count == 1
+    assert result.status == ('success' if query == 'acme filtering' else 'partial')
+    assert len(result.results) == 1
+    assert setup.await_count == (1 if query == 'acme filtering' else 2)
     assert result.results[0].get('snippet') or result.results[0].get('_source_scope_sentences')
 
 
@@ -732,3 +733,162 @@ async def test_short_official_deep_markup_disables_new_paragraph_qualification(s
     setup.side_effect = lambda _source, url, **_kw: response(url, body)
     result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="Acme持久化条件"))
     assert result.status == 'success' and not result.results
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("child_text", [
+    "Acme 只有启用持久化日志后才能恢复已经确认的记录。未启用日志时，重启会丢失仅保存在内存中的记录。",
+    "Acme keeps records only when journaling is enabled. Restart loses memory data.",
+])
+async def test_unrelated_root_proposal_does_not_mask_unmatched_child_selection(setup, monkeypatch, child_text):
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.citations.verifier import verify_citations
+    from deepchoice.utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+    root_body = ('<p>Acme documentation describes the project and its community. '
+                 'Readers can browse different chapters and contribute corrections.</p>'
+                 '<nav><a href="reference/">Reference</a></nav>')
+    setup.side_effect = lambda _source, url, **kw: response(
+        url, root_body if url == ROOT else '<p>' + child_text + '</p>')
+    query = 'Acme持久化条件'
+    retrieved = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query))
+    assert retrieved.status == 'success'
+    assert [item['url'] for item in retrieved.results] == [ROOT, ROOT + 'reference/']
+    assert [call.args[1] for call in setup.await_args_list] == [ROOT, ROOT + 'reference/']
+    assert all(item['snippet'] == '' for item in retrieved.results)
+    state = {'task': {'query': query, 'candidate_techs': ['Acme']},
+             'search_results': [retrieved.model_dump()]}
+    assert not (await SourceEvaluatorAgent().run(state))['source_scores']
+    selector = AsyncMock(return_value={'sources': [{'id': 'S2', 'ranges': [[0, len(retrieved.results[1]['_source_scope_sentences'])]]}]})
+    monkeypatch.setattr('deepchoice.utils.llm.call_model', selector)
+    scored = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    assert len(scored['source_scores']) == 1
+    selected = scored['source_scores'][0]
+    assert selected['url'] == ROOT + 'reference/' and selected['snippet'] == child_text
+    bound = bind_evidence_choices({'source_facts': [{'id': 'F1', 'evidence_id': 1}]},
+                                  [{'sources': [selected]}], [], [])
+    monkeypatch.setattr(run_context, 'get_run_context', lambda: None)
+    monkeypatch.setattr('deepchoice.citations.verifier.safe_fetch', setup)
+    checks, _ = await verify_citations(bound, [{'sources': [selected]}])
+    checked = calibrate_evidence_choices(bound, checks)
+    assert checked['source_facts'][0]['status'] == 'verified'
+    assert checked['source_facts'][0]['saved_text'] == child_text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('query', ['Acme持久化条件', 'Acme persistent storage'])
+async def test_unmatched_child_http_failure_retains_cross_language_root_as_visible_partial(setup, query):
+    text = 'Acme keeps records only when journaling is enabled. Restart loses memory data.'
+    root_body = '<p>' + text + '</p><nav><a href="login/">Login</a><a href="old-guide/">Guide</a></nav>'
+    setup.side_effect = lambda _source, url, **kw: response(url, root_body, status=200 if url == ROOT else 404)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query))
+    assert result.status == 'partial' and result.schema_version == 2
+    assert result.error == 'RuntimeError: HTTP 404'
+    assert len(result.results) == 1 and result.results[0]['url'] == ROOT
+    assert ' '.join(result.results[0]['_source_scope_sentences']) == text
+    assert [call.args[1] for call in setup.await_args_list] == [ROOT, ROOT + 'login/']
+    assert budget_runtime.reserve_call.await_count == budget_runtime.settle_call.await_count == 2
+    budget_runtime.unknown_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure_kind,expected', [
+    ('timeout', 'partial'), ('transport', 'partial'), ('safety_rejected', 'partial'),
+    ('response_rejected', 'partial'), ('dns_uncertain', 'partial'),
+    ('route_unsupported', 'failed'), ('route_unavailable', 'failed'),
+    ('unexpected', 'failed'),
+])
+async def test_supplemental_child_failure_is_visible_and_keeps_authority_boundary(setup, monkeypatch, failure_kind, expected):
+    from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
+    root_body = '<p>' + CHINESE_PROSE + '</p><nav><a href="guide/">Guide</a><a href="reference/">Reference</a></nav>'
+    resolver = SimpleNamespace(invalidate=AsyncMock())
+    monkeypatch.setattr(pages.outbound, 'get_resolver', lambda: resolver)
+    failure = (httpx.ConnectError('private token at http://10.0.0.1') if failure_kind == 'transport'
+               else TypeError('private implementation detail') if failure_kind == 'unexpected'
+               else UnsafeUrlError('private DNS IP and credential', failure=SafeFetchFailure(failure_kind)))
+    async def fetch(_source, url, **kw):
+        if url == ROOT:
+            return response(url, root_body)
+        raise failure
+    setup.side_effect = fetch
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件'))
+    assert result.status == expected
+    assert bool(result.results) is (expected == 'partial')
+    assert result.error == type(failure).__name__
+    assert setup.await_count == 2
+    assert budget_runtime.reserve_call.await_count == 2
+    assert budget_runtime.settle_call.await_count == budget_runtime.unknown_call.await_count == 1
+    pages.outbound.get_resolver().invalidate.assert_awaited_once_with('official')
+    assert 'private' not in result.model_dump_json() and '10.0.0.1' not in result.model_dump_json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('failure_kind', ['budget', 'persistence', 'stale', 'cancel'])
+async def test_supplemental_child_admission_failure_never_becomes_partial(setup, monkeypatch, failure_kind):
+    from deepchoice.budget_errors import StaleBudgetAuthorityError
+    root_body = '<p>' + CHINESE_PROSE + '</p><nav><a href="guide/">Guide</a></nav>'
+    setup.side_effect = lambda _source, url, **kw: response(url, root_body)
+    errors = {'budget': BudgetExceededError(BudgetResource.HTTP_CALLS, limit=1, consumed=1, requested=1),
+              'persistence': BudgetPersistenceError('private storage error'),
+              'stale': StaleBudgetAuthorityError('private lease'), 'cancel': asyncio.CancelledError()}
+    monkeypatch.setattr(budget_runtime, 'reserve_call', AsyncMock(side_effect=[('reservation',), errors[failure_kind]]))
+    with pytest.raises(type(errors[failure_kind])):
+        await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件'))
+    assert setup.await_count == budget_runtime.settle_call.await_count == 1
+    budget_runtime.unknown_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('limit', [1, 2])
+async def test_supplemental_pages_keep_limits_prior_material_and_legacy_atomic_projection(setup, limit):
+    root_body = '<p>' + CHINESE_PROSE + '</p><nav>' + ''.join(
+        f'<a href="chapter-{i}/">Chapter {i}</a>' for i in range(4)) + '</nav>'
+    setup.side_effect = lambda _source, url, **kw: response(url, root_body if url == ROOT else '<p>' + CHINESE_PROSE + '</p>')
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件'))
+    assert result.status == 'success' and len(result.results) == 3 and setup.await_count == 3
+    setup.reset_mock()
+    setup.side_effect = lambda _source, url, **kw: response(url, root_body if url == ROOT else '<p>' + CHINESE_PROSE + '</p>',
+                                                         status=404 if url.endswith('chapter-1/') else 200)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件', max_results=limit))
+    assert result.status == 'partial'
+    assert [item['url'] for item in result.results] == [ROOT, ROOT + 'chapter-0/'][:limit]
+    assert setup.await_count == 3
+    legacy = await official_mod.OfficialSearch().search('Acme持久化条件', [])
+    assert legacy['status'] == 'failed' and legacy['results'] == [] and legacy['error']
+    assert 'schema_version' not in legacy
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('parser_kind', ['links', 'blocks'])
+@pytest.mark.parametrize('where', ['root', 'child'])
+async def test_supplemental_parse_failure_is_partial_and_stops_new_pages(setup, monkeypatch, parser_kind, where):
+    from deepchoice.citations import source_windows
+    parser = pages._PageLinks if parser_kind == 'links' else source_windows._Blocks
+    original = parser.feed
+    def fail_child(self, value):
+        if 'PARSE_BREAK' in value:
+            raise ValueError('private parser content')
+        return original(self, value)
+    monkeypatch.setattr(parser, 'feed', fail_child)
+    root = '<p>' + CHINESE_PROSE + '</p><nav><a href="guide/">Guide</a><a href="next/">Next</a></nav>'
+    setup.side_effect = lambda _source, url, **kw: response(url, root if url == ROOT and where == 'child' else '<p>PARSE_BREAK</p>')
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件'))
+    assert result.status == ('partial' if where == 'child' else 'failed') and result.error == 'RuntimeError'
+    assert [item['url'] for item in result.results] == ([ROOT] if where == 'child' else [])
+    assert setup.await_count == budget_runtime.settle_call.await_count == (2 if where == 'child' else 1)
+    budget_runtime.unknown_call.assert_not_awaited()
+    assert 'private' not in result.model_dump_json()
+    if parser_kind == 'blocks':
+        legacy = source_windows.extract_source_document('<p>PARSE_BREAK</p>', truncated=False)
+        assert legacy.blocks == () and legacy.incomplete
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind', ['empty', 'truncated'])
+async def test_supplemental_empty_or_truncated_content_is_not_a_parse_failure(setup, kind):
+    root = '<p>' + CHINESE_PROSE + '</p><nav><a href="guide/">Guide</a></nav>'
+    setup.side_effect = lambda _source, url, **kw: response(
+        url, root if url == ROOT else '<main></main>' if kind == 'empty' else '<p>' + CHINESE_PROSE + '</p>',
+        truncated=url != ROOT and kind == 'truncated')
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件'))
+    assert result.status == 'success' and result.error is None
+    assert [item['url'] for item in result.results] == [ROOT]

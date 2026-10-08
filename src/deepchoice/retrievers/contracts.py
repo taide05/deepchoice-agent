@@ -1,3 +1,4 @@
+import re
 from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -56,14 +57,23 @@ class RetrievalRequest(BaseModel):
         return values
 
 
+class PartialRetrievalError(Exception):
+    """Internal acquired results plus a failed optional read; never serialized."""
+
+    def __init__(self, results: list[dict], failure: Exception):
+        super().__init__("Optional retrieval was incomplete")
+        self.results = results
+        self.failure = failure
+
+
 class RetrievalResult(BaseModel):
     """Stable result envelope returned by every retriever."""
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     source: str
-    status: Literal["success", "failed"]
+    status: Literal["success", "partial", "failed"]
     results: list[dict] = Field(default_factory=list)
     error: str | None = None
     latency_ms: int = Field(ge=0)
@@ -74,6 +84,12 @@ class RetrievalResult(BaseModel):
     def validate_status_fields(self) -> "RetrievalResult":
         if self.status == "success" and self.error is not None:
             raise ValueError("successful retrieval must not contain an error")
+        if self.status == "partial":
+            if self.schema_version != 2 or not self.results:
+                raise ValueError("partial retrieval requires schema v2 and acquired results")
+            if (self.error is None or len(self.error) > 128 or not re.fullmatch(
+                    r"[A-Za-z][A-Za-z0-9_]*(?:\(\)|: HTTP [1-5][0-9]{2})?", self.error)):
+                raise ValueError("partial retrieval requires a bounded public error type/status")
         if self.status == "failed":
             if self.results:
                 raise ValueError("failed retrieval must have no results")
