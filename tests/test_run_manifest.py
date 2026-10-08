@@ -178,7 +178,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.citation_policy_version == "deterministic-citation-v20"
     assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v34",
+    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v35",
                          "query_analyzer.decomposition_system": "v2",
                          "query_adapter.adapt_system": "v4",
                          "source_evaluator.source_scope_selection": "v2",
@@ -806,7 +806,7 @@ def test_post_render_review_workflow_is_readable_but_cannot_resume():
 
 
 @pytest.mark.parametrize("retired_asset,retired_version", [
-    *[("conclusion_synthesizer.synthesis_prompt", version) for version in ("v24", "v25", "v26", "v27", "v32", "v33")],
+    *[("conclusion_synthesizer.synthesis_prompt", version) for version in ("v24", "v25", "v26", "v27", "v32", "v33", "v34")],
     ("self_reviewer.review_system", "v8"),
 ])
 def test_retired_manifest_identity_is_readable_but_cannot_resume(retired_asset, retired_version):

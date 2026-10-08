@@ -122,7 +122,9 @@ within that source's displayed sentences. Sentences outside the interval do not 
 view. Separate locations are distinct excerpts, not one continuous quote. Conflict ranges are
 model-flagged disputed material, not truth; no offered view includes or neighbors that material.
 Choose substantive mechanisms, limitations and applicable conditions covering both candidates
-and the decisive original questions. Repository popularity and broad introductions are not
+and the decisive original questions. Consider every listed original question, including later
+ones, before selecting the five views. Prioritize evidence that can change the choice and cover
+distinct questions; list order is not importance. Repository popularity and broad introductions are not
 behavior/compatibility/performance evidence. Prefer applicable original documentation; preserve
 versions, workloads, exceptions and limiting conditions. A bounded view may omit a distant
 qualification: do not select it if its decisive condition is missing. Never fill a gap from
@@ -143,8 +145,11 @@ Runtime-bound source views (select IDs only):
 QUESTION_JUDGMENT_PROMPT = """Answer the original technology-selection questions in separate,
 short decision_analysis rows using only the runtime-bound source facts below. Return JSON only.
 Each row must select exactly one listed R0/Q question_id;
-produce at most one row per question, at most eight rows total. Omit a row if its answer cannot
-be grounded in these facts. Do not answer an omitted question.
+produce at most one row per question, at most eight rows total. Consider all listed questions
+before choosing rows: prioritize choice-changing questions with applicable basis and distinct
+uncovered issues, not the first eight IDs. Omit a row if its answer cannot be grounded in these
+facts. Do not imply that omitted questions are answered or unsupported; the report retains them
+as unanswered. Do not answer a question absent from the list.
 The response is a proposal for human review, never verified semantic truth or permission to operate.
 Keep source wording and its if/except/workload limits; a sufficient condition is not a necessary one.
 Title mentions return original candidate choice labels; a recognized leading decision action is ignored only for lexical product routing. A mention never proves source applicability.

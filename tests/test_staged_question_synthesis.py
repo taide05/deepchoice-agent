@@ -281,3 +281,106 @@ async def test_judgment_authority_loss_never_becomes_empty_success(monkeypatch, 
         await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
             {"task": TASK, "evidence_chains": CHAINS})
     assert caught.value is error and model.await_count == 2
+
+
+@pytest.mark.parametrize("retained_count", [1, 8])
+async def test_late_questions_get_selection_judgment_and_reviewed_report_opportunity(monkeypatch, retained_count):
+    """All accepted questions are offered; a stub choosing Q20 is not live coverage proof."""
+    import httpx
+    from copy import deepcopy
+    from deepchoice.contracts.api import ResearchRequest
+    from deepchoice.agents import self_reviewer as review
+    from deepchoice.agents.citation_validator import CitationValidatorAgent
+    from deepchoice.agents.report_generator import FORMAT_RENDERERS
+
+    questions = [f"Question {i}: " + "适用条件" * 115 + "?" for i in range(1, 21)]
+    task = ResearchRequest(query="Can Alpha queue writes?", candidate_techs=["Alpha"],
+                           sub_questions=questions).model_dump(mode="json")
+    selected_ids = [f"Q{i}" for i in range(21-retained_count, 21)]
+    rows = [answer(key)["decision_analysis"][0] for key in selected_ids]
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1"]}, {"decision_analysis": rows}])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = {"task": deepcopy(task), "evidence_chains": deepcopy(CHAINS[:1])}
+    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    assert model.await_count == 2
+    for call in model.await_args_list:
+        prompt = call.args[0][0]["content"]
+        assert all(f"Q{i}: {question}" in prompt for i, question in enumerate(questions, 1))
+        assert "R0: Can Alpha queue writes?" in prompt
+    assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [[key] for key in selected_ids]
+    assert state["quality_signals"][0]["staged_generation"]["questions_planned"] == 21
+    assert state["task"] == task
+    assert state["evidence_chains"] == CHAINS[:1]
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", AsyncMock(return_value=httpx.Response(
+        200, text=CHAINS[0]["sources"][0]["snippet"], headers={"content-type": "text/plain"})))
+    state.update(await CitationValidatorAgent().run(state))
+    reviewer = AsyncMock(return_value={"analysis_reviews": [
+        {"analysis_id": f"A{i}", "action": "keep", "source_checks": [["F1", "supports", [1]]]}
+        for i in range(1, retained_count+1)]})
+    monkeypatch.setattr(review, "call_model", reviewer)
+    state.update(await review.SelfReviewerAgent().run(state))
+    assert reviewer.await_count == 1
+    rec = state["final_recommendation"]
+    assert [row["requirement_ids"] for row in rec["decision_analysis"]] == [[key] for key in selected_ids]
+    assert rec["analysis_review"]["retained"] == retained_count
+    assert rec["winner"] == "context_dependent" and rec["deployment_readiness"] == "unverified"
+    for format_name, render in FORMAT_RENDERERS.items():
+        report = render(state)
+        assert rows[-1]["reasoning"] in report
+        assert questions[-1] in report and questions[0] in report
+        assert "Human review required" in report
+        if format_name == "comparison_matrix":
+            assert f"| {questions[0]} | Unanswered |" in report
+            assert f"| {questions[-1]} | Conditional analysis for human review |" in report
+        else:
+            missing = report.split("Questions without retained analysis", 1)[1]
+            assert questions[0] in missing and questions[-1] not in missing
+
+
+@pytest.mark.parametrize("count", [9, 21])
+async def test_more_offered_questions_does_not_expand_answer_output_authority(monkeypatch, count):
+    task = {**TASK, "sub_questions": [f"Original question {i}?" for i in range(1, 21)]}
+    ids = ["R0"] + [f"Q{i}" for i in range(1, 21)]
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1", "S2"]},
+        {"decision_analysis": [answer(key)["decision_analysis"][0] for key in ids[:count]]}])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
+        {"task": task, "evidence_chains": CHAINS})
+    assert model.await_count == 2
+    assert state["final_recommendation"]["decision_analysis"] == []
+    assert state["quality_signals"][0]["staged_generation"]["rows_rejected_limit"] == count
+    assert state["final_recommendation"]["answer_delivery"]["requirements"]["Q20"] == task["sub_questions"][-1]
+
+
+async def test_all_question_context_still_obeys_real_budget_before_model_dispatch(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from deepchoice.budget import BudgetHardLimits, BudgetExceededError, BudgetResource
+    from deepchoice.contracts.api import ResearchRequest
+    from deepchoice.runtime.context import bind_run_context
+    from deepchoice.agents.orchestrator import ChiefEditorAgent
+    from deepchoice.utils import llm
+    from tests.test_phase2c_budget_runtime import _running_budget, _context, _count
+
+    task = ResearchRequest(query="技术条件" * 1000, candidate_techs=["Alpha"],
+        sub_questions=[f"{i:02d}" + "问题" * 249 for i in range(20)]).model_dump(mode="json")
+    chains = [{"evidence_strength": "moderate", "sources": [{
+        "title": f"Alpha guide {i}", "url": f"https://source{i}.example/guide",
+        "snippet": "Alpha queues writes when writers can wait. " + "Documented condition " * 45 + "."}]} for i in range(24)]
+    connection, _, manager, _, _ = await _running_budget(tmp_path, limits=BudgetHardLimits(total_tokens=60000))
+    dispatch = AsyncMock()
+    monkeypatch.setattr(llm, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=dispatch))))
+    state = {"task": task, "evidence_chains": chains}
+    try:
+        node = ChiefEditorAgent(task)._timed_node("conclusion_synthesizer",
+            synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run)
+        with bind_run_context(_context(manager)), pytest.raises(BudgetExceededError) as caught:
+            await node(state)
+        assert caught.value.resource == BudgetResource.TOTAL_TOKENS
+        assert caught.value.requested > 60000
+        assert caught.value.partial_state["task"] == task
+        dispatch.assert_not_awaited()
+        assert await _count(connection) == 0
+    finally:
+        await connection.close()

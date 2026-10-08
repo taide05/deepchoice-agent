@@ -4,14 +4,17 @@ Title mentions are routing hints only. They never establish source applicability
 """
 import re
 
+from .decision_analysis import MAX_ANALYSES
 from .evidence import candidate_name_pattern, candidate_search_name
 
-MAX_QUESTION_ROWS = 8
+# Input opportunities include the request plus all 20 admitted subquestions.
+# Answer generation and review keep the existing, separate MAX_ANALYSES bound.
+MAX_QUESTION_ROWS = 21
 _COMMON_WORDS = frozenset({"and", "with", "plus", "background", "tasks", "database", "db", "vector"})
 
 
 def question_rows(query: str, requirements: list[dict]) -> list[tuple[str, str]]:
-    """Original request first, then frozen user questions; never derived questions."""
+    """Offer all admitted original questions; this is not an answer-count budget."""
     rows = [("R0", query.strip())] if isinstance(query, str) and query.strip() else []
     rows.extend((row["id"], row["requirement"]) for row in requirements
                 if row.get("kind") == "frozen_sub_question")
@@ -42,7 +45,7 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     return mentions
 
 
-QUESTION_BASIS_POLICY = "runtime-question-basis-v1:original-questions;refs=12;facts=4;sentences=3;question-only-requirements"
+QUESTION_BASIS_POLICY = "runtime-question-basis-v2:original-questions;context=21;answers=8;refs=12;facts=4;sentences=3;question-only-requirements"
 
 
 def _fact_sentence_groups(fact):
@@ -132,7 +135,7 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
     if not isinstance(rows, list):
         return []
     diagnostics["rows_received"] = len(rows)
-    if len(rows) > min(len(allowed_ids), MAX_QUESTION_ROWS):
+    if len(rows) > min(len(allowed_ids), MAX_ANALYSES):
         diagnostics["rows_rejected_limit"] = len(rows)
         return []
     selected, seen = [], set()

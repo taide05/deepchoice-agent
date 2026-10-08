@@ -19,6 +19,20 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-08 R28：合成v35与被哈希的runtime-question-basis-v2冻结原问题输入/输出容量
+分离。question_rows提供原R0及全部最多20个合法冻结子问题；两阶段提示考虑全部
+题目，按决定性、依据与不同问题选择。回答绑定复用MAX_ANALYSES=8，与下游绑定/
+自审同界，超过8整批撤回；五事实、每调用4096输出token与预算预留不变。原问题
+库存与三模板待答投影保留；未选不代表不支持，进入提示不代表全部作答或语义质量。
+大输入可能被原60,000总token预算拒绝；实际wrapper/SQLite回归证明在派发前拒绝，
+原问题随partial_state交回coordinator，非静默空成功。总需求>40的撤回与补充输入
+挤占查询目标仍属独立待修项，不能据此宣称所有合法组合均保留分析。
+
+旧真实v34及更早manifest可读/hash有效，但不能同run恢复；缓存按新manifest隔离。
+本轮只有合成提示版本/hash与核心资产相应身份变化；workflow/state、引用、报告、
+retriever、调用数/参数、生命周期和SQL保持。无新增回答表示或模型调用。离线smoke
+仅更新身份/时间/指纹元数据，案例、正文、指标与source-health not_run不变。
+
 2026-10-08 R27：arxiv/community v2和query_adapter提示v4冻结本轮首查询丢失与社区
 接口语法修复。有效RetrievalRequest中的最多20条适配串完整去重后顺序查询，沿既有
 merge_query_results按URL轮流合并，总max_results不变。社区改用/search/advanced的q/

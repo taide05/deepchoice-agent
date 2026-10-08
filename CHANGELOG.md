@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Offer every admitted original question to bounded synthesis
+
+Synthesis v35 supplies R0 and all 20 admitted subquestions to source selection and
+judgment, removing the fixed exclusion of Q8–Q20. Reuse the eight-analysis bound
+for answer binding and review; retain five facts, 4096 output tokens per call,
+budget admission, and explicit unanswered questions in all report formats. Large
+requests can still exhaust the existing budget before dispatch. This repairs
+context visibility, without claiming every question is answered or live-model
+prioritization is improved. Historical manifests remain readable but cannot
+resume under the changed identity; aggregate requirement and supplemental-input
+capacity defects remain open.
+
 ### Search later academic and community query targets within bounded calls
 
 ArXiv and community v2 process unique complete adapted queries in request order
