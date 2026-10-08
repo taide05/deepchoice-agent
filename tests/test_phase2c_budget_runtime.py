@@ -137,7 +137,8 @@ async def test_committed_retrieval_waiter_survives_later_budget_denial(tmp_path,
         assert result.status == 'success'
         get.assert_awaited_once()
         assert (await manager._usage())[BudgetResource.RETRIEVAL_CALLS] == 1
-        assert await _count(connection, "WHERE status='settled'") == 1
+        assert (await manager._usage())[BudgetResource.HTTP_CALLS] == 1
+        assert await _count(connection, "WHERE status='settled'") == 2
         assert not gate._queue and gate._active == 0
     finally:
         if pending is not None:
@@ -1240,4 +1241,81 @@ async def test_question_refs_use_real_admission_trace_and_no_phantom_judgment(tm
                             else ["fact-view-selection-v1"])
         assert all("retained records" not in row[1] for row in rows)
     finally:
+        await connection.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('source', ['arxiv', 'community'])
+@pytest.mark.parametrize('outcome', ['success', 'denied', 'timeout', 'cancelled', 'http_failure', 'oversized'])
+async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monkeypatch, source, outcome):
+    from contextlib import asynccontextmanager
+    import importlib
+    import httpx
+    from deepchoice import outbound
+    from deepchoice.outbound import throttle
+    from deepchoice.agents.multi_retriever import _invoke_retriever_miss
+
+    module = importlib.import_module('deepchoice.retrievers.' + ('arxiv_api' if source == 'arxiv' else source))
+    cls = module.ArxivSearch if source == 'arxiv' else module.CommunitySearch
+    connection, _, manager, _, _ = await _running_budget(
+        tmp_path, limits=BudgetHardLimits(http_calls=1 if outcome == 'denied' else 10))
+    monkeypatch.setattr(throttle.gate_for(source), 'interval', 0)
+    if outcome == 'timeout':
+        monkeypatch.setattr(module, '_SEARCH_TIMEOUT_S', 0.5)
+    entered = asyncio.Event()
+    calls = []
+    routes = []
+
+    async def get(url, *, params, **kwargs):
+        query = params.get('q', params.get('search_query'))
+        calls.append(query)
+        if len(calls) == 2 and outcome in {'timeout', 'cancelled'}:
+            entered.set()
+            await asyncio.Event().wait()
+        if len(calls) == 2 and outcome == 'oversized':
+            return httpx.Response(200, content=b'x' * (1024 * 1024 + 1), request=httpx.Request('GET', url))
+        status = 400 if len(calls) == 2 and outcome == 'http_failure' else 200
+        text = f'<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>https://arxiv.org/abs/{len(calls)}</id><title>durable state</title><summary>State survives a restart.</summary></entry></feed>'
+        return httpx.Response(status, text=text, request=httpx.Request('GET', url)) if source == 'arxiv' else httpx.Response(
+            status, json={'items':[{'link':f'https://stackoverflow.com/questions/{len(calls)}', 'title':'durable state'}]}, request=httpx.Request('GET', url))
+
+    @asynccontextmanager
+    async def client(name):
+        # Routing is inside each granted logical HTTP operation.
+        assert (await manager._usage())[BudgetResource.HTTP_CALLS] >= len(routes) + 1
+        routes.append(name)
+        yield SimpleNamespace(get=get)
+
+    monkeypatch.setattr(outbound, 'make_client', AsyncMock(side_effect=lambda name: client(name)))
+    pending = None
+    try:
+        with bind_run_context(_context(manager)):
+            pending = asyncio.create_task(_invoke_retriever_miss(source, cls,
+                query='durable state', sub_questions=[], adapted_queries=[
+                    'durable state', 'durable recovery', 'durable retention']))
+            if outcome == 'cancelled':
+                await asyncio.wait_for(entered.wait(), 3)
+                pending.cancel()
+            if outcome == 'denied':
+                with pytest.raises(BudgetExceededError):
+                    await pending
+            elif outcome == 'cancelled':
+                with pytest.raises(asyncio.CancelledError):
+                    await pending
+            else:
+                result, _ = await pending
+                assert result.status == ('success' if outcome == 'success' else 'failed')
+                assert len(result.results) == (3 if outcome == 'success' else 0)
+        expected = 3 if outcome == 'success' else 1 if outcome == 'denied' else 2
+        assert len(calls) == len(routes) == expected
+        usage = await manager._usage()
+        assert usage[BudgetResource.RETRIEVAL_CALLS] == 1
+        assert usage[BudgetResource.HTTP_CALLS] == expected
+        assert await _count(connection, "WHERE status='unknown_spend'") == (1 if outcome in {'timeout', 'cancelled'} else 0)
+        assert await _count(connection, "WHERE status='settled'") == expected + 1 - (outcome in {'timeout', 'cancelled'})
+    finally:
+        if pending is not None:
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
         await connection.close()

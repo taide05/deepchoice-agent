@@ -6,9 +6,10 @@ import re
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from .. import outbound
-from ..budget_errors import BudgetError, BudgetPersistenceError
+from ..budget_errors import BudgetError
 from ..security.urls import SafeFetchFailure, UnsafeUrlError
 from .contracts import PartialRetrievalError
+from .http import budgeted_http
 from ..utils.evidence import source_title
 from ..utils.evidence_choices import whole_source_text
 from ..utils.source_scope import MAX_SCOPE_CHARS, scope_sentences
@@ -22,26 +23,6 @@ MAX_SNIPPET = 1200
 _STOP = frozenset("a an and are as at be by can compare comparison could docs documentation do does for from guide how in is it of on or official reference should than that the their these this to use using versus vs what when which with would".split())
 _ASSETS = (".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".gz", ".pdf", ".json", ".xml")
 
-
-async def budgeted_http(dispatch, *, kind: str, require_budget: bool = False):
-    """One logical HTTP operation, in addition to its source retrieval charge."""
-    # The manifest imports retrievers while budget contracts are initialized.
-    from ..budget.contracts import BudgetAmount, BudgetResource
-    from ..budget.runtime import reserve_call, settle_call, unknown_call
-
-    reservations = await reserve_call(
-        (BudgetAmount(resource=BudgetResource.HTTP_CALLS, amount=1),),
-        call_id=None, summary={"kind": kind},
-    )
-    if require_budget and not reservations:
-        raise BudgetPersistenceError("Official body retrieval requires an active budget reservation")
-    try:
-        response = await dispatch()
-    except BaseException:
-        await unknown_call(reservations)
-        raise
-    await settle_call(reservations, {BudgetResource.HTTP_CALLS: 1})
-    return response
 
 
 def _terms(text: str) -> set[str]:

@@ -19,6 +19,27 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-08 R27：arxiv/community v2和query_adapter提示v4冻结本轮首查询丢失与社区
+接口语法修复。有效RetrievalRequest中的最多20条适配串完整去重后顺序查询，沿既有
+merge_query_results按URL轮流合并，总max_results不变。社区改用/search/advanced的q/
+relevance；arxiv仍原all:关键词和摘要重叠逻辑，无适配时原单查询截长回退保持。每个
+逻辑query HTTP预留先于make_client路由探测，包含该query原有有界重试；源级
+retrieval_calls仍一次，Trace仍源级调用，不增生命周期事件/字段/迁移。预算/权威错误
+和外部取消传播，已提交的HTTP等待者不被后来拒绝撤销；下一query仍需新的准入。
+普通必需查询故障原子failed空结果，不扩展R26的optional-child partial契约。
+
+两源整次异步等待期限180秒覆盖路由、节流和重试；超时未确定调用保守unknown结算。
+解析前拒绝超过1 MiB的已下载响应，每query最多处理max_results条。同步XML/JSON
+解析不能被asyncio硬中断；该字节门约束解析工作量，不声称静态provider下载前内存
+或所有外呼已迁移到safe-fetch。共享HTTP helper从official_pages移至retrievers/http，
+保留原导入位置和lazy budget imports；官网读取/安全语义不变。legacy/no-context仍
+可调用新两源，durable context缺有效预算时fail closed。未新增配置环境变量。
+
+现有7条结果容量不保证N>7目标均有材料；20目标另加补充说明产生21条请求的问题、
+社区仅分数/标签及arxiv摘要/原页范围仍是开放尾项。本包不声称A2全部闭合或真实
+语义质量提升。真实63c6c39旧三份manifest/hash可读有效，但不能同run恢复，缓存
+按新manifest隔离；核心资产仅适配提示变化，smoke案例/输出/分母/not_run保持。
+
 2026-10-08 R26：official v9允许登记根页仅有空snippet提议时，在原两子页上限内探索
 无重叠的真实范围内链接；普通已匹配子页与发现页规则保持。补充子页局部HTTP/传输/
 解析错误，以及安全策略拒绝目标、响应拒绝、DNS不确定、超时，停止本次后续正文读取，

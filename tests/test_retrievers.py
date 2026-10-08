@@ -774,3 +774,77 @@ async def test_adapter_slots_reach_actual_tavily_dispatch_and_bounded_result(mon
             adapted_queries=adaptation["adapted_queries"]["tavily"])
     assert dispatched == ["Alpha durability guide", "Beta isolation", "Gamma recovery guide"]
     assert [r["url"] for r in result["results"]] == [f"https://fixture.example/{i}/0" for i in range(3)]
+
+
+def _target_response(source, query, *, status=200):
+    if source == 'arxiv':
+        entries = ''.join(
+            f'<entry><id>https://arxiv.org/abs/{query.split()[0]}-{i}</id><title>{query}</title>'
+            '<summary>Conditional persistence evidence under the documented settings.</summary></entry>'
+            for i in range(3))
+        return httpx.Response(status, text=f'<feed xmlns="http://www.w3.org/2005/Atom">{entries}</feed>',
+                              request=httpx.Request('GET', 'https://export.arxiv.org/api/query'))
+    return httpx.Response(status, json={'items': [
+        {'link': f'https://stackoverflow.com/questions/{query.split()[0]}-{i}', 'title': query,
+         'score': 2, 'tags': ['python']} for i in range(3)]},
+        request=httpx.Request('GET', 'https://api.stackexchange.com/2.3/search/advanced'))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cls', [ArxivSearch, CommunitySearch])
+async def test_native_sources_preserve_later_target_queries_and_bounded_results(cls):
+    queries = ['atlas persistence', 'beacon failover', 'cedar batching']
+    dispatched = []
+    async def get(url, *, params, **kwargs):
+        query = params['search_query'].removeprefix('all:') if cls.source == 'arxiv' else params['q']
+        dispatched.append(query)
+        if cls.source == 'community':
+            assert url.endswith('/search/advanced') and params['sort'] == 'relevance'
+            assert 'intitle' not in params
+        return _target_response(cls.source, query)
+    with _patch_outbound(_FakeClient(get_side=get)):
+        result = await cls().search('original comparison', [], max_results=3,
+                                    adapted_queries=[queries[0], *queries])
+    assert result['status'] == 'success'
+    assert dispatched == queries
+    assert [x['title'] for x in result['results']] == queries
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cls', [ArxivSearch, CommunitySearch])
+async def test_native_source_later_required_query_failure_is_atomic(cls):
+    responses = [_target_response(cls.source, 'atlas persistence'),
+                 _target_response(cls.source, 'beacon failover', status=400)]
+    client = _FakeClient(get_side=responses)
+    with _patch_outbound(client):
+        result = await cls().search('original comparison', [], adapted_queries=[
+            'atlas persistence', 'beacon failover', 'cedar batching'])
+    assert result['status'] == 'failed' and result['results'] == []
+    assert client.get.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('cls', [ArxivSearch, CommunitySearch])
+@pytest.mark.parametrize('mode', ['maximum_targets', 'long_adaptation', 'legacy_fallback'])
+async def test_native_query_boundaries_preserve_expressions_without_enlarging_result_cap(cls, mode):
+    original = 'atlas vs beacon ' + 'persistence ' * 30
+    if mode == 'maximum_targets':
+        adapted = [f'target{i} persistence' for i in range(20)]
+    elif mode == 'long_adaptation':
+        adapted = ['atlas ' + 'configuration ' * 20 + 'without a shared backend']
+    else:
+        adapted = None
+    expected = adapted or [original.replace(' vs ', ' ')[:200 if cls.source == 'arxiv' else 150]]
+    dispatched = []
+    async def get(url, *, params, **kwargs):
+        query = params['search_query'].removeprefix('all:') if cls.source == 'arxiv' else params['q']
+        dispatched.append(query)
+        return _target_response(cls.source, query)
+    with _patch_outbound(_FakeClient(get_side=get)):
+        result = await cls().search(original, [], max_results=7, adapted_queries=adapted)
+    assert result['status'] == 'success' and dispatched == expected
+    assert len(result['results']) <= 7
+    if mode == 'maximum_targets':
+        # This package preserves the existing capacity limit; dispatch does not
+        # mean all twenty targets have material in the seven retained results.
+        assert [row['title'] for row in result['results']] == expected[:7]

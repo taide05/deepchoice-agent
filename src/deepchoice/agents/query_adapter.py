@@ -13,10 +13,10 @@ For EACH sub-question, generate 6 query variants:
 2. arxiv (academic papers): Keywords separated by spaces. Include technical terms, method names, framework names.
 3. github (repositories): A complete GitHub repository-search expression. Keep repo:, org:, language: and in:readme qualifiers together with their keywords; do not use code/issue-only filters.
 4. chroma (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search.
-5. community (StackOverflow): Include tags. Example: "site:stackoverflow.com [langgraph] agent state management"
+5. community (StackOverflow): Plain English technical search terms for the native question search API. Name the candidate and required behavior; do not use site:, bracketed tags, or search-engine-only operators.
 6. official (official docs): Keywords in documentation headings or API references.
 
-Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma). For English-only sources (arxiv/github/official), use English technical terms.
+Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma). For English-only sources (arxiv/github/community/official), use English technical terms.
 
 Rules:
 - The user message is JSON. request contains the unchanged original query, scene_context, candidate_techs, constraints and frozen sub_questions. adaptation_targets contains the CURRENT targets (which may instead be retry gaps or supplemental context). Use the original context even when the current targets omit a required capability; a coarse_scene_classification, if present, never replaces the original scene.

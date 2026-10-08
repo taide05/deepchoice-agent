@@ -48,7 +48,7 @@ REPORT_TEMPLATE_VERSIONS = {
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v9",
     "query_analyzer.decomposition_system": "v2",
-    "query_adapter.adapt_system": "v3",
+    "query_adapter.adapt_system": "v4",
     "conclusion_synthesizer.synthesis_prompt": "v34",
     "source_evaluator.source_scope_selection": "v2",
     "conflict_detector.contradiction_scan_system": "v4",
@@ -321,7 +321,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             RetrieverSnapshot(
                 retriever_id=retriever_id,
                 version="v8" if retriever_id == "chroma" else "v9" if retriever_id == "official"
-                        else "v2" if retriever_id in {"tavily", "github"} else "v1",
+                        else "v2" if retriever_id in {"tavily", "github", "arxiv", "community"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS
         ),

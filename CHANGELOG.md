@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Search later academic and community query targets within bounded calls
+
+ArXiv and community v2 process unique complete adapted queries in request order
+and reuse the existing bounded round-robin URL merge. Community now uses native
+advanced-search `q` with relevance ordering, aligned with query-adapter prompt v4.
+Each logical query reserves HTTP budget before route resolution; the source still
+costs one retrieval call. Preserve bounded retries, a 180-second asynchronous
+source deadline, atomic required-query failures, and budget/cancellation propagation.
+Limit each downloaded response to 1 MiB before synchronous parsing. Reuse the
+existing HTTP accounting helper with official retrieval. This does not guarantee
+streaming memory bounds, live relevance, or coverage beyond the unchanged result
+capacity; supplemental-input overflow and source-content gaps remain open.
+
 ### Preserve acquired pages while exposing supplemental retrieval failures
 
 Official v9 explores up to two real in-scope child links when a curated root
