@@ -7,7 +7,7 @@ import pytest
 
 from deepchoice.agents import conclusion_synthesizer as synth, self_reviewer as review
 from deepchoice.agents.citation_validator import CitationValidatorAgent
-from deepchoice.agents.report_generator import FORMAT_RENDERERS
+from deepchoice.agents.report_generator import FORMAT_RENDERERS, ReportGeneratorAgent
 from deepchoice.formats import decision
 from deepchoice.utils.answer_delivery import ANSWER_CONTRACT, expand_answer_response
 from deepchoice.utils.call_diagnostics import output_shape_valid
@@ -228,3 +228,51 @@ def test_terminal_delivery_keeps_canonical_answer_and_withdraws_parallel_authori
         assert result["action_plan"] == []
     else:
         assert is_fixed_validation_only_plan(result, query)
+
+
+@pytest.mark.parametrize("mode", ["choice", "answer", "withdrawn", "pending", "invalid_basis", "forged_legacy"])
+async def test_public_report_signal_tracks_displayable_choice_and_preserves_answer_distinction(monkeypatch, mode):
+    original_payload = payload
+
+    def choice_payload(reason):
+        value = original_payload(reason)
+        value['decision_analysis'][0].update(kind='answer' if mode == 'answer' else 'choice',
+                                             option='' if mode == 'answer' else 'Acme')
+        return value
+
+    monkeypatch.setattr(f"{__name__}.payload", choice_payload)
+    reasoning = '满足日志前提时可考虑 Acme；仍需核实当前配置。'
+    case = ('Acme', 'Acme keeps records only when journaling is enabled. Restart loses memory data.',
+            '恢复记录有什么条件？', reasoning)
+    state, pending = await pipeline(monkeypatch, case, action='withdraw' if mode == 'withdrawn' else 'keep')
+    if mode == 'pending':
+        state = pending
+    rec = state['final_recommendation']
+    if mode == 'invalid_basis':
+        rec['decision_analysis'][0]['basis'][0]['sentence_ids'] = [99]
+    elif mode == 'forged_legacy':
+        rec['decision_analysis'] = []
+        rec['recommendation'] = 'FORGED_UNREVIEWED_CHOICE'
+    for fmt in FORMAT_RENDERERS:
+        state['task']['report_format'] = fmt
+        generated = await ReportGeneratorAgent().run(deepcopy(state))
+        signal = generated['quality_signals'][-1]
+        assert signal['agent'] == 'report_generator' and signal['format'] == fmt
+        assert signal['has_recommendation'] is (mode == 'choice')
+        assert signal['recommendation_confidence'] == rec['confidence']
+        assert (reasoning in generated['report']) is (mode in {'choice', 'answer'})
+        assert 'FORGED_UNREVIEWED_CHOICE' not in generated['report']
+        # Published diagnostics use the same value; no private authority is added.
+        from deepchoice.runtime.coordinator import sanitize_public_json
+        assert sanitize_public_json(signal) == signal
+
+
+@pytest.mark.parametrize('text,expected', [('Legacy conditional prose.', True), ('', False)])
+async def test_public_report_signal_keeps_legacy_text_contract(text, expected):
+    for fmt in FORMAT_RENDERERS:
+        state = {'task': {'query': 'Legacy question', 'report_format': fmt},
+                 'final_recommendation': {'recommendation': text, 'confidence': 'medium'}}
+        generated = await ReportGeneratorAgent().run(state)
+        signal = generated['quality_signals'][-1]
+        assert signal['has_recommendation'] is expected
+        assert signal['recommendation_confidence'] == 'medium'

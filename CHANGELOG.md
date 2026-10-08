@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Align public report diagnostics with displayed conditional choices
+
+For compact answers, `has_recommendation` now means a conditional `choice`
+passes the same terminal display gate as the report. Ordinary answers, pending
+or withdrawn choices, invalid basis and unused legacy prose cannot set it. Keep
+legacy text-based semantics and the existing confidence projection. Run one
+additional pure metadata check, without another render or answer representation.
+Freeze all three report template identities at v21/v20/v19 for this diagnostic
+semantics change; report text stays unchanged and historical snapshots are not
+rewritten. The flag does not establish correctness or deployment authority.
+
 ### Retain short complete official paragraphs as selection proposals
 
 Reuse the existing HTML extractor to mark retained non-link paragraph text locally.

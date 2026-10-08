@@ -19,6 +19,18 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-08 R25：报告节点公开quality_signals中has_recommendation的默认compact语义
+为“报告可展示待人工审阅的choice条件选择”。渲染后复用原终端检查规则计算布尔值，
+不凭raw分析、review计数、普通answer或旧prose置位；legacy继续按旧recommendation
+文本判定。confidence仍兼容投影，不是独立选择质量分数，true不授予唯一胜者/满足
+需求或生产操作权限。每次render仍一次门，节点为诊断额外一次相同纯检查，未二次
+渲染或新增DTO/回答字段。quality_signals沿原allowlist进入不可变公开结果，当前UI
+不读该bool，外部/兼容snapshot读者可读；旧结果不回填，生命周期/SSE/数据库不改。
+三格式template身份分别what-why-how-v21、evidence-first-v20、comparison-matrix-v19，
+冻结报告节点诊断投影语义，不是模板正文修改。真实bace031旧三个manifest可读/hash
+有效、当前不能同run恢复，缓存按manifest隔离；核心资产仅报告身份变化。72份受控
+完整正文逐字相同，固定smoke输出/分母/not_run不变，身份元数据另核对后升版。
+
 2026-10-08 R24：official v8冻结短HTML正文提议及aria-hidden排除。复用原有界块提取器，
 仅官网skip_navigation路径同步记本地段落索引；SourceDocument末尾默认空tuple，旧
 两参数构造、合成范围/冲突/事实消费者与默认引用解析继续按原blocks/完整性/位置运行。

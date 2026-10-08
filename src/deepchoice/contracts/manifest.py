@@ -41,9 +41,9 @@ WORKFLOW_NODES = (
 )
 RETRIEVER_IDS = ("tavily", "chroma", "github", "arxiv", "community", "official")
 REPORT_TEMPLATE_VERSIONS = {
-    "what_why_how": "what-why-how-v20",
-    "evidence_first": "evidence-first-v19",
-    "comparison_matrix": "comparison-matrix-v18",
+    "what_why_how": "what-why-how-v21",
+    "evidence_first": "evidence-first-v20",
+    "comparison_matrix": "comparison-matrix-v19",
 }
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v9",

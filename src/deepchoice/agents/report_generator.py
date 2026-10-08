@@ -1,3 +1,5 @@
+from ..formats import decision
+from ..utils.answer_delivery import is_answer_delivery
 from ..formats.comparison_matrix import render as render_comparison_matrix
 from ..formats.evidence_first import render as render_evidence_first
 from ..formats.what_why_how import render as render_what_why_how
@@ -44,12 +46,17 @@ class ReportGeneratorAgent:
         report = renderer(research_state)
 
         rec = research_state.get("final_recommendation", {})
+        # The public flag describes a displayable conditional choice in the
+        # compact path. Legacy prose retains its historical field contract.
+        has_recommendation = (any(item.get("kind") == "choice"
+                                  for item in decision._displayable_analyses(rec))
+                              if is_answer_delivery(rec) else bool(rec.get("recommendation")))
         return {
             "report": report,
             "quality_signals": list(research_state.get("quality_signals", [])) + [{
                 "agent": "report_generator",
                 "format": fmt,
-                "has_recommendation": bool(rec.get("recommendation")),
+                "has_recommendation": has_recommendation,
                 "recommendation_confidence": rec.get("confidence", "N/A"),
             }],
         }
