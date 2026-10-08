@@ -218,7 +218,7 @@ async def test_invalid_internal_query_adaptation_is_an_isolated_contract_failure
 
 
 @pytest.mark.asyncio
-async def test_generic_sub_question_supplement_stays_within_contract_limit():
+async def test_generic_sub_question_supplement_preserves_twenty_original_targets():
     captured = {}
 
     class Fake:
@@ -228,12 +228,13 @@ async def test_generic_sub_question_supplement_stays_within_contract_limit():
             captured["request"] = request
             return _ok(self.source)
 
+    targets = [f"Short {i}?" for i in range(20)]
     result = await MultiRetrieverAgent(
         retriever_registry={"injected": Fake},
-    ).run({"task": {"query": "x"}, "sub_questions": ["short"] * 20})
+    ).run({"task": {"query": "x"}, "sub_questions": targets})
 
     assert result["search_results"][0]["status"] == "success"
-    assert len(captured["request"].sub_questions) == 20
+    assert captured["request"].sub_questions == tuple(targets)
 
 
 @pytest.mark.asyncio
@@ -342,3 +343,26 @@ def test_historical_two_state_results_remain_readable_with_missing_or_old_versio
         for status,results,error in [('success', [], None), ('failed', [], 'RuntimeError')]:
             row = RetrievalResult(**version, source='official', status=status, results=results, error=error, latency_ms=0)
             assert RetrievalResult.model_validate_json(row.model_dump_json()) == row
+
+
+@pytest.mark.parametrize("query_length,inject", [(968, True), (969, False)])
+async def test_generic_query_injection_preserves_item_length_boundary(query_length, inject):
+    captured = []
+
+    class Fake:
+        source = "injected"
+
+        async def retrieve(self, request):
+            captured.append(request)
+            return _ok(self.source)
+
+    query = "q" * query_length
+    targets = ["Cost?", "Fit?"]
+    result = await MultiRetrieverAgent(retriever_registry={"injected": Fake}).run({
+        "task": {"query": query}, "sub_questions": targets})
+    assert result["partial_failures"] == []
+    assert len(captured) == 1 and captured[0].query == query
+    expected = [f"{query} — detailed technical comparison", *targets] if inject else targets
+    assert captured[0].sub_questions == tuple(expected)
+    assert all(len(item) <= 1000 for item in captured[0].sub_questions)
+    assert targets == ["Cost?", "Fit?"]

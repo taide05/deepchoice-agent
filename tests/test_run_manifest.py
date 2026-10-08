@@ -180,7 +180,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v35",
                          "query_analyzer.decomposition_system": "v2",
-                         "query_adapter.adapt_system": "v4",
+                         "query_adapter.adapt_system": "v5",
                          "source_evaluator.source_scope_selection": "v2",
                          "conflict_detector.contradiction_scan_system": "v4"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
@@ -853,7 +853,7 @@ def test_sdk_retry_policy_is_frozen_and_previous_identity_remains_readable():
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("component,version", [("query_adapter", "v2"), ("query_adapter", "v3"),
+@pytest.mark.parametrize("component,version", [("query_adapter", "v2"), ("query_adapter", "v3"), ("query_adapter", "v4"),
     ("tavily", "v1"), ("github", "v1"), ("arxiv", "v1"), ("community", "v1")])
 def test_previous_query_allocation_identity_remains_readable_but_cannot_resume(component, version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id

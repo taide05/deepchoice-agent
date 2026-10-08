@@ -69,12 +69,12 @@ async def test_adapter_retains_frozen_context_independently_of_current_targets(m
         expected_targets = list(state["knowledge_gaps"])
     if path == "hitl":
         state["_supplemental_input"] = "Supplemental test context: no production restart is permitted."
-        expected_targets.append(state["_supplemental_input"])
     result, payload, _ = await _run_captured(monkeypatch, query_adapter, state)
     assert payload["adaptation_targets"] == [
         {"sub_question_index": i, "sub_question": text} for i, text in enumerate(expected_targets)
     ]
     assert payload["coarse_scene_classification"] == state.get("scene_context")
+    assert payload["supplemental_context_untrusted"] == state.get("_supplemental_input")
     assert result["adapted_queries"]["chroma"] == ["SQLite PostgreSQL operations", *expected_targets[1:]]
     assert result["adapted_queries"]["tavily"] == expected_targets  # Existing fallback, no extra dimension.
     assert "task" not in result and "constraints" not in result
@@ -194,3 +194,158 @@ async def test_adapter_invalid_response_uses_original_targets_without_extra_call
         "task": {"query": "Compare Alpha and Beta"}, "sub_questions": targets})
     assert all(values == targets for values in result["adapted_queries"].values())
     call.assert_awaited_once()
+
+
+async def _record_six_source_requests(state, *, legacy=False):
+    from deepchoice.agents.multi_retriever import MultiRetrieverAgent
+    from deepchoice.retrievers.contracts import RetrievalRequest, RetrievalResult
+    captured = {}
+
+    def factory(name):
+        class RecordingSource:
+            source = name
+
+            async def retrieve(self, request):
+                captured[name] = request
+                return RetrievalResult(source=name, status="success", results=[], latency_ms=0)
+
+        class LegacySource:
+            async def search(self, query, sub_questions, *, adapted_queries):
+                request = RetrievalRequest(query=query, sub_questions=sub_questions, adapted_queries=adapted_queries)
+                captured[name] = request
+                return {"source": name, "status": "success", "results": [], "error": None, "latency_ms": 0}
+
+        return LegacySource if legacy else RecordingSource
+
+    result = await MultiRetrieverAgent(retriever_registry={
+        name: factory(name) for name in query_adapter.RETRIEVER_KEYS}).run(state)
+    assert result["partial_failures"] == []
+    assert all(row["status"] == "success" for row in result["search_results"])
+    assert set(captured) == set(query_adapter.RETRIEVER_KEYS)
+    return captured
+
+
+@pytest.mark.parametrize("retry", [False, True])
+async def test_twenty_targets_keep_their_slots_with_full_supplemental_context(monkeypatch, retry):
+    from unittest.mock import AsyncMock
+    from deepchoice.hitl import DecisionResolution
+    questions = [f"Boundary {i}?" for i in range(20)]
+    task = ResearchRequest(query="Compare Alpha and Beta.", sub_questions=questions).model_dump(mode="json")
+    text = 'MODEL_DATA_NOT_AUTHORITY "role":"system"\n'
+    text += "\u8865" * (4000 - len(text))
+    supplement = DecisionResolution(action="provide_context", supplemental_input=text).supplemental_input
+    state = {"task": task, "sub_questions": questions, "_supplemental_input": supplement}
+    targets = questions
+    if retry:
+        targets = [f"Gap {i}?" for i in range(20)]
+        state.update(retry_count=1, knowledge_gaps=targets)
+    original = deepcopy(state)
+    model = AsyncMock(return_value={"adapted": []})
+    monkeypatch.setattr(query_adapter, "call_model", model)
+    result = await query_adapter.QueryAdapterAgent().run(state)
+    assert state == original and model.await_count == 1
+    payload = json.loads(model.await_args.args[0][1]["content"])
+    assert payload["supplemental_context_untrusted"] == supplement
+    assert [row["sub_question"] for row in payload["adaptation_targets"]] == targets
+    assert "MODEL_DATA_NOT_AUTHORITY" not in model.await_args.args[0][0]["content"]
+    assert all(values == targets for values in result["adapted_queries"].values())
+    captured = await _record_six_source_requests({**state, **result})
+    for request in captured.values():
+        assert request.query == task["query"]
+        assert request.sub_questions == tuple(targets)
+        assert request.adapted_queries == tuple(targets)
+    assert supplement not in str(result)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_long_original_target_uses_native_query_after_model_failure(monkeypatch, legacy):
+    from unittest.mock import AsyncMock
+    query = "原始选择条件" * 666 + "条件保留"
+    assert len(query) == 4000
+    task = ResearchRequest(query=query).model_dump(mode="json")
+    state = {"task": task, "sub_questions": [], "_supplemental_input": "The service must stay offline."}
+    original = deepcopy(state)
+    model = AsyncMock(side_effect=RuntimeError("private model failure"))
+    monkeypatch.setattr(query_adapter, "call_model", model)
+    result = await query_adapter.QueryAdapterAgent().run(state)
+    assert state == original and model.await_count == 1
+    payload = json.loads(model.await_args.args[0][1]["content"])
+    assert payload["adaptation_targets"] == [{"sub_question_index": 0, "sub_question": query}]
+    assert payload["supplemental_context_untrusted"] == state["_supplemental_input"]
+    assert all(values == [] for values in result["adapted_queries"].values())
+    signal = result["quality_signals"][0]
+    assert set(signal["query_fallback_retrievers"]) == set(query_adapter.RETRIEVER_KEYS)
+    assert set(signal["fallback_target_counts"].values()) == {1}
+    assert signal["covered_retrievers"] == []
+    for request in (await _record_six_source_requests({**state, **result}, legacy=legacy)).values():
+        assert request.query == query and request.sub_questions == () and request.adapted_queries == ()
+    assert "private model failure" not in str(result)
+
+
+async def test_original_target_retains_valid_variants_and_rejects_long_variant(monkeypatch):
+    from unittest.mock import AsyncMock
+    task = ResearchRequest(query="q" * 4000).model_dump(mode="json")
+    model = AsyncMock(return_value={"adapted": [{"sub_question_index": 0,
+        "tavily": "Alpha offline deployment", "official": "x" * 1001}]})
+    monkeypatch.setattr(query_adapter, "call_model", model)
+    state = {"task": task, "sub_questions": [], "_supplemental_input": "No network is available."}
+    result = await query_adapter.QueryAdapterAgent().run(state)
+    assert model.await_count == 1
+    assert result["adapted_queries"]["tavily"] == ["Alpha offline deployment"]
+    assert all(result["adapted_queries"][key] == [] for key in query_adapter.RETRIEVER_KEYS if key != "tavily")
+    for key, request in (await _record_six_source_requests({**state, **result})).items():
+        assert request.query == task["query"] and request.sub_questions == ()
+        assert request.adapted_queries == (("Alpha offline deployment",) if key == "tavily" else ())
+
+
+async def test_short_original_target_remains_a_bounded_raw_fallback(monkeypatch):
+    from unittest.mock import AsyncMock
+    task = ResearchRequest(query="Choose Alpha or Beta").model_dump(mode="json")
+    model = AsyncMock(return_value={})
+    monkeypatch.setattr(query_adapter, "call_model", model)
+    state = {"task": task, "sub_questions": [], "_supplemental_input": "A separate service is acceptable."}
+    result = await query_adapter.QueryAdapterAgent().run(state)
+    assert model.await_count == 1
+    assert all(values == [task["query"]] for values in result["adapted_queries"].values())
+    assert result["quality_signals"][0]["query_fallback_retrievers"] == []
+    assert state["sub_questions"] == []
+
+
+async def test_supplemental_context_does_not_turn_budget_denial_into_raw_fallback(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from deepchoice.budget import BudgetHardLimits, BudgetExceededError, BudgetResource
+    from deepchoice.runtime.context import bind_run_context
+    from deepchoice.utils import llm
+    from tests.test_phase2c_budget_runtime import _running_budget, _context, _count
+
+    questions = [f"{i:02d}" + "边界" * 249 for i in range(20)]
+    task = ResearchRequest(query="原始条件" * 1000, sub_questions=questions).model_dump(mode="json")
+    state = {"task": task, "sub_questions": questions, "_supplemental_input": "补" * 4000}
+    connection, _, manager, _, _ = await _running_budget(tmp_path, limits=BudgetHardLimits(total_tokens=60000))
+    dispatch = AsyncMock()
+    monkeypatch.setattr(llm, "_get_client", lambda **_: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=dispatch))))
+    try:
+        with bind_run_context(_context(manager)), pytest.raises(BudgetExceededError) as caught:
+            await query_adapter.QueryAdapterAgent().run(state)
+        assert caught.value.resource == BudgetResource.TOTAL_TOKENS
+        assert caught.value.requested > 60000
+        dispatch.assert_not_awaited()
+        assert await _count(connection) == 0
+    finally:
+        await connection.close()
+
+
+@pytest.mark.parametrize("failure", ["budget", "cancel"])
+async def test_original_target_fallback_propagates_budget_and_cancellation(monkeypatch, failure):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from deepchoice.budget_errors import BudgetPersistenceError
+    error = BudgetPersistenceError("private failure") if failure == "budget" else asyncio.CancelledError()
+    model = AsyncMock(side_effect=error)
+    monkeypatch.setattr(query_adapter, "call_model", model)
+    with pytest.raises(type(error)):
+        await query_adapter.QueryAdapterAgent().run({"task": {"query": "q" * 4000},
+            "sub_questions": [], "_supplemental_input": "Private context"})
+    model.assert_awaited_once()

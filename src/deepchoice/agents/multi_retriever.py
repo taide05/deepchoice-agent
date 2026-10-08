@@ -105,8 +105,11 @@ def _is_too_generic(sub_questions: list[str]) -> bool:
 
 
 def _supplement_sub_questions(sub_questions: list[str], query: str) -> list[str]:
-    """Inject the original query as a search dimension when sub_questions are generic."""
-    return [f"{query} — detailed technical comparison"] + sub_questions[:19]
+    """Add a bounded dimension without displacing accepted targets or clipping text."""
+    focused = f"{query} — detailed technical comparison"
+    if len(sub_questions) >= 20 or len(focused) > 1000:
+        return list(sub_questions)
+    return [focused, *sub_questions]
 
 
 async def _contract_failure(source: str, _exc: Exception) -> RetrievalResult:
@@ -614,7 +617,7 @@ class MultiRetrieverAgent:
         # inject the original query as a concrete search dimension.
         if _is_too_generic(sub_questions):
             print_agent_output(
-                "Sub-questions too generic (avg_len < 20), supplementing with original query",
+                "Sub-questions too generic (avg_len < 20), considering bounded original-query fallback",
                 agent="MULTI_RETRIEVER",
             )
             sub_questions = _supplement_sub_questions(sub_questions, query)

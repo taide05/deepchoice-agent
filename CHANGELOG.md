@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Keep supplemental context separate from bounded retrieval targets
+
+Query-adapter v5 receives supplemental input as separate untrusted context while
+preserving existing and retry target slots. With no targets, adapt the original
+query; if a missing/invalid variant cannot use the long query as a bounded raw
+fallback, pass its full text through the native query field instead. Generic
+query injection now preserves all 20 targets and never creates an oversized item.
+Budget failures and cancellation propagate. This repairs request validity, not
+live source relevance; provider-specific fallback limits and the pending source
+selector context handoff remain explicit.
+
 ### Offer every admitted original question to bounded synthesis
 
 Synthesis v35 supplies R0 and all 20 admitted subquestions to source selection and
