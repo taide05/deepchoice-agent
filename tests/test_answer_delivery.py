@@ -1,6 +1,6 @@
 """Offline mechanism tests: simulated model outputs are not live quality scores."""
 from copy import deepcopy
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -8,6 +8,7 @@ import pytest
 from deepchoice.agents import conclusion_synthesizer as synth, self_reviewer as review
 from deepchoice.agents.citation_validator import CitationValidatorAgent
 from deepchoice.agents.report_generator import FORMAT_RENDERERS
+from deepchoice.formats import decision
 from deepchoice.utils.answer_delivery import ANSWER_CONTRACT, expand_answer_response
 from deepchoice.utils.call_diagnostics import output_shape_valid
 from deepchoice.utils.decision_contract import restrict_recommendation
@@ -66,8 +67,12 @@ async def test_bound_chinese_answers_survive_without_claiming_requirement_satisf
     assert rec["deployment_readiness"] == "unverified"
     assert len(rec["decision_analysis"]) == 1
     for render in FORMAT_RENDERERS.values():
-        assert case[3] not in render(pending)  # citation alone cannot publish inference
-        text = render(state)
+        with patch.object(decision, "_displayable_analyses", wraps=decision._displayable_analyses) as guard:
+            assert case[3] not in render(pending)  # citation alone cannot publish inference
+            guard.assert_called_once()
+        with patch.object(decision, "_displayable_analyses", wraps=decision._displayable_analyses) as guard:
+            text = render(state)
+            guard.assert_called_once()
         assert case[3] in text and case[1] in text
         assert "Winner" not in text and "暂无唯一胜者" not in text
         assert "不得编造流量" not in text
@@ -75,6 +80,14 @@ async def test_bound_chinese_answers_survive_without_claiming_requirement_satisf
         assert "还有哪些证据缺口" in text and "尚无保留分析的问题" in text
         assert "适用前提待核对来源原文与当前工作负载" not in text
         assert "FORGED_WINNER" not in text and "UNSAFE_COMMAND" not in text and "DELETE" not in text
+    # Independent detail/helper calls must still run their own terminal gate.
+    for value, expected in ((pending, False), (state, True)):
+        for detail in (decision.render_decision_details, decision._render_answer_delivery,
+                       decision._render_model_analysis):
+            with patch.object(decision, "_displayable_analyses", wraps=decision._displayable_analyses) as guard:
+                text = "\n".join(detail(value["final_recommendation"], "zh"))
+                guard.assert_called_once()
+            assert (case[3] in text) is expected
     paths = {row["claim_path"] for row in state["citation_verification"]["checks"]}
     assert paths and all("source_facts" in path for path in paths)
 
@@ -84,7 +97,9 @@ async def test_missing_evidence_or_review_withdrawal_stays_a_gap(monkeypatch, so
     state, _ = await pipeline(monkeypatch, CASES[0], source_ok=source_ok, action=action)
     assert state["final_recommendation"]["decision_analysis"] == []
     for render in FORMAT_RENDERERS.values():
-        text = render(state)
+        with patch.object(decision, "_displayable_analyses", wraps=decision._displayable_analyses) as guard:
+            text = render(state)
+            guard.assert_called_once()  # An empty accepted list must not trigger a recheck.
         assert CASES[0][3] not in text and CASES[0][2] in text and "尚无保留分析的问题" in text
 
 

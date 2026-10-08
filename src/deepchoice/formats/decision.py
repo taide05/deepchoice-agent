@@ -122,10 +122,12 @@ def _displayable_analyses(recommendation: dict) -> list[dict]:
     return accepted
 
 
-def _render_model_analysis(recommendation: dict, lang: str) -> list[str]:
+def _render_model_analysis(
+    recommendation: dict, lang: str, *, visible: list[dict] | None = None,
+) -> list[str]:
     facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
              if isinstance(item.get("id"), str)}
-    accepted = _displayable_analyses(recommendation)
+    accepted = _displayable_analyses(recommendation) if visible is None else visible
     zh = lang == "zh"
     review = recommendation.get("analysis_review")
     note = ""
@@ -396,11 +398,14 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
     return lines
 
 
-def _render_answer_delivery(recommendation: dict, lang: str) -> list[str]:
-    """A single answer channel; source status is never question satisfaction."""
+def _render_answer_delivery(
+    recommendation: dict, lang: str, *, visible: list[dict] | None = None,
+) -> list[str]:
+    """Reuse locally checked analyses; independent callers still run the gate."""
     zh = lang == "zh"
-    lines = _render_model_analysis(recommendation, lang)
-    visible = _displayable_analyses(recommendation)
+    if visible is None:
+        visible = _displayable_analyses(recommendation)
+    lines = _render_model_analysis(recommendation, lang, visible=visible)
     addressed = {key for item in visible for key in item.get("requirement_ids", [])}
     inventory = recommendation["answer_delivery"]["requirements"]
     missing = [(key, text) for key, text in inventory.items()
@@ -465,13 +470,15 @@ def render_answer_report(state: dict, lang: str, format_name: str = "what_why_ho
                                     _plain_analysis(fact.get("status")))
         source_lines.append("")
 
-    answer_lines = _render_answer_delivery(rec, lang)
+    # This synchronous render owns the checked list. Never read it from state;
+    # the same guard result determines prose and both question-coverage views.
+    visible = _displayable_analyses(rec)
+    answer_lines = _render_answer_delivery(rec, lang, visible=visible)
     if format_name == "evidence_first":
         lines.extend(source_lines)
         lines.extend(["## 条件回答" if zh else "## Conditional answers", ""])
         lines.extend(answer_lines)
     elif format_name == "comparison_matrix":
-        visible = _displayable_analyses(rec)
         inventory = rec["answer_delivery"]["requirements"]
         lines.extend(["## 原问题覆盖" if zh else "## Original question coverage", "",
                       "| 原问题 | 当前状态 |" if zh else "| Original question | Current status |",

@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Reuse one terminal analysis check within each compact report
+
+Share the locally checked analysis list across prose, question gaps and the
+comparison table. Independent detail/helper calls still run the same gate;
+an empty result never triggers another pass. Keep legacy adapters, authority
+withdrawal, citation/review guards, escaping and full output unchanged. No new
+state, answer representation or call; manifest and core asset identity stay the
+same. This removes repeated deterministic work, without measured latency or
+live quality claims.
+
 ### Acquire bounded Chinese official proposals before evidence admission
 
 Use original mixed-script catalog names before adapted supplements, preserving
