@@ -6,6 +6,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from ..security.input_limits import validate_safe_text
+from ..contracts.api import QueryText
 
 BoundedStateText = Annotated[str, StringConstraints(max_length=4000)]
 ShortStateText = Annotated[str, StringConstraints(max_length=500)]
@@ -18,6 +19,9 @@ class SessionState(BaseModel):
     session_id: str = ""
     status: Literal["clarifying","ready","running","done"] = "clarifying"
     
+    current_query: QueryText | None = None
+    resolved_round: int | None = Field(default=None, ge=0, le=100)
+
     candidate_techs: list[ShortStateText] = Field(default_factory=list, max_length=50)
     scene: Literal["solo","team","enterprise"] | None = None
     complexity: Literal["simple","medium","complex"] | None = None
@@ -112,16 +116,12 @@ class SessionManager:
         return self._response(state)
 
     def _extract_initial_state(self, query: str) -> SessionState:
-        state = SessionState()
+        state = SessionState(current_query=query)
         state.missing_required = ["candidate_techs","scene","complexity"]
         state.clarity_score = 0.15
         response = self._detect_tech_keywords(query)
-        if response:
-            state.candidate_techs = response
-            state.missing_required.remove("candidate_techs")
-            state.filled_required.append("candidate_techs")
-        else:
-            state.unknown_techs = True
+        # A mention (including a negated one) is not a selected candidate.
+        state.unknown_techs = not bool(response)
         return state
 
     def _response(self, state: SessionState) -> dict:
@@ -147,9 +147,17 @@ class SessionManager:
         if not message or len(message) > 2000:
             raise ValueError("message length is invalid")
         validate_safe_text(message)
-        state.last_active = time.time()
+        if len(state.messages) >= 39:
+            raise ValueError("session message capacity is exhausted")
+        pending = [m["content"] for m in state.messages if m["role"] == "user"][(state.resolved_round or 0) + 1:]
+        if sum(map(len, pending)) + len(message) > 4000:
+            raise ValueError("unresolved replies exceed 4000 characters; start a new session with the complete request")
         state.append_message("user", message)
+        state.last_active = time.time()
         state.clarify_rounds += 1
+        state.status = "clarifying"
+        state.clarified_task = None
+        state.sub_questions = None
         return self._response(state)
 
     def _get_or_raise(self,session_id:str) -> SessionState:
@@ -168,10 +176,7 @@ class SessionManager:
         return self._get_or_raise(session_id)
 
     def _apply_soft_gate(self,state:SessionState) -> SessionState:
-        if state.scene is None:
-            state.scene = "team"
-        if state.complexity is None:
-            state.complexity = "medium"
+        # Unknown requirements stay unknown, including explicit user clearing.
         state.filled_required = []
         state.missing_required = []
         if state.candidate_techs:
@@ -189,12 +194,35 @@ class SessionManager:
         state.clarity_score = len(state.filled_required)/(len(state.missing_required) + len(state.filled_required))
         return state
     
-    def finalize(self,session_id:str) -> dict:
+    def finalize(self,session_id:str, *, expected_round: int | None = None, review_only: bool = False) -> dict:
         state = self._get_or_raise(session_id)
+        if expected_round is not None and (expected_round != state.clarify_rounds
+                                           or state.status != "ready" or state.clarified_task is None):
+            raise ValueError("confirmation is no longer current")
+        if state.clarify_rounds and state.resolved_round != state.clarify_rounds:
+            raise ValueError("latest replies have not been incorporated")
+        if len(state.messages) >= 40:
+            raise ValueError("session message capacity is exhausted")
+        if expected_round is None and not review_only and state.status != "ready":
+            if state.clarify_rounds:
+                raise ValueError("current requirements must be reviewed before skipping")
+            # Legacy first-turn skip uses only the actual user's original input,
+            # never an undisplayed model rewrite or model-inferred fields.
+            state.current_query = state.messages[0]["content"]
+            state.candidate_techs = []
+            state.constraints = []
+            state.scene = None
+            state.complexity = None
         self._apply_soft_gate(state)
         state.status = "ready"
         return self._response(state)
     
+    def commit_response(self, expected: SessionState, message_count: int, draft: SessionState) -> None:
+        current = self._get_or_raise(expected.session_id)
+        if current is not expected or len(current.messages) != message_count:
+            raise ValueError("clarification changed while processing")
+        self._sessions[expected.session_id] = draft
+
     def get_status(self,session_id:str) -> dict:
         state = self._get_or_raise(session_id)
         return self._response(state)

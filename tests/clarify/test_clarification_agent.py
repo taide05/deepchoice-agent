@@ -2,6 +2,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.clarify import model_snapshot
+
 from deepchoice.clarify.clarification_agent import (
     ClarificationAgent,
     _get_recommendations,
@@ -88,8 +90,8 @@ class TestClarificationAgentRecommend:
         state.unknown_techs = True
         state.clarify_rounds = 1
 
-        mock_llm = {"message": "这些是推荐的框架，你看看想比较哪几个？", "action": "recommend",
-                    "candidate_techs": ["LangChain", "Dify"]}
+        mock_llm = model_snapshot(state.messages[0]["content"], action="recommend",
+                                  candidate_techs=["LangChain", "Dify"])
         agent = ClarificationAgent()
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_call:
             if provider_fails:
@@ -133,6 +135,7 @@ class TestClarificationAgentSubQuestions:
     @pytest.mark.asyncio
     async def test_generate_sub_questions_fallback_on_error(self):
         state = SessionState()
+        state.current_query = "Compare React and Vue"
         state.candidate_techs = ["React", "Vue"]
         state.scene = "team"
         state.complexity = "medium"
@@ -158,9 +161,8 @@ def test_only_user_candidate_mentions_can_fill_selection(reply, candidates, expe
         {"role": "assistant", "content": "Perhaps Zephyr or Sable?"},
         {"role": "user", "content": reply},
     ])
-    ClarificationAgent()._merge_and_build_response(state, {
-        "action": "ask", "message": "Next question", "candidate_techs": candidates,
-    })
+    ClarificationAgent()._merge_and_build_response(state, model_snapshot(
+        state.messages[0]["content"], candidate_techs=candidates))
     assert state.candidate_techs == expected
     assert ("candidate_techs" in state.filled_required) == bool(expected)
 
@@ -173,7 +175,9 @@ def test_distinct_original_requests_and_replies_do_not_share_clarification_promp
         {"role": "assistant", "content": "Who will maintain this?"},
         {"role": "user", "content": "Personal use, no additional server"},
     ])
+    first.resolved_round = 1
     second = first.model_copy(deep=True)
+    second.resolved_round = 0
     second.messages = [
         {"role": "user", "content": "Choose a routing library for throughput"},
         {"role": "assistant", "content": "What is the deployment scope?"},
@@ -192,7 +196,7 @@ def test_distinct_original_requests_and_replies_do_not_share_clarification_promp
     {"scene": "solo", "complexity": "invalid", "constraints": ["must not commit"]},
     {"message": "x" * 4000},
 ])
-async def test_confirm_failure_is_atomic_and_default_notice_stays_within_message_limit(model_result):
+async def test_confirm_failure_is_atomic_and_does_not_invent_defaults(model_result):
     state = SessionState(candidate_techs=["Zephyr"], constraints=["Keep original constraint"],
         clarify_rounds=3, missing_required=["scene", "complexity"], messages=[
             {"role": "user", "content": "Compare Zephyr for personal use"},
@@ -203,24 +207,26 @@ async def test_confirm_failure_is_atomic_and_default_notice_stays_within_message
         else:
             model.return_value = model_result
         response = await ClarificationAgent().decide_and_respond(state)
-    assert model.await_count == 1 and response["action"] == "confirm"
-    assert state.scene == "team" and state.complexity == "medium"
+    assert model.await_count == 1 and response["action"] == "ask"
+    assert state.scene is None and state.complexity is None
     assert state.constraints == ["Keep original constraint"]
-    assert "场景=team" in response["answer"] and "复杂度=medium" in response["answer"]
-    assert "推测" in response["answer"] and len(response["answer"]) <= 4000
+    assert len(response["answer"]) <= 4000
     state.append_message("assistant", response["answer"])
-    assert response["payload"]["clarified_task"]["constraints"] == ["Keep original constraint"]
+    assert state.clarified_task is None
 
 
-async def test_confirm_preserves_known_values_and_defaults_only_missing_fields():
+
+async def test_confirm_preserves_known_values_and_keeps_missing_fields_unknown():
     state = SessionState(scene="solo", candidate_techs=["Zephyr"], clarify_rounds=3,
                          missing_required=["complexity"], messages=[
                              {"role": "user", "content": "Compare Zephyr for personal use"}])
     with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
-        model.return_value = {"scene": "enterprise", "message": "Confirm this request"}
+        model.return_value = model_snapshot(state.messages[0]["content"], scene="solo",
+                                            candidate_techs=["Zephyr"])
         response = await ClarificationAgent().decide_and_respond(state)
-    assert state.scene == "solo" and state.complexity == "medium"
-    assert "复杂度=medium" in response["answer"] and "场景=" not in response["answer"]
+    assert state.scene == "solo" and state.complexity is None
+    assert response["payload"]["clarified_task"]["complexity"] is None
+    assert "未知" in response["answer"]
     assert model.await_count == 1
 
 
@@ -242,8 +248,8 @@ async def test_unknown_category_asks_without_cards_and_preserves_reply_extractio
         if provider_fails:
             model.side_effect = RuntimeError("provider error")
         else:
-            model.return_value = {"action": "recommend", "scene": "solo",
-                                  "constraints": ["No new server"], "message": "Use a framework"}
+            model.return_value = model_snapshot(state.messages[0]["content"], action="recommend",
+                                                scene="solo", constraints=["No new server"])
         response = await ClarificationAgent().decide_and_respond(state)
     assert response["action"] == "ask" and response["payload"] == {"reason": "category_unknown"}
     assert "技术方向" in response["answer"] and model.await_count == 1

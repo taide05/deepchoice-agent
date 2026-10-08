@@ -1409,7 +1409,9 @@ content_insufficient、其他未通过状态或缺失检查都换成固定待核
 历史范围格式观察使用fact-selection-v2；当前默认视图选择使用fact-view-selection-v1，旧profile保持可读。
 形状通过不代表坐标、绑定、语义或内容验收通过。
 
-## 澄清入口输入保真（2026-10-07）
+## 澄清入口输入保真（2026-10-07阶段记录）
+
+以下R13/R14行为的当前替代契约见文末R34；不得据旧soft-default描述恢复已移除行为。
 
 澄清在durable task创建之前，无RunContext预算/Trace；本次不改变该费用边界。首问API/
 create/首条会话消息统一最多4000字符，后续用户消息2000、助手消息4000；超限拒绝且不
@@ -1452,3 +1454,41 @@ clarified_task及requirements_complete四语言投影，缺项不提供确认pay
 冲突扫描的无对象早退（2026-10-07）：先执行原score>=5过滤和不足两源早退，再加载原BGE。
 无配对时原conflicts/quality_signals/token_usage投影不变；有对象的加载/扫描异常继续传播，
 阈值、15对、预算和兼容仲裁不变。不改变task/run事务、状态模式或提示/manifest身份。
+
+
+## R34：当前澄清快照与执行请求（2026-10-08）
+
+澄清仍是durable创建前的有界内存会话，不增加run预算/Trace上下文。原每轮模型调用
+返回全部current_query、scene、complexity、candidate_techs、constraints、unknown_techs；
+缺字段或非法快照整份不提交，先通过正式ResearchRequest及既有列表/文本上限。
+有效快照替换当前需求，[]/null可清空；初始技术词仅提示是否需要示例，不自动选择候选。
+模型候选仍须用户字面提及，字面命中和模型改写均不构成用户同意/语义保真的证明。
+
+ResearchRequest schema v1新增可选original_query（非空时最多4000字符，安全文本及
+32,768字符聚合限额同样适用）。query是唯一执行问题；变更后的首问作审计，未变化不重复
+写入澄清payload。审计原文在可信单用户Task GET/结果请求中可见，不是秘密字段；直调API的该字段由调用方
+提供，不是服务端独立验真的历史记录。它不用于
+查询上下文、R0、子题生成或判断。历史缺字段请求仍可读，无SQL迁移。检索缓存接收独立
+RetrievalRequest，不包含此字段；澄清不属默认workflow/core资产，manifest和已有run
+兼容身份保持。保存原问不意味着保存了整段澄清对话。
+
+每条用户回复仍2000字符；原问/当前问题各4000，尚未合入的回复合计最多4000，上一条
+助手消息最多4000，消息总量40。处理成功只保留当前快照进入下一轮提示，并保留未处理
+回复；超限在append/外呼前拒绝，不截断后标为已合入。消息容量预留一条助手回复。
+新消息清ready/clarified_task/sub_questions；模型失败保持clarifying，未处理修正使
+finalize返回409。异步响应在副本上生成，提交前检查会话对象及消息数，迟到响应409。
+该检查只保护内存澄清交接，不是产品数据库CAS或多worker协调。
+
+confirm只展示同一已验证快照，模型message不拥有摘要权威。前端显示实际query、全部
+constraints、候选与未知字段，只为最后一条确认显示启动按钮。默认前端POST finalize
+携带{clarify_rounds: N}，轮次过时或已失效返回409，不重写提交选择。前端“跳过澄清”发送{review_only: true}，
+不再提问或调用模型，先展示同一完整快照，再由带轮次的确认提交。无body/空body旧端口
+只有在已经展示确认时才提交当前快照；首轮尚未展示确认则仅提交原始用户query，清除
+未确认的模型候选/约束/场景推断。有后续修正但尚未展示确认时返回409；任何skip均不能
+越过未处理回复。
+所有finalize保持未知scene/complexity为null，不再填team/medium；后续query_analyzer
+仍可能产生coarse team标签，固定五维问题生成也仍存在，留作A10后续，不能声称全链
+已消除默认推测。正常提取及finalize模型调用数量不增；实际语义保真仍需真实报告验证。
+
+未提供或显式为null的original_query在ResearchRequest序列化中省略，保持历史请求的
+规范化表示及冻结hash；非空审计输入仍按有界字段保存和返回。旧评估请求不作回填。

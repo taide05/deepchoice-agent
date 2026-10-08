@@ -1,5 +1,7 @@
 import pytest
 
+from tests.clarify import model_snapshot
+
 from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
@@ -163,11 +165,9 @@ class TestActualClarificationInput:
         try:
             with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
                 model.side_effect = [
-                    {"action": "ask", "message": "Which candidates and deployment scope?",
-                     "candidate_techs": ["Zephyr", "Sable"]},
-                    {"action": "ask", "message": "Ready to confirm",
-                     "candidate_techs": ["Zephyr", "Sable"], "scene": "solo",
-                     "complexity": "simple", "constraints": ["no additional server"]},
+                    model_snapshot(original, message="Which candidates and deployment scope?", candidate_techs=["Zephyr", "Sable"]),
+                    model_snapshot(original, candidate_techs=["Zephyr", "Sable"], scene="solo",
+                                   complexity="simple", constraints=["no additional server"]),
                     {"sub_questions": ["What changes after restart?"]},
                 ]
                 start = client.post("/clarify/start", json={"query": original})
@@ -216,10 +216,9 @@ class TestActualLastRoundConfirmation:
         try:
             with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
                 model.side_effect = [
-                    {"action": "ask", "message": "What is the scope and complexity?"},
-                    {"action": "confirm", "message": "Confirm the enterprise recovery requirement",
-                     "scene": "enterprise", "complexity": "complex",
-                     "candidate_techs": ["Zephyr", "Sable"], "constraints": ["no new server"]},
+                    model_snapshot(original, message="What is the scope and complexity?"),
+                    model_snapshot(original, action="confirm", scene="enterprise", complexity="complex",
+                                   candidate_techs=["Zephyr", "Sable"], constraints=["no new server"]),
                     {"sub_questions": ["How is restart recovery preserved without a new server?"]},
                 ]
                 start = client.post("/clarify/start", json={"query": original})
@@ -256,8 +255,8 @@ class TestActualStaticCandidateBoundary:
         try:
             with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
                 model.side_effect = [
-                    {"action": "recommend", "scene": "solo", "constraints": ["No new server"]},
-                    {"action": "recommend", "message": "These are best", "candidate_techs": ["React", "Vue"]},
+                    model_snapshot("Need rapid explain happy", action="recommend", unknown_techs=True, scene="solo", constraints=["No new server"]),
+                    model_snapshot("我想做个网站", action="recommend", unknown_techs=True, scene="solo", constraints=["No new server"], candidate_techs=["React", "Vue"]),
                 ]
                 start = client.post("/clarify/start", json={"query": "Need rapid explain happy"})
                 assert start.status_code == 200 and start.json()["next_action"] == "ask"
@@ -285,8 +284,7 @@ def test_extracted_user_candidates_take_priority_over_static_examples(query, sce
     sid = None
     try:
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
-            model.return_value = {"action": "confirm", "message": "Please provide the missing scope",
-                                  "candidate_techs": ["Atlas", "Borealis"], "scene": scene, "complexity": complexity}
+            model.return_value = model_snapshot(query, action="confirm", candidate_techs=["Atlas", "Borealis"], scene=scene, complexity=complexity)
             response = client.post("/clarify/start", json={"query": query})
             assert response.status_code == 200 and response.json()["next_action"] == expected
             sid = response.json()["session_id"]
@@ -311,8 +309,8 @@ def test_named_candidate_ask_can_complete_with_one_call_and_a_queryable_confirma
     query = "Evaluate FastAPI for a personal project with simple processing; No new server"
     try:
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as model:
-            model.return_value = {"action": model_action, "message": "Please tell me the scope",
-                                  "scene": "solo", "complexity": "simple", "constraints": ["No new server"]}
+            model.return_value = model_snapshot(query, action=model_action, candidate_techs=["fastapi"],
+                                                scene="solo", complexity="simple", constraints=["No new server"])
             response = client.post("/clarify/start", json={"query": query})
             assert response.status_code == 200 and response.json()["next_action"] == "confirm"
             sid = response.json()["session_id"]
@@ -353,8 +351,7 @@ def test_named_candidate_ask_keeps_partial_or_failed_extraction_out_of_confirmat
             assert state.complexity is None and state.constraints == []
             status = client.get(f"/clarify/{sid}/status")
             assert status.status_code == 200 and status.json()["status"] == "clarifying"
-            expected_scene = "solo" if isinstance(model_result, dict) and "complexity" not in model_result else None
-            assert state.scene == expected_scene and model.await_count == 1
+            assert state.scene is None and model.await_count == 1
     finally:
         if sid is not None:
             session_manager._sessions.pop(sid, None)

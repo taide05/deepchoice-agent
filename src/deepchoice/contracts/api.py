@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_serializer, model_validator
 from typing_extensions import Annotated
 
 from deepchoice.hitl import DecisionResolution
@@ -39,6 +39,7 @@ class ResearchRequest(BaseModel):
 
     schema_version: Literal[1] = 1
     query: QueryText
+    original_query: QueryText | None = Field(default=None, description="Original clarification input for audit only; query is the current execution request.")
     scene_context: Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] | None = None
     constraints: list[ShortText] = Field(default_factory=list, max_length=50)
     candidate_techs: list[ShortText] = Field(default_factory=list, max_length=50)
@@ -49,12 +50,21 @@ class ResearchRequest(BaseModel):
         description="Deprecated compatibility metadata. The scan-only workflow does not arbitrate or gather conflict evidence, regardless of this value.")
     language: Annotated[str, StringConstraints(strip_whitespace=True, max_length=50)] | None = None
 
+    @model_serializer(mode="wrap")
+    def serialize_request(self, handler):
+        data = handler(self)
+        # Preserve canonical historical requests and their frozen hashes when
+        # this additive audit field was not supplied (including explicit null).
+        if self.original_query is None:
+            data.pop("original_query", None)
+        return data
+
     @model_validator(mode="after")
     def validate_text_boundary(self) -> "ResearchRequest":
         values = [self.query]
         values.extend(
             value
-            for value in (self.scene_context, self.complexity, self.language)
+            for value in (self.original_query, self.scene_context, self.complexity, self.language)
             if value is not None
         )
         values.extend(self.constraints)

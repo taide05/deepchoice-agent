@@ -349,3 +349,18 @@ async def test_original_target_fallback_propagates_budget_and_cancellation(monke
         await query_adapter.QueryAdapterAgent().run({"task": {"query": "q" * 4000},
             "sub_questions": [], "_supplemental_input": "Private context"})
     model.assert_awaited_once()
+
+
+@pytest.mark.parametrize("module", [query_analyzer, query_adapter], ids=["analyzer", "adapter"])
+async def test_original_clarification_query_is_audit_only(monkeypatch, module):
+    from deepchoice.utils.question_packet import question_rows
+    task = ResearchRequest(query="Compare Cedar and Maple for a solo project", original_query="REVOKED must use Oak",
+                           candidate_techs=["Cedar", "Maple"], constraints=["No extra server"]).model_dump()
+    state = {"task": task}
+    if module is query_adapter:
+        state["sub_questions"] = ["What are the deployment requirements?"]
+    _, payload, prompt = await _run_captured(monkeypatch, module, state)
+    assert "REVOKED" not in json.dumps(prompt)
+    assert "original_query" not in payload["request"]
+    rows = question_rows(task["query"], [])
+    assert rows == [("R0", task["query"])]

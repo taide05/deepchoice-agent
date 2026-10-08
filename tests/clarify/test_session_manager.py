@@ -12,11 +12,12 @@ class TestSessionManagerCreate:
         assert result["session_id"].startswith("clarify_")
         assert result["status"] == "clarifying"
 
-    def test_detects_tech_keywords_in_query(self):
+    def test_tech_mentions_do_not_preselect_candidates(self):
         sm = SessionManager()
         result = sm.create("FastAPI vs Flask 哪个好")
-        assert "candidate_techs" in result["filled_required"]
-        assert "candidate_techs" not in result["missing_required"]
+        assert "candidate_techs" not in result["filled_required"]
+        assert "candidate_techs" in result["missing_required"]
+        assert sm.get(result["session_id"]).unknown_techs is False
 
     def test_no_tech_keywords_marks_unknown(self):
         sm = SessionManager()
@@ -42,14 +43,14 @@ class TestSessionManagerProcessMessage:
 
 
 class TestSessionManagerFinalize:
-    def test_applies_soft_gate_defaults(self):
+    def test_skip_keeps_unknown_requirements(self):
         sm = SessionManager()
         result = sm.create("做个AI应用")
         sid = result["session_id"]
         sm.finalize(sid)
         state = sm._sessions[sid]
-        assert state.scene == "team"
-        assert state.complexity == "medium"
+        assert state.scene is None
+        assert state.complexity is None
         assert state.status == "ready"
 
     def test_preserves_existing_values_on_finalize(self):
@@ -62,7 +63,7 @@ class TestSessionManagerFinalize:
         state.filled_required = ["candidate_techs", "scene", "complexity"]
         state.missing_required = []
         sm._sessions[sid] = state
-        sm.finalize(sid)
+        sm.finalize(sid, review_only=True)
         final_state = sm._sessions[sid]
         assert final_state.scene == "enterprise"
         assert final_state.complexity == "complex"

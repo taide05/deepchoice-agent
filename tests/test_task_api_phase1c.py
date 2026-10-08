@@ -232,3 +232,34 @@ def test_resume_returns_accepted_when_post_commit_wakeup_fails(
         events = client.portal.call(repository.list_task_events, task_id)
         assert events[-1].type == "run.retry_queued"
         assert events[-1].run_id == body["latest_run"]["run_id"]
+
+
+def test_clarified_request_and_audit_original_survive_task_restart(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    from deepchoice.clarify import clarification_agent
+    from tests.clarify import model_snapshot
+    original = "Compare Redis and PostgreSQL; Redis is required"
+    current = "Compare SQLite and PostgreSQL; Redis is excluded"
+    replies = [model_snapshot(original, scene="team", complexity="medium", candidate_techs=["Redis", "PostgreSQL"],
+                              constraints=["Redis is required"]),
+               model_snapshot(current, scene="solo", complexity="simple", candidate_techs=["SQLite", "PostgreSQL"],
+                              constraints=["Redis is excluded"]), {"sub_questions": ["How do the deployment requirements differ?"]}]
+    model = AsyncMock(side_effect=replies)
+    monkeypatch.setattr(clarification_agent, "call_model", model)
+    app_module.app.state.product_database_path = tmp_path / "clarified.db"
+    with TestClient(app_module.app) as client:
+        sid = client.post("/clarify/start", json={"query": original}).json()["session_id"]
+        confirmation = client.post(f"/clarify/{sid}/message", json={"message": current}).json()
+        finalized = client.post(f"/clarify/{sid}/finalize", json={"clarify_rounds": confirmation["clarify_rounds"]})
+        assert finalized.status_code == 200
+        payload = finalized.json()["payload"]
+        created = client.post("/api/v1/tasks", json={**payload["clarified_task"], "sub_questions": payload["sub_questions"]})
+        assert created.status_code == 202
+        task_id = created.json()["task"]["task_id"]
+    with TestClient(app_module.app) as client:
+        request = client.get(f"/api/v1/tasks/{task_id}").json()["task"]["request"]
+        assert request["query"] == current and request["original_query"] == original
+        assert request["constraints"] == ["Redis is excluded"]
+        assert request["candidate_techs"] == ["SQLite", "PostgreSQL"]
+        assert request["scene_context"] == "solo" and request["complexity"] == "simple"
+    assert model.await_count == 3

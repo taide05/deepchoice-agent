@@ -6,6 +6,8 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
+from tests.clarify import model_snapshot
+
 from deepchoice.budget_errors import BudgetError
 from deepchoice.clarify.session_manager import SessionManager, SessionState
 from deepchoice.clarify.clarification_agent import ClarificationAgent, _research_payload
@@ -719,19 +721,12 @@ async def test_application_wires_request_body_limit():
 
 
 def test_clarification_agent_rejects_unbounded_model_collections():
-    state = SessionState(missing_required=["candidate_techs"])
-    response = ClarificationAgent()._merge_and_build_response(
-        state,
-        {
-            "action": "unexpected",
-            "message": "ok",
-            "candidate_techs": ["x"] * 51,
-            "constraints": ["y"] * 51,
-        },
-    )
-    assert state.candidate_techs == []
-    assert state.constraints == []
-    assert response["action"] == "ask"
+    state = SessionState(current_query="Select a tool", missing_required=["candidate_techs"])
+    before = state.model_dump()
+    with pytest.raises(ValueError):
+        ClarificationAgent()._merge_and_build_response(
+            state, model_snapshot("Select a tool", candidate_techs=["x"] * 51, constraints=["y"] * 51))
+    assert state.model_dump() == before
 
 
 def test_clarification_model_merge_is_atomic_on_invalid_output():
@@ -739,7 +734,7 @@ def test_clarification_model_merge_is_atomic_on_invalid_output():
     with pytest.raises(ValidationError):
         ClarificationAgent()._merge_and_build_response(
             state,
-            {"scene": "solo", "complexity": "invalid", "message": "ok"},
+            model_snapshot("Select a tool", scene="solo", complexity="invalid"),
         )
     assert state.scene is None
     assert state.complexity is None

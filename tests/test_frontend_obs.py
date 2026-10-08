@@ -1165,3 +1165,55 @@ def test_partial_retrieval_panel_distinguishes_retained_material(monkeypatch, la
     at.run()
     assert not at.exception
     assert label in _md_text(at) and 'RuntimeError: HTTP 404' in _md_text(at)
+
+
+@pytest.mark.parametrize("lang_code", ["zh", "en", "ja", "ko"])
+def test_confirmation_displays_execution_input_and_submits_only_current_revision(monkeypatch, lang_code):
+    posts = []
+    def post(url, **kwargs):
+        posts.append((url, kwargs.get("json")))
+        return _FakeResp({}, status_code=409)
+    monkeypatch.setattr(httpx, "post", post)
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["lang"] = lang_code
+    at.session_state["clarify_session_id"] = "clarify_123456789abc"
+    def confirmation(query, number):
+        return {"role": "assistant", "action": "confirm", "content": "Review current requirements",
+                "payload": {"clarify_rounds": number, "clarified_task": {
+                    "query": query, "constraints": ["No Redis", "Offline operation"],
+                    "candidate_techs": ["SQLite", "PostgreSQL"], "scene_context": None, "complexity": None}}}
+    at.session_state["clarify_messages"] = [confirmation("Old question", 0),
+        {"role": "user", "content": "Use SQLite instead"}, confirmation("Current complete question", 1)]
+    at.run()
+    assert not at.exception
+    text = "\n".join(item.value for item in at.text)
+    assert "Current complete question" in text and "No Redis" in text and "Offline operation" in text
+    # Historical confirmation stays readable without a duplicate/live start button.
+    assert len([button for button in at.button if button.proto.type == "primary"]) == 1
+    next(button for button in at.button if button.proto.type == "primary").click().run()
+    assert not at.exception and at.error
+    assert len(posts) == 1 and posts[0][0].endswith("/clarify/clarify_123456789abc/finalize")
+    assert posts[0][1] == {"clarify_rounds": 1}
+    assert at.session_state["phase"] == "clarify" and at.session_state["clarified_data"] is None
+
+
+def test_skip_opens_full_confirmation_without_starting_research(monkeypatch):
+    posts = []
+    def post(url, **kwargs):
+        posts.append((url, kwargs.get("json")))
+        return _FakeResp({"action": "confirm", "answer": "Review current requirements", "clarify_rounds": 0,
+            "payload": {"reason": "review_requested", "clarify_rounds": 0, "clarified_task": {
+                "query": "MODEL REWRITE TO REVIEW", "constraints": ["A condition to review"],
+                "candidate_techs": [], "scene_context": None, "complexity": None}}})
+    monkeypatch.setattr(httpx, "post", post)
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["clarify_session_id"] = "clarify_123456789abc"
+    at.session_state["clarify_messages"] = [{"role": "user", "content": "My original request"},
+        {"role": "assistant", "content": "What is the scope?", "action": "ask"}]
+    at.run()
+    at.button(key="clarify_skip_btn").click().run()
+    assert not at.exception
+    assert len(posts) == 1 and posts[0][0].endswith("/finalize") and posts[0][1] == {"review_only": True}
+    assert at.session_state["phase"] == "clarify" and at.session_state["clarified_data"] is None
+    assert at.session_state["clarify_messages"][-1]["action"] == "confirm"
+    assert "MODEL REWRITE TO REVIEW" in "\n".join(item.value for item in at.text)

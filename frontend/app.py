@@ -44,6 +44,10 @@ T = {
         "recommend_caption": "尚未研究适用性；勾选想比较的技术，也可输入其他候选",
         "compare_btn": "对比所选",
         "confirm_title": "确认研究",
+        "confirm_query": "当前研究问题",
+        "confirm_constraints": "当前约束",
+        "confirm_unknown": "未提供",
+        "clarify_error": "会话已变化或尚有未处理内容，请修改或重新确认；输入过长时请新建研究。",
         "confirm_scene": "场景: {scene}  |  复杂度: {complexity}",
         "start_research_btn": "开始深度研究",
         "researching": "研究中:",
@@ -207,6 +211,10 @@ T = {
         "recommend_caption": "Suitability has not been researched. Select examples or enter other candidates.",
         "compare_btn": "Compare selected",
         "confirm_title": "Confirm your research",
+        "confirm_query": "Current research question",
+        "confirm_constraints": "Current constraints",
+        "confirm_unknown": "Not specified",
+        "clarify_error": "The session changed or has unresolved input. Revise or review it again; start a new research session if input is full.",
         "confirm_scene": "Scene: {scene}  |  Complexity: {complexity}",
         "start_research_btn": "Start Deep Research",
         "researching": "Researching:",
@@ -370,6 +378,10 @@ T = {
         "recommend_caption": "適合性は未調査です。比較する候補を選ぶか、別の候補を入力してください。",
         "compare_btn": "選択したものを比較",
         "confirm_title": "研究確認",
+        "confirm_query": "現在の研究課題",
+        "confirm_constraints": "現在の制約",
+        "confirm_unknown": "未指定",
+        "clarify_error": "セッションが変更されたか、未処理の入力があります。修正または再確認してください。入力上限の場合は新しい研究を開始してください。",
         "confirm_scene": "シーン: {scene}  |  複雑さ: {complexity}",
         "start_research_btn": "深層リサーチを開始",
         "researching": "研究中:",
@@ -533,6 +545,10 @@ T = {
         "recommend_caption": "적합성은 아직 조사하지 않았습니다. 예시를 선택하거나 다른 후보를 입력하세요.",
         "compare_btn": "선택 비교",
         "confirm_title": "연구 확인",
+        "confirm_query": "현재 조사 질문",
+        "confirm_constraints": "현재 제약 조건",
+        "confirm_unknown": "미지정",
+        "clarify_error": "세션이 변경되었거나 미처리 입력이 있습니다. 수정하거나 다시 확인하세요. 입력 한도에 도달했다면 새 조사를 시작하세요.",
         "confirm_scene": "장면: {scene}  |  복잡도: {complexity}",
         "start_research_btn": "심층 연구 시작",
         "researching": "연구 중:",
@@ -970,6 +986,7 @@ DEFAULTS = {
     "phase": "clarify",
     "clarify_session_id": None,
     "clarify_messages": [],
+    "clarify_error": False,
     "clarified_data": None,
     "research_task_id": None,
     "research_started": False,
@@ -1047,21 +1064,24 @@ def render_clarify_phase():
     chat_col, info_col = st.columns([3, 1])
 
     with chat_col:
-        for msg in st.session_state.clarify_messages:
+        if st.session_state.clarify_error:
+            st.error(t("clarify_error", lang))
+        for index, msg in enumerate(st.session_state.clarify_messages):
+            active = index == len(st.session_state.clarify_messages) - 1
             if msg["role"] == "assistant":
                 with st.chat_message("assistant"):
                     content = msg["content"]
                     if msg.get("action") == "recommend" and msg.get("payload", {}).get("candidates"):
                         content = t("recommend_intro", lang)
-                    elif msg.get("payload", {}).get("reason") == "requirements_complete":
+                    elif msg.get("payload", {}).get("reason") in {"requirements_complete", "review_requested"}:
                         content = t("confirm_ready", lang)
                     elif msg.get("payload", {}).get("reason") == "category_unknown":
                         content = t("category_question", lang)
                     st.markdown(content)
-                    if msg.get("action") == "recommend" and msg.get("payload", {}).get("candidates"):
+                    if active and msg.get("action") == "recommend" and msg.get("payload", {}).get("candidates"):
                         _render_tech_picker(msg["payload"]["candidates"])
                     if msg.get("action") == "confirm" and msg.get("payload"):
-                        _render_confirm_section(msg["payload"])
+                        _render_confirm_section(msg["payload"], active=active)
             else:
                 with st.chat_message("user"):
                     st.markdown(msg["content"])
@@ -1155,21 +1175,26 @@ def _render_tech_picker(candidates: list[dict]):
             st.rerun()
 
 
-def _render_confirm_section(payload: dict):
+def _render_confirm_section(payload: dict, *, active: bool = True):
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"**{t('confirm_title', lang)}**")
-        summary = t("confirm_ready", lang) if payload.get("reason") == "requirements_complete" else payload.get("summary", "")
+        summary = t("confirm_ready", lang) if payload.get("reason") in {"requirements_complete", "review_requested"} else payload.get("summary", "")
         st.markdown(summary)
-        if payload.get("candidate_techs"):
-            st.markdown("Comparing: " + "**, **".join(payload["candidate_techs"]))
-        if payload.get("scene"):
-            st.caption(t("confirm_scene", lang, scene=payload["scene"], complexity=payload.get("complexity", "N/A")))
+        task = payload.get("clarified_task", {})
+        st.markdown(f"**{t('confirm_query', lang)}**")
+        st.text(task.get("query", ""))
+        st.markdown(f"**{t('confirm_constraints', lang)}**")
+        st.text("\n".join(task.get("constraints", [])) or t("confirm_unknown", lang))
+        if task.get("candidate_techs"):
+            st.text("Comparing: " + ", ".join(task["candidate_techs"]))
+        st.caption(t("confirm_scene", lang, scene=task.get("scene_context") or t("confirm_unknown", lang),
+                     complexity=task.get("complexity") or t("confirm_unknown", lang)))
     with c2:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button(t("start_research_btn", lang), type="primary", use_container_width=True):
-            _handle_finalize()
+        if active and st.button(t("start_research_btn", lang), type="primary", use_container_width=True):
+            _handle_finalize(payload.get("clarify_rounds"))
             st.rerun()
 
 
@@ -1182,6 +1207,7 @@ def _handle_clarify_message(text: str):
 
     if resp.status_code == 200:
         data = resp.json()
+        st.session_state.clarify_error = False
         st.session_state.clarify_session_id = data["session_id"]
         st.session_state.clarify_messages.append({"role": "user", "content": text})
         msg = {"role": "assistant", "content": data["answer"],
@@ -1190,26 +1216,39 @@ def _handle_clarify_message(text: str):
             if k in data:
                 msg[k] = data[k]
         st.session_state.clarify_messages.append(msg)
+    else:
+        st.session_state.clarify_error = True
 
 
 def _handle_skip():
     sid = st.session_state.clarify_session_id
-    if sid:
-        resp = httpx.post(f"{API_BASE}/clarify/{sid}/finalize", timeout=10)
-        if resp.status_code == 200:
-            st.session_state.clarified_data = resp.json().get("payload", {})
-            st.session_state.phase = "research"
-            st.rerun()
+    if not sid:
+        return
+    resp = httpx.post(f"{API_BASE}/clarify/{sid}/finalize", json={"review_only": True}, timeout=10)
+    if resp.status_code != 200 or resp.json().get("action") != "confirm":
+        st.session_state.clarify_error = True
+        return
+    data = resp.json()
+    st.session_state.clarify_error = False
+    st.session_state.clarify_messages.append({"role": "assistant", "content": data["answer"],
+        "action": "confirm", **{key: data[key] for key in
+            ("payload", "clarity_score", "filled_required", "missing_required", "clarify_rounds") if key in data}})
 
 
-def _handle_finalize():
+def _handle_finalize(clarify_rounds: int | None = None):
     sid = st.session_state.clarify_session_id
     if sid:
-        resp = httpx.post(f"{API_BASE}/clarify/{sid}/finalize", timeout=10)
+        options = {"timeout": 10}
+        if clarify_rounds is not None:
+            options["json"] = {"clarify_rounds": clarify_rounds}
+        resp = httpx.post(f"{API_BASE}/clarify/{sid}/finalize", **options)
         if resp.status_code == 200:
+            st.session_state.clarify_error = False
             st.session_state.clarified_data = resp.json().get("payload", {})
             st.session_state.phase = "research"
             st.rerun()
+        else:
+            st.session_state.clarify_error = True
 
 
 # ═══════════════════════════════════════════════════════════════════════════

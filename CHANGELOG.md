@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Execute the current confirmed clarification request
+
+Replace fill-only/append-only extraction with a validated complete current snapshot.
+Allow candidate replacement, constraint withdrawal and explicit unknown fields;
+keyword mentions no longer preselect candidates. Confirmation displays the execution
+query and all constraints, and sub-question generation reads that same query.
+An optional bounded original_query retains the first input as visible request audit
+metadata, not a second execution question. Omit absent/null audit input from serialized
+requests to preserve historical canonical identities. New replies invalidate old confirmations;
+stale asynchronous responses and stale confirmation rounds return conflict. Bound
+unresolved replies and reject attempts to finalize unprocessed amendments. Explicit
+skip opens a complete confirmation; legacy first-turn skip uses only the original
+user request if no confirmation has been shown. Neither path invents team/medium requirements. No new model
+call or durable lifecycle schema; downstream coarse-scene defaults and generic
+five-dimension decomposition remain separate repair items. Synthetic extraction
+checks do not establish real-model requirement fidelity.
+
 ### Preserve complete arXiv abstracts before relevance filtering
 
 ArXiv v3 replaces the 500-character prefix with complete bounded abstract text or

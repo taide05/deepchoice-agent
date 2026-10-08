@@ -2,6 +2,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.clarify import model_snapshot
+
 from deepchoice.clarify.clarification_agent import ClarificationAgent
 from deepchoice.clarify.session_manager import SessionManager
 
@@ -18,7 +20,7 @@ class TestFullClarifyFlow:
         assert state.unknown_techs is True
         assert "candidate_techs" in state.missing_required
 
-        mock_r1 = {"action": "recommend", "message": "对话机器人方向，看看这些框架", "scene": "solo"}
+        mock_r1 = model_snapshot("个人开发对话机器人，用什么框架好", action="recommend", scene="solo")
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_r1
             sm.process_message(sid, "对话机器人")
@@ -26,26 +28,16 @@ class TestFullClarifyFlow:
             r1 = await agent.decide_and_respond(state)
             assert r1["action"] == "recommend"
 
-        state.candidate_techs = ["LangChain", "Dify"]
-        if "candidate_techs" in state.missing_required:
-            state.missing_required.remove("candidate_techs")
-        if "candidate_techs" not in state.filled_required:
-            state.filled_required.append("candidate_techs")
-
-        mock_r2 = {"action": "ask", "message": "这个项目业务逻辑复杂吗？", "complexity": None}
+        mock_r2 = model_snapshot("个人开发对话机器人，比较 LangChain 和 Dify", scene="solo",
+                                 candidate_techs=["LangChain", "Dify"])
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_r2
-            sm.process_message(sid, "就这两个")
+            sm.process_message(sid, "比较 LangChain 和 Dify")
             r2 = await agent.decide_and_respond(state)
             assert r2["action"] in ("ask", "confirm")
 
-        state.complexity = "simple"
-        if "complexity" in state.missing_required:
-            state.missing_required.remove("complexity")
-        if "complexity" not in state.filled_required:
-            state.filled_required.append("complexity")
-
-        mock_r3 = {"action": "confirm", "message": "确认：solo开发者，简单对话机器人，LangChain vs Dify。开始研究？"}
+        mock_r3 = model_snapshot("个人开发简单对话机器人，比较 LangChain 和 Dify", action="confirm",
+                                 scene="solo", complexity="simple", candidate_techs=["LangChain", "Dify"])
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_r3
             sm.process_message(sid, "简单的对话机器人")
@@ -69,14 +61,11 @@ class TestFullClarifyFlow:
         assert len(final["payload"]["clarified_task"]["candidate_techs"]) == 2
 
     @pytest.mark.asyncio
-    async def test_forced_finalize_with_defaults(self):
+    async def test_initial_skip_keeps_missing_requirements(self):
         sm = SessionManager()
         sm.create("做个项目")
         sid = list(sm._sessions.keys())[0]
-        state = sm._sessions[sid]
-        state.clarify_rounds = 1
-
         sm.finalize(sid)
         final_state = sm._sessions[sid]
-        assert final_state.scene == "team"
-        assert final_state.complexity == "medium"
+        assert final_state.scene is None
+        assert final_state.complexity is None
