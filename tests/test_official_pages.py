@@ -506,3 +506,168 @@ async def test_saved_consecutive_chinese_conditions_survive_scope_selection_and_
     checked = calibrate_evidence_choices(bound, checks)
     assert checked["source_facts"][0]["status"] == "verified"
     assert checked["source_facts"][0]["saved_text"] == prose
+
+
+CHINESE_PROSE = ("Acme 的字段过滤会按照指定条件选择匹配记录，并按照索引状态限制可以执行的查询。"
+                 "过滤操作本身不能证明权限检查已经完成，应用程序必须单独限制用户可访问的文档集合。"
+                 "只有满足这些条件，才能评估当前查询路径是否符合访问要求。")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("query,adapted,keys,expected", [
+    ("Beta与Acme比较", (), ["acme", "beta"], ["beta", "acme"]),
+    ("Acme是否支持字段过滤？", (), ["acme"], ["acme"]),
+    ("Beta与Acme比较", ("acme filtering",), ["acme", "beta"], ["beta", "acme"]),
+    ("Acme-Core与Beta比较，之后再考虑Acme", (), ["acme", "acme-core", "beta"], ["acme-core", "beta"]),
+    ("myacme库与Acme2服务", (), ["acme"], []),
+    ("AWS Lambda与Beta比较", (), ["aws-lambda", "beta"], ["aws-lambda", "beta"]),
+    ("awsLambda是否适用", (), ["aws-lambda"], ["aws-lambda"]),
+    ("k8s与Go比较", (), ["kubernetes", "go", "mongodb"], ["kubernetes", "go"]),
+    ("Next.js是否适用", (), ["next.js"], ["next.js"]),
+])
+async def test_durable_catalog_locator_keeps_original_mixed_script_order_and_name_boundaries(
+        setup, monkeypatch, query, adapted, keys, expected):
+    catalog = {key: {"url": f"https://docs.{key.replace('.', '-')}.example/docs/", "title": key + " docs"}
+               for key in keys}
+    monkeypatch.setattr(official_mod, "TECH_DOCS", catalog)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query, adapted_queries=adapted))
+    assert result.status == "success"
+    assert [call.args[1] for call in setup.await_args_list] == [catalog[key]["url"] for key in expected]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("query,body", [
+    ("Acme是否支持字段过滤？", CHINESE_PROSE),
+    ("Acme是否支持字段过滤？", PROSE + ' ' + QUALIFIER),
+    ("Acme filtering access boundary", CHINESE_PROSE),
+])
+async def test_chinese_request_body_is_only_a_proposal_until_selected_then_bound_and_verified(setup, monkeypatch, query, body):
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.citations.verifier import verify_citations
+    from deepchoice.utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+    setup.side_effect = lambda _source, url, **_kw: response(url, '<p>' + body + '</p>')
+    retrieved = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query))
+    assert retrieved.status == "success" and len(retrieved.results) == 1
+    raw = retrieved.results[0]
+    assert raw["snippet"] == "" and ' '.join(raw["_source_scope_sentences"]) == body
+    state = {"task": {"query": query, "candidate_techs": ["Acme"]},
+             "search_results": [retrieved.model_dump()]}
+    assert not (await SourceEvaluatorAgent().run(state))["source_scores"]
+    selector = AsyncMock(return_value={"sources": [{"id": "S1", "ranges": [[0, len(raw["_source_scope_sentences"])]]}]})
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    scored = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
+    selector.assert_awaited_once()
+    assert len(scored["source_scores"]) == 1
+    selected = scored["source_scores"][0]
+    assert selected["passages"] == [body] and selected["snippet"] == body
+    assert '_source_scope_sentences' not in selected
+    chains = [{"sources": [selected]}]
+    bound = bind_evidence_choices({"source_facts": [{"id": "F1", "evidence_id": 1}]}, chains, [], [])
+    monkeypatch.setattr(run_context, "get_run_context", lambda: None)
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", setup)
+    checks, _ = await verify_citations(bound, chains)
+    checked = calibrate_evidence_choices(bound, checks)
+    assert checked["source_facts"][0]["status"] == "verified"
+    assert checked["source_facts"][0]["saved_text"] == body
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("labels,query,expected", [
+    ([('other/', '其他说明'), ('filtering/', '字段过滤'), ('access/', '访问限制')], "Acme字段过滤", ['filtering/']),
+    ([('storage/', 'Storage'), ('queries/', 'Queries'), ('reference/', 'Reference')], "Acme字段过滤", ['storage/', 'queries/']),
+    ([('storage/', 'Storage'), ('filtering/', 'Filtering'), ('reference/', 'Reference')], "Acme filtering", ['filtering/']),
+])
+async def test_curated_children_use_bounded_unicode_hints_or_no_overlap_fallback(setup, labels, query, expected):
+    root = '<nav>' + ''.join(f'<a href="{href}">{label}</a>' for href, label in labels) + '</nav>'
+    setup.side_effect = lambda _source, url, **_kw: response(url, root if url == ROOT else '<p>' + CHINESE_PROSE + '</p>')
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query))
+    assert result.status == "success"
+    assert [call.args[1] for call in setup.await_args_list] == [ROOT, *[ROOT + path for path in expected]]
+    assert budget_runtime.reserve_call.await_count == budget_runtime.settle_call.await_count == 1 + len(expected)
+    assert all(item["snippet"] == "" for item in result.results)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["navigation", "code", "hidden", "truncated", "oversized", "duplicate"])
+async def test_fallback_scope_cannot_promote_hidden_incomplete_or_ambiguous_context(setup, kind):
+    wrappers = {"navigation": '<nav>{}</nav>', "code": '<pre>{}</pre>', "hidden": '<div hidden>{}</div>'}
+    if kind in wrappers:
+        body = wrappers[kind].format('<p>' + CHINESE_PROSE + '</p>')
+    elif kind == "oversized":
+        body = '<p>' + CHINESE_PROSE + '</p><p>' + 'x' * 2100 + '.</p>'
+    elif kind == "duplicate":
+        # A long page requires windows, all of which repeat verbatim.
+        body = ('<p>' + CHINESE_PROSE + '</p>') * 25
+    else:
+        body = '<p>' + CHINESE_PROSE + '</p>'
+    setup.side_effect = lambda _source, url, **_kw: response(url, body, truncated=kind == "truncated")
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="Acme字段过滤"))
+    assert result.status == "success" and result.results == []
+
+
+@pytest.mark.asyncio
+async def test_large_multitopic_chinese_page_offers_complete_neighbour_conditions(setup):
+    noise = [('Other topic ' + str(i) + ': ') + ('records consume storage in this isolated fixture. ' * 4) for i in range(12)]
+    body = ''.join('<p>' + text + '</p>' for text in [*noise[:6], CHINESE_PROSE, *noise[6:]])
+    setup.side_effect = lambda _source, url, **_kw: response(url, body)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="Acme字段过滤权限边界"))
+    assert len(result.results) == 1 and result.results[0]["snippet"] == ""
+    offered = ' '.join(result.results[0]["_source_scope_sentences"])
+    assert CHINESE_PROSE in offered and noise[5].strip() in offered and noise[6].strip() in offered
+    assert len(offered) <= pages.MAX_SCOPE_CHARS
+
+
+@pytest.mark.asyncio
+async def test_unrelated_chinese_official_prose_is_not_admitted_when_selector_omits_it(setup, monkeypatch):
+    from deepchoice.contracts.manifest import build_run_manifest
+    unrelated = ("Acme 的备份目录会保存已经写入的文件，操作之前需要检查所需的剩余磁盘空间和文件写入权限。"
+                 "但是备份文件不能说明查询结果是否符合访问限制，恢复之前仍然必须核实保存的文件版本。"
+                 "这些记录只描述离线备份过程，没有说明字段过滤能力或用户访问边界。")
+    setup.side_effect = lambda _source, url, **_kw: response(url, '<p>' + unrelated + '</p>')
+    retrieved = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme字段过滤权限边界'))
+    assert retrieved.results[0]['snippet'] == ''
+    selector = AsyncMock(return_value={'sources': []})
+    monkeypatch.setattr('deepchoice.utils.llm.call_model', selector)
+    scored = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run({
+        'task': {'query': 'Acme字段过滤权限边界', 'candidate_techs': ['Acme']},
+        'search_results': [retrieved.model_dump()],
+    })
+    selector.assert_awaited_once()
+    assert not scored['source_scores']
+
+
+@pytest.mark.asyncio
+async def test_unicode_child_path_keeps_existing_encoded_path_failure_visible(setup):
+    setup.side_effect = lambda _source, url, **_kw: response(
+        url, '<a href="字段过滤/">字段过滤</a>' if url == ROOT else '<p>' + CHINESE_PROSE + '</p>')
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme字段过滤'))
+    assert result.status == 'failed' and not result.results
+    assert setup.await_count == 2
+    assert budget_runtime.reserve_call.await_count == budget_runtime.settle_call.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('text', ['Acme-Pro与Beta比较', 'Acme.2与Beta比较', 'Other-Acme与Beta比较'])
+async def test_compound_locator_does_not_fall_back_to_catalog_short_name(setup, monkeypatch, text):
+    beta = 'https://docs.beta.example/docs/'
+    monkeypatch.setattr(official_mod, 'TECH_DOCS', {
+        'acme': {'url': ROOT, 'title': 'Acme guide'}, 'beta': {'url': beta, 'title': 'Beta guide'},
+    })
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=text))
+    assert result.status == 'success'
+    assert [call.args[1] for call in setup.await_args_list] == [beta]
+    setup.reset_mock()
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=text + '，另行考虑 Acme。'))
+    assert result.status == 'success'
+    assert [call.args[1] for call in setup.await_args_list] == [beta, ROOT]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('query,body', [('acme filtering', BODY), ('Acme字段过滤', '<p>' + CHINESE_PROSE + '</p>')])
+async def test_no_overlap_children_never_risk_existing_root_body(setup, query, body):
+    root_body = body + '<nav><a href="login/">Login</a><a href="old-guide/">Old guide</a></nav>'
+    setup.side_effect = lambda _source, url, **_kw: response(url, root_body, status=200 if url == ROOT else 404)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query))
+    assert result.status == 'success' and len(result.results) == 1
+    assert setup.await_count == 1
+    assert result.results[0].get('snippet') or result.results[0].get('_source_scope_sentences')

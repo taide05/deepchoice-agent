@@ -44,6 +44,15 @@ def _terms(text: str) -> set[str]:
     return set(re.findall(r"[a-z][a-z0-9]{2,}", text.casefold())) - _STOP
 
 
+
+def _proposal_hints(text: str) -> set[str]:
+    """Language-neutral sampling hints, never a support/admission decision."""
+    hints = _terms(text)
+    for run in re.findall(r"[\u3400-\u9fff]+", text):
+        hints.update(run[index:index + 2] for index in range(len(run) - 1))
+    return hints
+
+
 def exact_discovered_url(url: object) -> str | None:
     """Validate a dynamic page locator without granting catalog/path authority."""
     if not isinstance(url, str) or len(url) > 2048 or any(ch.isspace() for ch in url):
@@ -180,7 +189,33 @@ def _scope_near_snippet(document, snippet: str) -> list[str] | None:
     return list(sentences) if sentences else None
 
 
-async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool = False):
+
+def _proposal_scope(document, hints: set[str]) -> list[str] | None:
+    """Offer complete prose for selection when old lexical snippets are absent.
+
+    Prefer the entire bounded page. Longer pages sample whole neighbour blocks;
+    these windows can miss topics and must never be treated as selected facts.
+    """
+    if document.incomplete:
+        return None
+    indices = [index for index, block in enumerate(document.blocks)
+               if len(block) >= 80 and re.search(r"[.!?。！？]", block)]
+    if not indices:
+        return None
+    whole = " ".join(document.blocks)
+    scope = scope_sentences(whole)
+    if scope:
+        return list(scope)
+    choices = []
+    for index in indices:
+        text = " ".join(document.blocks[max(0, index - 1):index + 2])
+        scope = scope_sentences(text)
+        if scope and whole.count(text) == 1:
+            choices.append((len(_proposal_hints(document.blocks[index]) & hints), -index, scope))
+    return list(max(choices)[2]) if choices else None
+
+
+async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool = False, hints: set[str] | None = None):
     from ..citations.source_windows import extract_source_document
 
     response = await budgeted_http(
@@ -210,27 +245,34 @@ async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool =
         response.text, truncated=bool(response.extensions.get("deepchoice_body_truncated")),
         plain_text=plain, skip_navigation=True,
     )
+    hints = terms if hints is None else hints
     snippet, score = _snippet(document, terms)
     title = source_title(" ".join(parsed.title_parts), final_url)
-    result = {"url": final_url, "title": title, "snippet": snippet, "date": ""} if snippet else None
-    if result is not None:
-        scope = _scope_near_snippet(document, snippet)
-        if scope:
-            result["_source_scope_sentences"] = scope
+    scope = _scope_near_snippet(document, snippet) if snippet else _proposal_scope(document, hints)
+    result = {"url": final_url, "title": title, "snippet": snippet, "date": ""} if snippet or scope else None
+    if result is not None and scope:
+        result["_source_scope_sentences"] = scope
     if exact_page:
         return result, score, []
     links = []
+    fallback_links = []
     seen = {final_url, url}
     for href, label in parsed.links:
         child = _scoped_url(root, final_url, href)
         if child is None or child in seen:
             continue
         seen.add(child)
-        overlap = len((_terms(label) | _terms(urlsplit(child).path)) & terms)
+        fallback_links.append(child)
+        overlap = len((_proposal_hints(label) | _proposal_hints(urlsplit(child).path)) & hints)
         if overlap:
             links.append((overlap, child))
     links.sort(key=lambda item: -item[0])
-    return result, score, [url for _, url in links[:MAX_CHILDREN]]
+    # An arbitrary exploratory child must not risk an already obtained body
+    # through the atomic source failure contract. Only an empty directory root
+    # gains the bounded no-overlap fallback; matched children retain old errors.
+    children = ([url for _, url in links[:MAX_CHILDREN]] if links
+                else fallback_links[:MAX_CHILDREN] if result is None else [])
+    return result, score, children
 
 
 async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
@@ -239,22 +281,24 @@ async def read_official_roots(roots: list[dict], query_text: str) -> list[dict]:
     Discovered locators read one exact page with redirects disabled. They do
     not become official authority merely by entering this acquisition channel.
     Every error propagates into the existing atomic failed source envelope.
-    A successful page with no bounded relevant prose contributes no evidence.
+    Unselected fallback scopes are proposals, not evidence; the evaluator must
+    select bounded passages before they can enter source scoring.
     """
     groups = []
     seen = set()
     for root in roots[:MAX_ROOTS]:
         url = root["url"]
         terms = _terms(query_text) - _terms(root["title"]) - _terms(root["tech"])
+        hints = _proposal_hints(query_text) - _proposal_hints(root["title"]) - _proposal_hints(root["tech"])
         curated = root.get("curated") is True
-        result, score, children = await _read_page(url, url, terms, exact_page=not curated)
+        result, score, children = await _read_page(url, url, terms, exact_page=not curated, hints=hints)
         origin_kind = "curated" if curated else "discovered"
         group = [(score, {**result, "origin_kind": origin_kind})] if result is not None else []
         for child in children:
             if child in seen:
                 continue
             seen.add(child)
-            item, child_score, _ = await _read_page(url, child, terms)
+            item, child_score, _ = await _read_page(url, child, terms, hints=hints)
             if item is not None:
                 group.append((child_score, {**item, "origin_kind": origin_kind}))
         group.sort(key=lambda item: -item[0])

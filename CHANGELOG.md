@@ -2,14 +2,27 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Acquire bounded Chinese official proposals before evidence admission
+
+Use original mixed-script catalog names before adapted supplements, preserving
+longest-name ordering, existing spellings/aliases and compound-name boundaries.
+Offer complete bounded prose to the existing scope selector when ASCII snippet
+sampling fails; never score unselected blank proposals, including cache hits or
+selector failures. Unicode labels guide bounded curated child sampling; arbitrary
+no-overlap children are attempted only when the root has no usable body. Keep
+safe-fetch, exact discoveries, atomic failures and existing budget/size caps.
+Freeze official v7 and source-score-v12; prior identities remain readable and
+require a new compatible run. This does not establish live-model recall quality
+or support encoded URL paths beyond the existing conservative policy.
+
 ### Preserve source sentence separators in scope selection
 
 Keep consecutive source sentences without whitespace in one indivisible text
 unit, preserving Chinese prose and its conditions exactly. Keep actual sentence,
 scope, passage-size and unique-location limits; never clip an oversized unit.
 Freeze scope prompt v2, source-score-v11, official v6 and Chroma v8. Historical
-identities remain readable and require a new compatible run. This does not yet
-repair Chinese-only acquisition or child-page recall.
+identities remain readable and require a new compatible run. This scope-only change did not
+implement acquisition; the subsequent bounded acquisition change is above.
 
 ### Finalize compact answers without legacy reconstruction
 

@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from .. import outbound as _outbound
 from ..outbound import throttle
@@ -15,6 +16,7 @@ from .learned_docs import (
 )
 
 from ..utils.official_catalog import TECH_DOCS
+from ..utils.evidence import candidate_name_pattern, candidate_product_spans
 
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.
@@ -45,6 +47,41 @@ _TECH_ALIASES = {
     "k8s": "kubernetes",
     "golang": "go",
 }
+
+
+
+def _catalog_matches(lookup: dict, texts: list[str]) -> tuple[list[str], set[str]]:
+    """Catalog names locate pages; original request order precedes adaptation.
+
+    Spelling forms retain the existing space/dot/hyphen normalization. The
+    shared longest-name matcher supplies lexical boundaries, never relevance.
+    Locator-only compound guards prevent a missing longer catalog name from
+    resolving to its short prefix (e.g. Alpha-Pro must not locate Alpha).
+    """
+    labels = {}
+    for name in lookup:
+        for form in (name, _normalize(name), re.sub(r"[._-]+", " ", name)):
+            labels[form] = name
+    for alias, target in _TECH_ALIASES.items():
+        if target in lookup:
+            labels[alias] = target
+    targets = {pattern.pattern: labels[label] for label in labels
+               if (pattern := candidate_name_pattern(label)) is not None}
+    keys, components = [], set()
+    for text in texts:
+        text = text.casefold()
+        spans = [(start, end, key) for start, end, key in candidate_product_spans(text, list(labels))
+                 if not re.search(r"[a-z0-9_+#][.-]$", text[:start])
+                 and not re.match(r"[.-][a-z0-9_+#]", text[end:])]
+        for _, _, pattern in spans:
+            key = targets[pattern]
+            if key not in keys:
+                keys.append(key)
+        # Do not send an already located mixed-script token to URL discovery.
+        for token in re.finditer(r"\S+", text.casefold()):
+            if any(start < token.end() and end > token.start() for start, end, _ in spans):
+                components.add(_normalize(token.group()))
+    return keys, components
 
 
 
@@ -108,42 +145,44 @@ class OfficialSearch(BaseRetriever):
         results = []
         roots = []
 
-        # Pass 1: curated seed + learned cache via normalized n-gram matching.
-        # Space-separated multi-word terms ('AWS Lambda') match hyphenated or
-        # dotted keys ('aws-lambda', 'next.js') through alnum normalization.
-        norm_lookup = {_normalize(k): k for k in lookup}
-        for alias, target in _TECH_ALIASES.items():
-            if target in lookup:
-                norm_lookup[_normalize(alias)] = target
-        matched_norms: set[str] = set()
+        # Current body readers use literal catalog names in request order;
+        # the legacy directory path retains its historical n-gram behavior.
         matched_ngram_components: set[str] = set()
-        for n in (1, 2, 3):
-            for i in range(len(keywords) - n + 1):
-                phrase = " ".join(keywords[i:i + n])
-                norm = _normalize(phrase)
-                key = norm_lookup.get(norm)
-                if key is None or norm in matched_norms:
-                    continue
-                matched_norms.add(norm)
-                matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
+        if durable:
+            keys, matched_ngram_components = _catalog_matches(lookup, [query, all_text])
+            for key in keys:
                 doc = lookup[key]
-                url = doc["url"]
-                title = doc.get("title") or key
                 curated = key in TECH_DOCS
-                if durable and not curated:
-                    url = exact_discovered_url(url)
-                    if url is None:
-                        raise ValueError("Invalid discovered documentation locator")
+                url = doc["url"] if curated else exact_discovered_url(doc["url"])
+                if url is None:
+                    raise ValueError("Invalid discovered documentation locator")
                 if url not in {item["url"] for item in roots}:
-                    # Never copy learned metadata that could claim curated scope.
-                    roots.append({"url": url, "title": title, "tech": key, "curated": curated})
-                results.append({
-                    "url": url,
-                    "title": title,
-                    "snippet": f"Official documentation site for {key}",
-                    "date": "",
-                })
-
+                    roots.append({"url": url, "title": doc.get("title") or key,
+                                  "tech": key, "curated": curated})
+        else:
+            norm_lookup = {_normalize(k): k for k in lookup}
+            for alias, target in _TECH_ALIASES.items():
+                if target in lookup:
+                    norm_lookup[_normalize(alias)] = target
+            matched_norms: set[str] = set()
+            for n in (1, 2, 3):
+                for i in range(len(keywords) - n + 1):
+                    phrase = " ".join(keywords[i:i + n])
+                    norm = _normalize(phrase)
+                    key = norm_lookup.get(norm)
+                    if key is None or norm in matched_norms:
+                        continue
+                    matched_norms.add(norm)
+                    matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
+                    doc = lookup[key]
+                    url = doc["url"]
+                    title = doc.get("title") or key
+                    results.append({
+                        "url": url,
+                        "title": title,
+                        "snippet": f"Official documentation site for {key}",
+                        "date": "",
+                    })
         # Pass 1.5: LLM fallback for unmapped candidate terms (validated + learned)
         unmapped = []
         for kw in keywords:

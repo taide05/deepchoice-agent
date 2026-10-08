@@ -43,7 +43,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v19"
-    assert first.scoring_policy_version == "source-score-v11"
+    assert first.scoring_policy_version == "source-score-v12"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
@@ -53,7 +53,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v6"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v7"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v20"
     assert first.hitl_policy_version == "evidence-insufficient-v2"
@@ -85,7 +85,7 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5"])
+@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6"])
 def test_historical_official_retriever_manifest_cannot_resume(old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
@@ -130,7 +130,7 @@ def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("previous_policy", ["source-score-v6", "source-score-v9", "source-score-v10"])
+@pytest.mark.parametrize("previous_policy", ["source-score-v6", "source-score-v9", "source-score-v10", "source-score-v11"])
 def test_previous_source_score_policy_remains_readable_but_incompatible(previous_policy):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 

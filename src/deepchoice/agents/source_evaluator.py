@@ -531,6 +531,12 @@ class SourceEvaluatorAgent:
                 continue
             url = result.get("url", "")
             source = result.get("_source", "unknown")
+            if source == "official" and not (
+                    isinstance(result.get("snippet"), str) and result["snippet"].strip()):
+                # A safely fetched scope is only an offer. Title/URL identity,
+                # selector omission/failure, or cache provenance cannot promote it.
+                excluded += 1
+                continue
             if index in provisional and _candidate_rejection(result, source, candidates, patterns) is not None:
                 # Previously admitted sources retain their original lexical identity;
                 # their selected conditions need not repeat the product name.

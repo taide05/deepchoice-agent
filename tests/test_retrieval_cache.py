@@ -977,3 +977,45 @@ async def test_successful_fanout_survives_learning_failure(tmp_path, monkeypatch
             assert path.read_bytes() == b"[]"
     finally:
         await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_cached_blank_official_scope_still_requires_actual_selection(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+    from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.utils.source_scope import scope_sentences
+
+    connection, store = await _store(tmp_path)
+    query = "Acme字段过滤"
+    text = "Acme filters indexed fields using the configured predicate. However, applications must enforce authorization separately."
+    item = {"url": "https://docs.acme.example/docs/", "title": "Acme guide", "snippet": "",
+            "_source_scope_sentences": list(scope_sentences(text))}
+    monkeypatch.setattr(multi_module, 'official_mapping_identity', lambda: 'a' * 64)
+    request = RetrievalRequest(query=query, max_results=7, official_mapping_id='a' * 64)
+    key = store.make_key(source='official', request=request, manifest_id='manifest-1')
+
+    class Retriever:
+        source = 'official'
+
+        async def retrieve(self, request):
+            raise AssertionError('cached proposal must not retrieve again')
+
+    selector = AsyncMock(return_value={"sources": []})
+    monkeypatch.setattr('deepchoice.utils.llm.call_model', selector)
+    try:
+        assert await store.put(key, _success('official', results=[item]), source='official')
+        with bind_run_context(_context(store)):
+            cached, _, hit = await multi_module._invoke_retriever(
+                'official', Retriever, query=query, sub_questions=[], adapted_queries=[])
+            assert hit == 'hit' and cached.results == [item]
+            state = {'task': {'query': query, 'candidate_techs': ['Acme']},
+                     'search_results': [cached.model_dump()]}
+            agent = SourceEvaluatorAgent(run_manifest=build_run_manifest({}))
+            assert not (await agent.run(state))['source_scores']
+            selector.return_value = {'sources': [{'id': 'S1', 'ranges': [[0, len(item['_source_scope_sentences'])]]}]}
+            selected = await agent.run(state)
+            assert selected['source_scores'][0]['passages'] == [text]
+        assert selector.await_count == 2
+    finally:
+        await connection.close()

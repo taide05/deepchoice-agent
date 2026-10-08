@@ -543,3 +543,31 @@ async def test_previously_admitted_source_keeps_selected_nameless_conditions(mon
     assert output["source_scores"][0]["passages"] == [_SCOPE_MIDDLE + " " + _SCOPE_LAST]
     assert output["quality_signals"][0]["source_scope_proposal"]["accepted"] == 1
     assert output["quality_signals"][0]["candidate_excluded_count"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["no_manifest", "no_context", "omitted", "invalid", "provider", "unoffered", "private", "public"])
+async def test_blank_official_proposals_never_score_without_runtime_selection(monkeypatch, failure):
+    from deepchoice.runtime import context
+    from deepchoice.agents import source_evaluator as evaluator
+    monkeypatch.setattr(context, "get_run_context", lambda: None if failure == "no_context" else object())
+    text = "Acme supports filtering under the documented query conditions. Applications must enforce access separately."
+    row = {"url": "https://docs.acme.example/guide/", "title": "Acme docs", "snippet": "  ",
+           "_source_scope_sentences": list(scope_sentences(text))}
+    if failure in {"private", "public"}:
+        row['_source_passages' if failure == 'private' else 'passages'] = [text]
+    if failure == 'unoffered':
+        monkeypatch.setattr(evaluator, 'MAX_PROPOSAL_MESSAGE_BYTES', 1)
+    provider = AsyncMock(return_value={"sources": [] if failure == "omitted" else [{"id": "S1", "ranges": [[0, 99]]}]})
+    if failure == 'provider':
+        provider.side_effect = RuntimeError('private provider detail')
+    monkeypatch.setattr('deepchoice.utils.llm.call_model', provider)
+    manifest = None if failure == 'no_manifest' else build_run_manifest({})
+    scored = await SourceEvaluatorAgent(run_manifest=manifest).run({
+        "task": {"query": "Acme过滤能力", "candidate_techs": ["Acme"]},
+        "search_results": [{"source": "official", "results": [row]}],
+    })
+    assert scored['source_scores'] == []
+    assert 'private provider detail' not in json.dumps(scored)
+    if failure in {'no_manifest', 'no_context', 'unoffered', 'private', 'public'}:
+        provider.assert_not_awaited()
