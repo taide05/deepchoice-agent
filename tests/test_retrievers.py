@@ -301,7 +301,7 @@ class TestCommunitySearch:
             events.append("start")
             await _asyncio.sleep(0.15)
             events.append("end")
-            return MagicMock(status_code=200)
+            return httpx.Response(200, json={"items": []})
 
         class SlowClient:
             def __init__(self):
@@ -786,7 +786,8 @@ def _target_response(source, query, *, status=200):
                               request=httpx.Request('GET', 'https://export.arxiv.org/api/query'))
     return httpx.Response(status, json={'items': [
         {'link': f'https://stackoverflow.com/questions/{query.split()[0]}-{i}', 'title': query,
-         'score': 2, 'tags': ['python']} for i in range(3)]},
+         'score': 2, 'tags': ['python'],
+         'body': '<p>Conditional persistence evidence under the documented settings.</p>'} for i in range(3)]},
         request=httpx.Request('GET', 'https://api.stackexchange.com/2.3/search/advanced'))
 
 

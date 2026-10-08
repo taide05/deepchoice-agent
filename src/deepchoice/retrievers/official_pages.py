@@ -12,7 +12,10 @@ from .contracts import PartialRetrievalError
 from .http import budgeted_http
 from ..utils.evidence import source_title
 from ..utils.evidence_choices import whole_source_text
-from ..utils.source_scope import MAX_SCOPE_CHARS, scope_sentences
+from ..utils.source_scope import (
+    MAX_SCOPE_CHARS, scope_sentences, source_terms as _terms,
+    proposal_hints as _proposal_hints, proposal_scope as _proposal_scope,
+)
 from ..utils.official_catalog import catalog_scope_contains, parse_http_identity
 
 MAX_ROOTS = 2
@@ -20,22 +23,7 @@ MAX_CHILDREN = 2
 MAX_PAGE_BYTES = 128 * 1024
 MAX_LINKS = 256
 MAX_SNIPPET = 1200
-_STOP = frozenset("a an and are as at be by can compare comparison could docs documentation do does for from guide how in is it of on or official reference should than that the their these this to use using versus vs what when which with would".split())
 _ASSETS = (".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".gz", ".pdf", ".json", ".xml")
-
-
-
-def _terms(text: str) -> set[str]:
-    return set(re.findall(r"[a-z][a-z0-9]{2,}", text.casefold())) - _STOP
-
-
-
-def _proposal_hints(text: str) -> set[str]:
-    """Language-neutral sampling hints, never a support/admission decision."""
-    hints = _terms(text)
-    for run in re.findall(r"[\u3400-\u9fff]+", text):
-        hints.update(run[index:index + 2] for index in range(len(run) - 1))
-    return hints
 
 
 def exact_discovered_url(url: object) -> str | None:
@@ -172,34 +160,6 @@ def _scope_near_snippet(document, snippet: str) -> list[str] | None:
         left -= 1
     sentences = scope_sentences(" ".join(blocks[left:right]))
     return list(sentences) if sentences else None
-
-
-
-def _proposal_scope(document, hints: set[str]) -> list[str] | None:
-    """Offer complete prose for selection when old lexical snippets are absent.
-
-    Prefer the entire bounded page. Longer pages sample whole neighbour blocks;
-    these windows can miss topics and must never be treated as selected facts.
-    """
-    if document.incomplete:
-        return None
-    prose_indices = set(document.prose_indices)
-    indices = [index for index, block in enumerate(document.blocks)
-               if (len(block) >= 80 or (index in prose_indices and block[-1] in ".!?。！？"))
-               and re.search(r"[.!?。！？]", block)]
-    if not indices:
-        return None
-    whole = " ".join(document.blocks)
-    scope = scope_sentences(whole)
-    if scope:
-        return list(scope)
-    choices = []
-    for index in indices:
-        text = " ".join(document.blocks[max(0, index - 1):index + 2])
-        scope = scope_sentences(text)
-        if scope and whole.count(text) == 1:
-            choices.append((len(_proposal_hints(document.blocks[index]) & hints), -index, scope))
-    return list(max(choices)[2]) if choices else None
 
 
 async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool = False, hints: set[str] | None = None):

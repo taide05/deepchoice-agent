@@ -433,14 +433,14 @@ async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("variant", ["chroma", "tavily", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair"])
+@pytest.mark.parametrize("variant", ["chroma", "tavily", "community", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair"])
 async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries(monkeypatch, variant):
     from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
 
     state = _official_scope_only_state()
     channel = state["search_results"][0]
     item = channel["results"][0]
-    if variant in ("chroma", "tavily"):
+    if variant in ("chroma", "tavily", "community"):
         channel["source"] = variant
     elif variant == "nameless":
         item["_source_scope_sentences"] = [_SCOPE_MIDDLE]
@@ -547,8 +547,9 @@ async def test_previously_admitted_source_keeps_selected_nameless_conditions(mon
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("source", ["official", "community"])
 @pytest.mark.parametrize("failure", ["no_manifest", "no_context", "omitted", "invalid", "provider", "unoffered", "private", "public"])
-async def test_blank_official_proposals_never_score_without_runtime_selection(monkeypatch, failure):
+async def test_blank_proposals_never_score_without_runtime_selection(monkeypatch, failure, source):
     from deepchoice.runtime import context
     from deepchoice.agents import source_evaluator as evaluator
     monkeypatch.setattr(context, "get_run_context", lambda: None if failure == "no_context" else object())
@@ -567,7 +568,7 @@ async def test_blank_official_proposals_never_score_without_runtime_selection(mo
     scored = await SourceEvaluatorAgent(run_manifest=manifest).run({
         "task": {"query": "Acme过滤能力", "candidate_techs": ["Acme"]},
         "_supplemental_input": "Supplementary user condition",
-        "search_results": [{"source": "official", "results": [row]}],
+        "search_results": [{"source": source, "results": [row]}],
     })
     assert scored['source_scores'] == []
     assert 'private provider detail' not in json.dumps(scored)

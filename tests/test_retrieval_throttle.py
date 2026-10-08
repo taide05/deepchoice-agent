@@ -587,7 +587,8 @@ async def test_mocked_twelve_cases_retain_six_source_results(monkeypatch, virtua
             if source == "github":
                 return response(body={"items": [{"full_name": "fixture/repo", "html_url": "https://github.com/fixture/repo"}]})
             if source == "community":
-                return response(body={"items": [{"title": "Fixture", "link": "https://stackoverflow.com/q/1"}]})
+                return response(body={"items": [{"title": "Fixture", "link": "https://stackoverflow.com/q/1",
+                                                "body": "<p>SQLite fixture question body.</p>"}]})
             return response(404)
 
         async def post(*args, **kwargs):

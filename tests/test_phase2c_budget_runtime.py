@@ -1277,7 +1277,8 @@ async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monke
         status = 400 if len(calls) == 2 and outcome == 'http_failure' else 200
         text = f'<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>https://arxiv.org/abs/{len(calls)}</id><title>durable state</title><summary>State survives a restart.</summary></entry></feed>'
         return httpx.Response(status, text=text, request=httpx.Request('GET', url)) if source == 'arxiv' else httpx.Response(
-            status, json={'items':[{'link':f'https://stackoverflow.com/questions/{len(calls)}', 'title':'durable state'}]}, request=httpx.Request('GET', url))
+            status, json={'items':[{'link':f'https://stackoverflow.com/questions/{len(calls)}', 'title':'durable state',
+                                  'body':'<p>State survives a restart when journaling is enabled.</p>'}]}, request=httpx.Request('GET', url))
 
     @asynccontextmanager
     async def client(name):

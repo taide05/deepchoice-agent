@@ -15,7 +15,7 @@ _BLOCK_TAGS = frozenset({
 })
 _SKIP_TAGS = frozenset({'script', 'style', 'noscript', 'svg', 'template'})
 _PROSE_TAGS = frozenset({'p', 'blockquote', 'dd', 'td'})
-_NON_PROSE_TAGS = frozenset({'a', 'code', 'head', 'header', 'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'})
+_NON_PROSE_TAGS = frozenset({'a', 'code', 'pre', 'head', 'header', 'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'})
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,9 +33,11 @@ class SourceWindow:
 
 
 class _Blocks(HTMLParser):
-    def __init__(self, *, skip_navigation: bool = False):
+    def __init__(self, *, skip_navigation: bool = False, preserve_pre: bool = False):
         super().__init__(convert_charrefs=True)
-        self.skip_tags = _SKIP_TAGS | ({"nav", "form", "pre"} if skip_navigation else set())
+        self.skip_tags = _SKIP_TAGS | ({"nav", "form"} if skip_navigation else set())
+        if skip_navigation and not preserve_pre:
+            self.skip_tags |= {"pre"}
         self.separate_omitted = skip_navigation
         self.blocks = []
         self.prose_indices = []
@@ -125,7 +127,7 @@ class _Blocks(HTMLParser):
 
 def extract_source_document(
     value: str, *, truncated: bool, plain_text: bool = False, skip_navigation: bool = False,
-    raise_on_error: bool = False,
+    raise_on_error: bool = False, preserve_pre: bool = False,
 ) -> SourceDocument:
     value = value.removeprefix('\ufeff')
     if plain_text:
@@ -143,7 +145,7 @@ def extract_source_document(
             blocks.append(text)
             used += len(text) + 1
         return SourceDocument(tuple(blocks), truncated)
-    parser = _Blocks(skip_navigation=skip_navigation)
+    parser = _Blocks(skip_navigation=skip_navigation, preserve_pre=preserve_pre)
     try:
         parser.feed(value)
         parser.close()

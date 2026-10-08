@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Preserve community question bodies and reject unselected blank excerpts
+
+Community v3 requests StackExchange question bodies with the built-in withbody
+filter. Keep complete short bodies intact; offer bounded whole-block ranges only
+for longer bodies. Reuse the existing parser with an optional pre-block setting,
+retaining code context while excluding navigation and explicit hidden blocks.
+Source-score-v13 rejects blank community proposals after selection, including
+cache and legacy paths. Missing, invalid or unadmitted body text fails visibly;
+metadata alone is not evidence. Share existing proposal helpers without changing
+official defaults. Historical identities remain readable but require a new run.
+Question content is not answer verification or executable-code fidelity.
+
 ### Preserve bounded analyses beyond the legacy assessment limit
 
 Synthesis v36 stops clearing bound compact analyses when total requirements exceed

@@ -554,7 +554,7 @@ class SourceEvaluatorAgent:
                 continue
             url = result.get("url", "")
             source = result.get("_source", "unknown")
-            if source == "official" and not (
+            if source in {"official", "community"} and not (
                     isinstance(result.get("snippet"), str) and result["snippet"].strip()):
                 # A safely fetched scope is only an offer. Title/URL identity,
                 # selector omission/failure, or cache provenance cannot promote it.
