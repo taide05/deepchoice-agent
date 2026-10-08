@@ -90,7 +90,9 @@ def _audited_seed_scope_covers_candidate(
 
     Official pages often mention other products incidentally (for example as
     result backends).  Only the exact frozen identity and target registry may
-    reject such a cross-scope page.  A positive scope match never grants
+    reject such a cross-scope page after the producer verifies the chunk.
+    Unverified metadata falls back to ordinary candidate matching.
+    A positive scope match never grants
     admission: every result still passes the existing lexical candidate gate.
     Ordinary Chroma documents retain that gate without audited scope claims.
     """
@@ -99,6 +101,7 @@ def _audited_seed_scope_covers_candidate(
     seed_identity = result.get("_seed_seed_identity_sha256")
     if (
         source != "chroma"
+        or result.get("_seed_verified_chunk") is not True
         or result.get("_seed_source_type") != "official"
         or seed_identity != AUDITED_PRODUCT_SEED_IDENTITY
     ):

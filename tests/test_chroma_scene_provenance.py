@@ -215,3 +215,53 @@ async def test_replaced_audited_excerpt_clears_unavailable_new_chunk_scope(monke
     assert len(results) == 1
     assert results[0]["snippet"].startswith(ANCHOR)
     assert "_source_scope_sentences" not in results[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("candidate", ["FastAPI BackgroundTasks", "FastAPI"])
+@pytest.mark.parametrize("mutation", ["verified", "body", "target", "url", "identity", "doc_id", "index"])
+async def test_candidate_alias_requires_actual_chunk_verification(tmp_path, monkeypatch, candidate, mutation):
+    # Exercise the bounded audit loader and producer, not a self-asserted state flag.
+    target = "p04-fastapi-background-tasks"
+    url = "https://fastapi.tiangolo.com/tutorial/background-tasks/"
+    document = "FastAPI accepts callbacks under documented conditions."
+    digest = hashlib.sha256(document.encode()).hexdigest()
+    doc_id = f"{target}:0000:{digest[:16]}"
+    chunks = json.dumps([{"chunk_id": doc_id, "source_id": target, "text_sha256": digest}]).encode()
+    manifest = json.dumps({"sources": [{"stable_id": target, "url": url, "source_kind": "official"}]}).encode()
+    (tmp_path / "chunks.json").write_bytes(chunks)
+    (tmp_path / "seed-manifest.json").write_bytes(manifest)
+    monkeypatch.setattr(chroma_kb, "_AUDITED_CHUNKS_SHA256", hashlib.sha256(chunks).hexdigest())
+    monkeypatch.setattr(chroma_kb, "_AUDITED_MANIFEST_SHA256", hashlib.sha256(manifest).hexdigest())
+    if mutation == "index":
+        (tmp_path / "chunks.json").write_bytes(chunks + b" ")
+    index = chroma_kb._load_audited_index(str(tmp_path / "chroma"))
+    metadata = {**_meta(target, url), "title": "FastAPI guidance"}
+    if mutation == "body":
+        document += " Altered."
+    elif mutation == "target":
+        metadata["target_id"] = "p04-celery-introduction"
+    elif mutation == "url":
+        metadata["url"] = "https://example.org/other"
+    elif mutation == "identity":
+        metadata["seed_identity_sha256"] = "0" * 64
+    elif mutation == "doc_id":
+        doc_id = "unknown-chunk"
+    monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: SimpleNamespace(
+        encode=lambda _query: SimpleNamespace(tolist=lambda: [0.1, 0.2])
+    ))
+    retriever = object.__new__(chroma_kb.ChromaKB)
+    retriever._audited_index = index
+    retriever.collection = SimpleNamespace(query=lambda **_kwargs: {
+        "ids": [[doc_id]], "documents": [[document]], "metadatas": [[metadata]],
+    })
+    retrieved = await retriever._do_search("Choose a background option", [], 1)
+    verified = mutation == "verified"
+    assert retrieved[0].get("_seed_verified_chunk", False) is verified
+    assert ("_source_scope_sentences" in retrieved[0]) is verified
+    result = await SourceEvaluatorAgent().run({
+        "task": {"query": "Choose a background option", "candidate_techs": [candidate]},
+        "search_results": [{"source": "chroma", "results": retrieved}],
+    })
+    # Failed verification falls back to ordinary complete candidate matching.
+    assert len(result["source_scores"]) == int(verified or candidate == "FastAPI")

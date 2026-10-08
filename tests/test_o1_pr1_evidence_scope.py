@@ -62,7 +62,7 @@ async def test_http_comparison_is_not_treated_as_a_local_pair_template():
 @pytest.mark.asyncio
 async def test_audited_seed_target_rejects_incidental_candidate_mentions():
     seed = {
-        "_seed_source_type": "official",
+        "_seed_source_type": "official", "_seed_verified_chunk": True,
         "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
     }
     state = {"task": {"candidate_techs": ["Redis", "Memcached"]}, "search_results": [{
@@ -98,7 +98,7 @@ async def test_audited_seed_target_rejects_incidental_candidate_mentions():
 async def test_audited_seed_scope_never_bypasses_candidate_lexical_gate():
     state = {"task": {"candidate_techs": ["Redis"]}, "search_results": [{
         "source": "chroma", "results": [{
-            "_seed_source_type": "official",
+            "_seed_source_type": "official", "_seed_verified_chunk": True,
             "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
             "_seed_target_id": "p08-redis-persistence",
             "title": "Opaque approved page",
@@ -117,7 +117,7 @@ async def test_audited_seed_scope_never_bypasses_candidate_lexical_gate():
 async def test_audited_seed_title_matches_target_across_slug_and_camel_separators():
     state = {"task": {"candidate_techs": ["FastAPI BackgroundTasks", "Celery"]},
              "search_results": [{"source": "chroma", "results": [{
-                 "_seed_source_type": "official",
+                 "_seed_source_type": "official", "_seed_verified_chunk": True,
                  "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
                  "_seed_target_id": "p04-fastapi-background-tasks",
                  "title": "p04-fastapi-background-tasks",
@@ -145,7 +145,7 @@ async def test_audited_seed_compact_match_preserves_identifier_boundaries(
 ):
     state = {"task": {"candidate_techs": ["Redis"]}, "search_results": [{
         "source": "chroma", "results": [{
-            "_seed_source_type": "official",
+            "_seed_source_type": "official", "_seed_verified_chunk": True,
             "_seed_seed_identity_sha256": "9beba61dbeabf253fda953fa9a3dd6b3a8a8ff51e46d923c1cfdeb888a2391d6",
             "_seed_target_id": "p08-redis-persistence",
             "title": title,
@@ -162,7 +162,7 @@ async def test_audited_seed_compact_match_preserves_identifier_boundaries(
 @pytest.mark.asyncio
 async def test_untrusted_or_unknown_seed_metadata_cannot_claim_audited_scope():
     base = {
-        "_seed_source_type": "official",
+        "_seed_source_type": "official", "_seed_verified_chunk": True,
         "title": "Redis incidental mention",
         "snippet": "Redis is mentioned incidentally.",
         "url": "https://example.test/page",

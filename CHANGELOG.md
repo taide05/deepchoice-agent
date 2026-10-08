@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Require verified chunks for audited candidate scope
+
+Source-score-v17 requires the Chroma producer's verified-chunk marker before applying
+frozen-seed candidate aliases or ownership restrictions. Unverified metadata falls
+back to ordinary full candidate matching. Existing chunk/file hashes and retriever
+output remain unchanged; old scoring identities require a new run. The marker is
+internal provenance, not authorization for arbitrary callers or semantic proof.
+
 ### Remove prose keyword bonuses and prevent restricted strength inflation
 
 Source-score-v16 uses URL-category/date priors on the historical score scale.

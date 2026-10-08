@@ -459,7 +459,7 @@ async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries
     elif variant == "wrong_seed":
         channel["source"] = "chroma"
         item.update(_seed_source_type="official", _seed_seed_identity_sha256=AUDITED_PRODUCT_SEED_IDENTITY,
-                    _seed_target_id="p08-redis-persistence")
+                    _seed_target_id="p08-redis-persistence", _seed_verified_chunk=True)
     else:
         channel["source"] = "chroma"
         item.update(url="file:///knowledge/Alpha-vs-Gamma.md", title="Alpha vs Gamma")
@@ -538,7 +538,7 @@ async def test_previously_admitted_source_keeps_selected_nameless_conditions(mon
         state["search_results"][0]["results"][0].update(
             snippet=first, _source_scope_sentences=[first, _SCOPE_MIDDLE, _SCOPE_LAST],
             _seed_source_type="official", _seed_seed_identity_sha256=AUDITED_PRODUCT_SEED_IDENTITY,
-            _seed_target_id="p08-redis-persistence",
+            _seed_target_id="p08-redis-persistence", _seed_verified_chunk=True,
         )
     monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
     selector = AsyncMock(return_value={"sources": [{"id": "S1", "ranges": [[1, 3]]}]})

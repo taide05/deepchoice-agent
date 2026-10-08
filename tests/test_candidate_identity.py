@@ -67,6 +67,7 @@ async def test_evaluator_admits_product_prose_for_action_label_without_changing_
 
 def test_audited_seed_scope_uses_same_identity_without_granting_other_product_scope():
     source = {"_seed_target_id": "p01-sqlite-wal", "_seed_source_type": "official",
+              "_seed_verified_chunk": True,
               "_seed_seed_identity_sha256": AUDITED_PRODUCT_SEED_IDENTITY}
     assert _audited_seed_scope_covers_candidate(source, "chroma", ["continue using SQLite"]) is True
     assert _audited_seed_scope_covers_candidate(source, "chroma", ["迁移到 Redis"]) is False
@@ -204,3 +205,11 @@ def test_different_actions_for_same_literal_product_keep_shared_identity():
         "id": "F1", "source_title": "Atlas manual", "saved_text": "Operating limits apply."}])
     assert _candidate_attribution("continue using Atlas", ["F1"], context)
     assert _candidate_attribution("switch to Atlas", ["F1"], context)
+
+
+@pytest.mark.parametrize("verified", [None, False, 1, "true"])
+def test_audited_scope_requires_exact_producer_verification_flag(verified):
+    source = {"_seed_target_id": "p04-fastapi-background-tasks", "_seed_source_type": "official",
+              "_seed_seed_identity_sha256": AUDITED_PRODUCT_SEED_IDENTITY,
+              "_seed_verified_chunk": verified}
+    assert _audited_seed_scope_covers_candidate(source, "chroma", ["FastAPI BackgroundTasks"]) is None
