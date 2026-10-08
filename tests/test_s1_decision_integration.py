@@ -18,7 +18,7 @@ from deepchoice.utils.decision_contract import abstain_recommendation
 
 
 @pytest.mark.asyncio
-async def test_analyzed_constraints_survive_real_graph_state(monkeypatch):
+async def test_user_constraints_survive_real_graph_state_without_model_overwrite(monkeypatch):
     async def fake_model(*args, **kwargs):
         return {"constraints": ["Recover interrupted jobs safely"],
                 "sub_questions": ["Who prevents duplicate job side effects?"]}
@@ -39,7 +39,8 @@ async def test_analyzed_constraints_survive_real_graph_state(monkeypatch):
     await graph.compile().ainvoke({
         "task": {"query": "Compare background job queues", "constraints": ["Use Python"]},
     })
-    assert seen["constraints"] == ["Recover interrupted jobs safely"]
+    assert seen["constraints"] == ["Use Python"]
+    assert "Recover interrupted jobs safely" not in str(seen)
     assert seen["task"]["constraints"] == ["Use Python"]
     assert seen["sub_questions"] == ["Who prevents duplicate job side effects?"]
 

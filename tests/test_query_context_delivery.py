@@ -84,9 +84,9 @@ async def test_adapter_retains_frozen_context_independently_of_current_targets(m
 @pytest.mark.parametrize("task", CASES, ids=["P01", "P04"])
 async def test_analyzer_does_not_replace_free_text_scene_with_team(monkeypatch, task):
     result, payload, _ = await _run_captured(monkeypatch, query_analyzer, {"task": deepcopy(task)})
-    assert payload["coarse_scene_classification"] == "team"
-    assert payload["request"]["scene_context"] != "team"
-    assert result["scene_context"] == "team"  # Compatibility projection remains a label.
+    assert "coarse_scene_classification" not in payload
+    assert payload["request"]["scene_context"] == task["scene_context"]
+    assert "scene_context" not in result
 
 
 @pytest.mark.asyncio

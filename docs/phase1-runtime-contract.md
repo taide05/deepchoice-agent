@@ -1492,3 +1492,28 @@ constraints、候选与未知字段，只为最后一条确认显示启动按钮
 
 未提供或显式为null的original_query在ResearchRequest序列化中省略，保持历史请求的
 规范化表示及冻结hash；非空审计输入仍按有界字段保存和返回。旧评估请求不作回填。
+
+
+## R35：研究分解的单一入口与约束权威（2026-10-08）
+
+澄清finalize保留异步端口和payload形状，但本地返回空sub_questions，不再调用模型
+生成五维子题。默认已确认task据原有图入口进入query_analyzer；直调API明确提供的
+非空sub_questions仍作为用户冻结问题、跳过分析并直接适配。澄清抽取仍在run之前；
+分解现在由已有query_analyzer节点承担，其一次调用纳入当前run预算、Trace和manifest。
+不增加节点、调用阶段、状态字段或数据库迁移；不会在原分解之外再加一轮分析。
+
+query_analyzer提示v3仅请求与实际问题有关的研究子题，最多20条、每条500字符；
+原query、原task.constraints和这些问题复用ResearchRequest的32,768字符聚合、安全
+文本及集合边界。类型/长度/数量/聚合非法整份回退，不截取前缀冒充完整结果。模型
+额外constraints字段完全不采纳；state.constraints只复制原task.constraints，不能
+新增或撤销用户条件。派生子题不写回task，不进入冻结用户Q；原R0仍保留。对派生问题
+的语义相关性没有确定性保证，原文内多部分需求的逐项覆盖仍需真实质量验证。
+
+空、非法和模型故障分别记录固定fallback_reason并保留原query检索路径，不再记录
+恒定dimensions_covered=5或猜测team。BudgetError和取消继续传播。低层arxiv/community
+无适配词时的200/150字符回退限制未在本包处理。旧_detect_scene仅为冻结smoke-v1
+回放保留；默认分析不使用它，smoke仍不证明当前模型分解质量。
+
+仅query_analyzer提示版本/hash及对应core资产改变当前运行身份；旧manifest可读且
+hash有效，但不能同run恢复，须新run并隔离检索缓存。离线基线只更新身份/时间/指纹
+元数据，冻结数据集、案例正文、指标及source-health not_run保持。

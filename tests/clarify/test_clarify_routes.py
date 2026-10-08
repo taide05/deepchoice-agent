@@ -168,7 +168,6 @@ class TestActualClarificationInput:
                     model_snapshot(original, message="Which candidates and deployment scope?", candidate_techs=["Zephyr", "Sable"]),
                     model_snapshot(original, candidate_techs=["Zephyr", "Sable"], scene="solo",
                                    complexity="simple", constraints=["no additional server"]),
-                    {"sub_questions": ["What changes after restart?"]},
                 ]
                 start = client.post("/clarify/start", json={"query": original})
                 assert start.status_code == 200
@@ -185,7 +184,7 @@ class TestActualClarificationInput:
                 task = finalized.json()["payload"]["clarified_task"]
                 assert task["query"] == original and task["candidate_techs"] == ["Zephyr", "Sable"]
                 assert task["scene_context"] == "solo" and task["constraints"] == ["no additional server"]
-                assert model.await_count == 3
+                assert model.await_count == 2
         finally:
             if sid is not None:
                 session_manager._sessions.pop(sid, None)
@@ -209,7 +208,7 @@ class TestActualClarificationInput:
 
 
 class TestActualLastRoundConfirmation:
-    def test_third_reply_is_extracted_before_defaults_and_reaches_child_questions(self):
+    def test_third_reply_is_extracted_and_finalized_without_extra_decomposition(self):
         original = "Need a routing library for restart recovery"
         reply = "Compare Zephyr and Sable for enterprise use with complex processing; no new server"
         sid = None
@@ -219,7 +218,6 @@ class TestActualLastRoundConfirmation:
                     model_snapshot(original, message="What is the scope and complexity?"),
                     model_snapshot(original, action="confirm", scene="enterprise", complexity="complex",
                                    candidate_techs=["Zephyr", "Sable"], constraints=["no new server"]),
-                    {"sub_questions": ["How is restart recovery preserved without a new server?"]},
                 ]
                 start = client.post("/clarify/start", json={"query": original})
                 assert start.status_code == 200
@@ -241,9 +239,8 @@ class TestActualLastRoundConfirmation:
                 task = finalized.json()["payload"]["clarified_task"]
                 assert task["query"] == original and task["scene_context"] == "enterprise"
                 assert task["complexity"] == "complex" and task["constraints"] == ["no new server"]
-                child_prompt = model.await_args_list[2].args[0][0]["content"]
-                assert original in child_prompt and "no new server" in child_prompt
-                assert model.await_count == 3
+                assert finalized.json()["payload"]["sub_questions"] == []
+                assert model.await_count == 2
         finally:
             if sid is not None:
                 session_manager._sessions.pop(sid, None)

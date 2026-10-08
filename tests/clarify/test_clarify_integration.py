@@ -44,19 +44,13 @@ class TestFullClarifyFlow:
             r3 = await agent.decide_and_respond(state)
             assert r3["action"] == "confirm"
 
-        mock_sub_q = {"sub_questions": [
-            "LangChain vs Dify 功能覆盖度对比",
-            "LangChain vs Dify 性能基准测试",
-            "LangChain vs Dify 社区活跃度与维护频率",
-            "LangChain vs Dify 学习曲线与文档质量",
-            "LangChain vs Dify 在solo场景下的部署复杂度",
-        ]}
         with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_sub_q
+            mock_llm.side_effect = AssertionError("Finalize must not call a model")
             final = await agent._handle_finalize(state)
+            mock_llm.assert_not_awaited()
 
         assert final["action"] == "finalize"
-        assert len(final["payload"]["sub_questions"]) == 5
+        assert final["payload"]["sub_questions"] == []
         assert final["payload"]["clarified_task"]["scene_context"] == "solo"
         assert len(final["payload"]["clarified_task"]["candidate_techs"]) == 2
 

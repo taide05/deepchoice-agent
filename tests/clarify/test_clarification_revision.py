@@ -42,7 +42,7 @@ def test_revision_reaches_confirmation_finalize_and_execution_context(client, mo
     original = "Compare Redis and PostgreSQL for a team; Redis is required."
     current = "Compare SQLite and PostgreSQL for a simple solo project; Redis is excluded."
     model = AsyncMock(side_effect=[snapshot(original), snapshot(current, scene="solo", complexity="simple",
-        candidate_techs=["SQLite", "PostgreSQL"], constraints=["Redis is excluded"]), {"sub_questions": ["Which option needs a server?"]}])
+        candidate_techs=["SQLite", "PostgreSQL"], constraints=["Redis is excluded"])])
     monkeypatch.setattr(agent_module, "call_model", model)
     start = client.post("/clarify/start", json={"query": original}).json()
     sid = start["session_id"]
@@ -59,18 +59,17 @@ def test_revision_reaches_confirmation_finalize_and_execution_context(client, mo
     finalized = client.post(f"/clarify/{sid}/finalize", json={"clarify_rounds": confirmation["clarify_rounds"]})
     assert finalized.status_code == 200
     assert finalized.json()["payload"]["clarified_task"] == task
-    prompt = model.await_args_list[-1].args[0][0]["content"]
-    assert current in prompt and original not in prompt
+    assert finalized.json()["payload"]["sub_questions"] == []
     execution = query_request_context(ResearchRequest.model_validate(task).model_dump())
     assert execution["query"] == current and "original_query" not in execution
     assert original not in json.dumps(execution)
-    assert model.await_count == 3
+    assert model.await_count == 2
 
 
 def test_explicit_clear_preserves_unknown_and_removes_old_requirements(client, monkeypatch):
     query = "Compare Redis and PostgreSQL"
     model = AsyncMock(side_effect=[snapshot(query), snapshot("Choose a datastore; previous requirements are withdrawn.",
-        scene=None, complexity=None, candidate_techs=[], constraints=[], unknown_techs=True), {"sub_questions": []}])
+        scene=None, complexity=None, candidate_techs=[], constraints=[], unknown_techs=True)])
     monkeypatch.setattr(agent_module, "call_model", model)
     sid = client.post("/clarify/start", json={"query": query}).json()["session_id"]
     client.post(f"/clarify/{sid}/message", json={"message": "Withdraw previous requirements; I do not know the scope or candidates."})
@@ -178,11 +177,12 @@ async def test_new_reply_invalidates_inflight_finalize(monkeypatch):
     monkeypatch.setattr(agent_module, "call_model", AsyncMock(return_value=snapshot(query)))
     await routes._respond(manager.get(sid))
     started, release = asyncio.Event(), asyncio.Event()
+    original_finalize = routes.clarify_agent.finalize
     async def delayed(*args, **kwargs):
         started.set()
         await release.wait()
-        return {"sub_questions": ["Old question"]}
-    monkeypatch.setattr(agent_module, "call_model", delayed)
+        return await original_finalize(*args, **kwargs)
+    monkeypatch.setattr(routes.clarify_agent, "finalize", delayed)
     old = asyncio.create_task(routes.clarify_finalize(sid, routes.FinalizeRequest(clarify_rounds=0)))
     await asyncio.wait_for(started.wait(), timeout=5)
     manager.process_message(sid, "Replace Redis with SQLite")
@@ -214,8 +214,7 @@ def test_session_reserves_capacity_for_the_assistant_before_accepting_input(coun
 def test_skip_does_not_execute_unshown_model_rewrite(client, monkeypatch, review_first):
     original = "Compare Redis and PostgreSQL"
     invented = "Must migrate to SQLite and accept data loss"
-    model = AsyncMock(side_effect=[snapshot(invented, scene=None, complexity=None, constraints=["Accept data loss"]),
-                                  {"sub_questions": ["What deployment requirements apply?"]}])
+    model = AsyncMock(side_effect=[snapshot(invented, scene=None, complexity=None, constraints=["Accept data loss"])])
     monkeypatch.setattr(agent_module, "call_model", model)
     response = client.post("/clarify/start", json={"query": original}).json()
     assert response["next_action"] == "ask" and "payload" not in response
@@ -233,8 +232,7 @@ def test_skip_does_not_execute_unshown_model_rewrite(client, monkeypatch, review
         task = result.json()["payload"]["clarified_task"]
         assert task["query"] == original and "original_query" not in task
         assert task["constraints"] == [] and task["candidate_techs"] == []
-        assert invented not in model.await_args.args[0][0]["content"]
-    assert result.status_code == 200 and model.await_count == 2
+    assert result.status_code == 200 and model.await_count == 1
 
 
 @pytest.mark.parametrize("audit", [None, "Original request"])

@@ -110,44 +110,6 @@ class TestClarificationAgentRecommend:
         assert state.messages[0]["content"] in mock_call.await_args.args[0][0]["content"]
 
 
-class TestClarificationAgentSubQuestions:
-    @pytest.mark.asyncio
-    async def test_generate_sub_questions_returns_5(self):
-        state = SessionState()
-        state.candidate_techs = ["FastAPI", "Flask"]
-        state.scene = "solo"
-        state.complexity = "simple"
-        state.constraints = ["No additional server", "Restart recovery is mandatory"]
-        state.messages = [{"role": "user", "content": "Choose for durable restart recovery"}]
-
-        mock_llm = {"sub_questions": ["q1", "q2", "q3", "q4", "q5"]}
-        agent = ClarificationAgent()
-        with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_call:
-            mock_call.return_value = mock_llm
-            result = await agent._generate_sub_questions(state)
-
-        assert len(result) == 5
-        prompt = mock_call.await_args.args[0][0]["content"]
-        assert state.messages[0]["content"] in prompt
-        assert all(constraint in prompt for constraint in state.constraints)
-        assert mock_call.await_count == 1
-
-    @pytest.mark.asyncio
-    async def test_generate_sub_questions_fallback_on_error(self):
-        state = SessionState()
-        state.current_query = "Compare React and Vue"
-        state.candidate_techs = ["React", "Vue"]
-        state.scene = "team"
-        state.complexity = "medium"
-
-        agent = ClarificationAgent()
-        with patch("deepchoice.clarify.clarification_agent.call_model", new_callable=AsyncMock) as mock_call:
-            mock_call.side_effect = Exception("API error")
-            result = await agent._generate_sub_questions(state)
-
-        assert len(result) == 5
-
-
 @pytest.mark.parametrize("reply,candidates,expected", [
     ("Compare Zephyr and Sable", ["Zephyr", "Sable"], ["Zephyr", "Sable"]),
     ("Compare ZephyrPro", ["Zephyr", "Sable"], []),

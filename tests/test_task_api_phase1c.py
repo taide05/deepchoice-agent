@@ -243,7 +243,7 @@ def test_clarified_request_and_audit_original_survive_task_restart(tmp_path, mon
     replies = [model_snapshot(original, scene="team", complexity="medium", candidate_techs=["Redis", "PostgreSQL"],
                               constraints=["Redis is required"]),
                model_snapshot(current, scene="solo", complexity="simple", candidate_techs=["SQLite", "PostgreSQL"],
-                              constraints=["Redis is excluded"]), {"sub_questions": ["How do the deployment requirements differ?"]}]
+                              constraints=["Redis is excluded"])]
     model = AsyncMock(side_effect=replies)
     monkeypatch.setattr(clarification_agent, "call_model", model)
     app_module.app.state.product_database_path = tmp_path / "clarified.db"
@@ -262,4 +262,5 @@ def test_clarified_request_and_audit_original_survive_task_restart(tmp_path, mon
         assert request["constraints"] == ["Redis is excluded"]
         assert request["candidate_techs"] == ["SQLite", "PostgreSQL"]
         assert request["scene_context"] == "solo" and request["complexity"] == "simple"
-    assert model.await_count == 3
+    assert model.await_count == 2
+    assert request["sub_questions"] == []

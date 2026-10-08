@@ -179,7 +179,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v36",
-                         "query_analyzer.decomposition_system": "v2",
+                         "query_analyzer.decomposition_system": "v3",
                          "query_adapter.adapt_system": "v5",
                          "source_evaluator.source_scope_selection": "v3",
                          "conflict_detector.contradiction_scan_system": "v4"}

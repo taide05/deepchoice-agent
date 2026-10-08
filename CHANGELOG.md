@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Keep query decomposition in the budgeted research path
+
+Clarification finalization is local and returns no generated frozen questions.
+The existing query analyzer v3 generates only request-relevant research questions;
+remove forced dimensions, minimum word counts and live coarse-scene guesses.
+Only user task constraints enter its constraint projection: model-authored extra
+constraints cannot become decision requirements. Validate question shape/count/text
+and the combined query/constraint/question size before state updates; invalid or
+empty decomposition falls back to the original query with explicit diagnostics.
+Keep explicit API question routing, budget/cancellation propagation and the historical
+smoke-v1 scene helper. Existing analyzer calls own run budget and Trace; no new node
+or model call stage. Old manifests remain readable but require a new run. Real-model
+relevance and broad report quality remain unverified.
+
 ### Execute the current confirmed clarification request
 
 Replace fill-only/append-only extraction with a validated complete current snapshot.

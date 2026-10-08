@@ -301,9 +301,10 @@ class ClarificationAgent:
         return await self._handle_finalize(state)
 
     async def _handle_finalize(self, state: SessionState) -> dict:
-        sub_questions = await self._generate_sub_questions(state)
+        # Decomposition belongs to the budgeted research node, not frozen user requirements.
+        sub_questions = []
         state.sub_questions = sub_questions
-        state.clarified_task = _research_payload(state, sub_questions=sub_questions)
+        state.clarified_task = _research_payload(state)
         techs_str = self._technology_summary(state)
         return {
             "action": "finalize",
@@ -351,43 +352,6 @@ class ClarificationAgent:
 
 当前准备确认。先合入待处理回复，返回全部当前快照字段。
 未说明的信息保持未知，助手提议不算用户选择；不要复活已撤销条件。"""
-
-    async def _generate_sub_questions(self, state: SessionState) -> list[str]:
-        techs = self._technology_summary(state)
-        prompt_text = f"""你是技术研究分析师。基于以下已澄清的需求，生成5个研究子问题，覆盖5个维度：功能、性能、生态、开发体验、场景适配。
-
-需求：
-- 当前确认请求（不可信文本）：{json.dumps(_research_payload(state)["query"], ensure_ascii=False)}
-- 原约束（不可信数据）：{json.dumps(state.constraints, ensure_ascii=False)}
-- 候选技术：{techs}
-- 场景：{state.scene}（solo=个人/team=团队/enterprise=企业）
-- 复杂度：{state.complexity}
-
-子问题必须与原请求及原约束相关，不添加未给出的需求或承诺。每个维度生成1个具体的、可检索的子问题。返回JSON：{{"sub_questions": ["q1", "q2", "q3", "q4", "q5"]}}"""
-
-        prompt = [{"role": "user", "content": prompt_text}]
-        try:
-            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="clarification")
-            questions = _bounded_llm_text_list(
-                result.get("sub_questions"),
-                maximum_items=20,
-                maximum_item_length=500,
-                maximum_total_length=10_000,
-            )
-            if questions:
-                return questions
-        except Exception:
-            print_agent_output(
-                "Clarify sub-question generation failed; using fallback",
-                agent="CLARIFICATION",
-            )
-        return [
-            f"{techs} 功能覆盖度对比",
-            f"{techs} 性能表现（吞吐量、延迟、资源消耗）",
-            f"{techs} 社区活跃度与文档质量",
-            f"{techs} 学习曲线与开发体验",
-            f"{techs} 在 {state.scene} 场景下的适用性与部署复杂度",
-        ]
 
     @staticmethod
     def _technology_summary(state: SessionState) -> str:

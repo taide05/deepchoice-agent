@@ -34,11 +34,12 @@ class TestQueryAnalyzer:
             result = await agent.run(state)
 
         assert len(result["sub_questions"]) >= 3
-        assert result["scene_context"] == "solo"
+        assert "scene_context" not in result
+        assert state["task"]["scene_context"] == "solo"
         assert "python" in result["constraints"]
 
     @pytest.mark.asyncio
-    async def test_defaults_scene_to_team_when_unspecified(self):
+    async def test_empty_decomposition_reports_raw_fallback_without_scene_guess(self):
         state = {
             "task": {
                 "query": "test",
@@ -47,11 +48,13 @@ class TestQueryAnalyzer:
                 "report_format": "what_why_how",
             }
         }
-        mock_response = {"sub_questions": ["q1"], "scene_context": "team", "constraints": []}
+        mock_response = {"sub_questions": [], "scene_context": "team", "constraints": []}
 
         agent = QueryAnalyzerAgent()
         with patch("deepchoice.agents.query_analyzer.call_model", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_response
             result = await agent.run(state)
 
-        assert result["scene_context"] == "team"
+        assert "scene_context" not in result
+        assert result["sub_questions"] == []
+        assert result["quality_signals"][0]["fallback_reason"] == "empty_decomposition"

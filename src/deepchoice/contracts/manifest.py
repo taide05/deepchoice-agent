@@ -47,7 +47,7 @@ REPORT_TEMPLATE_VERSIONS = {
 }
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v9",
-    "query_analyzer.decomposition_system": "v2",
+    "query_analyzer.decomposition_system": "v3",
     "query_adapter.adapt_system": "v5",
     "conclusion_synthesizer.synthesis_prompt": "v36",
     "source_evaluator.source_scope_selection": "v3",
