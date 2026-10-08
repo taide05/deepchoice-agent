@@ -826,7 +826,7 @@ async def test_native_source_later_required_query_failure_is_atomic(cls):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('cls', [ArxivSearch, CommunitySearch])
-@pytest.mark.parametrize('mode', ['maximum_targets', 'long_adaptation', 'legacy_fallback'])
+@pytest.mark.parametrize('mode', ['maximum_targets', 'long_adaptation', 'legacy_fallback', 'short_expression'])
 async def test_native_query_boundaries_preserve_expressions_without_enlarging_result_cap(cls, mode):
     original = 'atlas vs beacon ' + 'persistence ' * 30
     if mode == 'maximum_targets':
@@ -835,7 +835,9 @@ async def test_native_query_boundaries_preserve_expressions_without_enlarging_re
         adapted = ['atlas ' + 'configuration ' * 20 + 'without a shared backend']
     else:
         adapted = None
-    expected = adapted or [original.replace(' vs ', ' ')[:200 if cls.source == 'arxiv' else 150]]
+    if mode == 'short_expression':
+        original = 'Alpha vs Beta versus Gamma; 不允许静默丢失条件。'
+    expected = adapted or [original]
     dispatched = []
     async def get(url, *, params, **kwargs):
         query = params['search_query'].removeprefix('all:') if cls.source == 'arxiv' else params['q']
@@ -849,3 +851,68 @@ async def test_native_query_boundaries_preserve_expressions_without_enlarging_re
         # This package preserves the existing capacity limit; dispatch does not
         # mean all twenty targets have material in the seven retained results.
         assert [row['title'] for row in result['results']] == expected[:7]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", [ArxivSearch, CommunitySearch])
+@pytest.mark.parametrize("language", ["ascii", "chinese"])
+async def test_failed_adapter_full_query_reaches_native_dispatch_through_multi_retriever(monkeypatch, cls, language):
+    from deepchoice.agents.query_adapter import QueryAdapterAgent
+    from deepchoice.retrievers.contracts import RetrievalRequest
+
+    prefix = "Alpha vs Beta; "
+    tail = " versus Omega; keep TAIL_CONSTRAINT."
+    fill = "x" if language == "ascii" else "界"
+    original = prefix + fill * (4000 - len(prefix) - len(tail)) + tail
+    state = {"task": {"query": original}, "sub_questions": [], "_supplemental_input": "Clarify the workload."}
+    model = AsyncMock(side_effect=RuntimeError("synthetic adaptation failure"))
+    monkeypatch.setattr("deepchoice.agents.query_adapter.call_model", model)
+    monkeypatch.setattr("deepchoice.agents.multi_retriever.harvest", lambda *a, **k: 0)
+    adaptation = await QueryAdapterAgent().run(state)
+    assert adaptation["adapted_queries"][cls.source] == []
+    requests = []
+    real_retrieve = cls.retrieve
+
+    async def retrieve(self, request):
+        assert isinstance(request, RetrievalRequest)
+        requests.append(request)
+        return await real_retrieve(self, request)
+
+    monkeypatch.setattr(cls, "retrieve", retrieve)
+    dispatched = []
+
+    async def get(url, *, params, **kwargs):
+        value = params["search_query"].removeprefix("all:") if cls.source == "arxiv" else params["q"]
+        dispatched.append(value)
+        return _target_response(cls.source, "Alpha documented conditions")
+
+    client = _FakeClient(get_side=get)
+    with _patch_outbound(client):
+        output = await MultiRetrieverAgent(retriever_registry={cls.source: cls}).run({**state, **adaptation})
+    assert len(requests) == 1 and requests[0].query == original and requests[0].adapted_queries == ()
+    assert dispatched == [original]
+    assert output["partial_failures"] == []
+    assert output["search_results"][0]["status"] == "success"
+    assert len(output["search_results"][0]["results"]) <= 7
+    model.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cls", [ArxivSearch, CommunitySearch])
+@pytest.mark.parametrize("status", [400, 414])
+async def test_native_long_query_rejection_is_visible_atomic_failure(cls, status):
+    original = "Alpha vs Beta " + "x" * 3986
+    dispatched = []
+
+    async def get(url, *, params, **kwargs):
+        value = params["search_query"].removeprefix("all:") if cls.source == "arxiv" else params["q"]
+        dispatched.append(value)
+        return httpx.Response(status, text="PRIVATE_PROVIDER_DETAIL", request=httpx.Request("GET", url))
+
+    client = _FakeClient(get_side=get)
+    with _patch_outbound(client):
+        result = await cls().search(original, [])
+    assert dispatched == [original] and client.get.await_count == 1
+    assert result["status"] == "failed" and result["results"] == []
+    expected_error = "HTTPStatusError" if cls.source == "arxiv" else f"RuntimeError: HTTP {status}"
+    assert result["error"] == expected_error and "PRIVATE_PROVIDER_DETAIL" not in result["error"]

@@ -1245,9 +1245,11 @@ async def test_question_refs_use_real_admission_trace_and_no_phantom_judgment(tm
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('source', ['arxiv', 'community'])
-@pytest.mark.parametrize('outcome', ['success', 'denied', 'timeout', 'cancelled', 'http_failure', 'oversized'])
-async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monkeypatch, source, outcome):
+@pytest.mark.parametrize('source,outcome,raw_fallback', [
+    (source, outcome, False) for source in ('arxiv', 'community')
+    for outcome in ('success', 'denied', 'timeout', 'cancelled', 'http_failure', 'oversized')
+] + [(source, outcome, True) for source in ('arxiv', 'community') for outcome in ('success', 'cancelled')])
+async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monkeypatch, source, outcome, raw_fallback):
     from contextlib import asynccontextmanager
     import importlib
     import httpx
@@ -1262,6 +1264,7 @@ async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monke
     monkeypatch.setattr(throttle.gate_for(source), 'interval', 0)
     if outcome == 'timeout':
         monkeypatch.setattr(module, '_SEARCH_TIMEOUT_S', 0.5)
+    original = 'durable state ' + 'boundary ' * 400 + ' versus Omega; preserve late conditions.'
     entered = asyncio.Event()
     calls = []
     routes = []
@@ -1269,7 +1272,7 @@ async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monke
     async def get(url, *, params, **kwargs):
         query = params.get('q', params.get('search_query'))
         calls.append(query)
-        if len(calls) == 2 and outcome in {'timeout', 'cancelled'}:
+        if len(calls) == (1 if raw_fallback else 2) and outcome in {'timeout', 'cancelled'}:
             entered.set()
             await asyncio.Event().wait()
         if len(calls) == 2 and outcome == 'oversized':
@@ -1292,7 +1295,7 @@ async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monke
     try:
         with bind_run_context(_context(manager)):
             pending = asyncio.create_task(_invoke_retriever_miss(source, cls,
-                query='durable state', sub_questions=[], adapted_queries=[
+                query=original if raw_fallback else 'durable state', sub_questions=[], adapted_queries=[] if raw_fallback else [
                     'durable state', 'durable recovery', 'durable retention']))
             if outcome == 'cancelled':
                 await asyncio.wait_for(entered.wait(), 3)
@@ -1306,8 +1309,10 @@ async def test_native_multiquery_http_budget_and_stop_boundaries(tmp_path, monke
             else:
                 result, _ = await pending
                 assert result.status == ('success' if outcome == 'success' else 'failed')
-                assert len(result.results) == (3 if outcome == 'success' else 0)
-        expected = 3 if outcome == 'success' else 1 if outcome == 'denied' else 2
+                assert len(result.results) == ((1 if raw_fallback else 3) if outcome == 'success' else 0)
+        expected = 1 if raw_fallback else 3 if outcome == 'success' else 1 if outcome == 'denied' else 2
+        if raw_fallback:
+            assert calls == [('all:' if source == 'arxiv' else '') + original]
         assert len(calls) == len(routes) == expected
         usage = await manager._usage()
         assert usage[BudgetResource.RETRIEVAL_CALLS] == 1

@@ -91,8 +91,7 @@ class ArxivSearch(BaseRetriever):
                          adapted_queries: list[str] | None = None) -> list[dict]:
         from ..runtime.context import get_run_context
 
-        queries = list(dict.fromkeys(adapted_queries)) if adapted_queries else [
-            query.replace(" vs ", " ").replace(" versus ", " ")[:200]]
+        queries = list(dict.fromkeys(adapted_queries)) if adapted_queries else [query]
         batches = []
         # Includes route resolution, provider pacing and all bounded retries.
         async with asyncio.timeout(_SEARCH_TIMEOUT_S):

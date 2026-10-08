@@ -49,7 +49,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
     }["chroma"] == "v8"
     assert all(
-        retriever.version == ("v3" if retriever.retriever_id in {"community", "arxiv"} else "v2" if retriever.retriever_id in {"tavily", "github"} else "v1")
+        retriever.version == ("v4" if retriever.retriever_id in {"community", "arxiv"} else "v2" if retriever.retriever_id in {"tavily", "github"} else "v1")
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
@@ -85,13 +85,15 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"])
-def test_historical_official_retriever_manifest_cannot_resume(old_version):
+@pytest.mark.parametrize("source,old_version", [
+    ("official", f"v{version}") for version in range(1, 10)
+] + [("community", "v3"), ("arxiv", "v3")])
+def test_historical_retriever_manifest_cannot_resume(source, old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
     current = build_run_manifest({})
     historical = current.model_copy(update={"retrievers": tuple(
-        row.model_copy(update={"version": old_version}) if row.retriever_id == "official" else row
+        row.model_copy(update={"version": old_version}) if row.retriever_id == source else row
         for row in current.retrievers
     )})
     historical = historical.model_copy(update={"manifest_id": _expected_manifest_id(historical)})
@@ -100,6 +102,12 @@ def test_historical_official_retriever_manifest_cannot_resume(old_version):
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
     assert restored.manifest_id != current.manifest_id
+
+    from deepchoice.cache import build_retrieval_cache_key
+    from deepchoice.retrievers.contracts import RetrievalRequest
+    request = RetrievalRequest(query="Alpha versus Beta")
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    assert build_retrieval_cache_key(source=source, request=request, manifest_id=restored.manifest_id) != build_retrieval_cache_key(source=source, request=request, manifest_id=current.manifest_id)
 
 
 @pytest.mark.parametrize("policy_version", [

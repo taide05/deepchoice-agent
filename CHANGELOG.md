@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Preserve complete native fallback queries
+
+Community and arXiv v4 send the complete bounded original query when adaptation is
+unavailable, preserving comparison wording and late constraints. Existing query,
+result, budget and timeout limits remain; provider rejection is a visible failure.
+This removes local truncation without claiming provider interpretation or recall.
+Both historical v3 retriever identities remain readable but require a new run.
+
 ### Require verified chunks for audited candidate scope
 
 Source-score-v17 requires the Chroma producer's verified-chunk marker before applying

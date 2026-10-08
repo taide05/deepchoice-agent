@@ -21,8 +21,7 @@ class CommunitySearch(BaseRetriever):
         from ..runtime.context import get_run_context
         from ..citations.source_windows import extract_source_document
 
-        queries = list(dict.fromkeys(adapted_queries)) if adapted_queries else [
-            query.replace(" vs ", " ").replace(" versus ", " ")[:150]]
+        queries = list(dict.fromkeys(adapted_queries)) if adapted_queries else [query]
         hints = proposal_hints(" ".join([query, *sub_questions]))
         batches = []
         async with asyncio.timeout(_SEARCH_TIMEOUT_S):
