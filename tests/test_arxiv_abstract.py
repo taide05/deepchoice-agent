@@ -77,12 +77,13 @@ async def test_abstract_math_and_wrapped_lines_are_xml_text_not_html(provider):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("paragraphs", [False, True])
-async def test_long_abstract_offers_complete_scope_then_requires_selection(provider, monkeypatch, paragraphs):
+@pytest.mark.parametrize("named_title", [False, True])
+async def test_long_abstract_offers_complete_scope_then_requires_selection(provider, monkeypatch, paragraphs, named_title):
     main = "Alpha retains queued jobs only when its persistent journal option is enabled during execution."
     limit = "If that option is disabled, queued jobs cannot be guaranteed to survive a process restart."
     background = [f"Background section {i} describes an unrelated measurement setup." for i in range(60 if paragraphs else 20)]
     prose = ("\n\n" if paragraphs else "\n").join([*background, main, limit])
-    _respond(provider, _feed(prose))
+    _respond(provider, _feed(prose, title="Alpha study" if named_title else "Recovery observations"))
     result = await arxiv_api.ArxivSearch().retrieve(RetrievalRequest(query="Alpha journal recovery"))
     assert result.status == "success"
     item = result.results[0]

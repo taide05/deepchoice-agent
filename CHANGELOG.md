@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Retain eligible long-source scopes before passage selection
+
+Source-score-v15 offers bounded community-body and arXiv-abstract scopes to the
+existing selector when their generic title omits an explicit candidate but the
+scope names it. Keep post-selection lexical checks, empty-text rejection, passage
+provenance, seed/comparison exclusions, limits and budget/cancellation propagation.
+No new model stage; existing scopes may now reach the budgeted selector. Historical
+scoring identities remain readable but need a new run. This restores eligibility,
+not semantic support or verified report-quality gains.
+
 ### Distinguish research outcomes from connection loss
 
 Show localized failed, timed-out, interrupted and unconfirmed outcomes separately

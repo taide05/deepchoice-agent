@@ -400,10 +400,10 @@ async def test_scope_prompt_reserves_late_distinct_candidate(monkeypatch):
 
 # A source name outside the old snippet may be offered, but only delivered
 # runtime-copied text can satisfy the same candidate gate afterward.
-def _official_scope_only_state():
+def _scope_only_state(source="official"):
     state = _scoped_source_state()
     channel = state["search_results"][0]
-    channel["source"] = "official"
+    channel["source"] = source
     channel["results"][0].update(title="Job journal", snippet=_SCOPE_MIDDLE)
     return state
 
@@ -416,11 +416,12 @@ def _official_scope_only_state():
     ({"sources": [{"id": "S1", "ranges": [[0, 99]]}]}, False),
     (RuntimeError("provider unavailable"), False),
 ])
-async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch, proposal, admitted):
+@pytest.mark.parametrize("source", ["official", "community", "arxiv"])
+async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch, source, proposal, admitted):
     monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: object())
     selector = AsyncMock(side_effect=proposal) if isinstance(proposal, Exception) else AsyncMock(return_value=proposal)
     monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
-    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_official_scope_only_state())
+    output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_scope_only_state(source))
     selector.assert_awaited_once()
     assert len(output["source_scores"]) == int(admitted)
     assert output["quality_signals"][0]["candidate_excluded_count"] == int(not admitted)
@@ -433,14 +434,16 @@ async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("variant", ["chroma", "tavily", "community", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair"])
-async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries(monkeypatch, variant):
+@pytest.mark.parametrize("source,variant", [
+    ("official", v) for v in ("chroma", "tavily", "github", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair")
+] + [(src, v) for src in ("community", "arxiv") for v in ("nameless", "oversized", "public_passages", "private_passages")])
+async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries(monkeypatch, source, variant):
     from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
 
-    state = _official_scope_only_state()
+    state = _scope_only_state(source)
     channel = state["search_results"][0]
     item = channel["results"][0]
-    if variant in ("chroma", "tavily", "community"):
+    if variant in ("chroma", "tavily", "github"):
         channel["source"] = variant
     elif variant == "nameless":
         item["_source_scope_sentences"] = [_SCOPE_MIDDLE]
@@ -470,12 +473,13 @@ async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("legacy", ["no_manifest", "no_context"])
-async def test_scope_only_candidate_preserves_legacy_exclusion(monkeypatch, legacy):
+@pytest.mark.parametrize("source", ["official", "community", "arxiv"])
+async def test_scope_only_candidate_preserves_legacy_exclusion(monkeypatch, source, legacy):
     monkeypatch.setattr("deepchoice.runtime.context.get_run_context", lambda: None if legacy == "no_context" else object())
     selector = AsyncMock()
     monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
     manifest = None if legacy == "no_manifest" else build_run_manifest({})
-    output = await SourceEvaluatorAgent(run_manifest=manifest).run(_official_scope_only_state())
+    output = await SourceEvaluatorAgent(run_manifest=manifest).run(_scope_only_state(source))
     assert output["source_scores"] == []
     assert output["quality_signals"][0]["candidate_excluded_count"] == 1
     selector.assert_not_awaited()
@@ -483,7 +487,8 @@ async def test_scope_only_candidate_preserves_legacy_exclusion(monkeypatch, lega
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["budget", "lease", "cancel"])
-async def test_scope_only_candidate_keeps_authority_failures_visible(monkeypatch, failure):
+@pytest.mark.parametrize("source", ["official", "community", "arxiv"])
+async def test_scope_only_candidate_keeps_authority_failures_visible(monkeypatch, source, failure):
     class LostLease(RuntimeError):
         code = "RUN_LEASE_LOST"
 
@@ -493,13 +498,14 @@ async def test_scope_only_candidate_keeps_authority_failures_visible(monkeypatch
     selector = AsyncMock(side_effect=exc)
     monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
     with pytest.raises(type(exc)):
-        await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_official_scope_only_state())
+        await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_scope_only_state(source))
     selector.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_unoffered_scope_only_candidate_cannot_gain_admission(monkeypatch):
-    state = _official_scope_only_state()
+@pytest.mark.parametrize("source", ["official", "community", "arxiv"])
+async def test_unoffered_scope_only_candidate_cannot_gain_admission(monkeypatch, source):
+    state = _scope_only_state(source)
     item = state["search_results"][0]["results"][0]
     state["search_results"][0]["results"] = [{**item, "url": f"https://example.org/journal/{index}"} for index in range(9)]
     seen = []
@@ -518,9 +524,9 @@ async def test_unoffered_scope_only_candidate_cannot_gain_admission(monkeypatch)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("source", ["official", "chroma", "audited_seed"])
+@pytest.mark.parametrize("source", ["official", "community", "arxiv", "chroma", "audited_seed"])
 async def test_previously_admitted_source_keeps_selected_nameless_conditions(monkeypatch, source):
-    state = _official_scope_only_state()
+    state = _scope_only_state()
     state["search_results"][0]["source"] = source
     state["search_results"][0]["results"][0]["snippet"] = _SCOPE_FIRST
     if source == "audited_seed":

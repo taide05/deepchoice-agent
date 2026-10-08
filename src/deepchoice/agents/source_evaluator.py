@@ -515,9 +515,9 @@ class SourceEvaluatorAgent:
                     continue
                 normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
                 rejection = _candidate_rejection(normalized_result, source, candidates, patterns)
-                if rejection == "missing_candidate" and source == "official":
-                    # Only official scopes are eligible for provisional admission.
-                    # A name in that bounded text permits offering it to the existing
+                if rejection == "missing_candidate" and source in {"official", "community", "arxiv"}:
+                    # These retrievers emit bounded body/abstract scopes. A name
+                    # in that text permits offering it to the existing
                     # selector; it cannot grant admission for unselected text.
                     scope = bounded_scope_sentences(r.get("_source_scope_sentences"))
                     if (scope and "passages" not in r and "_source_passages" not in r

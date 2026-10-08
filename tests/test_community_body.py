@@ -81,11 +81,15 @@ def test_preserved_pre_does_not_inherit_blockquote_prose_eligibility():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("paragraph_count", [28, 100])
-async def test_long_question_offers_complete_conditions_then_requires_selection(provider, monkeypatch, paragraph_count):
+@pytest.mark.parametrize("named_title", [False, True])
+async def test_long_question_offers_complete_conditions_then_requires_selection(provider, monkeypatch, paragraph_count, named_title):
     main = "Alpha retains queued jobs only when its persistent journal is enabled."
     limit = "If that journal is disabled, Alpha cannot guarantee recovery of queued jobs after restart."
     background = [f"Background section {index} describes another unrelated topic." for index in range(paragraph_count)]
-    provider.return_value = _response("".join(f"<p>{row}</p>" for row in [*background, main, limit]))
+    response = _response("".join(f"<p>{row}</p>" for row in [*background, main, limit]))
+    body = response.json()
+    body["items"][0]["title"] = "Alpha question" if named_title else "Recovery observations"
+    provider.return_value = httpx.Response(200, json=body, request=response.request)
     result = await community.CommunitySearch().retrieve(RetrievalRequest(query="Alpha journal recovery"))
     assert result.status == "success"
     item = result.results[0]
