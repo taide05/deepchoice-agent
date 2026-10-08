@@ -19,6 +19,15 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-08 R21：source_scope_selection v2、source-score-v11、official v6/Chroma v8
+冻结共用保存正文投影。按原归一文本顺序定位实际句；无空白相邻句合为一个不可拆原文
+单元，已有空白则分开，重算投影必须得到同tuple且空格join复原原文本。仍先限制实际
+40句/每句400字符、范围2000字符；单元可含多句，超过所选1200字符或不完整/不唯一
+时不可选，不截掉条件、不新增字段。模型仅返回已有单元范围，后续绑定/网页引用原文
+核验及unknown语义不变；普通英文分句索引保持。实际旧manifest仍可读/hash有效，
+当前同run恢复拒绝，official/Chroma缓存按manifest隔离。根地址/纯中文无英文主题正文
+获取与中文子页机会尚未处理，不能据范围修复宣称中文召回或真实报告质量验收。
+
 2026-10-07 R20：绑定/结构纠错后，runtime-owned compact回答按is_answer_delivery分流，
 终端投影保留answer_delivery原需求清单、source_facts和decision_analysis，明确写原
 constraint-aware-v1。旧具体胜者撤回为context_dependent，排名和旧平行字段清空，

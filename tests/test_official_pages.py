@@ -471,3 +471,38 @@ async def test_saved_official_body_reaches_selection_binding_and_citation(setup,
     assert checked["source_facts"][0]["status"] == "verified"
     assert intro in checked["source_facts"][0]["saved_text"]
     assert limit in checked["source_facts"][0]["saved_text"]
+
+
+@pytest.mark.asyncio
+async def test_saved_consecutive_chinese_conditions_survive_scope_selection_and_citation(setup, monkeypatch):
+    from deepchoice.contracts.manifest import build_run_manifest
+    from deepchoice.utils.source_scope import scope_sentences
+    from deepchoice.utils.evidence_choices import bind_evidence_choices, calibrate_evidence_choices
+    from deepchoice.citations.verifier import verify_citations
+
+    prose = ("Acme filtering 根据已经建立索引的字段选择匹配记录，并且按照指定的谓词返回相应的数据集合。"
+             "但是字段过滤不能代替权限检查，应用程序仍然需要单独限制用户允许访问的文档集合。"
+             "只有在查询路径和权限限制都经过核实时，才能据此判断当前场景的访问边界。")
+    body = '<html><body><main><p>' + prose + '</p></main></body></html>'
+    setup.side_effect = lambda _source, url, **_kw: response(url, body)
+    retrieved = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="acme filtering"))
+    assert retrieved.status == "success" and len(retrieved.results) == 1
+    assert retrieved.results[0].get("_source_scope_sentences") == [prose]
+    selector = AsyncMock(return_value={"sources": [{"id": "S1", "ranges": [[0, 1]]}]})
+    monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
+    scored = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run({
+        "task": {"query": "Acme 的过滤是否能单独建立权限边界？", "candidate_techs": ["Acme"]},
+        "search_results": [retrieved.model_dump()],
+    })
+    selector.assert_awaited_once()
+    assert scope_sentences(prose) == (prose,)
+    assert scored["source_scores"][0]["passages"] == [prose]
+    assert scored["source_scores"][0]["snippet"] == prose
+    chains = [{"sources": scored["source_scores"]}]
+    bound = bind_evidence_choices({"source_facts": [{"id": "F1", "evidence_id": 1}]}, chains, [], [])
+    monkeypatch.setattr(run_context, "get_run_context", lambda: None)
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", setup)
+    checks, _ = await verify_citations(bound, chains)
+    checked = calibrate_evidence_choices(bound, checks)
+    assert checked["source_facts"][0]["status"] == "verified"
+    assert checked["source_facts"][0]["saved_text"] == prose

@@ -1,6 +1,15 @@
 # Changelog
 
-## [Unreleased] - 2026-10-07
+## [Unreleased] - 2026-10-08
+
+### Preserve source sentence separators in scope selection
+
+Keep consecutive source sentences without whitespace in one indivisible text
+unit, preserving Chinese prose and its conditions exactly. Keep actual sentence,
+scope, passage-size and unique-location limits; never clip an oversized unit.
+Freeze scope prompt v2, source-score-v11, official v6 and Chroma v8. Historical
+identities remain readable and require a new compatible run. This does not yet
+repair Chinese-only acquisition or child-page recall.
 
 ### Finalize compact answers without legacy reconstruction
 

@@ -50,7 +50,7 @@ PROMPT_VERSIONS = {
     "query_analyzer.decomposition_system": "v2",
     "query_adapter.adapt_system": "v3",
     "conclusion_synthesizer.synthesis_prompt": "v34",
-    "source_evaluator.source_scope_selection": "v1",
+    "source_evaluator.source_scope_selection": "v2",
     "conflict_detector.contradiction_scan_system": "v4",
 }
 try:
@@ -99,7 +99,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -119,7 +119,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8", "source-score-v9", "source-score-v10"] = "source-score-v10"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8", "source-score-v9", "source-score-v10", "source-score-v11"] = "source-score-v11"
     security_policy_version: Literal[
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4", "outbound-url-v5"
     ] = "outbound-url-v5"
@@ -320,12 +320,12 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v7" if retriever_id == "chroma" else "v5" if retriever_id == "official"
+                version="v8" if retriever_id == "chroma" else "v6" if retriever_id == "official"
                         else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v10",
+        "scoring_policy_version": "source-score-v11",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v20",

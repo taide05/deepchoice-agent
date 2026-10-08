@@ -1,6 +1,6 @@
-"""Bounded, verbatim source sentence choices for an optional scope proposal.
+"""Bounded, verbatim text units for an optional source scope proposal.
 
-A model may name sentence ranges, but only runtime-owned retrieval text can
+A model may name text-unit ranges, but only runtime-owned retrieval text can
 become a passage. Live citation checks still decide provenance and lexical
 support; this module does not decide applicability or recommendation quality.
 """
@@ -17,7 +17,12 @@ MAX_PROPOSAL_MESSAGE_BYTES = 12000
 
 
 def scope_sentences(document: str) -> tuple[str, ...] | None:
-    """Number a bounded source excerpt without changing its normalized text."""
+    """Number exact text units while retaining the original sentence separators.
+
+    Consecutive sentences without intervening whitespace form one indivisible
+    unit. Actual sentence limits still apply, and range selection must copy the
+    whole unit; adding spaces or clipping a condition would alter source text.
+    """
     from ..citations.verifier import _split_sentences
 
     if not isinstance(document, str):
@@ -27,10 +32,20 @@ def scope_sentences(document: str) -> tuple[str, ...] | None:
         return None
     sentences = tuple(_split_sentences(text))
     if (not sentences or len(sentences) > MAX_SCOPE_SENTENCES
-            or any(not sentence or len(sentence) > MAX_SENTENCE_CHARS for sentence in sentences)
-            or " ".join(sentences) != text):
+            or any(not sentence or len(sentence) > MAX_SENTENCE_CHARS for sentence in sentences)):
         return None
-    return sentences
+    units: list[str] = []
+    cursor = 0
+    for sentence in sentences:
+        start = text.find(sentence, cursor)
+        if start == cursor and units:
+            units[-1] += sentence
+        elif start == cursor or (start == cursor + 1 and text[cursor:start] == " "):
+            units.append(sentence)
+        else:
+            return None
+        cursor = start + len(sentence)
+    return tuple(units) if cursor == len(text) and " ".join(units) == text else None
 
 
 def bounded_scope_sentences(value: object) -> tuple[str, ...] | None:
