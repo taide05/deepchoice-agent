@@ -140,6 +140,7 @@ def usable_evidence_chains(state: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(sources, list):
             continue
         valid_sources: list[dict[str, Any]] = []
+        chain_urls: set[str] = set()
         is_disputed = False
         for source in sources:
             if not isinstance(source, dict):
@@ -157,6 +158,7 @@ def usable_evidence_chains(state: dict[str, Any]) -> list[dict[str, Any]]:
             score = source.get("score")
             if (
                 canonical_url in seen_urls
+                or canonical_url in chain_urls
                 or not isinstance(score, (int, float))
                 or isinstance(score, bool)
                 or not math.isfinite(score)
@@ -167,6 +169,7 @@ def usable_evidence_chains(state: dict[str, Any]) -> list[dict[str, Any]]:
             snippet = _bounded_text(source.get("snippet"), maximum=2_000)
             if not conclusion or not (title or snippet):
                 continue
+            chain_urls.add(canonical_url)
             valid_sources.append(
                 {
                     "url": canonical_url,
@@ -177,13 +180,15 @@ def usable_evidence_chains(state: dict[str, Any]) -> list[dict[str, Any]]:
             )
         if valid_sources and not is_disputed:
             maximum_score = max(source["score"] for source in valid_sources)
-            strength = (
-                "strong"
-                if maximum_score >= 8
-                else "moderate"
-                if maximum_score >= 6
-                else "weak"
-            )
+            strengths = ("weak", "moderate", "strong")
+            original = chain.get("evidence_strength")
+            original_rank = strengths.index(original) if isinstance(original, str) and original in strengths else 0
+            score_rank = 2 if maximum_score >= 8 else 1 if maximum_score >= 6 else 0
+            if len(valid_sources) != len(sources):
+                # Removed sources cannot carry forward a prior corroboration label.
+                score_rank = min(score_rank, 1)
+            # A restricted projection may inherit a label, never create support.
+            strength = strengths[min(original_rank, score_rank)]
             seen_urls.update(source["url"] for source in valid_sources)
             usable.append(
                 {

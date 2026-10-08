@@ -97,11 +97,11 @@ T = {
         "format_cm": "五维对比矩阵",
         "format_label": "格式",
         "evidence_chains_title": "证据链",
-        "source_ratings_title": "来源评分",
+        "source_ratings_title": "来源排序参考",
         "sources_label": "{n} 个来源",
-        "authority_label": "权威",
-        "time_label": "时效",
-        "evidence_label": "可验证",
+        "authority_label": "URL类别",
+        "time_label": "日期先验",
+        "evidence_label": "文本线索",
         "footer": "DeepChoice — AI 驱动的技术选型研究",
         "footer_tag": "证据支撑。冲突透明。可追溯。",
         "new_research_btn": "开始新研究",
@@ -197,6 +197,8 @@ T = {
         "rv_citation_reason_mismatch": "确定性检查未能确认来源支持该主张。",
         "rv_citation_reason_generic": "核验说明不可用，请人工复核。",
         "tech_map": {"candidate_techs": "候选技术", "scene": "使用场景", "complexity": "复杂度"},
+        "source_unassessed": "未评估",
+        "source_prior_note": "分数用于来源排序，主张支持需另行核验。当前版本只使用URL类别与日期；历史结果保留当时的启发式数值。",
     },
     "en": {
         "title": "DeepChoice",
@@ -274,11 +276,11 @@ T = {
         "format_cm": "Comparison Matrix",
         "format_label": "Format",
         "evidence_chains_title": "Evidence Chains",
-        "source_ratings_title": "Source Ratings",
+        "source_ratings_title": "Source priority",
         "sources_label": "{n} source(s)",
-        "authority_label": "Authority",
-        "time_label": "Time",
-        "evidence_label": "Evidence",
+        "authority_label": "URL category",
+        "time_label": "Date prior",
+        "evidence_label": "Text cues",
         "footer": "DeepChoice — AI-powered technology selection research",
         "footer_tag": "Evidence-backed. Conflict-aware. Transparent.",
         "new_research_btn": "Start New Research",
@@ -374,6 +376,8 @@ T = {
         "rv_citation_reason_mismatch": "Deterministic checks did not establish support for this claim.",
         "rv_citation_reason_generic": "A safe verification explanation is unavailable; review manually.",
         "tech_map": {"candidate_techs": "Tech candidates", "scene": "Usage scene", "complexity": "Complexity"},
+        "source_unassessed": "Unassessed",
+        "source_prior_note": "Scores prioritize sources; claim support requires separate verification. Current runs use URL category and date. Historical results retain their earlier heuristic values.",
     },
     "ja": {
         "title": "DeepChoice",
@@ -451,11 +455,11 @@ T = {
         "format_cm": "比較マトリックス",
         "format_label": "形式",
         "evidence_chains_title": "証拠チェーン",
-        "source_ratings_title": "情報源評価",
+        "source_ratings_title": "情報源の優先順位",
         "sources_label": "{n}件のソース",
-        "authority_label": "権威性",
-        "time_label": "時間",
-        "evidence_label": "検証",
+        "authority_label": "URL分類",
+        "time_label": "日付の事前評価",
+        "evidence_label": "文章の手掛かり",
         "footer": "DeepChoice — AI深層リサーチによる技術選定",
         "footer_tag": "証拠に基づく。矛盾を検知。透明性。",
         "new_research_btn": "新しい研究を開始",
@@ -551,6 +555,8 @@ T = {
         "rv_citation_reason_mismatch": "決定的な検査では主張の裏付けを確認できませんでした。",
         "rv_citation_reason_generic": "安全な検証説明がありません。手動で確認してください。",
         "tech_map": {"candidate_techs": "候補技術", "scene": "利用シーン", "complexity": "複雑さ"},
+        "source_unassessed": "未評価",
+        "source_prior_note": "スコアは情報源の順序付けに使い、主張の裏付けは別途確認します。現在はURL分類と日付を使用し、過去の結果は当時の推定値を保持します。",
     },
     "ko": {
         "title": "DeepChoice",
@@ -628,11 +634,11 @@ T = {
         "format_cm": "비교 매트릭스",
         "format_label": "형식",
         "evidence_chains_title": "증거 체인",
-        "source_ratings_title": "출처 평가",
+        "source_ratings_title": "출처 우선순위",
         "sources_label": "{n}개 출처",
-        "authority_label": "권위",
-        "time_label": "시간",
-        "evidence_label": "검증",
+        "authority_label": "URL 분류",
+        "time_label": "날짜 사전 평가",
+        "evidence_label": "텍스트 단서",
         "footer": "DeepChoice — AI 기반 기술 선택 연구",
         "footer_tag": "증거 기반. 충돌 인식. 투명성.",
         "new_research_btn": "새 연구 시작",
@@ -728,6 +734,8 @@ T = {
         "rv_citation_reason_mismatch": "결정적 검사에서 주장을 뒷받침하는 근거를 확인하지 못했습니다.",
         "rv_citation_reason_generic": "안전한 검증 설명을 사용할 수 없습니다. 직접 확인해 주세요.",
         "tech_map": {"candidate_techs": "후보 기술", "scene": "사용 환경", "complexity": "복잡도"},
+        "source_unassessed": "미평가",
+        "source_prior_note": "점수는 출처의 순서를 정하며 주장에 대한 근거는 별도로 확인합니다. 현재는 URL 분류와 날짜를 사용하고 과거 결과는 당시의 추정값을 유지합니다.",
     },
 }
 
@@ -2678,9 +2686,15 @@ def _render_results():
 
     with tab2:
         st.markdown(f"### {t('source_ratings_title', lang)}")
+        st.caption(t("source_prior_note", lang))
         for s in snapshot.get("source_scores", [])[:12]:
             score = s.get("total_score", 0)
-            score_color = "#4ade80" if score >= 7 else ("#fbbf24" if score >= 5 else "#f87171")
+            score_color = "#a1a1aa"
+            components = []
+            for label, key in (("authority_label", "authority"), ("time_label", "timeliness"), ("evidence_label", "verifiability")):
+                value = s.get("scores", {}).get(key)
+                display = t("source_unassessed", lang) if value is None else str(value)
+                components.append(f"{t(label, lang)}: {_esc(display)}")
             st.markdown(f"""
             <div class="glass-card" style="padding:14px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -2688,7 +2702,7 @@ def _render_results():
                     <span style="color:{score_color}; font-weight:700; font-size:1rem;">{score}</span>
                 </div>
                 <div style="font-size:0.75rem; color:#52525b; margin-top:4px;">
-                    {t("authority_label", lang)}: {s["scores"]["authority"]} | {t("time_label", lang)}: {s["scores"]["timeliness"]} | {t("evidence_label", lang)}: {s["scores"]["verifiability"]}
+                    {' | '.join(components)}
                 </div>
             </div>
             """, unsafe_allow_html=True)

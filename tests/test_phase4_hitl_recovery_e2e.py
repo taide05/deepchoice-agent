@@ -530,7 +530,8 @@ async def test_default_reviewed_graph_pauses_and_resumes_without_replaying_revie
 
 
 @pytest.mark.asyncio
-async def test_actual_gate_checkpoint_uses_shared_safe_structural_gaps(tmp_path, monkeypatch):
+@pytest.mark.parametrize("strength", ["moderate", None], ids=["explicit-moderate", "missing-strength"])
+async def test_actual_gate_checkpoint_uses_shared_safe_structural_gaps(tmp_path, monkeypatch, strength):
     from deepchoice.agents import evidence_decision_gate as gate
     monkeypatch.setattr(gate, "get_run_context", lambda: object())
     initial = {
@@ -540,6 +541,9 @@ async def test_actual_gate_checkpoint_uses_shared_safe_structural_gaps(tmp_path,
         "conflicts": [], "knowledge_gaps": ["PRIVATE_SUPPLEMENTAL_SOURCE"],
         "final_recommendation": {"decision_basis_version": "constraint-aware-v1", "winner": "context_dependent"},
     }
+    if strength is not None:
+        for chain in initial["evidence_chains"]:
+            chain["evidence_strength"] = strength
     workflow = StateGraph(dict)
     workflow.add_node("evidence_gate", gate.EvidenceDecisionGateAgent().run)
     workflow.add_edge(START, "evidence_gate")
@@ -549,9 +553,12 @@ async def test_actual_gate_checkpoint_uses_shared_safe_structural_gaps(tmp_path,
         graph = workflow.compile(checkpointer=saver)
         paused = await graph.ainvoke(initial, config)
         payload = paused["__interrupt__"][0].value
-        assert payload["gaps"] == [
-            "Fewer than 2 distinct valid HTTP(S) hostnames are available in usable evidence.",
-            "Additional unresolved evidence or reasoning gaps were reported."]
+        expected_gaps = [
+            "Fewer than 2 distinct valid HTTP(S) hostnames are available in usable evidence."]
+        if strength is None:
+            expected_gaps.append("No usable evidence chain has moderate or strong evidence strength.")
+        expected_gaps.append("Additional unresolved evidence or reasoning gaps were reported.")
+        assert payload["gaps"] == expected_gaps
         assert payload["allowed_actions"] == ["provide_context", "limited_report", "cancel"]
         assert "PRIVATE_SUPPLEMENTAL_SOURCE" not in str(payload)
         snapshot = await graph.aget_state(config)

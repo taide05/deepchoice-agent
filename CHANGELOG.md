@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Remove prose keyword bonuses and prevent restricted strength inflation
+
+Source-score-v16 uses URL-category/date priors on the historical score scale.
+Default consistency/verifiability are unassessed (null), with an unassessed evidence
+type; legacy numeric helpers and stored values remain readable. Removing the English
+opinion penalty can increase scores by 0.8 and cross unchanged admission thresholds;
+code/benchmark bonuses also disappear. Ranking quality remains unmeasured.
+
+Budget/HITL restricted projections cap strength at both its original valid label
+and surviving-source score. Missing/invalid labels stay weak; filtering or deduplication
+caps prior strong at moderate. Local dedup state is committed only for accepted chains.
+Four-language source panels distinguish unassessed fields from historical numeric
+values and explain scores as ranking priors. Old manifests require a new run.
+
 ### Retain eligible long-source scopes before passage selection
 
 Source-score-v15 offers bounded community-body and arXiv-abstract scopes to the

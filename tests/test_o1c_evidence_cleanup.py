@@ -87,7 +87,7 @@ async def test_high_scores_do_not_fabricate_corroboration_or_strong_chains():
     state["search_results"][0]["source"] = "official"
     output = await SourceEvaluatorAgent().run(state)
     assert all(item["supporting_sources"] == [] for item in output["source_scores"])
-    assert all(item["scores"]["consistency"] == 4 for item in output["source_scores"])
+    assert all(item["scores"]["consistency"] is None for item in output["source_scores"])
     assert all(chain["evidence_strength"] != "strong" for chain in build_evidence_chain(output["source_scores"], []))
 
 

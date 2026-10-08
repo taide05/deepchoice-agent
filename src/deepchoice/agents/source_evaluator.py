@@ -242,6 +242,7 @@ def classify_source_type(url: str, source: str) -> str:
     return "tech_blog"
 
 def classify_evidence_type(snippet: str) -> str:
+    # Historical compatibility helper; the default ranker does not classify prose.
     snip_lower = snippet.lower()
     if any(kw in snip_lower for kw in ["```", "def ", "import ", "pip install", "npm install"]):
         return "code"
@@ -290,6 +291,7 @@ def score_verifiability(evidence_type: str) -> int:
 
 
 def compute_total_score(scores: dict[str, int]) -> float:
+    """Historical numeric four-component calculation for direct callers."""
     return round(
         scores["authority"] * WEIGHTS["authority"]
         + scores["timeliness"] * WEIGHTS["timeliness"]
@@ -297,6 +299,15 @@ def compute_total_score(scores: dict[str, int]) -> float:
         + scores["verifiability"] * WEIGHTS["verifiability"],
         1,
     )
+
+
+def compute_source_priority(authority: int, timeliness: int) -> float:
+    """URL/date prior on the historical score scale, not measured support.
+
+    The fixed 2.0 preserves the former default 4*0.20 + 6*0.20 offset.
+    Unassessed consistency/verifiability are not numeric observations.
+    """
+    return round(authority * WEIGHTS["authority"] + timeliness * WEIGHTS["timeliness"] + 2.0, 1)
 
 
 def _scope_prompt_url(value: object) -> str:
@@ -566,15 +577,15 @@ class SourceEvaluatorAgent:
                 excluded += 1
                 continue
             source_type = classify_source_type(url, source)
-            evidence_type = classify_evidence_type(result.get("snippet", ""))
+            evidence_type = "unassessed"
 
             scores = {
                 "authority": score_authority(source_type),
                 "timeliness": score_timeliness(result.get("date")),
-                "consistency": score_consistency([]),
-                "verifiability": score_verifiability(evidence_type),
+                "consistency": None,
+                "verifiability": None,
             }
-            total = compute_total_score(scores)
+            total = compute_source_priority(scores["authority"], scores["timeliness"])
 
             scored = {
                 "url": url,

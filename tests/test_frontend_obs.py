@@ -1217,3 +1217,33 @@ def test_skip_opens_full_confirmation_without_starting_research(monkeypatch):
     assert at.session_state["phase"] == "clarify" and at.session_state["clarified_data"] is None
     assert at.session_state["clarify_messages"][-1]["action"] == "confirm"
     assert "MODEL REWRITE TO REVIEW" in "\n".join(item.value for item in at.text)
+
+
+@pytest.mark.parametrize("lang,heading,unassessed,note", [
+    ("en","Source priority","Unassessed","Current runs use URL category and date"),("zh","来源排序参考","未评估","当前版本只使用URL类别与日期"),
+    ("ja","情報源の優先順位","未評価","現在はURL分類と日付"),("ko","출처 우선순위","미평가","현재는 URL 분류와 날짜"),
+])
+@pytest.mark.parametrize("historical", [False,True])
+def test_source_priority_displays_unassessed_fields_and_preserves_old_values(monkeypatch,lang,heading,unassessed,note,historical):
+    snapshot=copy.deepcopy(SNAP)
+    row=snapshot["source_scores"][0]
+    row["title"]="PRIORITY_ONLY_SOURCE"
+    row["scores"]["consistency"]=4 if historical else None
+    row["scores"]["verifiability"]=9 if historical else None
+    row["evidence_type"]="code" if historical else "unassessed"
+    monkeypatch.setattr(__import__(__name__,fromlist=["SNAP"]),"SNAP",snapshot)
+    backend=_FakeBackend([],True)
+    monkeypatch.setattr(httpx,"get",backend.get)
+    monkeypatch.setattr(httpx,"post",backend.post)
+    monkeypatch.setattr(httpx,"stream",backend.stream)
+    at=AppTest.from_file(APP_PATH,default_timeout=30).run()
+    _enter_results_phase(at)
+    at.session_state["lang"]=lang
+    at.run()
+    assert not at.exception
+    text=_md_text(at)
+    assert heading in text
+    card=next(str(m.value) for m in at.markdown if "PRIORITY_ONLY_SOURCE" in str(m.value))
+    assert (": 9" in card) if historical else (unassessed in card and "None" not in card)
+    assert "#4ade80" not in card and "#a1a1aa" in card
+    assert note in " ".join(str(c.value) for c in at.caption)

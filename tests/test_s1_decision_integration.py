@@ -51,6 +51,7 @@ def _state(fmt):
         "conflicts": [],
         "evidence_chains": [
             {"conclusion": "A saved finding", "disputed": False,
+             "evidence_strength": "moderate",
              "sources": [{"title": f"Docs {i}", "url": url, "score": 7,
                           "snippet": "A saved finding"}]}
             for i, url in enumerate(("https://a.example/1", "https://a.example/2",
