@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Preserve complete arXiv abstracts before relevance filtering
+
+ArXiv v3 replaces the 500-character prefix with complete bounded abstract text or
+existing source-range proposals. Preserve XML-decoded mathematical text and
+actual blank-line paragraphs; do not turn provider line wrapping into permission
+to clip conditions. Reject malformed feeds, API error entries, missing abstracts
+and unadmitted ranges visibly. Source-score-v14 rejects unselected blank arXiv
+proposals. Retrieval requests and budget boundaries stay unchanged; long abstracts
+may activate the existing selector call. Historical identities require a new run.
+Long single paragraphs and candidate-identity filtering still limit recall.
+
 ### Preserve community question bodies and reject unselected blank excerpts
 
 Community v3 requests StackExchange question bodies with the built-in withbody

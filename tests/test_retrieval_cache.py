@@ -991,7 +991,7 @@ async def test_successful_fanout_survives_learning_failure(tmp_path, monkeypatch
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("source_name", ["official", "community"])
+@pytest.mark.parametrize("source_name", ["official", "community", "arxiv"])
 async def test_cached_blank_scope_still_requires_actual_selection(tmp_path, monkeypatch, source_name):
     from unittest.mock import AsyncMock
     from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
@@ -1002,7 +1002,8 @@ async def test_cached_blank_scope_still_requires_actual_selection(tmp_path, monk
     query = "Acme字段过滤"
     text = "Acme filters indexed fields using the configured predicate. However, applications must enforce authorization separately."
     url = ("https://docs.acme.example/docs/" if source_name == "official"
-           else "https://stackoverflow.com/questions/123/acme-filtering")
+           else "https://stackoverflow.com/questions/123/acme-filtering" if source_name == "community"
+           else "https://arxiv.org/abs/2601.12345")
     item = {"url": url, "title": "Acme guide", "snippet": "",
             "_source_scope_sentences": list(scope_sentences(text))}
     monkeypatch.setattr(multi_module, 'official_mapping_identity', lambda: 'a' * 64)

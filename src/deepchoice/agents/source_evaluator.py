@@ -516,7 +516,7 @@ class SourceEvaluatorAgent:
                 normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
                 rejection = _candidate_rejection(normalized_result, source, candidates, patterns)
                 if rejection == "missing_candidate" and source == "official":
-                    # Only the official reader produces ordinary saved body scopes.
+                    # Only official scopes are eligible for provisional admission.
                     # A name in that bounded text permits offering it to the existing
                     # selector; it cannot grant admission for unselected text.
                     scope = bounded_scope_sentences(r.get("_source_scope_sentences"))
@@ -554,7 +554,7 @@ class SourceEvaluatorAgent:
                 continue
             url = result.get("url", "")
             source = result.get("_source", "unknown")
-            if source in {"official", "community"} and not (
+            if source in {"official", "community", "arxiv"} and not (
                     isinstance(result.get("snippet"), str) and result["snippet"].strip()):
                 # A safely fetched scope is only an offer. Title/URL identity,
                 # selector omission/failure, or cache provenance cannot promote it.

@@ -1,8 +1,12 @@
 import asyncio
+import re
+from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
 from .. import outbound as _outbound
 from ..outbound import throttle
+from ..utils.evidence_choices import whole_source_text
+from ..utils.source_scope import proposal_hints, proposal_scope
 from .base import BaseRetriever
 from .http import budgeted_http, check_response_size
 from .query_results import merge_query_results
@@ -13,12 +17,24 @@ _SEARCH_TIMEOUT_S = 180.0
 
 
 def _parse_response(resp, keywords: str, max_results: int) -> list[dict]:
+    from ..citations.source_windows import MAX_DOCUMENT_TEXT, SourceDocument
+
     try:
         root = ET.fromstring(resp.text)
     except ET.ParseError as e:
-        raise ValueError(f"Arxiv returned non-XML response: {e}") from e
+        raise ValueError("Invalid arXiv XML response") from e
 
     ns = {"atom": "http://www.w3.org/2005/Atom"}
+    if root.tag != "{" + ns["atom"] + "}feed":
+        raise ValueError("Invalid arXiv Atom feed")
+    entries = root.findall("atom:entry", ns)
+    # The API can report an error inside an otherwise successful HTTP/Atom reply.
+    for entry in entries:
+        identifier = (entry.findtext("atom:id", "", ns) or "").strip()
+        parsed = urlsplit(identifier)
+        if (parsed.hostname in {"arxiv.org", "export.arxiv.org"}
+                and parsed.path.rstrip("/") == "/api/errors"):
+            raise ValueError("arXiv API error")
 
     # Extract content-bearing words from query for relevance filtering
     stop_words = {"a", "an", "the", "and", "or", "but", "in", "on", "at", "to",
@@ -35,21 +51,36 @@ def _parse_response(resp, keywords: str, max_results: int) -> list[dict]:
         return any(qw in text for qw in query_words) if query_words else True
 
     results = []
-    for entry in root.findall("atom:entry", ns)[:max_results]:
-        title_el = entry.find("atom:title", ns)
+    hints = proposal_hints(keywords)
+    for entry in entries[:max_results]:
         summary_el = entry.find("atom:summary", ns)
-        link_el = entry.find("atom:id", ns)
-        published_el = entry.find("atom:published", ns)
-        title = title_el.text.strip() if title_el is not None else ""
-        snippet = (summary_el.text or "")[:500].strip() if summary_el is not None else ""
-        if not _has_overlap(title, snippet):
+        title = (entry.findtext("atom:title", "", ns) or "").strip()
+        url = (entry.findtext("atom:id", "", ns) or "").strip()
+        if (not title or not url or summary_el is None or len(summary_el)
+                or not isinstance(summary_el.text, str) or not summary_el.text.strip()
+                or len(summary_el.text) > MAX_DOCUMENT_TEXT):
+            raise ValueError("Invalid arXiv abstract entry")
+        # Atom abstracts contain XML-decoded text, including math. Single
+        # newlines are provider wrapping, not boundaries that permit clipping.
+        raw = summary_el.text.replace("\r\n", "\n").replace("\r", "\n")
+        paragraphs = tuple(" ".join(part.split()) for part in re.split(r"\n\s*\n", raw)
+                           if part.strip())
+        summary = " ".join(paragraphs)
+        if not _has_overlap(title, summary):
             continue
-        results.append({
-            "url": link_el.text.strip() if link_el is not None else "",
-            "title": title,
-            "snippet": snippet,
-            "date": (published_el.text or "")[:10] if published_el is not None else "",
-        })
+        snippet = whole_source_text(summary)
+        scope = None if snippet else proposal_scope(
+            SourceDocument(paragraphs, incomplete=False,
+                           prose_indices=tuple(range(len(paragraphs)))), hints)
+        if not snippet and not scope:
+            raise ValueError("No admitted arXiv abstract range")
+        result = {
+            "url": url, "title": title, "snippet": snippet,
+            "date": (entry.findtext("atom:published", "", ns) or "")[:10],
+        }
+        if scope:
+            result["_source_scope_sentences"] = scope
+        results.append(result)
     return results
 
 

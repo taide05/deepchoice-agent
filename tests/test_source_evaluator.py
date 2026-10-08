@@ -547,7 +547,7 @@ async def test_previously_admitted_source_keeps_selected_nameless_conditions(mon
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("source", ["official", "community"])
+@pytest.mark.parametrize("source", ["official", "community", "arxiv"])
 @pytest.mark.parametrize("failure", ["no_manifest", "no_context", "omitted", "invalid", "provider", "unoffered", "private", "public"])
 async def test_blank_proposals_never_score_without_runtime_selection(monkeypatch, failure, source):
     from deepchoice.runtime import context

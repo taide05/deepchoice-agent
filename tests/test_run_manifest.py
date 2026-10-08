@@ -43,13 +43,13 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v21"
-    assert first.scoring_policy_version == "source-score-v13"
+    assert first.scoring_policy_version == "source-score-v14"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
     }["chroma"] == "v8"
     assert all(
-        retriever.version == ("v3" if retriever.retriever_id == "community" else "v2" if retriever.retriever_id in {"tavily", "github", "arxiv"} else "v1")
+        retriever.version == ("v3" if retriever.retriever_id in {"community", "arxiv"} else "v2" if retriever.retriever_id in {"tavily", "github"} else "v1")
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
@@ -130,7 +130,7 @@ def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
 
 
-@pytest.mark.parametrize("previous_policy", ["source-score-v6", "source-score-v9", "source-score-v10", "source-score-v11", "source-score-v12"])
+@pytest.mark.parametrize("previous_policy", ["source-score-v6", "source-score-v9", "source-score-v10", "source-score-v11", "source-score-v12", "source-score-v13"])
 def test_previous_source_score_policy_remains_readable_but_incompatible(previous_policy):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
 
@@ -855,7 +855,7 @@ def test_sdk_retry_policy_is_frozen_and_previous_identity_remains_readable():
 
 
 @pytest.mark.parametrize("component,version", [("query_adapter", "v2"), ("query_adapter", "v3"), ("query_adapter", "v4"),
-    ("tavily", "v1"), ("github", "v1"), ("arxiv", "v1"), ("community", "v1"), ("community", "v2")])
+    ("tavily", "v1"), ("github", "v1"), ("arxiv", "v1"), ("arxiv", "v2"), ("community", "v1"), ("community", "v2")])
 def test_previous_query_allocation_identity_remains_readable_but_cannot_resume(component, version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
     current = build_run_manifest({})
