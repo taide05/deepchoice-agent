@@ -73,6 +73,16 @@ T = {
         "progress_phase": "阶段 {idx}/7: {name}",
         "progress_done": "研究完成",
         "loss_connection": "与研究服务器连接中断:",
+        "research_failed_message": "研究失败。可以重试，开始新的运行。",
+        "research_timeout_message": "研究超时。可以重试，开始新的运行。",
+        "research_interrupted_message": "研究已中断。可尝试恢复；无法续用原运行时，服务器会开始新的运行。",
+        "research_unconfirmed_message": "研究结果尚未确认，请先核对任务状态，避免重复提交。",
+        "research_retry_btn": "重试研究",
+        "research_resume_btn": "尝试恢复",
+        "research_reconnect_btn": "重新连接",
+        "research_start_unconfirmed": "无法确认启动结果，请先核对任务状态，避免重复提交。",
+        "research_resume_unconfirmed": "恢复请求未确认，请核对任务状态。",
+        "research_cancel_unconfirmed": "取消请求未确认，请核对任务状态。",
         "no_data_error": "没有研究数据，请返回重新澄清需求。",
         "restart_btn": "重新开始",
         "stats_chains": "证据链",
@@ -240,6 +250,16 @@ T = {
         "progress_phase": "Phase {idx}/7: {name}",
         "progress_done": "Research complete",
         "loss_connection": "Lost connection to research server:",
+        "research_failed_message": "Research failed. You can retry with a new run.",
+        "research_timeout_message": "Research timed out. You can retry with a new run.",
+        "research_interrupted_message": "Research was interrupted. Attempt recovery; the server may start a new run if the previous run cannot resume.",
+        "research_unconfirmed_message": "Research outcome is unconfirmed. Check task status before submitting again.",
+        "research_retry_btn": "Retry research",
+        "research_resume_btn": "Attempt recovery",
+        "research_reconnect_btn": "Reconnect",
+        "research_start_unconfirmed": "Start outcome is unconfirmed. Check task status before submitting again.",
+        "research_resume_unconfirmed": "Recovery request is unconfirmed. Check task status.",
+        "research_cancel_unconfirmed": "Cancellation request is unconfirmed. Check task status.",
         "no_data_error": "No research data. Please go back and re-clarify.",
         "restart_btn": "Restart",
         "stats_chains": "Evidence Chains",
@@ -407,6 +427,16 @@ T = {
         "progress_phase": "フェーズ {idx}/7: {name}",
         "progress_done": "研究完了",
         "loss_connection": "サーバー接続が失われました:",
+        "research_failed_message": "調査に失敗しました。新しい実行で再試行できます。",
+        "research_timeout_message": "調査がタイムアウトしました。新しい実行で再試行できます。",
+        "research_interrupted_message": "調査が中断されました。復旧を試せます。再開できない場合、サーバーは新しい実行を開始します。",
+        "research_unconfirmed_message": "調査結果を確認できません。再送信の前にタスクの状態を確認してください。",
+        "research_retry_btn": "調査を再試行",
+        "research_resume_btn": "復旧を試みる",
+        "research_reconnect_btn": "再接続",
+        "research_start_unconfirmed": "開始結果を確認できません。再送信の前にタスクの状態を確認してください。",
+        "research_resume_unconfirmed": "復旧リクエストを確認できません。タスクの状態を確認してください。",
+        "research_cancel_unconfirmed": "キャンセルリクエストを確認できません。タスクの状態を確認してください。",
         "no_data_error": "研究データがありません。戻って再確認してください。",
         "restart_btn": "再開始",
         "stats_chains": "証拠チェーン",
@@ -574,6 +604,16 @@ T = {
         "progress_phase": "단계 {idx}/7: {name}",
         "progress_done": "연구 완료",
         "loss_connection": "연구 서버 연결 손실:",
+        "research_failed_message": "연구 실패. 새 실행으로 다시 시도할 수 있습니다.",
+        "research_timeout_message": "연구 시간 초과. 새 실행으로 다시 시도할 수 있습니다.",
+        "research_interrupted_message": "연구가 중단되었습니다. 복구를 시도할 수 있으며, 이어서 실행할 수 없으면 서버가 새 실행을 시작합니다.",
+        "research_unconfirmed_message": "연구 결과가 확인되지 않았습니다. 다시 제출하기 전에 작업 상태를 확인하세요.",
+        "research_retry_btn": "연구 재시도",
+        "research_resume_btn": "복구 시도",
+        "research_reconnect_btn": "다시 연결",
+        "research_start_unconfirmed": "시작 결과가 확인되지 않았습니다. 다시 제출하기 전에 작업 상태를 확인하세요.",
+        "research_resume_unconfirmed": "복구 요청이 확인되지 않았습니다. 작업 상태를 확인하세요.",
+        "research_cancel_unconfirmed": "취소 요청이 확인되지 않았습니다. 작업 상태를 확인하세요.",
         "no_data_error": "연구 데이터가 없습니다. 돌아가서 다시 확인해 주세요.",
         "restart_btn": "다시 시작",
         "stats_chains": "증거 체인",
@@ -1295,18 +1335,26 @@ def render_research_phase():
 
     if st.session_state.research_connection_lost:
         st.warning(t("loss_connection", lang))
-        if st.button("重新连接", key="reconnect_durable_task"):
+        if st.button(t("research_reconnect_btn", lang), key="reconnect_durable_task"):
             st.session_state.research_connection_lost = False
             st.session_state.research_running = True
             st.rerun()
 
     if st.session_state.research_failed:
-        st.error(t("loss_connection", lang))
+        terminal = st.session_state.get("research_terminal_status")
+        if terminal == "failed":
+            st.error(t("research_failed_message", lang))
+        elif terminal == "timed_out":
+            st.error(t("research_timeout_message", lang))
+        elif terminal == "interrupted":
+            st.warning(t("research_interrupted_message", lang))
+        else:
+            st.warning(t("research_unconfirmed_message", lang))
         if (
             st.session_state.get("research_task_id")
             and st.session_state.get("research_terminal_status")
             in {"failed", "timed_out", "interrupted"}
-            and st.button("恢复运行", key="resume_durable_task")
+            and st.button(t("research_resume_btn" if terminal == "interrupted" else "research_retry_btn", lang), key="resume_durable_task")
         ):
             try:
                 resp = httpx.post(
@@ -1326,9 +1374,9 @@ def render_research_phase():
                     st.session_state.research_connection_lost = False
                     st.rerun()
                 else:
-                    st.error(f"恢复失败：HTTP {resp.status_code}")
-            except Exception as exc:
-                st.error(f"恢复失败：{exc}")
+                    st.error(f"{t('research_resume_unconfirmed', lang)} HTTP {resp.status_code}")
+            except Exception:
+                st.error(t("research_resume_unconfirmed", lang))
         if st.button(t("restart_btn", lang)):
             for k in DEFAULTS:
                 st.session_state[k] = DEFAULTS[k]
@@ -1346,6 +1394,7 @@ def render_research_phase():
 
 
 def _start_research(task: dict, sub_questions: list[str]):
+    lang = st.session_state.lang
     payload = dict(task)
     payload["sub_questions"] = sub_questions
     try:
@@ -1358,10 +1407,10 @@ def _start_research(task: dict, sub_questions: list[str]):
             st.session_state.research_last_event_id = None
             st.session_state.research_running = True
         else:
-            st.error(f"Failed to start research: HTTP {resp.status_code}")
+            st.error(f"{t('research_start_unconfirmed', lang)} HTTP {resp.status_code}")
             st.session_state.research_failed = True
-    except Exception as e:
-        st.error(f"Failed to start research: {e}")
+    except Exception:
+        st.error(t("research_start_unconfirmed", lang))
         st.session_state.research_failed = True
 
 
@@ -1730,7 +1779,7 @@ def _render_research_progress():
     live = st.empty()
     cancel_col, _ = st.columns([1, 4])
     with cancel_col:
-        if st.button("取消", key="cancel_durable_task"):
+        if st.button(t("decision_cancel", lang), key="cancel_durable_task"):
             try:
                 resp = httpx.post(
                     f"{API_BASE}/api/v1/tasks/{task_id}/cancel",
@@ -1747,9 +1796,9 @@ def _render_research_progress():
                         st.session_state.research_running = True
                     st.rerun()
                 else:
-                    st.error(f"取消失败：HTTP {resp.status_code}")
-            except Exception as exc:
-                st.error(f"取消失败：{exc}")
+                    st.error(f"{t('research_cancel_unconfirmed', lang)} HTTP {resp.status_code}")
+            except Exception:
+                st.error(t("research_cancel_unconfirmed", lang))
     max_idx = 0
     live_nodes, live_order = {}, []
     first_ts = last_ts = None
@@ -1823,7 +1872,7 @@ def _render_research_progress():
                     if node == "__done__":
                         _complete(); got_terminal = True; break
                     if node == "__error__":
-                        st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
+                        st.warning(t("research_unconfirmed_message", lang))
                         st.session_state.research_running = False
                         st.session_state.research_failed = True
                         return
@@ -1873,8 +1922,8 @@ def _render_research_progress():
             st.session_state.research_running = False
             st.session_state.research_failed = False
             st.session_state.research_connection_lost = True
-    except Exception as e:
-        st.error(f"{t('loss_connection', lang)} {e}")
+    except Exception:
+        # The caller renders the connection warning without private exception text.
         st.session_state.research_running = False
         st.session_state.research_failed = False
         st.session_state.research_connection_lost = True

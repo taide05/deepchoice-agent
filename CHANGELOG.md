@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Distinguish research outcomes from connection loss
+
+Show localized failed, timed-out, interrupted and unconfirmed outcomes separately
+from transport disconnection. Retry/recovery labels retain the existing task-version
+CAS endpoint and do not promise same-run recovery. Replace raw start/resume/cancel/stream
+exceptions and legacy error-event details with fixed safe messages; uncertain starts
+are not automatically resubmitted.
+
 ### Keep query decomposition in the budgeted research path
 
 Clarification finalization is local and returns no generated frozen questions.

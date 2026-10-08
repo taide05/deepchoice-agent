@@ -1517,3 +1517,16 @@ query_analyzer提示v3仅请求与实际问题有关的研究子题，最多20�
 仅query_analyzer提示版本/hash及对应core资产改变当前运行身份；旧manifest可读且
 hash有效，但不能同run恢复，须新run并隔离检索缓存。离线基线只更新身份/时间/指纹
 元数据，冻结数据集、案例正文、指标及source-health not_run保持。
+
+
+## R36：界面终态与连接中断（2026-10-08）
+
+前端仅投影既有状态：failed/timed_out显示失败/超时及重试，interrupted显示中断及
+尝试恢复；四种界面语言使用对应文案。failed/timed_out重试新run，interrupted也可能
+因兼容性检查转为新run，界面不承诺原run续跑。保留resume端点、If-Match、按钮key、
+终态事件后GET当前task/version以及SSE重放逻辑，不新增生命周期状态或迁移。
+
+无确认终态的失败标志（包括创建结果未知及旧__error__事件）只提示结果未确认；
+无task_id不能恢复，也不自动重发创建。实际连接中断单独警告及重连。启动、恢复、取消与
+SSE接收异常不显示原始异常或旧事件detail，仅固定本地化提示及HTTP状态码。取消端点、CAS与成功状态投影，以及
+等待输入/过期、完成及既有终态别名处理保持。此修改不证明服务故障已修复。
