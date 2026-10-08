@@ -8,17 +8,22 @@ from html.parser import HTMLParser
 
 MAX_DOCUMENT_TEXT = 64 * 1024
 MAX_SOURCE_WINDOW = 6000
+MAX_PROSE_DEPTH = 64
 _BLOCK_TAGS = frozenset({
     'article', 'blockquote', 'br', 'dd', 'div', 'dt', 'h1', 'h2', 'h3',
     'h4', 'h5', 'h6', 'li', 'main', 'p', 'pre', 'section', 'td', 'th',
 })
 _SKIP_TAGS = frozenset({'script', 'style', 'noscript', 'svg', 'template'})
+_PROSE_TAGS = frozenset({'p', 'blockquote', 'dd', 'td'})
+_NON_PROSE_TAGS = frozenset({'a', 'code', 'head', 'header', 'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'})
 
 
 @dataclass(frozen=True, slots=True)
 class SourceDocument:
     blocks: tuple[str, ...]
     incomplete: bool
+    # Local extraction provenance only; never grants fact/citation authority.
+    prose_indices: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +38,10 @@ class _Blocks(HTMLParser):
         self.skip_tags = _SKIP_TAGS | ({"nav", "form", "pre"} if skip_navigation else set())
         self.separate_omitted = skip_navigation
         self.blocks = []
+        self.prose_indices = []
+        self.prose_context = []
+        self.prose_tracking_exhausted = False
+        self.pending_prose = False
         self.pending = []
         self.ignored_depth = 0
         self.omitted_tag = None
@@ -43,11 +52,14 @@ class _Blocks(HTMLParser):
     def flush(self):
         text = ' '.join(''.join(self.pending).split())
         self.pending = []
+        prose, self.pending_prose = self.pending_prose, False
         if not text or self.exhausted:
             return
         if self.used + len(text) + 1 > MAX_DOCUMENT_TEXT:
             self.exhausted = True
             return
+        if prose:
+            self.prose_indices.append(len(self.blocks))
         self.blocks.append(text)
         self.used += len(text) + 1
 
@@ -58,6 +70,7 @@ class _Blocks(HTMLParser):
             return
         if self.separate_omitted and not self.ignored_depth and any(
             (key == "role" and "navigation" in (value or "").casefold().split()) or key == "hidden"
+            or (key == "aria-hidden" and (value or "").strip().casefold() == "true")
             for key, value in attrs
         ):
             self.flush()
@@ -68,8 +81,20 @@ class _Blocks(HTMLParser):
             if self.separate_omitted and not self.ignored_depth:
                 self.flush()
             self.ignored_depth += 1
-        if not self.ignored_depth and tag in _BLOCK_TAGS:
-            self.flush()
+        if not self.ignored_depth:
+            if tag in _BLOCK_TAGS:
+                self.flush()
+            if (self.separate_omitted and not self.prose_tracking_exhausted
+                    and tag in _PROSE_TAGS | _NON_PROSE_TAGS):
+                if len(self.prose_context) >= MAX_PROSE_DEPTH:
+                    # Fail closed only for new short-prose eligibility. Keep
+                    # source text and its original completeness boundaries.
+                    self.prose_tracking_exhausted = True
+                    self.prose_context.clear()
+                    self.prose_indices.clear()
+                    self.pending_prose = False
+                else:
+                    self.prose_context.append(tag)
 
     def handle_endtag(self, tag):
         if self.omitted_depth:
@@ -78,12 +103,24 @@ class _Blocks(HTMLParser):
             return
         if tag in self.skip_tags and self.ignored_depth:
             self.ignored_depth -= 1
-        if not self.ignored_depth and (tag in _BLOCK_TAGS or tag == 'body'):
-            self.flush()
+        if not self.ignored_depth:
+            if self.prose_context and self.prose_context[-1] == tag:
+                self.prose_context.pop()
+            elif tag in self.prose_context:
+                index = next(index for index in range(len(self.prose_context) - 1, -1, -1)
+                             if self.prose_context[index] == tag)
+                del self.prose_context[index:]
+            if tag in _BLOCK_TAGS or tag == 'body':
+                self.flush()
 
     def handle_data(self, data):
         if not self.ignored_depth and not self.omitted_depth and not self.exhausted:
             self.pending.append(data)
+            if (self.separate_omitted and not self.prose_tracking_exhausted
+                    and any(tag in _PROSE_TAGS for tag in self.prose_context)
+                    and not any(tag in _NON_PROSE_TAGS for tag in self.prose_context)
+                    and any(char.isalpha() for char in data)):
+                self.pending_prose = True
 
 
 def extract_source_document(
@@ -114,7 +151,8 @@ def extract_source_document(
     except Exception:
         return SourceDocument((), True)
     unfinished = bool(''.join(parser.pending).strip()) or bool(parser.ignored_depth) or bool(parser.omitted_depth)
-    return SourceDocument(tuple(parser.blocks), truncated or parser.exhausted or unfinished)
+    return SourceDocument(tuple(parser.blocks), truncated or parser.exhausted or unfinished,
+                          tuple(parser.prose_indices))
 
 
 def locate_source_window(excerpt: str, document: SourceDocument) -> SourceWindow | None:

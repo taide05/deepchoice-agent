@@ -2,6 +2,20 @@
 
 ## [Unreleased] - 2026-10-08
 
+### Retain short complete official paragraphs as selection proposals
+
+Reuse the existing HTML extractor to mark retained non-link paragraph text locally.
+Complete short HTML prose can trigger bounded proposals without the inherited
+80-character threshold; sole short headings, links, code and recognized hidden/aria-hidden text do not.
+This does not evaluate arbitrary CSS visibility.
+Cap this metadata tracking at 64 levels and disable the new eligibility on overflow,
+without further changing source blocks. The new aria-hidden omission applies only
+to official extraction. Keep plain-text and legacy snippet behavior,
+selection, binding, citation, safe-fetch and budget limits. Same-page headings can
+remain proposal context; structural provenance does not prove relevance or truth.
+Freeze official v8; prior identities remain readable, incompatible with same-run
+resume and isolated by cache manifest identity. No new graph/public fields or calls.
+
 ### Reuse one terminal analysis check within each compact report
 
 Share the locally checked analysis list across prose, question gaps and the

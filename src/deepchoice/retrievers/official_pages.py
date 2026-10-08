@@ -198,8 +198,10 @@ def _proposal_scope(document, hints: set[str]) -> list[str] | None:
     """
     if document.incomplete:
         return None
+    prose_indices = set(document.prose_indices)
     indices = [index for index, block in enumerate(document.blocks)
-               if len(block) >= 80 and re.search(r"[.!?。！？]", block)]
+               if (len(block) >= 80 or (index in prose_indices and block[-1] in ".!?。！？"))
+               and re.search(r"[.!?。！？]", block)]
     if not indices:
         return None
     whole = " ".join(document.blocks)

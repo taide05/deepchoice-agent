@@ -540,6 +540,8 @@ async def test_durable_catalog_locator_keeps_original_mixed_script_order_and_nam
     ("Acme是否支持字段过滤？", CHINESE_PROSE),
     ("Acme是否支持字段过滤？", PROSE + ' ' + QUALIFIER),
     ("Acme filtering access boundary", CHINESE_PROSE),
+    ("Acme持久化条件", "Acme 只有启用持久化日志后才能恢复已经确认的记录。未启用日志时，重启会丢失仅保存在内存中的记录。"),
+    ("Acme持久化条件", "Acme keeps records only when journaling is enabled. Restart loses memory data."),
 ])
 async def test_chinese_request_body_is_only_a_proposal_until_selected_then_bound_and_verified(setup, monkeypatch, query, body):
     from deepchoice.contracts.manifest import build_run_manifest
@@ -671,3 +673,62 @@ async def test_no_overlap_children_never_risk_existing_root_body(setup, query, b
     assert result.status == 'success' and len(result.results) == 1
     assert setup.await_count == 1
     assert result.results[0].get('snippet') or result.results[0].get('_source_scope_sentences')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    '<h1>Acme retains records only with a journal.</h1>',
+    '<p><a href="#guide">Acme retains records only with a journal.</a></p>',
+    '<p><code>Acme retains records only with a journal.</code></p>',
+    '<header><p>Acme retains records only with a journal.</p></header>',
+    '<head><title>Acme retains records only with a journal.</title></head>',
+    '<p aria-hidden="true">Acme retains records only with a journal.</p>',
+    '<nav><p>Acme retains records only with a journal.</p></nav>',
+    '<div hidden><p>Acme retains records only with a journal.</p></div>',
+    '<p>Acme retains records only with a journal',
+    '<div>Acme retains records only with a journal.</div>',
+    '<p>... !?</p>',
+])
+async def test_short_official_nonprose_does_not_trigger_a_body_proposal(setup, body):
+    setup.side_effect = lambda _source, url, **_kw: response(url, body)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="Acme持久化条件"))
+    assert result.status == "success" and not result.results
+    assert setup.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_short_official_inline_text_keeps_neighbouring_condition(setup):
+    text = 'Acme records need a journal.'
+    condition = 'Without it, restart loses data.'
+    setup.side_effect = lambda _source, url, **_kw: response(
+        url, '<h2>Recovery.</h2><p>Acme records need a <code>journal</code>.</p><p>' + condition + '</p>')
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="Acme持久化条件"))
+    assert len(result.results) == 1 and result.results[0]['snippet'] == ''
+    offered = ' '.join(result.results[0]['_source_scope_sentences'])
+    assert offered == 'Recovery. ' + text + ' ' + condition
+    # A heading can remain context on a page with prose, not evidence by itself.
+    assert setup.await_count == 1
+
+
+def test_short_official_plain_or_synthetic_blocks_do_not_gain_paragraph_provenance():
+    from deepchoice.citations.source_windows import SourceDocument
+    text = 'Acme records need a journal.'
+    plain = extract_source_document(text, truncated=False, plain_text=True, skip_navigation=True)
+    assert pages._proposal_scope(plain, set()) is None
+    assert pages._proposal_scope(SourceDocument((text,), False), set()) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("trailing", [False, True])
+async def test_short_official_deep_markup_disables_new_paragraph_qualification(setup, trailing):
+    text = 'Acme records need a journal.'
+    body = '<blockquote>' * 2000 + text + '</blockquote>' * 2000
+    if trailing:
+        body += '<p>Acme restart loses memory data.</p>'
+    assert len(body.encode()) < pages.MAX_PAGE_BYTES
+    document = extract_source_document(body, truncated=False, skip_navigation=True)
+    assert text in document.blocks and not document.incomplete
+    assert not document.prose_indices
+    setup.side_effect = lambda _source, url, **_kw: response(url, body)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query="Acme持久化条件"))
+    assert result.status == 'success' and not result.results
