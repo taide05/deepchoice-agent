@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "result_id": "repaired-diagnostic-20261009",
+  "dataset": {
+    "id": "quality-cross-scene-development-v1",
+    "version": "1.0.1",
+    "freeze_date": "2026-10-05",
+    "path": "benchmarks/quality-cross-scene-development-v1.json",
+    "sha256": "137b2f61f3a8cced1500248db5ca0bdd807d269fbec554b022b3d7f7529604e6"
+  },
+  "protocol": {
+    "path": "benchmarks/quality-repaired-diagnostic-v1.json",
+    "sha256": "bc4dffbf14c2b64e6ce018b0c29d6463d184b2bec352d5e2a7fa1a535164d981"
+  },
+  "evaluation_timestamp": "2026-10-09T03:58:05.360503+00:00",
+  "measurement_date": "2026-10-09",
+  "binding": {
+    "path": "outputs/repaired-diagnostic-20261009-v2/binding.json",
+    "sha256": "f28d9f42a37c9a8662b4cfdc9e2a4593c6ae46ec6260861c04fcddf7f69657dc"
+  },
+  "batch": {
+    "path": "outputs/repaired-diagnostic-20261009-v2/batch.json",
+    "sha256": "538934ea5e3714d80909afd53f7061243eb83f0b2282e6c9d6f74f24c8e4da28"
+  },
+  "production_commit": "44f1b3a5f153fa491ec311606b1bc9aebce07e01",
+  "core_asset_registry_id": "54dcb2e8b43c7b6bae4c133014c3aeb1f54791f0e2bdea822ded0c755afa9938",
+  "configuration_sha256": "4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474",
+  "dependency_snapshot_sha256": "c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b",
+  "knowledge_sha256": "bf5cc356c3196b19e6886565ec456c3cb38901d6f903ddc819cbf15171b362f7",
+  "starting_actual": 201,
+  "new_research": 4,
+  "cumulative_actual": 205,
+  "final_reserved": 24,
+  "denominator": 4,
+  "content_passes": 0,
+  "cases": [
+    {
+      "case_id": "P03",
+      "ordinal": 202,
+      "manifest_id": "c748172fbe9e50802045b7ed33f694c53c9acdee5c4c8a49a4be3b5d1319e9ad",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "artifact_consistent": true,
+      "report": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/202/development/reports/P03.md",
+        "sha256": "eaa51f22565639eec03cf207de477efc7f047e01af450bf54ebff096c7cc45de"
+      },
+      "snapshot": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/202/development/snapshots/P03.json",
+        "sha256": "27b02f7f0326b0de60a443172fed7879587d66d769021ba8bb47f3893e9aa53c"
+      },
+      "content_pass": false,
+      "important_answer_gaps": true,
+      "critical_errors_observed_in_published_report": false,
+      "must_answer_denominator": 4,
+      "must_answer_substantive_answers": 0,
+      "analysis_returned_by_synthesis": 4,
+      "analysis_returned_by_citation": 0,
+      "self_review_submitted": 0,
+      "usage": {
+        "total_tokens": 15297,
+        "llm_calls": 19,
+        "retrieval_calls": 6,
+        "token_usage_complete": true,
+        "failed_calls": 0,
+        "node_retries": 0,
+        "active_milliseconds": 180517,
+        "wall_time_ms": 182719
+      }
+    },
+    {
+      "case_id": "P06",
+      "ordinal": 203,
+      "manifest_id": "7881586673600a2988af160d0893a1aad409c795b7bc0ca47b25d544a5607ce9",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "artifact_consistent": true,
+      "report": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/203/development/reports/P06.md",
+        "sha256": "7f8edfba93ff0e76959c28e9bfd671c5e981576a63e8011c9aeaebfccb259c44"
+      },
+      "snapshot": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/203/development/snapshots/P06.json",
+        "sha256": "8c77ceac34f415fd62ca8a3379d203c312dc23d44a2eeac88471cb1b267aa6e4"
+      },
+      "content_pass": false,
+      "important_answer_gaps": true,
+      "critical_errors_observed_in_published_report": false,
+      "must_answer_denominator": 4,
+      "must_answer_substantive_answers": 0,
+      "analysis_returned_by_synthesis": 3,
+      "analysis_returned_by_citation": 0,
+      "self_review_submitted": 0,
+      "usage": {
+        "total_tokens": 14792,
+        "llm_calls": 18,
+        "retrieval_calls": 6,
+        "token_usage_complete": true,
+        "failed_calls": 1,
+        "node_retries": 0,
+        "active_milliseconds": 74161,
+        "wall_time_ms": 76656
+      }
+    },
+    {
+      "case_id": "P11",
+      "ordinal": 204,
+      "manifest_id": "7881586673600a2988af160d0893a1aad409c795b7bc0ca47b25d544a5607ce9",
+      "status": "completed_with_warnings",
+      "runtime_category": "restricted_or_degraded",
+      "artifact_consistent": true,
+      "report": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/204/development/reports/P11.md",
+        "sha256": "0580f0256f59aca07824c467c7dff83c9f271135ce4187786fa28848fb4cde41"
+      },
+      "snapshot": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/204/development/snapshots/P11.json",
+        "sha256": "f613094f0e3bd99ff3677ba741bac97db389cf45a0709db9bb99ba7d73810b59"
+      },
+      "content_pass": false,
+      "important_answer_gaps": true,
+      "critical_errors_observed_in_published_report": false,
+      "must_answer_denominator": 5,
+      "must_answer_substantive_answers": 0,
+      "analysis_returned_by_synthesis": 3,
+      "analysis_returned_by_citation": 0,
+      "self_review_submitted": 0,
+      "usage": {
+        "total_tokens": 14328,
+        "llm_calls": 19,
+        "retrieval_calls": 6,
+        "token_usage_complete": true,
+        "failed_calls": 2,
+        "node_retries": 1,
+        "active_milliseconds": 68014,
+        "wall_time_ms": 72657
+      }
+    },
+    {
+      "case_id": "P12",
+      "ordinal": 205,
+      "manifest_id": "c748172fbe9e50802045b7ed33f694c53c9acdee5c4c8a49a4be3b5d1319e9ad",
+      "status": "completed_with_warnings",
+      "runtime_category": "restricted_or_degraded",
+      "artifact_consistent": true,
+      "report": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/205/development/reports/P12.md",
+        "sha256": "a129cae140f0fb772cf832f1234ac82c73e4b179437ffb4aad58d0035571b365"
+      },
+      "snapshot": {
+        "path": "outputs/repaired-diagnostic-20261009-v2/cells/205/development/snapshots/P12.json",
+        "sha256": "f34f27f2453149924507a44aa90cc2aff36aeb86f6610ffa422ba7a522e952cb"
+      },
+      "content_pass": false,
+      "important_answer_gaps": true,
+      "critical_errors_observed_in_published_report": false,
+      "must_answer_denominator": 5,
+      "must_answer_substantive_answers": 0,
+      "analysis_returned_by_synthesis": 1,
+      "analysis_returned_by_citation": 0,
+      "self_review_submitted": 0,
+      "usage": {
+        "total_tokens": 4201,
+        "llm_calls": 6,
+        "retrieval_calls": 6,
+        "token_usage_complete": true,
+        "failed_calls": 1,
+        "node_retries": 1,
+        "active_milliseconds": 41138,
+        "wall_time_ms": 43985
+      }
+    }
+  ],
+  "resource_totals": {
+    "total_tokens": 48618,
+    "llm_calls": 62,
+    "retrieval_calls": 24,
+    "active_milliseconds": 363830,
+    "wall_time_ms": 376017
+  },
+  "latest_budget_aggregates": [
+    {
+      "resource": "active_milliseconds",
+      "status": "settled",
+      "reservations": 6,
+      "amount": 363830
+    },
+    {
+      "resource": "http_calls",
+      "status": "settled",
+      "reservations": 42,
+      "amount": 42
+    },
+    {
+      "resource": "http_calls",
+      "status": "unknown_spend",
+      "reservations": 5,
+      "amount": 5
+    },
+    {
+      "resource": "llm_calls",
+      "status": "settled",
+      "reservations": 62,
+      "amount": 62
+    },
+    {
+      "resource": "retrieval_calls",
+      "status": "settled",
+      "reservations": 24,
+      "amount": 24
+    },
+    {
+      "resource": "total_tokens",
+      "status": "settled",
+      "reservations": 62,
+      "amount": 48618
+    }
+  ],
+  "http_measurement": "Public configured-limit projection omits unlimited HTTP; collector zero is not a zero-call claim. Product ledger records42 settled+5 unknown_spend HTTP reservations.",
+  "monetary_cost": "unknown; unpriced-v1",
+  "source_health": "degraded; live retrieval ran, compatible prior preflight reused, citation availability/scope incomplete",
+  "review": {
+    "independent_assistant_reviewers": 2,
+    "exposure": "all four exposed",
+    "blind": false,
+    "human_calibration": false,
+    "independent_content_locked_before_trace_cost_review": true,
+    "disagreement": "none on0/4 and citation-node analysis loss",
+    "limits": "stage counts prove structural loss, not correctness or usefulness of removed prose; pre-citation analysis bodies unavailable"
+  },
+  "engineering_validation": {
+    "production_and_tests_unchanged_since": "4de909ce1c472a95e2e9925fab3340d95e064204",
+    "full_suite_passed": 3771,
+    "full_suite_seconds": 625.61,
+    "platform": "Windows/Python3.12",
+    "harness_focused_passed": 47,
+    "harness_focused_seconds": 14.29,
+    "linux_python311": "not_run"
+  },
+  "closure": {
+    "path": "outputs/repaired-diagnostic-20261009-v2/stopped-pair-check.json",
+    "sha256": "827d6dc1f20aa27ffe4e38841b31da0524c5ca6fef8604192c77e88f7fa39c83"
+  },
+  "quality_claims": {
+    "causal_gain": false,
+    "unseen_acceptance": false,
+    "repeatability": false,
+    "majority_coverage": false,
+    "code_simplicity_accepted": false,
+    "capacity_accepted": false,
+    "model_quality_accepted": false
+  },
+  "next": "Offline reproduce source-window/fact calibration -> all-dependency analysis withdrawal; classify valid refusal vs implementation loss before minimal generic repair. Source-selection coverage and limited-report projection remain distinct issues.",
+  "model_id": "deepseek-v4-flash",
+  "endpoint_sha256": "12b8deaccc34b32757dbb1497e029da0c2e7b26ffa86b9c926c08cb4692f4508",
+  "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+  "stage_count_evidence": {
+    "path": "outputs/repaired-diagnostic-20261009-v2/stage-count-review.json",
+    "sha256": "0c861e51e1f51f3589df838844c7ce00407a8872433f2153a23b5a7048ab372e"
+  }
+}

@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Record the repaired-version diagnostic failure
+
+The 2026-10-09 single-arm diagnostic of quality-cross-scene-development-v1/1.0.1
+(P03/P06/P11/P12, one each) produced consistent report/snapshot/export artifacts,
+but independent assistant content review passed 0/4. Safe stage counts locate
+11 bound analyses disappearing during citation calibration, before self-review;
+they do not prove the removed prose was correct. Preserve original inputs,
+uncertainty and final 24 sealed admissions. Record minimal sanitized identities,
+results and reconciled resources; complexity, capacity and model quality remain
+unaccepted. No production or test change, causal-gain or majority-coverage claim.
+
 ### Freeze the repaired-version diagnostic protocol
 
 Freeze four exposed original requests and unchanged rubric/HITL for one serial
