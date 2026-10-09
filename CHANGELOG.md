@@ -2,6 +2,29 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Retain product sources for explicitly modified choices
+
+Use conservative product/component retrieval hints for ordinary source admission
+and passage reservation while preserving the full choice label and its conditions.
+Keep audited-seed and local-comparison vetoes before those hints; do not guess unknown
+compound names or grant version applicability, authority or citation support.
+Query-adapter v6 targets documented behavior and primary sources; source-scope v4
+preserves the original qualifiers. No extra calls, topology, state or database changes.
+Focused checks: 417 passed; full validation: 3,849 passed in 636.88 seconds on
+Windows/Python 3.12, with no skips. Smoke, static/dependency checks and independent
+review passed. Real benefit remains unmeasured.
+
+### Record the four-run delivery check and user-requested pause
+
+Three independently prepared requests plus one preselected repeat completed through
+the durable API on 2026-10-09; all four artifacts reconciled, two results restricted.
+Independent assistant content review passed 0/4: critical missing answers, inapplicable
+sources and unstable retained analysis. No human calibration or general-quality claim.
+Actual research ledger is217; final24 remain sealed. All four inputs are now exposed
+for diagnosis. Three report formats, Markdown consistency and PDF export passed via
+Streamlit AppTest and the actual API. Services stopped; paired database backup verified.
+The ten-hour work clock pauses with work around20:00 and resumes only on user instruction.
+
 ### Verify source facts before generating decision analyses
 
 Split the existing two synthesis calls into source selection and post-verification
@@ -15,7 +38,7 @@ Historical manifests remain readable but require a new run. Remove unexecuted ac
 case drafts while preserving original historical records. Simplify the README around
 usage, architecture and observed limitations. Full validation: 3,826 passed on
 Windows/Python 3.12; offline smoke and static checks passed. Real-report delivery
-validation remains pending.
+validation subsequently failed 0/4 as recorded above.
 
 ### Align implementation direction with the full-path capability goal
 

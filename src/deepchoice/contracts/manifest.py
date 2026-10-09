@@ -49,9 +49,9 @@ REPORT_TEMPLATE_VERSIONS = {
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v10",
     "query_analyzer.decomposition_system": "v3",
-    "query_adapter.adapt_system": "v5",
+    "query_adapter.adapt_system": "v6",
     "conclusion_synthesizer.synthesis_prompt": "v39",
-    "source_evaluator.source_scope_selection": "v3",
+    "source_evaluator.source_scope_selection": "v4",
     "conflict_detector.contradiction_scan_system": "v4",
 }
 try:

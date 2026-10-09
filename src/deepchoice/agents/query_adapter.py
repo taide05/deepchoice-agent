@@ -9,7 +9,7 @@ ADAPT_SYSTEM = """You are a search query optimizer. Rewrite each sub-question in
 
 For EACH sub-question, generate 6 query variants:
 
-1. tavily (web search): Natural language, 1-2 sentences. Include technology names and version years if relevant. Best for finding blog posts, comparisons, news.
+1. tavily (web search): Search for the specific documented product behavior, restriction, version or deployment condition needed to answer the target. Prefer applicable official documentation and primary technical references. Use concise search terms, candidate names and explicit versions; avoid asking a search engine to write a comparison or recommend a winner, which tends to retrieve generic comparison blogs. Preserve the supplied candidate set across the targets; do not substitute popular alternatives.
 2. arxiv (academic papers): Keywords separated by spaces. Include technical terms, method names, framework names.
 3. github (repositories): A complete GitHub repository-search expression. Keep repo:, org:, language: and in:readme qualifiers together with their keywords; do not use code/issue-only filters.
 4. chroma (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search.

@@ -189,8 +189,8 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v10", "conclusion_synthesizer.synthesis_prompt": "v39",
                          "query_analyzer.decomposition_system": "v3",
-                         "query_adapter.adapt_system": "v5",
-                         "source_evaluator.source_scope_selection": "v3",
+                         "query_adapter.adapt_system": "v6",
+                         "source_evaluator.source_scope_selection": "v4",
                          "conflict_detector.contradiction_scan_system": "v4"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
         prompt_id: expected_versions.get(prompt_id, "v1") for prompt_id in expected_prompt_ids}

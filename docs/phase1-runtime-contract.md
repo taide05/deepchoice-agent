@@ -19,6 +19,13 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-09来源相关性修复：查询适配v6优先生成具体行为/条件的一手检索，来源选段v4
+保留原候选限定；两者调用数量和目标上限不变。普通来源准入/选段名额可使用剥离明确部署
+前缀、版本以及with/using组件的检索提示；原候选身份与后续归属/引用规则不变。
+提示不能授予版本适用性、来源权威或事实支持；历史审计种子范围与本地比较否决仍先执行。
+未知复合名称不猜测，历史seed的修饰标签覆盖限制保留。无新状态、数据库、节点或API。
+旧提示身份可读但不能同run恢复，新manifest隔离旧缓存；真实质量收益尚未测量。
+
 2026-10-09交付修复：新运行冻结 `research-v5`、合成v39、official v11、
 `runtime-source-views-v4` 与 `runtime-question-basis-v3`。图顺序为 evidence_chain →
 source_selection → citation_validator → conclusion_synthesizer → self_reviewer →
