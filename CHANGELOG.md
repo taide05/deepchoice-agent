@@ -2,6 +2,14 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Freeze the local-view development comparison
+
+Freeze four original public cases across four tradeoffs, with two not used for R44
+design but historically exposed. Compare fixed baseline/candidate identities in
+eight serial cells206–213 under standing development authority; the actual starting
+ledger is205 and final24 remain sealed. Dataset/rubric/protocol preparation does
+not establish executable runtime bindings, quality gain or unseen acceptance.
+
 ### Offer complete local views for short omitted excerpts
 
 Short excerpts containing an existing omission marker retain their whole-source

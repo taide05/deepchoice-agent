@@ -1,0 +1,83 @@
+{
+  "protocol_id": "local-view-development-v1",
+  "version": "1.0.0",
+  "status": "frozen",
+  "freeze_date": "2026-10-09",
+  "purpose": "Same-window serial baseline/candidate development comparison for complete local view opportunity; all cases historically exposed, no unseen/stability/breadth acceptance",
+  "dataset": {
+    "path": "benchmarks/quality-local-view-development-v1.json",
+    "sha256": "48d96c8fe0641ae273c9e128953d4c764795c6f8634cdd372237139b7dcd9556"
+  },
+  "content_commits": {
+    "baseline": "7f693db45c0c66c7bdd7cdabe04b50b5dfb22db2",
+    "candidate": "2b1759fdb474e1858f221c46e0ad81e6039eeafa"
+  },
+  "case_order": [
+    "P03",
+    "P11",
+    "P07",
+    "P09"
+  ],
+  "not_used_to_design_candidate": [
+    "P07",
+    "P09"
+  ],
+  "order": [
+    [
+      "baseline",
+      "P03"
+    ],
+    [
+      "candidate",
+      "P03"
+    ],
+    [
+      "candidate",
+      "P11"
+    ],
+    [
+      "baseline",
+      "P11"
+    ],
+    [
+      "baseline",
+      "P07"
+    ],
+    [
+      "candidate",
+      "P07"
+    ],
+    [
+      "candidate",
+      "P09"
+    ],
+    [
+      "baseline",
+      "P09"
+    ]
+  ],
+  "repetitions_per_arm": 1,
+  "concurrency": 1,
+  "starting_actual": 205,
+  "maximum_new": 8,
+  "development_end": 213,
+  "final_reserved": 24,
+  "final_acceptance_enabled": false,
+  "resource_authority": "Existing sustained paid development authorization and explicit quota-limit release; eight new development admissions206-213, no old remaining or final24 borrowing",
+  "run_limits": {
+    "total_tokens": 60000,
+    "llm_calls": 96,
+    "retrieval_calls": 72,
+    "active_milliseconds": 900000
+  },
+  "http_call_count_hard_limit": null,
+  "money": "unknown; per-run hard token/call bounds are not a currency estimate",
+  "hypothesis": "Existing legal complete local views beside omitted whole excerpts improve supported original-question answers in at least two different tradeoff classes without new critical errors or material regression of any passing baseline. Activation/counts/lexical verification alone do not pass.",
+  "configuration": "Same frozen original requests, rubric, HITL limited_report, model/native thinking0, dependencies, immutable audited seed with independent working copies, cache policy and shared copied exhausted-key ledger. Reference URLs remain reviewer pointers only. No new reference ingestion or source/provider.",
+  "preflight": "Reuse only October6 bounded evidence accepted by existing seven-day same-environment/calling-code compatibility verifier; otherwise stop preparation and freeze necessary bounded probes separately before calls.",
+  "content_review": "Independent read-only assistant judgments of original requests/reports/saved source versions and applicability lock before stage counts and cost. Hide labels/cost where possible; record incomplete blinding, prior exposure, disagreements and no human calibration.",
+  "gain_gate": "At least two different tradeoff classes improve useful supported answers, no new critical error, no material regression of a passing baseline. Four historically exposed cases cannot prove unseen, repeated or majority performance.",
+  "stop_policy": "Fixed eight serial cells. Ordinary classified failures remain; no replacement, extra ninth, retry of closed roots, answer tuning or rubric edit. Stop new admissions for security/budget/identity/lease-or-instance authority loss, uncertain submission or unclassified failure, then reconcile.",
+  "mechanism_stop": "This is the first actual quality comparison of R44 short omitted-source augmentation, not a new label for the historical view-ID comparison. Preserve previous mechanism failures; a second substantive solution in this defect family without cross-type net gain ends the mechanism and triggers simpler-flow/root-cause reassessment.",
+  "exit": "Close/reconcile both product/checkpoint pairs. Record complete denominator and independent content review. Gain -> independently held new validation preparation; no gain -> inspect decisive-source and stage-loss evidence, not raise capacities or add calls. Final24 remains sealed."
+}
