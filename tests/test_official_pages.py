@@ -97,6 +97,30 @@ async def test_two_roots_two_children_limit_and_round_robin_coverage(setup, monk
     assert all("three" not in call.args[1] and "gamma" not in call.args[1] for call in setup.await_args_list)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("query,keys,expected", [
+    ("Base 与 Acme 都被提到，但应选择 Acme 还是 Beta？",
+     ("base", "acme", "beta"), ("acme", "beta")),
+    ("Straße 团队：在 Base 中选择 Acme 还是 Beta？",
+     ("base", "acme", "beta"), ("acme", "beta")),
+    ("Base context: choose k8s vs Beta",
+     ("base", "kubernetes", "beta"), ("kubernetes", "beta")),
+])
+async def test_explicit_comparison_keeps_both_candidates_when_context_matches_catalog(
+        setup, monkeypatch, query, keys, expected):
+    catalog = {
+        key: {"url": f"https://docs.{key}.example/docs/", "title": key + " docs"}
+        for key in keys
+    }
+    monkeypatch.setattr(official_mod, "TECH_DOCS", catalog)
+    # This regression isolates documentation allocation from legacy PyPI discovery.
+    monkeypatch.setattr(official_mod, "_is_vs_query", lambda _: False)
+    result = await official_mod.OfficialSearch().retrieve(RetrievalRequest(query=query, max_results=2))
+    assert result.status == "success"
+    assert [row["url"] for row in result.results] == [catalog[key]["url"] for key in expected]
+    assert [call.args[1] for call in setup.await_args_list] == [catalog[key]["url"] for key in expected]
+
+
 @pytest.mark.parametrize("href", ["https://evil.example/docs/filter", "/docsevil/filter", "../filter",
                                   "filter?q=secret", "filter%2Fadmin", "https://user:pass@docs.acme.example/docs/filter",
                                   "https://docs.acme.example:444/docs/filter", "https://docs.acme.example:80/docs/filter", "http://docs.acme.example/docs/filter",

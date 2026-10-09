@@ -2,14 +2,29 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Verify source facts before generating decision analyses
+
+Split the existing two synthesis calls into source selection and post-verification
+judgment, with the single deterministic citation pass between them. Judgment sees
+only basis sentences already eligible under the existing citation policy; binding,
+uncertainty, budget, source identity and self-review gates remain in force. Freeze
+workflow v5/synthesis v39 with unchanged state schema and no database migration.
+Official v11 prioritizes explicit comparison candidates ahead of background catalog
+matches; source-view v4 includes the source hostname within the existing byte bound.
+Historical manifests remain readable but require a new run. Remove unexecuted active
+case drafts while preserving original historical records. Simplify the README around
+usage, architecture and observed limitations. Full validation: 3,826 passed on
+Windows/Python 3.12; offline smoke and static checks passed. Real-report delivery
+validation remains pending.
+
 ### Align implementation direction with the full-path capability goal
 
 Distinguish the goal of stable useful, supported output through the complete default
 workflow from the evidence and criteria used to accept delivery. Resume with existing
 failure evidence and full-path diagnosis; local engineering success no longer makes
 a four-case comparison the automatic next task. Preserve frozen evaluation standards,
-previous failures, standing boundaries and sealed final24. Documentation only; the
-user-requested development pause remains in effect.
+previous failures, standing boundaries and sealed final24. That earlier change was documentation only. The user subsequently resumed development
+under the ten-hour job-portfolio delivery plan.
 
 ### Preserve original context for source reasoning
 

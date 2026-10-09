@@ -125,6 +125,8 @@ def review_state(rec, task, chains):
     checks = []
     for i, fact in enumerate(rec["source_facts"]):
         fact["status"] = "verified"
+        fact.pop("review_availability", None)
+        fact.pop("reviewable_sentence_ids", None)
         checks.extend({"claim_id": f"source-{i}-{j}",
                        "claim_path": f"final_recommendation.source_facts[{i}].text",
                        "claim_text": sentence, "source_title": fact["source_title"],
@@ -138,6 +140,7 @@ def review_state(rec, task, chains):
 
 
 async def test_existing_synthesis_and_review_calls_receive_context_without_public_container(monkeypatch):
+    from tests.staged_synthesis_helpers import run_staged
     from unittest.mock import AsyncMock
     from deepchoice.agents import conclusion_synthesizer as synth, self_reviewer
     from deepchoice.contracts.manifest import build_run_manifest
@@ -155,8 +158,11 @@ async def test_existing_synthesis_and_review_calls_receive_context_without_publi
         "reasoning": "Administration responsibilities need configuration evidence; applicability remains unresolved.",
         "assumptions": [], "change_condition": "Reassess when the applicable version is known."}]}])
     monkeypatch.setattr(synth, "call_model", model)
-    update = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
-        {"task": task, "evidence_chains": chains})
+    import httpx
+    async def unavailable(*args, **kwargs):
+        raise httpx.ConnectError("synthetic unavailable page")
+    update = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)),
+        {"task": task, "evidence_chains": chains}, fetch=unavailable)
     assert model.await_count == 2
     judgment = model.await_args_list[1].args[0][0]["content"]
     assert ACTOR in judgment and TAIL in judgment

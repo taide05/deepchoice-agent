@@ -24,7 +24,7 @@ from ..agents.source_evaluator import SOURCE_SCOPE_SELECTION_PROMPT
 from ..utils.llm import MAX_OUTPUT_TOKENS, SDK_MAX_RETRIES, TIERS, max_output_tokens_for, synthesis_extra_body
 
 
-CURRENT_WORKFLOW_VERSION = "research-v4"
+CURRENT_WORKFLOW_VERSION = "research-v5"
 
 WORKFLOW_NODES = (
     "query_analyzer",
@@ -33,8 +33,9 @@ WORKFLOW_NODES = (
     "source_evaluator",
     "conflict_detector",
     "evidence_chain",
-    "conclusion_synthesizer",
+    "source_selection",
     "citation_validator",
+    "conclusion_synthesizer",
     "self_reviewer",
     "evidence_decision_gate",
     "report_generator",
@@ -49,7 +50,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v10",
     "query_analyzer.decomposition_system": "v3",
     "query_adapter.adapt_system": "v5",
-    "conclusion_synthesizer.synthesis_prompt": "v38",
+    "conclusion_synthesizer.synthesis_prompt": "v39",
     "source_evaluator.source_scope_selection": "v3",
     "conflict_detector.contradiction_scan_system": "v4",
 }
@@ -74,7 +75,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34", "v35", "v36", "v37", "v38"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34", "v35", "v36", "v37", "v38", "v39"] = "v1"
     sha256: str
 
 
@@ -99,7 +100,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -112,7 +113,7 @@ class RunManifest(FrozenModel):
     manifest_id: str
     created_at: datetime
     app_version: str
-    workflow_version: Literal["research-v1", "research-v2", "research-v3", "research-v4"] = "research-v4"
+    workflow_version: Literal["research-v1", "research-v2", "research-v3", "research-v4", "research-v5"] = "research-v5"
     workflow_nodes: tuple[str, ...] = WORKFLOW_NODES
     state_schema_version: Literal[1, 2, 3] = 3
     models: tuple[ModelConfigSnapshot, ...]
@@ -149,7 +150,7 @@ class CoreAssetRegistry(FrozenModel):
     registry_schema_version: Literal[1] = 1
     registry_id: str
     manifest_schema_version: Literal[1] = 1
-    workflow_version: Literal["research-v4"] = "research-v4"
+    workflow_version: Literal["research-v5"] = "research-v5"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
     citation_policy_version: Literal["deterministic-citation-v21"]
@@ -320,7 +321,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v8" if retriever_id == "chroma" else "v10" if retriever_id == "official"
+                version="v8" if retriever_id == "chroma" else "v11" if retriever_id == "official"
                         else "v4" if retriever_id in {"community", "arxiv"}
                         else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )

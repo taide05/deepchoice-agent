@@ -27,10 +27,15 @@ _PATHS = {
         "scope_accepted": ("source_scope_proposal", "accepted"),
     },
     "evidence_chain": _fields("total_chains", "strong", "moderate", "weak", "disputed"),
+    "source_selection": {
+        **_fields("source_facts_bound"),
+        **{key: ("staged_generation", key) for key in
+           ("facts_received", "facts_bound", "questions_planned", "provider_errors")},
+    },
     "conclusion_synthesizer": {
         **_fields("source_facts_received", "source_facts_bound"),
         **{key: ("staged_generation", key) for key in (
-            "facts_received", "facts_bound", "questions_planned", "judgment_calls",
+            "facts_received", "facts_bound", "facts_reviewable", "questions_planned", "judgment_calls",
             "rows_received", "rows_selected", "rows_rejected_shape",
             "rows_rejected_question", "rows_rejected_limit", "provider_errors",
         )},

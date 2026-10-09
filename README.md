@@ -3,130 +3,45 @@
 DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型：输入需求与候选后，
 检索多种来源、比较证据并生成可查看和导出的报告。报告区分来源事实、模型推断与未知项。
 
-## 当前能力与质量边界
+## 能做什么
 
-默认durable流程已具备持久任务、状态/SSE、恢复、预算控制、引用检查和报告导出。
-2026-10-04 的 quality-selection-development-v1（1.0.0，固定P01/P04/P08/P02四例）
-已完成 v23、v24、v25 三轮公开开发测量，每轮均 0/4“可用且有据”；v24 有一份
-关键错误，v25 的 P08 相对当时v23基线实质退化，均已撤回。当前合成为v38；默认分阶段路径仅准备实际发送的来源选择与逐题判断提示，
-旧编号来源提示仅在兼容路径构造；
-多段来源核验和原请求驱动的来源视图选择已实现；2026-10-07的
-quality-source-view-development-v1（1.0.1、P06/P09/P07/P11四对）中有两类局部有据回答改善，
-两臂整体均0/4可用且有据。工程能力和局部分析不代表
-稳定选型质量。最终24次仍封存。测量日期、成本与分母见
-[当前状态](docs/o1-execution-status.md)。
+- 输入原始需求、候选技术和约束，通过澄清界面确认研究任务。
+- 从网页、官方文档、GitHub、arXiv、社区与本地知识库检索材料，保留来源失败和证据冲突。
+- 先选择、绑定并核验来源，再生成有原句依据的条件分析；报告同时列出未能回答的问题。
+- 在 Streamlit 查看进度、来源、预算和报告，处理补充信息请求，并导出 Markdown、HTML 或 PDF。
+- 通过持久任务 API 查询、取消、重试或恢复任务；SQLite 保存任务状态与独立的图检查点。
 
-2026-10-07[累计逻辑审查](docs/codebase-audit.md#8-多轮修复后的累计逻辑审查2026-10-07)
-确认候选动作标签在自审误删/漏检、最终有界事实菜单可能丢掉另一候选等问题。
-R40后累计审查当时已确认的确定性缺陷及R41/R42尾项已完成工程验证和独立复审，
-详见[审计收口及限制](docs/codebase-audit.md#9-r40后累计逻辑复核2026-10-09)。准备中的旧对照保持零准入关闭；
-容量、词法/采样、模型及代码复杂度限制仍在，通用质量验收未完成。
-2026-10-09修复版按quality-cross-scene-development-v1/1.0.1的P03/P06/P11/P12各一次
-完成诊断，独立助手内容审查为 **0/4可用且有据**。合成已产生分析，引用校准后全部归零；
-仍须区分合理拒绝与实现损失，不能把代码复杂度、容量或模型质量记作已验收。
-脱敏身份与分母见[诊断结果](benchmarks/quality-repaired-diagnostic-result-20261009.json)，
-实际资源和下一定位见当前状态。四题已暴露、单臂非盲、无人工校准，不证明净收益、稳定性或多数场景能力。
-当前继续修复通用信息损失；含省略标记的短来源在保留整段选项的同时，可选择既有合法
-局部视图（view-policy v3）。整段与局部分别核验，字面代码省略号的整段机会保留。
-新增视图占用原24 KB菜单配额，边界处可能排除原本能容纳的来源；不提高容量或核验权限。
-结构精简、容量覆盖与中文/模型质量未整体验收。2026-10-09的
-quality-local-view-development-v1（1.0.0、P03/P11/P07/P09四对）
-[同条件开发对照结果](benchmarks/quality-local-view-development-result-20261009.json)中，
-基线与候选均0/4可用且有据，仅候选P03有局部有据回答改善，未取得两类跨场景净收益；
-基线P09另有一项来源主体归属错误。两例未用于R44设计但有历史暴露，部分标签盲化、
-助手评审、无人工校准；不证明未见、稳定性或多数场景能力。当前仍处修复后的开发验证
-与缺陷回流，继续定位主体/上下文保留和整条分析撤回，不以工程通过代替质量验收。
-自审v10保留动作标签内的产品身份与逐项依据归属检查，并排除同请求重叠名称的借用；
-原选择标签保留。它不证明语义支持，也不改变来源的引用状态或操作权限。
-来源视图与旧数值菜单现共用最终准入：按请求顺序为明确候选尽力保留一份可绑定来源，
-其余沿用原来源顺序，保持24源/24000字节与五事实上限；容量缺口明确进入选择提示。
+## 使用边界与验证状态
 
-局部事实裁剪可能丢掉远处的主体、版本和适用条件。合成v38/自审v10现从原证据链重建
-已精确重绑事实的有界原上下文，送入既有判断和复审调用；仅供解释或质疑已选依据，
-不能形成新引用编号、追加未经核验的依据或改变引用状态。缺失、歧义或超限上下文保持
-未知，不截断为完整来源；整段事实不重复复制。辅助JSON上限24 KB，单份原文沿用
-2000字符/40句/单句400字符门，既有五事实与证据权限不变。这不是总提示上限，新增
-输入可能增加token消耗。未新增节点、调用阶段、公开字段或数据库；旧版本须新run。
-原保存反例回放与模拟调用只证明输入损失已修复，真实主体归属和回答质量仍待测量。
+报告用于辅助技术选型。引用 `verified` 表示有界网页可达性与词法检查通过；模型推断仍需
+核对来源适用性，报告不表示部署验证已经完成。无充分依据时保留明确缺口，不编造结论。
+当前是单用户可信网络部署，API 未提供认证或任务所有权，运行时只支持单实例、单 worker。
 
-后续按[整体质量路线](docs/current-roadmap.md)改进证据组织、条件推理和报告完整性，
-用多场景对照与固定候选重复运行验收。验收方法和实际进展分别见
-[质量协议](docs/product-effectiveness-optimization.md)与[当前状态](docs/o1-execution-status.md)。
-公开跨场景开发输入现已冻结为[四例探针](benchmarks/quality-cross-scene-development-v1.json)
-（1.0.1，2026-10-05）。同日四场景各一对的[开发对照](benchmarks/quality-cross-scene-development-v1-result-20261005.json)
-中，基线与候选分别为0/4可用且有据，未取得跨场景净收益。后续先定位核心链路的信息损失，
-再决定最小结构调整；该公开小样本不代表支持范围整体通过率。
-文档角色见[阅读入口](docs/README.md)；旧逐轮优化记录移至[归档](docs/archive/README.md)。
+完整链路的交付验证正在进行。历史小样本存在空答和来源适用性错误，不能用历史 300 例指标
+或离线测试通过率声称当前报告普遍可靠。现行结果与范围见[执行状态](docs/o1-execution-status.md)，
+历史测量保留原日期、数据集与分母。研究入口不预填固定案例。
 
-引用verified只表示确定性检查结果，不证明语义或场景适用性。模型分析需要使用者核对
-关键依据；部署/恢复演练未由研究执行，报告不授权生产变更。API无认证或任务所有权，
-只限单用户可信网络，不能直接暴露公网；runtime保持单实例/单worker。
+## 设计重点
 
-现行跨场景开发复用durable采集器，并以冻结批次和逐笔标记约束准入。
-必要开发评测逐批冻结身份、停止线并精确记账，
-无需再请求普通开发额度授权；旧批次不可重开，最终24格仍封存。具体当前分配见
-[执行状态](docs/o1-execution-status.md)，入口与身份比较边界见
-[评估工具说明](benchmarks/README.md)。可选合成思考模式在新运行中显式冻结high强度，
-保留4096输出上限；候选预检另外验证该模式，旧关闭模式预检不能证明开启模式可用。
-temperature在思考模式不生效；预检通过也不证明复杂报告不会截断或内容质量通过。
+1. **依据先于判断**：来源选择和判断沿用两次模型调用，中间执行一次确定性来源核验。
+   被拒绝的依据不提供给判断模型；网络未确认材料保持未知标记，模型推理仍须复审。
+2. **原始需求与来源保真**：比较对象优先获得官方检索名额；选择菜单展示来源 hostname，
+   原句、适用条件与未答问题贯穿报告。hostname 和评分用于选择材料，不证明内容可信。
+3. **运行可恢复、费用有上限**：任务事件与状态原子保存，检查点受版本和执行权校验；
+   外呼前执行预算准入，同源成功检索支持 TTL 缓存，故障不会变成空成功。
+4. **有界外部输入**：动态 URL 经过安全获取和响应限制；输出 HTML 清洗后展示与导出。
 
-## 为什么值得关注
-
-技术选型搜索常需开发者自己翻博客、看仓库和文档。DeepChoice 汇总多个来源并展示评分、
-冲突处理和引用状态，帮助用户检查观点的依据；部分推断可能缺少充分支持，应保持未知。
-
-DeepChoice 展示信源评分、冲突处理、引用状态和未知项，方便使用者核对报告依据。引用检查只验证有界的可达性与词法支持，不能证明结论语义正确或适用于当前团队。
-
-## 核心特性
-
-- **查询目标与结果分配**：适配v5按当前目标索引保留查询位置，缺项逐目标回退；社区提示使用英文普通检索词。Tavily/GitHub v2及arXiv/社区 v3按查询批次轮流取不重复URL。arXiv/社区对有效请求中最多20条完整适配串去重、顺序查询；社区使用[原生advanced search的q参数](https://api.stackexchange.com/docs/advanced-search)和relevance排序，arXiv仍沿原all:关键词语义。每条逻辑查询在路由前预留HTTP预算，整源异步等待期限180秒（含路由、节流与重试）；每响应解析前上限1 MiB，这是已下载正文的解析限额，不是流式内存保证。任一必需查询失败仍整源失败，预算/取消透传；源级retrieval_calls仍一次。GitHub完整表达式最多4次仓库搜索，不提供代码/issue搜索。默认总结果仍7条，目标更多时后目标可能无保留材料；正式需求覆盖仍待验证，不能将全部发出视为全部覆盖。历史身份可读但不能同run续跑。
-
-- **学术摘要保真**：arXiv v3按[Atom接口契约](https://info.arxiv.org/help/api/user-manual.html)读取完整摘要后再做原关键词相关性过滤，不再截取前500字符。满足现有短文本门的摘要完整保留；长摘要复用有界选文，只有真实空行分段可参与相邻段落采样，单换行按排版归一化，数学符号按XML文本保留。非Atom响应、API错误条目、缺摘要或没有可准入范围均明确整源失败。单段超过2000字符仍无法进入当前范围门；长摘要标题未命名候选时还可能被前置身份门排除。摘要不等于论文结论已验证，实际API与网页逐字对应及报告收益仍待测量。
-
-- **社区提问正文**：StackExchange社区v3使用[内置withbody过滤器](https://api.stackexchange.com/docs/filters)取得提问正文。完整短正文保留全部条件，不再二次缩窄；长正文只提供有界完整相邻文本块给现有选文，未选中的空摘要不能评分。复用解析器保留代码配置，跳过导航及hidden/aria-hidden块；空白、缺失、不完整或未获当前范围门准入的正文明确整源失败，不回退为分数/标签。提问不等于已验证答案，空白归一化文本也不是可直接执行的代码；真实网页/API一致性和报告收益仍待测量。
-
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（当前 227 条：96 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑；Chroma v8 保留原始比较维度、限制查询维度/候选池、按 URL 合并并给适配查询保留结果容量，针对明确原始场景需求增加有界本地查询，并只在冻结正文身份核验通过时选用受审官方正文；GitHub 幂等 GET 对 `RemoteProtocolError` / `ReadError` 最多重试 2 次，重试耗尽仍以失败 envelope 暴露
-- **有界文档正文检索**：official v9 在 durable 路径按原问题优先、适配文本补充定位已有目录名，保留混合中文/Latin名称、原有拼写形式及别名，拒绝复合名误借短名；至多两个地址，登记目录优先。登记根每根最多跟随两个范围内链接；中文标签参与有界采样，无重叠链接可在根页无正文或仅有待选提议时探索。补充子页的局部获取/解析失败保留已安全取得材料，显式标记partial并停止后续正文读取；根页、原匹配子页及路由权威失败仍整源失败，预算/取消异常透传。partial不缓存、不用于自动学习映射，仍须经过选文与引用检查；报告和界面显示部分可用，旧search接口维持失败时空结果。动态发现只读安全校验的精确页面，不跟随重定向或子链接。逐次预留 HTTP 预算，失败显式暴露；发现页不获得官方身份，动态映射 hash 参与缓存身份。旧兼容路径保留目录结果。
-- **中文与跨语言正文提议**：没有原ASCII主题摘要时，完整短页或较长页面的完整相邻段落可进入原一次范围选择；真实HTML段落中被提取器保留的非链接正文有完整句末时，不再因不足80字符被丢弃。段落来源由原提取器局部标注，排除标题/页眉/纯链接/代码及hidden、aria-hidden=true等已识别标记的短正文触发；不判断任意CSS可见性。追踪超过64层时停用新增短正文资格，保留原文本解析。纯文本及旧摘要门保持；同页标题仍可作为上下文，结构标注不证明内容相关或真实。空摘要只是待选材料，未选/无效/调用失败/无运行上下文及缓存命中均不能直接进入评分。窗口/中文双字只帮助采样，不证明相关性。范围2000字符、实际40句/每句400、所选1200字符及安全获取限制保持；过大/不完整范围及无法唯一定位的选文拒绝。长页/子页覆盖仍有限，含编码路径的URL沿原安全策略拒绝；尚无真实模型召回或报告质量验收。
-- **补充说明与查询回退**：HITL补充说明独立作为不可信上下文参与适配，保留最多20个原目标或重试目标；无目标时临时适配原查询。模型失败或漏项时，过长原查询通过完整query字段回退，不填入限长适配项；泛问题补题不会挤掉第20项或截原文。六源稳定/兼容接口接收有效请求，但arXiv/社区无适配时仍分别使用既有200/150字符回退，不能据此宣称服务端使用完整查询或召回改善。选文v3也独立接收合法补充原文：原请求/提示/来源保留12 KB配额，补充文本另受既有4000字符与安全文本限制，完整消息仍需预算准入；非法上下文跳过选文并记录固定诊断。传递不证明模型遵循或约束已被正式核验。
-- **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
-- **问题与原句引用绑定**：默认第二次合成仅选择原始R0/Q问题及已展示的B原句标识，运行时生成引用坐标并复制完整原句，拒绝非法/重复/超限标识。保留每题一行、五事实和原引用/自审边界；没有可引用原句时跳过该调用。逐行只绑定原问题，不声称覆盖C；原始约束仍进入提示、自审和公共需求清单。无manifest的旧数字引用格式保留，旧v32身份可读但不能同run恢复。这是结构修复，尚未验证真实质量收益。
-- **研究状态与恢复**：界面分别显示失败、超时、中断和连接中断。失败/超时可重试新运行，中断可尝试恢复（不兼容时服务器可能新建运行）；创建结果不明时提醒先核对任务，避免重复提交。恢复仍使用任务版本校验，启动、恢复、取消与SSE接收异常及旧错误事件详情不直接展示。
-- **澄清输入保真**：每轮原调用返回完整当前需求快照，可替换候选、撤销约束或清空未知字段；缺字段/非法输出整份不提交。关键词提及不自动选中候选，助手卡片仅为名称示例，字面命中也不证明同意。确认页展示实际执行的完整问题、全部约束与候选；最终 `query` 使用这份当前问题，变更过的首问保存为可选 `original_query` 审计输入（直调API时由调用方提供，未独立验真），在任务请求中可见，不参与研究提示或判断。新增回复使旧确认失效，迟到响应不能覆盖新输入；解析失败后不能跳过尚未合入的修正。初问/当前问题各4000字符，回复每条2000、待合入回复总共4000，消息最多40条，超限明确拒绝。场景/复杂度未知保持空值，三轮后允许确认未知；“跳过澄清”先展示当前需求供确认，不直接提交未展示的模型改写；旧无body finalize首轮未展示确认时只使用原始用户问题，有后续回复则要求先展示确认。模型是否完整理解修正仍需用户核对。确认后不再调用模型生成固定五维子题；默认研究由已有QueryAnalyzer按实际请求分解，只接受研究问题，约束始终来自用户task。未知场景不再推成team；显式API子问题仍保留原跳过分析入口。模型分解的语义相关性和示例词典仍有验证限制；前置澄清抽取费用不计入run预算，研究分解纳入既有run预算与Trace。
-- **候选身份传递**：source-score-v17 与合成 v38 共用字面技术名匹配，识别明确中英文动作前缀，保留原选项标签；未知前缀、版本和复合名保持字面身份，名称命中不证明适用性。官网、社区正文与学术摘要的有界保存范围有候选名时可暂缓旧摘要排除，选择后仅重检暂缓项，未选/无名片段仍拒绝；正文提及仅为词法资格，不证明社区提问或学术陈述的适用性；原已准入来源保留不重复名称的条件句。范围选择v3以原文单元编号，连续无空白句不可拆，已有空白索引保持；官网v10/Chroma v8及评分版本冻结当前行为，旧身份可读但不能同run恢复。 本地受审种子的特殊别名与归属规则仅用于检索器已核验正文hash、target、URL及身份的chunk；未核验元数据回到普通完整候选字面门。旧种子的固定别名/摘录规则仍是兼容限制，内部标记不代表任意调用方有权授信。
-- **回答渲染与兼容**：默认事实、原需求清单及条件分析进入一个共用报告通道，三模板保留各自阅读顺序。一次同步渲染内，正文、缺口和对比表共用一次事实/状态/依据/审查检查；独立调用的详情与旧入口仍自行检查。只复用本地结果，不从模型/状态读取“已准入”标志；旧胜者、排名与操作渠道的清除及历史结果读取保持。
-- **公开报告诊断**：`report_generator.has_recommendation` 在默认回答中只表示报告包含经终端检查可展示的 `choice` 条件选择；普通问题解答、未审/撤回或无效依据不置位，旧未展示结论字段不能置位。旧报告沿原结论文本判定。`recommendation_confidence` 保留默认低置信兼容投影，不是独立质量分数；标记不证明适用性、唯一胜者或部署授权。报告正文一次检查，节点为诊断另执行一次相同检查，不二次渲染。当前三模板身份v22/v21/v20同时冻结这一诊断语义与部分来源覆盖提示；历史快照不回填。
-- **原查询回退**：社区/arXiv无适配查询时保留完整原请求（最多4000字符），不再截前150/200字符或删除vs/versus。适配查询仍最多20项、每项1000字符；保留原预算、时间和结果数上限。服务商拒绝长查询时明确失败；发送完整文本不证明服务商完整理解或召回。两源当前版本均v4，旧身份需新运行。
-- **来源排序参考**：默认按URL类别与日期计算先验分数，沿用历史分数尺度；正文中的代码、性能或个人意见字词不再加减分。一致性/可验证性未评估时返回null，文本类型为unassessed；旧结果及数值计算接口保持可读。删除旧英文opinion扣分后，这类来源可能越过原筛选阈值；其他来源失去代码/benchmark加分，真实排序收益待测量。分数不证明主张支持。受限报告只能继承或降低原证据强度，过滤/去重失去来源后不能继续保留strong；保留历史strong标签也不代表重新验证互证。
-- **保全冲突扫描**：不足两条分数至少5的来源时直接保留空扫描结果，不加载嵌入模型；默认只做有界相似来源扫描，保留模型标记冲突与扫描未知，异常不算无冲突；默认不仲裁或补搜。完整连续的有界摘录可在同一调用中定位争议句；运行时核对双方 URL、文本与结构身份，并合并同一 URL 的所有冲突。事实焦点及相邻条件避开全部争议句时，可经原绑定、网页核验和自审用于条件分析；争议标记与预算最低证据门保持。缺失/未知/非法坐标、遗漏标记、多段摘录或身份失配仍整来源排除。当前身份为 `scan-only-v2` / scan v4 / 合成 v38 / 引用 v21，旧身份可读但不能同 run 恢复。模型坐标与词法核验不证明语义正确、完整冲突覆盖或真实质量改善。
-  `gather_evidence` 是已弃用的兼容请求元数据，保留其请求/manifest 值；默认 graph（包括 `/research`）无论 true/false 均不补搜。公开质量信号同时记录请求值与实际禁用状态。
-- **已知条件与额外前提**：分析只列 0–4 项额外未确认前提，没有时必须显式给出空列表；缺字段、空项或非法类型仍拒绝。提示区分用户已给条件、来源限定与额外未知，用户条件不证明技术事实。引用、人工审阅和操作限制继续生效；真实模型是否稳定遵守仍待测量。
-- **原问题的判断机会**：合成v38向选材和判断提供原请求及全部最多20个合法子问题，移除原先仅前7个子问题参与的截断。仍最多5条事实、8条分析和每调用4096输出token；提示要求优先决定性且有依据的不同问题，三模板保留未答清单。预算准入成功才会调用模型；大输入可明确触发原预算拒绝。总需求超过旧40项评估上限时，保留经绑定且仍受引用/自审约束的分析，行动计划保持空；旧评估型回复仍按40项上限弃权。这不表示所有硬约束已满足，也不保证逐题作答、预算可完成或真实模型选题质量。
-- **渲染前分析自审**：引用核验后，已保留分析与可审的未知需求解释共享最多 8 个审阅槽。没有可审分析或需求解释时跳过模型，明确记录未运行、零项检查；无效提交仍撤回，缺失/不一致引用状态保守降级，不复制旧缺口原文。首次自审后，最多对 3 个未得到有效答复的分析槽逐项补审；明确撤回的不重试。每份答复都重过原句、完整来源、句子地址和候选词面归属校验；补审后的综合自评分与置信度保守下调；未通过的补审只记录固定拒绝类别和数量，不保存模型正文。模型仍可能漏判语义例外，不自动补搜或增加决策权威。
-- **3 种报告格式**：当前新运行按原问题交付有来源定位的条件分析；What/Why/How、Evidence-First 和问题覆盖矩阵分别安排阅读顺序。旧报告保留历史五维矩阵。三种格式共用引用、自审和缺答门控，已触及原问题不等于完整回答。
-- **约束感知结论**：显式回答请求约束与子问题；关键未知或引用未通过检查时撤回确定胜者及排名，展示条件分支、待验证步骤和回退。用户受限报告与预算触顶报告遵循相同结论规则；迁移触发与概念性过渡问题不自动要求完整迁移方案，明确步骤请求仍保留，操作计划仍限隔离验证
-- **可追溯的模型分析**：带 manifest 的新运行用一次事实选择调用，仅返回最多五个菜单视图ID；运行时生成事实编号并从原证据链重建原句。完整来源保留整段，较长连续来源提供短焦点和最大有界窗口，均复制相邻完整句并避开标记争议，再对R0与原始子问题逐题生成至多八条有界分析；全部事实仅明确涉及部分候选时保留原题缺口；标题路由同时识别完整短名称和带符号名称，仍不证明来源适用。每次模型调用独立预算准入，分析仍逐条经过引用和自审门控。未保留分析的原问题单独列出；无 manifest 的直接兼容调用保留一次结构纠正。引用原句和标题匹配不等于语义正确或场景适用；2026-10-05公开开发集1.0.1四例的上一候选为0/4；2026-10-06代码审计开发集1.0.0两臂各0/4，未有跨场景净收益；2026-10-07视图开发集1.0.1四对中候选有两类局部有据回答改善，但两臂整体均0/4；不证明稳定性。 绑定后默认收尾共用一次条件回答投影，旧胜者/约束适配/弃权重建只留兼容路径；保留原问题清单、事实和分析，清空平行旧结论，固定隔离验证计划。
-- **来源视图绑定边界**：视图、数值兼容菜单和范围重绑共用最终准入，最多24个来源、24000 UTF-8字节，以两种菜单行的较大成本统一计费，整行超限即拒绝。按请求顺序为明确候选尽力预留首个可装来源，其余原顺序补位；完整来源和合法范围来源均可补位，引用与自审按同一可信候选集合重算。它不保证最优覆盖，较大首源仍可能挤掉后置候选。每事实仍至多三段、1200字符和16句；菜单可选不代表语义完整，远处限定仍可能遗漏。公开事实与旧直接兼容格式保持可读，旧v33身份不能同run续跑。
-- **澄清请求失败**：传输、JSON或响应字段异常只显示固定提示，四个提交入口均不自动重发。未确认的输入保留在本地界面，须明确重新发送或放弃；查看服务端确认页不能证明该输入已被接纳，有待确认输入时不能使用旧确认开始研究。放弃仅清除本地待确认文本，不撤销服务端可能已处理的内容。合法finalize响应才进入原durable流程。
-- **结果页展示**：报告标签在首位，观测、证据和原始结果仍可查看。当前canonical回答省略固定low置信度卡片，并提示逐项核对依据、前提及未答问题，整体质量置信度未校准。旧格式和已撤回compact模式的受限报告保留原置信度投影；标签顺序不减少请求或计算。前端格式判定与后端契约等价，不依赖后端包安装。
-- **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
-- **可观测性与预算面板**：持久化节点尝试与 LLM/检索调用，展示耗时、重试、失败、Token 与预算余量；外呼先经过原子预算门，触顶时按最低证据生成受限报告或安全终止
-- **确定性引用验证**：在结论合成后检查关键声明的引用绑定、规范 URL、公开可达性、数字/否定冲突和词法支持度，只给出 `verified` / `unsupported` / `unreachable` / `unknown`，不增加第二个 LLM 裁判
-- **单一持久化人工决策门**：证据结构不足且推荐方向存在实质不确定性时暂停 durable run；用户可补充信息继续、基于现有证据生成明确标记的受限报告，或取消
-- **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
-- **运行契约与可复现清单**：研究请求、启动响应和错误采用 Pydantic 契约；每次运行生成不可变 `RunManifest`，记录模型、调用参数、Prompt 哈希、工作流、检索器和报告模板版本（不包含密钥或原始端点）
-- **Durable 默认路径**：Streamlit 通过 `/api/v1/tasks/*` 创建与恢复任务，SSE 支持 `Last-Event-ID` replay/resync；重启恢复后的最终报告仍可查询与导出
-
-历史实施和验收记录见 [归档索引](docs/archive/README.md)，其中当时额度和待办不代表当前状态。
+工程契约与历史版本兼容规则见[运行手册](docs/phase1-runtime-contract.md)。
 
 ## 快速开始
 
-使用 Python 3.11 或 3.12。以下命令启动单用户本地体验；配置 DeepSeek/Tavily 密钥后，实际研究会调用
+先安装 Python 3.11 或 3.12；以下 Windows 示例用 Python Launcher 选择 3.12。
+已有受支持的 `.venv` 可直接使用。配置 DeepSeek/Tavily 密钥后，实际研究会调用
 外部服务并可能产生费用。评估工具另见 [评估入口](benchmarks/README.md)。
 
 ```powershell
 # 1. 在项目根目录创建环境并安装
-python -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 
 # 2. 在项目根目录的私有 .env 或进程环境中配置 API Key（不要提交 .env）
@@ -147,248 +62,79 @@ python -m venv .venv
 核对引用与未知项，再按需导出 Markdown/PDF。失败或受限状态不代表已作出可靠选型。
 默认后端 `API_BASE` 为 `http://localhost:8000`，前端可通过同名环境变量连接其他受信地址。
 
-可选网络配置包括 `LOCAL_PROXY`、`FWD_BASE`、`FWD_KEY`、`FWD_TARGETS`、
-`OUTBOUND_CHANNELS`、`OUTBOUND_CHANNELS_COMMUNITY` 和 `OUTBOUND_CHANNELS_TAVILY`；Tavily
-需要保留 POST body，因此该 source 的路由会拒绝 `self-forward`。Docker Compose 中
-`TAVILY_KEY_STATE_PATH` 默认位于 `/app/outputs/tavily_key_state.json`，随 `outputs` volume
-持久化；可通过同名宿主机环境变量覆盖。完整配置约定见
-[`AGENTS.md`](AGENTS.md)。
+### 配置
 
-动态 safe-fetch 的代理信任独立使用 `SAFE_FETCH_TRUSTED_LOCAL_PROXY`，默认空值（关闭），
-单独设置 `LOCAL_PROXY` 不会放开动态目标。
-该新增能力仅用于具有冻结 manifest/RunContext 的 durable run；legacy `/research` 和无
-RunContext 的执行仍拒绝代理动态 URL。
-获批准后可将它设为与所选 `LOCAL_PROXY` 同一端点：仅
-`http://<loopback-literal-IP>:<explicit-port>`，IPv6 使用方括号；禁止认证、尾部 `/`、
-路径、query、fragment、scope ID 和空白。代理端口范围 1～65535，动态目标仅 HTTPS:443。
-不支持 self-forward、远程/SOCKS/HTTPS 代理、认证或 HTTP 引用；不自动改路由。
-Docker 传递同名设置，loopback 指容器自身；不得为容器便利而扩大信任为远程代理。
-端点只以哈希进入 manifest，运行配置漂移会 fail closed；当前离线实施不授权实际启用端点。
+在项目根目录的 `.env` 或进程环境中设置。密钥不得提交到仓库。
 
-所有 LLM 调用（含结论综合、冲突再仲裁、澄清、官方来源补全和 benchmark 的在线 judge）统一使用
-DeepSeek Flash。默认沿用 `deepseek-v4-flash` 与 `https://api.deepseek.com/v1`；
-`DS_FLASH_MODEL` / `DS_FLASH_BASE_URL` 可覆盖，兼容 `FLASH_MODEL` / `FLASH_BASE_URL` 和
-`DEEPSEEK_BASE_URL`。Docker 传递同样设置。Qwen 的 `QW_FLASH_*`、`PRO_*`、`LLM_*`
-模型/端点/密钥变量不再用于 LLM 配置，不会将 Qwen 密钥作为 DeepSeek 后备凭据。
+| 配置 | 用途与默认行为 |
+|---|---|
+| `DS_FLASH_API_KEY` | 所有 LLM 调用；兼容 `FLASH_API_KEY` / `DEEPSEEK_API_KEY` |
+| `DS_FLASH_MODEL` / `DS_FLASH_BASE_URL` | 默认 `deepseek-v4-flash` / `https://api.deepseek.com/v1`；兼容 `FLASH_MODEL` / `FLASH_BASE_URL` / `DEEPSEEK_BASE_URL` |
+| `TAVILY_API_KEYS` / `TAVILY_API_KEY` | 网页检索，多个密钥用逗号分隔 |
+| `GITHUB_TOKEN` / `STACKEXCHANGE_API_KEY` | 可选的社区数据凭据 |
+| `LOCAL_PROXY`、`FWD_BASE`、`FWD_KEY`、`FWD_TARGETS` | 可选出站代理/转发；转发目标按 hostname 边界匹配 |
+| `OUTBOUND_CHANNELS`、`OUTBOUND_CHANNELS_COMMUNITY`、`OUTBOUND_CHANNELS_TAVILY` | 各来源的通道顺序；Tavily 不允许会丢失 POST body 的 `self-forward` |
+| `SAFE_FETCH_TRUSTED_LOCAL_PROXY` | 默认空值关闭；动态 URL 安全抓取的显式本地代理信任配置，见下文 |
+| `CHROMA_PATH` | 默认 `./chroma_kb/chroma_db`；约束本地检索与冲突工具的库路径 |
+| `LEARNED_DOCS_PATH` / `LEARNED_DOCS_READONLY` | 默认 `./learned_docs.json` / `0`；设为 `1` 禁止学习写回 |
+| `TAVILY_KEY_STATE_PATH` / `TAVILY_REPROBE` | 保存耗尽密钥状态；默认不重新探测已耗尽密钥；Docker 默认状态文件在 `outputs` volume |
+| `RETRIEVAL_CACHE_ENABLED` | 默认 `1`；`0` 关闭持久化检索缓存，无 LLM 响应缓存 |
+| `LLM_DS_CONCURRENCY` | 默认 `80`，限制冲突扫描、仲裁和再仲裁调用；不替代单次研究预算 |
+| `DEEPCHOICE_SYNTH_THINKING` | 默认 `0` 显式关闭 thinking；`1` 为综合调用启用并冻结进 run manifest |
+| `API_BASE` | 前端连接的后端，默认 `http://localhost:8000` |
 
-默认请求显式发送 `thinking.type=disabled`；`DEEPCHOICE_SYNTH_THINKING=1` 仅启用综合节点的
-DeepSeek thinking，并在新 run manifest 中冻结。`LLM_DS_CONCURRENCY` 默认 `80`，控制冲突扫描、
-仲裁与再仲裁的共享并发门，不是每分钟请求限额；`LLM_QW_CONCURRENCY` 不再生效。
-旧 `call_model(model="qwen-flash")` 调用选择器及 `enable_thinking` 参数保留适配，但实际发往
-DeepSeek；历史 Qwen run 可读取，不能在新模型配置下续跑同一 run，需创建新 run/任务。
-本次是适配变更，报告效果需按[评估协议](docs/product-effectiveness-optimization.md)重新建立基线。
+旧 Qwen 的 `QW_FLASH_*`、`PRO_*`、`LLM_*` 与 `LLM_QW_CONCURRENCY` 已退役，
+不会向 DeepSeek 提供备用凭据。历史 `qwen-flash` 调用选择器仅为兼容适配器。
 
-`CHROMA_PATH` 默认 `./chroma_kb/chroma_db`，同时约束 Chroma 检索与冲突工具的库路径；
-`LEARNED_DOCS_PATH` 默认 `./learned_docs.json`，`LEARNED_DOCS_READONLY=1` 禁止自学习写回。
-学习映射上限512 KiB；缺失文件可创建，损坏/不可读文件保持原字节并绕过对应检索缓存。
-可选学习读写失败给出固定日志警告，不丢弃已取得的检索结果；预算、租约和取消异常仍传播。
-Windows原子替换遇到系统错误5/32/33时，锁内仅重试同一个临时文件，最多3次、合计等待
-30毫秒；持续拒绝仍保留旧映射并报告学习失败。这不保证长期占用或跨进程写入无损。
-无效学习项跳过；学习地址不因此获得官方身份或安全外呼权限。
-Docker 传递同名设置；覆盖容器路径时需自行提供相应挂载。O1 使用隔离知识快照，不改现有库。
+动态 URL 只能使用经安全校验的出站抓取。若确需本地代理，`SAFE_FETCH_TRUSTED_LOCAL_PROXY`
+必须与所选 `LOCAL_PROXY` 相同，格式为 `http://<loopback-literal-IP>:<explicit-port>`，
+禁止认证、路径、query、fragment、尾部 `/` 或空白；只接受动态 HTTPS:443 目标。
+信任仅在具有冻结 manifest 的持久化任务中生效。Docker 中 loopback 指容器自身。
+完整配置与安全语义见[运行契约](docs/phase1-runtime-contract.md)。
 
-O1-R 固定 conflict_scan 输出上限为 512（其他共享 LLM 调用仍 4096），请求/预算/manifest 一致；默认每 run 扫描最多四路；显式历史直接代理的初次仲裁也最多四路，并继续受全局 LLM 门约束。未增加环境变量或提高硬预算。仲裁 KB 工具复用默认 tech_kb/BGE 检索契约，不再访问旧 knowledge_base collection。实验服务单独关闭自动恢复，默认产品恢复不变；[修复与单次验证协议](docs/o1r-single-case-reliability.md)尚不构成稳定或质量验收。
+### 运行、报告与恢复
 
-2026-09-16 的 O1-R 最新候选仅测三个开发 case 各两次：6/6 正常完成、Trace token 完整，总计 143,354 token，1/78 逻辑检索失败（来源 degraded）。这是隔离/预热环境的单 case 执行观察，不是 12-case 基线、语义质量、并发或硬件稳定验收；该历史阶段曾暂停真实付费批次；当前授权与实际用量见[当前状态](docs/o1-execution-status.md)。
-
-O1 新观测增加模型输入缓存命中/未命中 token 已知小计、调用/运行完整性和 node-attempt CSV；Streamlit 与 observability 展示分项缺失，只有完整分项才计算命中率。它不是检索缓存，也不折扣 total-token 预算或伪造金额。旧六次 167 个 LLM 调用没有缓存分项，不能补算；输入 124,279、输出 19,075，冲突与合成占输入 87.8%，见 [拆账协议](docs/o1-cache-cost-accounting.md)。用户授权的 [开发报告助手核验](docs/o1-development-report-review.md)已发现来源错配、备份条件与性能适用性问题；非人工盲评，评分暂定，不宣布 O1/质量通过或进入 O2。
-
-Phase 3-2 已接入 durable 检索 SQLite TTL cache，以减少重复外部检索。
-`RETRIEVAL_CACHE_ENABLED` 默认值为 `1`，设置为 `0` 可安全关闭缓存；缓存只存储通过
-契约与来源校验的成功检索结果，不缓存失败结果或 LLM 响应，旧 `/research` 兼容路径继续绕过缓存。
-
-新的客户端应使用 `POST /api/v1/tasks`。`POST /research` 仅保留一版兼容，会返回弃用响应头；它仍会校验已知字段并拒绝额外字段，成功响应保留
-`task_id`/`status`，同时返回 `manifest_id` 供运行审计。API 错误保留兼容的
-`detail` 字段，并增加稳定的 `error` 对象（类别、错误码、是否可重试和建议动作）。
-
-Phase 1-A 已补齐任务与运行尝试的生命周期契约：两套状态枚举、完整转移矩阵、
-终态与可重试结果集合，以及严格类型边界。失败或超时任务只能通过创建新 run
-回到队列；已结束的 run 不会被重新打开。
-
-Phase 1-B 的产品持久化基础使用 `outputs/deepchoice.db`，与 LangGraph 的
-`outputs/checkpoints.db` 分离。`deepchoice.persistence` 提供可由启动流程调用的向前迁移 runner；
-迁移版本、名称和校验和都会校验，SQLite 连接启用外键、WAL 与有界 busy timeout。
-Phase 1-C 新增任务/运行记录的原子持久化、版本化状态更新、稳定分页和任务查询 API。
-Phase 1-D 在此基础上增加了带 fencing epoch 的 lease/heartbeat、过期 lease 恢复、
-取消与 deadline 优先级、interrupted resume、failed/timed-out retry 新 run，以及产品库中的
-LangGraph checkpoint 引用。旧 run 和 manifest 保留用于审计；根 checkpoint namespace 固定为空，
-每次 execution epoch 使用隔离的底层 checkpoint namespace 并在写入前校验 lease；resume
-固定从产品库已接受且 schema 兼容的 checkpoint ID 起步。执行协调器与 API 的执行开关仍可关闭，
-本阶段不承诺多进程调度、分布式锁服务或 checkpoint 内容本身的产品库复制。
-
-Phase 1-E 将任务状态变更与公开 `task_events` 写入同一 SQLite 事务，并以全局单调
-`event_id` 支持 `GET /api/v1/tasks/{task_id}/events` 的 `Last-Event-ID` 重放；游标不属于
-当前任务或超前时返回 `resync_required` 和脱敏后的当前任务快照。启动流程会只读扫描旧
-成功/失败 snapshot，以“相对路径 + SHA-256”幂等导入，不修改原文件；旧 `/research`
-入口保持兼容，旧状态别名也可读取 durable task。取消、恢复和跨进程重启的事件历史均保留。
-
-Phase 1-F 完成了 Phase 1 跨模块验收、旧 schema 实际升级、并发/CAS/fencing 故障测试和
-运行规范固化；追加的 schema v5 收紧了 legacy import 的 task/run 绑定约束，未修改 v4
-迁移历史。完整行为边界与恢复步骤见
-[`docs/phase1-runtime-contract.md`](docs/phase1-runtime-contract.md)，验收结论和遗留风险见
-[`docs/phase1-acceptance-report.md`](docs/phase1-acceptance-report.md)。
-
-Phase 1-G 把 Streamlit 默认路径切换到 durable task API，增加 immutable `run_results`，并将
-公开结果、成功终态和完成事件放在同一事务提交；报告、快照、阅读视图和导出均可在重启后
-查询。产品 schema 现为 v10：v8 建立 Phase 2-A 的 RunContext、Trace/Budget 契约及
-观测/预算骨架表；Phase 2-C 后新 durable run/retry 原子冻结 `standard-enforced-v1` 与
-`unpriced-v1`，已有 `standard-observe-v1` run 在同 run 恢复时保持原策略，价格未知不按零成本
-处理；v9 新增 retrieval-only TTL cache；v10 增加唯一 evidence-insufficient 决策的持久化表。旧
-snapshot 导入已移到 readiness 之后的受管后台任务，并具有候选数、I/O 时间和文件大小预算。
-`POST /research` 与旧 SSE 只作为一版弃用兼容保留。
-
-Phase 2-A 只冻结运行上下文、Trace/Budget DTO/Protocol、版本化预算策略和产品 schema
-骨架（`run_budget_policies`、`node_attempts`、`external_calls`、`trace_events`、
-`budget_ledger`）。旧 run 不回填，内部 policy 投影为 unavailable；后续查询 API 必须如实显示
-该缺失状态。Phase 2-B 已接入默认 durable 路径的节点/外部调用 Trace，并提供
-`GET /api/v1/tasks/{task_id}/observability`；查询只返回最新 run 的 allowlisted 摘要，旧 run、
-无 Trace 和无 latest run 明确标记 unavailable。latest run、run epoch/status 与 Trace 在同一 SQLite
-read snapshot 中读取；调用显示安全节点归属、run 内节点尝试序号和整数 retry 序号。过期 started
-记录投影为 interrupted/unknown。Token 聚合保留缺失字段并标记完整性，未知值不按零处理。
-Streamlit 展示 durable 节点、调用、重试、失败及已知 token；查询失败或不可用时回退已有
-snapshot panels。Trace 写入仍是 best-effort，不影响 task lifecycle/SSE；`task_events` 仍是
-状态与 SSE 正确性的唯一事实源。Phase 2-B 已通过完整测试和独立 Review。
-
-节点摘要还提供固定白名单的 `stage_counts`：来源准入、事实选择、问题行筛选、绑定、
-引用校准和自审保留数。只记录计数，历史缺失为 null，不保存模型原文。
-调用诊断 `node-shape-v2` 区分分步综合、主审和定向补审格式，旧 v1 记录保持可读；
-格式合格与计数只能辅助定位信息损失，不能证明答案质量。
-
-Phase 2-C 已在默认 durable 路径接入 fenced、append-only 的预算预留与结算：每次实际 LLM
-重试、每个 Retriever 来源和冲突证据工具调用都先通过原子预算门，并发不能超发；未知用量按
-预留上界记为 `unknown_spend`。标准档为 60,000 total token、96 次 LLM、72 次检索和 900 秒
-active-time，80% 时提示。60,000 token 与 900 秒分别给用户提供的历史上界（约 20,000 token、
-约 6 分钟）保留约 3 倍和 2.5 倍余量；这是保守的项目经验配置，不是付费健康集的 95% 实测。
-触顶后若已有至少三条非争议可用证据链、两个有效 HTTP(S) host 且含一条 moderate/strong
-证据，则不再外呼并生成明显标注的受限报告；否则稳定失败。Observability API 与 Streamlit
-展示 settled/unknown/reserved 用量、剩余额度和软/硬限制状态。`RunManifest` 仍为 schema v1，
-但现在冻结每个 LLM call 的 `max_output_tokens`，旧 manifest 会安全拒绝同 run 恢复。
-
-Phase 6-A 已收敛默认安全边界：所有受管 URL 外呼使用 `SafeUrlPolicy`/安全 fetch，仅允许
-HTTP(S)、80/443、无 userinfo，并在 DNS、direct-IP 连接及每一跳 redirect 上重新验证公网地址、
-端口和响应限制；无法证明安全的 proxy/forward 动态 URL fail closed。forward 目标采用完整
-hostname 精确匹配或显式 `*.example.com` 子域匹配。动态抓取显式请求 identity content encoding；
-无法解码、含未知编码或在打开/消费响应时发生 HTTPX stream 生命周期错误的响应，都按脱敏
-`response_rejected` 关闭，不能作为可重试 transport 证据。新 run 冻结 `outbound-url-v5`：默认安全
-抓取仍拒绝超过上限的正文；引用验证与 durable 官方正文读取显式选择最多 128 KiB 的有界页面前缀（提取文本最多 65,536 字符）。引用前缀命中可以获得
-词法 `verified`，前缀未命中保持 `unknown/content_insufficient`，不能据此判为不支持。历史 v1–v4
-manifest 仍可读取但不能按变化后的响应语义同 run 恢复。HTTP body 上限为 128 KiB，query、候选、
-澄清和聚合输入另有字段/数量限制。日志、错误、Trace 和 LLM diagnostics 统一脱敏，后者只保留
-hash、length、usage 和 error type。报告继续提供 Markdown，并由服务端生成经过 sanitizer 的
-`report_html`；PDF 复用同一 sanitizer，前端不把未清洗正文插入 `unsafe_allow_html`。
-本阶段不包含认证/API key、rate limiting，也不声称所有静态 provider 已迁移到安全 fetch。
-
-当前引用策略为 `deterministic-citation-v21`（五条来源事实的引用检查上限）。连续句末标点和方括号省略号保持完整，不拆成单个句号；
-无引用的前句与后续有引用句保持分离，尾部纯标点仍按未知检查。历史分析重渲染时，保存原句
-必须与当前句子地址完全相同，否则撤回该分析，避免静默更换引文。运行时复制的来源片段须在已获取正文中唯一定位，
-保留其完整的已闭合文本块及两侧邻块后核验；句中截断、重复位置、未闭合边界保持 `unknown`，同页强匹配
-反证也不能被局部正句掩盖。每段窗口最多 6,000 字符。整份来源事实每句通过时才标为verified；若检查完整且仅因网络
-暂不可核验，保存原文可作为受限分析的自审输入，来源仍为unknown。自审逐项通过后才展示
-“来源页面本次未能核验”的条件解释；缺检查、溢出、不支持及文本不足仍不进入该通道。
-v15还允许一个更窄的审阅入口：当整份来源仅有逐句`lexical_support`与
-`qualifier_unverified`、句子及来源身份完整匹配且无溢出时，只把分析实际引用的已通过句子
-送入同一次自审；自审仍须检查完整保存来源及未核实限定句。整份来源保持unknown，
-未经自审不展示，报告明确说明其限制；`content_insufficient`、跨语言、负面或缺失检查
-不能借此通过。该投影不提升Winner、需求满足状态、置信度或行动权限。
-其他模型断言沿用原核验规则；这只核对文本出处与词法支持，不证明推理正确或来源语义完整。
-历史引用 v1–v16 manifest 可读，但不兼容同 run 恢复。v15的P08真实开发报告仍未通过内容评审；v16的五事实容量已在公开开发批次使用，报告质量未获验收。
-v17允许同一来源的至多三段有界原文分别定位与逐句核验，且仍只算一个来源；报告分别标出非连续原文。技术标识符（如 `sys.exit()`）不再被句号拆断。
-新 durable 运行可从经核验的 Chroma 正文、已抓取的官方正文及有界社区/学术长正文生成句子候选，再按原请求、场景和来源版本路径用一次 DeepSeek Flash 调用提议至多三段，并优先尝试各明确候选的来源；运行时代替模型复制原文，消息超限或无效提议时保留原片段。提议不能授予引用通过或证明场景适用，真实报告收益仍待按现行评估协议跨场景测量。
-受审 Chroma 片段在原 500 字符边界后，最多延至 800 字符内首个有句末标点的行尾或完整 EOF，
-避免将排版换行直接当作句尾；找不到时保留原前缀，不能据此声称完整。该启发式不证明限定条件
-或推理正确，来源事实仍须经过上述核验。旧 Chroma v1–v6 可读，但须新 run。
-
-Phase 3-1 在结论合成与报告渲染之间增加确定性引用验证。等价 URL 规范化后每轮最多安全
-抓取一次，额外请求先预留 `http_calls`；检查结果随 immutable run snapshot 持久化，并由报告
-和 Streamlit 证据卡展示。该状态是可解释的规则判断，不是语义事实证明：临时网络、DNS、
-安全路由限制或跨语言难以判断时保持 `unknown`，不会被误写成错误引用。获胜项仍有支持、但任一
-模型生成的行动字段未通过引用检查时，系统保留获胜项并把整份计划替换为固定的隔离验证步骤，
-不把未核验操作作为可执行建议。新运行冻结 `research-v4`、state schema v3 与
-`deterministic-citation-v17`。保留v3引入的规则：系统生成且逐字段匹配的固定validation-only
-计划不作模型事实断言，无引用/无evidence绑定的纯unknown声明不计为`citation_missing`；
-任意或伪造计划仍按原规则校验。历史 workflow v1–v3 和 citation-policy v1–v16 manifest
-可审计但须新建run，不能在当前工作流上续跑旧 checkpoint。
-
-当前 `research-v4` 顺序为引用核验 → 分析自审 → 唯一 evidence-insufficient 门 → 报告。
-自审只看所供分析、原需求解释、重绑定来源和结论摘要，不审完整行动方案；分析与需求解释
-共享8个审阅槽。分析修订可改推理、假设和改变条件，并仅追加当前已保存来源的限定句，
-不能替换原依据；需求解释只可改文字。引用状态、Winner及操作权威保持。首次
-缺失/重复/非法的分析槽最多3项逐槽补审，仍无有效答复则撤回；有效其他项保留。
-模型服务失败会公开说明审查不可用。公开缺口使用固定提示，避免回显私密补充输入。
-三模板身份为 v20/v19/v18，自审提示为 v8；旧 workflow v1–v3 可读但不能按新图续
-同一 run，须新建运行，旧 pending decision 仍可取消。当前 synthesis 提示身份为 v26；
-v23 的分阶段判断契约仍用于生成。v21 将文本拒绝细分为固定类型，并在纠正提示中提供已绑定句子地址；纠正响应需保留原问题与来源句子
-覆盖，选择一份独立绑定结果，不混合两份输出，选中后保持低置信度与隔离验证限制。
-结构通过不代表建议质量通过。
-
-普通研究轮先有一次自审；A槽答复不完整时最多再消耗3次逐槽补审。原来在 HITL 门
-暂停、取消或受限输出的路径也先经过该自审节点。pending 重启不会重审；用户补充上下文后
-会随新研究轮再次自审。所有调用沿用预算
-准入，完整消息 UTF-8 字节加4096输出上限保守预留；大输入或剩余预算不足会被拒绝，
-符合结构最低条件时才生成本地受限报告。本改动尚未通过新真实报告验证推理质量。
-
-Phase 4-1 已为默认 durable 工作流加入单一 HITL 决策闭环：新运行冻结 `research-v4`、state
-schema v3 与 `evidence-insufficient-v2`。该 gate 位于引用验证之后、报告渲染之前，只在证据
-结构不足且推荐方向实质不确定时暂停。结构门与缺口说明共用三条判据：
-至少三条无争议可用链、两个规范化HTTP(S) hostname及一条中等/强证据链；仅属结构条件。
-说明列出未满足项，额外知识缺口仅显示固定提示，保留私人原文于内部；旧v1身份可读但需新run。
-`GET /api/v1/tasks/{task_id}/decision` 读取当前决策；
-`POST /api/v1/tasks/{task_id}/decisions/{decision_id}` 以 `If-Match` task version 提交动作。
-三个动作是 `provide_context`、`limited_report` 和 `cancel`。决定与 run、产品库接受的
-checkpoint、state schema 和暂停 epoch 绑定；相同请求幂等，冲突请求不覆盖已提交决定，7 天
-未决后收敛为取消。暂停后 lease、deadline 与执行槽都会释放。重启恢复只会续接兼容的已解决
-decision/checkpoint。补充文本不会进入公开 decision 响应或 `task_events`；checkpoint ID 和
-fencing identity 也只保留在内部。旧 `/research` 兼容路径绕过该持久决策门。Phase 4-2 已完成
-Streamlit 待决策界面及 SSE 等待断开/按 `Last-Event-ID` 续接，并以真实双 SQLite、
-StateGraph/checkpoint 验证 pending 跨重启、幂等/冲突、过期、取消和绑定 checkpoint 的单次 resume。
-
-Phase 5-1 已完成最小版本资产清单和离线 smoke/eval。当前契约限定为默认路径使用的 7 个
-核心 Prompt hash/version、`research-v4`/state v3/workflow nodes、citation/HITL policy 及三个报告
-模板版本；固定 12 个 fixture replay case 覆盖 query analysis、引用验证、结论后处理和报告渲染，
-每项 3 个，不调用 LLM、judge 或网络。其 artifact 会记录数据集 hash/date、各指标分母、manifest、
-registry 与 source health `not_run`/`degraded`。此测试只验证确定性代码和 fixture/报告结构，不能
-作为真实模型语义质量或实时信源可用性的证明，也不改变历史 300-case benchmark 指标。测试数量、
-死代码、默认路径一致性和完整 CI 的工程验收留在 Phase 5-2；真实 case 指标优化与面试交付不属于
-当前 Phase 5。
-运行命令、baseline 检查和指标解释见[Phase 5-1 离线评估说明](docs/phase5-offline-eval.md)。
-
-工程基础整体验收已完成，证据见 [工程验收](docs/phase5-engineering-acceptance.md)。
-产品优化的当前范围见 [任务地图](docs/current-roadmap.md)，评测口径见
-[评估协议入口](docs/product-effectiveness-optimization.md)。企业级扩展不在当前范围。
+- 新调用方使用 `/api/v1/tasks/*`；本地 API 文档在 `http://localhost:8000/docs`。
+  旧 `POST /research` 是一版弃用兼容入口。
+- 任务状态、结果与完成事件原子写入产品 SQLite；页面用 SSE 显示进度。网络断开后通过
+  任务快照与事件游标续接，故障保持可见。可恢复的中断续接兼容检查点，失败/超时重试创建新 run。
+- 证据不足时只有一个人工决策点：补充信息、生成受限报告、取消。重复提交相同动作幂等，
+  过期/冲突动作不会恢复旧执行。报告、快照与 Markdown 导出来自同一保存结果。
+- 新 run 冻结 `research-v5` / state v3。来源选择后先执行一次确定性核验，再生成条件分析和复审；
+  不再让已拒绝的来源进入第二次模型判断。旧 workflow v1–v4 可读，不能跨版本恢复。
+- `verified` 是有界页面检查与词法支持状态。临时网络不确定性保留为 `unknown`；
+  受限的句子级分析须经复审并显示限制。引用状态不能证明语义、性能或生产可用性。
+- 每 run 标准上限为 60,000 token、96 次 LLM、72 次检索、900 秒 active-time，80% 时提示。
+  调用前预留预算；未知用量保守结算，价格未知不显示为零成本。达到上限后停止外呼，
+  仅在已有证据满足结构条件时生成受限报告，否则明确失败。
+- 产品数据库 `outputs/deepchoice.db` 与检查点数据库 `outputs/checkpoints.db` 必须成对备份；
+  不得通过增加 worker 或副本共用 SQLite。恢复步骤见[运行契约](docs/phase1-runtime-contract.md)。
 
 ### 测试
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp=.codex-test-tmp
+.\.venv\Scripts\python.exe -m benchmarks.run_offline_eval --check-baseline
 ```
 
-项目支持 Python 3.11/3.12。当前工程验证及测量结果见 [当前状态](docs/o1-execution-status.md)。
-旧quality-selection-v1采集器绑定公开四例和保守研究账本，只保留历史结果与回归用途；
-新通用开发批须先冻结跨类别小样本、身份、顺序与停止线，见 [评估协议](docs/product-effectiveness-optimization.md)。
-2026-10-04的v25候选为0/4可用且有据，已退役。八场景稳定性与最终24次尚未启动，工程通过不代表报告内容通过。
-smoke-v1 是离线 fixture 验证；自动化测试不证明报告语义质量或并发效果。
-不要使用混装其他项目依赖的全局 Python 环境。
+`smoke-v1` 是 12 例离线 fixture 验证，不调用 LLM/网络，不证明真实报告质量。
+完整验证和当前真实测量见[当前状态](docs/o1-execution-status.md)。CI 在 Python 3.11/3.12
+运行测试、smoke、pyflakes 和 vulture。不要使用混装其他项目依赖的全局 Python 环境。
 
 ### Docker 部署
 
 ```bash
-docker build -t deepchoice .
-docker run -p 8000:8000 --env-file .env deepchoice
+docker compose up --build
 ```
 
-镜像构建为纯在线安装（清华镜像源），不依赖本地 wheels 目录。BGE-M3
-嵌入模型在容器首次运行时自动下载（约 2GB，下载到 `/root/.cache/huggingface`），
-建议挂载 volume 持久化模型缓存：
+打开 `http://localhost:8501`。后端与前端使用 Python 3.12，后端保持单 worker；
+`outputs` 与 Chroma 数据通过 volume 保存。BGE-M3 嵌入模型首次使用需要下载较大的模型文件，
+模型缓存位于后端容器 `/root/.cache/huggingface`，可挂载 volume 保留缓存。
 
-```bash
-docker run -p 8000:8000 --env-file .env \
-  -v deepchoice-hf-cache:/root/.cache/huggingface \
-  -v deepchoice-outputs:/app/outputs \
-  deepchoice
-```
+当前部署范围为单用户、可信主机/网络；API 没有身份认证或任务所有权校验。
+远程访问应配置带认证的反向代理，不要直接向公网开放 8000 端口。
 
-后端与前端镜像固定 Python 3.12，后端保持单 worker。SQLite runtime 不支持多副本；检测到多 worker 配置
-或另一实例仍持有产品库 lease 时会拒绝启动。数据库维护使用成对工具：
+备份前停止服务或进入维护模式：
 
 ```bash
 python scripts/runtime_db.py backup --product-db outputs/deepchoice.db --checkpoint-db outputs/checkpoints.db --destination backups/runtime-YYYYMMDD --maintenance-confirmed
@@ -396,70 +142,33 @@ python scripts/runtime_db.py verify --backup-dir backups/runtime-YYYYMMDD
 python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --drill-dir restore-drill
 ```
 
-两个数据库之间没有跨文件原子快照，执行 backup/restore 前必须停止服务或进入维护模式。
-
-当前 Phase 1 部署模型是单用户、可信主机/可信网络，API 尚未提供身份认证、租户隔离或任务
-所有权校验。Docker 虽监听 `0.0.0.0`，但不得直接暴露到公网；远程访问必须放在带认证与
-访问控制的反向代理后。进入多用户部署前，API token/会话认证和 tenant ownership 是阻断项。
-
 ## 架构概览
 
-```
-用户输入 "FastAPI vs Flask"
-        │
-        ▼
-   ┌──────────────┐
-   │  澄清模块      │  多轮对话核对当前需求（三轮后可确认未知）
-   │  混合式+软门禁  │  用户不知道该选什么 → 按类别提供候选示例
-   └──────┬───────┘
-          │ 已确认研究任务（不附加固定五维问题）
-          ▼
-   ┌──────────────────────────────────────────────────────┐
-   │          LangGraph 研究管道 + 确定性验证               │
-   │                                                      │
-   │  [1] QueryAnalyzer      按原请求生成必要研究问题         │
-   │         │                                            │
-   │  [2] QueryAdapter       每个子问题 → 6 种检索词       │
-   │         │                                            │
-   │  [3] MultiRetriever     6 路并行搜索                  │
-   │         │                                            │
-   │  [4] SourceEvaluator    URL类别/日期排序先验       │
-   │         │                                            │
-   │  [5] ConflictDetector   BGE-M3 候选配对 + 冲突扫描  │
-   │         │                                            │
-   │  [6] EvidenceChain      证据链组装 + 强弱标记          │
-   │         │                                            │
-   │  [7] ConclusionSynth    原问题、原句依据与条件分析   │
-   │         │                                            │
-   │  [8] CitationValidator  URL/声明支持确定性检查          │
-   │         │                                            │
-   │  [9] SelfReviewer       分析、原句和条件推理自审       │
-   │         │                                            │
-   │ [10] EvidenceDecision   唯一 evidence-insufficient 门 │
-   │         │              补充上下文可启动新研究轮        │
-   │ [11] ReportGenerator    3 种格式选一渲染，不自动重试    │
-   │         ▼                                            │
-   │       END                                            │
-   └──────────────────────────────────────────────────────┘
-          │
-          ▼
-   FastAPI SSE 流式输出 → Streamlit 前端（中/英/日/韩）
+```mermaid
+flowchart TD
+    U[需求与约束 / 澄清] --> A[问题分析与检索词适配]
+    A --> R[六源检索]
+    R --> E[来源评估 / 冲突扫描 / 证据组织]
+    E --> S[选择保存的来源片段]
+    S --> C[确定性来源核验]
+    C --> J[基于可用原句生成条件分析]
+    J --> V[分析复审]
+    V --> H{证据是否需要补充}
+    H -->|继续| P[渲染、查看与导出报告]
+    H -->|补充上下文| A
+    H -->|受限报告或取消| X[保存明确结果]
 ```
 
-**两阶段仲裁细节**：
-```
-所有冲突对 → flash 初裁（~3s/对）
-                     │
-    低置信度对 → 取分数差距最小的 1 对
-                     │
-            重裁（300s timeout，独立并发闸）
-```
+FastAPI 提供任务 API 与 SSE；Streamlit 提供中、英、日、韩界面。任务状态与事件存于产品
+SQLite，LangGraph 检查点存于独立 SQLite，两库按配对备份恢复。所有模型调用通过统一 helper
+执行预算、重试、脱敏与用量记录；来源检索统一通过 outbound 路由。
 
 ## 关键技术决策
 
-**信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
-
-**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。300 case 终测冲突检测率 28.8%——其中 keyword 预筛部分（确定性）低于 200 case 的 56.4%，当时归因为新增 case 的 known_contradictions 标注不足（检测靶子少）；这只是历史解释，当前优化方向须由新诊断确定。
+- **来源排序采用确定性规则**：URL 类别、日期等提供可解释的排序先验，不能代替事实检查。
+- **冲突扫描与判断分开**：先用嵌入相似性选择候选对，再做有界模型扫描；当前完整链路不执行旧两阶段仲裁或额外补搜。
+- **先核验依据，再写分析**：避免先基于不可用来源生成整段分析、随后整段撤回；引用核验与推理复审各自保留职责。
+- **版本化恢复**：运行时冻结工作流、模型参数和资产身份，拒绝用新逻辑接续不兼容的旧检查点。
 
 ## 量化指标（300 case 混合基准，2026-08-31 终测）
 
@@ -480,8 +189,8 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 
 上述 300-case 是 2026-08-31 的历史结果；当前模型、代码和评估路径已有变化，重跑旧案例不等于
 重现当时数字。旧直连工具与停用批次脚本的边界见[评估入口说明](benchmarks/README.md)。
-正式产品测量使用 durable API 和独立 product-baseline-v1 12-case 数据集；当前状态见
-[执行记录](docs/o1-execution-status.md)，不得混入上述 300-case 分母。历史停止和修复经过见
+当前产品测量使用持久化 API，按批次冻结输入与版本；旧 product-baseline-v1 的 12 例记录
+属于另一数据集。当前状态见[执行记录](docs/o1-execution-status.md)，不得混入上述 300-case 分母。历史停止和修复经过见
 [归档索引](docs/archive/README.md)。手动评估 workflow 仅运行 smoke-v1，不调用 LLM/检索服务。
 
 **历史局限（2026-08-31，300-case）**：端到端延迟 P50 342.1s/P95 445.3s，原记录使用 480s
@@ -489,9 +198,6 @@ python scripts/runtime_db.py exercise --backup-dir backups/runtime-YYYYMMDD --dr
 统一 Flash 后的耗时或冲突质量；当前 active-time 预算见运行契约。Tavily 配额仍是外部运行条件。
 
 ## 技术栈
-
-O1 冻结/隔离的本地验证（2026-09-16，Python 3.12）：18 个聚焦测试及完整套件 1095 passed、0 skipped；
-smoke-v1 12/12、fingerprint 匹配。以上是工程/fixture 验证，不是 12 个真实研究 case 的效果或成本。
 
 LangGraph（研究/生成节点 + 确定性引用验证与单一 HITL 决策门 + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · DeepSeek Flash（全部 LLM 调用） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
 
@@ -528,6 +234,6 @@ benchmarks/
 MIT
 
 
-代码审计后的公开开发探针已冻结于[quality-code-audit-development-v1](benchmarks/quality-code-audit-development-v1.json)（1.0.0，2026-10-06，4例），仅定义开发输入与评审，不代表运行完成或质量通过。
+
 
 当前质量测量的事实与下一成果见[状态](docs/o1-execution-status.md)，跨类别开发准入与保留集边界见[协议](docs/product-effectiveness-optimization.md)。旧四例采集相位和晋级锁不能授权新样本；最终24次仍封存。

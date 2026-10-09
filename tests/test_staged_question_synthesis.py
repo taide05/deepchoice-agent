@@ -1,4 +1,5 @@
 """Staged synthesis contracts; fixtures show routing, not semantic quality."""
+from tests.staged_synthesis_helpers import run_staged
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -84,7 +85,7 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
                                answer("Q1", "B4")["decision_analysis"][0]]},
     ])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
     rec = state["final_recommendation"]
@@ -109,7 +110,7 @@ async def test_one_sided_facts_withhold_r0_but_allow_bounded_specific_answer(mon
     model = AsyncMock(side_effect=[
         {"source_view_ids": ["S2"]}, answer("Q1", "B1")])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]
@@ -125,13 +126,13 @@ async def test_subquestion_cannot_create_a_second_choice(monkeypatch):
                                choice["decision_analysis"][0]]},
     ])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["R0"]]
     stage = state["quality_signals"][0]["staged_generation"]
     assert stage["rows_received"] == 2 and stage["rows_selected"] == 1
     assert stage["judgment_calls"] == 1
-    assert stage["facts_received"] == 2
+    assert stage["facts_bound"] == 2
     assert stage["rows_rejected_question"] == 1
 
 
@@ -143,7 +144,7 @@ async def test_malformed_question_id_cannot_crash_or_enter_output(monkeypatch):
         {"decision_analysis": [malformed, answer("Q1", "B3")["decision_analysis"][0]]},
     ])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]
 
@@ -158,7 +159,7 @@ async def test_invalid_question_output_isolated_and_budget_loss_propagates(monke
 
         ]}])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]
     model = AsyncMock(side_effect=[
@@ -166,7 +167,7 @@ async def test_invalid_question_output_isolated_and_budget_loss_propagates(monke
         BudgetPersistenceError("private budget error")])
     monkeypatch.setattr(synth, "call_model", model)
     with pytest.raises(BudgetPersistenceError):
-        await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+        await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
             {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
 
@@ -193,15 +194,15 @@ async def test_explicit_short_candidate_in_comparison_title_keeps_original_quest
     model = AsyncMock(side_effect=[
         {"source_view_ids": ["S1"]}, answer("R0", "B1")])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)),
         {"task": task, "evidence_chains": chains})
     rec = state["final_recommendation"]
     assert [row["requirement_ids"] for row in rec["decision_analysis"]] == [["R0"]]
     assert "R0:" in model.await_args_list[1].args[0][0]["content"]
     assert state["quality_signals"][0]["staged_generation"]["r0_withheld_one_sided"] == 0
     assert rec["winner"] == "context_dependent"
-    assert rec["source_facts"][0]["status"] == "unknown"
-    assert rec["decision_analysis"][0]["review_status"] == "not_checked"
+    assert rec["source_facts"][0]["status"] == "verified"
+    assert rec["decision_analysis"][0]["review_status"] == "human_review_required"
     assert not has_multi_candidate_coverage([{"source_title": "Node.js guide"}], task["candidate_techs"])
 
 
@@ -224,12 +225,12 @@ async def test_known_conditions_with_empty_extra_assumptions_reach_reviewed_repo
                                   {"decision_analysis": [row]}])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": deepcopy(task), "evidence_chains": deepcopy(original)}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     assert state["final_recommendation"]["decision_analysis"][0]["assumptions"] == []
     assert state["final_recommendation"]["decision_analysis"][0]["requirement_ids"] == ["R0"]
     inventory = state["final_recommendation"]["answer_delivery"]["requirements"]
     assert [inventory[f"C{i}"] for i in range(1, 5)] == task["constraints"]
-    assert state["task"] == task and state["evidence_chains"] == original
+    assert state["task"] == task and original == CHAINS[:1]
     judgment = model.await_args_list[1].args[0][0]["content"]
     assert task["scene_context"] in judgment and "0-4" in judgment
     assert all(constraint in judgment for constraint in task["constraints"])
@@ -259,7 +260,7 @@ async def test_no_advertised_basis_skips_judgment_and_keeps_visible_gaps(monkeyp
     original = deepcopy(CHAINS)
     monkeypatch.setattr(synth, "call_model", model)
     monkeypatch.setattr(synth, "basis_reference_packet", lambda *_, **__: ("No bound source facts.", {}))
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 1 and CHAINS == original
     rec = state["final_recommendation"]
@@ -278,7 +279,7 @@ async def test_judgment_authority_loss_never_becomes_empty_success(monkeypatch, 
     model = AsyncMock(side_effect=[{"source_view_ids": ["S1", "S2"]}, error])
     monkeypatch.setattr(synth, "call_model", model)
     with pytest.raises(RuntimeError) as caught:
-        await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
+        await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
             {"task": TASK, "evidence_chains": CHAINS})
     assert caught.value is error and model.await_count == 2
 
@@ -301,7 +302,7 @@ async def test_late_questions_get_selection_judgment_and_reviewed_report_opportu
     model = AsyncMock(side_effect=[{"source_view_ids": ["S1"]}, {"decision_analysis": rows}])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": deepcopy(task), "evidence_chains": deepcopy(CHAINS[:1])}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     assert model.await_count == 2
     for call in model.await_args_list:
         prompt = call.args[0][0]["content"]
@@ -310,7 +311,7 @@ async def test_late_questions_get_selection_judgment_and_reviewed_report_opportu
     assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [[key] for key in selected_ids]
     assert state["quality_signals"][0]["staged_generation"]["questions_planned"] == 21
     assert state["task"] == task
-    assert state["evidence_chains"] == CHAINS[:1]
+    assert state["evidence_chains"][0]["sources"][0]["snippet"] == CHAINS[0]["sources"][0]["snippet"]
 
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", AsyncMock(return_value=httpx.Response(
         200, text=CHAINS[0]["sources"][0]["snippet"], headers={"content-type": "text/plain"})))
@@ -346,7 +347,7 @@ async def test_more_offered_questions_does_not_expand_answer_output_authority(mo
     model = AsyncMock(side_effect=[{"source_view_ids": ["S1", "S2"]},
         {"decision_analysis": [answer(key)["decision_analysis"][0] for key in ids[:count]]}])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)),
         {"task": task, "evidence_chains": CHAINS})
     assert model.await_count == 2
     assert state["final_recommendation"]["decision_analysis"] == []
@@ -374,8 +375,8 @@ async def test_all_question_context_still_obeys_real_budget_before_model_dispatc
         chat=SimpleNamespace(completions=SimpleNamespace(create=dispatch))))
     state = {"task": task, "evidence_chains": chains}
     try:
-        node = ChiefEditorAgent(task)._timed_node("conclusion_synthesizer",
-            synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run)
+        node = ChiefEditorAgent(task)._timed_node("source_selection",
+            synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).select_sources)
         with bind_run_context(_context(manager)), pytest.raises(BudgetExceededError) as caught:
             await node(state)
         assert caught.value.resource == BudgetResource.TOTAL_TOKENS
@@ -412,13 +413,13 @@ async def test_many_requirements_preserve_only_bound_cited_reviewed_analysis(mon
     model = AsyncMock(side_effect=[{"source_view_ids": ["S1"]}, {"decision_analysis": [row]}])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": deepcopy(task), "evidence_chains": deepcopy(CHAINS[:1])}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     rec = state["final_recommendation"]
     assert model.await_count == 2
     for call in model.await_args_list:
         prompt = call.args[0][0]["content"]
         assert all(f": {text}\n" in prompt for text in task["constraints"])
-    assert state["task"] == task and state["evidence_chains"] == CHAINS[:1]
+    assert state["task"] == task and state["evidence_chains"][0]["sources"][0]["snippet"] == CHAINS[0]["sources"][0]["snippet"]
     expected_bound = 0 if outcome == "invalid_basis" else 1
     assert state["quality_signals"][0]["staged_generation"]["rows_selected"] == expected_bound
     assert len(rec["decision_analysis"]) == expected_bound

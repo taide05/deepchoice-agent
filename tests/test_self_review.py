@@ -259,7 +259,7 @@ async def test_actual_graph_reviews_before_gate_and_renders_reviewed_output_once
     monkeypatch.setattr(module, "call_model", review)
     async def noop(_state): return {}
     agents = {key: SimpleNamespace(run=noop) for key in (
-        "query_analyzer", "query_adapter", "multi_retriever", "source_evaluator", "conflict_detector", "evidence_chain", "conclusion_synthesizer", "citation_validator")}
+        "query_analyzer", "query_adapter", "multi_retriever", "source_evaluator", "conflict_detector", "evidence_chain", "source_selection", "conclusion_synthesizer", "citation_validator")}
     async def gate(seen):
         assert seen["final_recommendation"]["decision_analysis"][0]["reasoning"] == CORRECTED
         return await EvidenceDecisionGateAgent().run(seen)

@@ -3,6 +3,7 @@ from copy import deepcopy
 import json
 
 import pytest
+from tests.staged_synthesis_helpers import run_staged
 
 from deepchoice.utils import fact_selection as selection
 from deepchoice.utils.call_diagnostics import output_shape_valid
@@ -33,6 +34,8 @@ def test_runtime_ids_preserve_sources_when_model_fact_identity_would_clear_them(
     assert facts[1]["saved_text"] == original[0]["sources"][0]["snippet"]
     assert all(f["status"] == "unknown" for f in facts)
     assert original == before and '"id":"S1"' in packet
+    assert json.loads(packet.splitlines()[0])["source_host"] == "alpha.example"
+    assert "https://alpha.example/docs" not in packet
 
 
 def test_long_views_bind_displayed_context_once_and_preserve_far_material():
@@ -254,7 +257,7 @@ async def test_default_menu_range_survives_citation_review_and_rejects_unoffered
             "change_condition": "Reconsider if retention expires."}]}])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": task, "evidence_chains": deepcopy(original)}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     assert model.await_count == 2
     assert '"id":"S3W1"' in model.await_args_list[0].args[0][0]["content"]
     assert [f["evidence_id"] for f in state["final_recommendation"]["source_facts"]] == [1, 3]
@@ -288,7 +291,7 @@ async def test_menu_capacity_gap_is_visible_without_inventing_candidate_support(
     task = {"query": "Choose Alpha or Beta.", "candidate_techs": ["Alpha", "Beta"]}
     model = AsyncMock(return_value={"source_view_ids": ["S1"]})
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run({"task": task, "evidence_chains": original})
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), {"task": task, "evidence_chains": original})
     assert model.await_count == 1
     assert 'Candidates without a literal title mention in this menu: ["Beta"]' in model.await_args.args[0][0]["content"]
     assert state["final_recommendation"]["winner"] == "context_dependent"
@@ -387,7 +390,7 @@ async def test_short_omitted_menu_analysis_survives_default_citation_review_and_
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
     task = {"query": "How can Alpha consumers replay records?", "candidate_techs": ["Alpha"]}
     state = {"task": task, "evidence_chains": deepcopy(original)}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     state.update(await CitationValidatorAgent().run(state))
     reviewed_model = AsyncMock(return_value=reviewed([{
         "analysis_id": "A1", "action": "keep", "source_checks": [["F1", "supports", [1, 2]]]}]))

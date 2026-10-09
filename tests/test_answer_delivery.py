@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from tests.staged_synthesis_helpers import run_staged
 
 from deepchoice.agents import conclusion_synthesizer as synth, self_reviewer as review
 from deepchoice.agents.citation_validator import CitationValidatorAgent
@@ -127,7 +128,7 @@ async def test_durable_synthesis_cannot_fall_back_to_legacy_response(monkeypatch
     legacy.pop("source_facts")
     model = AsyncMock(return_value=legacy)
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)), {
         "task": TASK, "evidence_chains": CHAINS})
     model.assert_awaited_once()  # no bound facts, so no question generation
     rec = state["final_recommendation"]
@@ -164,7 +165,7 @@ async def test_missing_staged_fact_fields_fail_closed_without_extra_generation(m
 
     model = AsyncMock(return_value={"answer_contract": ANSWER_CONTRACT})
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)), {
         "task": TASK, "evidence_chains": CHAINS})
     model.assert_awaited_once()
     assert not state["final_recommendation"]["decision_analysis"]
@@ -195,7 +196,7 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
         {"decision_analysis": malformed["decision_analysis"]},
     ])
     monkeypatch.setattr(synth, "call_model", model)
-    state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run({
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)), {
         "task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 2
     assert state["final_recommendation"]["decision_analysis"] == []

@@ -28,7 +28,6 @@ T = {
         "welcome_icon": "",
         "welcome_title": "你要对比哪些技术方案？",
         "welcome_desc": "描述你想比较的技术 — 框架、数据库、工具、或整栈方案。<br>DeepChoice 跨 6 个数据源搜索，对证据质量打分，仲裁矛盾观点，<br>交付一份有据可查的研究报告。",
-        "examples": ["FastAPI vs Flask REST API", "PostgreSQL vs MongoDB 数据分析", "Kubernetes vs Docker Swarm", "React vs Vue 初创看板", "Redis vs Kafka 事件流"],
         "input_placeholder": "描述你想比较什么...",
         "chat_placeholder": "输入你的回答...",
         "skip": "跳过",
@@ -185,7 +184,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "查询分析", "query_adapter": "查询适配", "multi_retriever": "多源检索",
             "source_evaluator": "来源评估", "conflict_detector": "矛盾检测", "evidence_chain": "证据链构建",
-            "conclusion_synthesizer": "结论合成", "citation_validator": "引用验证", "report_generator": "报告生成", "self_reviewer": "自我审查",
+            "source_selection": "来源选择", "conclusion_synthesizer": "结论合成", "citation_validator": "引用验证", "report_generator": "报告生成", "self_reviewer": "自我审查",
         },
         "rv_toc_title": "目录",
         "rv_download_md": "下载 Markdown",
@@ -210,7 +209,6 @@ T = {
         "welcome_icon": "",
         "welcome_title": "What technology are you evaluating?",
         "welcome_desc": "Describe what you want to compare — frameworks, databases, tools, or an entire stack.<br>DeepChoice searches across 6 sources, scores evidence quality, arbitrates conflicts,<br>and delivers an evidence-backed report you can trust.",
-        "examples": ["FastAPI vs Flask for REST API", "PostgreSQL vs MongoDB for analytics", "Kubernetes vs Docker Swarm", "React vs Vue for a startup dashboard", "Redis vs Kafka for event streaming"],
         "input_placeholder": "Describe what you want to compare...",
         "chat_placeholder": "Type your response...",
         "skip": "Skip",
@@ -367,7 +365,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "Query Analysis", "query_adapter": "Query Adaptation", "multi_retriever": "Multi-Source Retrieval",
             "source_evaluator": "Source Evaluation", "conflict_detector": "Conflict Detection", "evidence_chain": "Evidence Chain",
-            "conclusion_synthesizer": "Conclusion Synthesis", "citation_validator": "Citation Verification", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
+            "source_selection": "Source Selection", "conclusion_synthesizer": "Conclusion Synthesis", "citation_validator": "Citation Verification", "report_generator": "Report Generation", "self_reviewer": "Self-Review",
         },
         "rv_toc_title": "Contents",
         "rv_download_md": "Download Markdown",
@@ -392,7 +390,6 @@ T = {
         "welcome_icon": "",
         "welcome_title": "どの技術を比較しますか？",
         "welcome_desc": "比較したい技術を記述してください。フレームワーク、データベース、ツール、またはスタック全体。<br>DeepChoiceは6つの情報源から検索し、証拠の品質をスコア化、矛盾を調停し、<br>信頼できるレポートを提供します。",
-        "examples": ["FastAPI vs Flask REST API", "PostgreSQL vs MongoDB 分析", "Kubernetes vs Docker Swarm", "React vs Vue スタートアップ", "Redis vs Kafka イベントストリーミング"],
         "input_placeholder": "比較したい内容を説明してください...",
         "chat_placeholder": "回答を入力...",
         "skip": "スキップ",
@@ -549,7 +546,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "クエリ分析", "query_adapter": "クエリ適応", "multi_retriever": "マルチソース検索",
             "source_evaluator": "情報源評価", "conflict_detector": "矛盾検出", "evidence_chain": "証拠チェーン",
-            "conclusion_synthesizer": "結論合成", "citation_validator": "引用検証", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
+            "source_selection": "資料選択", "conclusion_synthesizer": "結論合成", "citation_validator": "引用検証", "report_generator": "レポート生成", "self_reviewer": "自己レビュー",
         },
         "rv_toc_title": "目次",
         "rv_download_md": "Markdown をダウンロード",
@@ -574,7 +571,6 @@ T = {
         "welcome_icon": "",
         "welcome_title": "어떤 기술을 비교하시겠습니까?",
         "welcome_desc": "비교하고자 하는 기술을 설명해 주세요. 프레임워크, 데이터베이스, 도구, 또는 전체 스택.<br>DeepChoice는 6개 정보 소스로부터 검색하여 증거 품질을 평가하고, 모순을 중재하며,<br>신뢰할 수 있는 보고서를 제공합니다.",
-        "examples": ["FastAPI vs Flask REST API", "PostgreSQL vs MongoDB 분석", "Kubernetes vs Docker Swarm", "React vs Vue 스타트업", "Redis vs Kafka 이벤트 스트리밍"],
         "input_placeholder": "비교하고 싶은 내용을 설명해 주세요...",
         "chat_placeholder": "응답을 입력하세요...",
         "skip": "건너뛰기",
@@ -731,7 +727,7 @@ T = {
         "obs_nodes": {
             "query_analyzer": "쿼리 분석", "query_adapter": "쿼리 어댑터", "multi_retriever": "다중 소스 검색",
             "source_evaluator": "출처 평가", "conflict_detector": "충돌 탐지", "evidence_chain": "증거 체인",
-            "conclusion_synthesizer": "결론 합성", "citation_validator": "인용 검증", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
+            "source_selection": "출처 선택", "conclusion_synthesizer": "결론 합성", "citation_validator": "인용 검증", "report_generator": "보고서 생성", "self_reviewer": "자체 검토",
         },
         "rv_toc_title": "목차",
         "rv_download_md": "Markdown 다운로드",
@@ -812,9 +808,6 @@ st.markdown("""<style>
     .hero-icon { font-size: 3.5rem; margin-bottom: 20px; }
     .hero-title { font-size: 1.6rem; font-weight: 700; color: #e4e4e7; margin-bottom: 8px; }
     .hero-desc { color: #71717a; font-size: 0.95rem; line-height: 1.6; margin-bottom: 28px; }
-    .hero-examples { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-    .hero-chip { background: rgba(124, 58, 237, 0.1); border: 1px solid rgba(124, 58, 237, 0.2); padding: 8px 18px; border-radius: 100px; color: #c4b5fd; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; }
-    .hero-chip:hover { background: rgba(124, 58, 237, 0.2); border-color: rgba(124, 58, 237, 0.4); }
 
     .glass-card { background: rgba(255, 255, 255, 0.025); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 18px; padding: 24px; margin-bottom: 16px; transition: all 0.25s ease; }
     .glass-card:hover { border-color: rgba(255, 255, 255, 0.12); box-shadow: 0 12px 40px rgba(0,0,0,0.3); transform: translateY(-1px); }
@@ -916,7 +909,8 @@ NODE_TO_PHASE = {
     "source_evaluator": "source_evaluation",
     "conflict_detector": "conflict_detection",
     "evidence_chain": "evidence_chain",
-    "conclusion_synthesizer": "evidence_chain",
+    "source_selection": "evidence_chain",
+    "conclusion_synthesizer": "self_review",
     "citation_validator": "self_review",
     "evidence_decision_gate": "self_review",
     "report_generator": "report_generation",
@@ -1194,9 +1188,6 @@ def _render_welcome():
         <div class="hero-icon">&#x1f52c;</div>
         <div class="hero-title">{t("welcome_title", lang)}</div>
         <div class="hero-desc">{t("welcome_desc", lang)}</div>
-        <div class="hero-examples">
-            {''.join(f'<div class="hero-chip">{e}</div>' for e in t("examples", lang))}
-        </div>
     </div>
     """, unsafe_allow_html=True)
 

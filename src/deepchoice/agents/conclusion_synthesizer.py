@@ -1,7 +1,10 @@
 import json
 import re
 
-from ..utils.decision_analysis import inspect_synthesis_bindings, original_analysis_requirements, prefer_corrected_projection
+from ..utils.decision_analysis import (
+    inspect_synthesis_bindings, original_analysis_requirements, prefer_corrected_projection,
+    calibrate_decision_analysis, reviewable_source_fact, sentence_scoped_source_fact,
+)
 from ..utils.call_diagnostics import output_shape_valid
 from ..utils.answer_delivery import (
     ANSWER_CONTRACT, expand_answer_response, is_answer_delivery,
@@ -26,7 +29,10 @@ from ..utils.evidence import conclusion_source_allowed, is_navigation_placeholde
 from ..utils.llm import call_model, summarize_usage, synthesis_extra_body
 from ..utils.official_catalog import AUDITED_SNIPPET_WINDOW, is_catalog_official_url
 from ..utils.views import print_agent_output
-from ..utils.evidence_choices import MAX_SOURCE_TEXT, bounded_source_passages, eligible_source_fact_ids, whole_source_text
+from ..utils.evidence_choices import (
+    MAX_SOURCE_TEXT, bounded_source_passages, eligible_source_fact_ids, whole_source_text,
+    bind_evidence_choices, calibrate_evidence_choices,
+)
 from ..utils.question_packet import basis_reference_packet, bind_question_rows, has_multi_candidate_coverage, question_rows
 from ..utils.fact_selection import selection_view_packet, bind_selected_views
 from ..utils.evidence import candidate_product_mentions
@@ -143,7 +149,11 @@ Runtime-bound source views (select IDs only):
 
 
 QUESTION_JUDGMENT_PROMPT = """Answer the original technology-selection questions in separate,
-short decision_analysis rows using only the runtime-bound source facts below. Return JSON only.
+short decision_analysis rows using only the runtime-bound, citation-calibrated source facts below.
+Only advertised B references are eligible basis. verified is a lexical check, not semantic truth.
+network_unconfirmed means the saved text could not be checked live; keep that uncertainty.
+sentence_scoped permits only the advertised checked sentences; other context cannot be positive basis.
+Return JSON only.
 Each row must select exactly one listed R0/Q question_id;
 produce at most one row per question, at most eight rows total. Consider all listed questions
 before choosing rows: prioritize choice-changing questions with applicable basis and distinct
@@ -190,13 +200,9 @@ JSON shape:
 """
 
 
-async def _staged_answer(task, research_state, requirements, evidence_chains,
+async def _select_source_facts(task, research_state, requirements, evidence_chains,
                          *, model, response_format, timeout, seed, extra_body, usage):
-    """Bind source facts before one bounded question-row generation.
-
-    The two calls share frozen manifest parameters. Provider errors leave
-    visible gaps; budget and authority errors always propagate.
-    """
+    """Bind source identities for the following deterministic citation node."""
     candidates = task.get("candidate_techs", [])
     questions = question_rows(task.get("query", ""), requirements)
     common = dict(model=model, response_format=response_format,
@@ -236,13 +242,64 @@ async def _staged_answer(task, research_state, requirements, evidence_chains,
     raw_facts = [{key: fact[key] for key in ("id", "evidence_id", "source_ranges") if key in fact}
                  for fact in facts]
     diagnostic["facts_bound"] = len(facts)
+    return ({"answer_contract": ANSWER_CONTRACT, "source_facts": raw_facts,
+             "decision_analysis": []}, diagnostic)
+
+
+def _calibrated_source_facts(research_state, evidence_chains, candidates, requirements):
+    """Rebind the earlier node's facts before consuming its citation snapshot.
+
+    Model-authored statuses never grant eligibility. Changed source identities or
+    text invalidate the entire proposal; accepted checkpoints preserve this order.
+    """
+    from ..citations.contracts import CITATION_POLICY_VERSION, CitationVerification
+
+    original = research_state.get("final_recommendation")
+    if not is_answer_delivery(original):
+        return [], None
+    try:
+        verification = CitationVerification.model_validate_json(
+            json.dumps(research_state.get("citation_verification")))
+    except (ValueError, TypeError):
+        return [], None
+    if verification.policy_version != CITATION_POLICY_VERSION:
+        return [], None
+    rebound = bind_evidence_choices(original, evidence_chains, candidates, requirements)
+    previous, current = original.get("source_facts", []), rebound.get("source_facts", [])
+    identity_fields = ("id", "evidence_id", "source_ranges", "source_title", "canonical_url",
+                       "saved_text", "saved_passages", "text")
+    if (not isinstance(previous, list) or len(previous) != len(current)
+            or any(not isinstance(before, dict) or any(before.get(key) != after.get(key)
+                   for key in identity_fields) for before, after in zip(previous, current))):
+        return [], None
+    return calibrate_evidence_choices(rebound, verification).get("source_facts", []), verification
+
+
+async def _answer_verified(task, research_state, requirements, evidence_chains,
+                           *, verified_facts, model, response_format, timeout, seed, extra_body, usage):
+    """Spend the existing judgment call only on citation-eligible basis."""
+    candidates = task.get("candidate_techs", [])
+    questions = question_rows(task.get("query", ""), requirements)
+    all_facts = verified_facts
+    facts = [fact for fact in all_facts
+             if reviewable_source_fact(fact) or sentence_scoped_source_fact(fact)]
+    raw_facts = [{key: fact[key] for key in ("id", "evidence_id", "source_ranges") if key in fact}
+                 for fact in all_facts]
+    diagnostic = {"questions_planned": len(questions), "judgment_calls": 0,
+                  "rows_received": 0, "rows_selected": 0, "rows_rejected_shape": 0,
+                  "rows_rejected_question": 0, "rows_rejected_limit": 0,
+                  "r0_withheld_one_sided": False, "provider_errors": 0,
+                  "facts_bound": len(all_facts), "facts_reviewable": len(facts)}
+    common = dict(model=model, response_format=response_format,
+                  tag="conclusion_synthesizer", usage=usage, extra_body=extra_body,
+                  timeout=timeout, seed=seed)
     analyses = []
     if facts and questions:
         allowed = list(questions)
         if not has_multi_candidate_coverage(facts, candidates):
             allowed = [item for item in allowed if item[0] != "R0"]
             diagnostic["r0_withheld_one_sided"] = True
-        packet, basis_refs = basis_reference_packet(facts, candidates, evidence_chains=evidence_chains)
+        packet, basis_refs = basis_reference_packet(facts, candidates, evidence_chains=evidence_chains, require_reviewable=True)
         if allowed and basis_refs:
             prompt = [{"role": "user", "content": QUESTION_JUDGMENT_PROMPT.format(
                 query=_prompt_data(task.get("query", ""), 4000),
@@ -1055,6 +1112,64 @@ class ConclusionSynthesizerAgent:
         self.headers = headers
         self.run_manifest = run_manifest
 
+    def _call_options(self, research_state):
+        if self.run_manifest is not None:
+            frozen_call = next(
+                item
+                for item in self.run_manifest.llm_calls
+                if item.call_id == "conclusion_synthesizer"
+            )
+            call_config = frozen_call.model_dump(mode="json")
+        else:
+            call_config = next(
+                (
+                    item
+                    for item in research_state.get("run_manifest", {}).get("llm_calls", [])
+                    if item.get("call_id") == "conclusion_synthesizer"
+                ),
+                None,
+            )
+        if call_config is None:
+            # Backward compatibility for states/checkpoints created before
+            # RunManifest existed.
+            model = "deepseek-flash"
+            response_format = "json"
+            timeout = SYNTHESIS_CALL_TIMEOUT_S
+            seed = 0
+            extra_body = synthesis_extra_body()
+        else:
+            model = call_config["tier"]
+            response_format = call_config["response_format"]
+            timeout = call_config["timeout_s"]
+            seed = call_config.get("seed")
+            extra_body_json = call_config.get("extra_body_json")
+            extra_body = json.loads(extra_body_json) if extra_body_json else None
+        return dict(model=model, response_format=response_format, timeout=timeout,
+                    seed=seed, extra_body=extra_body)
+
+    async def select_sources(self, research_state: dict) -> dict:
+        task = research_state["task"]
+        chains = research_state.get("evidence_chains", [])
+        requirements, overflow = _decision_requirements(
+            task.get("query", ""), task.get("constraints", []), research_state.get("constraints", []),
+            task.get("sub_questions", []), research_state.get("sub_questions", []),
+            task.get("scene_context", ""))
+        usage = []
+        result, diagnostic = await _select_source_facts(
+            task, research_state, requirements, chains, usage=usage, **self._call_options(research_state))
+        result = expand_answer_response(result, requirements, task.get("query", ""), require_compact=True)
+        result, binding = inspect_synthesis_bindings(
+            result, chains, requirements, task.get("candidate_techs", []), task.get("query", ""))
+        result = finalize_answer_delivery(result, task.get("query", ""), requirements_overflow=overflow)
+        return {
+            "final_recommendation": result,
+            # Clear the prior pass before HITL/retry re-enters citation validation.
+            "citation_verification": {},
+            "quality_signals": [{"agent": "source_selection", "staged_generation": diagnostic,
+                                 "source_facts_bound": binding["source_facts_bound"]}],
+            "token_usage": research_state.get("token_usage", []) + [summarize_usage("source_selection", usage)],
+        }
+
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
         evidence_chains = research_state.get("evidence_chains", [])
@@ -1119,42 +1234,22 @@ class ConclusionSynthesizerAgent:
             }]
 
         local_usage: list = []
-        if self.run_manifest is not None:
-            frozen_call = next(
-                item
-                for item in self.run_manifest.llm_calls
-                if item.call_id == "conclusion_synthesizer"
-            )
-            call_config = frozen_call.model_dump(mode="json")
-        else:
-            call_config = next(
-                (
-                    item
-                    for item in research_state.get("run_manifest", {}).get("llm_calls", [])
-                    if item.get("call_id") == "conclusion_synthesizer"
-                ),
-                None,
-            )
-        if call_config is None:
-            # Backward compatibility for states/checkpoints created before
-            # RunManifest existed.
-            model = "deepseek-flash"
-            response_format = "json"
-            timeout = SYNTHESIS_CALL_TIMEOUT_S
-            seed = 0
-            extra_body = synthesis_extra_body()
-        else:
-            model = call_config["tier"]
-            response_format = call_config["response_format"]
-            timeout = call_config["timeout_s"]
-            seed = call_config.get("seed")
-            extra_body_json = call_config.get("extra_body_json")
-            extra_body = json.loads(extra_body_json) if extra_body_json else None
+        options = self._call_options(research_state)
+        model, response_format, timeout, seed, extra_body = (
+            options[key] for key in ("model", "response_format", "timeout", "seed", "extra_body"))
+        early_verification = None
         staged_diagnostic = None
+        verified_facts = []
+        if staged:
+            verified_facts, early_verification = _calibrated_source_facts(
+                research_state, evidence_chains, task.get("candidate_techs", []), requirements)
+            if early_verification is None:
+                raise ValueError("Citation-calibrated source selection is required before synthesis")
         try:
             if staged:
-                result, staged_diagnostic = await _staged_answer(
+                result, staged_diagnostic = await _answer_verified(
                     task, research_state, requirements, evidence_chains,
+                    verified_facts=verified_facts,
                     model=model, response_format=response_format, timeout=timeout,
                     seed=seed, extra_body=extra_body, usage=local_usage,
                 )
@@ -1314,6 +1409,11 @@ class ConclusionSynthesizerAgent:
                 # Apply after normalization, which otherwise resets action_plan_mode.
                 result = restrict_action_plan(result, task.get("query", ""))
                 result["confidence"] = "low"
+        if staged:
+            if early_verification is not None:
+                result = calibrate_decision_analysis(calibrate_evidence_choices(result, early_verification))
+            else:
+                result["decision_analysis"] = []
         _sanitize_citations(result, evidence_chains)
         _bind_citations(result, cite_map)
 
@@ -1338,3 +1438,10 @@ class ConclusionSynthesizerAgent:
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("conclusion_synthesizer", local_usage)],
         }
+
+
+class SourceSelectionAgent(ConclusionSynthesizerAgent):
+    """Expose the existing selection call as a checkpointed workflow step."""
+
+    async def run(self, research_state: dict) -> dict:
+        return await self.select_sources(research_state)

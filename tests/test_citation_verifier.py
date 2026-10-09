@@ -516,14 +516,15 @@ def test_untrusted_snippet_is_bounded_and_flattened_for_synthesis_prompt():
     assert len(next(line for line in rendered.splitlines() if "Untrusted snippet" in line)) < 650
 
 
-def test_workflow_runs_citation_validation_between_synthesis_and_rendering():
+def test_workflow_validates_selected_sources_before_judgment_and_review():
     from deepchoice.agents.orchestrator import ChiefEditorAgent
 
     orchestrator = ChiefEditorAgent({"query": "A vs B"})
     workflow = orchestrator._create_workflow(orchestrator._initialize_agents())
 
-    assert ("conclusion_synthesizer", "citation_validator") in workflow.edges
-    assert ("citation_validator", "self_reviewer") in workflow.edges
+    assert ("source_selection", "citation_validator") in workflow.edges
+    assert ("citation_validator", "conclusion_synthesizer") in workflow.edges
+    assert ("conclusion_synthesizer", "self_reviewer") in workflow.edges
     assert ("self_reviewer", "evidence_decision_gate") in workflow.edges
     assert ("report_generator", "__end__") in workflow.edges
     branch = workflow.branches["evidence_decision_gate"]["route_after_evidence_decision"]

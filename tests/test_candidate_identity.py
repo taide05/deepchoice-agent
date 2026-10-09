@@ -1,5 +1,6 @@
 """Candidate action labels keep their choices while routing literal products."""
 import pytest
+from tests.staged_synthesis_helpers import run_staged
 
 from deepchoice.agents.source_evaluator import (
     SourceEvaluatorAgent, _audited_seed_scope_covers_candidate, _candidate_patterns, _mentions_candidate,
@@ -116,7 +117,7 @@ async def test_action_choice_uses_own_product_through_binding_review_and_render(
     model = AsyncMock(side_effect=[{"source_view_ids": [f"S{i}" for i in range(1, len(source_names) + 1)]},
                                   {"decision_analysis": [row]}])
     monkeypatch.setattr(synth, "call_model", model)
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     assert state["final_recommendation"]["decision_analysis"][0]["option"] == labels[0]
 
     async def fetch(_provider, url, **kwargs):

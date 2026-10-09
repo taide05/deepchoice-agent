@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import pytest
+from tests.staged_synthesis_helpers import run_staged
 
 from deepchoice.agents import conflict_detector as cd
 from deepchoice.agents.evidence_chain import build_evidence_chain
@@ -204,7 +205,7 @@ async def test_conditional_choice_survives_citation_and_actual_self_review_witho
     model = AsyncMock(side_effect=[selection, analysis])
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": task, "evidence_chains": chains, "conflicts": conflicts}
-    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     async def fetch(*args, **kwargs):
         return httpx.Response(200, text=f"<p>{items[0]['snippet']}</p>", headers={"content-type": "text/html"})
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)

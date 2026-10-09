@@ -33,7 +33,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     assert first.manifest_id == second.manifest_id
     assert first.manifest_schema_version == 1
     assert first.app_version
-    assert first.workflow_version == "research-v4"
+    assert first.workflow_version == "research-v5"
     assert first.workflow_nodes == WORKFLOW_NODES
     assert first.state_schema_version == 3
     assert len(first.prompts) == 6
@@ -53,7 +53,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v10"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v11"
     assert first.security_policy_version == "outbound-url-v5"
     assert first.citation_policy_version == "deterministic-citation-v21"
     assert first.hitl_policy_version == "evidence-insufficient-v2"
@@ -86,7 +86,7 @@ def test_historical_chroma_is_readable_but_cannot_resume(old_version):
 
 
 @pytest.mark.parametrize("source,old_version", [
-    ("official", f"v{version}") for version in range(1, 10)
+    ("official", f"v{version}") for version in range(1, 11)
 ] + [("community", "v3"), ("arxiv", "v3")])
 def test_historical_retriever_manifest_cannot_resume(source, old_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
@@ -171,8 +171,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         "source_evaluator",
         "conflict_detector",
         "evidence_chain",
-        "conclusion_synthesizer",
+        "source_selection",
         "citation_validator",
+        "conclusion_synthesizer",
         "self_reviewer",
         "evidence_decision_gate",
         "report_generator",
@@ -180,13 +181,13 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
 
     assert registry.registry_schema_version == 1
     assert registry.manifest_schema_version == 1
-    assert registry.workflow_version == "research-v4"
+    assert registry.workflow_version == "research-v5"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
     assert registry.citation_policy_version == "deterministic-citation-v21"
     assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v10", "conclusion_synthesizer.synthesis_prompt": "v38",
+    expected_versions = {"self_reviewer.review_system": "v10", "conclusion_synthesizer.synthesis_prompt": "v39",
                          "query_analyzer.decomposition_system": "v3",
                          "query_adapter.adapt_system": "v5",
                          "source_evaluator.source_scope_selection": "v3",
@@ -316,7 +317,7 @@ def test_pre_constraint_aware_manifest_is_readable_but_cannot_resume(
     restored = RunManifest.model_validate_json(previous.model_dump_json())
 
     assert restored.manifest_id == _expected_manifest_id(restored)
-    assert restored.workflow_version == "research-v4"
+    assert restored.workflow_version == "research-v5"
     assert restored.state_schema_version == 3
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, task)
@@ -550,7 +551,7 @@ async def test_synthesizer_uses_frozen_call_parameters(monkeypatch, historical_d
     )
     synthesis["tier"] = "qwen-flash"
     synthesis["timeout_s"] = 1.0
-    await cs_mod.ConclusionSynthesizerAgent(run_manifest=manifest).run(
+    await cs_mod.ConclusionSynthesizerAgent(run_manifest=manifest).select_sources(
         {
             "task": {"query": "A vs B"},
             "run_manifest": state_manifest,
@@ -954,3 +955,20 @@ def test_manifest_imports_in_a_clean_interpreter():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_preverified_judgment_workflow_keeps_old_v4_identity_readable_but_not_resumable():
+    from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
+    current = build_run_manifest({})
+    nodes = list(current.workflow_nodes)
+    nodes.remove("source_selection")
+    a, b = nodes.index("citation_validator"), nodes.index("conclusion_synthesizer")
+    nodes[a], nodes[b] = nodes[b], nodes[a]
+    old = current.model_copy(update={"workflow_version": "research-v4", "workflow_nodes": tuple(nodes)})
+    old = old.model_copy(update={"manifest_id": _expected_manifest_id(old)})
+    restored = RunManifest.model_validate_json(old.model_dump_json())
+    assert restored.manifest_id == _expected_manifest_id(restored)
+    assert restored.workflow_version == "research-v4"
+    with pytest.raises(DeepChoiceError) as caught:
+        ensure_run_manifest_compatible(restored, {})
+    assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"

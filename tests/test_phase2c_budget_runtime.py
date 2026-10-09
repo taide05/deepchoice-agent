@@ -1192,6 +1192,7 @@ async def test_empty_self_review_uses_no_llm_budget_trace_or_sdk_dispatch(tmp_pa
 @pytest.mark.parametrize("call_limit,offer_basis", [(1, True), (2, True), (1, False)])
 async def test_question_refs_use_real_admission_trace_and_no_phantom_judgment(tmp_path, monkeypatch, call_limit, offer_basis):
     import json
+    from tests.staged_synthesis_helpers import run_staged
     from deepchoice.agents import conclusion_synthesizer as synth
     from deepchoice.observability import SQLiteTraceStore, RuntimeTraceRecorder
     from deepchoice.runtime.context import bind_node_attempt
@@ -1223,11 +1224,11 @@ async def test_question_refs_use_real_admission_trace_and_no_phantom_judgment(tm
             agent = synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task))
             if call_limit == 1 and offer_basis:
                 with pytest.raises(BudgetExceededError):
-                    await agent.run({"task": task, "evidence_chains": chains})
+                    await run_staged(agent, {"task": task, "evidence_chains": chains})
             else:
-                state = await agent.run({"task": task, "evidence_chains": chains})
+                state = await run_staged(agent, {"task": task, "evidence_chains": chains})
                 assert len(state["final_recommendation"]["decision_analysis"]) == int(offer_basis)
-                assert state["token_usage"][0]["calls"] == call_limit
+                assert sum(row["calls"] for row in state["token_usage"]) == call_limit
                 assert state["quality_signals"][0]["staged_generation"]["judgment_calls"] == int(offer_basis)
         assert create.await_count == call_limit
         usage = await manager._usage()

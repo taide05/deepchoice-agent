@@ -19,6 +19,32 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-09交付修复：新运行冻结 `research-v5`、合成v39、official v11、
+`runtime-source-views-v4` 与 `runtime-question-basis-v3`。图顺序为 evidence_chain →
+source_selection → citation_validator → conclusion_synthesizer → self_reviewer →
+evidence_decision_gate → report_generator。将已有两次合成调用分开，来源核验位于二者之间；
+无新增模型调用或第二次网页核验。source_selection沿现有conclusion_synthesizer调用配置和预算，
+拥有自己的节点计时与检查点。HTTP只核验来源事实，模型分析不是citation verified；
+后续原句绑定、依赖校准和自审仍约束推理，固定操作安全计划保持。
+
+复用final_recommendation/citation_verification，state schema仍v3，无数据库迁移或API形状变化。
+来源选择清空上一轮核验，HITL补充重新进入选择与核验。判断前重新绑定来源并核对原文/URL/
+范围等身份，再用本轮检查校准；缺少有效核验或身份失配明确失败，不能返回空成功。
+带manifest的ConclusionSynthesizerAgent.run是核验后的内部图节点；完整调用使用ChiefEditorAgent。
+无manifest的旧agent单调用接口保持。旧POST /research本来同样构建manifest，执行新图，
+仍保持其原有非持久生命周期和HITL旁路。
+
+verified或既有network_unconfirmed来源可提供原有句子，sentence_scoped仅提供已有
+reviewable_sentence_ids；其余unknown/unsupported/unreachable不提供B依据。未核验上下文
+只用于质疑适用性，不能创建B编号。来源核验状态在判断后再次按原检查校准，不能由模型升级。
+新节点映射到既有evidence_chain进度阶段；判断映射self_review阶段。SQLite断点恢复需覆盖
+来源选择后及核验后两个位置，保持不重复已完成调用。旧workflow v4、official v10、合成v38
+manifest仍可读且身份有效，同run恢复拒绝；新manifest自然隔离旧检索缓存。
+
+official v11用现有目录名/别名匹配到的明确比较对象优先分配原两个根名额，背景技术靠后，
+不新增目录或地址授权。选择菜单显示解析后的source_host，仍计入原24 KB上限；hostname不
+授予来源身份或事实支持。词法核验算法v21和其他运行/预算/安全/HITL约束保持。
+
 2026-10-09 R46：合成v38/自审v10在现有逐题判断与分析复审输入中加入临时
 original_saved_contexts。仅精确重绑的裁剪事实可从原evidence_chains重建上下文；事实ID、
 来源身份、保存文字/段落和范围必须一致，不信任模型提供的上下文字段。复用原坐标门：

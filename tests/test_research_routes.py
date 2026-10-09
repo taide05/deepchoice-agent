@@ -28,8 +28,9 @@ EXPECTED_EVENTS = [
     ("source_evaluator", "source_evaluation"),
     ("conflict_detector", "conflict_detection"),
     ("evidence_chain", "evidence_chain"),
-    ("conclusion_synthesizer", "evidence_chain"),
+    ("source_selection", "evidence_chain"),
     ("citation_validator", "self_review"),
+    ("conclusion_synthesizer", "self_review"),
     ("self_reviewer", "self_review"),
     ("report_generator", "report_generation"),
 ]
@@ -41,8 +42,9 @@ NODE_EVENTS = [
     {"source_evaluator": {"source_scores": []}},
     {"conflict_detector": {"conflicts": []}},
     {"evidence_chain": {"evidence_chains": []}},
-    {"conclusion_synthesizer": {"final_recommendation": {}}},
+    {"source_selection": {"final_recommendation": {}}},
     {"citation_validator": {"citation_verification": {}}},
+    {"conclusion_synthesizer": {"final_recommendation": {}}},
     {"self_reviewer": {"confidence": "high"}},
     {"report_generator": {"report": "# R"}},
 ]

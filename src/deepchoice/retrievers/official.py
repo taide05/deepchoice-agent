@@ -50,13 +50,32 @@ _TECH_ALIASES = {
 
 
 
-def _catalog_matches(lookup: dict, texts: list[str]) -> tuple[list[str], set[str]]:
-    """Catalog names locate pages; original request order precedes adaptation.
+_COMPARISON_JOIN = re.compile(r"\s*(?:vs\.?|versus|or|and|还是|或者|或|与|和)\s*", re.I)
 
-    Spelling forms retain the existing space/dot/hyphen normalization. The
-    shared longest-name matcher supplies lexical boundaries, never relevance.
-    Locator-only compound guards prevent a missing longer catalog name from
-    resolving to its short prefix (e.g. Alpha-Pro must not locate Alpha).
+
+def _explicit_comparison_keys(text: str, spans: list[tuple[int, int, str]]) -> list[str]:
+    """Prioritize compared products using the locator's validated alias spans."""
+    pairs = []
+    for left, right in zip(spans, spans[1:]):
+        gap = text[left[1]:right[0]]
+        match = _COMPARISON_JOIN.fullmatch(gap) if len(gap) <= 20 else None
+        if match is not None:
+            connector = match.group().strip().casefold().rstrip(".")
+            strength = 1 if connector in {"and", "与", "和"} else 0
+            pairs.append((strength, left[0], left[2], right[2]))
+    priority = []
+    for _, _, left, right in sorted(pairs):
+        for key in (left, right):
+            if key not in priority:
+                priority.append(key)
+    return priority
+
+
+def _catalog_matches(lookup: dict, texts: list[str]) -> tuple[list[str], set[str]]:
+    """Locate catalog names, preserving the original comparison before context.
+
+    Spelling forms and aliases share one boundary-checked locator. Comparison
+    priority only allocates the existing roots; it grants no source authority.
     """
     labels = {}
     for name in lookup:
@@ -67,22 +86,23 @@ def _catalog_matches(lookup: dict, texts: list[str]) -> tuple[list[str], set[str
             labels[alias] = target
     targets = {pattern.pattern: labels[label] for label in labels
                if (pattern := candidate_name_pattern(label)) is not None}
-    keys, components = [], set()
-    for text in texts:
+    keys, components, compared = [], set(), []
+    for index, text in enumerate(texts):
         text = text.casefold()
-        spans = [(start, end, key) for start, end, key in candidate_product_spans(text, list(labels))
+        spans = [(start, end, targets[pattern])
+                 for start, end, pattern in candidate_product_spans(text, list(labels))
                  if not re.search(r"[a-z0-9_+#][.-]$", text[:start])
                  and not re.match(r"[.-][a-z0-9_+#]", text[end:])]
-        for _, _, pattern in spans:
-            key = targets[pattern]
+        if index == 0:
+            compared = _explicit_comparison_keys(text, spans)
+        for _, _, key in spans:
             if key not in keys:
                 keys.append(key)
         # Do not send an already located mixed-script token to URL discovery.
-        for token in re.finditer(r"\S+", text.casefold()):
+        for token in re.finditer(r"\S+", text):
             if any(start < token.end() and end > token.start() for start, end, _ in spans):
                 components.add(_normalize(token.group()))
-    return keys, components
-
+    return compared + [key for key in keys if key not in compared], components
 
 
 class OfficialSearch(BaseRetriever):

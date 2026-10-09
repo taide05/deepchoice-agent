@@ -45,7 +45,7 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     return mentions
 
 
-QUESTION_BASIS_POLICY = "runtime-question-basis-v2:original-questions;context=21;answers=8;refs=12;facts=4;sentences=3;question-only-requirements"
+QUESTION_BASIS_POLICY = "runtime-question-basis-v3:verified-before-judgment;original-questions;context=21;answers=8;refs=12;facts=4;sentences=3;question-only-requirements"
 
 
 def _fact_sentence_groups(fact):
@@ -87,7 +87,7 @@ def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
     return "\n".join(lines) if lines else "No bound source facts."
 
 
-def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence_chains=None) -> tuple[str, dict]:
+def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence_chains=None, require_reviewable=False) -> tuple[str, dict]:
     """Offer opaque IDs for the exact complete sentence addresses used by binding.
 
     Location labels do not join separate page passages. Any sentence-policy
@@ -95,6 +95,7 @@ def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence
     """
     from ..citations.verifier import _split_sentences
     from .evidence_choices import whole_source_text
+    from .decision_analysis import analysis_fact_reviewable
 
     facts = facts[:5]
     identifiers = [fact.get("id") for fact in facts]
@@ -111,11 +112,16 @@ def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence
         if not sentences or sentences != _split_sentences(fact["saved_text"]):
             continue
         lines.append(_fact_heading(fact, candidates))
+        if require_reviewable:
+            lines.append(f'  citation: {fact.get("status", "unknown")}; review: {fact.get("review_availability", "lexical_only")}')
         sentence_index = 1
         for passage_index, group in enumerate(groups, 1):
             if separate:
                 lines.append(f'  Passage {passage_index}/{len(groups)} (same source, separate location):')
             for sentence in group:
+                if require_reviewable and not analysis_fact_reviewable(fact, {"sentence_ids": [sentence_index]}):
+                    sentence_index += 1
+                    continue
                 token = f"B{len(offered) + 1}"
                 lines.append(f"  {token}: {sentence}")
                 offered[token] = {"fact_id": fact["id"], "sentence_ids": [sentence_index],

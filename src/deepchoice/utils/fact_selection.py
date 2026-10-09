@@ -6,6 +6,7 @@ at binding and citation time; local matches never grant a citation status.
 import json
 import re
 from copy import deepcopy
+from urllib.parse import urlsplit
 
 from .evidence import candidate_product_mentions, is_navigation_placeholder
 from .source_scope import MAX_SCOPE_CHARS, MAX_SCOPE_SENTENCES, MAX_SENTENCE_CHARS
@@ -160,7 +161,8 @@ def _selection_rows(bindings):
         if scope is None and fact is None:
             continue
         sentences = tuple(_split_sentences(fact["saved_text"])) if fact is not None else scope
-        row = {"title": resolved.title, "whole_allowed": fact is not None,
+        row = {"title": resolved.title, "source_host": urlsplit(resolved.canonical_url).hostname,
+               "whole_allowed": fact is not None,
                "ranges_allowed": scope is not None,
                "sentences": [{"index": index, "text": text} for index, text in enumerate(sentences)]}
         if "conflict_scope" in source:
@@ -174,7 +176,7 @@ def _selection_rows(bindings):
         yield number, row
 
 
-SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v3:sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;request-order"
+SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v4:sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;source-host"
 
 
 def _view_rows(bindings):
@@ -250,7 +252,8 @@ def _view_rows(bindings):
         views, refs = validated, view_bindings
         if not views:
             continue
-        row = {"title": original["title"], "views": views, "sentences": original["sentences"]}
+        row = {"title": original["title"], "source_host": original["source_host"],
+               "views": views, "sentences": original["sentences"]}
         if original.get("separate_locations"):
             row["separate_locations"] = True
         if original.get("conflict_ranges"):
