@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Prioritize reports without a placeholder quality score
+
+The result view opens with the Report tab and retains observability, evidence,
+raw data and downloads. Canonical answers omit the fixed low confidence card and
+show a localized reminder that overall quality confidence is not calibrated.
+Legacy and limited results retain their previous confidence projection. A small
+frontend format adapter matches the backend predicate without requiring backend
+packages in the lightweight frontend image. Tab order does not reduce requests.
+
 ### Contain clarification request failures
 
 The four clarification submission paths validate consumed response fields before

@@ -660,6 +660,13 @@ MAX_CLAIM_TEXT（500 字符，含标记），任何检查溢出、缺引用、un
 包括已撤回的操作文本；它不会重新成为 final_recommendation.action_plan 或报告步骤。
 因此本契约是撤回操作建议，不是抹除整个公共快照的审计原文。
 
+2026-10-09结果页展示：Report为首个标签，其他观测、证据、原始结果和下载保持。
+只对满足answer_delivery version=question-analysis-v1且requirements为dict的格式省略
+顶层固定low置信度卡，显示四语言未校准提示；不以low值、分析数量或年份判断格式。
+旧格式及撤回compact模式的受限报告保持原置信度，快照/报告内容和HITL语义不变。
+轻量前端用与后端is_answer_delivery等价的小适配器，不导入后端包；回归禁止后端导入
+并覆盖四语言各格式。标签顺序不提供lazy loading，不减少请求/调用或授予质量证明。
+
 2026-10-09澄清UI错误边界：start/message/review-only/finalize共用界面消费字段的
 响应检查，状态在检查后更新；传输、JSON及结构失败不向界面反射异常原文。失败不等于
 服务端未处理，不能自动重发。未确认输入保留在本地session并可复制查看；须明确同文

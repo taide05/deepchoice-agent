@@ -90,6 +90,7 @@ T = {
         "restart_btn": "重新开始",
         "stats_chains": "证据链",
         "stats_conflicts": "发现矛盾",
+        "answer_review_note": "请逐项核对依据、前提和未答问题；整体质量置信度尚未校准。",
         "stats_confidence": "置信度",
         "stats_formats": "报告格式",
         "tab_report": "  报告  ",
@@ -271,6 +272,7 @@ T = {
         "restart_btn": "Restart",
         "stats_chains": "Evidence Chains",
         "stats_conflicts": "Conflicts Found",
+        "answer_review_note": "Check the evidence, assumptions and unanswered questions individually. Overall quality confidence is not calibrated.",
         "stats_confidence": "Confidence",
         "stats_formats": "Report Formats",
         "tab_report": "  Report  ",
@@ -452,6 +454,7 @@ T = {
         "restart_btn": "再開始",
         "stats_chains": "証拠チェーン",
         "stats_conflicts": "検出された矛盾",
+        "answer_review_note": "根拠、前提、未回答の質問を個別に確認してください。全体的な品質の信頼度は校正されていません。",
         "stats_confidence": "信頼度",
         "stats_formats": "レポート形式",
         "tab_report": "  レポート  ",
@@ -633,6 +636,7 @@ T = {
         "restart_btn": "다시 시작",
         "stats_chains": "증거 체인",
         "stats_conflicts": "발견된 충돌",
+        "answer_review_note": "근거, 전제 및 답변되지 않은 질문을 각각 확인하세요. 전체 품질 신뢰도는 보정되지 않았습니다.",
         "stats_confidence": "신뢰도",
         "stats_formats": "보고서 형식",
         "tab_report": "  보고서  ",
@@ -922,6 +926,17 @@ NODE_TO_PHASE = {
 # ═══════════════════════════════════════════════════════════════════════════
 # Observability helpers (Task 3: timeline waterfall + panels)
 # ═══════════════════════════════════════════════════════════════════════════
+def _is_answer_delivery(value):
+    """Mirror the public format predicate in the standalone frontend deployment.
+
+    Dockerfile.frontend does not package the backend; equivalence is tested.
+    Recognizing this envelope grants no evidence or decision authority.
+    """
+    return (isinstance(value, dict) and isinstance(value.get("answer_delivery"), dict)
+            and value["answer_delivery"].get("version") == "question-analysis-v1"
+            and isinstance(value["answer_delivery"].get("requirements"), dict))
+
+
 def _esc(text) -> str:
     """Escape source-provided text before injecting into HTML."""
     return _html.escape(str(text or ""), quote=True)
@@ -2642,19 +2657,27 @@ def _render_results():
     n_chains = len(snapshot.get("evidence_chains", []))
     n_conflicts = len(snapshot.get("conflicts", []))
     confidence = snapshot.get("confidence", "unknown")
+    answer_delivery = _is_answer_delivery(snapshot.get("final_recommendation"))
+    confidence_card = "" if answer_delivery else (
+        f'<div class="stat-card"><div class="stat-value">{_esc(str(confidence).upper())}</div>'
+        f'<div class="stat-label">{t("stats_confidence", lang)}</div></div>'
+    )
 
     st.markdown(f"""
     <div class="stat-row">
         <div class="stat-card"><div class="stat-value">{n_chains}</div><div class="stat-label">{t("stats_chains", lang)}</div></div>
         <div class="stat-card"><div class="stat-value">{n_conflicts}</div><div class="stat-label">{t("stats_conflicts", lang)}</div></div>
-        <div class="stat-card"><div class="stat-value">{_esc(str(confidence).upper())}</div><div class="stat-label">{t("stats_confidence", lang)}</div></div>
+        {confidence_card}
         <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">{t("stats_formats", lang)}</div></div>
     </div>
     """, unsafe_allow_html=True)
 
-    tab_obs, tab1, tab2, tab3 = st.tabs([
-        t("tab_observability", lang),
+    if answer_delivery:
+        st.caption(t("answer_review_note", lang))
+
+    tab1, tab_obs, tab2, tab3 = st.tabs([
         t("tab_report", lang),
+        t("tab_observability", lang),
         t("tab_evidence", lang),
         t("tab_raw", lang),
     ])

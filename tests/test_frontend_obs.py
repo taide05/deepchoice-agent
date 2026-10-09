@@ -8,6 +8,8 @@ Run this test in the supported project-local Python 3.11/3.12 environment:
 
     .\\.venv\\Scripts\\python.exe -m pytest tests/test_frontend_obs.py -q
 """
+import ast
+import builtins
 import copy
 import json
 from pathlib import Path
@@ -1247,3 +1249,84 @@ def test_source_priority_displays_unassessed_fields_and_preserves_old_values(mon
     assert (": 9" in card) if historical else (unassessed in card and "None" not in card)
     assert "#4ade80" not in card and "#a1a1aa" in card
     assert note in " ".join(str(c.value) for c in at.caption)
+
+
+@pytest.mark.parametrize("lang,report_label,confidence_label,note", [
+    ("zh", "报告", "置信度", "整体质量置信度尚未校准"),
+    ("en", "Report", "Confidence", "Overall quality confidence is not calibrated"),
+    ("ja", "レポート", "信頼度", "全体的な品質の信頼度は校正されていません"),
+    ("ko", "보고서", "신뢰도", "전체 품질 신뢰도는 보정되지 않았습니다"),
+])
+@pytest.mark.parametrize("mode", ["compact", "legacy", "limited", "invalid"])
+def test_results_prioritize_report_without_treating_compact_placeholder_as_quality(monkeypatch, lang, report_label, confidence_label, note, mode):
+    from deepchoice.utils.answer_delivery import expand_answer_response, bound_answer_delivery
+    from deepchoice.utils.decision_contract import restrict_recommendation
+    snapshot = copy.deepcopy(SNAP)
+    recommendation = bound_answer_delivery(expand_answer_response({
+        "answer_contract": "question-analysis-v1", "source_facts": [], "decision_analysis": [],
+    }, [], "Compare Acme and Beta"))
+    if mode == "limited":
+        recommendation = restrict_recommendation(recommendation, "Compare Acme and Beta")
+        assert "answer_delivery" not in recommendation
+    elif mode == "legacy":
+        recommendation = {"recommendation": "Historical result", "decision_analysis": []}
+    elif mode == "invalid":
+        recommendation["answer_delivery"]["requirements"] = []
+    snapshot["final_recommendation"] = recommendation
+    snapshot["confidence"] = "low"  # Same value in every mode; it cannot identify the format.
+    original = copy.deepcopy(snapshot)
+    original_import = builtins.__import__
+
+    def frontend_only_import(name, *args, **kwargs):
+        if name == "deepchoice" or name.startswith("deepchoice."):
+            raise ModuleNotFoundError("Backend is absent from the frontend image")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", frontend_only_import)
+    monkeypatch.setattr(__import__(__name__, fromlist=["SNAP"]), "SNAP", snapshot)
+    backend = _FakeBackend([], True)
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    _enter_results_phase(at)
+    at.session_state["lang"] = lang
+    at.run()
+    assert not at.exception
+    stats = next(item.value for item in at.markdown if 'class="stat-row"' in item.value)
+    captions = " ".join(str(item.value) for item in at.caption)
+    if mode == "compact":
+        assert confidence_label not in stats and ">LOW<" not in stats
+        assert note in captions
+    else:
+        assert confidence_label in stats and ">LOW<" in stats
+        assert note not in captions
+    assert at.tabs[0].label.strip() == report_label
+    assert len(at.tabs) == 4
+    assert "Fake report" in _md_text(at) and "example.com/bench" in _md_text(at)
+    assert at.get("download_button") and at.json
+    assert backend.observability_requests == 1
+    assert snapshot == original and at.session_state["research_snapshot"] == original
+
+
+@pytest.mark.parametrize("value", [
+    None, [], "question-analysis-v1", {}, {"answer_delivery": None},
+    {"answer_delivery": []}, {"answer_delivery": {}},
+    {"answer_delivery": {"version": "other", "requirements": {}}},
+    {"answer_delivery": {"version": "question-analysis-v1"}},
+    {"answer_delivery": {"version": "question-analysis-v1", "requirements": []}},
+    {"answer_delivery": {"version": "question-analysis-v1", "requirements": None}},
+    {"answer_delivery": {"version": "question-analysis-v1", "requirements": {}}},
+    {"answer_delivery": {"version": "question-analysis-v1", "requirements": {"custom": []}},
+     "confidence": "high", "decision_analysis": []},
+])
+def test_standalone_frontend_answer_format_matches_backend_contract(value):
+    from deepchoice.utils.answer_delivery import is_answer_delivery
+    tree = ast.parse(Path(APP_PATH).read_text(encoding="utf-8"))
+    predicate = next(node for node in tree.body
+                     if isinstance(node, ast.FunctionDef) and node.name == "_is_answer_delivery")
+    namespace = {}
+    exec(compile(ast.Module(body=[predicate], type_ignores=[]), APP_PATH, "exec"), namespace)
+    original = copy.deepcopy(value)
+    assert namespace["_is_answer_delivery"](value) == is_answer_delivery(value)
+    assert value == original
