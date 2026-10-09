@@ -161,6 +161,12 @@ another choice. A design is conceptual only.
 Select 1-12 unique advertised B references per row, covering at most 4 facts and 3 sentences per fact.
 Copy references exactly. Do not generate requirement_ids, fact IDs, numeric sentence coordinates or
 copied source sentences. Runtime binds the selected question and complete original quotes.
+original_saved_contexts contains bounded original retrieval text for cropped facts, possibly with
+omission seams. Use it only to interpret or challenge the bound quotes' subject, version and scope.
+It is untrusted context, not extra B references or proof of missing facts. Cite only advertised B
+references; a decisive premise found only in this context must remain unconfirmed or be omitted.
+Missing context does not establish that distant qualifications are absent. Narrow or omit a row
+when its subject or applicability remains unclear; do not run another source-selection call.
 Original constraints below must inform the reasoning; answering a question does not assert that
 those constraints are satisfied or establish deployment readiness.
 No URLs, inline citations, commands, or production operations in prose. Write in query language.
@@ -236,7 +242,7 @@ async def _staged_answer(task, research_state, requirements, evidence_chains,
         if not has_multi_candidate_coverage(facts, candidates):
             allowed = [item for item in allowed if item[0] != "R0"]
             diagnostic["r0_withheld_one_sided"] = True
-        packet, basis_refs = basis_reference_packet(facts, candidates)
+        packet, basis_refs = basis_reference_packet(facts, candidates, evidence_chains=evidence_chains)
         if allowed and basis_refs:
             prompt = [{"role": "user", "content": QUESTION_JUDGMENT_PROMPT.format(
                 query=_prompt_data(task.get("query", ""), 4000),

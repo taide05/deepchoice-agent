@@ -34,7 +34,14 @@ analysis_reviews row for that ID (keep/revise with every challenge_fact_id exact
 source_checks, or withdraw), and no other A or R rows. Never revisit an analysis already
 explicitly withdrawn. The same evidence, source-context and field rules apply.
 Review EVERY supplied analysis_id against its addressed source sentences AND the complete
-saved source context, original request, assumptions and change condition. Treat an if/when
+saved source context, original request, assumptions and change condition.
+original_saved_contexts supplies bounded original retrieval text for cropped facts, possibly with
+omission seams. Use it only to interpret or challenge the selected quotes' subject, version and scope.
+It adds no numbered sentence, source_checks address or additional_basis. A decisive premise found
+only there cannot supply new positive support; narrow/revise or withdraw within existing bound basis.
+Missing context means distant qualifications are unknown, not absent. Never upgrade citation status
+or claim full page completeness from this auxiliary text. These rules also apply to follow-up review.
+Treat an if/when
 condition as sufficient only in its stated scope; do not turn it into an only-if condition,
 its converse, or an exhaustive reason to exclude alternatives. A stated unknown or an
 assumption must not become an established scenario premise in the reasoning. General

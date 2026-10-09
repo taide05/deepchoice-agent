@@ -258,7 +258,7 @@ async def test_no_advertised_basis_skips_judgment_and_keeps_visible_gaps(monkeyp
     model = AsyncMock(return_value={"source_view_ids": ["S1", "S2"]})
     original = deepcopy(CHAINS)
     monkeypatch.setattr(synth, "call_model", model)
-    monkeypatch.setattr(synth, "basis_reference_packet", lambda *_: ("No bound source facts.", {}))
+    monkeypatch.setattr(synth, "basis_reference_packet", lambda *_, **__: ("No bound source facts.", {}))
     state = await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)).run(
         {"task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 1 and CHAINS == original

@@ -5,7 +5,7 @@ A model review is a second inference, never semantic verification or authority.
 from collections import Counter
 import json
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .decision_analysis import (
     MAX_ANALYSES, bind_decision_analysis, calibrate_decision_analysis,
@@ -26,6 +26,7 @@ class AnalysisReviewContext:
     submitted: int
     provisional_slots: dict
     provisional_submitted: int
+    source_contexts: dict = field(default_factory=dict)
 
 
 def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
@@ -89,12 +90,15 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
         recommendation, verification, [fact for fact in facts if reviewable_source_fact(fact)],
         requirements, query, MAX_ANALYSES - len(slots),
     )
+    from .fact_selection import original_fact_contexts
     return AnalysisReviewContext(recommendation, slots, facts, requirements, candidates, query,
-                                 submitted, provisional_slots, provisional_submitted)
+                                 submitted, provisional_slots, provisional_submitted,
+                                 source_contexts=original_fact_contexts(facts, state.get("evidence_chains", [])))
 
 
 def analysis_review_input(context: AnalysisReviewContext) -> dict:
     return {
+        "original_saved_contexts": context.source_contexts,
         "analyses": [{
             "analysis_id": key,
             **{field: item[field] for field in (

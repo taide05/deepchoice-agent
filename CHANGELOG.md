@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Preserve original context for source reasoning
+
+Rebuild bounded original saved context for exactly rebound cropped facts in the
+existing judgment and review calls. Context may clarify or challenge the subject,
+version and applicability; it grants no new basis/check coordinates, citation
+status, operational authority or public field. Preserve missing-context uncertainty,
+whole-fact deduplication and existing source limits. The auxiliary JSON envelope is
+bounded at24 KB, not the whole prompt; added input may increase token admission.
+Freeze synthesis v38/review v10; real old manifests remain identity-valid but must
+start a new run, with retrieval caches isolated. No new node, call stage or database.
+Original snapshot replay repairs input loss, without claiming model-quality gain.
+
 ### Record the local-view comparison failure
 
 Complete the frozen 2026-10-09 four-pair development comparison: both arms passed

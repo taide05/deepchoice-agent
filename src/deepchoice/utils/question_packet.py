@@ -87,7 +87,7 @@ def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
     return "\n".join(lines) if lines else "No bound source facts."
 
 
-def basis_reference_packet(facts: list[dict], candidates: list[str]) -> tuple[str, dict]:
+def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence_chains=None) -> tuple[str, dict]:
     """Offer opaque IDs for the exact complete sentence addresses used by binding.
 
     Location labels do not join separate page passages. Any sentence-policy
@@ -121,6 +121,12 @@ def basis_reference_packet(facts: list[dict], candidates: list[str]) -> tuple[st
                 offered[token] = {"fact_id": fact["id"], "sentence_ids": [sentence_index],
                                   "source_sentences": [sentence]}
                 sentence_index += 1
+    if evidence_chains is not None:
+        import json
+        from .fact_selection import original_fact_contexts
+
+        lines.append(json.dumps({"original_saved_contexts": original_fact_contexts(facts, evidence_chains)},
+                                ensure_ascii=False))
     return ("\n".join(lines) if lines else "No bound source facts."), offered
 
 

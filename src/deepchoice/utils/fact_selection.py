@@ -110,6 +110,44 @@ def selected_passages(source, ranges):
     return bounded
 
 
+def original_fact_contexts(facts, chains):
+    """Rebuild bounded original context for inference only, never new basis IDs.
+
+    Only exactly rebound cropped facts qualify. Missing/oversized context remains
+    unknown; never clip an original source or trust a model-supplied context field.
+    The serialized auxiliary envelope shares the existing menu byte bound.
+    """
+    from .evidence_choices import MAX_SOURCE_FACTS, bind_source_fact, source_fact_bindings
+
+    if not isinstance(facts, list) or len(facts) > MAX_SOURCE_FACTS:
+        return {}
+    ids = [fact.get("id") for fact in facts if isinstance(fact, dict)]
+    if (len(ids) != len(facts)
+            or any(not isinstance(key, str) or not re.fullmatch(r"F[1-9]\d?", key) for key in ids)
+            or len(set(ids)) != len(ids)):
+        return {}
+    bindings = source_fact_bindings(chains)
+    contexts = {}
+    for fact in facts:
+        number = fact.get("evidence_id")
+        if "source_ranges" not in fact or type(number) is not int or number not in bindings:
+            continue
+        bound = bind_source_fact(fact, bindings[number])
+        if bound is None or any(fact.get(key) != bound.get(key) for key in (
+            "id", "evidence_id", "source_title", "canonical_url", "saved_text", "text",
+            "saved_passages", "source_ranges",
+        )):
+            continue
+        scope = _source_coordinates(bindings[number][0])
+        if scope is None or scope[0] == fact["saved_text"]:
+            continue
+        proposed = {**contexts, fact["id"]: scope[0]}
+        envelope = json.dumps({"original_saved_contexts": proposed}, ensure_ascii=False)
+        if len(envelope.encode("utf-8")) <= MAX_PACKET_BYTES:
+            contexts = proposed
+    return contexts
+
+
 def _selection_rows(bindings):
     """Yield identity-valid rows before menu capacity is applied."""
     from ..citations.verifier import _split_sentences

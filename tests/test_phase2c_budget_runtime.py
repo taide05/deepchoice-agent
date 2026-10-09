@@ -1211,7 +1211,7 @@ async def test_question_refs_use_real_admission_trace_and_no_phantom_judgment(tm
     monkeypatch.setattr(llm_module, "_get_client", lambda **_: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
     if not offer_basis:
-        monkeypatch.setattr(synth, "basis_reference_packet", lambda *_: ("No bound source facts.", {}))
+        monkeypatch.setattr(synth, "basis_reference_packet", lambda *_, **__: ("No bound source facts.", {}))
     connection, lock, manager, _, clock = await _running_budget(
         tmp_path, limits=BudgetHardLimits(llm_calls=call_limit, total_tokens=200_000))
     sink = SQLiteTraceStore(connection, lock, clock=clock).bind(
