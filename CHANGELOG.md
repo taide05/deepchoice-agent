@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Record the local-view comparison failure
+
+Complete the frozen 2026-10-09 four-pair development comparison: both arms passed
+0/4 useful-supported reports; only candidate P03 showed a local supported answer
+gain, below the two-tradeoff threshold. Preserve a baseline P09 subject attribution
+error separately from candidate results. Lock independent assistant content reviews
+before costs/Trace; historical exposure and partial blinding do not establish unseen
+or human acceptance. All eight runs/artifacts reconciled, services stopped and both
+paired backups verified. Actual research ledger is213; final24 remain sealed.
+No production/test change or product acceptance claim; reassess contextual selection
+and whole-analysis withdrawal with simpler alternatives rather than repeat sampling.
+
 ### Freeze the local-view development comparison
 
 Freeze four original public cases across four tradeoffs, with two not used for R44

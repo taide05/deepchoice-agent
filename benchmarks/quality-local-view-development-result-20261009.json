@@ -1,0 +1,622 @@
+{
+  "schema_version": 1,
+  "result_id": "quality-local-view-development-result-20261009",
+  "dataset": {
+    "path": "benchmarks/quality-local-view-development-v1.json",
+    "id": "quality-local-view-development-v1",
+    "version": "1.0.0",
+    "freeze_date": "2026-10-09",
+    "sha256": "48d96c8fe0641ae273c9e128953d4c764795c6f8634cdd372237139b7dcd9556"
+  },
+  "protocol": {
+    "path": "benchmarks/quality-local-view-comparison-v1.json",
+    "version": "1.0.0",
+    "sha256": "1ac39a3c36d6d2a04481eeac688ca52062ba5336ff2923a052702b297d9f37ad"
+  },
+  "evaluation_timestamp": "2026-10-09T05:43:41.777893+00:00",
+  "measurement_date": "2026-10-09",
+  "production_commits": {
+    "baseline": "7f693db45c0c66c7bdd7cdabe04b50b5dfb22db2",
+    "candidate": "2b1759fdb474e1858f221c46e0ad81e6039eeafa"
+  },
+  "runner_commit": "01a2e36b7435e558773c5ee8d303fb6e6840066a",
+  "batch_sha256": "ee47e67288d882415eadd87cd8788067d3ea12d64fb20ac35a30391259920fdc",
+  "bindings": {
+    "baseline": {
+      "sha256": "6a1cc771abe278275fb090b7483aed2fd974b7b9fd275a697256d1ae8cad3410",
+      "core_asset_registry_id": "54dcb2e8b43c7b6bae4c133014c3aeb1f54791f0e2bdea822ded0c755afa9938",
+      "manifest_ids": {
+        "P03": "c748172fbe9e50802045b7ed33f694c53c9acdee5c4c8a49a4be3b5d1319e9ad",
+        "P11": "7881586673600a2988af160d0893a1aad409c795b7bc0ca47b25d544a5607ce9",
+        "P07": "c748172fbe9e50802045b7ed33f694c53c9acdee5c4c8a49a4be3b5d1319e9ad",
+        "P09": "7881586673600a2988af160d0893a1aad409c795b7bc0ca47b25d544a5607ce9"
+      }
+    },
+    "candidate": {
+      "sha256": "cf9c046209a7790fcf40c9b61f195b1f44ae2e290ddedba0d8f057d8067b5e06",
+      "core_asset_registry_id": "c1108885c305e377769d5a3eadd4ea5710656a51437738b6ad4100be717b1a18",
+      "manifest_ids": {
+        "P03": "a4dd592c58e5c5477dd1d9120525fac6d7300a3141d0a3097b109f7e08ce40b4",
+        "P11": "faec89a200606a939a010e68b59d709efecead6b962f2ff70faf9694d903faa6",
+        "P07": "a4dd592c58e5c5477dd1d9120525fac6d7300a3141d0a3097b109f7e08ce40b4",
+        "P09": "faec89a200606a939a010e68b59d709efecead6b962f2ff70faf9694d903faa6"
+      }
+    }
+  },
+  "starting_actual": 205,
+  "new_research": 8,
+  "cumulative_actual": 213,
+  "final_reserved": {
+    "count": 24,
+    "status": "sealed",
+    "used": 0
+  },
+  "denominator": {
+    "paired_cases": 4,
+    "runs": 8,
+    "runs_per_arm": 4,
+    "repetitions_per_case_arm": 1
+  },
+  "content_passes": {
+    "baseline": 0,
+    "candidate": 0
+  },
+  "cross_scene_gain": {
+    "supported_improvement_types": 1,
+    "required_types": 2,
+    "development_gate_pass": false,
+    "causal_attribution": "not established; live sources and stochastic outputs differ"
+  },
+  "critical_errors": {
+    "baseline": 1,
+    "candidate": 0,
+    "scope": "one confirmed original-source subject/applicability reversal in baseline P09; no observed published critical error in other seven reports"
+  },
+  "cases": [
+    {
+      "ordinal": 206,
+      "arm": "baseline",
+      "case_id": "P03",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "af6a02b5d13b12da435e58e27a30c9934a72471852e6db624711b1586aa916cd",
+      "snapshot_sha256": "a9abf31e0aa1e8885f3e12b1b8d309d0342f0d171b6fe2b4c1eb74adda48f87a",
+      "export_sha256": "29362352628e9faceb661e1a253fe2a02d790b94767678f10929d7f52c55b14c",
+      "total_tokens": 21830,
+      "llm_calls": 22,
+      "retrieval_calls": 6,
+      "active_milliseconds": 86292,
+      "wall_time_ms": 88688,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps"
+      },
+      "content_bundle_sha256": "0cf4f0a85f220e99edbd54a0f700af361a0dea5d3ab3facfa6224b4b9e571b38",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 4,
+          "analyses_received": 4,
+          "analyses_returned": 4,
+          "rows_rejected_shape": 0
+        },
+        "citation_validator": {
+          "analyses_rebound": 4,
+          "analyses_received": 4,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "analyses_returned": 0,
+          "retained": 0,
+          "revised": 0,
+          "submitted": 0,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    },
+    {
+      "ordinal": 207,
+      "arm": "candidate",
+      "case_id": "P03",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "08ea32c9196d5c3dd291bdddaef22e1dd4085f639547359b15f9607a2e6ccd1c",
+      "snapshot_sha256": "2783c89f3169bac2945ae99cd7f01c034f7af772cf1d8a0be9a0f8cb45301f4c",
+      "export_sha256": "d529fcedcdfaa9ff3ee636c2cc384aef5eaad947a91246d7e5ca38c0cfcbc088",
+      "total_tokens": 19567,
+      "llm_calls": 23,
+      "retrieval_calls": 6,
+      "active_milliseconds": 91011,
+      "wall_time_ms": 93594,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps",
+        "supported_gain_vs_B": "async applicability only; main choice/admin/permissions/delivery/team unanswered"
+      },
+      "content_bundle_sha256": "5e7b52bcc01cac4dae752fb99a4ffd84d0b4d51285b212f6e305b755f04ad832",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 4,
+          "analyses_received": 4,
+          "analyses_returned": 4,
+          "rows_rejected_shape": 0
+        },
+        "citation_validator": {
+          "analyses_rebound": 4,
+          "analyses_received": 4,
+          "analyses_returned": 1
+        },
+        "self_reviewer": {
+          "analyses_returned": 1,
+          "retained": 1,
+          "revised": 1,
+          "submitted": 1,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    },
+    {
+      "ordinal": 208,
+      "arm": "candidate",
+      "case_id": "P11",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "cb878d6cc0535e0e4dfd410941b0aaa5bc6afe4ada63b66199ef44820f947b93",
+      "snapshot_sha256": "a22f878f88d019bb6a31b8df390ea3693f36fadb6835b57a0b8cdfbf2be61520",
+      "export_sha256": "07ea0aab3799d3c27fc6401dcf52eb94d85a3135f10093cab6b8059767cec3df",
+      "total_tokens": 23611,
+      "llm_calls": 23,
+      "retrieval_calls": 6,
+      "active_milliseconds": 69346,
+      "wall_time_ms": 71156,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps",
+        "supported_gain_vs_A": false
+      },
+      "content_bundle_sha256": "c3479f7267793a0e09b8258af52901838058a88eabf8eb8ec90fb2e2a21d9bc5",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 2,
+          "analyses_received": 2,
+          "analyses_returned": 2,
+          "rows_rejected_shape": 2
+        },
+        "citation_validator": {
+          "analyses_rebound": 2,
+          "analyses_received": 2,
+          "analyses_returned": 1
+        },
+        "self_reviewer": {
+          "analyses_returned": 0,
+          "retained": 0,
+          "revised": 0,
+          "submitted": 1,
+          "targeted_review_attempts": 1,
+          "withdrawn": 1
+        }
+      }
+    },
+    {
+      "ordinal": 209,
+      "arm": "baseline",
+      "case_id": "P11",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "86813c6d9e9347d03eca7055266c9adc23d4a49d3da4dcfd20faef7e3bffb48e",
+      "snapshot_sha256": "a37dee73e173d70769c6b81c8f090a8f4f65affb46fb9c86c65a86d784e00e03",
+      "export_sha256": "cbc27a82e6ab3b9741240344783f560156d49342246c9f8ef7c115a8a01f32af",
+      "total_tokens": 15749,
+      "llm_calls": 21,
+      "retrieval_calls": 6,
+      "active_milliseconds": 74263,
+      "wall_time_ms": 76766,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps"
+      },
+      "content_bundle_sha256": "f6a50021d780f7731e2a5e3e963e58fa10c009e5f49cdd97654856501f454e24",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 4,
+          "analyses_received": 4,
+          "analyses_returned": 4,
+          "rows_rejected_shape": 0
+        },
+        "citation_validator": {
+          "analyses_rebound": 4,
+          "analyses_received": 4,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "analyses_returned": 0,
+          "retained": 0,
+          "revised": 0,
+          "submitted": 0,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    },
+    {
+      "ordinal": 210,
+      "arm": "baseline",
+      "case_id": "P07",
+      "status": "completed_with_warnings",
+      "runtime_category": "restricted_or_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "ffeeebe2dad4d21c4a32f6d710a2522b2ae7cb331426f93c196830700f19d9cd",
+      "snapshot_sha256": "474719e5867205e66ad60e62434e5f821581b5e386940f89e6a6861daea105cd",
+      "export_sha256": "3dec9ea34266deb0d321fffacbc306c7b27ceb868e3677f81077be9e3e53858a",
+      "total_tokens": 8712,
+      "llm_calls": 8,
+      "retrieval_calls": 6,
+      "active_milliseconds": 45246,
+      "wall_time_ms": 48109,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps"
+      },
+      "content_bundle_sha256": "ad80aa51ceeb46613871eb88ab5bc477bc8908fe2b6197f5dde74b23b44df50b",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 1,
+          "analyses_received": 1,
+          "analyses_returned": 1,
+          "rows_rejected_shape": 3
+        },
+        "citation_validator": {
+          "analyses_rebound": 1,
+          "analyses_received": 1,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "analyses_returned": 0,
+          "retained": 0,
+          "revised": 0,
+          "submitted": 0,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    },
+    {
+      "ordinal": 211,
+      "arm": "candidate",
+      "case_id": "P07",
+      "status": "completed_with_warnings",
+      "runtime_category": "restricted_or_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "d9d84db5fc0cd3ed474bf27810108beac1ecdefe1ef21ed398fb7cf51c4a0e6c",
+      "snapshot_sha256": "62beb26a4e792b63620aae94fc41d6e04bd5fd70c85c350c21568b44cfcc12b1",
+      "export_sha256": "d017c99c53b8763b3c176fd7ebcb4ae11aa80c5a1d3abf6d283f897b670071dc",
+      "total_tokens": 11458,
+      "llm_calls": 7,
+      "retrieval_calls": 6,
+      "active_milliseconds": 65425,
+      "wall_time_ms": 70156,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps"
+      },
+      "content_bundle_sha256": "af40c24c76c575df9dff6b9d65042bd934cdb685146c3a7bb2d914a3dc3d7c0e",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 3,
+          "analyses_received": 3,
+          "analyses_returned": 3,
+          "rows_rejected_shape": 1
+        },
+        "citation_validator": {
+          "analyses_rebound": 3,
+          "analyses_received": 3,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "analyses_returned": 0,
+          "retained": 0,
+          "revised": 0,
+          "submitted": 0,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    },
+    {
+      "ordinal": 212,
+      "arm": "candidate",
+      "case_id": "P09",
+      "status": "completed",
+      "runtime_category": "source_or_model_degraded",
+      "artifact_consistent": true,
+      "report_sha256": "4e33952cb36e8f731f305cd2477b66150caf701cad0d2779dcfda155a6d7a4db",
+      "snapshot_sha256": "852b744690c17ddc447b3e98b91dec5d0a58ac29f75a1337463de90118cc0a5d",
+      "export_sha256": "f75bac0b171c00cd033bd806f7ab26f9de644424b25bad94232d3e9943fdee43",
+      "total_tokens": 14377,
+      "llm_calls": 17,
+      "retrieval_calls": 6,
+      "active_milliseconds": 66966,
+      "wall_time_ms": 69625,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "important_gaps"
+      },
+      "content_bundle_sha256": "3fccafcb251eed6d406dc15e75b1661d115c065295e0b2e36bebea14799ff2c7",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 0,
+          "analyses_received": 0,
+          "analyses_returned": 0,
+          "rows_rejected_shape": 4
+        },
+        "citation_validator": {
+          "analyses_rebound": 0,
+          "analyses_received": 0,
+          "analyses_returned": 0
+        },
+        "self_reviewer": {
+          "analyses_returned": 0,
+          "retained": 0,
+          "revised": 0,
+          "submitted": 0,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    },
+    {
+      "ordinal": 213,
+      "arm": "baseline",
+      "case_id": "P09",
+      "status": "completed",
+      "runtime_category": "artifact_complete",
+      "artifact_consistent": true,
+      "report_sha256": "454fc7e23fbc088acc2c01a12b3a9fd9bd7243d234271d10fdb85f485a8eb1b8",
+      "snapshot_sha256": "0d57ed7ab6af9391cc0194ada51d93b10f9ec1b1415c730de1381abb4f270040",
+      "export_sha256": "e4db3e8f3be727e2a7d100051b445c33743074db8a95986afc57684c0d7e6eec",
+      "total_tokens": 21650,
+      "llm_calls": 23,
+      "retrieval_calls": 6,
+      "active_milliseconds": 62045,
+      "wall_time_ms": 62594,
+      "budget_admission_denied": false,
+      "token_usage_complete": true,
+      "content": {
+        "pass": false,
+        "severity": "critical_applicability_reversal",
+        "critical_error": "Temporal-context HITL custom signal handlers/state machines F5 used as LangGraph-side team requirement; saved full source supplies subject omitted from selected excerpt"
+      },
+      "content_bundle_sha256": "2028204bfd6316e0554e6d1b8e44665923b23cfbf3aa0682e352f7965547aacf",
+      "stage_count_evidence": {
+        "conclusion_synthesizer": {
+          "analyses_bound": 3,
+          "analyses_received": 3,
+          "analyses_returned": 3,
+          "rows_rejected_shape": 1
+        },
+        "citation_validator": {
+          "analyses_rebound": 3,
+          "analyses_received": 3,
+          "analyses_returned": 2
+        },
+        "self_reviewer": {
+          "analyses_returned": 2,
+          "retained": 2,
+          "revised": 2,
+          "submitted": 2,
+          "targeted_review_attempts": 0,
+          "withdrawn": 0
+        }
+      }
+    }
+  ],
+  "resource_totals": {
+    "total_tokens": 136954,
+    "llm_calls": 144,
+    "retrieval_calls": 48,
+    "active_milliseconds": 560594,
+    "wall_time_ms": 580688
+  },
+  "latest_budget_aggregates": {
+    "baseline": [
+      {
+        "resource": "active_milliseconds",
+        "status": "settled",
+        "amount": 267846,
+        "rows": 5
+      },
+      {
+        "resource": "http_calls",
+        "status": "settled",
+        "amount": 50,
+        "rows": 50
+      },
+      {
+        "resource": "http_calls",
+        "status": "unknown_spend",
+        "amount": 3,
+        "rows": 3
+      },
+      {
+        "resource": "llm_calls",
+        "status": "settled",
+        "amount": 74,
+        "rows": 74
+      },
+      {
+        "resource": "retrieval_calls",
+        "status": "settled",
+        "amount": 24,
+        "rows": 24
+      },
+      {
+        "resource": "total_tokens",
+        "status": "settled",
+        "amount": 67941,
+        "rows": 74
+      }
+    ],
+    "candidate": [
+      {
+        "resource": "active_milliseconds",
+        "status": "settled",
+        "amount": 292748,
+        "rows": 5
+      },
+      {
+        "resource": "http_calls",
+        "status": "settled",
+        "amount": 40,
+        "rows": 40
+      },
+      {
+        "resource": "http_calls",
+        "status": "unknown_spend",
+        "amount": 7,
+        "rows": 7
+      },
+      {
+        "resource": "llm_calls",
+        "status": "settled",
+        "amount": 70,
+        "rows": 70
+      },
+      {
+        "resource": "retrieval_calls",
+        "status": "settled",
+        "amount": 24,
+        "rows": 24
+      },
+      {
+        "resource": "total_tokens",
+        "status": "settled",
+        "amount": 69013,
+        "rows": 70
+      }
+    ]
+  },
+  "http_measurement": {
+    "settled": 90,
+    "unknown_spend": 10,
+    "source": "latest entry per product budget reservation",
+    "collector_public_zero": "not a zero-spend measurement; HTTP has no new protocol count limit"
+  },
+  "monetary_cost": "unknown",
+  "source_health": {
+    "status": "degraded",
+    "fresh_probe": "not_run",
+    "compatible_preflight_reused": true
+  },
+  "review": {
+    "content_locked_before_trace_cost": true,
+    "independent_read_only_assistants": 2,
+    "assistant_only": true,
+    "human_calibration": false,
+    "blinding": "partial labels only; root knew identities and prior candidate/history exposure persists",
+    "all_cases_historically_exposed": true,
+    "not_used_for_candidate_design": [
+      "P07",
+      "P09"
+    ],
+    "disagreements": [
+      {
+        "scope": "P07 consistency fifth check",
+        "reviewer_delivery": "fail: refers to absent branches",
+        "reviewer_case_prep": "pass: no published dangerous guarantee",
+        "root": "minor dangling branch reference recorded; both fail overall; no pass claim affected"
+      },
+      {
+        "scope": "P09-A uncertainty fourth check",
+        "reviewer_delivery": "fail",
+        "reviewer_case_prep": "pass",
+        "root": "specific unknowns locally useful; critical applicability error still disqualifies whole answer; conservative whole fail"
+      }
+    ],
+    "label_mapping": {
+      "P03-A": "candidate",
+      "P03-B": "baseline",
+      "P11-A": "baseline",
+      "P11-B": "candidate",
+      "P07-A": "candidate",
+      "P07-B": "baseline",
+      "P09-A": "baseline",
+      "P09-B": "candidate"
+    }
+  },
+  "engineering_validation": {
+    "production_commit": "2b1759fdb474e1858f221c46e0ad81e6039eeafa",
+    "full_suite_passed": 3781,
+    "full_suite_seconds": 601.92,
+    "scope": "Windows/Python3.12; production/tests unchanged after run",
+    "collector_local_focused_passed": 28,
+    "collector_local_focused_seconds": 14.97,
+    "independent_binding_review": "no blockers; both cold identity checks exit0"
+  },
+  "closure": {
+    "status": "collected_closed",
+    "collector_exit_code": 0,
+    "servers_ctrl_c_exit_codes": [
+      1,
+      1
+    ],
+    "tasks_runs_results_per_arm": [
+      4,
+      4,
+      4
+    ],
+    "terminal_and_leases_cleared": true,
+    "ports_absent": [
+      8792,
+      8793
+    ],
+    "paired_backups_verified": true,
+    "stopped_pair_check_sha256": "c6076c8b8242d7e54690cfc94c20a6add00b9b41f0e49b16a7a97c0f949cc749",
+    "backup_manifests": {
+      "baseline": {
+        "path": "outputs\\local-view-development-20261009-v1\\baseline\\stopped-backup\\runtime-backup-manifest.json",
+        "sha256": "b771b42b6e4227e2e791be81ffce53a9a4e84a255dbf80d273e5368d7013c327"
+      },
+      "candidate": {
+        "path": "outputs\\local-view-development-20261009-v1\\candidate\\stopped-backup\\runtime-backup-manifest.json",
+        "sha256": "0fb4cb78fda7d4b6608d4c32577c3d7942f83279095e911bdf6a60dbe7bca88b"
+      }
+    }
+  },
+  "quality_claims": {
+    "overall_product_accepted": false,
+    "code_simplicity_accepted": false,
+    "capacity_accepted": false,
+    "chinese_model_quality_accepted": false,
+    "unseen_accepted": false,
+    "repeatability_accepted": false,
+    "majority_breadth_accepted": false
+  },
+  "next": "Reassess the source-selection/binding/calibration/review flow with saved counterexamples. Address candidate subject/context preservation and whole-analysis withdrawal at the responsible boundary; compare a simpler flow rather than adding view/prompt/fact slots or resampling old cases. No automatic new research admission or final24 opening.",
+  "environment": {
+    "configuration_sha256": "4240dcd933e728eff05ea91d27cc5a57056c6c87404d20fa3b946cef50d9c474",
+    "dependency_snapshot_sha256": "c07764a225a2eef37b2ee47dacdd1dec0efac5cd263c4522b5c121c50a40493b",
+    "knowledge_sha256": "bf5cc356c3196b19e6886565ec456c3cb38901d6f903ddc819cbf15171b362f7",
+    "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "model_id": "deepseek-v4-flash",
+    "endpoint_sha256": "12b8deaccc34b32757dbb1497e029da0c2e7b26ffa86b9c926c08cb4692f4508"
+  }
+}
