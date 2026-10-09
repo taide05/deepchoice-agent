@@ -308,3 +308,132 @@ def test_second_application_cannot_start_coordinator_on_same_product_database(tm
         with pytest.raises(RuntimeInstanceConflictError):
             with TestClient(second_app):
                 pass
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["recover", "busy", "expired", "monotonic_expired", "fenced"])
+async def test_instance_renewal_retries_only_writer_admission_contention(tmp_path, monkeypatch, outcome):
+    from deepchoice.runtime import instance_guard as module
+    import aiosqlite
+    current = NOW
+    path = tmp_path / "instance-contention.db"
+    connection = await connect_database(path, busy_timeout_ms=20)
+    await run_migrations(connection)
+    writer = await connect_database(path, busy_timeout_ms=20)
+    guard = RuntimeInstanceGuard(connection, asyncio.Lock(), owner_token="original", clock=lambda: current)
+    await guard.acquire()
+    original_begin = module._begin_transaction
+    attempts = 0
+    async def begin(conn):
+        nonlocal attempts, current
+        attempts += 1
+        try:
+            await original_begin(conn)
+        except aiosqlite.OperationalError:
+            if attempts == 1 and outcome != "busy":
+                if outcome == "expired":
+                    current += timedelta(seconds=31)
+                elif outcome == "monotonic_expired":
+                    guard._monotonic_expiry = 0
+                elif outcome == "fenced":
+                    await writer.execute("UPDATE runtime_instance_leases SET owner_token='replacement' WHERE singleton=1")
+                await writer.commit()
+            raise
+    monkeypatch.setattr(module, "_begin_transaction", begin)
+    await writer.execute("BEGIN IMMEDIATE")
+    try:
+        if outcome == "recover":
+            await guard.renew_once()
+            assert guard.has_authority and guard.observations()["renewals"] == 1
+        else:
+            with pytest.raises(aiosqlite.OperationalError if outcome == "busy" else RuntimeInstanceLeaseLostError):
+                await guard.renew_once()
+            assert not guard.has_authority
+            assert guard.observations()["renewals"] == 0
+        assert attempts == 2
+        assert not connection.in_transaction
+    finally:
+        await writer.rollback()
+        await guard.release()
+        await writer.close()
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_instance_renewal_does_not_retry_non_contention_failure(tmp_path, monkeypatch):
+    from deepchoice.runtime import instance_guard as module
+    import aiosqlite
+    connection = await connect_database(tmp_path / "instance-error.db")
+    await run_migrations(connection)
+    guard = RuntimeInstanceGuard(connection, asyncio.Lock(), clock=lambda: NOW)
+    await guard.acquire()
+    attempts = 0
+    async def begin(conn):
+        nonlocal attempts
+        attempts += 1
+        raise aiosqlite.OperationalError("disk I/O error")
+    monkeypatch.setattr(module, "_begin_transaction", begin)
+    try:
+        with pytest.raises(aiosqlite.OperationalError):
+            await guard.renew_once()
+        assert attempts == 1 and not guard.has_authority
+        assert guard.observations()["renewals"] == 0
+        assert not connection.in_transaction
+    finally:
+        await guard.release()
+        await connection.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel_attempt", [1, 2])
+async def test_instance_writer_retry_cancellation_revokes_authority(tmp_path, monkeypatch, cancel_attempt):
+    from deepchoice.runtime import instance_guard as module
+    import aiosqlite
+    connection = await connect_database(tmp_path / "instance-cancel.db")
+    await run_migrations(connection)
+    guard = RuntimeInstanceGuard(connection, asyncio.Lock(), clock=lambda: NOW)
+    await guard.acquire()
+    attempts = 0
+    async def begin(conn):
+        nonlocal attempts
+        attempts += 1
+        if attempts == cancel_attempt:
+            raise asyncio.CancelledError()
+        raise aiosqlite.OperationalError("database is locked")
+    monkeypatch.setattr(module, "_begin_transaction", begin)
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await guard.renew_once()
+        assert attempts == cancel_attempt and not guard.has_authority
+        assert guard.observations()["renewals"] == 0
+        assert not connection.in_transaction
+    finally:
+        await guard.release()
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_instance_writer_retry_never_retries_an_entered_transaction(tmp_path, monkeypatch):
+    from deepchoice.runtime import instance_guard as module
+    import aiosqlite
+    connection = await connect_database(tmp_path / "instance-transaction.db")
+    await run_migrations(connection)
+    guard = RuntimeInstanceGuard(connection, asyncio.Lock(), clock=lambda: NOW)
+    await guard.acquire()
+    attempts = 0
+    original_begin = module._begin_transaction
+    async def begin(conn):
+        nonlocal attempts
+        attempts += 1
+        await original_begin(conn)
+        raise aiosqlite.OperationalError("database is locked")
+    monkeypatch.setattr(module, "_begin_transaction", begin)
+    try:
+        with pytest.raises(aiosqlite.OperationalError):
+            await guard.renew_once()
+        assert attempts == 1 and not guard.has_authority
+        assert guard.observations()["renewals"] == 0
+        assert not connection.in_transaction
+    finally:
+        await guard.release()
+        await connection.close()

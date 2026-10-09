@@ -15,7 +15,7 @@ from typing import Any
 
 import aiosqlite
 
-from deepchoice.persistence.database import _await_cleanup, _begin_transaction
+from deepchoice.persistence.database import _await_cleanup, _begin_transaction, _is_locked_error
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -191,8 +191,18 @@ class RuntimeInstanceGuard:
         started = time.monotonic()
         async with self._lock:
             try:
+                # A failed writer admission has not changed the lease. Retry
+                # one transient contention error while no transaction began;
+                # UPDATE/commit failures and cancellation are never retried.
+                for attempt in range(2):
+                    try:
+                        await _begin_transaction(self._connection)
+                        break
+                    except Exception as exc:
+                        if attempt or not _is_locked_error(exc) or self._connection.in_transaction:
+                            raise
+                        await asyncio.sleep(0)
                 # Sampling must follow BOTH the shared lock and SQLite writer wait.
-                await _begin_transaction(self._connection)
                 now, expiry = self._now_and_expiry()
                 sampled = time.monotonic()
                 if not self.has_authority:

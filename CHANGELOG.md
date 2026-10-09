@@ -2,6 +2,24 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Bound singleton lease writer-admission retries
+
+Retry one SQLITE_BUSY/LOCKED failure only before entering the instance-renewal
+transaction. Keep TTL, single-worker checks, owner fencing, both expiration clocks,
+commit-before-local-extension and cancellation behavior. UPDATE/commit failures,
+non-contention errors, an entered transaction or a second failure still revoke
+local authority. Real SQLite short-lock recovery was reproduced failing before
+the patch; focused fault/recovery checks: 35 passed, independent review passed.
+Full validation: 3,873 passed in 593.13 seconds, no skips, Windows/Python 3.12;
+smoke/static/dependency checks passed. No new schema, settings or public fields.
+
+Diagnosis219 stopped on unavailable runtime health during retrieval, before any
+citation check or report. It is a runtime failure, not a content pass/fail. The
+interrupted task was cancelled through the durable API in an execution-disabled,
+recovery-disabled management instance, then both databases backed up and verified.
+Actual ledger219; final24 sealed. The exact loss cause remains unconfirmed; short
+writer contention is independently reproducible, not proof of this run's cause.
+
 ### Align bounded citation prose location and empty-result guidance
 
 Citation policy v22 adds a visible-prose fallback only when the original document
