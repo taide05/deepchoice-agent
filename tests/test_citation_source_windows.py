@@ -310,7 +310,8 @@ async def test_dotted_technical_identifier_qualifier_verifies_as_one_sentence(mo
 
 
 @pytest.mark.asyncio
-async def test_separate_passages_bind_and_verify_once_against_one_page(monkeypatch):
+@pytest.mark.parametrize("navigation", [False, True])
+async def test_separate_passages_bind_and_verify_once_against_one_page(monkeypatch, navigation):
     first = "If writers cannot queue, a client/server database is appropriate."
     second = "SQLite needs no configuration or maintenance for local storage."
     source = {
@@ -328,6 +329,8 @@ async def test_separate_passages_bind_and_verify_once_against_one_page(monkeypat
     async def fetch(channel, url, **kwargs):
         calls.append((channel, url))
         body = f"<p>{first}</p><p>Unrelated deployment content.</p><p>{second}</p>"
+        if navigation:
+            body = "<nav>" + "menu " * 14000 + "</nav>" + body
         return httpx.Response(200, text=body, headers={"content-type": "text/html"})
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
     verification, _ = await verify_citations(bound, deepcopy(chains))
@@ -437,3 +440,52 @@ def test_saved_uncertainty_excerpt_preserves_separate_passage_provenance():
 
     malformed = {**source, "passages": [first, first]}
     assert _saved_excerpts([check], [{"sources": [malformed]}], 1) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('noise', [
+    '<nav>' + 'menu ' * 14000 + '</nav>',
+    '<div hidden>' + 'hidden ' * 10000 + '</div>',
+    '<div role="navigation">' + 'menu ' * 14000 + '</div>',
+], ids=['nav', 'hidden', 'role-navigation'])
+async def test_visible_prose_fallback_locates_source_after_bounded_navigation(monkeypatch, noise):
+    body = noise + f'<p>{TEXT}</p><p>Visible documentation ends here.</p>'
+    assert locate_source_window(TEXT, extract_source_document(body, truncated=False)) is None
+    bound, verification, calls = await verify_page(monkeypatch, body)
+    assert bound['source_facts'][0]['status'] == 'verified'
+    assert len(calls) == 1
+    assert all(check.reason.value == 'lexical_support' for check in verification.checks)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tail,expected', [
+    ('<pre>The queue never supports durable messages.</pre>', 'negation_conflict'),
+    ('<footer><p>The queue never supports durable messages.</p></footer>', 'negation_conflict'),
+    ('<pre>If recovery is enabled, the queue supports durable messages.</pre>', 'qualifier_unverified'),
+    ('<p>The queue supports durable messages.</p>', 'content_insufficient'),
+    ('<p>Only if recovery remains enabled.', 'content_insufficient'),
+    ('<p>Only if ' + 'x' * (128 * 1024), 'content_insufficient'),
+], ids=['pre-negation', 'footer-negation', 'pre-condition', 'duplicate', 'unclosed', 'truncated'])
+async def test_prose_fallback_keeps_counter_evidence_duplicates_and_incomplete_edges(monkeypatch, tail, expected):
+    excerpt = 'The queue supports durable messages.'
+    body = '<nav>' + 'menu ' * 14000 + '</nav><p>' + excerpt + '</p>' + tail
+    bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
+    assert bound['source_facts'][0]['status'] == 'unknown'
+    assert verification.checks[0].reason.value == expected
+
+
+@pytest.mark.asyncio
+async def test_prose_fallback_preserves_real_pre_source(monkeypatch):
+    body = '<nav>' + 'menu ' * 14000 + '</nav><pre>' + TEXT + '</pre><p>End of documentation.</p>'
+    bound, _, calls = await verify_page(monkeypatch, body)
+    assert bound['source_facts'][0]['status'] == 'verified'
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_successful_default_location_does_not_fallback_to_hide_a_conflict(monkeypatch):
+    excerpt = 'The queue supports durable messages.'
+    body = '<nav><p>The queue never supports durable messages.</p></nav><p>' + excerpt + '</p>'
+    bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
+    assert bound['source_facts'][0]['status'] == 'unknown'
+    assert verification.checks[0].reason.value == 'negation_conflict'

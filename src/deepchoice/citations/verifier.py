@@ -158,6 +158,7 @@ class _FetchOutcome:
     text: str = ""
     truncated: bool = False
     document: SourceDocument | None = None
+    prose_document: SourceDocument | None = None
 
 
 def canonicalize_source_url(value: Any) -> str | None:
@@ -753,6 +754,8 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         if fact.get("saved_passages") != list(passages):
             return unknown
         windows = locate_source_windows(passages, outcome.document)
+        if windows is None and outcome.prose_document is not None:
+            windows = locate_source_windows(passages, outcome.prose_document)
         if windows is None:
             return unknown
         matches = [
@@ -766,6 +769,8 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         if "saved_passages" in fact:
             return unknown
         window = locate_source_window(snippet, outcome.document)
+        if window is None and outcome.prose_document is not None:
+            window = locate_source_window(snippet, outcome.prose_document)
         if window is None:
             return unknown
     status, reason = _support_status(claim.text, window.text)
@@ -850,6 +855,16 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
                 response.text,
                 truncated=bool(response.extensions.get("deepchoice_body_truncated")),
                 plain_text=response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain",
+            ),
+            # Match retrieval's visible-prose extraction without removing code
+            # blocks or footer qualifications. This bounded second view uses
+            # the same response; it is used only when exact location fails.
+            extract_source_document(
+                response.text,
+                truncated=bool(response.extensions.get("deepchoice_body_truncated")),
+                plain_text=response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain",
+                skip_navigation=True,
+                preserve_pre=True,
             ),
         )
     if status_code in {401, 403, 404, 410}:

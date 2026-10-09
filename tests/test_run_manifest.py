@@ -42,7 +42,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         call.max_output_tokens == max_output_tokens_for(call.call_id) for call in first.llm_calls
     )
     assert len(first.retrievers) == 6
-    assert first.report.template_version == "evidence-first-v21"
+    assert first.report.template_version == "evidence-first-v22"
     assert first.scoring_policy_version == "source-score-v17"
     assert {
         retriever.retriever_id: retriever.version
@@ -55,7 +55,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v11"
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v21"
+    assert first.citation_policy_version == "deterministic-citation-v22"
     assert first.hitl_policy_version == "evidence-insufficient-v2"
 
 
@@ -184,7 +184,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v5"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v21"
+    assert registry.citation_policy_version == "deterministic-citation-v22"
     assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v10", "conclusion_synthesizer.synthesis_prompt": "v39",
@@ -199,9 +199,9 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
         template.report_format: template.template_version
         for template in registry.report_templates
     } == {
-        "what_why_how": "what-why-how-v22",
-        "evidence_first": "evidence-first-v21",
-        "comparison_matrix": "comparison-matrix-v20",
+        "what_why_how": "what-why-how-v23",
+        "evidence_first": "evidence-first-v22",
+        "comparison_matrix": "comparison-matrix-v21",
     } == REPORT_TEMPLATE_VERSIONS
     assert re.fullmatch(r"[0-9a-f]{64}", registry.registry_id)
 

@@ -193,3 +193,23 @@ def test_only_explicit_empty_assumptions_are_valid_when_no_extra_premise_is_unkn
         assert result["decision_analysis"][0]["assumptions"] == []
     rec["decision_analysis"][0].pop("assumptions")
     assert not bind_decision_analysis(rec, requirements, TASK["candidate_techs"], require_basis=True)["decision_analysis"]
+
+
+def test_empty_abstention_does_not_point_to_nonexistent_branches():
+    from deepchoice.utils.decision_contract import abstain_recommendation
+    for query, forbidden in [('请选择合适方案', '条件分支'), ('Choose a suitable option', 'conditional branches')]:
+        original = {'decision_branches': []}
+        result = abstain_recommendation(original, query)
+        assert result['decision_branches'] == []
+        assert forbidden not in result['recommendation']
+        assert original == {'decision_branches': []}
+
+
+@pytest.mark.parametrize('query,forbidden', [('请选择合适方案', '行动计划'), ('Choose a suitable option', 'action plan')])
+def test_conditional_abstention_does_not_reference_an_absent_plan(query, forbidden):
+    from deepchoice.utils.decision_contract import abstain_recommendation
+    branch = {'option': 'ExampleQueue', 'condition': 'If recovery is confirmed.'}
+    result = abstain_recommendation({'decision_branches': [branch]}, query)
+    assert result['decision_branches'] == [branch]
+    assert result['action_plan'] == []
+    assert forbidden not in result['recommendation']

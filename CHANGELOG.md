@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Align bounded citation prose location and empty-result guidance
+
+Citation policy v22 adds a visible-prose fallback only when the original document
+cannot locate the saved passages. Both bounded views use one existing safe fetch;
+code blocks, footer qualifications, uniqueness, truncation and counter-evidence
+checks remain. Historical v21 results stay readable. Report templates 23/22/21
+stop pointing to absent conditional branches or action plans.
+Focused checks: 334 passed; full validation: 3,864 passed in 594.84 seconds, no skips
+on Windows/Python 3.12. Smoke 12/12, static/dependency checks and independent
+read-only review passed. This does not establish real-report quality.
+
+One exposed CI request rerun on the preceding relevance repair completed with
+warnings: six evidence chains and five bound facts, zero reviewable facts after
+citation checks, no judgment call; independent assistant content review passed
+0/1 on 2026-10-09. Actual research ledger218, final24 sealed. Originals retained,
+services stopped and paired database backup verified.
+
 ### Retain product sources for explicitly modified choices
 
 Use conservative product/component retrieval hints for ordinary source admission
@@ -12,7 +29,7 @@ Query-adapter v6 targets documented behavior and primary sources; source-scope v
 preserves the original qualifiers. No extra calls, topology, state or database changes.
 Focused checks: 417 passed; full validation: 3,849 passed in 636.88 seconds on
 Windows/Python 3.12, with no skips. Smoke, static/dependency checks and independent
-review passed. Real benefit remains unmeasured.
+review passed. The later exposed-case diagnosis improved source admission but still failed content acceptance.
 
 ### Record the four-run delivery check and user-requested pause
 

@@ -760,9 +760,9 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
 - task/run 的 `version` 是乐观并发控制字段。读取后再写的生命周期操作必须做 CAS；
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
-  模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
-  `deterministic-citation-v21` 与 `evidence-insufficient-v2` 策略；历史 workflow v1–v3、HITL v1及
-  citation-policy v1–v20 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  模板版本。当前新运行使用 `research-v5`/state schema v3，并冻结
+  `deterministic-citation-v22` 与 `evidence-insufficient-v2` 策略；历史 workflow v1–v4、HITL v1及
+  citation-policy v1–v21 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。
@@ -1677,3 +1677,13 @@ Community/arXiv检索器v4在adapted_queries为空时仅用完整RetrievalReques
 仅两检索器从v3升v4；旧manifest身份可读、不能同run恢复，缓存按新manifest隔离。
 其他版本、提示、core资产和预算政策不变；smoke只更新时间/manifest元数据。
 原文到达参数不证明服务商接受全部长度或完整理解查询，HTTP成功不证明语义覆盖。
+
+
+### 2026-10-09 有界网页定位修复
+
+引用policy v22在同一次已预算安全抓取中构建原文档和可见正文文档；仅当保存片段在原文档
+无法定位时，尝试排除nav/form及显式hidden/导航角色的视图。第二视图保留pre、正文和footer，
+不增加外呼，不保存网页原文，继续执行同页唯一/有序定位、完整边界、限定和窗口内外反证检查。
+原定位成功后的不支持/未知不能通过回退覆盖；128 KiB响应、64 KiB文本及其余限额保持。
+历史v21结果可读且不回填，新运行身份隔离旧缓存与续跑。三模板23/22/21冻结空摘要文案：
+不存在条件分支或行动计划时，不指引用户阅读不存在内容。本修复的真实报告收益须另测。

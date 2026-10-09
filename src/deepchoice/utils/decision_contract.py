@@ -249,11 +249,11 @@ def is_fixed_validation_only_plan(recommendation: Any, query: Any) -> bool:
 def _restricted_message(query: Any, reason: str | None = None) -> str:
     clean_reason = _clean_text(reason, limit=500)
     if _is_zh(query):
-        base = "现有证据不足以支持单一结论；请依据条件分支验证关键未知项后再决定。"
+        base = "现有证据不足以支持单一结论；请核实影响选择的关键未知项后再决定。"
         return f"{base} 限制原因：{clean_reason}" if clean_reason else base
     base = (
         "The available evidence does not support one unconditional choice; "
-        "validate the critical unknowns and use the conditional branches before deciding."
+        "validate the critical unknowns before deciding."
     )
     return f"{base} Restriction reason: {clean_reason}" if clean_reason else base
 
@@ -291,10 +291,10 @@ def abstain_recommendation(
     result["action_plan"] = _validation_only_plan(query) if has_plan else []
     if result["decision_branches"]:
         result["recommendation"] = (
-            "当前给出条件性建议：按下方各方案的前提与行动计划验证后选择，不将其视为无条件胜者。"
+            "当前给出条件性建议：验证下方各方案的前提后选择，不将其视为无条件胜者。"
             if _is_zh(query) else
             "Use the conditional choices below: validate each option's prerequisites "
-            "with the action plan before adoption; none is an unconditional winner."
+            "before adoption; none is an unconditional winner."
         )
         clean_reason = _clean_text(reason, limit=500)
         if clean_reason:
