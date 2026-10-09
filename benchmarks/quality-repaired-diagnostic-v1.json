@@ -1,0 +1,44 @@
+{
+  "protocol_id": "repaired-diagnostic-v1",
+  "version": "1.0.0",
+  "purpose": "Four exposed original requests, one current-version diagnostic each; no causal comparison or unseen/stability/breadth acceptance",
+  "dataset": {
+    "path": "benchmarks/quality-cross-scene-development-v1.json",
+    "sha256": "137b2f61f3a8cced1500248db5ca0bdd807d269fbec554b022b3d7f7529604e6"
+  },
+  "case_order": [
+    "P03",
+    "P06",
+    "P11",
+    "P12"
+  ],
+  "case_policy": "All four exposed development/regression cases; original request/HITL/rubric unchanged; no reference injection",
+  "hypothesis": "Can this repaired version provide evidence-backed answers on four exposed original requests under the existing rubric? If not, which saved stages show information loss?",
+  "repetitions": 1,
+  "concurrency": 1,
+  "starting_actual": 201,
+  "maximum_new": 4,
+  "development_end": 205,
+  "final_reserved": 24,
+  "final_acceptance_enabled": false,
+  "resource_authority": "Existing sustained development authorization plus explicit user quota-limit release; fixed four new diagnostic admissions only, no sealed final admissions",
+  "run_limits": {
+    "total_tokens": 60000,
+    "llm_calls": 96,
+    "retrieval_calls": 72,
+    "active_milliseconds": 900000
+  },
+  "http_call_count_hard_limit": null,
+  "amount": "unknown; theory token/call upper bounds are not money or wall-time estimates",
+  "preflight": "Reuse only evidence accepted by the existing prerequisite compatibility verifier; otherwise freeze separate bounded preparation probes before dispatch",
+  "stop_policy": "Retain ordinary content/provider failures in fixed serial matrix. Stop new admissions for security, budget, identity drift, lease/instance authority loss, uncertain submission or unclassified fault; reconcile before any continuation. No replacement/extra fifth run.",
+  "content_review": "Original request/report/original saved source judgments lock before Trace/cost; assistant-only, single-arm nonblind. Missing intermediate artifacts remain unassessable.",
+  "exit": "Close batch after four or safety stop. Confirmed common defect -> one family and fresh same-condition comparison with 3-4 scenes, >=3 tradeoffs, >=2 not used for candidate design. If usable, prepare independently held new scenes; no invented code change needed. No final24 release.",
+  "status": "frozen",
+  "freeze_date": "2026-10-09",
+  "unvalidated_designs": {
+    "bounded_evidence_inventory": "Check whether saved retrieved evidence for decisive original questions reaches selected facts, retained analysis and report; no public intermediate evidence means unassessable, not presumed loss or support.",
+    "complexity_contribution": "Assess actual node/call contributions to delivered useful analysis alongside prior static reachability review. Run counts cannot prove the codebase is lean.",
+    "model_and_language_reasoning": "Check source versions, applicability, assumptions and condition changes; lexical citation status cannot prove semantic support."
+  }
+}

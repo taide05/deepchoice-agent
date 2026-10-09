@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Freeze the repaired-version diagnostic protocol
+
+Freeze four exposed original requests and unchanged rubric/HITL for one serial
+current-version diagnostic each. The separate four-run allocation preserves the
+sealed final 24. Runtime identities and collector checks must pass before admission.
+Engineering repair closure does not certify code simplicity, evidence capacity,
+Chinese recall or model quality; this diagnostic measures none of repeatability,
+unseen acceptance, majority coverage or causal improvement.
+
 ### Prioritize reports without a placeholder quality score
 
 The result view opens with the Report tab and retains observability, evidence,
