@@ -136,7 +136,7 @@ def _selection_rows(bindings):
         yield number, row
 
 
-SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v2:sources=24;bytes=24000;focus=2+maximal;shared-admission=max-packet-bytes;literal-candidate-first-fit;request-order"
+SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v3:sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;request-order"
 
 
 def _view_rows(bindings):
@@ -152,7 +152,12 @@ def _view_rows(bindings):
             identifier = f"S{number}"
             views.append({"id": identifier, "included_sentence_range": [0, count]})
             refs[identifier] = {"evidence_id": number}
-        elif original["ranges_allowed"]:
+        # A short search excerpt can contain omission seams despite fitting the
+        # whole-fact limit. Keep its whole view (ellipsis may be literal code),
+        # but also offer existing complete range views without changing the source.
+        if original["ranges_allowed"] and (
+            not original["whole_allowed"] or _OMISSION.search(source.get("snippet", ""))
+        ):
             focuses = []
             # Keep small mechanisms selectable without forcing unrelated numeric
             # material into the same fact. Also retain maximal windows for a
@@ -189,7 +194,7 @@ def _view_rows(bindings):
             fact = bind_source_fact({"id": "F1", **ref}, bindings[number])
             if fact is None:
                 continue
-            if original["whole_allowed"]:
+            if "source_ranges" not in ref:
                 original["sentences"] = [{"index": index, "text": text}
                                          for index, text in enumerate(_split_sentences(fact["saved_text"]))]
                 if original.get("separate_locations"):

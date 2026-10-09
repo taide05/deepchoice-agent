@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Offer complete local views for short omitted excerpts
+
+Short excerpts containing an existing omission marker retain their whole-source
+option and additionally offer existing validated local ranges. Each view keeps
+original sentence coordinates and passes the same binding, citation and review
+checks; a verified local fact cannot authorize an unknown whole fact. Preserve
+literal code ellipses, retriever admission and shared source/byte/fact limits.
+Additional metadata can exclude a previously fitting source at the byte boundary.
+Freeze view-policy v3, synthesis v37 and citation v21; historical v20 remains readable
+but requires a new run. No additional call stage, state schema or database change.
+This repairs an offline selection defect without claiming real-report quality gain.
+
 ### Record the repaired-version diagnostic failure
 
 The 2026-10-09 single-arm diagnostic of quality-cross-scene-development-v1/1.0.1

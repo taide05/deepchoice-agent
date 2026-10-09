@@ -55,7 +55,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v10"
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v20"
+    assert first.citation_policy_version == "deterministic-citation-v21"
     assert first.hitl_policy_version == "evidence-insufficient-v2"
 
 
@@ -118,7 +118,7 @@ def test_historical_retriever_manifest_cannot_resume(source, old_version):
     "deterministic-citation-v7", "deterministic-citation-v8",
     "deterministic-citation-v9", "deterministic-citation-v10", "deterministic-citation-v12",
     "deterministic-citation-v13", "deterministic-citation-v14",
-    "deterministic-citation-v15", "deterministic-citation-v16", "deterministic-citation-v17", "deterministic-citation-v19",
+    "deterministic-citation-v15", "deterministic-citation-v16", "deterministic-citation-v17", "deterministic-citation-v19", "deterministic-citation-v20",
 ])
 def test_historical_citation_policy_is_readable_but_cannot_resume(policy_version):
     from deepchoice.contracts.manifest import RunManifest, _expected_manifest_id
@@ -183,10 +183,10 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v4"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v20"
+    assert registry.citation_policy_version == "deterministic-citation-v21"
     assert registry.hitl_policy_version == "evidence-insufficient-v2"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
-    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v36",
+    expected_versions = {"self_reviewer.review_system": "v9", "conclusion_synthesizer.synthesis_prompt": "v37",
                          "query_analyzer.decomposition_system": "v3",
                          "query_adapter.adapt_system": "v5",
                          "source_evaluator.source_scope_selection": "v3",

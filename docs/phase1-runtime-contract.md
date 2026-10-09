@@ -19,6 +19,20 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
+2026-10-09 R44：runtime-source-views-v3对含既有省略标记的短来源保留整段S，并追加
+既有范围构造/最终绑定允许的局部W；普通完整短来源仍只有S，长来源保持旧W，不能
+形成合法范围时保留原S。代码/math中的字面省略号不改变来源原文或整段核验机会。
+各view按其reference中的source_ranges分别验证，保留原句坐标及邻句，不拼接原文。
+whole_source_text及三个检索器准入不变；整段/局部事实分别核验，局部verified不会
+使整段unknown获得分析资格，同一URL不能充作两个独立来源。全部分析依赖、自审和
+unknown边界保持。范围与机械邻句不证明远处语义限定完整，也不保证模型选择该视图。
+
+仍按同一24源/24,000 UTF-8字节共享菜单与五事实门准入；新增view metadata也计入
+原配额，容量边缘可能整源拒绝原先能放入的材料，不部分截断、隐藏抬限或增加调用阶段。
+合成v37/引用v21冻结菜单及重绑行为；旧v36/v20可读/hash有效，拒当前同run恢复，
+缓存按manifest隔离。workflow/state、数据库迁移、API形状、来源helper及报告模板不变。
+零外呼反例与全链替身回归不构成R43真实报告改善或通用质量验收。
+
 2026-10-08 R33：arxiv v3先校验Atom feed及完整摘要，再执行原关键词相关性过滤。
 短摘要复用1200字符/16句/单句500字符门并整体保留，不提供二次缩窄scope；长摘要
 用真实空行段落构造完整相邻范围，复用2000字符/40句/单句400字符提议与原选文。
@@ -697,8 +711,8 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
   模板版本。当前新运行使用 `research-v4`/state schema v3，并冻结
-  `deterministic-citation-v20` 与 `evidence-insufficient-v2` 策略；历史 workflow v1–v3、HITL v1及
-  citation-policy v1–v19 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  `deterministic-citation-v21` 与 `evidence-insufficient-v2` 策略；历史 workflow v1–v3、HITL v1及
+  citation-policy v1–v20 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

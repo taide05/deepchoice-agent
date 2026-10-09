@@ -294,3 +294,155 @@ async def test_menu_capacity_gap_is_visible_without_inventing_candidate_support(
     assert state["final_recommendation"]["winner"] == "context_dependent"
     assert not state["final_recommendation"].get("decision_analysis")
     assert state["quality_signals"][0]["staged_generation"]["r0_withheld_one_sided"]
+
+
+OMITTED_SHORT_TEXT = (
+    "Alpha stores retained records. Only retained records can be replayed. "
+    "A consumer can request an earlier offset. Replays preserve order within a partition. "
+    "Different partitions may proceed independently. Operators must choose a retention period. "
+    "[...] Other sections describe deployment."
+)
+
+
+def test_short_omitted_source_offers_complete_ranges_with_original_coordinates():
+    original = chains(OMITTED_SHORT_TEXT)
+    before = deepcopy(original)
+    packet, menu = selection.selection_view_packet(original, ["Alpha"])
+    assert "S1" in menu and len(menu) > 1
+    assert "[...]" in packet  # Preserve the full saved input; never splice the source.
+    assert any("source_ranges" in view["reference"] for view in menu.values())
+    rows = json.loads(packet)
+    for view in rows["views"]:
+        fact = menu[view["id"]]["fact"]
+        first, stop = view["included_sentence_range"]
+        assert tuple(s["text"] for s in rows["sentences"][first:stop]) == selection.selection_sentences({"snippet": fact["saved_text"]})
+        if "source_ranges" in menu[view["id"]]["reference"]:
+            assert "[...]" not in fact["saved_text"]
+        assert bind_evidence_choices({"source_facts": [fact]}, original, ["Alpha"], [])["source_facts"] == [fact]
+    assert any(view["reference"].get("source_ranges") == [[2, 4]] for view in menu.values())
+    assert original == before
+    # Whole numeric compatibility input still earns no location/support by binding.
+    whole = bind_evidence_choices({"source_facts": [{"id": "F1", "evidence_id": 1}]}, original, ["Alpha"], [])
+    assert whole["source_facts"][0]["saved_text"] == OMITTED_SHORT_TEXT
+    assert whole["source_facts"][0]["status"] == "unknown"
+
+
+@pytest.mark.parametrize("text", [
+    "Callable[..., T] defines a callback signature.",
+    "The expression array[..., 0] selects a dimension.",
+    "Alpha replays records. [...] Only retained records can be replayed.",
+])
+def test_short_literal_or_adjacent_ellipsis_without_safe_range_retains_whole_view(text):
+    original = chains(text)
+    _, menu = selection.selection_view_packet(original)
+    assert set(menu) == {"S1"}
+    assert menu["S1"]["fact"]["saved_text"] == text
+    assert "source_ranges" not in menu["S1"]["reference"]
+
+
+def test_literal_code_ellipsis_with_safe_remote_context_does_not_change_source_text():
+    text = OMITTED_SHORT_TEXT.replace("[...]", "The expression array[..., 0] selects a dimension.")
+    original = chains(text)
+    _, menu = selection.selection_view_packet(original)
+    assert "S1" in menu and len(menu) > 1
+    assert menu["S1"]["fact"]["saved_text"] == text
+    assert all("..." not in view["fact"]["saved_text"] for view in menu.values() if "source_ranges" in view["reference"])
+    assert original[0]["sources"][0]["snippet"] == text
+
+
+def test_whole_fallback_waits_for_successful_range_binding(monkeypatch):
+    from deepchoice.utils import evidence_choices
+
+    bind = evidence_choices.bind_source_fact
+    def reject_ranges(item, binding):
+        return None if "source_ranges" in item else bind(item, binding)
+    monkeypatch.setattr(evidence_choices, "bind_source_fact", reject_ranges)
+    original = chains(OMITTED_SHORT_TEXT)
+    _, menu = selection.selection_view_packet(original)
+    assert set(menu) == {"S1"}
+    assert menu["S1"]["fact"]["saved_text"] == OMITTED_SHORT_TEXT
+
+
+async def test_short_omitted_menu_analysis_survives_default_citation_review_and_render(monkeypatch):
+    from unittest.mock import AsyncMock
+    import httpx
+    from deepchoice.agents import conclusion_synthesizer as synth, self_reviewer as review
+    from deepchoice.agents.citation_validator import CitationValidatorAgent
+    from deepchoice.agents.report_generator import FORMAT_RENDERERS
+    from deepchoice.contracts.manifest import build_run_manifest
+    from tests.test_self_review import reviewed
+
+    original = chains(OMITTED_SHORT_TEXT)
+    _, menu = selection.selection_view_packet(original, ["Alpha"])
+    chosen = next((key for key, view in menu.items()
+                   if view["reference"].get("source_ranges") == [[2, 4]]), "S1")
+    reasoning = "Replay depends on retained records and preserves order only within a partition."
+    model = AsyncMock(side_effect=[{"source_view_ids": [chosen]}, {"decision_analysis": [{
+        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["B1", "B2"],
+        "reasoning": reasoning, "assumptions": [],
+        "change_condition": "Reassess if the required records have expired."}]}])
+    monkeypatch.setattr(synth, "call_model", model)
+    page = OMITTED_SHORT_TEXT.replace("[...]", "Details about unrelated clients appear in this section.")
+    fetch = AsyncMock(return_value=httpx.Response(200, text=page, headers={"content-type": "text/plain"}))
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    task = {"query": "How can Alpha consumers replay records?", "candidate_techs": ["Alpha"]}
+    state = {"task": task, "evidence_chains": deepcopy(original)}
+    state.update(await synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)).run(state))
+    state.update(await CitationValidatorAgent().run(state))
+    reviewed_model = AsyncMock(return_value=reviewed([{
+        "analysis_id": "A1", "action": "keep", "source_checks": [["F1", "supports", [1, 2]]]}]))
+    monkeypatch.setattr(review, "call_model", reviewed_model)
+    state.update(await review.SelfReviewerAgent().run(state))
+    assert len(state["final_recommendation"]["decision_analysis"]) == 1
+    assert reviewed_model.await_count == 1 and model.await_count == 2 and fetch.await_count == 1
+    assert state["final_recommendation"]["source_facts"][0]["source_ranges"] == [[2, 4]]
+    for render in FORMAT_RENDERERS.values():
+        assert reasoning in render(state)
+    assert state["evidence_chains"][0]["sources"][0]["snippet"] == OMITTED_SHORT_TEXT
+    # A mismatching live page must still withdraw the same bound analysis.
+    fetch.return_value = httpx.Response(200, text="Alpha is an unrelated language.", headers={"content-type": "text/plain"})
+    state.update(await CitationValidatorAgent().run(state))
+    assert state["final_recommendation"]["decision_analysis"] == []
+    assert state["final_recommendation"]["source_facts"][0]["status"] == "unknown"
+
+
+async def test_whole_and_local_same_source_keep_separate_citation_eligibility(monkeypatch):
+    import httpx
+    from deepchoice.citations.verifier import verify_citations
+    from deepchoice.utils.evidence_choices import calibrate_evidence_choices
+
+    original = chains(OMITTED_SHORT_TEXT)
+    _, menu = selection.selection_view_packet(original)
+    local = next(key for key, value in menu.items() if value["reference"].get("source_ranges") == [[2, 4]])
+    facts = select(["S1", local], menu, original)
+    assert [f["id"] for f in facts] == ["F1", "F2"]
+    assert len({f["canonical_url"] for f in facts}) == 1
+    async def fetch(*args, **kwargs):
+        page = OMITTED_SHORT_TEXT.replace("[...]", "Details about unrelated clients appear here.")
+        return httpx.Response(200, text=page, headers={"content-type": "text/plain"})
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    verification, _ = await verify_citations({"source_facts": facts}, original)
+    calibrated = calibrate_evidence_choices({"source_facts": facts}, verification)
+    assert [f["status"] for f in calibrated["source_facts"]] == ["unknown", "verified"]
+    assert calibrated["source_facts"][0].get("review_availability") is None
+
+
+def test_extra_view_metadata_obeys_shared_capacity_without_partial_source(monkeypatch):
+    import re
+
+    original = chains(OMITTED_SHORT_TEXT)
+    with monkeypatch.context() as context:
+        context.setattr(selection, "_OMISSION", re.compile(r"(?!)"))
+        old_packet, _ = selection.selection_view_packet(original)
+        old_numeric, _ = selection.selection_packet(original)
+    limit = max(len(old_packet.encode("utf-8")), len(old_numeric.encode("utf-8")))
+    added_packet, _ = selection.selection_view_packet(original)
+    assert len(added_packet.encode("utf-8")) > limit
+    original += [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
+                               "snippet": "Beta retains records. Configuration determines retention."}]}]
+    monkeypatch.setattr(selection, "MAX_PACKET_BYTES", limit)
+    packet, menu = selection.selection_view_packet(original, ["Alpha", "Beta"])
+    numeric, ids = selection.selection_packet(original, ["Alpha", "Beta"])
+    assert set(menu) == {"S2"} and ids == {2}
+    assert max(len(packet.encode("utf-8")), len(numeric.encode("utf-8"))) <= limit
+    assert not selection.bind_selected_views({"source_view_ids": ["S1"]}, {"S1": {}}, original, ["Alpha", "Beta"], [])
