@@ -1,6 +1,10 @@
 # 选型质量评估协议
 
-更新：2026-10-05。用于判定现行跨场景开发候选和后续稳定性。目标见[路线](current-roadmap.md)，实际准入与候选见[状态](o1-execution-status.md)。旧 quality-selection-v1、旧四例晋级、额度追加及已退役的八场景前置设计完整保存在[历史快照](archive/quality-direction-20261005/evaluation-protocol-snapshot.md)和[Q0 原件](archive/quality-direction-20261005/quality-selection-q0-snapshot.md)，只解释当时实验，不授权当前研究。
+更新：2026-10-09。用于判定现行跨场景开发候选和后续稳定性。目标见[路线](current-roadmap.md)，实际准入与候选见[状态](o1-execution-status.md)。旧 quality-selection-v1、旧四例晋级、额度追加及已退役的八场景前置设计完整保存在[历史快照](archive/quality-direction-20261005/evaluation-protocol-snapshot.md)和[Q0 原件](archive/quality-direction-20261005/quality-selection-q0-snapshot.md)，只解释当时实验，不授权当前研究。
+
+本页定义交付/测量标准，不能替代[路线第1节](current-roadmap.md)的完整链路能力目标。
+2026-10-09执行方向调整不改变已有冻结数据、评分、失败结果或最终24封存；每次测量的
+诊断/成果证明目的由执行规则与当前状态明确，不因完成局部修复自动运行预设四例。
 
 ## 1. 开发集与身份
 

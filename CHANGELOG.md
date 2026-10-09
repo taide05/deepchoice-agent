@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-09
 
+### Align implementation direction with the full-path capability goal
+
+Distinguish the goal of stable useful, supported output through the complete default
+workflow from the evidence and criteria used to accept delivery. Resume with existing
+failure evidence and full-path diagnosis; local engineering success no longer makes
+a four-case comparison the automatic next task. Preserve frozen evaluation standards,
+previous failures, standing boundaries and sealed final24. Documentation only; the
+user-requested development pause remains in effect.
+
 ### Preserve original context for source reasoning
 
 Rebuild bounded original saved context for exactly rebound cropped facts in the
