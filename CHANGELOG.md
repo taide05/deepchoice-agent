@@ -1,6 +1,15 @@
 # Changelog
 
-## [Unreleased] - 2026-10-08
+## [Unreleased] - 2026-10-09
+
+### Contain clarification request failures
+
+The four clarification submission paths validate consumed response fields before
+updating local UI state. Transport, JSON and invalid-shape errors use fixed localized
+messages, including on the welcome screen. Unconfirmed input stays local until an
+explicit same-text resend succeeds or the user discards it; viewing a confirmation
+does not imply that pending input was accepted. Pending corrections block old start
+controls. No automatic replay, backend lifecycle or run identity changes.
 
 ### Preserve complete native fallback queries
 

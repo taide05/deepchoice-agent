@@ -5,6 +5,7 @@ Streamlit frontend with artistic dark-themed UI + multilingual support (zh/en/ja
 import html as _html
 import json
 import os
+import re
 import time
 
 import httpx
@@ -47,7 +48,9 @@ T = {
         "confirm_query": "当前研究问题",
         "confirm_constraints": "当前约束",
         "confirm_unknown": "未提供",
-        "clarify_error": "会话已变化或尚有未处理内容，请修改或重新确认；输入过长时请新建研究。",
+        "clarify_resend": "重新发送保留输入",
+        "clarify_discard": "放弃本地待确认输入",
+        "clarify_error": "请求结果尚未确认，或会话需要重新确认。服务端可能已处理输入，重复发送可能再次处理；请核对当前需求后再操作。",
         "confirm_scene": "场景: {scene}  |  复杂度: {complexity}",
         "start_research_btn": "开始深度研究",
         "researching": "研究中:",
@@ -226,7 +229,9 @@ T = {
         "confirm_query": "Current research question",
         "confirm_constraints": "Current constraints",
         "confirm_unknown": "Not specified",
-        "clarify_error": "The session changed or has unresolved input. Revise or review it again; start a new research session if input is full.",
+        "clarify_resend": "Resend retained input",
+        "clarify_discard": "Discard locally pending input",
+        "clarify_error": "Request outcome is unconfirmed, or the session needs review. The server may have processed the input; resending may process it again. Review the current requirements before continuing.",
         "confirm_scene": "Scene: {scene}  |  Complexity: {complexity}",
         "start_research_btn": "Start Deep Research",
         "researching": "Researching:",
@@ -405,7 +410,9 @@ T = {
         "confirm_query": "現在の研究課題",
         "confirm_constraints": "現在の制約",
         "confirm_unknown": "未指定",
-        "clarify_error": "セッションが変更されたか、未処理の入力があります。修正または再確認してください。入力上限の場合は新しい研究を開始してください。",
+        "clarify_resend": "保持した入力を再送信",
+        "clarify_discard": "ローカルの未確認入力を破棄",
+        "clarify_error": "リクエストの結果を確認できません。または要件の再確認が必要です。入力が処理済みの可能性があるため、再送前に現在の要件を確認してください。",
         "confirm_scene": "シーン: {scene}  |  複雑さ: {complexity}",
         "start_research_btn": "深層リサーチを開始",
         "researching": "研究中:",
@@ -584,7 +591,9 @@ T = {
         "confirm_query": "현재 조사 질문",
         "confirm_constraints": "현재 제약 조건",
         "confirm_unknown": "미지정",
-        "clarify_error": "세션이 변경되었거나 미처리 입력이 있습니다. 수정하거나 다시 확인하세요. 입력 한도에 도달했다면 새 조사를 시작하세요.",
+        "clarify_resend": "보관된 입력 다시 보내기",
+        "clarify_discard": "로컬 대기 입력 버리기",
+        "clarify_error": "요청 결과가 확인되지 않았습니다. 또는 요구 사항을 다시 확인해야 합니다. 서버가 입력을 처리했을 수 있으므로 다시 보내기 전에 현재 요구 사항을 확인하세요.",
         "confirm_scene": "장면: {scene}  |  복잡도: {complexity}",
         "start_research_btn": "심층 연구 시작",
         "researching": "연구 중:",
@@ -1035,6 +1044,7 @@ DEFAULTS = {
     "clarify_session_id": None,
     "clarify_messages": [],
     "clarify_error": False,
+    "clarify_pending_input": None,
     "clarified_data": None,
     "research_task_id": None,
     "research_started": False,
@@ -1103,6 +1113,20 @@ def render_clarify_phase():
     st.markdown(f'<h1 class="app-title">{t("title", lang)}</h1>', unsafe_allow_html=True)
     st.markdown(f'<p class="app-subtitle">{t("subtitle", lang)}</p>', unsafe_allow_html=True)
 
+    pending = st.session_state.clarify_pending_input
+    if st.session_state.clarify_error or pending:
+        st.error(t("clarify_error", lang))
+    if pending:
+        st.text(pending)
+        if st.button(t("clarify_resend", lang), key="clarify_resend"):
+            _handle_clarify_message(pending)
+            st.rerun()
+        if st.button(t("clarify_discard", lang), key="clarify_discard"):
+            # This only discards local pending text; it does not undo a server write.
+            st.session_state.clarify_pending_input = None
+            st.session_state.clarify_error = False
+            st.rerun()
+
     has_history = len(st.session_state.clarify_messages) > 0
 
     if not has_history:
@@ -1112,8 +1136,6 @@ def render_clarify_phase():
     chat_col, info_col = st.columns([3, 1])
 
     with chat_col:
-        if st.session_state.clarify_error:
-            st.error(t("clarify_error", lang))
         for index, msg in enumerate(st.session_state.clarify_messages):
             active = index == len(st.session_state.clarify_messages) - 1
             if msg["role"] == "assistant":
@@ -1136,7 +1158,7 @@ def render_clarify_phase():
 
         c1, c2 = st.columns([5, 1])
         with c1:
-            user_input = st.chat_input(t("chat_placeholder", lang), key="clarify_chat")
+            user_input = st.chat_input(t("chat_placeholder", lang), key="clarify_chat", disabled=bool(st.session_state.clarify_pending_input))
         with c2:
             skip = st.button(t("skip", lang), key="clarify_skip_btn", use_container_width=True)
 
@@ -1163,7 +1185,7 @@ def _render_welcome():
     </div>
     """, unsafe_allow_html=True)
 
-    user_input = st.chat_input(t("input_placeholder", lang), key="hero_chat")
+    user_input = st.chat_input(t("input_placeholder", lang), key="hero_chat", disabled=bool(st.session_state.clarify_pending_input))
     if user_input:
         _handle_clarify_message(user_input)
         st.rerun()
@@ -1218,7 +1240,8 @@ def _render_tech_picker(candidates: list[dict]):
                 selected.append(tech["name"])
 
     if selected:
-        if st.button(f"{t('compare_btn', lang)}: {', '.join(selected)}", type="primary"):
+        if st.button(f"{t('compare_btn', lang)}: {', '.join(selected)}", type="primary",
+                     disabled=bool(st.session_state.clarify_pending_input)):
             _handle_clarify_message(", ".join(selected))
             st.rerun()
 
@@ -1241,62 +1264,124 @@ def _render_confirm_section(payload: dict, *, active: bool = True):
                      complexity=task.get("complexity") or t("confirm_unknown", lang)))
     with c2:
         st.markdown("<br>", unsafe_allow_html=True)
-        if active and st.button(t("start_research_btn", lang), type="primary", use_container_width=True):
+        if active and not st.session_state.clarify_pending_input and st.button(t("start_research_btn", lang), type="primary", use_container_width=True):
             _handle_finalize(payload.get("clarify_rounds"))
             st.rerun()
 
 
-def _handle_clarify_message(text: str):
-    sid = st.session_state.clarify_session_id
-    if sid is None:
-        resp = httpx.post(f"{API_BASE}/clarify/start", json={"query": text}, timeout=10)
-    else:
-        resp = httpx.post(f"{API_BASE}/clarify/{sid}/message", json={"message": text}, timeout=10)
-
-    if resp.status_code == 200:
-        data = resp.json()
-        st.session_state.clarify_error = False
-        st.session_state.clarify_session_id = data["session_id"]
-        st.session_state.clarify_messages.append({"role": "user", "content": text})
-        msg = {"role": "assistant", "content": data["answer"],
-               "action": data.get("next_action", data.get("action", "ask"))}
-        for k in ("payload", "clarity_score", "filled_required", "missing_required", "clarify_rounds"):
-            if k in data:
-                msg[k] = data[k]
-        st.session_state.clarify_messages.append(msg)
-    else:
+def _clarify_post(path: str, *, mode: str, session_id: str | None = None, **options):
+    """Validate a reply before local mutation; an uncertain POST is never replayed."""
+    try:
+        response = httpx.post(f"{API_BASE}{path}", timeout=10, **options)
+        if response.status_code != 200:
+            raise ValueError("Clarification response unavailable")
+        data = response.json()
+        if not isinstance(data, dict) or not isinstance(data.get("answer"), str):
+            raise ValueError("Invalid clarification reply")
+        action = data.get("next_action", data.get("action", "ask"))
+        allowed = {"ask", "recommend", "confirm"} if mode == "message" else {mode}
+        if not isinstance(action, str) or action not in allowed:
+            raise ValueError("Invalid clarification action")
+        if mode == "message":
+            sid = data.get("session_id")
+            if (not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", sid)
+                    or (session_id is not None and sid != session_id)):
+                raise ValueError("Invalid clarification session")
+        for key in ("filled_required", "missing_required"):
+            items = data.get(key, [])
+            if not isinstance(items, list) or any(not isinstance(item, str) for item in items):
+                raise ValueError("Invalid clarification fields")
+        score = data.get("clarity_score", 0)
+        rounds = data.get("clarify_rounds", 0)
+        if (type(score) not in (int, float) or not 0 <= score <= 1
+                or type(rounds) is not int or not 0 <= rounds <= 100):
+            raise ValueError("Invalid clarification progress")
+        payload = data.get("payload", {})
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid clarification payload")
+        if payload.get("reason") is not None and not isinstance(payload["reason"], str):
+            raise ValueError("Invalid clarification reason")
+        if action == "recommend":
+            candidates = payload.get("candidates", [])
+            if (not isinstance(candidates, list) or any(
+                    not isinstance(item, dict) or not isinstance(item.get("name"), str)
+                    or not item["name"].strip() for item in candidates)):
+                raise ValueError("Invalid candidate examples")
+            if len({item["name"] for item in candidates}) != len(candidates):
+                raise ValueError("Duplicate candidate controls")
+        if action in {"confirm", "finalize"}:
+            task = payload.get("clarified_task")
+            if (not isinstance(task, dict) or not isinstance(task.get("query"), str)
+                    or not task["query"].strip()):
+                raise ValueError("Invalid confirmed request")
+            for key in ("constraints", "candidate_techs", "sub_questions"):
+                items = task.get(key, [])
+                if not isinstance(items, list) or any(not isinstance(item, str) for item in items):
+                    raise ValueError("Invalid request fields")
+            for key in ("scene_context", "complexity"):
+                if task.get(key) is not None and not isinstance(task[key], str):
+                    raise ValueError("Invalid request context")
+            if action == "confirm" and (type(payload.get("clarify_rounds")) is not int
+                                         or not 0 <= payload["clarify_rounds"] <= 100):
+                raise ValueError("Missing confirmation revision")
+            questions = payload.get("sub_questions", [])
+            if not isinstance(questions, list) or any(not isinstance(item, str) for item in questions):
+                raise ValueError("Invalid research questions")
+        return data
+    except Exception:
+        # Do not reflect transport/JSON/schema details or assume the server rolled back.
         st.session_state.clarify_error = True
+        return None
+
+
+def _handle_clarify_message(text: str):
+    pending = st.session_state.clarify_pending_input
+    if pending is not None and pending != text:
+        st.session_state.clarify_error = True
+        return
+    sid = st.session_state.clarify_session_id
+    st.session_state.clarify_pending_input = text
+    data = _clarify_post("/clarify/start" if sid is None else f"/clarify/{sid}/message",
+                         mode="message", session_id=sid,
+                         json={"query" if sid is None else "message": text})
+    if data is None:
+        return
+    msg = {"role": "assistant", "content": data["answer"],
+           "action": data.get("next_action", data.get("action", "ask"))}
+    for key in ("payload", "clarity_score", "filled_required", "missing_required", "clarify_rounds"):
+        if key in data:
+            msg[key] = data[key]
+    st.session_state.clarify_session_id = data["session_id"]
+    st.session_state.clarify_messages.extend([{"role": "user", "content": text}, msg])
+    st.session_state.clarify_error = False
+    st.session_state.clarify_pending_input = None
 
 
 def _handle_skip():
     sid = st.session_state.clarify_session_id
     if not sid:
         return
-    resp = httpx.post(f"{API_BASE}/clarify/{sid}/finalize", json={"review_only": True}, timeout=10)
-    if resp.status_code != 200 or resp.json().get("action") != "confirm":
-        st.session_state.clarify_error = True
+    data = _clarify_post(f"/clarify/{sid}/finalize", mode="confirm", json={"review_only": True})
+    if data is None:
         return
-    data = resp.json()
-    st.session_state.clarify_error = False
     st.session_state.clarify_messages.append({"role": "assistant", "content": data["answer"],
         "action": "confirm", **{key: data[key] for key in
             ("payload", "clarity_score", "filled_required", "missing_required", "clarify_rounds") if key in data}})
+    st.session_state.clarify_error = False
+    # Reviewing server state does not prove a pending correction was received.
 
 
 def _handle_finalize(clarify_rounds: int | None = None):
     sid = st.session_state.clarify_session_id
-    if sid:
-        options = {"timeout": 10}
-        if clarify_rounds is not None:
-            options["json"] = {"clarify_rounds": clarify_rounds}
-        resp = httpx.post(f"{API_BASE}/clarify/{sid}/finalize", **options)
-        if resp.status_code == 200:
-            st.session_state.clarify_error = False
-            st.session_state.clarified_data = resp.json().get("payload", {})
-            st.session_state.phase = "research"
-            st.rerun()
-        else:
-            st.session_state.clarify_error = True
+    if sid and not st.session_state.clarify_pending_input:
+        options = {"json": {"clarify_rounds": clarify_rounds}} if clarify_rounds is not None else {}
+        data = _clarify_post(f"/clarify/{sid}/finalize", mode="finalize", **options)
+        if data is None:
+            return
+        st.session_state.clarify_error = False
+        st.session_state.clarified_data = data["payload"]
+        st.session_state.phase = "research"
+        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════

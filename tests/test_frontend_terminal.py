@@ -140,3 +140,154 @@ def test_cancel_preserves_cas_and_never_projects_unconfirmed_cancellation(monkey
         assert at.session_state["research_task_version"]==8
     else:
         assert at.error
+
+
+@pytest.mark.parametrize("operation,outcome", [
+    (operation, outcome)
+    for operation in ("start", "message", "skip", "finalize")
+    for outcome in ("timeout", "json", "shape", "nested", "http")
+] + [(operation, outcome) for operation in ("start", "message") for outcome in ("reason", "duplicates")])
+def test_clarification_failure_is_atomic_visible_and_never_replayed(monkeypatch, operation, outcome):
+    import copy
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["lang"] = "en"
+    original = [{"role": "assistant", "content": "Review the current request", "action": "confirm",
+                 "payload": {"clarify_rounds": 2, "clarified_task": {
+                     "query": "Current request", "constraints": ["Offline"], "candidate_techs": ["Acme"]}}}]
+    if operation != "start":
+        at.session_state["clarify_session_id"] = "clarify_test"
+        at.session_state["clarify_messages"] = copy.deepcopy(original)
+    at.run()
+    calls = []
+    marker = "PRIVATE_CLARIFY_SENTINEL"
+    def post(url, **kwargs):
+        calls.append((url, kwargs))
+        if outcome == "timeout":
+            raise httpx.ReadTimeout(marker)
+        if outcome == "http":
+            return _FakeResp({"detail": marker}, 500)
+        if outcome == "json":
+            class BadJson:
+                status_code = 200
+                def json(self):
+                    raise ValueError(marker)
+            return BadJson()
+        if outcome == "shape":
+            return _FakeResp({"session_id": "clarify_test"})
+        if outcome in {"reason", "duplicates"}:
+            return _FakeResp({"session_id": "clarify_test", "answer": "Reply", "action": "recommend",
+                              "payload": {"reason": []} if outcome == "reason" else {
+                                  "candidates": [{"name": "Acme"}, {"name": "Acme"}]}})
+        return _FakeResp({"session_id": "clarify_test", "answer": "Review", "action": "confirm",
+                          "payload": {"clarify_rounds": 2, "clarified_task": {"query": "New", "constraints": None}}})
+    monkeypatch.setattr(httpx, "post", post)
+    if operation in {"start", "message"}:
+        at.chat_input(key="hero_chat" if operation == "start" else "clarify_chat").set_value("Retain this correction").run()
+    elif operation == "skip":
+        at.button(key="clarify_skip_btn").click().run()
+    else:
+        next(button for button in at.button if button.proto.type == "primary").click().run()
+    assert not at.exception
+    assert at.error
+    assert marker not in " ".join(str(x.value) for group in (at.error, at.warning, at.markdown, at.text) for x in group)
+    assert at.session_state["clarify_error"] is True
+    assert at.session_state["phase"] == "clarify"
+    assert at.session_state["clarified_data"] is None
+    assert at.session_state["clarify_session_id"] == (None if operation == "start" else "clarify_test")
+    assert at.session_state["clarify_messages"] == ([] if operation == "start" else original)
+    if operation in {"start", "message"}:
+        assert "Retain this correction" in " ".join(x.value for x in at.text)
+        assert not any(button.proto.type == "primary" for button in at.button)
+    at.run()
+    assert not at.exception and len(calls) == 1
+    if operation == "skip":
+        assert calls[0][1]["json"] == {"review_only": True}
+    if operation == "finalize":
+        assert calls[0][1]["json"] == {"clarify_rounds": 2}
+
+
+@pytest.mark.parametrize("lang,expected", [
+    ("zh", "请求结果尚未确认"), ("en", "Request outcome is unconfirmed"),
+    ("ja", "リクエストの結果を確認できません"), ("ko", "요청 결과가 확인되지 않았습니다"),
+])
+def test_clarification_error_is_visible_on_welcome_in_each_language(monkeypatch, lang, expected):
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["lang"] = lang
+    at.run()
+    def fail(*args, **kwargs):
+        raise httpx.ReadTimeout("PRIVATE_CLARIFY_SENTINEL")
+    monkeypatch.setattr(httpx, "post", fail)
+    at.chat_input(key="hero_chat").set_value("Keep original input").run()
+    assert not at.exception and any(expected in x.value for x in at.error)
+    assert "Keep original input" in " ".join(x.value for x in at.text)
+
+
+@pytest.mark.parametrize("resolution", ["resend", "discard"])
+def test_pending_correction_survives_old_server_confirmation(monkeypatch, resolution):
+    import copy
+    task = {"query": "Online allowed", "constraints": [], "candidate_techs": ["Acme"]}
+    response = {"answer": "Review", "action": "confirm", "clarify_rounds": 2,
+                "payload": {"clarify_rounds": 2, "clarified_task": task}}
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["clarify_session_id"] = "clarify_test"
+    at.session_state["clarify_messages"] = [{"role": "assistant", "content": "Review", "action": "confirm",
+                                            "payload": copy.deepcopy(response["payload"])}]
+    at.run()
+    calls = []
+    def post(url, **kwargs):
+        calls.append((url, kwargs.get("json")))
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("PRIVATE_CLARIFY_SENTINEL")
+        if url.endswith("/message"):
+            return _FakeResp({"session_id": "clarify_test", "answer": "Received correction", "next_action": "ask"})
+        return _FakeResp(copy.deepcopy(response))
+    monkeypatch.setattr(httpx, "post", post)
+    at.chat_input(key="clarify_chat").set_value("Must work offline").run()
+    assert not at.exception and at.chat_input(key="clarify_chat").disabled
+    at.button(key="clarify_skip_btn").click().run()
+    assert not at.exception and len(calls) == 2
+    assert at.session_state["clarify_pending_input"] == "Must work offline"
+    assert "Online allowed" in " ".join(x.value for x in at.text)
+    assert "Must work offline" in " ".join(x.value for x in at.text)
+    assert not any(button.proto.type == "primary" for button in at.button)
+    at.run()
+    assert len(calls) == 2
+    at.button(key="clarify_" + resolution).click().run()
+    assert not at.exception and at.session_state["clarify_pending_input"] is None
+    assert not at.session_state["clarify_error"]
+    assert not at.chat_input(key="clarify_chat").disabled
+    if resolution == "resend":
+        assert len(calls) == 3 and calls[-1][1] == {"message": "Must work offline"}
+        assert at.session_state["clarify_messages"][-2] == {"role": "user", "content": "Must work offline"}
+    else:
+        assert len(calls) == 2
+        assert any(button.proto.type == "primary" for button in at.button)
+    assert at.session_state["phase"] == "clarify"
+
+
+def test_valid_clarification_finalize_keeps_durable_request_and_revision(monkeypatch):
+    task = {"query": "Compare Acme and Beta offline", "constraints": ["No external writes"],
+            "candidate_techs": ["Acme", "Beta"], "scene_context": None, "complexity": None}
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    at.session_state["clarify_session_id"] = "clarify_test"
+    at.session_state["clarify_messages"] = [{"role": "assistant", "content": "Review", "action": "confirm",
+                                            "payload": {"clarify_rounds": 3, "clarified_task": task}}]
+    at.run()
+    calls = []
+    def post(url, **kwargs):
+        calls.append((url, kwargs.get("json")))
+        if url.endswith("/finalize"):
+            return _FakeResp({"action": "finalize", "answer": "Confirmed", "payload": {
+                "clarified_task": task, "sub_questions": []}})
+        assert url.endswith("/api/v1/tasks")
+        # Stop the downstream fake transport after proving the exact request handoff.
+        return _FakeResp({}, 503)
+    monkeypatch.setattr(httpx, "post", post)
+    next(button for button in at.button if button.proto.type == "primary").click().run()
+    assert not at.exception and at.session_state["phase"] == "research"
+    assert not at.session_state["clarify_error"]
+    assert at.session_state["clarified_data"] == {"clarified_task": task, "sub_questions": []}
+    assert calls[0][1] == {"clarify_rounds": 3}
+    assert calls[1][1] == {**task, "sub_questions": []}
+    at.run()
+    assert not at.exception and len(calls) == 2
