@@ -474,9 +474,9 @@ def _tokens(value: str) -> set[str]:
 
 def _has_negation(value: str) -> bool:
     lowered = value.casefold()
-    # "not only" is additive, not a denial.  Bare Chinese characters such as
+    # "not only/just" is additive, not a denial.  Bare Chinese characters such as
     # 未/无 are deliberately excluded because they occur in ordinary words.
-    lowered = re.sub(r"\bnot\s+only\b", "", lowered)
+    lowered = re.sub(r"\bnot\s+(?:only\b|just\b(?=\s+\w[^.!?;]*\bbut\b))", "", lowered)
     return any(
         re.search(rf"\b{re.escape(negation)}\b", lowered) is not None
         for negation in _EN_NEGATIONS
@@ -487,7 +487,7 @@ def _has_negation(value: str) -> bool:
 
 def _negation_targets(value: str) -> set[str]:
     """Small local lexical window; never used as a semantic entailment test."""
-    value = re.sub(r"\bnot\s+only\b", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\bnot\s+(?:only\b|just\b(?=\s+\w[^.!?;]*\bbut\b))", "", value, flags=re.IGNORECASE)
     targets: set[str] = set()
     for marker in _NEGATION_MARKER_RE.finditer(value):
         tail = re.split(r"[,.;!?]|\b(?:and|but|or|then)\b", value[marker.end():], maxsplit=1)[0]

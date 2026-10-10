@@ -563,3 +563,81 @@ async def test_numbered_source_outside_registry_bound_stays_unknown_without_fetc
     verification, _ = await verify_citations(bound, chains)
     assert calibrate_evidence_choices(bound, verification)['source_facts'][0]['status'] == 'unknown'
     fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_copied_mechanism_is_not_negated_by_separate_token_validation_instruction(monkeypatch):
+    mechanism = "With Acme Actions, you can use OpenID Connect (OIDC) tokens to authenticate your workflow outside of Acme Actions."
+    qualification = ("It's important that you verify not just that the OIDC token came from Acme Actions, "
+                     "but that it came specifically from your expected workflows, so that other Acme Actions "
+                     "users aren't able to access services in your private network.")
+    excerpt = mechanism + " " + qualification
+    bound, verification, _ = await verify_page(monkeypatch, f"<p>{excerpt}</p>", excerpt=excerpt)
+    assert bound["source_facts"][0]["status"] == "verified"
+    assert all(check.status.value == "verified" for check in verification.checks)
+    assert qualification in bound["source_facts"][0]["saved_text"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("contrary", [
+    "The queue never supports durable messages.",
+    "The queue not just retains messages but cannot support durable messages.",
+])
+async def test_additive_marker_handling_keeps_real_partial_overlap_negation(monkeypatch, contrary):
+    excerpt = "The queue supports durable messages on disk."
+    bound, verification, _ = await verify_page(monkeypatch, f"<p>{excerpt}</p><p>{contrary}</p>", excerpt=excerpt)
+    assert bound["source_facts"][0]["status"] == "unknown"
+    assert verification.checks[0].reason.value == "negation_conflict"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body,expected", [
+    ("<p>Jobs can use <code>contents: read</code> for repository access.</p>", "verified"),
+    ("<p>Jobs can use contents: read for repository access.</p>", "unknown"),
+    ("<pre>Jobs can use <code>contents: read</code> for repository access.</pre>", "unknown"),
+    ("<p>Jobs can use <code>contents: write</code> for repository access.</p>", "unknown"),
+    ("<p>Jobs can use <code>contents: read</code> for repository access only after approval.</p>", "unknown"),
+    ("<p>Jobs can use <code>contents: read</code> for repository access.</p>" * 2, "unknown"),
+])
+async def test_markdown_code_delimiters_require_matching_html_inline_code_position(monkeypatch, body, expected):
+    excerpt = "Jobs can use `contents: read` for repository access."
+    bound, _, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
+    assert bound["source_facts"][0]["status"] == expected
+    assert bound["source_facts"][0]["saved_text"] == excerpt
+
+
+@pytest.mark.parametrize("excerpt", [
+    "Run `whoami` on the host.", "Run \\`whoami\\` on the host.",
+    "Run ``whoami`` on the host.", "Run `whoami on the host.",
+])
+def test_literal_escaped_double_or_unclosed_ticks_do_not_gain_plain_text_location(excerpt):
+    plain = extract_source_document("<p>Run whoami on the host.</p>", truncated=False)
+    assert locate_source_window(excerpt, plain) is None
+
+
+@pytest.mark.parametrize("excerpt,body", [
+    ("Run whoami on the host.", "<p>Run <code>`whoami`</code> on the host.</p>"),
+    ("Run `whoami` on the host.", "<p><code>Run whoami on the host.</code></p>"),
+    ("Run ``whoami`` on the host.", "<p>Run <code>whoami</code> on the host.</p>"),
+    ("Run \\`whoami\\` on the host.", "<p>Run <code>whoami</code> on the host.</p>"),
+])
+def test_inline_code_matching_preserves_literal_command_characters_and_span_identity(excerpt, body):
+    assert locate_source_window(excerpt, extract_source_document(body, truncated=False)) is None
+
+
+def test_separate_markdown_code_passages_keep_order_and_exact_saved_spelling():
+    doc = extract_source_document("<p>Use <code>read</code> permission.</p><p>Middle.</p>"
+                                  "<p>Keep <code>write</code> disabled.</p>", truncated=False)
+    excerpts = ("Use `read` permission.", "Keep `write` disabled.")
+    assert locate_source_windows(excerpts, doc) is not None
+    assert locate_source_windows(excerpts[::-1], doc) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("contrary", ["The access decision is not just.", "The access decision is not just, but expedient."])
+async def test_just_as_adjective_remains_a_real_negation(monkeypatch, contrary):
+    excerpt = "The access decision is just."
+    body = f"<p>{excerpt}</p><p>{contrary}</p>"
+    bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
+    assert bound["source_facts"][0]["status"] == "unknown"
+    assert verification.checks[0].reason.value == "negation_conflict"

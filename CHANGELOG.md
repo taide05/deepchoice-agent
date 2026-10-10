@@ -2,6 +2,22 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Preserve additive qualifications and proven inline code presentation
+
+Citation v25 recognizes explicit "not just ... but ..." additive wording using
+the existing negation rule. All local and strong contrary-evidence checks remain.
+Markdown single-backtick delimiters may match HTML only when each matches the
+same unique location's complete inline code text. Literal command characters,
+plain prose, pre blocks, malformed/escaped/double delimiters and ambiguous or
+incomplete locations receive no new authority. Original saved facts stay unchanged.
+Final full validation: 3,910 passed in 612.06s, no skips (Windows/Python3.12).
+Focused tests, smoke12/12, static/dependency checks and independent read-only review passed;
+268 frozen file hashes remained unchanged.
+
+Exposed regression222 of8e3d976 remained content0/1 despite consistent durable
+artifacts. It exposed these two source losses and remaining selection/reasoning
+gaps. Service stopped and paired backup verified; this does not establish quality.
+
 ### Retain numbered evidence and relevant search proposals
 
 Remove full candidate-label rejection for request-specific Tavily proposals, retaining

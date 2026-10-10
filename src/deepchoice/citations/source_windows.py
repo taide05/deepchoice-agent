@@ -5,6 +5,7 @@ and a neighbouring block on each side; never clip away a trailing condition.
 """
 from dataclasses import dataclass
 from html.parser import HTMLParser
+import re
 
 # HTML shells can be much larger than their visible text. Keep transport and
 # extracted-text bounds separate, shared by retrieval and citation.
@@ -27,6 +28,8 @@ class SourceDocument:
     incomplete: bool
     # Local extraction provenance only; never grants fact/citation authority.
     prose_indices: tuple[int, ...] = ()
+    # Unique inline-code text within its block; local matching provenance only.
+    inline_codes: tuple[tuple[int, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,10 +56,17 @@ class _Blocks(HTMLParser):
         self.omitted_depth = 0
         self.used = 0
         self.exhausted = False
+        self.inline_codes = []
+        self.pending_codes = []
+        self.code_parts = None
+        self.code_depth = 0
+        self.pre_depth = 0
 
     def flush(self):
         text = ' '.join(''.join(self.pending).split())
         self.pending = []
+        codes, self.pending_codes = self.pending_codes, []
+        self.code_parts = None
         prose, self.pending_prose = self.pending_prose, False
         if not text or self.exhausted:
             return
@@ -65,6 +75,8 @@ class _Blocks(HTMLParser):
             return
         if prose:
             self.prose_indices.append(len(self.blocks))
+        self.inline_codes.extend((len(self.blocks), code) for code in codes
+                                 if code and text.count(code) == 1)
         self.blocks.append(text)
         self.used += len(text) + 1
 
@@ -89,6 +101,11 @@ class _Blocks(HTMLParser):
         if not self.ignored_depth:
             if tag in _BLOCK_TAGS:
                 self.flush()
+            if tag == "pre":
+                self.pre_depth += 1
+            if tag == "code":
+                self.code_parts = [] if self.code_depth == 0 and not self.pre_depth else None
+                self.code_depth += 1
             if (self.separate_omitted and not self.prose_tracking_exhausted
                     and tag in _PROSE_TAGS | _NON_PROSE_TAGS):
                 if len(self.prose_context) >= MAX_PROSE_DEPTH:
@@ -109,6 +126,13 @@ class _Blocks(HTMLParser):
         if tag in self.skip_tags and self.ignored_depth:
             self.ignored_depth -= 1
         if not self.ignored_depth:
+            if tag == "code" and self.code_depth:
+                self.code_depth -= 1
+                if self.code_depth == 0 and self.code_parts is not None:
+                    self.pending_codes.append(' '.join(''.join(self.code_parts).split()))
+                    self.code_parts = None
+            if tag == "pre":
+                self.pre_depth = max(0, self.pre_depth - 1)
             if self.prose_context and self.prose_context[-1] == tag:
                 self.prose_context.pop()
             elif tag in self.prose_context:
@@ -121,6 +145,8 @@ class _Blocks(HTMLParser):
     def handle_data(self, data):
         if not self.ignored_depth and not self.omitted_depth and not self.exhausted:
             self.pending.append(data)
+            if self.code_parts is not None:
+                self.code_parts.append(data)
             if (self.separate_omitted and not self.prose_tracking_exhausted
                     and any(tag in _PROSE_TAGS for tag in self.prose_context)
                     and not any(tag in _NON_PROSE_TAGS for tag in self.prose_context)
@@ -160,7 +186,7 @@ def extract_source_document(
         return SourceDocument((), True)
     unfinished = bool(''.join(parser.pending).strip()) or bool(parser.ignored_depth) or bool(parser.omitted_depth)
     return SourceDocument(tuple(parser.blocks), truncated or parser.exhausted or unfinished,
-                          tuple(parser.prose_indices))
+                          tuple(parser.prose_indices), tuple(parser.inline_codes))
 
 
 def extract_page_document(value: str, *, truncated: bool, plain_text: bool = False,
@@ -171,10 +197,43 @@ def extract_page_document(value: str, *, truncated: bool, plain_text: bool = Fal
                                    raise_on_error=raise_on_error)
 
 
+def _inline_code_presentation(excerpt: str, document: SourceDocument) -> str:
+    """Drop Markdown delimiters only at a proven HTML inline-code location."""
+    whole = ' '.join(document.blocks)
+    if '`' not in excerpt or excerpt in whole or '\\`' in excerpt or '``' in excerpt:
+        return excerpt
+    parts, spans, cursor, size = [], [], 0, 0
+    for match in re.finditer(r'`([^`]+)`', excerpt):
+        prefix = excerpt[cursor:match.start()]
+        if '`' in prefix:
+            return excerpt
+        parts.extend((prefix, match[1]))
+        size += len(prefix)
+        spans.append((size, match[1]))
+        size += len(match[1])
+        cursor = match.end()
+    if not spans or '`' in excerpt[cursor:]:
+        return excerpt
+    parts.append(excerpt[cursor:])
+    plain = ''.join(parts)
+    start = whole.find(plain)
+    if start < 0 or whole.find(plain, start + 1) >= 0:
+        return excerpt
+    offsets, offset = [], 0
+    for block in document.blocks:
+        offsets.append(offset)
+        offset += len(block) + 1
+    positions = {(offsets[index] + document.blocks[index].index(code), code)
+                 for index, code in document.inline_codes
+                 if code and document.blocks[index].count(code) == 1}
+    return plain if all((start + relative, code) in positions for relative, code in spans) else excerpt
+
+
 def locate_source_window(excerpt: str, document: SourceDocument) -> SourceWindow | None:
     excerpt = ' '.join(excerpt.split())
     if not excerpt or len(excerpt) > 1200:
         return None
+    excerpt = _inline_code_presentation(excerpt, document)
     whole = ' '.join(document.blocks)
     start = whole.find(excerpt)
     if start < 0 or whole.find(excerpt, start + 1) >= 0:
@@ -232,6 +291,7 @@ def locate_source_windows(excerpts: tuple[str, ...], document: SourceDocument) -
         total += len(clean)
         if not clean or total + 2 * (len(windows)) > 1200:
             return None
+        clean = _inline_code_presentation(clean, document)
         start = whole.find(clean)
         if start < previous_end:
             return None
