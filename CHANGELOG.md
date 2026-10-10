@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased] - 2026-10-09
+## [Unreleased] - 2026-10-10
+
+### Simplification-first delivery plan
+
+Synchronize the maintained roadmap, execution rules, content acceptance and current
+status around removal or consolidation of redundant research processing. Allocate
+the remaining 7:24:49 across simplification, three-request-plus-repeat checks,
+confirmed-blocker repair, final delivery and contingency. Preserve paused development
+and timer state. Documentation only; no new research or product-quality claim.
 
 ### Bound singleton lease writer-admission retries
 
