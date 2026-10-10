@@ -427,7 +427,8 @@ async def test_whole_and_local_same_source_keep_separate_citation_eligibility(mo
     verification, _ = await verify_citations({"source_facts": facts}, original)
     calibrated = calibrate_evidence_choices({"source_facts": facts}, verification)
     assert [f["status"] for f in calibrated["source_facts"]] == ["unknown", "verified"]
-    assert calibrated["source_facts"][0].get("review_availability") is None
+    assert calibrated["source_facts"][0]["review_availability"] == "sentence_scoped"
+    assert calibrated["source_facts"][0]["reviewable_sentence_ids"] == [1, 2, 3, 4, 5]
 
 
 def test_extra_view_metadata_obeys_shared_capacity_without_partial_source(monkeypatch):

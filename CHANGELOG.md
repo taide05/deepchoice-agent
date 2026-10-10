@@ -2,6 +2,19 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Preserve usable sentences and conditional reasoning
+
+Citation v26 reuses bounded sentence locations for whole retrieval snippets whose
+presentation prevents whole-snippet matching. Whole facts stay unknown; only unique,
+ordered, complete, non-omission-adjacent checked sentences can enter existing scoped
+review. Selected ranges, multi-passage order, provenance and contrary checks remain.
+Judgment/self-review distinguish given constraints, technical facts and proposed measurements.
+Query adaptation no longer suggests invented years and checks candidate coverage.
+No additional model/HTTP calls, nodes, fields or migrations. Final full validation:
+3,923 passed in613.99s, no skips (Windows/Python3.12);268 frozen hashes unchanged.
+Smoke12/12, static/dependency checks and independent read-only review passed.
+Exposed regression223 of5cfc609 remained content0/1; service closed and paired backup verified.
+
 ### Preserve additive qualifications and proven inline code presentation
 
 Citation v25 recognizes explicit "not just ... but ..." additive wording using

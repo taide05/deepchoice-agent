@@ -235,9 +235,10 @@ def calibrate_evidence_choices(recommendation, verification):
                 # This grants review eligibility only, never citation/decision authority.
                 fact["review_availability"] = "network_unconfirmed"
             elif (outcomes <= {("verified", "lexical_support"),
-                               ("unknown", "qualifier_unverified")}
+                               ("unknown", "qualifier_unverified"),
+                               ("unknown", "content_insufficient")}
                   and ("verified", "lexical_support") in outcomes
-                  and ("unknown", "qualifier_unverified") in outcomes):
+                  and any(status == "unknown" for status, _ in outcomes)):
                 # A whole fact stays unknown. Only uniquely addressed, verified
                 # sentences may be considered for a bounded analysis review.
                 sentences = [_strip_citations(text) for text in _split_sentences(fact["saved_text"])]

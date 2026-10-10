@@ -167,8 +167,8 @@ def _render_model_analysis(
             lines.extend(["来源页面本次未能核验（unknown）。以下仅为基于保存片段、待人工审阅的条件分析；未确认来源当前内容与适用性。"
                           if zh else "Live source verification was unavailable (unknown). This is a conditional analysis of saved excerpts for human review; current source content and applicability remain unconfirmed.", ""])
         elif item.get("review_status") == "sentence_scoped_human_review_required":
-            lines.extend(["所引句子通过有限词法核验，但同份来源仍有未核实的限定句，整份来源保持unknown。以下模型推断需核对完整原文并由人工审阅。"
-                          if zh else "Addressed sentences passed bounded lexical checks, but another qualifier in the same source remains unverified. The whole source stays unknown; inspect its full text and review this inference manually.", ""])
+            lines.extend(["所引句子通过有限词法核验，但同份来源仍有未定位或未核实的内容，整份来源保持unknown。以下模型推断需核对完整原文并由人工审阅。"
+                          if zh else "Addressed sentences passed bounded lexical checks, but other text in the same source remains unlocated or unverified. The whole source stays unknown; inspect its full text and review this inference manually.", ""])
         requirements = item.get("requirements", [])
         if isinstance(requirements, list):
             lines.append(("对应问题：" if zh else "Addresses: ") + " / ".join(_plain_analysis(v) for v in requirements[:4]))
@@ -195,7 +195,7 @@ def _render_model_analysis(
         if fact.get("status") == "verified":
             lines.append("  - " + ("原文词法核验：verified；不验证上方模型推断。" if zh else "Source lexical check: verified; this does not verify the model inferences above."))
         elif fact.get("review_availability") == "sentence_scoped":
-            lines.append("  - " + ("原文核验：unknown（部分限定句未核实）；完整保存片段与模型分析均需人工核对。" if zh else "Source check: unknown (a qualifier remains unverified); the complete saved excerpt and model analysis require human checking."))
+            lines.append("  - " + ("原文核验：unknown（部分内容未定位或未核实）；完整保存片段与模型分析均需人工核对。" if zh else "Source check: unknown (some source text remains unlocated or unverified); the complete saved excerpt and model analysis require human checking."))
         else:
             lines.append("  - " + ("原文核验：unknown（本次网络核验未完成）；保存片段与模型分析均需人工核对。" if zh else "Source check: unknown (network verification unavailable); saved excerpts and model analysis require human checking."))
     return lines + [""]

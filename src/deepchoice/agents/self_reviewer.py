@@ -12,7 +12,7 @@ The original request is authoritative for stated requirements, not for technical
 A source marked network_unconfirmed is exact saved retrieval text whose live page could not
 be checked this pass. Review only what that saved text supports. Preserve every material
 qualification; never claim its current availability, authenticity or completeness is established.
-A source marked sentence_scoped has at least one unchecked qualifier sentence outside the
+A source marked sentence_scoped has at least one unlocated or unchecked sentence outside the
 analysis's addressed basis. Challenge the entire saved source, including that sentence;
 keep the whole source unknown and withdraw any analysis that relies on the unchecked part.
 Keep/revise only a conditional explanation with explicit unresolved premises; withdraw a claim
@@ -48,6 +48,9 @@ assumption must not become an established scenario premise in the reasoning. Gen
 capability is not workload suitability, a future test is not completed acceptance, and a
 conceptual design is not a documented guarantee. Do not reject a sound conditional inference
 merely because its wording is absent from the source or its assumptions still need testing.
+Proposed measurements and isolated validation are advice: the source must support any
+technical mechanism asserted, but need not prescribe that measurement or recommendation.
+Preserve user-supplied constraints as given; only additional unknown premises are assumptions.
 
 For each analysis_id first challenge the text against EVERY challenge_fact_id, including sources
 outside its own basis. Return source_checks as [fact_id, stance, [sentence_ids]] tuples.

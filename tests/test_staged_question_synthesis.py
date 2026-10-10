@@ -101,6 +101,9 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     assert judgment.kwargs["diagnostic_profile"] == "question-judgment-v2"
     assert '"id":"S1"' in selection.args[0][0]["content"]
     assert "B4: If the service fails" in judgment.args[0][0]["content"]
+    assert "User inputs:" in judgment.args[0][0]["content"]
+    assert "Sources need not prescribe that measurement" in judgment.args[0][0]["content"]
+    assert "Technical facts:" in judgment.args[0][0]["content"]
     assert "R0:" in judgment.args[0][0]["content"] and "Q1:" in judgment.args[0][0]["content"]
     assert all(call.kwargs["seed"] == 0 for call in model.await_args_list)
     unused.assert_not_called()

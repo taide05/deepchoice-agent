@@ -15,6 +15,13 @@ MAX_PACKET_BYTES = 24000
 MAX_PACKET_SOURCES = 24
 _OMISSION = re.compile(r"\[\s*(?:\.{3,}|…+)\s*\]|\.{3,}|…")
 
+
+def has_omission_context(sentences, start, end):
+    """An omitted focus or neighbouring premise cannot acquire source authority."""
+    return any(_OMISSION.search(sentence)
+               for sentence in sentences[max(0, start - 1):min(len(sentences), end + 1)])
+
+
 def _source_coordinates(source):
     """Keep original character spans, including Chinese sentence boundaries."""
     from ..citations.verifier import _split_sentences
@@ -73,7 +80,7 @@ def selected_passages(source, ranges):
         if not previous_end <= start < end <= len(sentences):
             return None
         focus = text[spans[start][0]:spans[end - 1][1]]
-        if (_OMISSION.search(focus) or focus[-1] not in ".!?。！？；;"
+        if (has_omission_context(sentences, start, end) or focus[-1] not in ".!?。！？；;"
                 or locate_source_windows((focus,), document) is None):
             return None
         focuses.append((start, end))
@@ -83,11 +90,6 @@ def selected_passages(source, ranges):
     # Store the focus coordinates unchanged, so every rebind is idempotent.
     expanded = []
     for start, end in focuses:
-        # An omission-bearing neighbour may also carry the missing premise.
-        # Refuse this focus instead of silently skipping that qualification.
-        if ((start and _OMISSION.search(sentences[start - 1]))
-                or (end < len(sentences) and _OMISSION.search(sentences[end]))):
-            return None
         left, right = max(0, start - 1), min(len(sentences), end + 1)
         context = text[spans[left][0]:spans[right - 1][1]]
         if (context[-1] not in ".!?。！？；;"

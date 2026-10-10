@@ -36,6 +36,8 @@ class SourceDocument:
 class SourceWindow:
     text: str
     outside: tuple[str, ...]
+    start: int = 0
+    end: int = 0
 
 
 class _Blocks(HTMLParser):
@@ -268,7 +270,7 @@ def locate_source_window(excerpt: str, document: SourceDocument) -> SourceWindow
     text = ' '.join(document.blocks[left:right])
     if len(text) > MAX_SOURCE_WINDOW:
         return None
-    return SourceWindow(text, document.blocks[:left] + document.blocks[right:])
+    return SourceWindow(text, document.blocks[:left] + document.blocks[right:], start, end)
 
 
 def locate_source_windows(excerpts: tuple[str, ...], document: SourceDocument) -> tuple[SourceWindow, ...] | None:

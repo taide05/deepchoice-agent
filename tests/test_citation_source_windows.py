@@ -225,6 +225,7 @@ async def test_ellipsis_does_not_bridge_omitted_source_content(monkeypatch):
     bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
     assert bound['source_facts'][0]['status'] == 'unknown'
     assert all(check.reason.value == 'content_insufficient' for check in verification.checks)
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
 
 
 
@@ -641,3 +642,91 @@ async def test_just_as_adjective_remains_a_real_negation(monkeypatch, contrary):
     bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
     assert bound["source_facts"][0]["status"] == "unknown"
     assert verification.checks[0].reason.value == "negation_conflict"
+
+
+@pytest.mark.asyncio
+async def test_partial_whole_snippet_preserves_only_unique_located_sentence_addresses(monkeypatch):
+    excerpt = 'The worker accepts jobs. Saved formatting is unavailable. The operator supplies cleanup.'
+    page = '<p>The worker accepts jobs.</p><p>The operator supplies cleanup.</p>'
+    bound, checks, calls = await verify_page(monkeypatch, page, excerpt=excerpt)
+    fact = bound['source_facts'][0]
+    assert fact['saved_text'] == excerpt and fact['status'] == 'unknown'
+    assert fact['review_availability'] == 'sentence_scoped'
+    assert fact['reviewable_sentence_ids'] == [1, 3]
+    assert [check.status.value for check in checks.checks] == ['verified', 'unknown', 'verified']
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('body', [
+    '<p>The worker accepts jobs.</p><p>The worker accepts jobs.</p>',
+    '<p>The worker accepts jobs only if registration is enabled.</p>',
+    '<p>The worker accepts jobs.</p><p>Only if registration is enabled.',
+    '<p>The worker accepts jobs.</p><p>The worker never accepts jobs.</p>',
+    '<p>The worker accepts jobs.</p><p>Context.</p><h2>Exceptions</h2><p>The worker never accepts jobs.</p>',
+    '<script>The worker accepts jobs.</script><p>Other content.</p>',
+])
+async def test_partial_snippet_cannot_bypass_location_or_contrary_evidence(monkeypatch, body):
+    bound, checks, _ = await verify_page(monkeypatch, body,
+        excerpt='The worker accepts jobs. Saved formatting is unavailable.')
+    assert checks.checks[0].status.value != 'verified'
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
+
+
+@pytest.mark.asyncio
+async def test_individual_matches_cannot_verify_reordered_whole_snippet(monkeypatch):
+    bound, checks, _ = await verify_page(monkeypatch,
+        '<p>The operator supplies cleanup.</p><p>The worker accepts jobs.</p>',
+        excerpt='The worker accepts jobs. The operator supplies cleanup.')
+    assert all(check.status.value == 'unknown' for check in checks.checks)
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
+
+
+@pytest.mark.asyncio
+async def test_repeated_original_sentence_cannot_borrow_partial_address(monkeypatch):
+    bound, checks, _ = await verify_page(monkeypatch, '<p>The worker accepts jobs.</p>',
+        excerpt='The worker accepts jobs. Saved formatting is unavailable. The worker accepts jobs.')
+    assert all(check.status.value == 'unknown' for check in checks.checks)
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
+
+
+@pytest.mark.asyncio
+async def test_partial_snippet_does_not_repair_code_fence_or_omission_sentence(monkeypatch):
+    excerpt = 'The worker accepts jobs. Note [...] the worker isolates secrets. ``` cleanup. ```'
+    bound, checks, _ = await verify_page(monkeypatch,
+        '<p>The worker accepts jobs.</p><p>The worker isolates secrets.</p><pre>cleanup.</pre>', excerpt=excerpt)
+    assert bound['source_facts'][0]['status'] == 'unknown'
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
+    assert all(check.status.value == 'unknown' for check in checks.checks)
+
+
+@pytest.mark.asyncio
+async def test_partial_snippet_rejects_reordered_located_sentences(monkeypatch):
+    bound, checks, _ = await verify_page(monkeypatch,
+        '<p>The operator supplies cleanup.</p><p>The worker accepts jobs.</p>',
+        excerpt='The worker accepts jobs. Saved formatting is unavailable. The operator supplies cleanup.')
+    assert all(check.status.value == 'unknown' for check in checks.checks)
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
+
+
+@pytest.mark.asyncio
+async def test_partial_snippet_preserves_omission_adjacent_scope_even_for_low_overlap(monkeypatch):
+    bound, checks, _ = await verify_page(monkeypatch,
+        '<p>The worker accepts jobs.</p><p>Context.</p><p>Registration is required.</p>',
+        excerpt='The worker accepts jobs. Note [...] only when registered.')
+    assert all(check.status.value == 'unknown' for check in checks.checks)
+    assert bound['source_facts'][0].get('review_availability') != 'sentence_scoped'
+
+
+@pytest.mark.asyncio
+async def test_whole_snippet_keeps_complete_inline_code_sentence_before_unlocatable_fence(monkeypatch):
+    excerpt = ('Register the worker using `--once` with `setup.sh`. '
+               'For example: ``` . /setup.sh --once ``` The service removes registration after one job.')
+    page = ('<p>Register the worker using <code>--once</code> with <code>setup.sh</code>.</p>'
+            '<pre>./setup.sh --once</pre><p>The service removes registration after one job.</p>')
+    bound, checks, calls = await verify_page(monkeypatch, page, excerpt=excerpt)
+    fact = bound['source_facts'][0]
+    assert fact['status'] == 'unknown' and fact['saved_text'] == excerpt
+    assert fact['review_availability'] == 'sentence_scoped'
+    assert fact['reviewable_sentence_ids'] == [1]
+    assert checks.checks[0].status.value == 'verified' and len(calls) == 1

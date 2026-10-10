@@ -25,7 +25,8 @@ Rules:
 - Only when BOTH the original request and the current target leave the candidate set open (no named candidate technologies or comparison): first enumerate 3-5 mainstream candidate technologies that plausibly satisfy the question, then generate every retriever query naming those candidates — official/github/arxiv especially need concrete tech names to retrieve anything.
 - Return exactly one row per supplied sub_question_index, with every retriever variant a non-empty string of at most 1000 characters. Keep the index unchanged; do not merge, duplicate or renumber targets.
 - Each variant MUST be specific and searchable
-- Include version numbers or years where relevant
+- Preserve only versions or dates supplied in the request; never invent a year or silently narrow to older documentation.
+- Before returning, check each retriever column across all targets against candidate_techs. Retain every supplied candidate in relevant searches; do not let one familiar product occupy all queries.
 - If a sub-question doesn't fit a particular retriever type, still generate the best possible query
 
 Return ONLY a JSON object:

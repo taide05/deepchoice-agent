@@ -109,6 +109,8 @@ async def test_accepted_boundaries_and_instruction_like_text_remain_data(monkeyp
     assert payload["request"]["candidate_techs"] == candidates
     assert payload["request"]["sub_questions"] == frozen_questions
     if module is query_adapter:
+        assert "never invent a year" in prompt[0]["content"]
+        assert "Retain every supplied candidate" in prompt[0]["content"]
         assert len(payload["adaptation_targets"]) == 20
         assert [row["sub_question"] for row in payload["adaptation_targets"]] == frozen_questions
     assert "DO_NOT_PROJECT" not in str(prompt)

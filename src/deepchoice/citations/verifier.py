@@ -710,8 +710,9 @@ def _support_status(claim: str, evidence: str) -> tuple[CitationStatus, Citation
 def _source_fact_support(claim, source, recommendation, evidence_chains, outcome, offered_selection_ids):
     """Verify each copied source-fact sentence against its own page location.
 
-    Separate passages share one source identity. Every passage must be found
-    in order on the same fetched page before any sentence can be verified.
+    Selected ranges and separate passages retain their ordered-location gate.
+    A whole retrieval snippet may contain provider presentation seams; complete
+    uniquely located sentences can be reviewed without verifying the whole.
     """
     from ..utils.evidence_choices import selected_source_text
 
@@ -753,19 +754,41 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         if fact.get("saved_passages") != list(passages):
             return unknown
         windows = locate_source_windows(passages, outcome.document)
-        if windows is None:
-            return unknown
         matches = [
             index for index, passage in enumerate(passages)
             if claim.text in _split_sentences(passage)
         ]
         if len(matches) != 1:
             return unknown
-        window = windows[matches[0]]
+        window = windows[matches[0]] if windows is not None else None
     else:
         if "saved_passages" in fact:
             return unknown
         window = locate_source_window(snippet, outcome.document)
+    if window is None:
+        # Never relax model-selected range or multi-passage ordering. Reuse exact
+        # original sentence addresses without splitting seams or repairing text.
+        # One unlocated sentence keeps the whole fact unknown; uniquely located
+        # complete sentences may proceed to the existing scoped review.
+        sentences = _split_sentences(snippet)
+        if ("source_ranges" in fact or len(passages) > 1
+                or len(sentences) != len(set(sentences)) or claim.text not in sentences):
+            return unknown
+        located = [locate_source_window(sentence, outcome.document) for sentence in sentences]
+        if all(item is not None for item in located):
+            # Individual matches must not bypass whole-snippet ordering and
+            # continuity to acquire whole-fact verified authority.
+            return unknown
+        positions = [item for item in located if item is not None]
+        if any(left.end > right.start for left, right in zip(positions, positions[1:])):
+            return unknown
+        sentence_index = sentences.index(claim.text)
+        from ..utils.fact_selection import has_omission_context
+        # Reuse the existing focus/adjacent-omission guard on the original
+        # retrieval text. This does not replace or renumber the saved excerpt.
+        if has_omission_context(sentences, sentence_index, sentence_index + 1):
+            return unknown
+        window = located[sentence_index]
         if window is None:
             return unknown
     status, reason = _support_status(claim.text, window.text)

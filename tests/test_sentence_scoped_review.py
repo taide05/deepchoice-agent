@@ -29,8 +29,9 @@ def partial_state(*, reason="qualifier_unverified", status="unknown", addressed=
     return state
 
 
-def test_only_addressed_verified_sentence_enters_full_source_review():
-    state = partial_state()
+@pytest.mark.parametrize("reason", ["qualifier_unverified", "content_insufficient"])
+def test_only_addressed_verified_sentence_enters_full_source_review(reason):
+    state = partial_state(reason=reason)
     recommendation = state["final_recommendation"]
     fact = recommendation["source_facts"][0]
     assert fact["status"] == "unknown"
@@ -56,8 +57,8 @@ def test_only_addressed_verified_sentence_enters_full_source_review():
     assert result["decision_analysis"][0]["review_status"] == "sentence_scoped_human_review_required"
     report = "\n".join(render_decision_details(result, "en"))
     assert "Model judgment" in report
-    assert "qualifier in the same source remains unverified" in report
-    assert "Source check: unknown (a qualifier remains unverified)" in report
+    assert "text in the same source remains unlocated or unverified" in report
+    assert "Source check: unknown (some source text remains unlocated or unverified)" in report
     assert "Other requirements can also justify" in report
 
 
@@ -67,15 +68,13 @@ def test_an_analysis_addressing_the_unverified_sentence_is_withheld():
     assert prepare_analysis_review(state).slots == {}
 
 
-@pytest.mark.parametrize("mutation", ["content", "cross_language", "unsupported", "unreachable",
+@pytest.mark.parametrize("mutation", ["cross_language", "unsupported", "unreachable",
                                        "missing", "duplicate", "wrong_title", "wrong_url", "overflow"])
-def test_partial_review_requires_exact_complete_identity_and_only_qualifier_uncertainty(mutation):
+def test_partial_review_requires_exact_complete_identity_and_eligible_uncertainty(mutation):
     state = make_state()
     verification = deepcopy(state["citation_verification"])
     checks = verification["checks"]
-    if mutation == "content":
-        checks[0].update(status="unknown", reason="content_insufficient")
-    elif mutation == "cross_language":
+    if mutation == "cross_language":
         checks[0].update(status="unknown", reason="cross_language")
     elif mutation == "unsupported":
         checks[0].update(status="unsupported", reason="lexical_mismatch")
@@ -200,4 +199,4 @@ async def test_real_verifier_mixed_sentence_status_reaches_review_and_report(mon
     assert result["source_facts"][0]["status"] == "unknown"
     report = "\n".join(render_decision_details(result, "en"))
     assert "Model judgment" in report
-    assert "qualifier in the same source remains unverified" in report
+    assert "text in the same source remains unlocated or unverified" in report
