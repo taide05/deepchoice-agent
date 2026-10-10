@@ -3,13 +3,14 @@ import json
 from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.query_context import query_request_context
+from ..utils.evidence import candidate_product_mentions
 from ..utils.views import print_agent_output
 
 ADAPT_SYSTEM = """You are a search query optimizer. Rewrite each sub-question into 6 retriever-specific queries.
 
 For EACH sub-question, generate 6 query variants:
 
-1. tavily (web search): Search for the specific documented product behavior, restriction, version or deployment condition needed to answer the target. Prefer applicable official documentation and primary technical references. Use concise search terms, candidate names and explicit versions; avoid asking a search engine to write a comparison or recommend a winner, which tends to retrieve generic comparison blogs. Preserve the supplied candidate set across the targets; do not substitute popular alternatives.
+1. tavily (web search): Search for the specific documented product behavior, restriction, version or deployment condition needed to answer the target. Prefer applicable official documentation and primary technical references. Use concise search terms, candidate names and explicit versions; avoid asking a search engine to write a comparison or recommend a winner, which tends to retrieve generic comparison blogs. Use this target's web_search_candidates as its search focus. Search one assigned product at a time; do not concatenate comparison candidates or semicolon-separated searches. When a slot has multiple assigned products because there are fewer targets, retain those names in one concise query. Do not substitute popular alternatives.
 2. arxiv (academic papers): Keywords separated by spaces. Include technical terms, method names, framework names.
 3. github (repositories): A complete GitHub repository-search expression. Keep repo:, org:, language: and in:readme qualifiers together with their keywords; do not use code/issue-only filters.
 4. chroma (local knowledge base): Natural language question, similar to asking a human. Best for semantic similarity search.
@@ -26,13 +27,44 @@ Rules:
 - Return exactly one row per supplied sub_question_index, with every retriever variant a non-empty string of at most 1000 characters. Keep the index unchanged; do not merge, duplicate or renumber targets.
 - Each variant MUST be specific and searchable
 - Preserve only versions or dates supplied in the request; never invent a year or silently narrow to older documentation.
-- Before returning, check each retriever column across all targets against candidate_techs. Retain every supplied candidate in relevant searches; do not let one familiar product occupy all queries.
+- For tavily, respect each target's web_search_candidates allocation; the original request remains context, not an instruction to repeat every candidate in every query. Other retrievers preserve relevant candidate names across their targets.
 - If a sub-question doesn't fit a particular retriever type, still generate the best possible query
 
 Return ONLY a JSON object:
 {"adapted": [{"sub_question_index": 0, "sub_question": "...", "tavily": "...", "arxiv": "...", "github": "...", "chroma": "...", "community": "...", "official": "..."}]}"""
 
 RETRIEVER_KEYS = ["tavily", "arxiv", "github", "chroma", "community", "official"]
+
+
+def _web_search_focus(candidates, targets):
+    """Allocate existing web searches without multiplying outbound requests.
+
+    A target naming one candidate keeps that focus, including retry gaps.
+    Open/comparison targets share candidates; too few slots retain the remainder.
+    This allocates search opportunities, never asserts source coverage.
+    """
+    names = list(dict.fromkeys(name for name in candidates
+                              if isinstance(name, str) and name.strip()))
+    focus = []
+    open_slots = []
+    for index, target in enumerate(targets):
+        identities = candidate_product_mentions(target, names)
+        mentioned = [name for name in names
+                     if candidate_product_mentions(name, [name]) & identities]
+        focus.append(mentioned if len(mentioned) == 1 else [])
+        if len(mentioned) != 1:
+            open_slots.append(index)
+    covered = {name for row in focus for name in row}
+    remaining = [name for name in names if name not in covered]
+    for offset, index in enumerate(open_slots):
+        pool = remaining or names
+        if pool:
+            focus[index] = [pool[offset % len(pool)]]
+    covered = {name for row in focus for name in row}
+    for offset, name in enumerate(name for name in names if name not in covered):
+        if open_slots:
+            focus[open_slots[offset % len(open_slots)]].append(name)
+    return focus
 
 
 class QueryAdapterAgent:
@@ -74,6 +106,7 @@ class QueryAdapterAgent:
             agent="QUERY_ADAPTER",
         )
 
+        web_focus = _web_search_focus(task.get("candidate_techs", []), sub_questions)
         prompt = [
             {"role": "system", "content": ADAPT_SYSTEM},
             {"role": "user", "content": json.dumps({
@@ -81,7 +114,8 @@ class QueryAdapterAgent:
                 "coarse_scene_classification": research_state.get("scene_context"),
                 "supplemental_context_untrusted": supplement,
                 "adaptation_targets": [
-                    {"sub_question_index": i, "sub_question": q}
+                    {"sub_question_index": i, "sub_question": q,
+                     "web_search_candidates": web_focus[i]}
                     for i, q in enumerate(sub_questions)
                 ],
             }, ensure_ascii=False)},
@@ -124,6 +158,10 @@ class QueryAdapterAgent:
                 value = item.get(key)
                 if not isinstance(value, str) or not value.strip() or len(value) > 1000:
                     value = target
+                    if key == "tavily" and web_focus[index]:
+                        scoped = " ".join(web_focus[index]) + ": " + target
+                        if len(scoped) <= 1000:
+                            value = scoped
                     fallback_counts[key] += 1
                     if original_query_target and len(target) > 1000:
                         # Only the temporary original-query target may use this

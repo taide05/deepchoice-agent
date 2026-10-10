@@ -398,8 +398,8 @@ async def test_scope_prompt_reserves_late_distinct_candidate(monkeypatch):
     assert len(urls) == 8
 
 
-# A source name outside the old snippet may be offered, but only delivered
-# runtime-copied text can satisfy the same candidate gate afterward.
+# Broad community/paper channels keep their lexical gate. Documentation bodies
+# are request-specific proposals even when the full candidate label is absent.
 def _scope_only_state(source="official"):
     state = _scoped_source_state()
     channel = state["search_results"][0]
@@ -423,9 +423,10 @@ async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch,
     monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
     output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(_scope_only_state(source))
     selector.assert_awaited_once()
+    admitted = admitted or source == "official"
     assert len(output["source_scores"]) == int(admitted)
     assert output["quality_signals"][0]["candidate_excluded_count"] == int(not admitted)
-    if admitted:
+    if admitted and proposal == {"sources": [{"id": "S1", "ranges": [[0, 3]]}]}:
         item = output["source_scores"][0]
         assert item["snippet"] == _SCOPE_DOCUMENT
         assert item["passages"] == [_SCOPE_DOCUMENT]
@@ -435,7 +436,7 @@ async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch,
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("source,variant", [
-    ("official", v) for v in ("chroma", "github", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair")
+    ("official", v) for v in ("chroma", "github", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair")
 ] + [(src, v) for src in ("community", "arxiv") for v in ("nameless", "oversized", "public_passages", "private_passages")])
 async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries(monkeypatch, source, variant):
     from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
@@ -480,8 +481,8 @@ async def test_scope_only_candidate_preserves_legacy_exclusion(monkeypatch, sour
     monkeypatch.setattr("deepchoice.utils.llm.call_model", selector)
     manifest = None if legacy == "no_manifest" else build_run_manifest({})
     output = await SourceEvaluatorAgent(run_manifest=manifest).run(_scope_only_state(source))
-    assert output["source_scores"] == []
-    assert output["quality_signals"][0]["candidate_excluded_count"] == 1
+    assert len(output["source_scores"]) == int(source == "official")
+    assert output["quality_signals"][0]["candidate_excluded_count"] == int(source != "official")
     selector.assert_not_awaited()
 
 
@@ -519,8 +520,8 @@ async def test_unoffered_scope_only_candidate_cannot_gain_admission(monkeypatch,
     monkeypatch.setattr("deepchoice.utils.llm.call_model", select)
     output = await SourceEvaluatorAgent(run_manifest=build_run_manifest({})).run(state)
     assert len(seen) == 1 and len(seen[0]["sources"]) == 8
-    assert len(output["source_scores"]) == 8
-    assert output["quality_signals"][0]["candidate_excluded_count"] == 1
+    assert len(output["source_scores"]) == (9 if source == "official" else 8)
+    assert output["quality_signals"][0]["candidate_excluded_count"] == int(source != "official")
 
 
 @pytest.mark.asyncio
@@ -733,3 +734,23 @@ async def test_web_search_proposal_survives_missing_exact_candidate_label():
     assert output['source_scores'][0]['snippet'] == source['snippet']
     assert output['source_scores'][0]['evidence_type'] == 'unassessed'
     assert output['quality_signals'][0]['candidate_excluded_count'] == 0
+
+
+@pytest.mark.asyncio
+async def test_documentation_body_with_shorter_product_name_remains_a_proposal():
+    from copy import deepcopy
+    from deepchoice.agents.evidence_chain import build_evidence_chain
+    from deepchoice.utils.fact_selection import selection_view_packet
+    source = {"title": "Overview - Example Engine", "url": "https://docs.example.org/overview",
+              "snippet": "The engine can run locally on one machine. Distributed execution needs separate configuration."}
+    state = {"task": {"query": "Compare local deployment", "candidate_techs": ["Acme Example Engine", "Other Tool"]},
+             "search_results": [{"source": "official", "status": "success", "results": [source]}]}
+    before = deepcopy(state)
+    result = await SourceEvaluatorAgent().run(state)
+    assert state == before
+    assert result["source_scores"][0]["snippet"] == source["snippet"]
+    assert result["source_scores"][0]["source_type"] == "tech_blog"
+    assert result["source_scores"][0]["evidence_type"] == "unassessed"
+    menu, offered = selection_view_packet(build_evidence_chain(result["source_scores"], []), state["task"]["candidate_techs"])
+    assert "run locally on one machine" in menu and offered
+    assert "verified" not in result["source_scores"][0]

@@ -2,6 +2,18 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Request-focused source delivery (2026-10-10)
+
+Official retrieval bodies now reach source selection without requiring the complete candidate label;
+this does not confer source authority or relax citation, safety, or local seed scope checks.
+Existing web-query slots receive candidate focus, preserving explicit single-product targets and
+remaining candidates when slots are scarce. Query v8 and source-score-v19 freeze the change.
+The preceding cf065dc fresh delivery check (delivery-fresh-cases v1.0.0, 2026-10-10) passed content
+0/4, with one critical candidate exclusion and unstable repeat evidence; originals remain unchanged.
+Engineering checks passed: 695 related tests, final 182 query/source tests, full 3929 tests in
+600.54 seconds without skips (Windows/Python 3.12), smoke12/12, static/dependency checks and
+independent review. Frozen hashes stayed unchanged. Live content improvement remains unverified.
+
 ### Preserve usable sentences and conditional reasoning
 
 Citation v26 reuses bounded sentence locations for whole retrieval snippets whose

@@ -245,8 +245,8 @@ def _candidate_rejection(result: dict, source: str, candidates: object,
     comparison_scope = _local_comparison_covers_candidates(result, source, patterns)
     if comparison_scope is False:
         return "comparison_scope"
-    if comparison_scope is True or source == "tavily":
-        # Request-specific web results are proposals for the existing selector;
+    if comparison_scope is True or source in {"tavily", "official"}:
+        # Request-specific web and documentation results are proposals for selection;
         # a missing literal choice label cannot establish irrelevance.
         return None
     lexical_match = (_audited_seed_lexically_names_target(result) if seed_scope is True
@@ -588,7 +588,7 @@ class SourceEvaluatorAgent:
                     continue
                 normalized_result = {**r, "title": source_title(r.get("title"), r.get("url"))}
                 rejection = _candidate_rejection(normalized_result, source, candidates, patterns, retrieval_patterns)
-                if rejection == "missing_candidate" and source in {"official", "community", "arxiv"}:
+                if rejection == "missing_candidate" and source in {"community", "arxiv"}:
                     # These retrievers emit bounded body/abstract scopes. A name
                     # in that text permits offering it to the existing
                     # selector; it cannot grant admission for unselected text.

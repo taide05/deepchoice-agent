@@ -70,13 +70,12 @@ async def test_adapter_retains_frozen_context_independently_of_current_targets(m
     if path == "hitl":
         state["_supplemental_input"] = "Supplemental test context: no production restart is permitted."
     result, payload, _ = await _run_captured(monkeypatch, query_adapter, state)
-    assert payload["adaptation_targets"] == [
-        {"sub_question_index": i, "sub_question": text} for i, text in enumerate(expected_targets)
-    ]
+    assert [(row["sub_question_index"], row["sub_question"]) for row in payload["adaptation_targets"]] == list(enumerate(expected_targets))
     assert payload["coarse_scene_classification"] == state.get("scene_context")
     assert payload["supplemental_context_untrusted"] == state.get("_supplemental_input")
     assert result["adapted_queries"]["chroma"] == ["SQLite PostgreSQL operations", *expected_targets[1:]]
-    assert result["adapted_queries"]["tavily"] == expected_targets  # Existing fallback, no extra dimension.
+    assert len(result["adapted_queries"]["tavily"]) == len(expected_targets)
+    assert all(value.endswith(target) for value, target in zip(result["adapted_queries"]["tavily"], expected_targets))
     assert "task" not in result and "constraints" not in result
 
 
@@ -110,7 +109,7 @@ async def test_accepted_boundaries_and_instruction_like_text_remain_data(monkeyp
     assert payload["request"]["sub_questions"] == frozen_questions
     if module is query_adapter:
         assert "never invent a year" in prompt[0]["content"]
-        assert "Retain every supplied candidate" in prompt[0]["content"]
+        assert "web_search_candidates allocation" in prompt[0]["content"]
         assert len(payload["adaptation_targets"]) == 20
         assert [row["sub_question"] for row in payload["adaptation_targets"]] == frozen_questions
     assert "DO_NOT_PROJECT" not in str(prompt)
@@ -124,7 +123,8 @@ async def test_context_delivery_does_not_add_calls_on_model_failure(monkeypatch,
     state = {"task": deepcopy(CASES[0]), "sub_questions": ["Existing target"]}
     result, _, _ = await _run_captured(monkeypatch, module, state, fails=True)
     if module is query_adapter:
-        assert all(items == ["Existing target"] for items in result["adapted_queries"].values())
+        assert all(items == ["Existing target"] for key, items in result["adapted_queries"].items() if key != "tavily")
+        assert result["adapted_queries"]["tavily"] == ["SQLite PostgreSQL: Existing target"]
     else:
         assert result["sub_questions"] == [] and result["constraints"] == state["task"]["constraints"]
 
@@ -272,7 +272,7 @@ async def test_long_original_target_uses_native_query_after_model_failure(monkey
     result = await query_adapter.QueryAdapterAgent().run(state)
     assert state == original and model.await_count == 1
     payload = json.loads(model.await_args.args[0][1]["content"])
-    assert payload["adaptation_targets"] == [{"sub_question_index": 0, "sub_question": query}]
+    assert payload["adaptation_targets"] == [{"sub_question_index": 0, "sub_question": query, "web_search_candidates": []}]
     assert payload["supplemental_context_untrusted"] == state["_supplemental_input"]
     assert all(values == [] for values in result["adapted_queries"].values())
     signal = result["quality_signals"][0]
@@ -366,3 +366,37 @@ async def test_original_clarification_query_is_audit_only(monkeypatch, module):
     assert "original_query" not in payload["request"]
     rows = question_rows(task["query"], [])
     assert rows == [("R0", task["query"])]
+
+
+@pytest.mark.parametrize("targets, expected", [
+    (["memory", "deployment", "correctness", "measurement", "cost"], [["Alpha"], ["Beta"], ["Gamma"], ["Alpha"], ["Beta"]]),
+    (["deployment"], [["Alpha", "Beta", "Gamma"]]),
+    (["deployment", "recovery"], [["Alpha", "Gamma"], ["Beta"]]),
+    (["Beta recovery"], [["Beta"]]),
+    (["Beta recovery", "deployment"], [["Beta"], ["Alpha", "Gamma"]]),
+    (["Alpha vs Beta vs Gamma recovery", "cost", "deployment"], [["Alpha"], ["Beta"], ["Gamma"]]),
+])
+def test_existing_web_slots_focus_candidates_without_losing_explicit_targets(targets, expected):
+    assert query_adapter._web_search_focus(["Alpha", "Beta", "Gamma"], targets) == expected
+
+
+@pytest.mark.asyncio
+async def test_candidate_focus_is_in_existing_target_payload_and_failed_rows_keep_it(monkeypatch):
+    captured = []
+    async def call(messages, **kwargs):
+        captured.append(json.loads(messages[1]["content"]))
+        return {"adapted": [{"sub_question_index": 1, "tavily": "Beta recovery docs"},
+                            {"sub_question_index": 0, "tavily": "x" * 1001}]}
+    monkeypatch.setattr(query_adapter, "call_model", call)
+    state = {"task": {"query": "Compare deployment", "candidate_techs": ["Alpha", "Beta", "Gamma"]},
+             "sub_questions": ["deployment", "recovery", "cost"]}
+    result = await query_adapter.QueryAdapterAgent().run(state)
+    assert len(captured) == 1
+    assert [row["web_search_candidates"] for row in captured[0]["adaptation_targets"]] == [["Alpha"], ["Beta"], ["Gamma"]]
+    assert result["adapted_queries"]["tavily"] == ["Alpha: deployment", "Beta recovery docs", "Gamma: cost"]
+    assert all(len(rows) == 3 for rows in result["adapted_queries"].values())
+
+
+def test_single_product_retry_focus_preserves_longer_candidate_identity():
+    assert query_adapter._web_search_focus(["Tool", "Tool Pro", "Other"], ["Tool Pro privacy"]) == [["Tool Pro"]]
+    assert query_adapter._web_search_focus(["Tool", "Tool Pro", "Other"], ["Tool privacy"]) == [["Tool"]]

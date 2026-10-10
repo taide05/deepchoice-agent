@@ -49,7 +49,7 @@ REPORT_TEMPLATE_VERSIONS = {
 PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v11",
     "query_analyzer.decomposition_system": "v3",
-    "query_adapter.adapt_system": "v7",
+    "query_adapter.adapt_system": "v8",
     "conclusion_synthesizer.synthesis_prompt": "v40",
     "source_evaluator.source_scope_selection": "v4",
     "conflict_detector.contradiction_scan_system": "v4",
@@ -120,7 +120,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8", "source-score-v9", "source-score-v10", "source-score-v11", "source-score-v12", "source-score-v13", "source-score-v14", "source-score-v15", "source-score-v16", "source-score-v17", "source-score-v18"] = "source-score-v18"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8", "source-score-v9", "source-score-v10", "source-score-v11", "source-score-v12", "source-score-v13", "source-score-v14", "source-score-v15", "source-score-v16", "source-score-v17", "source-score-v18", "source-score-v19"] = "source-score-v19"
     security_policy_version: Literal[
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4", "outbound-url-v5"
     ] = "outbound-url-v5"
@@ -327,7 +327,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             )
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v18",
+        "scoring_policy_version": "source-score-v19",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
         "citation_policy_version": "deterministic-citation-v26",

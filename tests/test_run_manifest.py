@@ -43,7 +43,7 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
     )
     assert len(first.retrievers) == 6
     assert first.report.template_version == "evidence-first-v23"
-    assert first.scoring_policy_version == "source-score-v18"
+    assert first.scoring_policy_version == "source-score-v19"
     assert {
         retriever.retriever_id: retriever.version
         for retriever in first.retrievers
@@ -189,7 +189,7 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v11", "conclusion_synthesizer.synthesis_prompt": "v40",
                          "query_analyzer.decomposition_system": "v3",
-                         "query_adapter.adapt_system": "v7",
+                         "query_adapter.adapt_system": "v8",
                          "source_evaluator.source_scope_selection": "v4",
                          "conflict_detector.contradiction_scan_system": "v4"}
     assert {prompt.prompt_id: prompt.version for prompt in registry.prompts} == {
