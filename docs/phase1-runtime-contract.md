@@ -64,10 +64,6 @@ sentence_scoped审阅，未定位/未核实内容不可作正依据。原文、�
 未知复合名称不猜测，历史seed的修饰标签覆盖限制保留。无新状态、数据库、节点或API。
 旧提示身份可读但不能同run恢复，新manifest隔离旧缓存；真实质量收益尚未测量。
 
-2026-10-10来源视图v6：移除选材菜单对整份来源的单句400字符否决。长句仍不得绕过
-选中段落的事实长度、原文定位、邻近限定和引用校验；其它完整段落可作为独立局部视图。
-新manifest身份隔离旧同run恢复；真实报告收益尚待测量。
-
 2026-10-10主流程合并：新运行冻结 `research-v6`、合成v42、official v12、
 `runtime-source-views-v5` 与 `runtime-question-basis-v5`。图顺序为 evidence_chain →
 conclusion_synthesizer → citation_validator → self_reviewer → evidence_decision_gate →

@@ -2,16 +2,6 @@
 
 ## [Unreleased] - 2026-10-10
 
-### Preserve bounded passages beside an oversized sentence
-
-Remove the menu's global per-sentence rejection: a long sentence no longer hides
-independent complete passages from the same saved source. Existing local passage,
-source-identity, omission, citation and packet bounds still apply. Source-view
-policy v6 freezes the changed manifest identity. Full validation: 3849 passed /
-570.76s (Windows/Python3.12), no skips; smoke12/12, static/dependency checks
-and independent read-only review passed. Report-level benefit remains unmeasured;
-no content acceptance is claimed by this code change.
-
 ### Retire unused conflict arbitration and search tools
 
 Explicitly remove the documented direct-agent `legacy_arbitration=True` adapter,

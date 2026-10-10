@@ -9,7 +9,7 @@ from copy import deepcopy
 from urllib.parse import urlsplit
 
 from .evidence import candidate_product_mentions, is_navigation_placeholder
-from .source_scope import MAX_SCOPE_CHARS, MAX_SCOPE_SENTENCES
+from .source_scope import MAX_SCOPE_CHARS, MAX_SCOPE_SENTENCES, MAX_SENTENCE_CHARS
 
 MAX_PACKET_BYTES = 24000
 MAX_PACKET_SOURCES = 24
@@ -40,7 +40,8 @@ def _source_coordinates(source):
     if not text or len(text) > MAX_SCOPE_CHARS:
         return None
     sentences = tuple(_split_sentences(text))
-    if not sentences or len(sentences) > MAX_SCOPE_SENTENCES or any(not row for row in sentences):
+    if (not sentences or len(sentences) > MAX_SCOPE_SENTENCES
+            or any(not row or len(row) > MAX_SENTENCE_CHARS for row in sentences)):
         return None
     spans, cursor = [], 0
     for sentence in sentences:
@@ -177,7 +178,7 @@ def _selection_rows(bindings):
         yield number, row
 
 
-SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v6:joint-view-quotes;local-bounds-no-global-sentence-veto;sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;source-host"
+SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v5:joint-view-quotes;sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;source-host"
 
 
 def _view_rows(bindings):
