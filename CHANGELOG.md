@@ -2,6 +2,15 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Ask each original question before selecting supporting views
+
+The existing single-call synthesis prompt now starts from the original R0/Q questions,
+then chooses at most five supporting views. Repeated coverage and conditionality prose
+was consolidated; binding, source and citation limits, review and runtime authority
+are unchanged. Prompt v43 isolates new runs from historical identity. Focused tests
+passed; real report benefit is pending. The prior global-sentence-veto candidate was
+fully validated but reverted after exposed FVC-02 run 231 remained incomplete.
+
 ### Retire unused conflict arbitration and search tools
 
 Explicitly remove the documented direct-agent `legacy_arbitration=True` adapter,

@@ -64,7 +64,11 @@ sentence_scoped审阅，未定位/未核实内容不可作正依据。原文、�
 未知复合名称不猜测，历史seed的修饰标签覆盖限制保留。无新状态、数据库、节点或API。
 旧提示身份可读但不能同run恢复，新manifest隔离旧缓存；真实质量收益尚未测量。
 
-2026-10-10主流程合并：新运行冻结 `research-v6`、合成v42、official v12、
+2026-10-10合成提示v43：同一次调用先按原始R0/Q问题组织有据的局部回答，再选择
+支撑这些回答的最多五份视图；重复条件说明收拢。仍由运行时重绑原句，保持引用、预算、
+恢复与自审边界。v42旧身份可读但不能同run恢复。真实内容收益尚待独立检查。
+
+2026-10-10主流程合并时：当时新运行冻结 `research-v6`、合成v42、official v12、
 `runtime-source-views-v5` 与 `runtime-question-basis-v5`。图顺序为 evidence_chain →
 conclusion_synthesizer → citation_validator → self_reviewer → evidence_decision_gate →
 report_generator。删除独立source_selection节点，将选源与问题判断的两次模型处理合为一次。

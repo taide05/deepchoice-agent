@@ -73,6 +73,9 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     assert "Sources need not prescribe that measurement" in judgment.args[0][0]["content"]
     assert "Technical facts:" in judgment.args[0][0]["content"]
     assert "R0:" in judgment.args[0][0]["content"] and "Q1:" in judgment.args[0][0]["content"]
+    content = judgment.args[0][0]["content"]
+    assert content.index("For every question") < content.index("select at most FIVE")
+    assert "Missing evidence for another part does not erase" in content
     assert all(call.kwargs["seed"] == 0 for call in model.await_args_list)
     unused.assert_not_called()
 
