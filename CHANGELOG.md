@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Retire unused conflict arbitration and search tools
+
+Explicitly remove the documented direct-agent `legacy_arbitration=True` adapter,
+its arbitration/re-arbitration prompts and three evidence-search tools. Repository
+product and benchmark consumers use scan-only behavior. Keep current scan ranges,
+unknown findings, cancellation/draining, budgets, historical manifests/Trace,
+public deprecated gather_evidence metadata and research/retriever compatibility.
+Remove tests dedicated to retired behavior; retain current safety regressions.
+Production net -717 lines across two files; conflict module974→258 lines.
+Full validation3848 passed/592.01s, no skips (Windows/Python3.12); final related258
+and focused166 passed. Smoke12/12, static/dependency checks and independent read-only
+review passed. Current default manifest identity unchanged. This reduces idle
+maintenance surface, not active report-quality loss.
+
+
 ### Merge source selection and question judgment
 
 Research v6 / synthesis v42 removes the separate source-selection node and combines
@@ -15,7 +30,7 @@ Final validation: 3878 passed in543.62s, no skips (Windows/Python3.12); related2
 and the corrected real-admission denial test passed. All272 frozen files unchanged.
 Smoke12/12, static/dependency checks and independent read-only review passed;
 smoke outputs/metrics unchanged, only asset identity metadata refreshed.
-Real-report benefit remains unverified. The broader code simplification is unfinished.
+Real regression230 (2026-10-10, exposed FVC-02, delivery-fresh-cases v1.0.0) failed0/1: rotation discussion partly restored, identity/audit/availability/overall choice still missing. No overall material usability improvement. The broader code simplification is unfinished.
 
 ### Keep the overall question available under partial evidence
 

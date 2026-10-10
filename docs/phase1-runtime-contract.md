@@ -448,8 +448,10 @@ quality_signals分别统计conflicts_found与scan_unknown_count；unresolved_cou
 默认取消仲裁和补搜外呼；`gather_evidence`保留请求及manifest的输入值，用于历史输入身份，
 在OpenAPI标记deprecated并说明scan-only不受此开关影响，公开质量信号记录requested及
 effective=false。这同样适用于已弃用`/research`的当前graph，不增加新的HTTP入口。
-只为旧直接代理保留显式legacy_arbitration=True与原补搜开关，SDK重试/预算/Trace契约保留。
-兼容仲裁异常必须保全扫描标记，任何赢家/高置信度仍不能解封来源；未知对不参与仲裁。
+2026-10-10明确退役旧直接代理的`legacy_arbitration=True`入口、仲裁/再仲裁及三个补搜工具；
+仓库产品与评估入口均无调用者，专用测试同步移除。直接构造时传该旧参数现拒绝。
+当前扫描、范围、unknown、预算/Trace及取消后drain行为保持；历史manifest和Trace只读兼容保持。
+公开`gather_evidence`及`/research`兼容入口保持上述行为。该闲置实现退役不证明报告质量改善。
 标题筛对、未提供完整坐标的短描述、模型范围漏判与保守排除仍可能丢失或误用事实。
 词法核验、自审与hash均不是语义证明；真实质量收益尚未测量。
 

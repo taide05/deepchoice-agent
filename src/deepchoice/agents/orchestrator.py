@@ -84,7 +84,6 @@ class ChiefEditorAgent:
             "conflict_detector": ConflictDetectorAgent(
                 self.websocket, self.stream_output, self.headers,
                 gather_evidence=self.run_manifest.gather_evidence,
-                legacy_arbitration=False,
             ),
             "evidence_chain": EvidenceChainAgent(self.websocket, self.stream_output, self.headers),
             "conclusion_synthesizer": ConclusionSynthesizerAgent(

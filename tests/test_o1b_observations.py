@@ -601,9 +601,8 @@ async def test_conflict_cold_model_does_not_block_event_loop(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_observed_retrieval_rate_limit_and_tool_error_preserve_envelope(tmp_path, monkeypatch):
+async def test_observed_retrieval_rate_limit_preserves_envelope(tmp_path, monkeypatch):
     from deepchoice.agents.multi_retriever import _invoke_retriever_miss
-    from deepchoice.agents.conflict_detector import _tool_error, _tool_failure_category
     from deepchoice.retrievers.contracts import RetrievalResult
 
     class Limited:
@@ -631,10 +630,6 @@ async def test_observed_retrieval_rate_limit_and_tool_error_preserve_envelope(tm
         assert result.status == "failed" and result.results == []
         call = (await SQLiteObservabilityQuery(connection, lock).for_task("task")).calls[0]
         assert call.status == "failed" and call.failure_category == "rate_limited"
-        error = type("HTTPStatusError", (Exception,), {"status_code": 429})("secret")
-        assert _tool_failure_category(_tool_error(error)) == "rate_limited"
-        assert json.loads(_tool_error(RuntimeError("secret"))) == {"error": "RuntimeError"}
-        assert "secret" not in _tool_error(error)
     finally:
         await connection.close()
 

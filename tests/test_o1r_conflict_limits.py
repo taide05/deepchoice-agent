@@ -69,80 +69,15 @@ async def test_scan_bounds_fanout_and_drains_before_failure(monkeypatch, deny):
     assert calls == 15 and peak == 4 and active == 0
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("failed", [False, True])
-async def test_kb_evidence_tool_uses_default_collection_and_embeddings(monkeypatch, failed):
-    from deepchoice.retrievers import chroma_kb
-
-    captured = {}
-    def query(**kwargs):
-        captured["query"] = kwargs
-        if failed:
-            raise RuntimeError("private provider detail must not escape")
-        return {"ids": [["fixture"]], "documents": [["x" * 500]],
-                "metadatas": [[{"url": "https://example.com/kb", "title": "fixture", "date": "2026"}]]}
-    def collection(name):
-        captured["collection"] = name
-        return SimpleNamespace(query=query)
-    def client(**kwargs):
-        captured["path"] = kwargs["path"]
-        return SimpleNamespace(get_or_create_collection=collection)
-    monkeypatch.setenv("CHROMA_PATH", "fixture-isolated-kb")
-    monkeypatch.setattr(chroma_kb.chromadb, "PersistentClient", client)
-    monkeypatch.setattr(chroma_kb, "get_embedding_model", lambda: SimpleNamespace(
-        encode=lambda query: np.ones(1024)))
-    monkeypatch.setattr("deepchoice.retrievers.base._outbound.get_resolver", lambda: SimpleNamespace(
-        invalidate=AsyncMock()))
-    result = json.loads(await cd._execute_search("search_kb", {"query": "fixture", "max_results": 2}))
-    assert captured["path"] == "fixture-isolated-kb" and captured["collection"] == "tech_kb"
-    assert "query_texts" not in captured["query"]
-    assert len(captured["query"]["query_embeddings"][0]) == 1024
-    if failed:
-        assert result == {"error": "KB collection unavailable", "results": []}
-        assert cd._tool_failure_category(json.dumps(result)) == "knowledge_base_unavailable"
-    else:
-        assert result == [{"content": "x" * 300, "metadata": {
-            "url": "https://example.com/kb", "title": "fixture", "date": "2026"}}]
 
 
-@pytest.mark.asyncio
-async def test_kb_evidence_tool_does_not_swallow_budget_error(monkeypatch):
-    error = BudgetExceededError(BudgetResource.RETRIEVAL_CALLS,
-        limit=72, consumed=72, requested=1)
-    monkeypatch.setattr("deepchoice.retrievers.chroma_kb.ChromaKB.retrieve", AsyncMock(side_effect=error))
-    monkeypatch.setattr("deepchoice.retrievers.chroma_kb.ChromaKB.__init__", lambda self: None)
-    with pytest.raises(BudgetExceededError) as raised:
-        await cd._execute_search("search_kb", {"query": "fixture"})
-    assert raised.value is error
 
 
-@pytest.mark.asyncio
-async def test_arbitration_has_a_run_local_four_call_gate(monkeypatch):
-    items = sources()
-    pairs = [{"source_a": items[0], "source_b": items[1], "similarity": 1}
-             for _ in range(15)]
-    monkeypatch.setattr(cd, "find_contradictions", AsyncMock(return_value=pairs))
-    active = peak = calls = 0
-    async def arbitrate(*_args, **_kwargs):
-        nonlocal active, peak, calls
-        calls += 1
-        active += 1
-        peak = max(peak, active)
-        try:
-            await asyncio.sleep(0.01)
-            return {"resolution": "both_partial", "confidence": "high"}
-        finally:
-            active -= 1
-    monkeypatch.setattr(cd, "call_model", arbitrate)
-    result = await cd.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "fixture"}, "source_scores": items})
-    assert len(result["conflicts"]) == 15
-    assert calls == 15 and peak == 4 and active == 0
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scores", [[], [7], [3, 4], [7, 4]])
-@pytest.mark.parametrize("legacy", [False, True])
-async def test_unpairable_sources_do_not_require_embedding_weights(monkeypatch, scores, legacy):
+async def test_unpairable_sources_do_not_require_embedding_weights(monkeypatch, scores):
     from copy import deepcopy
 
     loader = Mock(side_effect=AssertionError("Unpairable sources must not load weights"))
@@ -154,7 +89,7 @@ async def test_unpairable_sources_do_not_require_embedding_weights(monkeypatch, 
              for index, score in enumerate(scores)]
     original = deepcopy(items)
     previous_usage = {"agent": "previous", "total_tokens": 17}
-    result = await cd.ConflictDetectorAgent(legacy_arbitration=legacy).run({
+    result = await cd.ConflictDetectorAgent().run({
         "task": {"query": "Select a store"}, "source_scores": items,
         "token_usage": [previous_usage],
     })
@@ -163,8 +98,8 @@ async def test_unpairable_sources_do_not_require_embedding_weights(monkeypatch, 
     assert result["quality_signals"] == [{
         "agent": "conflict_detector", "conflicts_found": 0,
         "resolved_count": 0, "unresolved_count": 0, "scan_unknown_count": 0,
-        "conflict_policy": "legacy-arbitration" if legacy else "scan-only-v2",
-        "gather_evidence_requested": True, "gather_evidence_effective": legacy,
+        "conflict_policy": "scan-only-v2",
+        "gather_evidence_requested": True, "gather_evidence_effective": False,
     }]
     loader.assert_not_called()
     call.assert_not_awaited()

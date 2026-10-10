@@ -2,7 +2,7 @@
 
 > 2026-10-10最新真实检查：`delivery-fresh-cases` v1.0.0三类请求加一次预定重复，
 > cf065dc内容0/4通过；仍存在重要缺答、一项候选排除错误及重复依据丢失。
-> 随后已暴露FVC-02回归仍0/1；当前合并来源选择与问题判断，尚未达到求职作品内容交付标准。
+> 随后39c1353的已暴露FVC-02回归（230）仍0/1；选源与判断合并后仍有重要缺答，尚未达到求职作品内容交付标准。
 
 DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型：输入需求与候选后，
 检索多种来源、比较证据并生成可查看和导出的报告。报告区分来源事实、模型推断与未知项。
@@ -30,6 +30,10 @@ DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型
 当前复用句级审阅保留部分可核验原句，并区分事实与条件建议，尚未取得合格报告。不能用历史 300 例指标
 或离线测试通过率声称当前报告普遍可靠。现行结果与范围见[执行状态](docs/o1-execution-status.md)，
 历史测量保留原日期、数据集与分母。研究入口不预填固定案例。
+
+旧直接代理的`legacy_arbitration=True`及其仲裁/再仲裁/补搜工具已退役；当前产品只扫描
+冲突并保留未解决或未知状态。公开`gather_evidence`作为已弃用输入元数据保留，实际不补搜。
+历史运行与Trace仍可读取，`/research`和检索器兼容接口保持。
 
 ## 设计重点
 
@@ -92,7 +96,7 @@ py -3.12 -m venv .venv
 | `LEARNED_DOCS_PATH` / `LEARNED_DOCS_READONLY` | 默认 `./learned_docs.json` / `0`；设为 `1` 禁止学习写回 |
 | `TAVILY_KEY_STATE_PATH` / `TAVILY_REPROBE` | 保存耗尽密钥状态；默认不重新探测已耗尽密钥；Docker 默认状态文件在 `outputs` volume |
 | `RETRIEVAL_CACHE_ENABLED` | 默认 `1`；`0` 关闭持久化检索缓存，无 LLM 响应缓存 |
-| `LLM_DS_CONCURRENCY` | 默认 `80`，限制冲突扫描、仲裁和再仲裁调用；不替代单次研究预算 |
+| `LLM_DS_CONCURRENCY` | 默认 `80`，限制冲突扫描调用；不替代单次研究预算 |
 | `DEEPCHOICE_SYNTH_THINKING` | 默认 `0` 显式关闭 thinking；`1` 为综合调用启用并冻结进 run manifest |
 | `API_BASE` | 前端连接的后端，默认 `http://localhost:8000` |
 

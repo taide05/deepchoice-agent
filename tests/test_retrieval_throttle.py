@@ -1,6 +1,5 @@
 """Offline regressions for physical-request admission across research cases."""
 import asyncio
-import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from email.utils import format_datetime
@@ -406,24 +405,6 @@ async def test_rate_limit_failure_does_not_invalidate_route(virtual_clock, monke
     fake.invalidate.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_scholarly_tool_and_normal_arxiv_share_gate(virtual_clock, monkeypatch):
-    from deepchoice.agents.conflict_detector import _execute_search
-
-    starts = []
-
-    async def get(*args, **kwargs):
-        starts.append(virtual_clock[0])
-        return response(xml=True)
-
-    @asynccontextmanager
-    async def client():
-        yield SimpleNamespace(get=get)
-
-    monkeypatch.setattr(outbound, "make_client", AsyncMock(side_effect=lambda _: client()))
-    assert (await arxiv_api.ArxivSearch().search("fixture", []))["status"] == "success"
-    assert json.loads(await _execute_search("search_scholarly", {"query": "fixture"})) == []
-    assert starts[1] - starts[0] >= 3
 
 
 @pytest.mark.asyncio

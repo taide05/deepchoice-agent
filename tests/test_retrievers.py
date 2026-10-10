@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -108,47 +107,7 @@ class TestTavilySearch:
             await retriever.search("main query", ["sq1", "sq2", "sq3"])
         assert client.post.await_count >= 3  # probe + main + sub-questions
 
-    @pytest.mark.asyncio
-    async def test_conflict_search_web_uses_tavily_outbound_client(self):
-        from deepchoice.agents.conflict_detector import _execute_search
 
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "results": [{
-                "url": "https://example.com/evidence",
-                "title": "Evidence",
-                "content": "bounded evidence content",
-            }]
-        }
-        client = _FakeClient(post_return=mock_resp)
-        with _patch_outbound(client) as make_client:
-            output = await _execute_search(
-                "search_web", {"query": "claim", "max_results": 2}
-            )
-
-        make_client.assert_awaited_once_with("tavily")
-        assert client.post.await_count == 2  # key probe + actual search
-        assert json.loads(output) == [{
-            "title": "Evidence",
-            "content": "bounded evidence content",
-            "url": "https://example.com/evidence",
-        }]
-
-    @pytest.mark.asyncio
-    async def test_conflict_search_web_route_unavailable_is_safe_error(self):
-        from deepchoice.agents.conflict_detector import _execute_search
-
-        with patch(
-            "deepchoice.outbound.make_client",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("private route detail"),
-        ) as make_client:
-            output = await _execute_search("search_web", {"query": "claim"})
-
-        make_client.assert_awaited_once_with("tavily")
-        assert json.loads(output) == {"error": "RuntimeError"}
-        assert "private route detail" not in output
 
 
 class TestGitHubSearch:
@@ -456,36 +415,6 @@ class TestSearchKBChromaPath:
         ChromaKB()
         assert captured == {"path": configured or "./chroma_kb/chroma_db", "collection": "tech_kb"}
 
-    def test_default_path_matches_retriever(self, monkeypatch):
-        import asyncio
-
-        import chromadb
-        from deepchoice.agents.conflict_detector import _execute_search
-        from deepchoice.retrievers.chroma_kb import ChromaKB
-        from deepchoice.retrievers.contracts import RetrievalResult
-
-        captured = {}
-
-        class FakeClient:
-            def get_or_create_collection(self, name):
-                captured["collection"] = name
-                return object()
-
-        def fake_persistent(path, **_):
-            captured["path"] = path
-            return FakeClient()
-
-        monkeypatch.setattr(chromadb, "PersistentClient", fake_persistent)
-        monkeypatch.delenv("CHROMA_PATH", raising=False)
-        retrieve = AsyncMock(return_value=RetrievalResult(source="chroma", status="failed",
-            results=[], error="private provider detail", latency_ms=0))
-        monkeypatch.setattr(ChromaKB, "retrieve", retrieve)
-
-        out = asyncio.run(_execute_search("search_kb", {"query": "x"}))
-
-        assert captured == {"path": "./chroma_kb/chroma_db", "collection": "tech_kb"}
-        assert retrieve.call_args.args[0].query == "x"
-        assert json.loads(out) == {"error": "KB collection unavailable", "results": []}
 
     @pytest.mark.asyncio
     async def test_search_keeps_original_query_and_diversifies_chunked_urls(self, monkeypatch):

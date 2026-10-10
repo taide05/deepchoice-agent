@@ -36,24 +36,6 @@ def _fake_client(response):
     )
 
 
-def _gather_fake_response(content="evidence found", model="deepseek-v4-flash",
-                          prompt_tokens=150, completion_tokens=60):
-    """Fake OpenAI response for _gather_evidence: assistant message with
-    model_dump() and no tool_calls, plus a usage block."""
-    message = types.SimpleNamespace(
-        content=content,
-        tool_calls=[],
-        model_dump=lambda **_: {"role": "assistant", "content": content},
-    )
-    return types.SimpleNamespace(
-        model=model,
-        usage=types.SimpleNamespace(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-        ),
-        choices=[types.SimpleNamespace(message=message)],
-    )
 
 
 class _APIError(Exception):
@@ -62,18 +44,6 @@ class _APIError(Exception):
         self.status_code = status_code
 
 
-@pytest.mark.asyncio
-async def test_direct_evidence_gather_preserves_cache_pair(monkeypatch):
-    from deepchoice.utils import llm
-    response = _gather_fake_response()
-    response.usage.prompt_cache_hit_tokens = 100
-    response.usage.prompt_cache_miss_tokens = 50
-    client = _fake_client(response)
-    monkeypatch.setattr(llm, "_get_client", lambda **_: client)
-    usage = []
-    assert await cd_module._gather_evidence("topic", "claim A", "claim B", usage=usage) == "evidence found"
-    assert usage[0]["prompt_cache_hit_tokens"] == 100
-    assert usage[0]["prompt_cache_miss_tokens"] == 50
 
 
 class TestCallModelRetry:
@@ -369,57 +339,8 @@ class TestAgentTokenUsageWiring:
         assert rows[0]["calls"] == 0
 
 
-class TestGatherEvidenceUsageCapture:
-    @pytest.mark.asyncio
-    async def test_gather_evidence_appends_usage_row(self):
-        """_gather_evidence now reuses llm._get_client (provider-agnostic), so
-        mock it via deepchoice.utils.llm._get_client."""
-        usage = []
-        client = _fake_client(
-            _gather_fake_response("Benchmarks favor async under concurrent load"))
-        with patch("deepchoice.utils.llm._get_client", return_value=client):
-            evidence = await cd_module._gather_evidence(
-                topic="FastAPI async performance",
-                claim_a="Async endpoints are slower than sync",
-                claim_b="Async endpoints are faster under concurrency",
-                usage=usage,
-            )
-
-        assert evidence == "Benchmarks favor async under concurrent load"
-        assert client.chat.completions.create.await_args.kwargs["extra_body"] == {
-            "thinking": {"type": "disabled"},
-        }
-        assert usage == [{
-            "model": "deepseek-v4-flash",
-            "prompt_tokens": 150,
-            "completion_tokens": 60,
-            "total_tokens": 210,
-        }]
 
 
-class TestDeterministicArbitration:
-    def test_large_gap_cannot_establish_correctness(self):
-        out = cd_module._deterministic_arbitration(
-            {"total_score": 9.0}, {"total_score": 3.0})
-        assert out["resolution"] == "insufficient_data"
-        assert out["confidence"] == "low"
-        assert out["key_factor"] == "comparable_evidence_required"
-
-    def test_moderate_gap_remains_insufficient(self):
-        out = cd_module._deterministic_arbitration(
-            {"total_score": 7.0}, {"total_score": 4.0})  # gap 3.0
-        assert out["resolution"] == "insufficient_data"
-        assert out["confidence"] == "low"
-
-    def test_reversing_score_order_does_not_create_a_winner(self):
-        out = cd_module._deterministic_arbitration(
-            {"total_score": 3.0}, {"total_score": 6.0})
-        assert out["resolution"] == "insufficient_data"
-
-    def test_close_gap_returns_none(self):
-        out = cd_module._deterministic_arbitration(
-            {"total_score": 6.0}, {"total_score": 5.0})  # gap 1.0
-        assert out is None
 
 
 class TestCitationCoverage:

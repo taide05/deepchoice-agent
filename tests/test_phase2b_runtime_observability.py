@@ -11,7 +11,6 @@ import pytest
 
 from deepchoice.agents.multi_retriever import MultiRetrieverAgent
 from deepchoice.agents.orchestrator import ChiefEditorAgent
-from deepchoice.agents import conflict_detector as conflict_module
 from deepchoice.agents import multi_retriever as multi_retriever_module
 from deepchoice.budget import DEFAULT_RUN_BUDGET_POLICY, DeferredBudgetManager
 from deepchoice.contracts.api import ResearchRequest
@@ -457,77 +456,6 @@ async def test_deadline_aware_cancel_classification_for_node_llm_and_retriever(
         await connection.close()
 
 
-@pytest.mark.asyncio
-async def test_conflict_tools_trace_structured_provider_errors_as_failed(
-    tmp_path, monkeypatch
-):
-    connection, _, run, recorder = await _running_trace(tmp_path, suffix="-tool-error")
-    assert run is not None
-
-    tool_calls = [
-        SimpleNamespace(
-            id="tool-1",
-            type="function",
-            function=SimpleNamespace(name="search_web", arguments="{}"),
-        ),
-        SimpleNamespace(
-            id="tool-2",
-            type="function",
-            function=SimpleNamespace(name="unknown_provider", arguments="{}"),
-        ),
-    ]
-    message = SimpleNamespace(
-        tool_calls=tool_calls,
-        content=None,
-        model_dump=lambda **_: {"role": "assistant", "tool_calls": []},
-    )
-    response = SimpleNamespace(
-        usage=None,
-        choices=[SimpleNamespace(message=message)],
-    )
-    create = AsyncMock(return_value=response)
-    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setattr(llm_module, "_get_client", lambda **_: client)
-
-    async def fake_search(tool_name, _arguments):
-        if tool_name == "search_web":
-            return json.dumps({"error": "no Tavily API key available"})
-        return json.dumps({"error": f"Unknown tool: {tool_name}"})
-
-    monkeypatch.setattr(conflict_module, "_execute_search", fake_search)
-
-    class Cancellation:
-        async def raise_if_cancelled(self):
-            return None
-
-    context = RunContext.from_run_record(
-        run,
-        cancellation=Cancellation(),
-        trace=recorder,
-        budget=DeferredBudgetManager(),
-    )
-    node = await recorder.start_node_attempt("conflict_detector")
-    try:
-        with bind_run_context(context), bind_node_attempt(node.node_attempt_id):
-            assert await conflict_module._gather_evidence(
-                "topic", "claim a", "claim b", max_iterations=1
-            ) == ""
-        rows = await _rows(
-            connection,
-            """
-            SELECT provider, status, result_summary_json
-            FROM external_calls WHERE kind = 'retrieval' ORDER BY provider
-            """,
-        )
-        assert [(row[0], row[1]) for row in rows] == [
-            ("search_web", "failed"),
-            ("unknown_provider", "failed"),
-        ]
-        categories = [json.loads(row[2])["failure_category"] for row in rows]
-        assert categories == ["provider_unavailable", "unsupported_tool"]
-        assert "Tavily" not in json.dumps(rows)
-    finally:
-        await connection.close()
 
 
 @pytest.mark.asyncio

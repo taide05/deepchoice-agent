@@ -109,7 +109,7 @@ python -m benchmarks.run_baseline --health-check
 
 - Never print, commit, rewrite, or expose `.env` values.
 - DeepSeek tier: `DS_FLASH_API_KEY` or legacy `FLASH_API_KEY` / `DEEPSEEK_API_KEY`; optional model/base overrides use the corresponding `DS_FLASH_*`, `FLASH_*`, or `DEEPSEEK_BASE_URL` names.
-- All LLM calls use the DeepSeek Flash tier, including synthesis, re-arbitration, clarification and
+- All LLM calls use the DeepSeek Flash tier, including synthesis, clarification and
   benchmark judges. Qwen `QW_FLASH_*`, `PRO_*` and `LLM_*` model/base/key variables are retired and
   must never supply fallback credentials to DeepSeek. The old `qwen-flash` call selector and
   `enable_thinking` argument remain compatibility adapters to DeepSeek, not a second provider.
@@ -118,7 +118,7 @@ python -m benchmarks.run_baseline --health-check
   `OUTBOUND_CHANNELS_TAVILY`, `LOCAL_PROXY`, `FWD_BASE`, `FWD_KEY`, and `FWD_TARGETS`.
   Tavily must exclude `self-forward` because that transport does not preserve POST bodies.
 - Runtime state: `CHROMA_PATH`, `LEARNED_DOCS_PATH`, `LEARNED_DOCS_READONLY`, `TAVILY_KEY_STATE_PATH`, `TAVILY_REPROBE`, and `RETRIEVAL_CACHE_ENABLED` (default `1`; set `0` to disable the retrieval cache).
-- Concurrency/behavior: `LLM_DS_CONCURRENCY` (conflict scan/arbitration/re-arbitration gate, default 80)
+- Concurrency/behavior: `LLM_DS_CONCURRENCY` (conflict scan gate, default 80)
   and `DEEPCHOICE_SYNTH_THINKING` (default 0). Requests explicitly disable DeepSeek thinking unless
   the synthesis option enables it. `LLM_QW_CONCURRENCY` is retired. Freeze native thinking parameters
   in new manifests; historical dual-provider runs remain readable but require a new compatible run.
@@ -129,8 +129,7 @@ When adding a setting, update the code default, tests, README configuration sect
 ## Implementation contracts
 
 - Keep network access in retrievers routed through `deepchoice.outbound`; do not add ad-hoc direct clients that bypass channel selection and health reporting.
-- Tavily route probing is a credential-free static HEAD. Its keypool POSTs in retrieval, conflict
-  evidence, and benchmark health checks use the selected outbound client. The legacy artifact label
+- Tavily route probing is a credential-free static HEAD. Its keypool POSTs in retrieval and benchmark health checks use the selected outbound client. The legacy artifact label
   `tavily_direct` does not mean direct routing is forced.
 - Preserve the `BaseRetriever.search()` signature and the uniform source/status/results/error envelope.
 - Retrieval failure must remain visible as failed or partial failure; do not convert external errors into silent empty success.

@@ -52,28 +52,6 @@ def test_native_thinking_option_wins_over_legacy_option_without_mutation():
     assert options == {"enable_thinking": True, "thinking": {"type": "disabled"}}
 
 
-@pytest.mark.asyncio
-async def test_evidence_rearbitration_uses_deepseek_and_same_conflict_gate(monkeypatch):
-    from deepchoice.agents import conflict_detector as detector
-
-    source = {"url": "https://a.test", "title": "Claim A", "total_score": 7, "scores": {"authority": 7}}
-    pair = {"source_a": source, "source_b": {**source, "url": "https://b.test", "title": "Claim B"}, "similarity": 0.9}
-    monkeypatch.setattr(detector, "find_contradictions", AsyncMock(return_value=[pair]))
-    monkeypatch.setattr(detector, "_deterministic_arbitration", lambda *_: None)
-    monkeypatch.setattr(detector, "_gather_evidence", AsyncMock(return_value="Additional evidence"))
-    gate = AsyncMock()
-    monkeypatch.setattr(detector, "FLASH_SEM", gate)
-    call = AsyncMock(side_effect=[
-        {"confidence": "low", "resolution": "insufficient_data"},
-        {"confidence": "high", "resolution": "A_correct"},
-    ])
-    monkeypatch.setattr(detector, "call_model", call)
-    result = await detector.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "A vs B"}, "source_scores": []})
-    assert [entry.kwargs["model"] for entry in call.await_args_list] == ["deepseek-flash", "deepseek-flash"]
-    assert call.await_args_list[-1].kwargs["tag"] == "conflict_rearbitration"
-    assert gate.__aenter__.await_count == 2
-    assert result["conflicts"][0]["arbiter_model"] == "deepseek-flash+evidence"
-    assert result["conflicts"][0]["resolution"] == "A_correct"
 
 
 @pytest.mark.asyncio

@@ -5,10 +5,7 @@ import pytest
 
 from deepchoice.agents import conclusion_synthesizer as cs_mod
 from deepchoice.agents.conflict_detector import (
-    ARBITRATION_SYSTEM,
     CONTRADICTION_SCAN_SYSTEM,
-    EVIDENCE_GATHER_SYSTEM,
-    EVIDENCE_GATHER_USER_TEMPLATE,
 )
 from deepchoice.agents.orchestrator import ChiefEditorAgent
 from deepchoice.agents.query_adapter import ADAPT_SYSTEM
@@ -224,9 +221,7 @@ def test_core_asset_registry_contains_prompt_hashes_but_no_prompt_text():
         DECOMPOSITION_SYSTEM,
         ADAPT_SYSTEM,
         CONTRADICTION_SCAN_SYSTEM,
-        ARBITRATION_SYSTEM,
-        EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE,
-        cs_mod.SYNTHESIS_PROMPT,
+            cs_mod.SYNTHESIS_PROMPT,
         REVIEW_SYSTEM,
     )
 
@@ -663,25 +658,6 @@ def test_saved_manifest_keeps_its_resolved_synthesis_option(monkeypatch):
     ensure_run_manifest_compatible(manifest, task)
 
 
-def test_manifest_covers_direct_evidence_gathering_call():
-    from deepchoice.agents.conflict_detector import (
-        EVIDENCE_GATHER_CALL_TIMEOUT_S, EVIDENCE_GATHER_MAX_ITERATIONS,
-        EVIDENCE_GATHER_TOOL_TIMEOUT_S,
-    )
-    from deepchoice.contracts.manifest import LLMCallSnapshot
-    # Historical DTOs remain readable although these calls are no longer frozen
-    # as default-path assets.
-    call = LLMCallSnapshot(call_id="conflict_evidence_gather", tier="deepseek-flash",
-        prompt_id="conflict_detector.evidence_gather", response_format=None,
-        timeout_s=EVIDENCE_GATHER_CALL_TIMEOUT_S, max_iterations=EVIDENCE_GATHER_MAX_ITERATIONS,
-        tool_timeout_s=EVIDENCE_GATHER_TOOL_TIMEOUT_S, tools_sha256="0" * 64,
-        max_output_tokens=4096, sdk_max_retries=0)
-
-    assert call.response_format is None
-    assert call.timeout_s == 30.0
-    assert call.max_iterations == 2
-    assert call.tool_timeout_s == 630.0
-    assert call.tools_sha256
 
 
 def test_pre_throttle_tool_timeout_manifest_remains_readable_but_cannot_resume():
@@ -894,12 +870,12 @@ def test_pre_scan_only_identity_is_readable_and_not_resumable():
     for prompt in historical["prompts"]:
         if prompt["prompt_id"] == "conflict_detector.contradiction_scan_system":
             prompt["version"] = "v2"
-    for prompt_id, text in [
-        ("conflict_detector.arbitration_system", ARBITRATION_SYSTEM),
-        ("conflict_detector.evidence_gather", EVIDENCE_GATHER_SYSTEM + "\n" + EVIDENCE_GATHER_USER_TEMPLATE),
+    for prompt_id, prompt_hash in [
+        ("conflict_detector.arbitration_system", "53c3a8accf4a71ee2d58df41d5f1e9bbda3797baa219ef1e6160a72841119ce8"),
+        ("conflict_detector.evidence_gather", "744b4b4222d5027aa6c440adccbbc1c4e184efe911c1372cef00bcaaeaf4a4b5"),
     ]:
         historical["prompts"].append({"prompt_id": prompt_id, "version": "v2" if "arbitration" in prompt_id else "v1",
-                                      "sha256": hashlib.sha256(text.encode()).hexdigest()})
+                                      "sha256": prompt_hash})
     from deepchoice.contracts.manifest import LLMCallSnapshot
     historical["llm_calls"].append(LLMCallSnapshot(call_id="conflict_arbitration",
         tier="deepseek-flash", prompt_id="conflict_detector.arbitration_system",
@@ -972,3 +948,16 @@ def test_joint_workflow_keeps_old_v5_identity_readable_but_not_resumable():
     with pytest.raises(DeepChoiceError) as caught:
         ensure_run_manifest_compatible(restored, {})
     assert caught.value.error_detail.code == "RUN_MANIFEST_INCOMPATIBLE"
+
+
+def test_historical_evidence_gather_call_snapshot_remains_readable():
+    from deepchoice.contracts.manifest import LLMCallSnapshot
+
+    # Frozen historical values remain readable without importing retired tools.
+    call = LLMCallSnapshot(call_id="conflict_evidence_gather", tier="deepseek-flash",
+        prompt_id="conflict_detector.evidence_gather", response_format=None,
+        timeout_s=30.0, max_iterations=2, tool_timeout_s=630.0, tools_sha256="0" * 64,
+        max_output_tokens=4096, sdk_max_retries=0)
+    restored = LLMCallSnapshot.model_validate_json(call.model_dump_json())
+    assert restored == call
+    assert restored.response_format is None and restored.tools_sha256 == "0" * 64

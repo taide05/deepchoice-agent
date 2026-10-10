@@ -7,7 +7,6 @@ import pytest
 
 from deepchoice.agents import conflict_detector as detector
 from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
-from deepchoice.budget import BudgetExceededError, BudgetResource
 
 
 def _source(title, snippet="Compared under one stated workload", score=7):
@@ -284,70 +283,10 @@ async def test_high_gap_remains_unresolved_without_new_calls_or_evidence_tools(m
     pair = {"source_a": _source("Alpha", score=10),
             "source_b": _source("Beta", score=5), "similarity": 0.9}
     monkeypatch.setattr(detector, "find_contradictions", AsyncMock(return_value=[pair]))
-    call, gather = AsyncMock(), AsyncMock()
+    call = AsyncMock()
     monkeypatch.setattr(detector, "call_model", call)
-    monkeypatch.setattr(detector, "_gather_evidence", gather)
     result = await detector.ConflictDetectorAgent().run({"task": {"query": "Choose"}})
     conflict = result["conflicts"][0]
     assert conflict["resolution"] == "insufficient_data" and conflict["confidence"] == "low"
     assert result["quality_signals"][0]["resolved_count"] == 0
     call.assert_not_awaited()
-    gather.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("intervening_failure", [False, True])
-async def test_rearbitration_updates_original_close_pair_not_preceding_rule(monkeypatch, intervening_failure):
-    rule_pair = {"source_a": _source("Rule A", score=10),
-                 "source_b": _source("Rule B", score=5), "similarity": 0.9}
-    close_pair = {"source_a": _source("Close A"),
-                  "source_b": _source("Close B"), "similarity": 0.8}
-    pairs = [rule_pair]
-    results = []
-    if intervening_failure:
-        pairs.append({"source_a": _source("Failed A"),
-                      "source_b": _source("Failed B"), "similarity": 0.85})
-        results.append(RuntimeError("fixture failed arbitration"))
-    pairs.append(close_pair)
-    results.extend([
-        {"resolution": "insufficient_data", "confidence": "low"},
-        {"resolution": "both_partial", "confidence": "high"},
-    ])
-    monkeypatch.setattr(detector, "find_contradictions", AsyncMock(return_value=pairs))
-    call = AsyncMock(side_effect=results)
-    gather = AsyncMock(return_value="Direct comparable fixture evidence")
-    monkeypatch.setattr(detector, "call_model", call)
-    monkeypatch.setattr(detector, "_gather_evidence", gather)
-    result = await detector.ConflictDetectorAgent(legacy_arbitration=True).run({"task": {"query": "Choose"}})
-    rule, *middle, revised = result["conflicts"]
-    assert len(middle) == int(intervening_failure)
-    if middle:
-        assert middle[0]["claim_a"] == "Failed A"
-        assert middle[0]["resolution"] == "insufficient_data"
-    assert rule["claim_a"] == "Rule A" and rule["claim_b"] == "Rule B"
-    assert rule["resolution"] == "insufficient_data" and rule["evidence_collected"] == ""
-    assert rule["arbiter_model"] == "deepseek-flash(rule)"
-    assert revised["claim_a"] == "Close A" and revised["claim_b"] == "Close B"
-    assert revised["resolution"] == "both_partial"
-    assert revised["arbiter_model"] == "deepseek-flash+evidence"
-    assert revised["evidence_collected"] == "Direct comparable fixture evidence"
-    gather.assert_awaited_once()
-    assert gather.await_args.kwargs["claim_a"] == "Close A"
-    assert gather.await_args.kwargs["claim_b"] == "Close B"
-
-
-@pytest.mark.asyncio
-async def test_close_score_arbitration_receives_actual_text_and_retains_existing_budget_failure(monkeypatch):
-    pair = {"source_a": _source("Alpha capability", "Alpha accepts one writer"),
-            "source_b": _source("Beta capability", "Beta accepts multiple writers"), "similarity": 0.9}
-    monkeypatch.setattr(detector, "find_contradictions", AsyncMock(return_value=[pair]))
-    denial = BudgetExceededError(BudgetResource.LLM_CALLS, limit=96, consumed=96, requested=1)
-    call = AsyncMock(side_effect=denial)
-    monkeypatch.setattr(detector, "call_model", call)
-    with pytest.raises(BudgetExceededError) as caught:
-        await detector.ConflictDetectorAgent(gather_evidence=False, legacy_arbitration=True).run({"task": {"query": "Choose"}})
-    assert caught.value is denial
-    messages = call.await_args.args[0]
-    assert "Alpha accepts one writer" in messages[1]["content"]
-    assert "Beta accepts multiple writers" in messages[1]["content"]
-    assert call.await_args.kwargs["tag"] == "conflict_arbitration"

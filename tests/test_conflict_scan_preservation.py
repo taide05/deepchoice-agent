@@ -32,9 +32,7 @@ async def test_default_preserves_confirmed_pair_without_arbitration(monkeypatch,
     call = AsyncMock(side_effect=[{"has_difference": True, "type": "tradeoff_disagreement",
                                   "explanation": "Incompatible writer counts"},
                                  RuntimeError("arbitration provider private detail")])
-    gather = AsyncMock(side_effect=AssertionError("default must not gather"))
     monkeypatch.setattr(cd, "call_model", call)
-    monkeypatch.setattr(cd, "_gather_evidence", gather)
     result = await cd.ConflictDetectorAgent(gather_evidence=gather_requested).run(
         {"task": {"query": "Select a store"}, "source_scores": sources()})
     assert len(result["conflicts"]) == 1
@@ -43,7 +41,6 @@ async def test_default_preserves_confirmed_pair_without_arbitration(monkeypatch,
     assert conflict["resolution"] == "insufficient_data"
     assert conflict["confidence"] == "low"
     assert [c.kwargs["tag"] for c in call.await_args_list] == ["conflict_scan"]
-    gather.assert_not_awaited()
     assert all(chain["disputed"] for chain in build_evidence_chain(sources(), result["conflicts"]))
     signal = result["quality_signals"][0]
     assert signal["resolved_count"] == 0 and signal["scan_unknown_count"] == 0
@@ -113,29 +110,26 @@ def test_default_manifest_and_graph_exclude_legacy_calls(requested):
     assert manifest.gather_evidence is requested
     assert {c.call_id for c in manifest.llm_calls}.isdisjoint({
         "conflict_arbitration", "conflict_evidence_gather", "conflict_rearbitration"})
-    assert not ChiefEditorAgent(task)._initialize_agents()["conflict_detector"].legacy_arbitration
+    assert isinstance(ChiefEditorAgent(task)._initialize_agents()["conflict_detector"], cd.ConflictDetectorAgent)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("verdict", [RuntimeError("private arbitration failure"),
-    {"resolution": "A_correct", "confidence": "high"}])
-async def test_legacy_arbitration_cannot_erase_or_unblock_scan(monkeypatch, verdict):
+@pytest.mark.parametrize("scan_status", ["confirmed", "unknown"])
+async def test_unresolved_scan_excludes_even_stale_undisputed_chains(monkeypatch, scan_status):
     from deepchoice.budget.limited import usable_evidence_chains
     items = sources()
     pair = {"source_a": items[0], "source_b": items[1], "similarity": 1,
-            "scan_status": "confirmed", "difference_type": "tradeoff_disagreement"}
+            "scan_status": scan_status, "difference_type": "tradeoff_disagreement"}
     monkeypatch.setattr(cd, "find_contradictions", AsyncMock(return_value=[pair]))
-    call = AsyncMock(side_effect=verdict) if isinstance(verdict, Exception) else AsyncMock(return_value=verdict)
+    call = AsyncMock(side_effect=AssertionError("Scan findings must not trigger arbitration"))
     monkeypatch.setattr(cd, "call_model", call)
-    result = await cd.ConflictDetectorAgent(gather_evidence=False, legacy_arbitration=True).run(
+    result = await cd.ConflictDetectorAgent(gather_evidence=False).run(
         {"task": {"query": "fixture"}, "source_scores": items})
-    assert len(result["conflicts"]) == 1
     chains = build_evidence_chain(items, result["conflicts"])
     assert all(c["disputed"] for c in chains)
-    # Budget minimum gate independently excludes even deliberately stale chains.
     stale_chains = [dict(c, disputed=False) for c in chains]
     assert usable_evidence_chains({"evidence_chains": stale_chains, "conflicts": result["conflicts"]}) == []
-    assert call.await_count == 1
+    call.assert_not_awaited()
 
 
 @pytest.mark.parametrize("renderer_name", ["what_why_how", "evidence_first", "comparison_matrix"])
@@ -171,23 +165,15 @@ def test_synthesis_summary_preserves_scan_status(status, expected):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("cancel_stage", ["scan", "arbitration", "gather", "rearbitration"])
-async def test_cancellation_propagates_from_every_retained_stage(monkeypatch, cancel_stage):
+async def test_cancellation_propagates_from_scan(monkeypatch):
     import asyncio
-    items = sources()
-    pair = {"source_a": items[0], "source_b": items[1], "similarity": 1, "scan_status": "confirmed"}
-    cancellation = asyncio.CancelledError()
-    low = {"resolution": "insufficient_data", "confidence": "low"}
-    if cancel_stage == "scan":
-        embeddings(monkeypatch)
-        call = AsyncMock(side_effect=cancellation)
-    else:
-        monkeypatch.setattr(cd, "find_contradictions", AsyncMock(return_value=[pair]))
-        call = AsyncMock(side_effect=[cancellation] if cancel_stage == "arbitration" else
-                         [low, cancellation] if cancel_stage == "rearbitration" else [low])
-    monkeypatch.setattr(cd, "call_model", call)
-    gather = AsyncMock(side_effect=cancellation) if cancel_stage == "gather" else AsyncMock(return_value="fixture")
-    monkeypatch.setattr(cd, "_gather_evidence", gather)
+    embeddings(monkeypatch)
+    monkeypatch.setattr(cd, "call_model", AsyncMock(side_effect=asyncio.CancelledError()))
     with pytest.raises(asyncio.CancelledError):
-        await cd.ConflictDetectorAgent(legacy_arbitration=cancel_stage != "scan").run(
-            {"task": {"query": "fixture"}, "source_scores": items})
+        await cd.ConflictDetectorAgent().run(
+            {"task": {"query": "fixture"}, "source_scores": sources()})
+
+
+def test_retired_direct_agent_arbitration_is_rejected():
+    with pytest.raises(TypeError, match="legacy_arbitration"):
+        cd.ConflictDetectorAgent(legacy_arbitration=True)
