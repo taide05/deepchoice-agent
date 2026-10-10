@@ -63,6 +63,22 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Before judging ahead/behind or merge status, refresh remote refs when network access is available. If fetch fails, report that remote state is unverified.
 - Do not delete branches, reflogs, tags, or `refs/backup/*`, and do not run `git gc` or `git prune`, without explicit approval.
 - Do not push, force-push, merge to `main`, or create releases without explicit approval.
+- A push is allowed only after a publication audit of the **entire outgoing commit range** against
+  freshly fetched remote refs. Identify the exact remote, destination branch, base commit, and every
+  outgoing commit; inspect each commit's changed paths and relevant contents, including files added
+  and later deleted or renamed. A clean worktree, `.gitignore`, and the latest diff do not prove that
+  earlier commits are safe to publish. If remote refs cannot be refreshed or the outgoing range
+  cannot be established, do not push; report the unverified state.
+- Push only files needed for the intended code, tests, required configuration, maintained user or
+  runtime documentation, and minimal reviewed evaluation evidence. Do not push session handoffs,
+  temporary plans, debugging diaries, raw reports or traces, generated outputs, caches, local
+  environment files, credentials, personal material, or unrelated historical documents. Treat
+  already-tracked files the same way; being tracked is not a reason to publish them.
+- If any outgoing commit contains an unnecessary or questionable file, stop the push and show the
+  path, commit, and reason to the user. Prepare a reviewable clean publication range while preserving
+  the original local history; do not assume a later deletion removes a file from pushed history.
+  Do not amend, rebase, reset, force-push, or discard commits to clean the range without explicit
+  authorization. Re-audit the final range before the separately authorized push.
 - Keep implementation, tests, and directly affected documentation in the same change. Prefer focused commits with conventional prefixes such as `fix:`, `feat:`, `test:`, `docs:`, or `chore:`.
 - Every completed change must have a corresponding Git commit before handoff so it can be traced and rolled back. Do not leave completed work only in the working tree.
 - Every behavior change must add or update the relevant automated tests. Before delivery, run the affected tests and the full validation suite; all tests and required checks must pass. A passing full-suite result remains valid if only documentation, comments, or recorded test results change afterward. If production code, public contracts, migrations, tests, or runtime conditions change, rerun the affected tests and the full validation suite. If validation cannot pass, do not present the change as complete.
@@ -431,11 +447,8 @@ When adding a setting, update the code default, tests, README configuration sect
   document, check its intended reader, lasting maintenance/reproduction value, overlap with existing
   sources, and public suitability. Use explicit paths when staging; do not sweep local session
   material into a commit merely because it is under `docs/` or already tracked.
-- Before an explicitly authorized push/PR, review the entire outgoing commit range and its file
-  list, not only the latest commit or staged diff. Earlier local commits can contain unwanted
-  documents even when the final working tree is clean. Report questionable inclusions and resolve
-  them with the user before publishing; do not assume a later deletion prevents earlier contents
-  from being uploaded in Git history. If remote refs cannot be refreshed, state that limitation.
+- The Git safety publication gate above applies to documents as well as code. A document must have
+  lasting public value and a reviewed, sanitized purpose before it enters the outgoing range.
 - Public documents must not expose credentials, private endpoints, raw provider errors/payloads,
   supplemental user input or unnecessary personal context. Retain required dataset/date/denominator
   and identity metadata for evidence; sanitization alone does not make every artifact worth publishing.
