@@ -53,10 +53,10 @@ def test_manifest_id_is_deterministic_and_created_at_is_not_identity():
         for retriever in first.retrievers
         if retriever.retriever_id not in {"chroma", "official"}
     )
-    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v11"
+    assert next(r.version for r in first.retrievers if r.retriever_id == "official") == "v12"
     assert first.security_policy_version == "outbound-url-v5"
-    assert first.citation_policy_version == "deterministic-citation-v22"
-    assert first.hitl_policy_version == "evidence-insufficient-v2"
+    assert first.citation_policy_version == "deterministic-citation-v23"
+    assert first.hitl_policy_version == "evidence-insufficient-v3"
 
 
 @pytest.mark.parametrize("old_version", ["v1", "v2", "v3", "v4", "v5", "v6", "v7"])
@@ -184,8 +184,8 @@ def test_core_asset_registry_locks_the_versioned_core_asset_inventory():
     assert registry.workflow_version == "research-v5"
     assert registry.state_schema_version == 3
     assert registry.workflow_nodes == expected_nodes == WORKFLOW_NODES
-    assert registry.citation_policy_version == "deterministic-citation-v22"
-    assert registry.hitl_policy_version == "evidence-insufficient-v2"
+    assert registry.citation_policy_version == "deterministic-citation-v23"
+    assert registry.hitl_policy_version == "evidence-insufficient-v3"
     assert tuple(prompt.prompt_id for prompt in registry.prompts) == expected_prompt_ids
     expected_versions = {"self_reviewer.review_system": "v10", "conclusion_synthesizer.synthesis_prompt": "v39",
                          "query_analyzer.decomposition_system": "v3",

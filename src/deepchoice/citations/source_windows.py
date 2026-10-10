@@ -6,6 +6,9 @@ and a neighbouring block on each side; never clip away a trailing condition.
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
+# HTML shells can be much larger than their visible text. Keep transport and
+# extracted-text bounds separate, shared by retrieval and citation.
+MAX_PAGE_BYTES = 1024 * 1024
 MAX_DOCUMENT_TEXT = 64 * 1024
 MAX_SOURCE_WINDOW = 6000
 MAX_PROSE_DEPTH = 64
@@ -158,6 +161,14 @@ def extract_source_document(
     unfinished = bool(''.join(parser.pending).strip()) or bool(parser.ignored_depth) or bool(parser.omitted_depth)
     return SourceDocument(tuple(parser.blocks), truncated or parser.exhausted or unfinished,
                           tuple(parser.prose_indices))
+
+
+def extract_page_document(value: str, *, truncated: bool, plain_text: bool = False,
+                          raise_on_error: bool = False) -> SourceDocument:
+    """One visible-source policy for retrieval and verification, including code."""
+    return extract_source_document(value, truncated=truncated, plain_text=plain_text,
+                                   skip_navigation=True, preserve_pre=True,
+                                   raise_on_error=raise_on_error)
 
 
 def locate_source_window(excerpt: str, document: SourceDocument) -> SourceWindow | None:

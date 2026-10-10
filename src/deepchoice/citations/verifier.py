@@ -30,7 +30,7 @@ from deepchoice.outbound.throttle import ProviderAdmissionError, ProviderRateLim
 from deepchoice.security.redaction import redact_text
 from deepchoice.security.urls import ALLOWED_PORTS, MAX_URL_LENGTH, UnsafeUrlError
 
-from .source_windows import SourceDocument, extract_source_document, locate_source_window, locate_source_windows
+from .source_windows import MAX_PAGE_BYTES, SourceDocument, extract_page_document, locate_source_window, locate_source_windows
 
 from .contracts import (
     CITATION_POLICY_VERSION,
@@ -47,7 +47,7 @@ from ..utils.evidence import conclusion_source_allowed
 
 MAX_UNIQUE_SOURCE_URLS = 12
 MAX_FETCH_CONCURRENCY = 4
-MAX_RESPONSE_BYTES = 128 * 1024
+MAX_RESPONSE_BYTES = MAX_PAGE_BYTES
 MAX_EXTRACTED_TEXT = 64 * 1024
 MAX_REDIRECTS = 3
 FETCH_TIMEOUT_S = 15.0
@@ -158,7 +158,6 @@ class _FetchOutcome:
     text: str = ""
     truncated: bool = False
     document: SourceDocument | None = None
-    prose_document: SourceDocument | None = None
 
 
 def canonicalize_source_url(value: Any) -> str | None:
@@ -754,8 +753,6 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         if fact.get("saved_passages") != list(passages):
             return unknown
         windows = locate_source_windows(passages, outcome.document)
-        if windows is None and outcome.prose_document is not None:
-            windows = locate_source_windows(passages, outcome.prose_document)
         if windows is None:
             return unknown
         matches = [
@@ -769,8 +766,6 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         if "saved_passages" in fact:
             return unknown
         window = locate_source_window(snippet, outcome.document)
-        if window is None and outcome.prose_document is not None:
-            window = locate_source_window(snippet, outcome.prose_document)
         if window is None:
             return unknown
     status, reason = _support_status(claim.text, window.text)
@@ -780,8 +775,10 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
         return status, reason
     # A local exact match cannot hide a strongly matching contrary statement
     # inside OR outside the window, including tied matches whose order differs.
+    # Reuse the bounded legacy text for contrary navigation/hidden statements;
+    # it may challenge support but cannot establish a source location.
     tokens = _tokens(claim.text)
-    for block in (window.text,) + window.outside:
+    for block in (window.text, outcome.text) + window.outside:
         for sentence in _split_sentences(block):
             if not tokens or len(tokens & _tokens(sentence)) / len(tokens) < 0.9:
                 continue
@@ -851,20 +848,10 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
             CitationReason.LEXICAL_SUPPORT,
             _html_to_text(response.text),
             bool(response.extensions.get("deepchoice_body_truncated")),
-            extract_source_document(
+            extract_page_document(
                 response.text,
                 truncated=bool(response.extensions.get("deepchoice_body_truncated")),
                 plain_text=response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain",
-            ),
-            # Match retrieval's visible-prose extraction without removing code
-            # blocks or footer qualifications. This bounded second view uses
-            # the same response; it is used only when exact location fails.
-            extract_source_document(
-                response.text,
-                truncated=bool(response.extensions.get("deepchoice_body_truncated")),
-                plain_text=response.headers.get("content-type", "").split(";", 1)[0].strip().lower() == "text/plain",
-                skip_navigation=True,
-                preserve_pre=True,
             ),
         )
     if status_code in {401, 403, 404, 410}:

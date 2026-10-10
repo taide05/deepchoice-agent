@@ -14,9 +14,10 @@ from deepchoice.hitl import ALLOWED_DECISION_ACTIONS, DECISION_TTL, DecisionReso
 from deepchoice.hitl.contracts import MAX_DECISION_GAPS
 from deepchoice.runtime.context import get_run_context
 from deepchoice.utils.decision_contract import restrict_recommendation
+from deepchoice.utils.answer_delivery import finalize_answer_delivery, is_answer_delivery
 
 
-HITL_POLICY_VERSION = "evidence-insufficient-v2"
+HITL_POLICY_VERSION = "evidence-insufficient-v3"
 HITL_PARTIAL_FAILURE = "evidence_insufficient_user_limited"
 
 
@@ -79,7 +80,44 @@ def _public_gaps(state: dict[str, Any]) -> tuple[str, ...]:
 
 def _build_limited_report(state: dict[str, Any]) -> dict[str, Any]:
     limited = dict(state)
-    limited["evidence_chains"] = usable_evidence_chains(state)
+    recommendation = state.get("final_recommendation", {})
+    canonical = is_answer_delivery(recommendation)
+    # Reuse the existing source/citation binder and display boundary before
+    # carrying a reviewed answer through the user-selected restricted report.
+    if canonical:
+        from deepchoice.utils.analysis_review import prepare_analysis_review
+        from deepchoice.formats.decision import _displayable_analyses
+
+        context = prepare_analysis_review(state)
+        summary = recommendation.get("analysis_review")
+        rows = recommendation.get("decision_analysis", [])
+        review_valid = (
+            isinstance(summary, dict) and isinstance(rows, list)
+            and summary.get("status") in {"complete", "incomplete"}
+            and all(type(summary.get(key)) is int and 0 <= summary[key] <= 9
+                    for key in ("submitted", "reviewed", "retained", "revised", "withdrawn"))
+            and summary["retained"] == len(rows)
+            and summary["revised"] <= summary["retained"] <= summary["reviewed"] <= summary["submitted"]
+            and summary["withdrawn"] == summary["submitted"] - summary["retained"]
+        )
+        visible = _displayable_analyses(recommendation) if review_valid else []
+        retained = [row for row in visible if any(
+            row == {**bound, "review_status": row["review_status"]}
+            for bound in context.slots.values()
+        )]
+        recommendation = {**recommendation, "source_facts": context.facts,
+                          "decision_analysis": retained}
+        if review_valid:
+            removed = max(0, summary["retained"] - len(retained))
+            recommendation["analysis_review"] = {
+                **summary, "retained": len(retained),
+                "withdrawn": summary.get("withdrawn", 0) + removed,
+                "status": "incomplete" if removed else summary.get("status"),
+            }
+        else:
+            recommendation.pop("analysis_review", None)
+    # Preserve source numbering. Early budget results retain their strict path.
+    limited["evidence_chains"] = state.get("evidence_chains", []) if canonical else usable_evidence_chains(state)
     failures = [
         item for item in state.get("partial_failures", []) if isinstance(item, str)
     ]
@@ -94,8 +132,9 @@ def _build_limited_report(state: dict[str, Any]) -> dict[str, Any]:
         if is_zh
         else "Evidence is insufficient. This restricted report uses only evidence collected before the pause and should be interpreted cautiously."
     )
-    limited["final_recommendation"] = restrict_recommendation(
-        state.get("final_recommendation", {}), query
+    limited["final_recommendation"] = (
+        finalize_answer_delivery(recommendation, query) if canonical
+        else restrict_recommendation(recommendation, query)
     )
     renderer = FORMAT_RENDERERS.get(
         task.get("report_format", "what_why_how"), FORMAT_RENDERERS["what_why_how"]

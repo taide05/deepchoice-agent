@@ -64,7 +64,7 @@ async def test_directory_root_follows_real_relevant_child_and_retains_limitation
     assert len(scored["source_scores"]) == 1
     assert budget_runtime.reserve_call.await_count == budget_runtime.settle_call.await_count == 2
     for call in setup.await_args_list:
-        assert call.kwargs["max_response_bytes"] == 128 * 1024
+        assert call.kwargs["max_response_bytes"] == 1024 * 1024
         assert call.kwargs["max_redirects"] == 3 and call.kwargs["timeout_s"] == 15
     budget_runtime.unknown_call.assert_not_awaited()
     # The acquired text must survive the actual source binding/citation path.
@@ -750,7 +750,8 @@ async def test_short_official_deep_markup_disables_new_paragraph_qualification(s
     body = '<blockquote>' * 2000 + text + '</blockquote>' * 2000
     if trailing:
         body += '<p>Acme restart loses memory data.</p>'
-    assert len(body.encode()) < pages.MAX_PAGE_BYTES
+    from deepchoice.citations.source_windows import MAX_PAGE_BYTES
+    assert len(body.encode()) < MAX_PAGE_BYTES
     document = extract_source_document(body, truncated=False, skip_navigation=True)
     assert text in document.blocks and not document.incomplete
     assert not document.prose_indices

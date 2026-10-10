@@ -20,7 +20,6 @@ from ..utils.official_catalog import catalog_scope_contains, parse_http_identity
 
 MAX_ROOTS = 2
 MAX_CHILDREN = 2
-MAX_PAGE_BYTES = 128 * 1024
 MAX_LINKS = 256
 MAX_SNIPPET = 1200
 _ASSETS = (".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".zip", ".gz", ".pdf", ".json", ".xml")
@@ -163,7 +162,7 @@ def _scope_near_snippet(document, snippet: str) -> list[str] | None:
 
 
 async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool = False, hints: set[str] | None = None):
-    from ..citations.source_windows import extract_source_document
+    from ..citations.source_windows import MAX_PAGE_BYTES, extract_source_document
 
     response = await budgeted_http(
         lambda: outbound.safe_fetch(

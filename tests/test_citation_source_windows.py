@@ -53,7 +53,7 @@ async def test_source_after_html_noise_is_checked_once_without_losing_ack_qualif
     )
     bound, verification, calls = await verify_page(monkeypatch, body)
     assert bound['source_facts'][0]['status'] == 'verified'
-    assert len(calls) == 1 and calls[0][2]['max_response_bytes'] == 128 * 1024
+    assert len(calls) == 1 and calls[0][2]['max_response_bytes'] == 1024 * 1024
     assert 'before running the task' in bound['source_facts'][0]['saved_text']
     assert len(verification.checks) == 2
     assert 'Ignored work' not in verification.model_dump_json()
@@ -489,3 +489,13 @@ async def test_successful_default_location_does_not_fallback_to_hide_a_conflict(
     bound, verification, _ = await verify_page(monkeypatch, body, excerpt=excerpt)
     assert bound['source_facts'][0]['status'] == 'unknown'
     assert verification.checks[0].reason.value == 'negation_conflict'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shell_bytes,expected", [(180000, "verified"), (1024 * 1024, "unknown")])
+async def test_documented_source_after_large_page_shell_is_available_with_one_fetch(monkeypatch, shell_bytes, expected):
+    body = '<head><script>' + 'x' * shell_bytes + '</script></head>' + f'<main><p>{TEXT}</p><p>End of documentation.</p></main>'
+    bound, checks, calls = await verify_page(monkeypatch, body)
+    assert bound['source_facts'][0]['status'] == expected
+    assert len(calls) == 1
+    assert 'xxxx' not in checks.model_dump_json()

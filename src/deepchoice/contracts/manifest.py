@@ -100,7 +100,7 @@ class LLMCallSnapshot(FrozenModel):
 
 class RetrieverSnapshot(FrozenModel):
     retriever_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12"] = "v1"
 
 
 class ReportTemplateSnapshot(FrozenModel):
@@ -135,9 +135,9 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v10", "deterministic-citation-v11",
         "deterministic-citation-v12", "deterministic-citation-v13", "deterministic-citation-v14",
         "deterministic-citation-v15", "deterministic-citation-v16",
-        "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19", "deterministic-citation-v20", "deterministic-citation-v21", "deterministic-citation-v22",
+        "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19", "deterministic-citation-v20", "deterministic-citation-v21", "deterministic-citation-v22", "deterministic-citation-v23",
     ] | None = None
-    hitl_policy_version: Literal["evidence-insufficient-v1", "evidence-insufficient-v2"] | None = None
+    hitl_policy_version: Literal["evidence-insufficient-v1", "evidence-insufficient-v2", "evidence-insufficient-v3"] | None = None
     # Missing in historical schema-v1 identities; current default is scan-only.
     conflict_policy_version: Literal["scan-only-v1", "scan-only-v2"] | None = None
     gather_evidence: bool
@@ -153,8 +153,8 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v5"] = "research-v5"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v22"]
-    hitl_policy_version: Literal["evidence-insufficient-v2"]
+    citation_policy_version: Literal["deterministic-citation-v23"]
+    hitl_policy_version: Literal["evidence-insufficient-v3"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
 
@@ -321,7 +321,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "retrievers": tuple(
             RetrieverSnapshot(
                 retriever_id=retriever_id,
-                version="v8" if retriever_id == "chroma" else "v11" if retriever_id == "official"
+                version="v8" if retriever_id == "chroma" else "v12" if retriever_id == "official"
                         else "v4" if retriever_id in {"community", "arxiv"}
                         else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )
@@ -330,8 +330,8 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         "scoring_policy_version": "source-score-v17",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v22",
-        "hitl_policy_version": "evidence-insufficient-v2",
+        "citation_policy_version": "deterministic-citation-v23",
+        "hitl_policy_version": "evidence-insufficient-v3",
         "conflict_policy_version": "scan-only-v2",
         "gather_evidence": task.get("gather_evidence", True),
         "report": ReportTemplateSnapshot(

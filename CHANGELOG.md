@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Preserve source text and reviewed answers
+
+Use one visible citation document instead of fallback document reconstruction;
+share a bounded 1 MiB fetch limit for official pages and citations, retaining the
+64 KiB text cap and existing source, URL, completeness and budget checks.
+The user-selected HITL limited report preserves bound, reviewed analyses through
+the existing review/display guards. Early budget exits retain their strict path.
+Citation v23, HITL v3 and official v12 freeze these behaviors. No new model calls,
+fetches, migrations or public fields. Full validation:3,885 passed in683.89s,
+no skips, Windows/Python3.12. Focused boundary/recovery, independent read-only
+review, static/dependency checks and smoke12/12 passed. Live benefit pending.
+
+Diagnosis220 completed with consistent durable artifacts but content failed0/1.
+All five citation responses hit the old128KiB cap; the limited report removed the
+one retained analysis. Services stopped; paired backup verified. Historical0/4
+results remain unchanged. User resumed stageA and the10-hour timer at10:19:42+08.
+
 ### Simplification-first delivery plan
 
 Synchronize the maintained roadmap, execution rules, content acceptance and current

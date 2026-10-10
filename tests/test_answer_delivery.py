@@ -306,3 +306,52 @@ async def test_partial_source_report_keeps_available_material_and_visible_gap(mo
         assert partial_label in generated['report'] and unavailable_label in generated['report']
         assert 'Unavailable: official' not in generated['report'] and '不可用: official' not in generated['report']
         assert case[3] in generated['report']
+
+
+@pytest.mark.parametrize("case", CASES, ids=["database", "jobs", "cache"])
+async def test_user_limited_report_preserves_reviewed_canonical_answer(monkeypatch, case):
+    from deepchoice.agents.evidence_decision_gate import _build_limited_report
+    state, pending = await pipeline(monkeypatch, case, corrupt=True)
+    original = deepcopy(state)
+    for fmt in FORMAT_RENDERERS:
+        state['task']['report_format'] = fmt
+        pending['task']['report_format'] = fmt
+        result = _build_limited_report(state)
+        assert case[3] in result['report']
+        assert case[1] in result['report']
+        assert result['final_recommendation']['winner'] == 'context_dependent'
+        assert result['final_recommendation']['deployment_readiness'] == 'unverified'
+        assert result['_hitl_limited_report'] is True
+        assert 'FORGED_WINNER' not in result['report'] and 'DELETE' not in result['report']
+        assert case[3] not in _build_limited_report(pending)['report']
+    assert state['final_recommendation'] == original['final_recommendation']
+    assert state['evidence_chains'] == original['evidence_chains']
+
+
+@pytest.mark.parametrize("damage", ["source", "citation", "basis", "review", "mixed", "mixed_claimed_review", "bad_review_counts"])
+async def test_user_limited_report_rechecks_bindings_and_keeps_only_reviewed_rows(monkeypatch, damage):
+    from deepchoice.agents.evidence_decision_gate import _build_limited_report
+    state, pending = await pipeline(monkeypatch, CASES[0])
+    rec = state['final_recommendation']
+    if damage == 'source':
+        state['evidence_chains'][0]['sources'][0]['snippet'] = 'Different source text.'
+    elif damage == 'citation':
+        state['citation_verification'] = {}
+    elif damage == 'basis':
+        rec['decision_analysis'][0]['basis'][0]['source_sentences'] = ['FORGED_SOURCE']
+    elif damage == 'review':
+        rec.pop('analysis_review')
+    elif damage == 'bad_review_counts':
+        rec['analysis_review']['withdrawn'] = 'forged'
+    else:
+        row = deepcopy(pending['final_recommendation']['decision_analysis'][0])
+        row['reasoning'] = 'UNREVIEWED_ROW'
+        row['review_status'] = 'human_review_required' if damage == 'mixed_claimed_review' else 'not_checked'
+        rec['decision_analysis'].append(row)
+    for fmt in FORMAT_RENDERERS:
+        state['task']['report_format'] = fmt
+        result = _build_limited_report(state)
+        assert CASES[0][3] not in result['report']
+        assert 'UNREVIEWED_ROW' not in result['report']
+        assert 'FORGED_SOURCE' not in result['report']
+        assert result['final_recommendation']['deployment_readiness'] == 'unverified'

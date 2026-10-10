@@ -19,7 +19,7 @@ class CommunitySearch(BaseRetriever):
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None) -> list[dict]:
         from ..runtime.context import get_run_context
-        from ..citations.source_windows import extract_source_document
+        from ..citations.source_windows import extract_page_document
 
         queries = list(dict.fromkeys(adapted_queries)) if adapted_queries else [query]
         hints = proposal_hints(" ".join([query, *sub_questions]))
@@ -54,9 +54,8 @@ class CommunitySearch(BaseRetriever):
                         raise ValueError("StackExchange question body unavailable")
                     # Questions are reported context, not verified answers. Keep
                     # code settings with prose; skip navigation and explicit hidden blocks.
-                    document = extract_source_document(
-                        item["body"], truncated=False, skip_navigation=True,
-                        preserve_pre=True, raise_on_error=True,
+                    document = extract_page_document(
+                        item["body"], truncated=False, raise_on_error=True,
                     )
                     if document.incomplete:
                         raise ValueError("Incomplete StackExchange question body")
