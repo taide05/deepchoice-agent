@@ -7,7 +7,7 @@ from deepchoice.agents.source_evaluator import (
 )
 from deepchoice.utils.evidence import candidate_name_pattern
 from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
-from deepchoice.utils.question_packet import candidate_mentions, has_multi_candidate_coverage
+from deepchoice.utils.question_packet import candidate_mentions
 
 
 @pytest.mark.parametrize("label,title", [
@@ -77,11 +77,6 @@ def test_audited_seed_scope_uses_same_identity_without_granting_other_product_sc
                                               "chroma", ["继续使用 SQLite"]) is None
 
 
-def test_multi_candidate_packet_preserves_original_choice_labels_and_missing_side():
-    labels = ["continue using Atlas", "migrate to Beta"]
-    assert not has_multi_candidate_coverage([{"source_title": "Atlas documentation"}], labels)
-    assert has_multi_candidate_coverage([{"source_title": "Atlas documentation"},
-                                        {"source_title": "Beta documentation"}], labels)
 
 
 @pytest.mark.asyncio
@@ -113,10 +108,9 @@ async def test_action_choice_uses_own_product_through_binding_review_and_render(
     assert len(state["source_scores"]) == len(source_names)
     state.update(await EvidenceChainAgent().run(state))
     row = answer("R0")["decision_analysis"][0]
-    row.update(kind="choice", option=labels[0], basis_refs=["B1", "B2"], assumptions=[],
+    row.update(kind="choice", option=labels[0], basis_refs=["S1B1", "S1B2"], assumptions=[],
                reasoning="Given tolerance for queuing, Alpha is an option to evaluate; restart recovery remains unconfirmed.")
-    model = AsyncMock(side_effect=[{"source_view_ids": [f"S{i}" for i in range(1, len(source_names) + 1)]},
-                                  {"decision_analysis": [row]}])
+    model = AsyncMock(return_value={**{"source_view_ids": [f"S{i}" for i in range(1, len(source_names) + 1)]}, **{"decision_analysis": [row]}})
     monkeypatch.setattr(synth, "call_model", model)
     state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
     assert state["final_recommendation"]["decision_analysis"][0]["option"] == labels[0]
@@ -153,7 +147,7 @@ async def test_action_choice_uses_own_product_through_binding_review_and_render(
     for render in FORMAT_RENDERERS.values():
         report = render(state)
         assert retained["reasoning"] in report and labels[0] in report
-    assert model.await_count == 2 and reviewer.await_count == 1
+    assert model.await_count == 1 and reviewer.await_count == 1
 
 
 @pytest.mark.parametrize("label,product,wrong", [

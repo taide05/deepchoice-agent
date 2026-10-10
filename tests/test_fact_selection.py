@@ -36,7 +36,7 @@ def refs(ranges=None):
 
 def model_answer():
     return {"decision_analysis": [{"kind": "answer", "option": "", "question_id": "R0",
-        "basis_refs": ["B1", "B2"],
+        "basis_refs": ["S1W1B1", "S1W1B2"],
         "reasoning": "Replay depends on retained records.", "assumptions": ["Retention is configured."],
         "change_condition": "Reassess if the records expire."}]}
 
@@ -127,11 +127,11 @@ def test_range_diagnostic_observes_shape_without_granting_binding(ranges, valid)
 
 async def test_staged_coordinates_survive_citation_and_review_without_mutating_chains(monkeypatch):
     original = chains()
-    model = AsyncMock(side_effect=[{"source_view_ids": ["S1W1"]}, model_answer()])
+    model = AsyncMock(return_value={**{"source_view_ids": ["S1W1"]}, **model_answer()})
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": TASK, "evidence_chains": deepcopy(original), "search_results": {"fixture": "unchanged"}}
     update = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)), state)
-    assert model.await_count == 2
+    assert model.await_count == 1
     assert update["final_recommendation"]["source_facts"][0]["source_ranges"] == [[0, 2]]
     assert state["evidence_chains"] == original
     assert update["evidence_chains"][0]["sources"][0]["snippet"] == original[0]["sources"][0]["snippet"]
@@ -178,24 +178,22 @@ async def test_sqlite_checkpoint_restart_keeps_range_coordinates_and_original_so
 
     answer = model_answer()
     answer["decision_analysis"][0]["assumptions"] = assumptions
-    model = AsyncMock(side_effect=[{"source_view_ids": ["S1W1"]}, answer])
+    model = AsyncMock(return_value={"source_view_ids": ["S1W1"], **answer})
     monkeypatch.setattr(synth, "call_model", model)
     async def fetch(*args, **kwargs):
         return httpx.Response(200, text=f"<p>{TEXT}</p>", headers={"content-type": "text/html"})
     monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
     workflow = StateGraph(ResearchState)
     agent = synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK))
-    workflow.add_node("selection", agent.select_sources)
-    workflow.add_node("citation", CitationValidatorAgent().run)
     workflow.add_node("synthesis", agent.run)
-    workflow.add_edge(START, "selection")
-    workflow.add_edge("selection", "citation")
-    workflow.add_edge("citation", "synthesis")
-    workflow.add_edge("synthesis", END)
+    workflow.add_node("citation", CitationValidatorAgent().run)
+    workflow.add_edge(START, "synthesis")
+    workflow.add_edge("synthesis", "citation")
+    workflow.add_edge("citation", END)
     config = {"configurable": {"thread_id": "range-restart"}}
     path = str(tmp_path / "checkpoints.db")
     async with AsyncSqliteSaver.from_conn_string(path) as saver:
-        graph = workflow.compile(checkpointer=saver, interrupt_after=["selection"])
+        graph = workflow.compile(checkpointer=saver, interrupt_after=["synthesis"])
         await graph.ainvoke({"task": TASK, "evidence_chains": chains()}, config)
         saved = await graph.aget_state(config)
         assert saved.next == ("citation",)
@@ -204,7 +202,7 @@ async def test_sqlite_checkpoint_restart_keeps_range_coordinates_and_original_so
     async with AsyncSqliteSaver.from_conn_string(path) as saver:
         graph = workflow.compile(checkpointer=saver)
         restored = await graph.ainvoke(None, config)
-    assert model.await_count == 2  # Selection is not repeated; judgment runs once after verification.
+    assert model.await_count == 1  # Joint generation is not repeated after checkpoint recovery.
     assert restored["final_recommendation"]["source_facts"][0]["status"] == "verified"
     assert restored["evidence_chains"][0]["sources"][0]["snippet"] == TEXT
     assert len(prepare_analysis_review(restored).slots) == 1

@@ -250,15 +250,15 @@ async def test_default_menu_range_survives_citation_review_and_rejects_unoffered
             "snippet": f"{product} retains records. Retention requires configuration. Administrators retain a recovery log. " + tail}]})
     monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 2)
     task = {"query": "Choose Alpha or Beta under retention constraints.", "candidate_techs": ["Alpha", "Beta"]}
-    model = AsyncMock(side_effect=[{"source_view_ids": ["S1W1", "S3W1"],
-        "source_facts": [{"id": "F1", "evidence_id": 2}]}, {"decision_analysis": [{
-            "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["B1", "B2"],
+    model = AsyncMock(return_value={**{"source_view_ids": ["S1W1", "S3W1"],
+        "source_facts": [{"id": "F1", "evidence_id": 2}]}, **{"decision_analysis": [{
+            "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["S1W1B1", "S1W1B2"],
             "reasoning": "Retention depends on configuration.", "assumptions": [],
-            "change_condition": "Reconsider if retention expires."}]}])
+            "change_condition": "Reconsider if retention expires."}]}})
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": task, "evidence_chains": deepcopy(original)}
     state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
-    assert model.await_count == 2
+    assert model.await_count == 1
     assert '"id":"S3W1"' in model.await_args_list[0].args[0][0]["content"]
     assert [f["evidence_id"] for f in state["final_recommendation"]["source_facts"]] == [1, 3]
     async def fetch(*args, **kwargs):
@@ -361,10 +361,10 @@ async def test_short_omitted_menu_analysis_survives_default_citation_review_and_
     chosen = next((key for key, view in menu.items()
                    if view["reference"].get("source_ranges") == [[2, 4]]), "S1")
     reasoning = "Replay depends on retained records and preserves order only within a partition."
-    model = AsyncMock(side_effect=[{"source_view_ids": [chosen]}, {"decision_analysis": [{
-        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["B1", "B2"],
+    model = AsyncMock(return_value={**{"source_view_ids": [chosen]}, **{"decision_analysis": [{
+        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": [f"{chosen}B1", f"{chosen}B2"],
         "reasoning": reasoning, "assumptions": [],
-        "change_condition": "Reassess if the required records have expired."}]}])
+        "change_condition": "Reassess if the required records have expired."}]}})
     monkeypatch.setattr(synth, "call_model", model)
     page = OMITTED_SHORT_TEXT.replace("[...]", "Details about unrelated clients appear in this section.")
     fetch = AsyncMock(return_value=httpx.Response(200, text=page, headers={"content-type": "text/plain"}))
@@ -378,7 +378,7 @@ async def test_short_omitted_menu_analysis_survives_default_citation_review_and_
     monkeypatch.setattr(review, "call_model", reviewed_model)
     state.update(await review.SelfReviewerAgent().run(state))
     assert len(state["final_recommendation"]["decision_analysis"]) == 1
-    assert reviewed_model.await_count == 1 and model.await_count == 2 and fetch.await_count == 1
+    assert reviewed_model.await_count == 1 and model.await_count == 1 and fetch.await_count == 1
     assert state["final_recommendation"]["source_facts"][0]["source_ranges"] == [[2, 4]]
     for render in FORMAT_RENDERERS.values():
         assert reasoning in render(state)
@@ -431,3 +431,25 @@ def test_extra_view_metadata_obeys_shared_capacity_without_partial_source(monkey
     assert set(menu) == {"S2"} and ids == {2}
     assert max(len(packet.encode("utf-8")), len(numeric.encode("utf-8"))) <= limit
     assert not selection.bind_selected_views({"source_view_ids": ["S1"]}, {"S1": {}}, original, ["Alpha", "Beta"], [])
+
+
+@pytest.mark.parametrize("reference", ["unselected_view", "outside_view", "selected_view", "changed_menu"])
+def test_joint_quotes_remain_bound_to_selected_overlapping_view(reference):
+    original = chains(OMITTED_SHORT_TEXT)
+    packet, offered = selection.selection_view_packet(original, ["Alpha"])
+    selected_id = next(key for key in offered if key != "S1")
+    from deepchoice.citations.verifier import _split_sentences
+    count = len(_split_sentences(offered[selected_id]["fact"]["saved_text"]))
+    token = ("S1B1" if reference == "unselected_view" else
+             f"{selected_id}B{count+1}" if reference == "outside_view" else f"{selected_id}B1")
+    raw = {"source_view_ids": [selected_id], "decision_analysis": [{
+        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": [token],
+        "reasoning": "A conditional explanation.", "assumptions": [], "change_condition": "Reassess the premise."}]}
+    assert token in packet or reference == "outside_view"
+    if reference == "changed_menu":
+        original[0]["sources"][0]["snippet"] += " A new saved qualification applies."
+    facts, rows = selection.bind_selection_answers(raw, offered, original, ["Alpha"], {"R0"}, {})
+    assert bool(rows) is (reference == "selected_view")
+    if rows:
+        assert rows[0]["basis"][0]["fact_id"] == facts[0]["id"]
+        assert rows[0]["basis"][0]["source_sentences"] == [_split_sentences(facts[0]["saved_text"])[0]]

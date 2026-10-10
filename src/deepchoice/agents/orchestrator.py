@@ -25,7 +25,7 @@ from ..runtime.context import (
 from ..utils.stage_diagnostics import node_stage_counts
 from ..utils.views import print_agent_output
 from .citation_validator import CitationValidatorAgent
-from .conclusion_synthesizer import ConclusionSynthesizerAgent, SourceSelectionAgent
+from .conclusion_synthesizer import ConclusionSynthesizerAgent
 from .conflict_detector import ConflictDetectorAgent
 from .evidence_chain import EvidenceChainAgent
 from .evidence_decision_gate import EvidenceDecisionGateAgent, route_after_evidence_decision
@@ -87,9 +87,6 @@ class ChiefEditorAgent:
                 legacy_arbitration=False,
             ),
             "evidence_chain": EvidenceChainAgent(self.websocket, self.stream_output, self.headers),
-            "source_selection": SourceSelectionAgent(
-                self.websocket, self.stream_output, self.headers, run_manifest=self.run_manifest,
-            ),
             "conclusion_synthesizer": ConclusionSynthesizerAgent(
                 self.websocket,
                 self.stream_output,
@@ -204,7 +201,6 @@ class ChiefEditorAgent:
         workflow.add_node("source_evaluator", self._timed_node("source_evaluator", agents["source_evaluator"].run))
         workflow.add_node("conflict_detector", self._timed_node("conflict_detector", agents["conflict_detector"].run))
         workflow.add_node("evidence_chain", self._timed_node("evidence_chain", agents["evidence_chain"].run))
-        workflow.add_node("source_selection", self._timed_node("source_selection", agents["source_selection"].run))
         workflow.add_node("conclusion_synthesizer", self._timed_node("conclusion_synthesizer", agents["conclusion_synthesizer"].run))
         workflow.add_node("citation_validator", self._timed_node("citation_validator", agents["citation_validator"].run))
         workflow.add_node("evidence_decision_gate", self._timed_node("evidence_decision_gate", agents["evidence_decision_gate"].run))
@@ -218,10 +214,9 @@ class ChiefEditorAgent:
         workflow.add_edge("multi_retriever", "source_evaluator")
         workflow.add_edge("source_evaluator", "conflict_detector")
         workflow.add_edge("conflict_detector", "evidence_chain")
-        workflow.add_edge("evidence_chain", "source_selection")
-        workflow.add_edge("source_selection", "citation_validator")
-        workflow.add_edge("citation_validator", "conclusion_synthesizer")
-        workflow.add_edge("conclusion_synthesizer", "self_reviewer")
+        workflow.add_edge("evidence_chain", "conclusion_synthesizer")
+        workflow.add_edge("conclusion_synthesizer", "citation_validator")
+        workflow.add_edge("citation_validator", "self_reviewer")
         workflow.add_edge("self_reviewer", "evidence_decision_gate")
         workflow.add_conditional_edges(
             "evidence_decision_gate",

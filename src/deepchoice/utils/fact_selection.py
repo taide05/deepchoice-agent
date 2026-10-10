@@ -178,7 +178,7 @@ def _selection_rows(bindings):
         yield number, row
 
 
-SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v4:sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;source-host"
+SOURCE_VIEW_SELECTION_POLICY = "runtime-source-views-v5:joint-view-quotes;sources=24;bytes=24000;focus=2+maximal;short-omitted=whole+bounded-views;shared-admission=max-packet-bytes;literal-candidate-first-fit;source-host"
 
 
 def _view_rows(bindings):
@@ -249,6 +249,7 @@ def _view_rows(bindings):
             shown = tuple(row["text"] for row in original["sentences"][left:right])
             if shown != tuple(_split_sentences(fact["saved_text"])):
                 continue  # Never advertise text differing from its bound view.
+            view["basis_refs"] = [f"{view['id']}B{i}" for i in range(1, len(shown) + 1)]
             validated.append(view)
             view_bindings[view["id"]] = {"reference": ref, "source": deepcopy(source), "fact": fact}
         views, refs = validated, view_bindings
@@ -336,7 +337,7 @@ def selection_view_packet(chains, candidates=()):
     return "\n".join(row[1] for row in rows), {key: view for row in rows for key, view in row[3].items()}
 
 
-def bind_selected_views(selected, offered, chains, candidates, requirements):
+def _bound_selected_views(selected, offered, chains, candidates):
     """Rebuild advertised selections and assign F identities after binding.
 
     Invalid/unknown IDs never become guessed sources. Duplicate advertised IDs
@@ -346,9 +347,9 @@ def bind_selected_views(selected, offered, chains, candidates, requirements):
 
     values = selected.get("source_view_ids") if isinstance(selected, dict) else None
     if not isinstance(values, list) or not values or len(values) > MAX_SOURCE_FACTS:
-        return []
+        return {}
     _, current = selection_view_packet(chains, candidates)
-    facts, seen = [], set()
+    facts, seen = {}, set()
     for identifier in values:
         if not isinstance(identifier, str) or identifier not in offered or identifier in seen:
             continue
@@ -358,5 +359,24 @@ def bind_selected_views(selected, offered, chains, candidates, requirements):
             continue  # Recompute admission and freeze full sources, not only crops.
         fact = deepcopy(current[identifier]["fact"])
         fact["id"] = f"F{len(facts) + 1}"
-        facts.append(fact)
+        facts[identifier] = fact
     return facts
+
+
+def bind_selected_views(selected, offered, chains, candidates, requirements):
+    return list(_bound_selected_views(selected, offered, chains, candidates).values())
+
+
+def bind_selection_answers(selected, offered, chains, candidates, questions, diagnostics):
+    """Bind quotes to the selected specific view, never another overlapping view."""
+    from ..citations.verifier import _split_sentences
+    from .question_packet import bind_question_rows
+
+    facts = _bound_selected_views(selected, offered, chains, candidates)
+    quotes = {}
+    for view_id, fact in facts.items():
+        for index, sentence in enumerate(_split_sentences(fact["saved_text"]), 1):
+            quotes[f"{view_id}B{index}"] = {"fact_id": fact["id"],
+                "sentence_ids": [index], "source_sentences": [sentence]}
+    rows = bind_question_rows(selected.get("decision_analysis"), questions, quotes, diagnostics=diagnostics)
+    return list(facts.values()), rows

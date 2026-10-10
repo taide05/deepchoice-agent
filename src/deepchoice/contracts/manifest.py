@@ -11,7 +11,7 @@ from ..utils.fact_selection import SOURCE_VIEW_SELECTION_POLICY
 from ..utils.question_packet import QUESTION_BASIS_POLICY
 from ..agents.conclusion_synthesizer import (
     SYNTHESIS_CALL_TIMEOUT_S, SYNTHESIS_CORRECTION_TEMPLATE, SYNTHESIS_PROMPT,
-    FACT_SELECTION_PROMPT, QUESTION_JUDGMENT_PROMPT,
+    JOINT_SYNTHESIS_PROMPT,
     SYNTHESIS_STRUCTURE_POLICY, SOURCE_PASSAGE_DISPLAY_POLICY,
 )
 from ..agents.conflict_detector import CONTRADICTION_SCAN_SYSTEM
@@ -24,7 +24,7 @@ from ..agents.source_evaluator import SOURCE_SCOPE_SELECTION_PROMPT
 from ..utils.llm import MAX_OUTPUT_TOKENS, SDK_MAX_RETRIES, TIERS, max_output_tokens_for, synthesis_extra_body
 
 
-CURRENT_WORKFLOW_VERSION = "research-v5"
+CURRENT_WORKFLOW_VERSION = "research-v6"
 
 WORKFLOW_NODES = (
     "query_analyzer",
@@ -33,9 +33,8 @@ WORKFLOW_NODES = (
     "source_evaluator",
     "conflict_detector",
     "evidence_chain",
-    "source_selection",
-    "citation_validator",
     "conclusion_synthesizer",
+    "citation_validator",
     "self_reviewer",
     "evidence_decision_gate",
     "report_generator",
@@ -50,7 +49,7 @@ PROMPT_VERSIONS = {
     "self_reviewer.review_system": "v11",
     "query_analyzer.decomposition_system": "v3",
     "query_adapter.adapt_system": "v8",
-    "conclusion_synthesizer.synthesis_prompt": "v41",
+    "conclusion_synthesizer.synthesis_prompt": "v42",
     "source_evaluator.source_scope_selection": "v4",
     "conflict_detector.contradiction_scan_system": "v4",
 }
@@ -75,7 +74,7 @@ class ModelConfigSnapshot(FrozenModel):
 
 class PromptSnapshot(FrozenModel):
     prompt_id: str
-    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34", "v35", "v36", "v37", "v38", "v39", "v40", "v41"] = "v1"
+    version: Literal["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "v32", "v33", "v34", "v35", "v36", "v37", "v38", "v39", "v40", "v41", "v42"] = "v1"
     sha256: str
 
 
@@ -113,7 +112,7 @@ class RunManifest(FrozenModel):
     manifest_id: str
     created_at: datetime
     app_version: str
-    workflow_version: Literal["research-v1", "research-v2", "research-v3", "research-v4", "research-v5"] = "research-v5"
+    workflow_version: Literal["research-v1", "research-v2", "research-v3", "research-v4", "research-v5", "research-v6"] = "research-v6"
     workflow_nodes: tuple[str, ...] = WORKFLOW_NODES
     state_schema_version: Literal[1, 2, 3] = 3
     models: tuple[ModelConfigSnapshot, ...]
@@ -150,7 +149,7 @@ class CoreAssetRegistry(FrozenModel):
     registry_schema_version: Literal[1] = 1
     registry_id: str
     manifest_schema_version: Literal[1] = 1
-    workflow_version: Literal["research-v5"] = "research-v5"
+    workflow_version: Literal["research-v6"] = "research-v6"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
     citation_policy_version: Literal["deterministic-citation-v26"]
@@ -239,7 +238,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
         ("conflict_detector.contradiction_scan_system", CONTRADICTION_SCAN_SYSTEM),
         ("conclusion_synthesizer.synthesis_prompt",
          SYNTHESIS_PROMPT + "\n" + SYNTHESIS_STRUCTURE_POLICY + "\n" + SYNTHESIS_CORRECTION_TEMPLATE
-         + "\n" + FACT_SELECTION_PROMPT + "\n" + QUESTION_JUDGMENT_PROMPT
+         + "\n" + JOINT_SYNTHESIS_PROMPT
          + "\n" + SOURCE_PASSAGE_DISPLAY_POLICY + "\n" + SOURCE_VIEW_SELECTION_POLICY
          + "\n" + QUESTION_BASIS_POLICY),
         ("self_reviewer.review_system", REVIEW_SYSTEM),

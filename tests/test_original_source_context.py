@@ -155,18 +155,18 @@ async def test_existing_synthesis_and_review_calls_receive_context_without_publi
                 if value["reference"].get("source_ranges") == [[8, 10]])
     task = {"query": "Compare the administration responsibilities of Atlas and Boreal.",
             "candidate_techs": ["Atlas", "Boreal"], "constraints": [], "sub_questions": []}
-    model = AsyncMock(side_effect=[{"source_view_ids": [view]}, {"decision_analysis": [{
-        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": ["B1"],
+    model = AsyncMock(return_value={**{"source_view_ids": [view]}, **{"decision_analysis": [{
+        "kind": "answer", "option": "", "question_id": "R0", "basis_refs": [f"{view}B1"],
         "reasoning": "Administration responsibilities need configuration evidence; applicability remains unresolved.",
-        "assumptions": [], "change_condition": "Reassess when the applicable version is known."}]}])
+        "assumptions": [], "change_condition": "Reassess when the applicable version is known."}]}})
     monkeypatch.setattr(synth, "call_model", model)
     import httpx
     async def unavailable(*args, **kwargs):
         raise httpx.ConnectError("synthetic unavailable page")
     update = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)),
         {"task": task, "evidence_chains": chains}, fetch=unavailable)
-    assert model.await_count == 2
-    judgment = model.await_args_list[1].args[0][0]["content"]
+    assert model.await_count == 1
+    judgment = model.await_args_list[0].args[0][0]["content"]
     assert ACTOR in judgment and TAIL in judgment
     state = review_state(update["final_recommendation"], task, chains)
     assert len(state["final_recommendation"]["decision_analysis"]) == 1

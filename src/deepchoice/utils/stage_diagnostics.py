@@ -27,11 +27,6 @@ _PATHS = {
         "scope_accepted": ("source_scope_proposal", "accepted"),
     },
     "evidence_chain": _fields("total_chains", "strong", "moderate", "weak", "disputed"),
-    "source_selection": {
-        **_fields("source_facts_bound"),
-        **{key: ("staged_generation", key) for key in
-           ("facts_received", "facts_bound", "questions_planned", "provider_errors")},
-    },
     "conclusion_synthesizer": {
         **_fields("source_facts_received", "source_facts_bound"),
         **{key: ("staged_generation", key) for key in (
@@ -63,8 +58,6 @@ def _safe_counts(node, counts):
     allowed = set(_PATHS.get(node, {}))
     if node in _ANALYSIS_NODES:
         allowed.add("analyses_returned")
-    if node == "conclusion_synthesizer":
-        allowed.add("r0_withheld_one_sided")
     result = {key: counts[key] for key in allowed if key in counts
               and type(counts[key]) is int and 0 <= counts[key] <= 10000}
     return result or None
@@ -85,11 +78,6 @@ def node_stage_counts(node, result):
                 for part in path:
                     value = value.get(part) if isinstance(value, dict) else None
                 counts[key] = value
-            stage = signal.get("staged_generation")
-            if node == "conclusion_synthesizer" and isinstance(stage, dict):
-                flag = stage.get("r0_withheld_one_sided")
-                if type(flag) is bool:
-                    counts["r0_withheld_one_sided"] = int(flag)
             break
     recommendation = result.get("final_recommendation")
     if node in _ANALYSIS_NODES and isinstance(recommendation, dict):

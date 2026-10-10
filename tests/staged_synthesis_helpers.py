@@ -17,9 +17,9 @@ async def run_staged(agent, state, *, fetch=None):
         passages = item.get("passages") or [item.get("snippet", "")]
         body = "".join("<p>" + escape(text) + "</p>" for text in passages)
         return httpx.Response(200, text=body, headers={"content-type": "text/html"})
-    selection = await agent.select_sources(current)
-    current.update(selection)
-    with patch("deepchoice.citations.verifier.safe_fetch", fetch or synthetic_fetch):
-        current.update(await CitationValidatorAgent().run(current))
     current.update(await agent.run(current))
+    with patch("deepchoice.citations.verifier.safe_fetch", fetch or synthetic_fetch):
+        checked = await CitationValidatorAgent().run(current)
+        checked["quality_signals"] = current.get("quality_signals", []) + checked.get("quality_signals", [])
+        current.update(checked)
     return current

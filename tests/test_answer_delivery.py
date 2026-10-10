@@ -190,15 +190,12 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
     from tests.test_synthesis_structure import TASK, CHAINS
 
     malformed = payload("The source supports recovery; a different assertion [[2]] is uncited.")
-    malformed["decision_analysis"][0].update(question_id="R0", basis_refs=["B1"])
-    model = AsyncMock(side_effect=[
-        {"source_view_ids": ["S1"]},
-        {"decision_analysis": malformed["decision_analysis"]},
-    ])
+    malformed["decision_analysis"][0].update(question_id="R0", basis_refs=["S1B1"])
+    model = AsyncMock(return_value={**{"source_view_ids": ["S1"]}, **{"decision_analysis": malformed["decision_analysis"]}})
     monkeypatch.setattr(synth, "call_model", model)
     state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)), {
         "task": TASK, "evidence_chains": CHAINS})
-    assert model.await_count == 2
+    assert model.await_count == 1
     assert state["final_recommendation"]["decision_analysis"] == []
     assert "different assertion" not in FORMAT_RENDERERS["what_why_how"](state)
 

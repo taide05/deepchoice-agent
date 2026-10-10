@@ -26,7 +26,7 @@ def test_stage_allowlist_drops_private_content_and_invalid_counts():
     assert counts == {
         "source_facts_bound": 2, "facts_received": 3, "rows_received": 4,
         "rows_selected": 2, "rows_rejected_question": 1, "rows_rejected_shape": 1,
-        "r0_withheld_one_sided": 0, "analyses_received": 2, "analyses_bound": 1,
+        "analyses_received": 2, "analyses_bound": 1,
         "binding_rejected_prose_reference": 1, "analyses_returned": 1,
     }
     assert result == before

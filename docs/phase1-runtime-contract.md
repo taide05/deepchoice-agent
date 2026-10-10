@@ -19,8 +19,8 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-10精简：当前引用政策v26、评分政策source-score-v19、HITL政策v3、official v12；workflow v5/state3保持。
-合成v41、查询适配v8、自审v11；报告模板what-why-how v24/evidence-first v23/comparison-matrix v22。
+2026-10-10精简：当前引用政策v26、评分政策source-score-v19、HITL政策v3、official v12；workflow v6/state3。
+合成v42、查询适配v8、自审v11；报告模板what-why-how v24/evidence-first v23/comparison-matrix v22。
 官方正文和引用动态获取共用1 MiB响应上限；提取正文仍64 KiB、选段1200字符、上下文6000字符，
 URL数量、15秒、重定向、安全解析和预算准入边界保持。请求body上限仍128 KiB。
 引用仅在一个可见正文视图定位，保留pre/footer、完整段落、邻近条件及歧义/截断拒绝；
@@ -64,27 +64,25 @@ sentence_scoped审阅，未定位/未核实内容不可作正依据。原文、�
 未知复合名称不猜测，历史seed的修饰标签覆盖限制保留。无新状态、数据库、节点或API。
 旧提示身份可读但不能同run恢复，新manifest隔离旧缓存；真实质量收益尚未测量。
 
-2026-10-09交付修复：新运行冻结 `research-v5`、合成v39、official v11、
-`runtime-source-views-v4` 与 `runtime-question-basis-v3`。图顺序为 evidence_chain →
-source_selection → citation_validator → conclusion_synthesizer → self_reviewer →
-evidence_decision_gate → report_generator。将已有两次合成调用分开，来源核验位于二者之间；
-无新增模型调用或第二次网页核验。source_selection沿现有conclusion_synthesizer调用配置和预算，
-拥有自己的节点计时与检查点。HTTP只核验来源事实，模型分析不是citation verified；
-后续原句绑定、依赖校准和自审仍约束推理，固定操作安全计划保持。
+2026-10-10主流程合并：新运行冻结 `research-v6`、合成v42、official v12、
+`runtime-source-views-v5` 与 `runtime-question-basis-v5`。图顺序为 evidence_chain →
+conclusion_synthesizer → citation_validator → self_reviewer → evidence_decision_gate →
+report_generator。删除独立source_selection节点，将选源与问题判断的两次模型处理合为一次。
+最多五份来源视图、八项分析，每项最多四事实/每事实三句的限额保持；菜单总计24KiB包含
+运行时引用ID元数据。模型仅复制所选视图及其原句ID，运行时重算当前菜单、完整来源身份、
+具体视图与相对原句地址；同页重叠视图不得借用引用。无新增数据库、API或state字段。
 
-复用final_recommendation/citation_verification，state schema仍v3，无数据库迁移或API形状变化。
-来源选择清空上一轮核验，HITL补充重新进入选择与核验。判断前重新绑定来源并核对原文/URL/
-范围等身份，再用本轮检查校准；缺少有效核验或身份失配明确失败，不能返回空成功。
-带manifest的ConclusionSynthesizerAgent.run是核验后的内部图节点；完整调用使用ChiefEditorAgent。
-无manifest的旧agent单调用接口保持。旧POST /research本来同样构建manifest，执行新图，
-仍保持其原有非持久生命周期和HITL旁路。
+联合节点只做结构绑定，不提前按unknown清除分析；先清空旧citation_verification，
+随后引用节点重新绑定、核验并校准，自审决定可公开的推断。HITL补充重新进入该顺序。
+来源的verified/network_unconfirmed/sentence_scoped资格及其他unknown/unsupported/
+unreachable撤回边界保持。HTTP检查来源事实，不验证模型分析的语义；原句范围、候选归属
+挑战和固定validation_only操作限制保持。删除标题R0词面覆盖门后，单侧来源可支持条件选择
+提议，但不证明比较充分性，不授予winner/部署权限；跨候选借证仍由原绑定与自审拦截。
 
-verified或既有network_unconfirmed来源可提供原有句子，sentence_scoped仅提供已有
-reviewable_sentence_ids；其余unknown/unsupported/unreachable不提供B依据。未核验上下文
-只用于质疑适用性，不能创建B编号。来源核验状态在判断后再次按原检查校准，不能由模型升级。
-新节点映射到既有evidence_chain进度阶段；判断映射self_review阶段。SQLite断点恢复需覆盖
-来源选择后及核验后两个位置，保持不重复已完成调用。旧workflow v4、official v10、合成v38
-manifest仍可读且身份有效，同run恢复拒绝；新manifest自然隔离旧检索缓存。
+带manifest的ConclusionSynthesizerAgent.run是引用前的联合节点；完整调用使用ChiefEditorAgent。
+无manifest的旧agent单调用接口保持。旧POST /research仍构建manifest并执行当前图，保持
+其非持久生命周期与HITL旁路。历史workflow v1–v5及原prompt身份仍可读、身份有效，
+但不兼容同run恢复；须以新run执行。SQLite恢复验证联合节点完成后继续引用而不重复生成。
 
 official v11用现有目录名/别名匹配到的明确比较对象优先分配原两个根名额，背景技术靠后，
 不新增目录或地址授权。选择菜单显示解析后的source_host，仍计入原24 KB上限；hostname不
@@ -798,9 +796,9 @@ TTL、CAS、fencing、预算准入及四种引用状态不变。
 - task/run 的 `version` 是乐观并发控制字段。读取后再写的生命周期操作必须做 CAS；
   CAS 失败返回冲突，不得覆盖赢家。
 - `RunManifest` 冻结模型、LLM 参数、Prompt hash、workflow/state schema、retriever 和报告
-  模板版本。当前新运行使用 `research-v5`/state schema v3，并冻结
-  `deterministic-citation-v22` 与 `evidence-insufficient-v2` 策略；历史 workflow v1–v4、HITL v1及
-  citation-policy v1–v21 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
+  模板版本。当前新运行使用 `research-v6`/state schema v3，并冻结
+  `deterministic-citation-v26` 与 `evidence-insufficient-v3` 策略；历史 workflow v1–v5、HITL v1/v2及
+  citation-policy v1–v25 manifest 仍可读取和校验身份，但不能在当前 runtime 上续同一 run，须创建
   新 run。same-run resume 必须校验 manifest ID 及当前运行时兼容性；不兼容时拒绝恢复。
 - `completed`、`completed_with_warnings` 和 `cancelled` 是不可重开的 task 结果；
   `failed`、`timed_out` 可通过新 run 重试；`interrupted` 是可恢复状态，不是不可重开终态。

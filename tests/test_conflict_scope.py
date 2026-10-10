@@ -198,11 +198,11 @@ async def test_conditional_choice_survives_citation_and_actual_self_review_witho
     task = {"query": "Choose Atlas when encrypted snapshots are required.", "candidate_techs": ["Atlas"]}
     selection = {"source_view_ids": ["S1W3"]}
     analysis = {"decision_analysis": [{"kind": "choice", "option": "Atlas", "question_id": "R0",
-        "basis_refs": ["B1", "B2", "B3"],
+        "basis_refs": ["S1W3B1", "S1W3B2", "S1W3B3"],
         "reasoning": "Consider Atlas for encrypted snapshots if the original encryption key is retained and isolated restoration validation is satisfactory.",
         "assumptions": ["The original encryption key is available."],
         "change_condition": "Reassess if the encryption key is unavailable."}]}
-    model = AsyncMock(side_effect=[selection, analysis])
+    model = AsyncMock(return_value={**selection, **analysis})
     monkeypatch.setattr(synth, "call_model", model)
     state = {"task": task, "evidence_chains": chains, "conflicts": conflicts}
     state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
@@ -222,7 +222,7 @@ async def test_conditional_choice_survives_citation_and_actual_self_review_witho
     assert "original encryption key" in final["source_facts"][0]["saved_text"]
     assert chains == original and _usable_evidence_ids(chains) == set()
     assert usable_evidence_chains(state) == []
-    assert model.await_count == 2 and reviewer.await_count == 1
+    assert model.await_count == 1 and reviewer.await_count == 1
     forged = deepcopy(state)
     forged["final_recommendation"]["source_facts"][0]["source_ranges"] = [[0, 1]]
     assert not prepare_analysis_review(forged).slots

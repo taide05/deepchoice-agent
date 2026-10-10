@@ -2,6 +2,21 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Merge source selection and question judgment
+
+Research v6 / synthesis v42 removes the separate source-selection node and combines
+its selection and question answering into one model call. Each opaque quote belongs
+to a specific selected view; original source identity, context limits, later citation
+calibration, self-review, budget and durable recovery boundaries remain. Clear stale
+citation state on regeneration. Historical v5 runs stay readable but require a new run.
+Remove the title-based overall-choice veto; conditional proposals still require
+source attribution and review and confer no winner or deployment authority.
+Final validation: 3878 passed in543.62s, no skips (Windows/Python3.12); related266
+and the corrected real-admission denial test passed. All272 frozen files unchanged.
+Smoke12/12, static/dependency checks and independent read-only review passed;
+smoke outputs/metrics unchanged, only asset identity metadata refreshed.
+Real-report benefit remains unverified. The broader code simplification is unfinished.
+
 ### Keep the overall question available under partial evidence
 
 Remove the title-coverage veto that deleted the overall question before judgment.

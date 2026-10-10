@@ -445,7 +445,7 @@ async def test_interrupted_checkpoint_checks_full_manifest_before_resume(reposit
     )
 
     assert resumed.latest_run.run_id != run.run_id
-    assert resumed.latest_run.manifest.workflow_version == "research-v5"
+    assert resumed.latest_run.manifest.workflow_version == "research-v6"
     assert resumed.latest_run.manifest.state_schema_version == 3
     assert resumed.latest_run.manifest.citation_policy_version == (
         "deterministic-citation-v26"
