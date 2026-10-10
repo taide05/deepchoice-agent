@@ -8,6 +8,12 @@ from ..outbound.throttle import ProviderAdmissionError
 from ..utils.views import print_agent_output
 
 
+def is_authority_error(exc: Exception) -> bool:
+    detail = getattr(exc, "error_detail", None)
+    codes = {"RUN_LEASE_LOST", "RUNTIME_INSTANCE_LEASE_LOST", "RUN_BUDGET_AUTHORITY_STALE"}
+    return getattr(exc, "code", None) in codes or getattr(detail, "code", None) in codes
+
+
 def error_text(e: Exception) -> str:
     """Return a stable public summary without reflecting provider payloads."""
 
@@ -43,6 +49,8 @@ class BaseRetriever:
         except BudgetError:
             raise
         except Exception as e:
+            if is_authority_error(e):
+                raise
             partial = isinstance(e, PartialRetrievalError)
             failure = e.failure if partial else e
             # A failed request may mean the routed channel died after probing

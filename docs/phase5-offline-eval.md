@@ -43,3 +43,7 @@ core_asset_registry_id、artifact_fingerprint 变化。更新这四项记录并�
 仅更新 evaluated_at、current_manifest_id、core_asset_registry_id 和
 artifact_fingerprint 四项，`--check-baseline` 通过。新增绑定器的多原句传递由相关
 回归及固定来源节点回放验证；smoke 仍不衡量真实报告语义。
+
+2026-10-10 Tavily v3/检索缓存策略v2后复核：12例输出、指标、数据集、core asset身份、
+fingerprint及`not_run`来源健康均不变；仅更新评估时间和当前manifest ID。
+`--check-baseline`通过。smoke不执行新增网页读取，也不证明真实来源或报告质量。

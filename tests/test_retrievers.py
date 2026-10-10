@@ -107,6 +107,89 @@ class TestTavilySearch:
             await retriever.search("main query", ["sq1", "sq2", "sq3"])
         assert client.post.await_count >= 3  # probe + main + sub-questions
 
+    @pytest.mark.asyncio
+    async def test_durable_tavily_uses_exact_page_excerpt_and_preserves_failed_read(self, monkeypatch):
+        from deepchoice.retrievers import tavily_search
+        from deepchoice.retrievers.contracts import RetrievalRequest
+
+        async def post(_post, _payload):
+            response = MagicMock()
+            response.json.return_value = {"results": [
+                {"url": "https://docs.example/alpha", "title": "Alpha docs", "content": "Provider assembled summary."},
+                {"url": "https://docs.example/beta", "title": "Beta docs", "content": "Provider beta summary."},
+            ]}
+            return response, None
+
+        async def read(root, url, terms, *, exact_page):
+            assert root == url and exact_page and terms
+            if url.endswith("beta"):
+                raise OSError("page unavailable")
+            return ({"snippet": "Complete Alpha condition. Adjacent Alpha qualification.",
+                     "_source_scope_sentences": ["Complete Alpha condition.", "Adjacent Alpha qualification."]},
+                    2, [], False)
+
+        monkeypatch.setattr(tavily_search, "post_with_failover", post)
+        monkeypatch.setattr(tavily_search, "get_run_context", lambda: object())
+        monkeypatch.setattr(tavily_search, "_read_page", read)
+        with _patch_outbound(_FakeClient()):
+            result = await TavilySearch().retrieve(RetrievalRequest(query="Alpha Beta", adapted_queries=("both",)))
+        assert result.status == "partial" and result.schema_version == 2
+        assert result.error == "OSError"
+        assert result.results[0]["snippet"] == "Complete Alpha condition. Adjacent Alpha qualification."
+        assert result.results[0]["_source_scope_sentences"] == [
+            "Complete Alpha condition.", "Adjacent Alpha qualification."]
+        assert result.results[1]["snippet"] == "Provider beta summary."
+        assert "_source_scope_sentences" not in result.results[1]
+
+    @pytest.mark.asyncio
+    async def test_durable_tavily_fully_page_backed_result_is_success(self, monkeypatch):
+        from deepchoice.retrievers import tavily_search
+        from deepchoice.retrievers.contracts import RetrievalRequest
+
+        async def post(_post, _payload):
+            response = MagicMock()
+            response.json.return_value = {"results": [
+                {"url": "https://docs.example/alpha", "title": "Alpha docs", "content": "Provider summary."},
+            ]}
+            return response, None
+
+        async def read(root, url, terms, *, exact_page):
+            return ({"snippet": "Complete Alpha condition. Adjacent Alpha qualification."}, 2, [], False)
+
+        monkeypatch.setattr(tavily_search, "post_with_failover", post)
+        monkeypatch.setattr(tavily_search, "get_run_context", lambda: object())
+        monkeypatch.setattr(tavily_search, "_read_page", read)
+        with _patch_outbound(_FakeClient()):
+            result = await TavilySearch().retrieve(RetrievalRequest(query="Alpha", adapted_queries=("one",)))
+        assert result.status == "success" and result.error is None
+        assert result.results[0]["snippet"] == "Complete Alpha condition. Adjacent Alpha qualification."
+
+    @pytest.mark.asyncio
+    async def test_durable_tavily_page_budget_failure_is_not_hidden(self, monkeypatch):
+        from deepchoice.budget_errors import BudgetPersistenceError
+        from deepchoice.retrievers import tavily_search
+
+        async def denied(*args, **kwargs):
+            raise BudgetPersistenceError("storage unavailable")
+
+        monkeypatch.setattr(tavily_search, "_read_page", denied)
+        with pytest.raises(BudgetPersistenceError):
+            await TavilySearch._page_backed({
+                "url": "https://docs.example/alpha", "snippet": "Provider summary."})
+
+    @pytest.mark.asyncio
+    async def test_durable_tavily_empty_terms_do_not_spend_page_http(self, monkeypatch):
+        from deepchoice.retrievers import tavily_search
+
+        async def unexpected(*args, **kwargs):
+            raise AssertionError("page GET must not be dispatched")
+
+        monkeypatch.setattr(tavily_search, "_read_page", unexpected)
+        result, failure = await TavilySearch._page_backed({
+            "url": "https://docs.example/alpha", "snippet": "the and for"})
+        assert result["snippet"] == "the and for"
+        assert failure is None
+
 
 
 
@@ -357,6 +440,14 @@ class TestErrorReporting:
         assert result["error"] == "Exception"
 
     @pytest.mark.asyncio
+    async def test_lease_authority_error_is_not_reported_as_source_failure(self):
+        class LeaseLost(RuntimeError):
+            code = "RUN_LEASE_LOST"
+
+        with pytest.raises(LeaseLost):
+            await self._RaisingRetriever(LeaseLost("stale")).search("test", [])
+
+    @pytest.mark.asyncio
     async def test_multi_retriever_gather_error_not_empty(self):
         state = {
             "task": {"query": "test", "scene_context": "solo", "constraints": [], "report_format": "what_why_how"},
@@ -570,6 +661,24 @@ class TestSearchKBChromaPath:
 
 
 class TestMultiRetriever:
+    @pytest.mark.asyncio
+    async def test_lease_authority_loss_escapes_default_fanout(self):
+        class LeaseLost(RuntimeError):
+            code = "RUN_LEASE_LOST"
+
+        class LeaseRetriever:
+            source = "lease"
+
+            async def retrieve(self, request):
+                raise LeaseLost("stale execution")
+
+        state = {"task": {"query": "test", "scene_context": "solo", "constraints": [],
+                          "report_format": "what_why_how"}, "sub_questions": []}
+        with patch.dict("deepchoice.agents.multi_retriever.RETRIEVER_REGISTRY",
+                        {"lease": LeaseRetriever}, clear=True):
+            with pytest.raises(LeaseLost):
+                await MultiRetrieverAgent().run(state)
+
     @pytest.mark.asyncio
     async def test_aggregates_all_sources(self):
         state = {

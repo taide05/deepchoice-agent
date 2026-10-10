@@ -2,6 +2,23 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Preserve exact page evidence behind Tavily summaries
+
+Durable Tavily retrieval now reuses the bounded official-page reader on each merged
+result's exact URL. A complete local page excerpt replaces the provider summary
+only after a safe, budgeted read. Unreadable pages retain their summaries under a
+visible partial source envelope, which is excluded from the successful retrieval
+cache; citation verification still decides whether any quoted fact is located.
+Budget and lease authority failures remain fatal, while legacy search without a
+run context keeps its prior interface. Tavily retriever v3 and cache policy v2
+isolate this behavior from historical runs and entries. Saved 233/234/236 source
+probes found complete excerpts on multiple live AWS pages where prior assembled
+summaries failed whole-text location; this does not establish complete report quality.
+Engineering acceptance: 479 focused and 3,854 full-suite tests passed; smoke-v1
+12/12, pyflakes, vulture 100%, dependency, compile and diff checks passed.
+Independent read-only review found no remaining blocker. Real report benefit is
+reserved for one frozen four-report retrial.
+
 ### Preserve bounded quoted answers across the synthesis binders
 
 The staged question binder and downstream analysis binder now share the four-fact,

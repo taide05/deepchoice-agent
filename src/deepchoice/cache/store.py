@@ -16,7 +16,7 @@ from deepchoice.persistence.database import _await_cleanup
 from deepchoice.retrievers.contracts import RetrievalRequest, RetrievalResult
 
 
-RETRIEVAL_CACHE_POLICY_VERSION = "retrieval-cache-v1"
+RETRIEVAL_CACHE_POLICY_VERSION = "retrieval-cache-v2"
 MAX_CACHE_ENTRY_BYTES = 512 * 1024
 _SOURCE_TTLS = {
     "tavily": timedelta(hours=1),

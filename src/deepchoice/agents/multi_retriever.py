@@ -3,7 +3,7 @@ import re
 from collections.abc import Mapping
 
 from ..retrievers import RETRIEVER_REGISTRY
-from ..retrievers.base import error_text
+from ..retrievers.base import error_text, is_authority_error
 from ..retrievers.contracts import RetrievalRequest, RetrievalResult
 from ..retrievers.chroma_kb import chroma_collection_identity
 from ..retrievers.learned_docs import extract_terms, harvest, official_mapping_identity
@@ -137,6 +137,8 @@ async def _invoke_retriever_untraced(
     except BudgetError:
         raise
     except Exception as exc:
+        if is_authority_error(exc):
+            raise
         return (
             RetrievalResult(
                 source=name,
@@ -159,6 +161,8 @@ async def _invoke_retriever_untraced(
     except BudgetError:
         raise
     except Exception as exc:
+        if is_authority_error(exc):
+            raise
         return await _contract_failure(name, exc), True
 
     is_stable = callable(getattr(retriever, "retrieve", None))
@@ -175,6 +179,8 @@ async def _invoke_retriever_untraced(
     except BudgetError:
         raise
     except Exception as exc:
+        if is_authority_error(exc):
+            raise
         return (
             RetrievalResult(
                 source=name,
@@ -195,6 +201,8 @@ async def _invoke_retriever_untraced(
     except BudgetError:
         raise
     except Exception as exc:
+        if is_authority_error(exc):
+            raise
         return (
             RetrievalResult(
                 source=name,
@@ -655,6 +663,8 @@ class MultiRetrieverAgent:
         # per-source partial failures by the retriever's resilient fan-out.
         for invocation in raw_results:
             if isinstance(invocation, BudgetError):
+                raise invocation
+            if isinstance(invocation, Exception) and is_authority_error(invocation):
                 raise invocation
 
         search_results = []

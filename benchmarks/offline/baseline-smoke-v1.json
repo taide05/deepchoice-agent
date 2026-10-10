@@ -6,12 +6,12 @@
     "freeze_date": "2026-09-15",
     "file_sha256": "e9cdbcc650e93eee38ed891a89ac8eaecc23b1b3419a431adcc8e7bead2113cd"
   },
-  "evaluated_at": "2026-10-10T13:28:13.343749+00:00",
+  "evaluated_at": "2026-10-10T14:04:36.642249+00:00",
   "case_count": 12,
   "evaluated_case_count": 12,
   "execution_mode": "fixture_replay",
   "judge": "none",
-  "current_manifest_id": "7acb7f459f39c8cbbb42b8c6631af70cd963bbabdbcd83310e7019cee5e0954e",
+  "current_manifest_id": "cb4be3d52d8fc4544c634b7a781b12a7f811bf60eaebe297442e5c1f7c0ab48e",
   "core_asset_registry_id": "3320e8191e5155b203265bdf79af7958fdd12832d28c2dcb76b8bf930ab8fe56",
   "source_health": {
     "status": "not_run",
