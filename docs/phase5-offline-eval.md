@@ -38,3 +38,8 @@ core_asset_registry_id 和 artifact_fingerprint 四项不同，因此只更新�
 逐例结果、指标、数据集和来源健康均不变；仅 evaluated_at、current_manifest_id、
 core_asset_registry_id、artifact_fingerprint 变化。更新这四项记录并通过 `--check-baseline`；
 新的句子级自审行为由专门的离线回归覆盖，smoke 分数不代表真实报告质量。
+
+2026-10-10 问题依据绑定v6后复核：固定12例输出、指标、数据集和来源健康均未变化，
+仅更新 evaluated_at、current_manifest_id、core_asset_registry_id 和
+artifact_fingerprint 四项，`--check-baseline` 通过。新增绑定器的多原句传递由相关
+回归及固定来源节点回放验证；smoke 仍不衡量真实报告语义。

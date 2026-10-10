@@ -2,6 +2,17 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Preserve bounded quoted answers across the synthesis binders
+
+The staged question binder and downstream analysis binder now share the four-fact,
+12-reference row budget. They no longer reject an entire answer merely because
+one selected source view supplies more than three exact, advertised sentences.
+Unknown references, changed source text, duplicate coordinates, over-budget rows,
+citation status and self-review remain separately checked. Question basis policy
+v6 gives the changed runtime binding a new manifest identity. Fixed-source node
+replay on exposed 224/225/231 inputs showed the previous per-fact veto dropping
+otherwise bounded R0/Q rows; complete report content remains unverified.
+
 ### Ask each original question before selecting supporting views
 
 The existing single-call synthesis prompt now starts from the original R0/Q questions,

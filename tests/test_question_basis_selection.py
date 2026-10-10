@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from deepchoice.utils.decision_analysis import bind_decision_analysis
+from deepchoice.utils.decision_analysis import bind_analysis_basis, bind_decision_analysis
 from deepchoice.utils.question_packet import basis_reference_packet, bind_question_rows
 
 
@@ -42,8 +42,8 @@ def test_refs_copy_full_original_qualifiers_and_cannot_claim_constraint_coverage
     assert bound["decision_analysis"][0]["basis"] == rows[0]["basis"]
 
 
-@pytest.mark.parametrize("refs", [[], ["B0"], ["F1S1"], ["B1", "B1"],
-                                  ["B1", "B99"], [1], [True], "B1", ["B1"] * 13])
+@pytest.mark.parametrize("refs", [[], ["F1S1"], ["B1", "B1"],
+                                  ["B1", "B99"], [True], "B1", ["B1"] * 13])
 def test_bad_reference_never_donates_a_partial_basis_or_guesses_coordinates(refs):
     _, offered = basis_reference_packet(FACTS, ["Alpha", "Beta"])
     assert bind_question_rows([row(refs=refs)], {"R0"}, offered, diagnostics={}) == []
@@ -75,17 +75,31 @@ def test_model_cannot_target_a_constraint_or_create_a_subquestion_choice():
         bind_question_rows([row()], {"R0"}, offered, diagnostics={})[0]]
 
 
-def test_original_fact_and_sentence_bounds_apply_to_reference_groups():
+def test_total_reference_bound_replaces_per_fact_veto_without_losing_quote_identity():
     facts = [{"id": f"F{i}", "source_title": f"Guide {i}", "saved_text":
               "First qualified statement. Second qualified statement. Third qualified statement. Fourth qualified statement."}
              for i in range(1, 6)]
     _, offered = basis_reference_packet(facts, [])
-    assert bind_question_rows([row(refs=["B1", "B2", "B3", "B4"])], {"R0"}, offered, diagnostics={}) == []
-    assert bind_question_rows([row(refs=["B1", "B5", "B9", "B13", "B17"])], {"R0"}, offered, diagnostics={}) == []
+    one_source = bind_question_rows([row(refs=["B1", "B2", "B3", "B4"])], {"R0"}, offered, diagnostics={})
+    assert one_source[0]["basis"] == [{"fact_id": "F1", "sentence_ids": [1, 2, 3, 4],
+                                      "source_sentences": ["First qualified statement.",
+                                                           "Second qualified statement.",
+                                                           "Third qualified statement.",
+                                                           "Fourth qualified statement."]}]
     legal = [f"B{i}" for i in (1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15)]
     rows = bind_question_rows([row(refs=legal)], {"R0"}, offered, diagnostics={})
     assert len(rows[0]["basis"]) == 4
-    assert all(len(b["sentence_ids"]) == 3 for b in rows[0]["basis"])
+    assert [len(b["sentence_ids"]) for b in rows[0]["basis"]] == [3, 3, 3, 3]
+    assert bind_analysis_basis(rows[0]["basis"], {fact["id"]: fact for fact in facts})[1] is None
+    assert bind_question_rows([row(refs=["B1", "B5", "B9", "B13", "B17"])],
+                              {"R0"}, offered, diagnostics={}) == []
+    oversized = rows[0]["basis"] + [{"fact_id": "F5", "sentence_ids": [1]}]
+    assert bind_analysis_basis(oversized, {fact["id"]: fact for fact in facts})[1] == "basis_missing_or_invalid"
+    too_many_refs = [{"fact_id": "F1", "sentence_ids": [1, 2, 3, 4]},
+                     {"fact_id": "F2", "sentence_ids": [1, 2, 3, 4]},
+                     {"fact_id": "F3", "sentence_ids": [1, 2, 3, 4]},
+                     {"fact_id": "F4", "sentence_ids": [1]}]
+    assert bind_analysis_basis(too_many_refs, {fact["id"]: fact for fact in facts})[1] == "basis_invalid_sentences"
 
 
 def test_ambiguous_duplicate_fact_ids_are_not_offered():

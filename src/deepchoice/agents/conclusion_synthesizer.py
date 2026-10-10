@@ -144,8 +144,8 @@ at most eight rows total. For R0, kind choice and an exact candidate label requi
 a supported conditional preference; otherwise use kind answer with empty option.
 Subquestions use answer or conceptual design, never a second choice.
 
-Select 1-12 unique advertised basis_refs per row, at most four selected views and
-three sentences per view. Each view lists basis_refs in the SAME ORDER as complete
+Select 1-12 unique advertised basis_refs per row from at most four selected views.
+Each view lists basis_refs in the SAME ORDER as complete
 sentences in its included_sentence_range. Cite only refs belonging to source_view_ids
 selected in this response. Each independent factual premise needs its own applicable
 sentence and qualifications. Copy IDs exactly; runtime supplies the question, original

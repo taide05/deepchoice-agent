@@ -7,6 +7,8 @@ from copy import deepcopy
 import re
 
 MAX_ANALYSES = 8
+MAX_ROW_BASIS_FACTS = 4
+MAX_ROW_BASIS_REFS = 12
 KINDS = frozenset({"choice", "answer", "design"})
 
 
@@ -56,10 +58,11 @@ def bind_analysis_basis(raw, facts):
     """Copy addressed full saved sentences; never label an inference verified."""
     from ..citations.verifier import _split_sentences
 
-    if not isinstance(raw, list) or not 0 < len(raw) <= 4:
+    if not isinstance(raw, list) or not 0 < len(raw) <= MAX_ROW_BASIS_FACTS:
         return None, "basis_missing_or_invalid"
     selected = []
     seen = set()
+    reference_count = 0
     for item in raw:
         if not isinstance(item, dict):
             return None, "basis_invalid_item"
@@ -71,9 +74,12 @@ def bind_analysis_basis(raw, facts):
             return None, "basis_invalid_fact"
         sentences = _split_sentences(text)
         indexes = item.get("sentence_ids")
-        if (not isinstance(indexes, list) or not 0 < len(indexes) <= 3
+        if (not isinstance(indexes, list) or not 0 < len(indexes) <= MAX_ROW_BASIS_REFS
                 or any(type(index) is not int or not 1 <= index <= len(sentences) for index in indexes)
                 or len(set(indexes)) != len(indexes)):
+            return None, "basis_invalid_sentences"
+        reference_count += len(indexes)
+        if reference_count > MAX_ROW_BASIS_REFS:
             return None, "basis_invalid_sentences"
         source_sentences = [sentences[index - 1] for index in indexes]
         # Saved projections can outlive a sentence policy. Never reinterpret

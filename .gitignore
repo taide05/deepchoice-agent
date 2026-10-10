@@ -48,6 +48,7 @@ tavily_key_state.json
 *.log
 .env.*
 .pytest_cache/
+.codex-test-tmp*/
 .ruff_cache/
 .mypy_cache/
 review-*.txt

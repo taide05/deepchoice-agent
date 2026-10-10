@@ -453,3 +453,47 @@ def test_joint_quotes_remain_bound_to_selected_overlapping_view(reference):
     if rows:
         assert rows[0]["basis"][0]["fact_id"] == facts[0]["id"]
         assert rows[0]["basis"][0]["source_sentences"] == [_split_sentences(facts[0]["saved_text"])[0]]
+
+
+async def test_joint_answer_keeps_exact_multi_sentence_basis_through_review_and_render(monkeypatch):
+    from unittest.mock import AsyncMock
+    import httpx
+    from deepchoice.agents import conclusion_synthesizer as synth
+    from deepchoice.agents import self_reviewer as review
+    from deepchoice.agents.citation_validator import CitationValidatorAgent
+    from deepchoice.agents.report_generator import FORMAT_RENDERERS
+    from deepchoice.citations.verifier import _split_sentences
+    from deepchoice.contracts.manifest import build_run_manifest
+    from tests.test_self_review import reviewed
+
+    source = chains(" ".join(
+        f"Alpha {condition} condition applies to the documented mode."
+        for condition in ("retention", "replay", "ordering", "recovery", "expiry", "isolation")))
+    _, offered = selection.selection_view_packet(source, ["Alpha"])
+    assert "S1" in offered
+    raw = {"source_view_ids": ["S1"], "decision_analysis": [{
+        "kind": "answer", "option": "", "question_id": "R0",
+        "basis_refs": [f"S1B{number}" for number in range(1, 7)],
+        "reasoning": "The mode has six documented conditions.",
+        "assumptions": [], "change_condition": "Reconsider when the mode changes.",
+    }]}
+    monkeypatch.setattr(synth, "call_model", AsyncMock(return_value=raw))
+    task = {"query": "Assess Alpha", "candidate_techs": ["Alpha"]}
+    state = {"task": task, "evidence_chains": source}
+    state.update(await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), state))
+    bound = state["final_recommendation"]
+    assert len(bound["decision_analysis"]) == 1
+    assert bound["decision_analysis"][0]["basis"][0]["sentence_ids"] == list(range(1, 7))
+    assert bound["decision_analysis"][0]["basis"][0]["source_sentences"] == _split_sentences(
+        bound["source_facts"][0]["saved_text"])
+    page = source[0]["sources"][0]["snippet"]
+    fetch = AsyncMock(return_value=httpx.Response(200, text=page, headers={"content-type": "text/plain"}))
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    state.update(await CitationValidatorAgent().run(state))
+    assert state["citation_verification"]["status_counts"]["verified"] == 6
+    monkeypatch.setattr(review, "call_model", AsyncMock(return_value=reviewed([{
+        "analysis_id": "A1", "action": "keep", "source_checks": [["F1", "supports", [1, 2, 3]]]}])))
+    state.update(await review.SelfReviewerAgent().run(state))
+    assert len(state["final_recommendation"]["decision_analysis"]) == 1
+    for render in FORMAT_RENDERERS.values():
+        assert raw["decision_analysis"][0]["reasoning"] in render(state)

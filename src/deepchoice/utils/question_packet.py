@@ -4,7 +4,7 @@ Title mentions are routing hints only. They never establish source applicability
 """
 import re
 
-from .decision_analysis import MAX_ANALYSES
+from .decision_analysis import MAX_ANALYSES, MAX_ROW_BASIS_FACTS, MAX_ROW_BASIS_REFS
 from .evidence import candidate_name_pattern, candidate_search_name
 
 # Input opportunities include the request plus all 20 admitted subquestions.
@@ -45,7 +45,7 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     return mentions
 
 
-QUESTION_BASIS_POLICY = "runtime-question-basis-v5:joint-view-quotes;original-questions;context=21;answers=8;refs=12;facts=4;sentences=3;question-only-requirements"
+QUESTION_BASIS_POLICY = "runtime-question-basis-v6:joint-view-quotes;original-questions;context=21;answers=8;refs=12;facts=4;per-fact-cap=removed;question-only-requirements"
 
 
 def _fact_sentence_groups(fact):
@@ -143,7 +143,7 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
             continue
         seen.add(question)
         refs = row.get("basis_refs")
-        if (not isinstance(refs, list) or not 0 < len(refs) <= 12
+        if (not isinstance(refs, list) or not 0 < len(refs) <= MAX_ROW_BASIS_REFS
                 or any(not isinstance(ref, str) or ref not in offered for ref in refs)
                 or len(set(refs)) != len(refs)):
             diagnostics["rows_rejected_shape"] += 1
@@ -155,7 +155,7 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
                                                         "sentence_ids": [], "source_sentences": []})
             basis["sentence_ids"].extend(quote["sentence_ids"])
             basis["source_sentences"].extend(quote["source_sentences"])
-        if len(groups) > 4 or any(len(basis["sentence_ids"]) > 3 for basis in groups.values()):
+        if len(groups) > MAX_ROW_BASIS_FACTS:
             diagnostics["rows_rejected_shape"] += 1
             continue
         proposal = {key: row.get(key) for key in ("kind", "option", "reasoning", "assumptions", "change_condition")}
