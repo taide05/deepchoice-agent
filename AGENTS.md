@@ -38,6 +38,12 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - **验证随改动聚焦**：用真实失败材料和有独立回归价值的测试证明删并前后的传递与边界；
   冻结代码后完成所需全套及独立复核，再用未经手修的真实报告判断收益。沿用已有效的
   验证，不为文档变化重跑全套，不堆测试数量或反复抽样代替质量进展。
+- **按问题批次迭代**：先在已保存、已暴露的请求和来源上固定输入，逐阶段找首次信息损失，
+  区分来源不足、模型遗漏、代码过滤、引用未知和渲染损失；按已确认的共同原因组成有限的
+  修复包。实施中只做固定输入回放、节点级和相关回归；不要每修一处就启动完整研究报告。
+  同批不夹带无关猜测或逐题例外。完成相关修复、冻结代码与运行身份后，才集中运行一次
+  预先绑定的完整报告批次并按原问题逐项评审。工程全套与独立复核仍按交付契约完成；
+  付费诊断和最终保留集各守原额度、身份、暂停和准入边界，不能借“批次”重置。
 - **测试也要做减法**：测试数量臃肿属于当前精简范围。删除重复覆盖、仅复述实现细节、
   过时路径和无运行消费者的辅助代码所绑定的测试；可合并重复准备与无独立故障意义的参数。
   删前指出保留测试如何覆盖同一行为，保留有独立价值的安全/事实/恢复负例。不用大参数
@@ -361,12 +367,16 @@ When adding a setting, update the code default, tests, README configuration sect
 - Separate runtime failures, critical content errors, evidence gaps and minor presentation issues.
   Test counts and lexical citation status do not prove report quality; useful conditional advice
   may pass without a unique Winner. Freeze case-specific expectations before observing outputs.
-- Quality-selection-v1 defines the new development/repeated acceptance plan. Its dataset and batch
-  bindings must actually exist before execution; documentation is not proof of implementation.
+- `docs/product-effectiveness-optimization.md` defines current development and delivery acceptance.
+  `quality-selection-v1` is historical; its dataset, batch bindings and OPEN fields do not authorize
+  current execution. New batch bindings must actually exist before execution; documentation is not
+  proof of implementation.
   The actual cumulative research ledger and remaining resources live only in current status.
 - Carry authorized diagnosis, implementation, necessary repair, validation, review and local
-  commits through without per-step permission requests. Existing paid authorization persists;
-  freeze each batch and honor actual budget/data/security/publication boundaries.
+  commits through without per-step permission requests. An explicit pause stops product repair,
+  tests and report runs until resumed; a later documentation-only request authorizes only that
+  document work. Existing paid authorization persists subject to the pause and actual
+  budget/data/security/publication boundaries; freeze each executable batch before admission.
 - Use independent reviewers for final content acceptance, unexposed validation-case preparation
   and contract-required engineering review. Content/code review is read-only; case preparation
   writes only assigned evaluation materials. A document reorganization may receive one
