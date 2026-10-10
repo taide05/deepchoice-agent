@@ -882,7 +882,8 @@ def test_reviewed_candidate_can_lock_but_acceptance_still_requires_same_runner(f
         q.verify_comparison(changed, candidate)
 
 
-@pytest.mark.parametrize("mode,admitted", [("success", 4), ("uncertain", 1), ("budget", 1)])
+# Generic budget/uncertain stop semantics are covered by the base collector matrix.
+@pytest.mark.parametrize("mode,admitted", [("success", 4), ("uncertain", 1)])
 async def test_reviewed_candidate_uses_real_ledger_and_existing_stop_contract(frozen, ledger, tmp_path, mode, admitted):
     fill_reviewed_history(ledger)
     candidate, cases, path, _ = reviewed_binding(frozen, tmp_path)
@@ -1078,7 +1079,7 @@ def test_extension_failed_commit_keeps_witness_and_refuses_retry(ledger,tmp_path
     with pytest.raises(ValueError): ledger.authorize_extension(ref)
 
 
-@pytest.mark.parametrize("mode,admitted",[("success",4),("uncertain",1),("budget",1)])
+@pytest.mark.parametrize("mode,admitted",[("success",4)])
 async def test_delivery_collect_uses_extended_ledger_and_same_stop_policy(frozen,ledger,tmp_path,mode,admitted):
     candidate,cases,path,ref=delivery_binding(frozen,ledger,tmp_path)
     assert q.load_binding(path)[0]==candidate
@@ -1284,7 +1285,7 @@ def test_coverage_damaged_authority_fails_closed(frozen, ledger, tmp_path, monke
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('mode,admitted', [('success',4),('uncertain',1),('budget',1)])
+@pytest.mark.parametrize('mode,admitted', [('success',4)])
 async def test_coverage_collector_retains_stop_contract(frozen, ledger, tmp_path, mode, admitted):
     candidate, cases, path, extension, ref = coverage_binding(frozen, ledger, tmp_path)
     assert q.load_binding(path)[0] == candidate

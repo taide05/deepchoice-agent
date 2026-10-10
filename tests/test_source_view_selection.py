@@ -280,25 +280,6 @@ async def test_default_menu_range_survives_citation_review_and_rejects_unoffered
     assert [c["sources"][0]["snippet"] for c in state["evidence_chains"]] == [c["sources"][0]["snippet"] for c in original]
 
 
-async def test_menu_capacity_gap_is_visible_without_inventing_candidate_support(monkeypatch):
-    from unittest.mock import AsyncMock
-    from deepchoice.agents import conclusion_synthesizer as synth
-    from deepchoice.contracts.manifest import build_run_manifest
-
-    original = chains() + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
-        "snippet": "Beta retains records. Configuration determines retention."}]}]
-    monkeypatch.setattr(selection, "MAX_PACKET_SOURCES", 1)
-    task = {"query": "Choose Alpha or Beta.", "candidate_techs": ["Alpha", "Beta"]}
-    model = AsyncMock(return_value={"source_view_ids": ["S1"]})
-    monkeypatch.setattr(synth, "call_model", model)
-    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)), {"task": task, "evidence_chains": original})
-    assert model.await_count == 1
-    assert 'Candidates without a literal title mention in this menu: ["Beta"]' in model.await_args.args[0][0]["content"]
-    assert state["final_recommendation"]["winner"] == "context_dependent"
-    assert not state["final_recommendation"].get("decision_analysis")
-    assert state["quality_signals"][0]["staged_generation"]["r0_withheld_one_sided"]
-
-
 OMITTED_SHORT_TEXT = (
     "Alpha stores retained records. Only retained records can be replayed. "
     "A consumer can request an earlier offset. Replays preserve order within a partition. "

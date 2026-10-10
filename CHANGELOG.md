@@ -2,6 +2,26 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Keep the overall question available under partial evidence
+
+Remove the title-coverage veto that deleted the overall question before judgment.
+The existing row binder now applies one-sided abstention to explicit choice/design
+or non-empty option fields; an overall answer with empty option can continue through
+unchanged provenance, citation calibration and self-review. Source selection drops
+redundant coordinate instructions and the duplicate title-coverage prompt projection.
+Synthesis v41 freezes question-basis-v4. No new model calls, nodes or result fields.
+Remove an unused numbered fact-packet helper and its test-only consumers; replace
+redundant synthesis checks with the retained binding/review regressions. Compress
+independent language/status UI combinations and duplicate shared-parser/collector
+failure matrices, retaining each distinct branch and private-state/authority checks.
+Correct the finalize nested-response stub so it reaches nested validation.
+Final validation: 3895 passed in557.69s, no skips (Windows/Python3.12), down34
+from the preceding3929-case suite. Related boundaries330 and changed modules239 passed;
+274 frozen hashes unchanged, smoke12/12 and static/dependency checks passed.
+Independent review found no production blocker. Some non-English terminal-message
+literals no longer have individual assertions; state and representative locale paths remain.
+Real-report benefit is not established.
+
 ### Request-focused source delivery (2026-10-10)
 
 Official retrieval bodies now reach source selection without requiring the complete candidate label;
@@ -12,7 +32,8 @@ The preceding cf065dc fresh delivery check (delivery-fresh-cases v1.0.0, 2026-10
 0/4, with one critical candidate exclusion and unstable repeat evidence; originals remain unchanged.
 Engineering checks passed: 695 related tests, final 182 query/source tests, full 3929 tests in
 600.54 seconds without skips (Windows/Python 3.12), smoke12/12, static/dependency checks and
-independent review. Frozen hashes stayed unchanged. Live content improvement remains unverified.
+independent review. Frozen hashes stayed unchanged. The exposed FVC-02 regression228
+(2026-10-10, delivery-fresh-cases v1.0.0) remained content0/1; no overall improvement.
 
 ### Preserve usable sentences and conditional reasoning
 

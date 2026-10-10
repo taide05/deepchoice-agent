@@ -45,7 +45,7 @@ def candidate_mentions(title: str, candidates: list[str]) -> list[str]:
     return mentions
 
 
-QUESTION_BASIS_POLICY = "runtime-question-basis-v3:verified-before-judgment;original-questions;context=21;answers=8;refs=12;facts=4;sentences=3;question-only-requirements"
+QUESTION_BASIS_POLICY = "runtime-question-basis-v4:verified-before-judgment;original-questions;one-sided-withholds-choice-only;context=21;answers=8;refs=12;facts=4;sentences=3;question-only-requirements"
 
 
 def _fact_sentence_groups(fact):
@@ -66,25 +66,6 @@ def _fact_sentence_groups(fact):
 def _fact_heading(fact, candidates):
     mentions = candidate_mentions(fact["source_title"], candidates)
     return f'{fact["id"]} | title: {fact["source_title"]} | title mentions: {mentions or "none"}'
-
-
-def bounded_fact_packet(facts: list[dict], candidates: list[str]) -> str:
-    """Retain the historical numbered packet interface and passage locations."""
-    lines = []
-    for fact in facts[:5]:
-        prepared = _fact_sentence_groups(fact)
-        if prepared is None:
-            continue
-        groups, separate = prepared
-        lines.append(_fact_heading(fact, candidates))
-        sentence_index = 1
-        for passage_index, group in enumerate(groups, 1):
-            if separate:
-                lines.append(f'  Passage {passage_index}/{len(groups)} (same source, separate location):')
-            for sentence in group:
-                lines.append(f'  s{sentence_index}: {sentence}')
-                sentence_index += 1
-    return "\n".join(lines) if lines else "No bound source facts."
 
 
 def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence_chains=None, require_reviewable=False) -> tuple[str, dict]:
@@ -136,7 +117,7 @@ def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence
     return ("\n".join(lines) if lines else "No bound source facts."), offered
 
 
-def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
+def bind_question_rows(rows, allowed_ids, offered, *, diagnostics, allow_r0_choice=True):
     """Map only advertised question/quote IDs; old model provenance is ignored.
 
     This creates canonical proposals for the unchanged analysis binder. It does
@@ -158,6 +139,11 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
         question = row["question_id"]
         if (question not in allowed_ids or question in seen
                 or (question != "R0" and row.get("kind") == "choice")):
+            diagnostics["rows_rejected_question"] += 1
+            continue
+        if question == "R0" and not allow_r0_choice and (
+                row.get("kind") != "answer" or row.get("option") != ""):
+            diagnostics["r0_withheld_one_sided"] = True
             diagnostics["rows_rejected_question"] += 1
             continue
         seen.add(question)
@@ -185,7 +171,7 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
 
 
 def has_multi_candidate_coverage(facts: list[dict], candidates: list[str]) -> bool:
-    """Withhold R0 only when titles clearly mention some choices and exclude others.
+    """Withhold a choice when titles clearly mention some candidates and exclude others.
 
     An unclassified source leaves applicability undecided rather than proving an
     absent candidate. This is an abstention check, never positive proof of fit.

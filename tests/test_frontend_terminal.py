@@ -28,8 +28,11 @@ def prepare(monkeypatch, status, lang="en"):
     return at
 
 
-@pytest.mark.parametrize("lang", LABELS)
-@pytest.mark.parametrize("status,index", [("failed",0),("timed_out",1),("interrupted",2),(None,3)])
+# Status transitions and translation lookup are independent dimensions.
+@pytest.mark.parametrize("lang,status,index", [
+    ("en", "failed", 0), ("en", "timed_out", 1), ("en", "interrupted", 2), ("en", None, 3),
+    ("zh", "failed", 0), ("ja", "failed", 0), ("ko", "failed", 0),
+])
 def test_terminal_projection_and_action_are_localized(monkeypatch, lang, status, index):
     at = prepare(monkeypatch, status, lang).run()
     assert not at.exception
@@ -111,8 +114,10 @@ def test_request_failures_do_not_expose_private_details_or_resubmit(monkeypatch,
     assert marker not in " ".join(str(x.value) for group in (at.error,at.warning,at.markdown) for x in group)
 
 
-@pytest.mark.parametrize("lang,label", [("zh","取消任务"),("en","Cancel task"),("ja","タスクをキャンセル"),("ko","작업 취소")])
-@pytest.mark.parametrize("outcome", ["exception", 409, 200])
+@pytest.mark.parametrize("lang,label,outcome", [
+    ("en", "Cancel task", "exception"), ("en", "Cancel task", 409), ("en", "Cancel task", 200),
+    ("zh", "取消任务", 200), ("ja", "タスクをキャンセル", 200), ("ko", "작업 취소", 200),
+])
 def test_cancel_preserves_cas_and_never_projects_unconfirmed_cancellation(monkeypatch, lang, label, outcome):
     at=prepare(monkeypatch,"connection_lost",lang)
     at.session_state["research_running"]=True
@@ -142,11 +147,13 @@ def test_cancel_preserves_cas_and_never_projects_unconfirmed_cancellation(monkey
         assert at.error
 
 
+# Each entry point preserves its own state; shared parsing failures need one entry.
 @pytest.mark.parametrize("operation,outcome", [
-    (operation, outcome)
-    for operation in ("start", "message", "skip", "finalize")
-    for outcome in ("timeout", "json", "shape", "nested", "http")
-] + [(operation, outcome) for operation in ("start", "message") for outcome in ("reason", "duplicates")])
+    ("start", "timeout"), ("message", "timeout"), ("skip", "timeout"), ("finalize", "timeout"),
+    ("message", "json"), ("message", "shape"), ("message", "http"),
+    ("message", "reason"), ("message", "duplicates"),
+    ("skip", "nested"), ("finalize", "nested"),
+])
 def test_clarification_failure_is_atomic_visible_and_never_replayed(monkeypatch, operation, outcome):
     import copy
     at = AppTest.from_file(APP_PATH, default_timeout=30).run()
@@ -178,7 +185,8 @@ def test_clarification_failure_is_atomic_visible_and_never_replayed(monkeypatch,
             return _FakeResp({"session_id": "clarify_test", "answer": "Reply", "action": "recommend",
                               "payload": {"reason": []} if outcome == "reason" else {
                                   "candidates": [{"name": "Acme"}, {"name": "Acme"}]}})
-        return _FakeResp({"session_id": "clarify_test", "answer": "Review", "action": "confirm",
+        return _FakeResp({"session_id": "clarify_test", "answer": "Review",
+                          "action": "finalize" if operation == "finalize" else "confirm",
                           "payload": {"clarify_rounds": 2, "clarified_task": {"query": "New", "constraints": None}}})
     monkeypatch.setattr(httpx, "post", post)
     if operation in {"start", "message"}:

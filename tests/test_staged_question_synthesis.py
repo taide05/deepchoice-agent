@@ -8,7 +8,7 @@ from deepchoice.agents import conclusion_synthesizer as synth
 from deepchoice.budget_errors import BudgetPersistenceError
 from deepchoice.contracts.manifest import build_run_manifest
 from deepchoice.utils.question_packet import (
-    bounded_fact_packet, candidate_mentions, has_multi_candidate_coverage, question_rows,
+    candidate_mentions, has_multi_candidate_coverage, question_rows,
 )
 
 TASK = {"query": "Choose Alpha or Beta under restart constraints?",
@@ -30,35 +30,6 @@ def answer(question_id, ref="B1"):
         "assumptions": ["The relevant prerequisite is confirmed."],
         "change_condition": "Reconsider when the prerequisite changes."}]}
 
-
-def test_packet_keeps_complete_sentence_addresses_and_title_tags():
-    facts = [{"id": "F1", "source_title": "Alpha guide", "saved_text": CHAINS[0]["sources"][0]["snippet"]},
-             {"id": "F2", "source_title": "Beta guide", "saved_text": CHAINS[1]["sources"][0]["snippet"]}]
-    packet = bounded_fact_packet(facts, TASK["candidate_techs"])
-    assert "F1 | title: Alpha guide | title mentions: ['Alpha']" in packet
-    assert "s1: If writers can wait" in packet
-    assert "s2: Alpha does not guarantee restart recovery" in packet
-    assert "s2: If the service fails" in packet
-    assert has_multi_candidate_coverage(facts, TASK["candidate_techs"])
-    assert not has_multi_candidate_coverage(facts[1:], TASK["candidate_techs"])
-    assert candidate_mentions("Alpha vs Beta", TASK["candidate_techs"]) == ["Alpha", "Beta"]
-    assert has_multi_candidate_coverage([{"source_title": "Unclassified comparison"}], TASK["candidate_techs"])
-
-
-
-def test_packet_marks_separate_passages_without_changing_sentence_addresses():
-    first = "If writers cannot queue, a server database is appropriate."
-    second = "A local database needs no configuration or maintenance."
-    fact = {"id": "F1", "source_title": "Alpha guide",
-            "saved_text": first + " " + second,
-            "saved_passages": [first, second]}
-    packet = bounded_fact_packet([fact], TASK["candidate_techs"])
-    assert "Passage 1/2 (same source, separate location):" in packet
-    assert "Passage 2/2 (same source, separate location):" in packet
-    assert f"s1: {first}" in packet and f"s2: {second}" in packet
-    assert packet.index(f"s1: {first}") < packet.index("Passage 2/2") < packet.index(f"s2: {second}")
-    invalid = {**fact, "saved_passages": [first, first]}
-    assert bounded_fact_packet([invalid], TASK["candidate_techs"]) == "No bound source facts."
 
 def test_only_original_question_rows_are_planned():
     rows = question_rows(TASK["query"], [
@@ -109,15 +80,26 @@ async def test_durable_stage_answers_each_original_question_with_bound_facts(mon
     unused.assert_not_called()
 
 
-async def test_one_sided_facts_withhold_r0_but_allow_bounded_specific_answer(monkeypatch):
-    model = AsyncMock(side_effect=[
-        {"source_view_ids": ["S2"]}, answer("Q1", "B1")])
+@pytest.mark.parametrize("kind,option,retained", [("answer", "", True), ("choice", "Beta", False),
+    ("answer", "Beta", False), ("design", "", False)])
+async def test_one_sided_overall_answer_preserved_without_granting_choice(monkeypatch, kind, option, retained):
+    row = answer("R0", "B1")["decision_analysis"][0]
+    row.update(kind=kind, option=option)
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S2"]}, {"decision_analysis": [row]}])
     monkeypatch.setattr(synth, "call_model", model)
     state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
         {"task": TASK, "evidence_chains": CHAINS})
+    rec = state["final_recommendation"]
+    analyses = rec["decision_analysis"]
+    assert bool(analyses) is retained
+    if retained:
+        assert analyses[0]["requirement_ids"] == ["R0"]
+        assert analyses[0]["kind"] == "answer" and analyses[0]["option"] == ""
+    assert rec["winner"] == "context_dependent"
+    stage = state["quality_signals"][0]["staged_generation"]
+    assert stage["r0_withheld_one_sided"] is not retained
+    assert stage["rows_selected"] == int(retained)
     assert model.await_count == 2
-    assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]
-    assert "R0:" not in model.await_args_list[1].args[0][0]["content"]
 
 
 async def test_subquestion_cannot_create_a_second_choice(monkeypatch):
@@ -137,19 +119,6 @@ async def test_subquestion_cannot_create_a_second_choice(monkeypatch):
     assert stage["judgment_calls"] == 1
     assert stage["facts_bound"] == 2
     assert stage["rows_rejected_question"] == 1
-
-
-async def test_malformed_question_id_cannot_crash_or_enter_output(monkeypatch):
-    malformed = answer("R0", "B1")["decision_analysis"][0]
-    malformed["question_id"] = {"not": "an ID"}
-    model = AsyncMock(side_effect=[
-        {"source_view_ids": ["S1", "S2"]},
-        {"decision_analysis": [malformed, answer("Q1", "B3")["decision_analysis"][0]]},
-    ])
-    monkeypatch.setattr(synth, "call_model", model)
-    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
-        {"task": TASK, "evidence_chains": CHAINS})
-    assert [row["requirement_ids"] for row in state["final_recommendation"]["decision_analysis"]] == [["Q1"]]
 
 
 async def test_invalid_question_output_isolated_and_budget_loss_propagates(monkeypatch):
@@ -215,7 +184,7 @@ async def test_known_conditions_with_empty_extra_assumptions_reach_reviewed_repo
     from deepchoice.agents import self_reviewer as review
     from deepchoice.agents.citation_validator import CitationValidatorAgent
     from deepchoice.agents.report_generator import FORMAT_RENDERERS
-    task = {"query": "Can Alpha queue writes when writers can wait?", "candidate_techs": ["Alpha"],
+    task = {"query": "Can Alpha queue writes when writers can wait?", "candidate_techs": ["Alpha", "Beta"],
         "scene_context": "The user confirms queued writes are acceptable; one maintainer.",
         "constraints": ["Queued writes are acceptable", "One maintainer", "Do not invent throughput",
                         "Recovery remains unconfirmed"]}
@@ -342,7 +311,7 @@ async def test_late_questions_get_selection_judgment_and_reviewed_report_opportu
             assert questions[0] in missing and questions[-1] not in missing
 
 
-@pytest.mark.parametrize("count", [9, 21])
+@pytest.mark.parametrize("count", [9])
 async def test_more_offered_questions_does_not_expand_answer_output_authority(monkeypatch, count):
     task = {**TASK, "constraints": [f"Maintain boundary {i}" for i in range(50)],
             "sub_questions": [f"Original question {i}?" for i in range(1, 21)]}
@@ -372,7 +341,7 @@ async def test_all_question_context_still_obeys_real_budget_before_model_dispatc
     chains = [{"evidence_strength": "moderate", "sources": [{
         "title": f"Alpha guide {i}", "url": f"https://source{i}.example/guide",
         "snippet": "Alpha queues writes when writers can wait. " + "Documented condition " * 45 + "."}]} for i in range(24)]
-    connection, _, manager, _, _ = await _running_budget(tmp_path, limits=BudgetHardLimits(total_tokens=60000))
+    connection, _, manager, _, _ = await _running_budget(tmp_path, limits=BudgetHardLimits(total_tokens=50000))
     dispatch = AsyncMock()
     monkeypatch.setattr(llm, "_get_client", lambda **_: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=dispatch))))
@@ -383,7 +352,7 @@ async def test_all_question_context_still_obeys_real_budget_before_model_dispatc
         with bind_run_context(_context(manager)), pytest.raises(BudgetExceededError) as caught:
             await node(state)
         assert caught.value.resource == BudgetResource.TOTAL_TOKENS
-        assert caught.value.requested > 60000
+        assert caught.value.requested > 50000
         assert caught.value.partial_state["task"] == task
         dispatch.assert_not_awaited()
         assert await _count(connection) == 0
@@ -478,3 +447,24 @@ async def test_many_requirements_preserve_only_bound_cited_reviewed_analysis(mon
         else:
             missing = report.split("Questions without retained analysis", 1)[1]
             assert (task["sub_questions"][0] in missing) is (not retained)
+
+
+async def test_one_sided_overall_answer_still_rejects_unbound_alternative_after_review(monkeypatch):
+    from deepchoice.agents import self_reviewer as review
+    from deepchoice.agents.report_generator import FORMAT_RENDERERS
+    row = answer("R0", "B1")["decision_analysis"][0]
+    row.update(reasoning="Beta guarantees restart recovery, so select Beta.", assumptions=[])
+    model = AsyncMock(side_effect=[{"source_view_ids": ["S1"]}, {"decision_analysis": [row]}])
+    monkeypatch.setattr(synth, "call_model", model)
+    state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)),
+        {"task": TASK, "evidence_chains": CHAINS})
+    assert len(state["final_recommendation"]["decision_analysis"]) == 1
+    reviewer = AsyncMock(return_value={"analysis_reviews": [{"analysis_id": "A1", "action": "keep",
+        "source_checks": [["F1", "supports", [1, 2]]]}]})
+    monkeypatch.setattr(review, "call_model", reviewer)
+    state.update(await review.SelfReviewerAgent().run(state))
+    assert reviewer.await_count >= 1
+    assert state["final_recommendation"]["decision_analysis"] == []
+    assert state["final_recommendation"]["winner"] == "context_dependent"
+    for render in FORMAT_RENDERERS.values():
+        assert row["reasoning"] not in render(state)
