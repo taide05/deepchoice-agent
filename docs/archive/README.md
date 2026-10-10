@@ -5,8 +5,8 @@
 
 ## 2026-10-10 八小时计划结案
 
-[原活动路线原字节快照](delivery-eight-hour-20261010/roadmap-snapshot.md)来自结案前
-`HEAD` 的 `docs/current-roadmap.md`，SHA256
+[原活动路线原字节快照](delivery-eight-hour-20261010/roadmap-snapshot.md)来自提交
+`66a07cb5048fb8d4bb28d47079f1d94f76030778` 的 `docs/current-roadmap.md`，SHA256
 `81c5a9a42eea6a8d7cdfb240c04e1c3f50b1eec2c0f7a43324ce413376d0bf47`。
 N1–N4 与旧时间/研究额度已结案，内容未达标；快照中的命令式阶段和授权不再执行。
 结案事实与研究账本见[状态](../o1-execution-status.md)。
