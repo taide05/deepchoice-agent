@@ -10,6 +10,37 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Material under `D:\ai-career` is external career/project documentation. It is useful context, but it can lag behind this repository and must not override the current Git state or tests.
 - Do not silently update resumes, interview material, or other external consumer documents while changing this repository. First establish and record the verified repository facts.
 
+## High-priority execution rules: subtraction first (2026-10-10)
+
+本节落实用户当前执行方向，优先于本文件及活动计划中与其冲突的历史默认增量做法。
+用户最新指令始终优先；下述减法原则不授权绕过安全、事实核验、预算或持久化正确性边界。
+
+- **成果优先**：首要成果是完整研究链路稳定生成有依据、回答关键取舍的报告。
+  局部修复、测试通过、提交数和文档完成均不能代替这个成果；阶段按用户可见结果验收。
+- **默认做减法**：先定位完整数据流中的首次不合理信息损失，优先删除无贡献处理、合并
+  重复筛选/校验/转换/重建，收拢同一事实和判断的多套表示。不要把旧代码一律当成必须
+  保留的前提，再叠一层补丁；也不要以净减行数为目标做无关清理或整仓重写。
+- **实施前明确替代关系**：在现有工作卡或简短说明中写明拟删除/合并的旧逻辑、实际消费者、
+  必须保留的边界和预期报告收益。说明足够具体即可，不另造审批、文档或审计流程。
+  仅重命名、搬文件、抽取包装函数，未减少重复处理或信息损失，不算完成减法。
+- **增量属于有依据的例外**：只有已确认的共性阻断无法通过删减、合并或复用解决时，才
+  增加最小必要逻辑；同时说明为何不能更简单、它替代什么或如何限制新增复杂度。
+  不将每次失败直接转成新分支、提示约束、关键词/别名表、例外、兜底层或模型调用。
+  不为通过单个案例硬编码答案、来源或阈值。
+- **停止补丁循环**：连续局部修补仍无完整回答改善，或新规则持续增长时，先重新检查
+  责任划分和更简单的数据流，不继续在同一机制上叠加例外。保留原失败和有效成果，
+  无收益的候选只留可回滚记录，不自动成为下一层修补的永久基础。
+- **区分必要校验与重复否决**：保留来源身份与正文绑定、引用未知语义、安全外呼、秘密
+  脱敏、预算、CAS/fencing、恢复、事务及必要兼容性。节点之间因恢复或不可信输入而需要的
+  校验不能凭相似代码删除；词法命中、结构分数等启发式也不能冒充事实支持或语义反证。
+- **验证随改动聚焦**：用真实失败材料和有独立回归价值的测试证明删并前后的传递与边界；
+  冻结代码后完成所需全套及独立复核，再用未经手修的真实报告判断收益。沿用已有效的
+  验证，不为文档变化重跑全套，不堆测试数量或反复抽样代替质量进展。
+- **进度与时间如实报告**：分别说明工程状态和内容状态；仍主要是增量修补时应直接说明，
+  不能称为已完成精简。十小时为当前预算基线，用户允许为稳定报告作必要的适度让步；
+  接近或超过基线时说明实际耗时、剩余阻断及预计增量，不无限延期，不因时间到点而
+  提前包装交付或宣称未通过的阶段已完成。明确暂停命令仍须执行，暂停期间停止计时。
+
 ## Git safety
 
 - Start every task with `git status --short --branch` and inspect the active branch.
@@ -307,6 +338,9 @@ When adding a setting, update the code default, tests, README configuration sect
   resolution resuming the bound run exactly once from its accepted checkpoint.
 
 ### Current implementation scope
+
+- Apply the high-priority subtraction-first rules above before choosing an implementation approach.
+  Historical phase detail does not justify restoring an incremental patch loop.
 
 - Read `docs/README.md` first, then `docs/current-roadmap.md`,
   `docs/product-effectiveness-optimization.md`, `docs/optimization-execution.md`, and
