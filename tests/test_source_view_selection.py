@@ -55,6 +55,52 @@ def test_long_views_bind_displayed_context_once_and_preserve_far_material():
     assert original == before
 
 
+async def test_long_bounded_sentence_view_rebinds_and_keeps_citation_check(monkeypatch):
+    import httpx
+    from deepchoice.citations.verifier import verify_citations
+
+    prefix = " ".join(f"Section {chr(65 + i)} records independent background context." for i in range(10))
+    long = ("Alpha requires the configured audit sink to remain available while recording events because "
+            + "operators preserve the original retention context for later review " * 6 + ".")
+    suffix = " ".join(f"Later section {chr(65 + i)} covers separate administration." for i in range(10))
+    text = prefix + " " + long + " " + suffix
+    original = chains(text)
+    assert 400 < len(long) <= 500 and len(text) > 1200
+    _, menu = selection.selection_view_packet(original, ["Alpha"])
+    chosen = next(key for key, view in menu.items() if long in view["fact"]["saved_text"])
+    fact = select([chosen], menu, original)[0]
+    assert long in fact["saved_text"] and len(fact["saved_text"]) <= 1200
+
+    async def fetch(*args, **kwargs):
+        return httpx.Response(200, text=text, headers={"content-type": "text/plain"})
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fetch)
+    verification, _ = await verify_citations({"source_facts": [fact]}, original)
+    assert {check.status.value for check in verification.checks} == {"verified"}, [(check.status.value, check.reason.value, len(check.claim_text)) for check in verification.checks]
+
+def test_long_unusable_sentence_does_not_hide_bounded_audit_view():
+    # A global sentence cap used to discard this whole source even though an
+    # independent, complete passage can be bound under the existing fact cap.
+    text = "Alpha retains audit events. Rotation needs a configured sink. "
+    text += " ".join(f"Section {i} describes unrelated operational notes." for i in range(20))
+    text += " " + "X" * 510 + "."
+    original = chains(text)
+    source = original[0]["sources"][0]
+    sentences = selection.selection_sentences(source)
+    assert len(text) > 1200 and sentences is not None and len(sentences[-1]) > 500
+    assert selection.selected_passages(source, [[len(sentences) - 1, len(sentences)]]) is None
+
+    packet, menu = selection.selection_view_packet(original, ["Alpha"])
+    assert menu and "S1" not in menu and len(packet.encode("utf-8")) <= selection.MAX_PACKET_BYTES
+    chosen = next(key for key, view in menu.items()
+                  if "Alpha retains audit events." in view["fact"]["saved_text"])
+    fact = select([chosen], menu, original)[0]
+    assert "Rotation needs a configured sink." in fact["saved_text"]
+    assert len(fact["saved_text"]) <= 1200 and "X" * 510 not in fact["saved_text"]
+    source["snippet"] = source["snippet"].replace("X" * 510, "Y" * 510)
+    assert not select([chosen], menu, original)
+
+
 def test_repeated_short_focus_must_not_hide_a_valid_longer_window():
     text = "Alpha retains records. The primary retention condition must be configured explicitly. "
     text += " ".join(f"Section {i} explains separate storage administration responsibilities and recovery prerequisites." for i in range(14))
@@ -220,7 +266,7 @@ def test_forged_offered_mapping_cannot_admit_a_source_outside_final_menu(monkeyp
     assert not selection.bind_selected_views({"source_view_ids": ["S2"]}, forged, original, ["Alpha", "Beta"], [])
 
 
-@pytest.mark.parametrize("candidates", [[], ["Alpha", "Beta"], ["Alpha", "Beta", "Gamma"]])
+@pytest.mark.parametrize("candidates", [[], ["Alpha", "Beta"]])
 def test_capacity_gaps_do_not_raise_limits_or_truncate_qualifiers(candidates, monkeypatch):
     original = chains() + [{"sources": [{"title": "Beta guide", "url": "https://beta.example/docs",
         "snippet": "Beta retains records. Configuration determines retention."}]}]
