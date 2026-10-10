@@ -120,7 +120,7 @@ class RunManifest(FrozenModel):
     prompts: tuple[PromptSnapshot, ...]
     llm_calls: tuple[LLMCallSnapshot, ...]
     retrievers: tuple[RetrieverSnapshot, ...]
-    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8", "source-score-v9", "source-score-v10", "source-score-v11", "source-score-v12", "source-score-v13", "source-score-v14", "source-score-v15", "source-score-v16", "source-score-v17"] = "source-score-v17"
+    scoring_policy_version: Literal["source-score-v1", "source-score-v2", "source-score-v3", "source-score-v4", "source-score-v5", "source-score-v6", "source-score-v7", "source-score-v8", "source-score-v9", "source-score-v10", "source-score-v11", "source-score-v12", "source-score-v13", "source-score-v14", "source-score-v15", "source-score-v16", "source-score-v17", "source-score-v18"] = "source-score-v18"
     security_policy_version: Literal[
         "outbound-url-v1", "outbound-url-v2", "outbound-url-v3", "outbound-url-v4", "outbound-url-v5"
     ] = "outbound-url-v5"
@@ -135,7 +135,7 @@ class RunManifest(FrozenModel):
         "deterministic-citation-v10", "deterministic-citation-v11",
         "deterministic-citation-v12", "deterministic-citation-v13", "deterministic-citation-v14",
         "deterministic-citation-v15", "deterministic-citation-v16",
-        "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19", "deterministic-citation-v20", "deterministic-citation-v21", "deterministic-citation-v22", "deterministic-citation-v23",
+        "deterministic-citation-v17", "deterministic-citation-v18", "deterministic-citation-v19", "deterministic-citation-v20", "deterministic-citation-v21", "deterministic-citation-v22", "deterministic-citation-v23", "deterministic-citation-v24",
     ] | None = None
     hitl_policy_version: Literal["evidence-insufficient-v1", "evidence-insufficient-v2", "evidence-insufficient-v3"] | None = None
     # Missing in historical schema-v1 identities; current default is scan-only.
@@ -153,7 +153,7 @@ class CoreAssetRegistry(FrozenModel):
     workflow_version: Literal["research-v5"] = "research-v5"
     state_schema_version: Literal[3] = 3
     workflow_nodes: tuple[str, ...]
-    citation_policy_version: Literal["deterministic-citation-v23"]
+    citation_policy_version: Literal["deterministic-citation-v24"]
     hitl_policy_version: Literal["evidence-insufficient-v3"]
     prompts: tuple[PromptSnapshot, ...]
     report_templates: tuple[ReportTemplateSnapshot, ...]
@@ -327,10 +327,10 @@ def _manifest_content(task: dict) -> dict[str, Any]:
             )
             for retriever_id in RETRIEVER_IDS
         ),
-        "scoring_policy_version": "source-score-v17",
+        "scoring_policy_version": "source-score-v18",
         "security_policy_version": "outbound-url-v5",
         "safe_fetch_proxy_sha256": OutboundConfig.from_env().safe_fetch_proxy_sha256,
-        "citation_policy_version": "deterministic-citation-v23",
+        "citation_policy_version": "deterministic-citation-v24",
         "hitl_policy_version": "evidence-insufficient-v3",
         "conflict_policy_version": "scan-only-v2",
         "gather_evidence": task.get("gather_evidence", True),

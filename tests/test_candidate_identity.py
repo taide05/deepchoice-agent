@@ -62,7 +62,8 @@ async def test_evaluator_admits_product_prose_for_action_label_without_changing_
                 "snippet": name + " stores records in a bounded local journal."} for name in ["Atlas", "Other"]]
     state = await SourceEvaluatorAgent().run({"task": task,
         "search_results": [{"source": "tavily", "results": results}]})
-    assert [row["title"] for row in state["source_scores"]] == ["Atlas documentation"]
+    assert [row["title"] for row in state["source_scores"]] == ["Atlas documentation", "Other documentation"]
+    assert all(row["evidence_type"] == "unassessed" for row in state["source_scores"])
     assert task["candidate_techs"] == ["继续使用 Atlas", "迁移到 Beta"]
 
 

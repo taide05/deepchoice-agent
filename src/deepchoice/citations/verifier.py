@@ -918,12 +918,25 @@ async def verify_citations(
         from ..utils.fact_selection import admitted_source_ids
         offered_selection_ids = admitted_source_ids(evidence_chains, candidates)
     claims, claims_truncated = _extract_claims(recommendation)
+    from ..utils.evidence_choices import source_fact_bindings
+    numbered_sources = source_fact_bindings(evidence_chains) if isinstance(source_facts, list) and source_facts else {}
     resolved: list[tuple[_Claim, _RegistrySource | None, CitationReason | None]] = []
     for claim in claims:
         if claim.source_title is None:
             resolved.append((claim, None, CitationReason.CITATION_MISSING))
         else:
-            source, error = _resolve_title(claim.source_title, registry)
+            fact_path = re.fullmatch(r"final_recommendation\.source_facts\[(\d+)\]\.text", claim.path)
+            if fact_path is not None:
+                fact = source_facts[int(fact_path[1])]
+                number = fact.get("evidence_id")
+                binding = numbered_sources.get(number) if type(number) is int else None
+                source = binding[1] if binding else None
+                error = None if source and claim.source_title == source.title else CitationReason.CONTENT_INSUFFICIENT
+                if error is not None:
+                    source = None
+            else:
+                # Free-text legacy citations still need global title disambiguation.
+                source, error = _resolve_title(claim.source_title, registry)
             if registry_truncated and error is CitationReason.SOURCE_NOT_FOUND:
                 error = CitationReason.SOURCE_LIMIT
             resolved.append((claim, source, error))
@@ -939,7 +952,7 @@ async def verify_citations(
     checks: list[CitationCheck] = []
     aggregate: dict[tuple[int, int], tuple[CitationStatus, CitationReason]] = {}
     for claim, source, error in resolved:
-        if error is CitationReason.SOURCE_LIMIT:
+        if error in {CitationReason.SOURCE_LIMIT, CitationReason.CONTENT_INSUFFICIENT}:
             check = _make_check(
                 claim,
                 source=None,

@@ -172,10 +172,12 @@ def test_eligible_fact_inventory_preserves_numbering_and_identity_rules_across_b
         {"disputed": True, "sources": [source("Disputed", "six")]},
     ]
     before = deepcopy(chains)
-    assert eligible_source_fact_ids(chains) == {1, 5}
+    assert eligible_source_fact_ids(chains) == {1, 2, 3, 5}
     assert chains == before
     prompt, mapping = synth._summarize_chains(chains)
     assert mapping[5] == "Next batch" and mapping[6] == "Disputed"
+    for number in (2, 3):
+        assert f"[[{number}]] Ambiguous (score: N/A)\n       Source-fact binding allowed: yes" in prompt
     assert "[[5]] Next batch (score: N/A)\n       Source-fact binding allowed: yes" in prompt
     assert "[[6]] Disputed (score: N/A)\n       Source-fact binding allowed: no" in prompt
 

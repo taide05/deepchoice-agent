@@ -86,7 +86,7 @@ async def test_conditional_choice_survives_abstention_only_with_whole_source_che
 
 
 @pytest.mark.parametrize("bad", ["candidate", "requirement", "fact", "relation", "evidence", "duplicate",
-                                  "disputed", "ambiguous", "oversized", "long_sentence", "markup", "lowercase_markup", "title_redirect"])
+                                  "disputed", "oversized", "long_sentence", "markup", "lowercase_markup", "title_redirect"])
 def test_invalid_bindings_do_not_create_usable_choices(bad):
     rec, chains = proposal(), deepcopy(CHAINS)
     choice = rec["conditional_choices"][0]
@@ -104,10 +104,6 @@ def test_invalid_bindings_do_not_create_usable_choices(bad):
         rec["source_facts"] *= 2
     elif bad == "disputed":
         chains[0]["disputed"] = True
-    elif bad == "ambiguous":
-        other = deepcopy(chains[0]["sources"][0])
-        other["url"] = "https://example.org/other"
-        chains[0]["sources"].append(other)
     elif bad == "oversized":
         chains[0]["sources"][0]["snippet"] = SNIPPET * 12
     elif bad == "long_sentence":

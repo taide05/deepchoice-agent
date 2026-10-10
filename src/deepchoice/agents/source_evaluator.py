@@ -245,7 +245,9 @@ def _candidate_rejection(result: dict, source: str, candidates: object,
     comparison_scope = _local_comparison_covers_candidates(result, source, patterns)
     if comparison_scope is False:
         return "comparison_scope"
-    if comparison_scope is True:
+    if comparison_scope is True or source == "tavily":
+        # Request-specific web results are proposals for the existing selector;
+        # a missing literal choice label cannot establish irrelevance.
         return None
     lexical_match = (_audited_seed_lexically_names_target(result) if seed_scope is True
                      else _mentions_candidate(result, retrieval_patterns if retrieval_patterns is not None else patterns))

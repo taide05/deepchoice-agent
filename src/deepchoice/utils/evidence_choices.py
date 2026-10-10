@@ -79,11 +79,12 @@ def selected_source_text(source, fact):
 
 
 def source_fact_bindings(chains):
-    """Index globally unambiguous sources once, retaining original source numbers."""
-    from ..citations.verifier import _resolve_title, _source_registry
+    """Index runtime source positions, retaining original source numbers."""
+    from ..citations.verifier import _source_registry
     from .conflict_scope import validated_conflict_scope
 
     registry, _ = _source_registry(chains)
+    by_position = {row.position: row for row in registry}
     numbered, number = {}, 0
     for chain_index, chain in enumerate(chains):
         for source_index, source in enumerate(chain.get("sources", [])[:4]):
@@ -93,10 +94,8 @@ def source_fact_bindings(chains):
             if ((chain.get("disputed") or "conflict_scope" in source)
                     and validated_conflict_scope(source) is None):
                 continue
-            title = source.get("title")
-            resolved, error = _resolve_title(title, registry) if isinstance(title, str) else (None, "missing")
-            if (error is not None or resolved is None or not resolved.canonical_url
-                    or resolved.position != (chain_index, source_index)):
+            resolved = by_position.get((chain_index, source_index))
+            if resolved is None or not resolved.canonical_url:
                 continue
             marker = f"[Source: {resolved.title}]"
             spans = citation_spans(marker)

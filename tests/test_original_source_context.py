@@ -63,7 +63,7 @@ def test_forged_fact_never_receives_original_context(field, value):
     assert contexts(facts, chains) == {}
 
 
-def test_source_mutation_and_ambiguous_identity_are_rejected():
+def test_source_mutation_rejected_while_numbered_duplicate_title_keeps_own_context():
     chains, facts = fixture()
     chains[0]["sources"][0]["url"] = "https://other.example/docs"
     assert contexts(facts, chains) == {}
@@ -71,6 +71,8 @@ def test_source_mutation_and_ambiguous_identity_are_rejected():
     other = deepcopy(chains[0])
     other["sources"][0]["url"] = "https://other.example/ambiguous"
     chains.append(other)
+    assert contexts(facts, chains) == {"F1": " ".join(TEXT.split())}
+    facts[0]["evidence_id"] = 2
     assert contexts(facts, chains) == {}
     chains, facts = fixture()
     chains[0]["sources"][0]["snippet"] = "not a complete original source"

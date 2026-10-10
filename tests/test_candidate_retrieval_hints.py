@@ -67,7 +67,8 @@ async def test_source_admission_preserves_version_and_deployment_conditions(monk
     state = await SourceEvaluatorAgent().run({"task":task,"search_results":[{"source":"tavily","results":[
         {"title":"Acme 6 reference", "url":"https://example.org/acme/6/guide", "snippet":"Acme stores values using the configured service."},
         {"title":"Other guide", "url":"https://example.org/other", "snippet":"Other stores values."}]}]})
-    assert len(state["source_scores"]) == 1
+    assert len(state["source_scores"]) == 2
+    assert all(row["evidence_type"] == "unassessed" for row in state["source_scores"])
     row = state["source_scores"][0]
     assert row["title"] == "Acme 6 reference"  # Discovery does not assert requested v7 applicability.
     assert row["evidence_type"] == "unassessed"

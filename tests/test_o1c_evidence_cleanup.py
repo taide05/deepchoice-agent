@@ -22,21 +22,21 @@ def _result(title, snippet="", url="https://example.com/docs"):
     return {"title": title, "snippet": snippet, "url": url}
 
 
-def _state(results, candidates=None):
+def _state(results, candidates=None, *, source="tavily"):
     return {
         "task": {"query": "A technology choice", "candidate_techs": candidates or []},
-        "search_results": [{"source": "tavily", "status": "success", "results": results}],
+        "search_results": [{"source": source, "status": "success", "results": results}],
     }
 
 
 @pytest.mark.asyncio
-async def test_candidate_gate_preserves_raw_results_and_rejects_offtopic_popularity():
+async def test_broad_channel_gate_preserves_raw_results_and_rejects_offtopic_popularity():
     state = _state([
         _result("React release", "A popular serverless web framework"),
         _result("On quantum steps", "Serverless task scheduling"),
         _result("SQLite notes", "SQLite WAL backup boundaries"),
         _result("Migration guide", "PostgreSQL migration from embedded storage"),
-    ], ["SQLite", "PostgreSQL"])
+    ], ["SQLite", "PostgreSQL"], source="github")
     original = deepcopy(state)
     output = await SourceEvaluatorAgent().run(state)
     assert state == original
@@ -56,7 +56,7 @@ async def test_candidate_gate_preserves_raw_results_and_rejects_offtopic_popular
 async def test_candidate_gate_identifier_boundaries_and_mixed_language(candidate, positive, negative):
     output = await SourceEvaluatorAgent().run(_state([
         _result(positive), _result(negative, url="https://example.com/other"),
-    ], [candidate]))
+    ], [candidate], source="github"))
     assert [item["title"] for item in output["source_scores"]] == [" ".join(positive.split())]
 
 
@@ -72,7 +72,7 @@ async def test_category_and_legacy_tasks_do_not_guess_candidates_or_hide_failure
 
 @pytest.mark.asyncio
 async def test_no_named_candidate_evidence_stays_empty_not_fallback_to_offtopic():
-    output = await SourceEvaluatorAgent().run(_state([_result("General survey")], ["Qdrant"]))
+    output = await SourceEvaluatorAgent().run(_state([_result("General survey")], ["Qdrant"], source="github"))
     assert output["source_scores"] == []
     assert build_evidence_chain(output["source_scores"], []) == []
 

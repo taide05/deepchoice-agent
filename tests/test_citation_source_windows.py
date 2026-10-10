@@ -499,3 +499,67 @@ async def test_documented_source_after_large_page_shell_is_available_with_one_fe
     assert bound['source_facts'][0]['status'] == expected
     assert len(calls) == 1
     assert 'xxxx' not in checks.model_dump_json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tamper', [None, 'number', 'url', 'title'])
+async def test_numbered_same_title_sources_bind_separately_and_legacy_stays_ambiguous(monkeypatch, tamper):
+    second = 'A worker uses an isolated workspace for each job.'
+    chains = [{'sources': [
+        {'title': 'Shared documentation title', 'url': URL, 'snippet': TEXT},
+        {'title': 'Shared documentation title', 'url': URL + '/mirror', 'snippet': second},
+    ]}]
+    bound = bind_evidence_choices({'source_facts': [{'id': 'F1', 'evidence_id': 1},
+                                                   {'id': 'F2', 'evidence_id': 2}]}, chains, [], [])
+    assert len(bound['source_facts']) == 2
+    if tamper == 'number':
+        bound['source_facts'][0]['evidence_id'] = 2
+    elif tamper == 'url':
+        bound['source_facts'][0]['canonical_url'] = URL + '/mirror'
+    elif tamper == 'title':
+        bound['source_facts'][0]['source_title'] = 'Forged title'
+    calls = []
+    async def fetch(_source, url, **kwargs):
+        calls.append(url)
+        return httpx.Response(200, text='<p>' + (TEXT if url == URL else second) + '</p>',
+                              headers={'content-type': 'text/html'})
+    monkeypatch.setattr('deepchoice.citations.verifier.safe_fetch', fetch)
+    verification, _ = await verify_citations(bound, chains)
+    result = calibrate_evidence_choices(bound, verification)
+    assert result['source_facts'][0]['status'] == ('verified' if tamper is None else 'unknown')
+    assert result['source_facts'][1]['status'] == 'verified'
+    assert len(calls) <= 2
+    legacy, _ = await verify_citations({'recommendation': second + ' [Source: Shared documentation title]'}, chains)
+    assert legacy.checks and all(c.reason.value == 'source_ambiguous' for c in legacy.checks)
+
+
+@pytest.mark.asyncio
+async def test_same_url_positions_cannot_borrow_another_saved_excerpt(monkeypatch):
+    second = 'Workers isolate each new job in a separate workspace.'
+    chains = [{'sources': [{'title': 'Queue source', 'url': URL, 'snippet': text} for text in (TEXT, second)]}]
+    bound = bind_evidence_choices({'source_facts': [{'id': 'F1', 'evidence_id': 1},
+                                                   {'id': 'F2', 'evidence_id': 2}]}, chains, [], [])
+    bound['source_facts'][0]['evidence_id'] = 2
+    calls = []
+    async def fetch(_source, url, **kwargs):
+        calls.append(url)
+        return httpx.Response(200, text=f'<p>{TEXT}</p><p>{second}</p>', headers={'content-type': 'text/html'})
+    monkeypatch.setattr('deepchoice.citations.verifier.safe_fetch', fetch)
+    verification, _ = await verify_citations(bound, chains)
+    facts = calibrate_evidence_choices(bound, verification)['source_facts']
+    assert [f['status'] for f in facts] == ['unknown', 'verified']
+    assert calls == [URL]
+
+
+@pytest.mark.asyncio
+async def test_numbered_source_outside_registry_bound_stays_unknown_without_fetch(monkeypatch):
+    from unittest.mock import AsyncMock
+    chains = [{'sources': [{'title': 'Queue source', 'url': URL, 'snippet': TEXT},
+                           {'title': 'Other source', 'url': URL + '/other', 'snippet': TEXT}]}]
+    bound = bind_evidence_choices({'source_facts': [{'id': 'F1', 'evidence_id': 2}]}, chains, [], [])
+    monkeypatch.setattr('deepchoice.citations.verifier.MAX_REGISTRY_SOURCES', 1)
+    fetch = AsyncMock(side_effect=AssertionError('unregistered source must not fetch'))
+    monkeypatch.setattr('deepchoice.citations.verifier.safe_fetch', fetch)
+    verification, _ = await verify_citations(bound, chains)
+    assert calibrate_evidence_choices(bound, verification)['source_facts'][0]['status'] == 'unknown'
+    fetch.assert_not_awaited()

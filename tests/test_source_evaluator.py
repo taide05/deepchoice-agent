@@ -435,7 +435,7 @@ async def test_scope_only_candidate_requires_delivered_literal_name(monkeypatch,
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("source,variant", [
-    ("official", v) for v in ("chroma", "tavily", "github", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair")
+    ("official", v) for v in ("chroma", "github", "nameless", "wrong_product", "oversized", "public_passages", "private_passages", "navigation", "wrong_seed", "wrong_pair")
 ] + [(src, v) for src in ("community", "arxiv") for v in ("nameless", "oversized", "public_passages", "private_passages")])
 async def test_scope_only_candidate_does_not_bypass_producer_or_scope_boundaries(monkeypatch, source, variant):
     from deepchoice.utils.official_catalog import AUDITED_PRODUCT_SEED_IDENTITY
@@ -719,3 +719,17 @@ async def test_scope_budget_reserves_complete_supplement_before_dispatch(tmp_pat
                 assert (await manager._usage())[BudgetResource.TOTAL_TOKENS] == 110
     finally:
         await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_web_search_proposal_survives_missing_exact_candidate_label():
+    from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
+    source = {'title': 'Isolation reference', 'url': 'https://docs.example/isolation',
+              'snippet': 'Hosted workers run each job in an isolated workspace. Operators manage the private workers.'}
+    output = await SourceEvaluatorAgent().run({'task': {'query': 'Compare isolated execution options.',
+        'candidate_techs': ['Managed Acme job workers', 'Private Beta agents']},
+        'search_results': [{'source': 'tavily', 'status': 'success', 'results': [source]}]})
+    assert len(output['source_scores']) == 1
+    assert output['source_scores'][0]['snippet'] == source['snippet']
+    assert output['source_scores'][0]['evidence_type'] == 'unassessed'
+    assert output['quality_signals'][0]['candidate_excluded_count'] == 0

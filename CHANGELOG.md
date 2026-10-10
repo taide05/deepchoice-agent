@@ -2,6 +2,24 @@
 
 ## [Unreleased] - 2026-10-10
 
+### Retain numbered evidence and relevant search proposals
+
+Remove full candidate-label rejection for request-specific Tavily proposals, retaining
+navigation and audited/local scope refusals. Numbered facts bind their original source
+position instead of globally resolving a duplicate title; ID, URL, title, saved text,
+range, registry capacity and page checks remain enforced. Legacy free-text citations
+still reject ambiguous titles. Freeze citation v24 and source-score v18.
+Focused validation:597 passed in68.03s plus145 updated-contract checks in14.44s.
+Final full validation:3,890 passed in769.83s, no skips, Windows/Python3.12.
+Independent read-only review, static/dependency checks and smoke12/12 passed.
+The first full run retained11 obsolete-assertion failures/3,879 passes; production
+was unchanged while expectations were updated. Frozen hashes remained unchanged.
+
+Regression221 on the previous package fetched complete pages and retained3 reviewed
+analyses, but independent content acceptance remained0/1 due to important omissions.
+The saved materials exposed the two admission losses above. Paired backup verified,
+services stopped. This is an exposed regression, separate from the historical0/4.
+
 ### Preserve source text and reviewed answers
 
 Use one visible citation document instead of fallback document reconstruction;
