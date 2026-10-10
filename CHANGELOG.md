@@ -2,22 +2,22 @@
 
 ## [Unreleased] - 2026-10-10
 
-### Preserve exact page evidence behind Tavily summaries
+### Withdraw unproven page enrichment and preserve lease authority
 
-Durable Tavily retrieval now reuses the bounded official-page reader on each merged
-result's exact URL. A complete local page excerpt replaces the provider summary
-only after a safe, budgeted read. Unreadable pages retain their summaries under a
-visible partial source envelope, which is excluded from the successful retrieval
-cache; citation verification still decides whether any quoted fact is located.
-Budget and lease authority failures remain fatal, while legacy search without a
-run context keeps its prior interface. Tavily retriever v3 and cache policy v2
-isolate this behavior from historical runs and entries. Saved 233/234/236 source
-probes found complete excerpts on multiple live AWS pages where prior assembled
-summaries failed whole-text location; this does not establish complete report quality.
-Engineering acceptance: 479 focused and 3,854 full-suite tests passed; smoke-v1
-12/12, pyflakes, vulture 100%, dependency, compile and diff checks passed.
-Independent read-only review found no remaining blocker. Real report benefit is
-reserved for one frozen four-report retrial.
+The frozen Tavily page-enrichment candidate `bdb3954` passed 3,854 full-suite
+tests and independent code review, but its separately frozen four-report retrial
+237–240 was 0/4 usable. The public snapshots do not prove that any page excerpt
+replaced a provider summary; Tavily was partial or failed in every run. Withdraw
+its extra HTTP reads, partial classification, cache-policy and retriever-version
+changes as one traceable change. Keep the independent lease/fencing correction:
+non-budget authority-loss errors now escape the base retriever, invocation
+wrapper, official supplemental page path and fan-out instead of becoming an
+ordinary failed source. Final frozen verification: 373 affected tests and
+3,853 full-suite tests passed; smoke-v1 12/12 matched its baseline, static,
+dependency and compile checks passed, and independent review found no blocker. The first
+frozen batch 233–236 was also 0/4, and the ten-run development allocation is
+exhausted. Original reports and both verified paired database backups remain
+under their immutable run roots; the final 24-run set remains sealed.
 
 ### Preserve bounded quoted answers across the synthesis binders
 
@@ -28,7 +28,7 @@ Unknown references, changed source text, duplicate coordinates, over-budget rows
 citation status and self-review remain separately checked. Question basis policy
 v6 gives the changed runtime binding a new manifest identity. Fixed-source node
 replay on exposed 224/225/231 inputs showed the previous per-fact veto dropping
-otherwise bounded R0/Q rows; complete report content remains unverified.
+otherwise bounded R0/Q rows; the subsequent frozen four-report batch was 0/4.
 
 ### Ask each original question before selecting supporting views
 
@@ -36,7 +36,8 @@ The existing single-call synthesis prompt now starts from the original R0/Q ques
 then chooses at most five supporting views. Repeated coverage and conditionality prose
 was consolidated; binding, source and citation limits, review and runtime authority
 are unchanged. Prompt v43 isolates new runs from historical identity. Focused tests
-passed; real report benefit is pending. The prior global-sentence-veto candidate was
+passed; two later four-report batches were 0/4, so real report benefit is unproven.
+The prior global-sentence-veto candidate was
 fully validated but reverted after exposed FVC-02 run 231 remained incomplete.
 
 ### Retire unused conflict arbitration and search tools

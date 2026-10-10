@@ -847,6 +847,22 @@ async def test_supplemental_child_failure_is_visible_and_keeps_authority_boundar
 
 
 @pytest.mark.asyncio
+async def test_supplemental_child_instance_lease_loss_escapes_retrieval(setup):
+    from deepchoice.runtime.instance_guard import RuntimeInstanceLeaseLostError
+
+    root_body = '<p>' + CHINESE_PROSE + '</p><nav><a href="guide/">Guide</a></nav>'
+    async def fetch(_source, url, **kw):
+        if url == ROOT:
+            return response(url, root_body)
+        raise RuntimeInstanceLeaseLostError('lease expired')
+
+    setup.side_effect = fetch
+    with pytest.raises(RuntimeInstanceLeaseLostError):
+        await official_mod.OfficialSearch().retrieve(RetrievalRequest(query='Acme持久化条件'))
+    assert setup.await_count == 2
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('failure_kind', ['budget', 'persistence', 'stale', 'cancel'])
 async def test_supplemental_child_admission_failure_never_becomes_partial(setup, monkeypatch, failure_kind):
     from deepchoice.budget_errors import StaleBudgetAuthorityError

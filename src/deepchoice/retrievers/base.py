@@ -9,6 +9,7 @@ from ..utils.views import print_agent_output
 
 
 def is_authority_error(exc: Exception) -> bool:
+    """Keep lease/fencing loss outside an ordinary failed-source envelope."""
     detail = getattr(exc, "error_detail", None)
     codes = {"RUN_LEASE_LOST", "RUNTIME_INSTANCE_LEASE_LOST", "RUN_BUDGET_AUTHORITY_STALE"}
     return getattr(exc, "code", None) in codes or getattr(detail, "code", None) in codes
@@ -51,6 +52,8 @@ class BaseRetriever:
         except Exception as e:
             if is_authority_error(e):
                 raise
+            if isinstance(e, PartialRetrievalError) and is_authority_error(e.failure):
+                raise e.failure from e
             partial = isinstance(e, PartialRetrievalError)
             failure = e.failure if partial else e
             # A failed request may mean the routed channel died after probing

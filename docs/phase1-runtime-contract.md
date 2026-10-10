@@ -19,14 +19,11 @@ Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使�
 
 ## 2. 身份、状态与版本
 
-2026-10-10 Tavily正文绑定：有RunContext的Tavily检索将合并结果逐条按原URL调用现有
-有预算的安全正文读取（HTTP(S)、限体积/类型/15秒、禁重定向）。取得完整可定位选段时替换
-供应商拼接摘要，保留原URL/来源身份；已尝试读取却未取得正文或读取失败时保留摘要但将
-该来源标记为schema v2 partial，暴露安全错误类别且不写成功缓存。无有效匹配词时不发
-无收益GET，保留原摘要/成功缓存资格。摘要本身不获得事实权威，
-引用仍按live正文及unknown语义核验。HTTP预算/租约权威错误和取消传播，不降成可用摘要。
-历史无RunContext接口不新增页面读取。当前Tavily检索器v3、检索缓存策略v2，旧manifest
-可读但不同身份不能同run续跑；旧缓存键隔离。无状态模式、迁移、生命周期或公开API变化。
+2026-10-10权威错误透传：检索器内部、默认调用包装和并发汇总对带
+`RUN_LEASE_LOST`、`RUNTIME_INSTANCE_LEASE_LOST`、`RUN_BUDGET_AUTHORITY_STALE`
+代码的异常直接上抛，不把丢失的租约/实例/预算权威变成普通单源failed结果。
+普通来源异常仍保留现有失败envelope；预算fail-closed与取消边界不变。
+此纠正没有改变正常结果、manifest、迁移、生命周期表或公开API形状。
 
 2026-10-10精简：当前引用政策v26、评分政策source-score-v19、HITL政策v3、official v12；workflow v6/state3。
 合成v42、查询适配v8、自审v11；报告模板what-why-how v24/evidence-first v23/comparison-matrix v22。

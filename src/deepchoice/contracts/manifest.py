@@ -322,8 +322,7 @@ def _manifest_content(task: dict) -> dict[str, Any]:
                 retriever_id=retriever_id,
                 version="v8" if retriever_id == "chroma" else "v12" if retriever_id == "official"
                         else "v4" if retriever_id in {"community", "arxiv"}
-                        else "v3" if retriever_id == "tavily"
-                        else "v2" if retriever_id == "github" else "v1",
+                        else "v2" if retriever_id in {"tavily", "github"} else "v1",
             )
             for retriever_id in RETRIEVER_IDS
         ),

@@ -9,6 +9,7 @@ from .. import outbound
 from ..budget_errors import BudgetError
 from ..security.urls import SafeFetchFailure, UnsafeUrlError
 from .contracts import PartialRetrievalError
+from .base import is_authority_error
 from .http import budgeted_http
 from ..utils.evidence import source_title
 from ..utils.evidence_choices import whole_source_text
@@ -228,6 +229,8 @@ async def _read_page(root: str, url: str, terms: set[str], *, exact_page: bool =
 
 
 def _local_page_failure(exc: Exception) -> bool:
+    if is_authority_error(exc):
+        return False
     if isinstance(exc, UnsafeUrlError):
         return exc.failure in {
             SafeFetchFailure.SAFETY_REJECTED, SafeFetchFailure.RESPONSE_REJECTED,
