@@ -12,12 +12,14 @@ This file is the project-level operating guide for AI coding assistants. It appl
 
 ## High-priority execution rules: subtraction first (2026-10-10)
 
-本节落实用户当前执行方向，优先于本文件及活动计划中与其冲突的历史默认增量做法。
+本节落实用户当前执行方向，优先于本文件及历史计划中与其冲突的默认增量做法。
 用户最新指令始终优先；下述减法原则不授权绕过安全、事实核验、预算或持久化正确性边界。
+接手先读 [Codex 复盘与接手约束](docs/agent-development-lessons.md)。旧八小时 N1–N4
+已结案且内容未达标，不是活动计划；旧付费额度已结算，不推导下一轮授权。
 
 - **成果优先**：首要成果是完整研究链路稳定生成有依据、回答关键取舍的报告。
   局部修复、测试通过、提交数和文档完成均不能代替这个成果；阶段按用户可见结果验收。
-- **默认做减法**：先定位完整数据流中的首次不合理信息损失，优先删除无贡献处理、合并
+- **默认做减法**：同时排查完整数据流各阶段的不合理信息损失和独立阻断，优先删除无贡献处理、合并
   重复筛选/校验/转换/重建，收拢同一事实和判断的多套表示。不要把旧代码一律当成必须
   保留的前提，再叠一层补丁；也不要以净减行数为目标做无关清理或整仓重写。
   排查以活动代码/数据流和具体处理为主线，失败材料只作反向核对与回归，不限定全部范围。
@@ -38,21 +40,21 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - **验证随改动聚焦**：用真实失败材料和有独立回归价值的测试证明删并前后的传递与边界；
   冻结代码后完成所需全套及独立复核，再用未经手修的真实报告判断收益。沿用已有效的
   验证，不为文档变化重跑全套，不堆测试数量或反复抽样代替质量进展。
-- **按问题批次迭代**：先在已保存、已暴露的请求和来源上固定输入，逐阶段找首次信息损失，
+- **按问题批次迭代**：先在已保存的诊断材料上固定输入，逐阶段列出全部可观察损失，
   区分来源不足、模型遗漏、代码过滤、引用未知和渲染损失；按已确认的共同原因组成有限的
   修复包。实施中只做固定输入回放、节点级和相关回归；不要每修一处就启动完整研究报告。
   同批不夹带无关猜测或逐题例外。完成相关修复、冻结代码与运行身份后，才集中运行一次
-  预先绑定的完整报告批次并按原问题逐项评审。工程全套与独立复核仍按交付契约完成；
-  付费诊断和最终保留集各守原额度、身份、暂停和准入边界，不能借“批次”重置。
+  预先绑定的**全新题集**完整报告批次并按原问题逐项评审。Codex 时期用过的所有题、
+  案例及改写只保留历史取证用途，不作下一轮内容验收或成功分母。工程全套与独立复核
+  仍按交付契约完成；任何新付费批次须另定额度、身份与停止线，最终24仍封存。
 - **测试也要做减法**：测试数量臃肿属于当前精简范围。删除重复覆盖、仅复述实现细节、
   过时路径和无运行消费者的辅助代码所绑定的测试；可合并重复准备与无独立故障意义的参数。
   删前指出保留测试如何覆盖同一行为，保留有独立价值的安全/事实/恢复负例。不用大参数
   组合或重复端到端启动抬高数量，也不把参数藏进循环来制造数量下降；核对实际覆盖与耗时。
 - **进度与时间如实报告**：分别说明工程状态和内容状态；仍主要是增量修补时应直接说明，
-  不能称为已完成精简。旧十小时计划已归档；当前用户授权新一轮八小时有效工时硬上限，
-  以路线N1–N4和当前计时卡执行，不自动延期，也不沿用旧“适度让步”授权。代码精简为
-  主线，相关测试精简同包，不能另开测试数量专项。到限完成收束，未通过如实标未达标；
-  追加工时须新的明确授权。暂停停止计时，恢复不重置已用；历史工时及失败账本保留。
+  不能称为已完成精简。旧十小时和八小时计划均已关闭，历史工时、失败与研究账本保留；
+  不把旧余额或“持续授权”延续到下一轮。代码精简为主线，相关测试精简同包，不能另开
+  测试数量专项。后续时间及付费额度按用户新委托明确，超限不自动续时。
 
 ## Git safety
 
@@ -354,7 +356,7 @@ When adding a setting, update the code default, tests, README configuration sect
 - Apply the high-priority subtraction-first rules above before choosing an implementation approach.
   Historical phase detail does not justify restoring an incremental patch loop.
 
-- Read `docs/README.md` first, then `docs/current-roadmap.md`,
+- Read `docs/README.md` and `docs/agent-development-lessons.md` first, then `docs/current-roadmap.md`,
   `docs/product-effectiveness-optimization.md`, `docs/optimization-execution.md`, and
   `docs/o1-execution-status.md`. These own scope, quality criteria, work cadence, and actual state.
 - The 2026-09-29 user direction is sustained overall selection quality and repeatability across
@@ -367,16 +369,17 @@ When adding a setting, update the code default, tests, README configuration sect
 - Separate runtime failures, critical content errors, evidence gaps and minor presentation issues.
   Test counts and lexical citation status do not prove report quality; useful conditional advice
   may pass without a unique Winner. Freeze case-specific expectations before observing outputs.
-- `docs/product-effectiveness-optimization.md` defines current development and delivery acceptance.
+- `docs/product-effectiveness-optimization.md` defines content criteria; the next execution batch,
+  sample size and budget have not been authorized or frozen. All Codex-used cases are historical only.
   `quality-selection-v1` is historical; its dataset, batch bindings and OPEN fields do not authorize
   current execution. New batch bindings must actually exist before execution; documentation is not
   proof of implementation.
   The actual cumulative research ledger and remaining resources live only in current status.
-- Carry authorized diagnosis, implementation, necessary repair, validation, review and local
-  commits through without per-step permission requests. An explicit pause stops product repair,
-  tests and report runs until resumed; a later documentation-only request authorizes only that
-  document work. Existing paid authorization persists subject to the pause and actual
-  budget/data/security/publication boundaries; freeze each executable batch before admission.
+- Carry work within the current user request through without per-step permission requests.
+  An explicit pause stops product repair, tests and report runs until resumed; a later
+  documentation-only request authorizes only that document work. The former eight-hour round and
+  paid research allocation are closed. Do not infer new paid admission from old continuous-authorization
+  prose or remaining seconds on a historical card; freeze a newly authorized batch before admission.
 - Use independent reviewers for final content acceptance, unexposed validation-case preparation
   and contract-required engineering review. Content/code review is read-only; case preparation
   writes only assigned evaluation materials. A document reorganization may receive one

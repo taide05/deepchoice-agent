@@ -3,6 +3,14 @@
 归档日期：2026-09-21。默认不整包读取本目录；只有当前工作需要核对某个历史决定或证据时，才打开对应文件。
 当前规划以 [任务地图](../current-roadmap.md)为准，阅读次序见 [文档索引](../README.md)。
 
+## 2026-10-10 八小时计划结案
+
+[原活动路线原字节快照](delivery-eight-hour-20261010/roadmap-snapshot.md)来自结案前
+`HEAD` 的 `docs/current-roadmap.md`，SHA256
+`81c5a9a42eea6a8d7cdfb240c04e1c3f50b1eec2c0f7a43324ce413376d0bf47`。
+N1–N4 与旧时间/研究额度已结案，内容未达标；快照中的命令式阶段和授权不再执行。
+结案事实与研究账本见[状态](../o1-execution-status.md)。
+
 ## 2026-10-10 旧Q0–Q3路线移出活动文档
 
 [原活动路线第3节](quality-direction-20261010/roadmap-q0-q3.md)保留当时逐轮工程和

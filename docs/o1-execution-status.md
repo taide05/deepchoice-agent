@@ -1,10 +1,10 @@
 # 当前质量状态
 
-更新：2026-10-10。唯一活动计划为[八小时求职交付N1–N4](current-roadmap.md#1-要交付什么)，
-ID `delivery-eight-hour-20261010-v1`。内容标准见[评估协议](product-effectiveness-optimization.md)，
-批次方法见[执行规则](optimization-execution.md)。
+更新：2026-10-10。八小时求职交付 N1–N4 已 `closed_unmet`，非活动计划。
+研究 10/10 已结算，最终 24 封存；下一轮无已冻结的工时、外呼额度或题集。
+内容标准见[评估协议](product-effectiveness-optimization.md)，接手规则见[复盘](agent-development-lessons.md)。
 
-## 授权、时间与暂停
+## 已结案计划的授权、时间与暂停
 
 本轮有效工时硬上限为8小时（28800秒），规划、实施、工具等待、验证、文档和收束均计入；
 用户等待与明确暂停不计。旧十小时计划及其延期授权已
