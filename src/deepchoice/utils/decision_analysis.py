@@ -266,6 +266,45 @@ def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain
             and not corrected.get("ranked_options") and no_upgrade)
 
 
+def _reviewable_basis(item, facts):
+    """Keep only the basis an analysis may be reviewed against.
+
+    A citation pass can verify a narrower part of a source than synthesis saw:
+    ``sentence_scoped`` marks which sentences were uniquely verified. An analysis
+    that also addressed an unverified sentence still has usable, reviewable
+    support, so the unverified part is dropped instead of discarding the whole
+    analysis. Returns (basis or None, dropped sentence ids).
+    """
+    basis = item.get("basis")
+    kept, dropped = [], []
+    for part in basis if isinstance(basis, list) else []:
+        key = part.get("fact_id")
+        fact = facts.get(key)
+        if fact is None:
+            dropped.extend(part.get("sentence_ids") or [])
+            continue
+        if reviewable_source_fact(fact):
+            kept.append(part)
+            continue
+        if not sentence_scoped_source_fact(fact):
+            dropped.extend(part.get("sentence_ids") or [])
+            continue
+        allowed = set(fact["reviewable_sentence_ids"])
+        original = list(part.get("sentence_ids") or [])
+        addressed = [index for index in original if index in allowed]
+        dropped.extend(index for index in original if index not in allowed)
+        if not addressed:
+            continue
+        trimmed = dict(part)
+        trimmed["sentence_ids"] = addressed
+        sentences = part.get("source_sentences")
+        if isinstance(sentences, list) and len(sentences) == len(original):
+            positions = {index: offset for offset, index in enumerate(original)}
+            trimmed["source_sentences"] = [sentences[positions[index]] for index in addressed]
+        kept.append(trimmed)
+    return (kept or None), dropped
+
+
 def calibrate_decision_analysis(recommendation):
     """Permit review only against facts calibrated by this citation pass.
 
@@ -278,20 +317,30 @@ def calibrate_decision_analysis(recommendation):
         return recommendation
     facts = {row["id"]: row for row in recommendation.get("source_facts", [])}
     accepted = []
+    dropped_sentences = 0
+    dropped_analyses = 0
     for item in recommendation["decision_analysis"]:
-        basis = item.get("basis")
-        addressed = {row["fact_id"]: row for row in basis} if isinstance(basis, list) else {}
-        if item["fact_ids"] and all(
-            key in facts and analysis_fact_reviewable(facts[key], addressed.get(key))
-            for key in item["fact_ids"]
-        ):
-            item["review_status"] = (
-                "sentence_scoped_pending_review" if any(
-                    sentence_scoped_source_fact(facts[key]) for key in item["fact_ids"]
-                ) else "human_review_required" if all(
-                    facts[key]["status"] == "verified" for key in item["fact_ids"]
-                ) else "network_unconfirmed_pending_review"
-            )
-            accepted.append(item)
+        basis, dropped = _reviewable_basis(item, facts)
+        dropped_sentences += len(dropped)
+        if not basis:
+            dropped_analyses += 1
+            continue
+        item["basis"] = basis
+        item["fact_ids"] = [part["fact_id"] for part in basis]
+        item["review_status"] = (
+            "sentence_scoped_pending_review" if any(
+                sentence_scoped_source_fact(facts[key]) for key in item["fact_ids"]
+            ) else "human_review_required" if all(
+                facts[key]["status"] == "verified" for key in item["fact_ids"]
+            ) else "network_unconfirmed_pending_review"
+        )
+        accepted.append(item)
     recommendation["decision_analysis"] = accepted
+    # Content removed for reviewability must stay observable instead of vanishing.
+    if dropped_sentences or dropped_analyses:
+        recommendation["analysis_calibration"] = {
+            "basis_sentences_dropped": dropped_sentences,
+            "analyses_dropped": dropped_analyses,
+            "retained": len(accepted),
+        }
     return recommendation

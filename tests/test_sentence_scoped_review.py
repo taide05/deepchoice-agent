@@ -5,7 +5,7 @@ import json
 import pytest
 
 from deepchoice.citations.contracts import CitationVerification
-from deepchoice.citations.verifier import _split_sentences
+from deepchoice.citations.verifier import _split_sentences, _strip_citations
 from deepchoice.formats.decision import render_decision_details
 from deepchoice.utils.analysis_review import analysis_review_input, apply_analysis_review, prepare_analysis_review
 from deepchoice.utils.decision_analysis import calibrate_decision_analysis
@@ -64,8 +64,56 @@ def test_only_addressed_verified_sentence_enters_full_source_review(reason):
 
 def test_an_analysis_addressing_the_unverified_sentence_is_withheld():
     state = partial_state(addressed=1)
+    # The unverified sentence is dropped; with no reviewable basis left the
+    # analysis is withheld, and the removal stays observable.
     assert state["final_recommendation"]["decision_analysis"] == []
+    assert state["final_recommendation"]["analysis_calibration"] == {
+        "basis_sentences_dropped": 2, "analyses_dropped": 2, "retained": 0}
     assert prepare_analysis_review(state).slots == {}
+
+
+def test_analysis_keeps_reviewable_basis_when_one_premise_is_unverified():
+    """One unverifiable premise must not delete the whole useful analysis.
+
+    Mirrors the measured 2026-10-10 loss: six analyses were generated and two
+    were deleted whole because one of two cited sentences fell outside the
+    narrower verified range.
+    """
+    state = make_state()
+    recommendation = deepcopy(state["final_recommendation"])
+    recommendation["decision_analysis"] = recommendation["decision_analysis"][:1]
+    recommendation["decision_analysis"][0]["basis"] = [
+        {"fact_id": "F1", "sentence_ids": [1]},
+        {"fact_id": "F2", "sentence_ids": [2]},
+    ]
+    recommendation["source_facts"].append({
+        **deepcopy(recommendation["source_facts"][0]), "id": "F2", "evidence_id": 2,
+        "source_title": "Source 1", "canonical_url": "https://source1.example/docs"})
+    verification = deepcopy(state["citation_verification"])
+    # F1 keeps only sentence 2 reviewed; the analysis addressed sentence 1.
+    verification["checks"][0].update(status="unknown", reason="qualifier_unverified")
+    # F2 is fully verified: availability alone is uncertain for that source.
+    fact_two = recommendation["source_facts"][1]
+    for offset, sentence in enumerate(_split_sentences(fact_two["saved_text"])):
+        verification["checks"].append({
+            "claim_id": f"check-f2-{offset}",
+            "claim_path": "final_recommendation.source_facts[1].text",
+            "claim_text": _strip_citations(sentence),
+            "source_title": fact_two["source_title"],
+            "canonical_url": fact_two["canonical_url"],
+            "status": "verified", "reason": "lexical_support"})
+    verification["status_counts"] = {"verified": 3, "unknown": 1}
+    bound = CitationVerification.model_validate_json(json.dumps(verification))
+    result = calibrate_decision_analysis(calibrate_evidence_choices(recommendation, bound))
+
+    assert result["source_facts"][0]["review_availability"] == "sentence_scoped"
+    assert result["source_facts"][0]["reviewable_sentence_ids"] == [2]
+    assert result["analysis_calibration"] == {
+        "basis_sentences_dropped": 1, "analyses_dropped": 0, "retained": 1}
+    assert len(result["decision_analysis"]) == 1
+    row = result["decision_analysis"][0]
+    assert row["fact_ids"] == ["F2"]
+    assert [part["sentence_ids"] for part in row["basis"]] == [[2]]
 
 
 @pytest.mark.parametrize("mutation", ["cross_language", "unsupported", "unreachable",
