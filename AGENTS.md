@@ -19,6 +19,8 @@ This file is the project-level operating guide for AI coding assistants. It appl
 
 - **成果优先**：首要成果是完整研究链路稳定生成有依据、回答关键取舍的报告。
   局部修复、测试通过、提交数和文档完成均不能代替这个成果；阶段按用户可见结果验收。
+  先区分“任务运行并可查询报告”和“报告回答原问题且依据适用”；单例链路与内容尚未
+  稳定时，不以批量/并发测量、控制器完善或测试数增长代替产品进展。
 - **默认做减法**：同时排查完整数据流各阶段的不合理信息损失和独立阻断，优先删除无贡献处理、合并
   重复筛选/校验/转换/重建，收拢同一事实和判断的多套表示。不要把旧代码一律当成必须
   保留的前提，再叠一层补丁；也不要以净减行数为目标做无关清理或整仓重写。
@@ -55,11 +57,18 @@ This file is the project-level operating guide for AI coding assistants. It appl
   不能称为已完成精简。旧十小时和八小时计划均已关闭，历史工时、失败与研究账本保留；
   不把旧余额或“持续授权”延续到下一轮。代码精简为主线，相关测试精简同包，不能另开
   测试数量专项。后续时间及付费额度按用户新委托明确，超限不自动续时。
+  每个检查点简报已产出的用户结果、工程/内容分别达到什么程度、实耗时间和外呼成本、
+  未解决阻断及下一动作；不要让多次“继续”只累积过程而看不见交付进度。
 
 ## Git safety
 
 - Start every task with `git status --short --branch` and inspect the active branch.
 - Preserve user changes. Do not discard, overwrite, reset, stash, amend, or rebase work unless explicitly requested.
+- When handing work between agents or worktrees, verify each checkout's branch, HEAD, worktree
+  status, and actual uncommitted changes. Treat `.git/info/*` and shared Git configuration as
+  repository-wide state; keep test shims and virtual environments local to the owning worktree.
+  Specify one integration owner and reconcile changes from an older worktree against the current
+  base rather than assuming its branch or handoff text is current.
 - Before judging ahead/behind or merge status, refresh remote refs when network access is available. If fetch fails, report that remote state is unverified.
 - Do not delete branches, reflogs, tags, or `refs/backup/*`, and do not run `git gc` or `git prune`, without explicit approval.
 - Do not push, force-push, merge to `main`, or create releases without explicit approval.
