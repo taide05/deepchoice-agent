@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased] - 2026-10-11
+
+### Repair unverified analysis basis instead of deleting the whole analysis
+
+A citation pass can verify a narrower part of a source than synthesis saw:
+`sentence_scoped` records the sentences that were uniquely verified. When a
+generated analysis also addressed a sentence outside that range,
+`calibrate_decision_analysis` deleted the analysis whole. Replaying the frozen
+2026-10-10 retrial stores shows the effect: cell 238 generated six analyses,
+the citation pass removed two, and one of the deleted rows answered the
+original headline question. Nothing user-visible reported the removal.
+
+Keep the analysis and drop only the unreviewable basis sentences, deleting an
+analysis only when nothing reviewable remains. Display authority is unchanged:
+an analysis is still shown only while every remaining premise is a verified
+source or an eligible uncertainty, and the independent
+`_candidate_attribution` guard is untouched. Removal is now observable through
+`final_recommendation.analysis_calibration` (`basis_sentences_dropped`,
+`analyses_dropped`, `retained`). Replaying frozen cell 238 changes 6 -> 4 with
+two analyses deleted into 6 retained with two basis sentences dropped and no
+analysis deleted, so all six rows reach the report gate instead of none.
+
+This was an offline repair derived from the frozen run stores; no new research
+was run, and the sealed reports and ledgers are unchanged. The recovered rows
+are conditional findings rather than a supported winner, so whether the
+resulting report is usable still requires a separately authorized fresh-case
+run. Full suite: 3,854 passed (3,853 baseline plus one regression test) with no
+failures or skips. The dominant blocker on this material remains source
+availability: cell 240 scored zero sources from fourteen retrieved candidates.
+
 ## [Unreleased] - 2026-10-10
 
 ### Withdraw unproven page enrichment and preserve lease authority
