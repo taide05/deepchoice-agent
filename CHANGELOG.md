@@ -13,7 +13,10 @@ the citation pass removed two, and one of the deleted rows answered the
 original headline question. Nothing user-visible reported the removal.
 
 Keep the analysis and drop only the unreviewable basis sentences, deleting an
-analysis only when nothing reviewable remains. Display authority is unchanged:
+analysis only when nothing reviewable remains. A basis part whose addressed
+quotations cannot be re-indexed consistently is dropped whole rather than kept
+in an inconsistent state, so a surviving basis never carries a quotation it
+cannot vouch for. Display authority is unchanged:
 an analysis is still shown only while every remaining premise is a verified
 source or an eligible uncertainty, and the independent
 `_candidate_attribution` guard is untouched. Removal is now observable through
@@ -22,13 +25,28 @@ source or an eligible uncertainty, and the independent
 two analyses deleted into 6 retained with two basis sentences dropped and no
 analysis deleted, so all six rows reach the report gate instead of none.
 
+An independent read-only review of this change confirmed the boundary is not
+weakened: both the renderer and the review path re-derive quotations from saved
+text through `bind_analysis_basis`, so a trimmed basis can never be displayed
+from a stale stored list, and the attribution guards read a `fact_ids` list that
+trimming only shrinks. Its 2112-input sweep found no input whose kept basis
+fails the reviewability contract. Its two findings (a non-list `sentence_ids`
+raising where the previous code tolerated it, and the inconsistent-pair case
+above) and a missing re-indexing test are fixed in the same change.
+
 This was an offline repair derived from the frozen run stores; no new research
 was run, and the sealed reports and ledgers are unchanged. The recovered rows
 are conditional findings rather than a supported winner, so whether the
 resulting report is usable still requires a separately authorized fresh-case
-run. Full suite: 3,854 passed (3,853 baseline plus one regression test) with no
-failures or skips. The dominant blocker on this material remains source
-availability: cell 240 scored zero sources from fourteen retrieved candidates.
+run. Full suite on the final revision: 3,856 passed (3,853 baseline plus three
+regression tests) in 617 s with no failures or skips. The dominant blocker on
+this material remains source availability: cell 240 scored zero sources from
+fourteen retrieved candidates.
+
+Residual content risk, recorded rather than patched: reasoning prose is never
+re-checked against the trimmed basis while the report presents it as based on
+the displayed sentences. The displayed quotations are always correct; the
+prose-to-basis correspondence is not machine-verified.
 
 ## [Unreleased] - 2026-10-10
 
