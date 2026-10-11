@@ -10,7 +10,7 @@ This file is the project-level operating guide for AI coding assistants. It appl
 - Material under `D:\ai-career` is external career/project documentation. It is useful context, but it can lag behind this repository and must not override the current Git state or tests.
 - Do not silently update resumes, interview material, or other external consumer documents while changing this repository. First establish and record the verified repository facts.
 
-## High-priority execution rules: subtraction first (2026-10-10)
+## High-priority execution rules: subtraction first (2026-10-11)
 
 本节落实用户当前执行方向，优先于本文件及历史计划中与其冲突的默认增量做法。
 用户最新指令始终优先；下述减法原则不授权绕过安全、事实核验、预算或持久化正确性边界。
@@ -40,15 +40,18 @@ This file is the project-level operating guide for AI coding assistants. It appl
   脱敏、预算、CAS/fencing、恢复、事务及必要兼容性。节点之间因恢复或不可信输入而需要的
   校验不能凭相似代码删除；词法命中、结构分数等启发式也不能冒充事实支持或语义反证。
 - **验证随改动聚焦**：用真实失败材料和有独立回归价值的测试证明删并前后的传递与边界；
-  冻结代码后完成所需全套及独立复核，再用未经手修的真实报告判断收益。沿用已有效的
-  验证，不为文档变化重跑全套，不堆测试数量或反复抽样代替质量进展。
+  每个修复包先通过相关测试并冻结运行身份，再用一份未经手修的真实报告判断本轮收益；
+  完整工程套件与契约要求的独立复核在交付前完成，涉及特定高风险契约时仍按其门槛执行。
+  沿用已有效的验证，不为文档变化重跑全套，不堆测试数量或反复抽样代替质量进展。
 - **按问题批次迭代**：先在已保存的诊断材料上固定输入，逐阶段列出全部可观察损失，
   区分来源不足、模型遗漏、代码过滤、引用未知和渲染损失；按已确认的共同原因组成有限的
   修复包。实施中只做固定输入回放、节点级和相关回归；不要每修一处就启动完整研究报告。
-  同批不夹带无关猜测或逐题例外。完成相关修复、冻结代码与运行身份后，才集中运行一次
-  预先绑定的**全新题集**完整报告批次并按原问题逐项评审。Codex 时期用过的所有题、
-  案例及改写只保留历史取证用途，不作下一轮内容验收或成功分母。工程全套与独立复核
-  仍按交付契约完成；任何新付费批次须另定额度、身份与停止线，最终24仍封存。
+  同批不夹带无关猜测或逐题例外。一个修复包完成并冻结代码与运行身份后，在已有额度内
+  **只运行一份**预先绑定的全新题完整报告，按原问题评审运行成功与回答质量；失败保留并
+  用于下一包诊断，不自动补跑。Codex 时期用过的所有题、案例及改写只保留历史取证用途，
+  不作下一轮内容验收或成功分母。一份通过只证明该题可用；要声明稳定性或跨场景能力，
+  待单例可用后另定更广的样本与授权。工程全套与独立复核仍按交付契约完成；新一轮付费
+  授权须明确单例运行数量、总额度、身份边界与停止线，范围内不逐次重复请示，最终24仍封存。
 - **测试也要做减法**：测试数量臃肿属于当前精简范围。删除重复覆盖、仅复述实现细节、
   过时路径和无运行消费者的辅助代码所绑定的测试；可合并重复准备与无独立故障意义的参数。
   删前指出保留测试如何覆盖同一行为，保留有独立价值的安全/事实/恢复负例。不用大参数
@@ -122,7 +125,8 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run frontend/app.py
 ```
 
-Run the smallest relevant test first, then the full suite:
+During implementation run the smallest relevant tests; run the full suite before delivery or when
+a specific contract requires it earlier:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/path_to_test.py -q -p no:cacheprovider
