@@ -266,6 +266,16 @@ def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain
             and not corrected.get("ranked_options") and no_upgrade)
 
 
+def _declared_sentence_ids(part):
+    """Read a basis part's declared sentence ids defensively.
+
+    A non-list value is unaddressable rather than fatal; the sentence-address
+    binder rejects it independently.
+    """
+    declared = part.get("sentence_ids") if isinstance(part, dict) else None
+    return declared if isinstance(declared, list) else []
+
+
 def _reviewable_basis(item, facts):
     """Keep only the basis an analysis may be reviewed against.
 
@@ -278,28 +288,34 @@ def _reviewable_basis(item, facts):
     basis = item.get("basis")
     kept, dropped = [], []
     for part in basis if isinstance(basis, list) else []:
-        key = part.get("fact_id")
+        declared = _declared_sentence_ids(part)
+        key = part.get("fact_id") if isinstance(part, dict) else None
         fact = facts.get(key)
         if fact is None:
-            dropped.extend(part.get("sentence_ids") or [])
+            dropped.extend(declared)
             continue
         if reviewable_source_fact(fact):
             kept.append(part)
             continue
         if not sentence_scoped_source_fact(fact):
-            dropped.extend(part.get("sentence_ids") or [])
+            dropped.extend(declared)
+            continue
+        sentences = part.get("source_sentences")
+        # The addressed quotations must line up one-to-one with the declared
+        # sentences. A part that cannot be trimmed consistently is dropped whole
+        # so a surviving basis never carries a quotation it cannot vouch for.
+        if isinstance(sentences, list) and len(sentences) != len(declared):
+            dropped.extend(declared)
             continue
         allowed = set(fact["reviewable_sentence_ids"])
-        original = list(part.get("sentence_ids") or [])
-        addressed = [index for index in original if index in allowed]
-        dropped.extend(index for index in original if index not in allowed)
+        addressed = [index for index in declared if index in allowed]
+        dropped.extend(index for index in declared if index not in allowed)
         if not addressed:
             continue
         trimmed = dict(part)
         trimmed["sentence_ids"] = addressed
-        sentences = part.get("source_sentences")
-        if isinstance(sentences, list) and len(sentences) == len(original):
-            positions = {index: offset for offset, index in enumerate(original)}
+        if isinstance(sentences, list):
+            positions = {index: offset for offset, index in enumerate(declared)}
             trimmed["source_sentences"] = [sentences[positions[index]] for index in addressed]
         kept.append(trimmed)
     return (kept or None), dropped

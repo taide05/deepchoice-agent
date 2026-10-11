@@ -8,7 +8,7 @@ from deepchoice.citations.contracts import CitationVerification
 from deepchoice.citations.verifier import _split_sentences, _strip_citations
 from deepchoice.formats.decision import render_decision_details
 from deepchoice.utils.analysis_review import analysis_review_input, apply_analysis_review, prepare_analysis_review
-from deepchoice.utils.decision_analysis import calibrate_decision_analysis
+from deepchoice.utils.decision_analysis import bind_analysis_basis, calibrate_decision_analysis
 from deepchoice.utils.evidence_choices import calibrate_evidence_choices
 from tests.test_self_review import make_state, reviewed, revision
 
@@ -114,6 +114,49 @@ def test_analysis_keeps_reviewable_basis_when_one_premise_is_unverified():
     row = result["decision_analysis"][0]
     assert row["fact_ids"] == ["F2"]
     assert [part["sentence_ids"] for part in row["basis"]] == [[2]]
+
+
+def test_trimming_reindexes_addressed_quotations_to_the_surviving_sentences():
+    """A partially reviewable fact keeps only the quotations it can vouch for."""
+    state = make_state()
+    recommendation = deepcopy(state["final_recommendation"])
+    recommendation["decision_analysis"] = recommendation["decision_analysis"][:1]
+    sentences = _split_sentences(recommendation["source_facts"][0]["saved_text"])
+    recommendation["decision_analysis"][0]["basis"] = [
+        {"fact_id": "F1", "sentence_ids": [1, 2],
+         "source_sentences": [sentences[0], sentences[1]]},
+    ]
+    verification = deepcopy(state["citation_verification"])
+    # Only sentence 2 of F1 is uniquely verified; sentence 1 stays unverified.
+    verification["checks"][0].update(status="unknown", reason="qualifier_unverified")
+    verification["status_counts"] = {"verified": 1, "unknown": 1}
+    bound = CitationVerification.model_validate_json(json.dumps(verification))
+    result = calibrate_decision_analysis(calibrate_evidence_choices(recommendation, bound))
+
+    row = result["decision_analysis"][0]
+    assert row["fact_ids"] == ["F1"]
+    assert row["basis"][0]["sentence_ids"] == [2]
+    # The surviving quotation must belong to sentence 2, not the dropped sentence 1.
+    assert row["basis"][0]["source_sentences"] == [sentences[1]]
+    assert result["analysis_calibration"] == {
+        "basis_sentences_dropped": 1, "analyses_dropped": 0, "retained": 1}
+    # The row stays review-pending here, so the renderer gate withholds it until
+    # analysis_review completes; that gate is covered above and by the binder.
+    basis, error = bind_analysis_basis(row["basis"], {
+        row["fact_ids"][0]: recommendation["source_facts"][0]})
+    assert error is None and basis[0]["source_sentences"] == [sentences[1]]
+
+
+def test_inconsistent_addressed_quotations_are_dropped_whole():
+    """A basis part whose quotations cannot be re-indexed must not survive."""
+    from deepchoice.utils.decision_analysis import _reviewable_basis
+
+    fact = {"id": "F1", "status": "unknown", "review_availability": "sentence_scoped",
+            "reviewable_sentence_ids": [2], "saved_text": "Alpha one. Bravo two."}
+    kept, dropped = _reviewable_basis({"basis": [{
+        "fact_id": "F1", "sentence_ids": [1, 2], "source_sentences": ["Alpha one."]}]},
+        {"F1": fact})
+    assert kept is None and dropped == [1, 2]
 
 
 @pytest.mark.parametrize("mutation", ["cross_language", "unsupported", "unreachable",
