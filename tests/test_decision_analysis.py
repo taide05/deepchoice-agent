@@ -182,28 +182,46 @@ def test_eligible_fact_inventory_preserves_numbering_and_identity_rules_across_b
     assert "[[6]] Disputed (score: N/A)\n       Source-fact binding allowed: no" in prompt
 
 
-@pytest.mark.parametrize("value", [[], [""], ["A condition."] * 5, [42]])
-def test_only_explicit_empty_assumptions_are_valid_when_no_extra_premise_is_unknown(value):
+def test_explicit_empty_assumptions_are_valid_when_no_extra_premise_is_unknown():
+    from deepchoice.utils.evidence_choices import bind_evidence_choices
+    rec = proposal()
+    rec["decision_analysis"][0]["assumptions"] = []
+    requirements, _ = synth._decision_requirements(TASK["query"], TASK["constraints"], [], TASK["sub_questions"], [])
+    rec = bind_evidence_choices(rec, CHAINS, TASK["candidate_techs"], requirements)
+    result = bind_decision_analysis(rec, requirements, TASK["candidate_techs"], require_basis=True)
+    assert len(result["decision_analysis"]) == 1
+    row = result["decision_analysis"][0]
+    assert row["reasoning"] == "先定义权威任务记录，再评估执行器替换；这一设计仍需人工审阅。"
+    assert row["kind"] == "design" and row["assumptions"] == []
+
+
+@pytest.mark.parametrize("value,expected", [
+    ([""], "prose_empty"), ([42], "prose_type"),
+    (["A condition."] * 5, None),          # capacity trim, row kept
+    (["x" * 301], "prose_length"),         # unusable premise, row rejected
+], ids=["blank", "non_string", "over_capacity", "over_length"])
+def test_unusable_premise_rejects_its_row_while_capacity_excess_only_trims(value, expected):
+    """An unusable premise would make the row's stated premises untrue.
+
+    A premise that cannot be used whole rejects its own row; merely carrying
+    more premises than one row may hold keeps the leading ones.
+    """
     from deepchoice.utils.evidence_choices import bind_evidence_choices
     rec = proposal()
     rec["decision_analysis"][0]["assumptions"] = value
     requirements, _ = synth._decision_requirements(TASK["query"], TASK["constraints"], [], TASK["sub_questions"], [])
     rec = bind_evidence_choices(rec, CHAINS, TASK["candidate_techs"], requirements)
-    result = bind_decision_analysis(rec, requirements, TASK["candidate_techs"], require_basis=True)
-    # An unusable premise is dropped on its own; the row and its other fields
-    # survive, so a bad assumption cannot discard an otherwise valid answer.
-    assert len(result["decision_analysis"]) == 1
-    row = result["decision_analysis"][0]
-    assert row["reasoning"] == "先定义权威任务记录，再评估执行器替换；这一设计仍需人工审阅。"
-    assert row["kind"] == "design"
-    if value == []:
-        assert row["assumptions"] == []
-    elif value == [42]:
-        assert row["assumptions"] == [] and row["prose_degraded"] == ["prose_type"]
-    elif value == [""]:
-        assert row["assumptions"] == [] and row["prose_degraded"] == ["prose_empty"]
+    counts = {}
+    result = bind_decision_analysis(rec, requirements, TASK["candidate_techs"],
+                                    diagnostics=counts, require_basis=True)
+    if expected is None:
+        assert len(result["decision_analysis"]) == 1
+        row = result["decision_analysis"][0]
+        assert len(row["assumptions"]) == 4
+        assert row["prose_degraded"] == ["assumptions_trimmed"]
     else:
-        assert len(row["assumptions"]) == 4 and row["prose_degraded"] == ["assumptions_trimmed"]
+        assert result["decision_analysis"] == []
+        assert counts["rejected"] == {expected: 1}
 
 
 @pytest.mark.parametrize("value", [None, "condition"])

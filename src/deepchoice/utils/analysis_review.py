@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from .decision_analysis import (
-    MAX_ANALYSES, MAX_ROW_BASIS_REFS, bind_decision_analysis,
+    MAX_ANALYSES, bind_decision_analysis,
     calibrate_decision_analysis, reviewable_source_fact, sentence_scoped_source_fact,
 )
 from .evidence import candidate_product_mentions, candidate_search_name
@@ -130,18 +130,18 @@ def _revision_text_error(row) -> str | None:
     because a trimmed conclusion or a stripped citation would misrepresent what
     the reviewer approved.
     """
-    from .decision_analysis import _bounded_prose
+    from .decision_analysis import _prose_state
 
     for name, limit in (("reasoning", 1500), ("change_condition", 600)):
         if name not in row:
             continue
-        text, note = _bounded_prose(row.get(name), limit)
+        text, note = _prose_state(row.get(name), limit)
         if not text or note:
             return note or "prose_empty"
     assumptions = row.get("assumptions")
     if isinstance(assumptions, list):
         for value in assumptions:
-            text, note = _bounded_prose(value, 300)
+            text, note = _prose_state(value, 300)
             if not text or note:
                 return note or "prose_empty"
     return None
@@ -161,9 +161,14 @@ def _review_row_shape_category(row, facts, original=None, context=None) -> str |
         return "action_shape"
     required = {"analysis_id", "action"} if action == "withdraw" else {
         "analysis_id", "action", "source_checks"}
+    if action == "revise":
+        # The prose fields are merged into the row, so a revision that omits one
+        # is malformed. Rejecting it here keeps a malformed review row from
+        # raising during the merge, which would fail the whole run.
+        required |= {"reasoning", "assumptions", "change_condition"}
     if not required.issubset(row):
         return "fields_shape"
-    if action != "withdraw" and not _challenge_valid(row, facts, sentence_limit=MAX_ROW_BASIS_REFS):
+    if action != "withdraw" and not _challenge_valid(row, facts):
         return "source_checks"
     if action == "revise":
         error = _revision_text_error(row)
@@ -197,7 +202,11 @@ def _review_row_shape_category(row, facts, original=None, context=None) -> str |
 
 
 def _indexed_review_rows(rows, facts, slots=None, context=None) -> tuple[dict, Counter]:
-    """Index structurally valid rows by slot, counting fixed rejections."""
+    """Index structurally valid rows by slot, counting fixed rejections.
+
+    Rows are judged on their own structure here. Whether a slot was adjudicated
+    exactly once is decided by the caller, which knows the slot set.
+    """
     rejections: Counter = Counter()
     valid = []
     slots = slots if isinstance(slots, dict) else {}
@@ -218,7 +227,6 @@ def _indexed_review_rows(rows, facts, slots=None, context=None) -> tuple[dict, C
     for row in valid:
         key = row["analysis_id"]
         if counts[key] != 1:
-            rejections["duplicate_analysis_id"] += 1
             continue
         indexed[key] = row
     return indexed, rejections
@@ -231,16 +239,20 @@ def apply_analysis_review(context: AnalysisReviewContext, response: dict | None)
     rows = rows if valid_list else []
     indexed, rejections = _indexed_review_rows(rows, context.facts, context.slots, context)
     kept, revised, reviewed = [], 0, 0
+    duplicate_slots = Counter(row["analysis_id"] for row in rows
+                              if isinstance(row, dict)
+                              and isinstance(row.get("analysis_id"), str))
     for key, original in context.slots.items():
         row = indexed.get(key)
         if row is None:
+            if duplicate_slots.get(key, 0) > 1:
+                # Two rows for one slot cannot be merged into one adjudication.
+                rejections["duplicate_analysis_id"] += duplicate_slots[key]
             continue
-        # The response carried a row for this slot, so the reviewer adjudicated
-        # it even when a later gate rejects the row itself. Only a slot the
-        # response never contained counts as unaddressed.
-        reviewed += 1
         action = row["action"]
         if action == "withdraw":
+            # An explicit withdrawal is a completed adjudication.
+            reviewed += 1
             continue
         item = deepcopy(original)
         if action == "revise":
@@ -278,13 +290,15 @@ def apply_analysis_review(context: AnalysisReviewContext, response: dict | None)
         elif accepted[0]["review_status"] == "sentence_scoped_pending_review":
             accepted[0]["review_status"] = "sentence_scoped_human_review_required"
         kept.append(accepted[0])
+        reviewed += 1
         revised += action == "revise"
     if context.submitted:
         result["decision_analysis"] = kept
     status = ("unavailable" if response is None else
               "complete" if valid_list and reviewed == context.submitted else "incomplete")
     summary = {"status": status, "submitted": context.submitted, "reviewed": reviewed,
-               "retained": len(kept), "revised": revised, "withdrawn": context.submitted - len(kept),
+               "retained": len(kept), "revised": revised,
+               "withdrawn": reviewed - len(kept),
                "unaddressed": context.submitted - reviewed}
     if rejections:
         summary["row_rejections"] = dict(sorted(rejections.items()))
@@ -300,12 +314,8 @@ def _sentences(fact):
             for index, text in enumerate(_split_sentences(fact["saved_text"]), 1)]
 
 
-def _challenge_valid(row, facts, *, sentence_limit: int = 3):
-    """Enforce complete addressed review, not the truth of model stances.
-
-    A decision analysis addresses up to `MAX_ROW_BASIS_REFS` sentences per fact,
-    while a provisional requirement explanation keeps the tighter review bound.
-    """
+def _challenge_valid(row, facts):
+    """Enforce complete addressed review, not the truth of model stances."""
     checks = row.get("source_checks")
     expected = {fact["id"]: len(_sentences(fact)) for fact in facts}
     if not isinstance(checks, list) or len(checks) != len(expected):
@@ -317,7 +327,7 @@ def _challenge_valid(row, facts, *, sentence_limit: int = 3):
         key, stance, ids = check
         if (not isinstance(key, str) or key not in expected or key in seen
                 or not isinstance(stance, str) or stance not in {"supports", "irrelevant", "qualifies", "conflicts"}
-                or not isinstance(ids, list) or len(ids) > sentence_limit
+                or not isinstance(ids, list) or len(ids) > 3
                 or (not ids and stance != "irrelevant")
                 or any(type(index) is not int or not 1 <= index <= expected[key] for index in ids)
                 or len(set(ids)) != len(ids)):
@@ -391,7 +401,7 @@ def _prepare_provisional(recommendation, verification, facts, requirements, quer
 
 
 def _apply_provisional(result, context, response):
-    from .decision_analysis import _bounded_prose
+    from .decision_analysis import _prose_state
     rows = response.get("provisional_reviews") if isinstance(response, dict) else None
     valid = isinstance(rows, list) and len(rows) <= MAX_ANALYSES
     rows = rows if valid else []
@@ -419,7 +429,7 @@ def _apply_provisional(result, context, response):
         fields = {"analysis_id", "action", "source_checks"} | ({"text"} if action == "revise" else set())
         if set(row) != fields or not _challenge_valid(row, context.facts):
             continue
-        text, _note = _bounded_prose(
+        text, _note = _prose_state(
             row.get("text") if action == "revise" else slot["text"],
             200 if action == "revise" else 500,
         )

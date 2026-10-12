@@ -341,9 +341,11 @@ class SelfReviewerAgent:
                                "unavailable" if result is None and not adjudicated else "incomplete"),
                     "submitted": context.submitted, "reviewed": len(adjudicated),
                     "retained": len(accepted), "revised": revised,
-                    "withdrawn": context.submitted - len(accepted),
+                    "withdrawn": len(adjudicated) - len(accepted),
                     "unaddressed": context.submitted - len(adjudicated),
                 }
+                if repair_rejections:
+                    summary["row_rejections"] = dict(sorted(repair_rejections.items()))
                 recommendation["analysis_review"] = summary
         result = result or {}
         confidence = result.get("confidence")

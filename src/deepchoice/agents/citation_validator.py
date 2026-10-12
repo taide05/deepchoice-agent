@@ -73,6 +73,7 @@ def _saved_excerpts(checks, evidence_chains: list[dict], limit: int) -> list[dic
 def _calibrate_decision(
     recommendation: dict, verification, query: str,
     evidence_chains: list[dict] | None = None,
+    calibration_diagnostics: dict | None = None,
 ) -> dict:
     """Withdraw unsupported decision premises without treating unknown as false.
 
@@ -280,7 +281,8 @@ def _calibrate_decision(
                 if excerpts:
                     row["saved_source_excerpts"] = excerpts
                     remaining_excerpts -= len(excerpts)
-    return calibrate_decision_analysis(calibrate_evidence_choices(result, verification))
+    return calibrate_decision_analysis(
+        calibrate_evidence_choices(result, verification), calibration_diagnostics)
 
 
 class CitationValidatorAgent:
@@ -325,7 +327,8 @@ class CitationValidatorAgent:
             candidates=task.get("candidate_techs", []),
         )
         counts = verification.status_counts
-        output = {
+        calibration: dict = {}
+        output: dict = {
             "citation_verification": verification.model_dump(mode="json"),
             "evidence_chains": projected_chains,
             "quality_signals": [{
@@ -344,7 +347,12 @@ class CitationValidatorAgent:
                 recommendation, verification,
                 query,
                 evidence_chains if isinstance(evidence_chains, list) else [],
+                calibration,
             )
+        # A row dropped by calibration leaves no other trace, so its fixed
+        # categories are the only record of why it disappeared.
+        if calibration:
+            output["quality_signals"][0]["analysis_calibration"] = calibration
         return output
 
 

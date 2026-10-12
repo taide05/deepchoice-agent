@@ -156,7 +156,8 @@ async def test_targeted_review_rejects_incomplete_source_challenge_with_fixed_ca
     assert rec["decision_analysis"][0]["reasoning"] == CORRECTED
     assert rec["analysis_review"] == {"status": "incomplete", "submitted": 2,
                                       "reviewed": 1, "retained": 1, "revised": 1,
-                                      "withdrawn": 1, "unaddressed": 1}
+                                      "withdrawn": 0, "unaddressed": 1,
+                                      "row_rejections": {"source_checks": 1}}
     signal = update["quality_signals"][0]
     assert signal["targeted_review_attempts"] == 1
     assert signal["targeted_review_rejections"] == {"source_checks": 1}

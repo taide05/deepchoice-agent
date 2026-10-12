@@ -7,9 +7,9 @@ from .call_diagnostics import strict_json
 
 
 _BINDING_REASONS = (
-    "invalid_list", "item_limit", "invalid_kind", "invalid_option",
+    "invalid_list", "invalid_kind", "invalid_option", "dropped_item_limit",
     "basis_missing_or_invalid", "basis_invalid_item", "basis_invalid_fact",
-    "basis_invalid_sentences", "basis_source_sentences_mismatch",
+    "basis_fact_limit", "basis_invalid_sentences", "basis_source_sentences_mismatch",
     "invalid_fact_ids", "invalid_requirement_ids", "invalid_assumptions",
     "prose_type", "prose_length", "prose_reference", "prose_empty",
 )
@@ -32,7 +32,7 @@ _PATHS = {
         **{key: ("staged_generation", key) for key in (
             "facts_received", "facts_bound", "facts_reviewable", "questions_planned", "judgment_calls",
             "rows_received", "rows_selected", "rows_rejected_shape",
-            "rows_rejected_question", "rows_rejected_limit", "provider_errors",
+            "rows_rejected_question", "rows_dropped_item_limit", "provider_errors",
         )},
         "analyses_received": ("analysis_binding", "received"),
         "analyses_bound": ("analysis_binding", "retained"),
@@ -43,7 +43,7 @@ _PATHS = {
                                  "analyses_received", "analyses_rebound"),
     "self_reviewer": {
         **{key: ("analysis_review", key) for key in (
-            "submitted", "reviewed", "retained", "revised", "withdrawn")},
+            "submitted", "reviewed", "retained", "revised", "withdrawn", "unaddressed")},
         **_fields("targeted_review_attempts"),
     },
 }

@@ -124,8 +124,7 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
     not assert constraint coverage, source applicability, or permission to act.
     """
     diagnostics.update(rows_received=0, rows_selected=0, rows_rejected_shape=0,
-                       rows_rejected_question=0, rows_rejected_limit=0,
-                       rows_dropped_item_limit=0, basis_refs_trimmed=0)
+                       rows_rejected_question=0, rows_dropped_item_limit=0)
     if not isinstance(rows, list):
         return []
     diagnostics["rows_received"] = len(rows)
@@ -147,18 +146,12 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
             diagnostics["rows_rejected_question"] += 1
             continue
         refs = row.get("basis_refs")
-        if not isinstance(refs, list) or not refs:
-            diagnostics["rows_rejected_shape"] += 1
-            continue
-        # Every addressed reference must be offered and unique; the excess of a
-        # merely longer list is a capacity overrun and is dropped on its own.
-        if (any(not isinstance(ref, str) or ref not in offered for ref in refs)
+        if (not isinstance(refs, list) or not 0 < len(refs) <= MAX_ROW_BASIS_REFS
+                or any(not isinstance(ref, str) or ref not in offered for ref in refs)
                 or len(set(refs)) != len(refs)):
             diagnostics["rows_rejected_shape"] += 1
             continue
-        kept_refs = refs[:MAX_ROW_BASIS_REFS]
-        if len(kept_refs) < len(refs):
-            diagnostics["basis_refs_trimmed"] += 1
+        kept_refs = refs
         seen.add(question)
         groups = {}
         for ref in kept_refs:
@@ -168,11 +161,12 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
             basis["sentence_ids"].extend(quote["sentence_ids"])
             basis["source_sentences"].extend(quote["source_sentences"])
         if len(groups) > MAX_ROW_BASIS_FACTS:
-            # Addresses are ordered by the response, so the first facts are the
-            # ones the row led with; the excess is dropped, not the row.
-            keep = list(groups)[:MAX_ROW_BASIS_FACTS]
-            groups = {key: groups[key] for key in keep}
-            diagnostics["basis_refs_trimmed"] += 1
+            # Addressing more distinct facts than one row may carry. Dropping the
+            # excess would remove whatever premises those coordinates were the
+            # only support for while the row was still published, so the row is
+            # rejected instead of silently losing support.
+            diagnostics["rows_rejected_shape"] += 1
+            continue
         proposal = {key: row.get(key) for key in ("kind", "option", "reasoning", "assumptions", "change_condition")}
         proposal.update(requirement_ids=[question], basis=list(groups.values()))
         selected.append(proposal)

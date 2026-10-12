@@ -196,14 +196,10 @@ async def test_compact_prose_cannot_supply_its_own_citation(monkeypatch):
     state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(TASK)), {
         "task": TASK, "evidence_chains": CHAINS})
     assert model.await_count == 1
-    # The row survives, but the prose-supplied marker is removed and recorded:
-    # model prose can never become its own provenance.
-    rows = state["final_recommendation"]["decision_analysis"]
-    assert len(rows) == 1
-    assert "[[" not in rows[0]["reasoning"]
-    assert rows[0]["prose_degraded"] == ["prose_reference"]
-    report = FORMAT_RENDERERS["what_why_how"](state)
-    assert "[[2]]" not in report and "[Source: 2]" not in report
+    # Model prose cannot donate its own citation, so a field carrying one is not
+    # used at all rather than being quietly cleaned and published.
+    assert state["final_recommendation"]["decision_analysis"] == []
+    assert "different assertion" not in FORMAT_RENDERERS["what_why_how"](state)
 
 
 @pytest.mark.parametrize("query", ["Choose Alpha", "选择 Alpha"])

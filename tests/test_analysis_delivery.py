@@ -146,56 +146,37 @@ async def test_partial_correction_cannot_trade_away_old_coverage_or_strengthen_a
     assert result["quality_signals"][0]["structure_correction"]["outcome"] == "invalid"
 
 
-@pytest.mark.parametrize("value,expected", [(None, "prose_type"), ("", "prose_empty")],
-                         ids=["type", "empty"])
+@pytest.mark.parametrize("value,expected", [(None, "prose_type"), ("", "prose_empty"),
+                                            ("x" * 1501, "prose_length"),
+                                            ("[[1]]", "prose_reference")],
+                         ids=["type", "empty", "length", "reference"])
 def test_unusable_prose_rejects_only_its_own_row_with_a_fixed_reason(value, expected):
+    """Prose is accepted whole or not at all; it is never truncated.
+
+    A prefix cut can remove a trailing condition or negation and leave a claim
+    that asserts more than the model wrote, so the field rejects its own row.
+    """
     rec = response()
     rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
     rec["decision_analysis"][0]["reasoning"] = value
     counts = {}
     bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
-    assert bound["decision_analysis"] == [] and counts["rejected"] == {expected:1}
+    assert bound["decision_analysis"] == [] and counts["rejected"] == {expected: 1}
     assert "PRIVATE" not in json.dumps(counts)
 
 
-def test_over_long_prose_degrades_its_own_field_instead_of_dropping_the_row():
-    """A length overrun is bounded, reported, and only affects its own field."""
+def test_one_unusable_prose_row_does_not_discard_an_independently_valid_one():
+    """The rejection is per row, which is the point of the change."""
     rec = response()
     rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
-    rec["decision_analysis"][0]["reasoning"] = "x" * 1501
+    good = deepcopy(rec["decision_analysis"][0])
+    good["reasoning"] = "A usable conditional answer for the same question."
+    rec["decision_analysis"] = [{**rec["decision_analysis"][0], "reasoning": "x" * 1501}, good]
     counts = {}
     bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
     assert len(bound["decision_analysis"]) == 1
-    row = bound["decision_analysis"][0]
-    assert len(row["reasoning"]) == 1500
-    assert row["prose_degraded"] == ["prose_length"]
-    assert counts["rejected"] == {} and "PRIVATE" not in json.dumps(counts)
-
-
-def test_prose_supplied_citation_is_removed_and_never_becomes_its_own_provenance():
-    """Model prose cannot donate a citation; the runtime supplies provenance."""
-    rec = response()
-    rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
-    rec["decision_analysis"][0]["reasoning"] = (
-        "Recovery needs the journal, see https://forged.example/claim and [[2]].")
-    counts = {}
-    bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
-    assert len(bound["decision_analysis"]) == 1
-    reasoning = bound["decision_analysis"][0]["reasoning"]
-    assert "forged.example" not in reasoning and "[[" not in reasoning
-    assert bound["decision_analysis"][0]["prose_degraded"] == ["prose_reference"]
-
-
-@pytest.mark.parametrize("value", ["[[1]]", "[Source: Forged title]"],
-                         ids=["numbered_marker", "named_marker"])
-def test_a_field_that_is_only_a_reference_marker_still_rejects_its_row(value):
-    rec = response()
-    rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
-    rec["decision_analysis"][0]["reasoning"] = value
-    counts = {}
-    bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
-    assert bound["decision_analysis"] == []
-    assert counts["rejected"] == {"prose_reference": 1}
+    assert bound["decision_analysis"][0]["reasoning"] == "A usable conditional answer for the same question."
+    assert counts["rejected"] == {"prose_length": 1}
 
 
 @pytest.mark.asyncio

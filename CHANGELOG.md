@@ -5,36 +5,63 @@
 ### Stop one invalid item from discarding independently valid answer content
 
 Two confirmed common causes of lost answer rows are repaired without adding a
-new rule, node, prompt or model call.
+new rule, node, prompt or model call. An independent read-only review of the
+first candidate found three defects, which are corrected here; the review also
+showed that two of the original capacity rules were lossy and they have been
+withdrawn rather than kept.
 
-**M-2 - collection-level clears replaced by per-item validation.** Four gates
-discarded every independently valid row when one item failed a collection
-bound: `bind_question_rows` returned `[]` for a response over the row budget,
-`bind_decision_analysis` returned no rows for the same reason, an over-long
-reference list discarded its row, and an over-long prose field discarded its
-row. A capacity overrun is now handled as a capacity overrun: the addressed
-items are kept in request order and only the excess is dropped, and the drop is
-reported (`rows_dropped_item_limit`, `basis_refs_trimmed`, `prose_degraded`).
-Address validity is unchanged and still row-fatal: an unknown, non-string or
+**M-2 - one collection-level clear removed; no coordinate is ever dropped.**
+`bind_question_rows` returned `[]` for a response over the row budget, and
+`bind_decision_analysis` did the same, so one excess row discarded every
+independently valid row. Both now keep the addressed rows in request order,
+drop only the excess whole rows, and report it as `rows_dropped_item_limit`.
+The duplicate logic was merged into one capacity decision.
+
+Two further rules from the first candidate were withdrawn after review:
+dropping basis coordinates past `MAX_ROW_BASIS_FACTS` and trimming the
+reference list past `MAX_ROW_BASIS_REFS`. Dropping a coordinate removes whatever
+premise that coordinate was the only support for while the row and its
+conclusion are still published, so both again reject their own row
+(`basis_fact_limit`, `rows_rejected_shape`). The one lossless change kept is
+that the same fact addressed twice is merged into one coordinate instead of
+rejecting the row. Address validity is unchanged: an unknown, non-string or
 duplicated reference, an out-of-range sentence id, a mismatched saved quote and
-a missing `saved_text` all still reject their own row. The public
-request-input limit (`security/input_limits.py`) still rejects over-limit user
-input rather than truncating it; this change touches only internal model output.
+a missing `saved_text` still reject their own row. The public request-input
+limit (`security/input_limits.py`) is untouched and still rejects over-limit
+user input rather than truncating it.
 
-**M-3 - a review response is a batch of independent adjudications.** A single
-malformed row used to zero the whole `analysis_reviews` list, so every slot in
-that response was treated as unaddressed and dropped. Rows are now validated
-individually; a malformed row is discarded with one fixed category
-(`row_shape`/`action_shape`/`fields_shape`/`source_checks`/`duplicate_analysis_id`
-and, for revisions, the prose and identity gates) while the remaining rows of
-the same response still apply. A well-formed row for a slot outside the current
-review is ignored instead of invalidating its siblings. A revision may rewrite
-prose only: it may not move the slot to another option, drop its basis, or
-introduce a candidate its own basis does not cover. A revision is never
-truncated or cleaned to make it fit - an unusable revision is rejected so it
-cannot be published as an approved answer. `analysis_review` now also reports
-`unaddressed` and `row_rejections`, which separates "the reviewer never
-addressed this slot" from "the reviewer withdrew it".
+**M-3 - a review response is a batch of independent adjudications.**
+A single malformed row used to zero the whole `analysis_reviews` list, so every
+slot in that response was treated as unaddressed and dropped. Rows are now
+validated individually: a malformed row is discarded with one fixed category
+while the remaining rows of the same response still apply, and a row for a slot
+outside this review is ignored instead of invalidating its siblings.
+
+Three corrections from the review:
+- A `revise` row that omits `reasoning`, `assumptions` or `change_condition` is
+  now rejected as `fields_shape`. It previously passed the shape gate and raised
+  `KeyError` during the merge, which escaped `SelfReviewerAgent.run` and failed
+  the whole run.
+- `reviewed` is counted only after every gate accepts an adjudication. Counting
+  a shape-valid row early made a repairable rejection look like a terminal
+  withdrawal and suppressed the targeted repair.
+- `withdrawn` is now `reviewed - retained` and `unaddressed` is
+  `submitted - reviewed`, so "never adjudicated" and "withdrawn after review"
+  are no longer the same number.
+
+A revision may rewrite prose only: it may not move the slot to another option,
+drop its basis, or introduce a candidate its own basis does not cover. It is
+never truncated or cleaned to fit - an unusable revision is rejected so it
+cannot be published as approved. Prose (original or revised) is accepted whole
+or not at all: a length overrun rejects its own row, because a prefix cut can
+remove a trailing condition or negation and leave a claim that asserts more than
+the model wrote.
+
+**Diagnostics.** A row dropped by `calibrate_decision_analysis` left no trace in
+any artefact; that stage now reports fixed categories
+(`analysis_calibration` in `quality_signals`). The Trace allowlist publishes the
+new capacity counters and the self-review `unaddressed` count, and drops two
+keys no code path can produce any more.
 
 Boundaries preserved: citation `unknown` semantics, the display gate's
 requirement that a row's facts be verified or reviewable, the fixed
@@ -42,10 +69,16 @@ validation-only plan for operational advice, `_candidate_attribution`,
 `_challenge_valid`, budget/lease/security/persistence contracts, and the
 withhold-on-withdraw behaviour.
 
-Fixed-source replay on frozen inputs: rows kept rises from 0 to 5 of 10 for an
-over-limit response, 0 to 1 for an over-long reference list, 0 to 1 for an
-over-long fact list, and 0 to 1 for an over-long prose field; the frozen
-snapshots' already-adjudicated rows display unchanged.
+Fixed-source replay on frozen inputs: an over-limit response of 10 rows keeps 5
+instead of 0; the over-long reference list, over-long fact count and over-long
+prose cases still keep 0, as they should. The frozen snapshots'
+already-adjudicated rows display unchanged (all eight cases).
+
+Verification: full suite 3855 passed, 0 failed, 0 errors on Python 3.12.4;
+`pyflakes src/ tests/` clean; `vulture --min-confidence 80` and `100` clean;
+`smoke-v1` matches its baseline. The `tmp_path` suite errors seen earlier were a
+sandbox limitation (`os.chmod` on the temp root is blocked in the confined
+mode), not code; the suite was re-run with a writable explicit `--basetemp`.
 
 Affected tests updated in the same change; `pyflakes` and `vulture`
 (`--min-confidence 100`, and 80) report nothing. Full suite: 3045 passed, 0

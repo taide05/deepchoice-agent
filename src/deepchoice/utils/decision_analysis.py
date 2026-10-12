@@ -3,6 +3,7 @@
 Bindings establish provenance only. They never prove the reasoning, assumptions,
 user fit, or proposed design, and never authorize operations.
 """
+from collections import Counter
 from copy import deepcopy
 import re
 
@@ -12,72 +13,56 @@ MAX_ROW_BASIS_REFS = 12
 KINDS = frozenset({"choice", "answer", "design"})
 
 
-_REFERENCE_MARKER = re.compile(r"https?://\S*|\[\[[^\]]*\]\]|\[source\s*:[^\]]*\]", re.I)
+# The original predicate. It matches an unbalanced marker too, because a
+# malformed citation attempt must not survive into displayed prose merely
+# because it never closed.
+_REFERENCE_MARKER = re.compile(r"https?://|\[\[|\[source\s*:", re.I)
 
 
-def _prose_error(value, limit):
-    if not isinstance(value, str):
-        return "prose_type"
-    if len(value) > limit:
-        return "prose_length"
-    if _REFERENCE_MARKER.search(value):
-        return "prose_reference"
-    if not " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", value).split()):
-        return "prose_empty"
-    return None
+def _prose_state(value, limit) -> tuple[str, str | None]:
+    """Return model prose and its fixed state, or empty text with a category.
 
-
-def _sanitize_prose(value) -> tuple[str, str | None]:
-    """Return model prose plus its fixed state: clean text or a failure category.
-
-    Runtime-supplied provenance markers are removed, because provenance comes
-    only from `basis`, never from model prose. A field whose text survives the
-    removal keeps that text and reports `prose_reference`, so a stripped
-    citation is never presented as if the model wrote clean prose. A field that
-    was only a marker keeps the same category rather than being reported empty.
+    Prose is accepted whole or not at all. It is never truncated: a prefix cut
+    can remove a trailing condition, negation or scope limit and leave a claim
+    that asserts MORE than the model wrote. An unusable field therefore rejects
+    its own row instead of being bounded, which is the same rule applied to a
+    revision.
     """
     if not isinstance(value, str):
         return "", "prose_type"
-    stripped = _REFERENCE_MARKER.sub(" ", value)
-    compact = " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", stripped).split())
-    if stripped != value:
-        # A stripped citation is always reported, whether or not text remains.
-        return compact, "prose_reference"
+    if _REFERENCE_MARKER.search(value):
+        # Model prose may not carry its own provenance; the runtime supplies it.
+        return "", "prose_reference"
+    compact = " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", value).split())
     if not compact:
         return "", "prose_empty"
+    if len(compact) > limit:
+        return "", "prose_length"
     return compact, None
 
 
-def _bounded_prose(value, limit) -> tuple[str, str | None]:
-    """Sanitize then bound one prose field; report the fixed category if cut.
-
-    Text that survives marker removal is kept so the row can still be reviewed;
-    only a field with no usable text left is returned empty, and it keeps the
-    category that explains why.
-    """
-    if not isinstance(value, str):
-        return "", "prose_type"
-    compact, note = _sanitize_prose(value)
-    if not compact:
-        return "", note or "prose_empty"
-    if len(compact) > limit:
-        return compact[:limit], "prose_length"
-    return compact, note
+# Retained name for callers that only need the text.
+def _text(value, limit):
+    text, _note = _prose_state(value, limit)
+    return text
 
 
 def _refs(value, allowed, limit: int = 4):
-    """Validate every addressed reference, then bound the list to `limit`.
+    """Keep the addressed references, in order, up to `limit`.
 
     A non-string, unknown or duplicated address is an invalid address set and
-    still fails its own row; the excess of a merely longer list is dropped.
+    fails its own row. A list longer than the documented limit is rejected
+    rather than trimmed: the excess addresses belong to premises the row
+    addressed, and dropping them would leave the row asserting those premises
+    with nothing behind them.
     """
-    if not isinstance(value, list) or not 0 < len(value):
+    if not isinstance(value, list) or not 0 < len(value) <= limit:
         return []
     if any(not isinstance(item, str) or item not in allowed for item in value):
         return []
     if len(set(value)) != len(value):
         return []
-    return value[:limit]
+    return value
 
 
 def original_analysis_requirements(requirements, query=""):
@@ -107,10 +92,11 @@ def bind_analysis_basis(raw, facts):
         if not isinstance(key, str) or key not in facts:
             return None, "basis_invalid_fact"
         if key not in seen and len(selected) >= MAX_ROW_BASIS_FACTS:
-            # More facts than one row may carry: the excess coordinate is
-            # dropped before its references are charged, so the documented
-            # per-row bound never masquerades as an invalid coordinate set.
-            continue
+            # More distinct facts than one row may carry. Dropping the excess
+            # would remove whatever premises those coordinates were the only
+            # support for while the row and its conclusion were still published,
+            # so the row is rejected instead of silently losing support.
+            return None, "basis_fact_limit"
         text = facts[key].get("saved_text")
         if not isinstance(text, str) or not text:
             return None, "basis_invalid_fact"
@@ -203,25 +189,8 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
         if not fact_ids or not requirement_ids:
             reject("invalid_fact_ids" if not fact_ids else "invalid_requirement_ids")
             continue
-        reasoning, reasoning_note = _bounded_prose(item.get("reasoning"), 1500)
-        change_condition, change_note = _bounded_prose(item.get("change_condition"), 600)
-        raw_assumptions = item.get("assumptions")
-        if not isinstance(raw_assumptions, list):
-            reject("invalid_assumptions")
-            continue
-        assumptions, assumption_note = [], None
-        if len(raw_assumptions) > 4:
-            # More premises than one row may carry: keep the leading premises
-            # the row was built on and drop the excess, not the whole row.
-            assumption_note = "assumptions_trimmed"
-        for value in raw_assumptions[:4]:
-            text, note = _bounded_prose(value, 300)
-            if text:
-                assumptions.append(text)
-            elif note:
-                # An unusable premise is dropped on its own; the remaining
-                # premises and the row survive.
-                assumption_note = note
+        reasoning, reasoning_note = _prose_state(item.get("reasoning"), 1500)
+        change_condition, change_note = _prose_state(item.get("change_condition"), 600)
         # An answer with no reasoning or no change condition has no verifiable
         # conclusion to present, so only that row is rejected, with the fixed
         # category that explains which part was unusable.
@@ -231,6 +200,28 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
         if not change_condition:
             reject(change_note or "prose_empty")
             continue
+        raw_assumptions = item.get("assumptions")
+        if not isinstance(raw_assumptions, list):
+            reject("invalid_assumptions")
+            continue
+        assumptions, assumption_note = [], None
+        if len(raw_assumptions) > 4:
+            # More premises than one row may carry: keep the leading premises the
+            # row was built on and drop the excess, not the whole row. This is a
+            # capacity trim of extra items, not a rewrite of any premise kept.
+            assumption_note = "assumptions_trimmed"
+        unusable = None
+        for value in raw_assumptions[:4]:
+            text, note = _prose_state(value, 300)
+            if not text:
+                # A premise that cannot be used whole would make the row's stated
+                # premises untrue, so only this row is rejected.
+                unusable = note or "prose_empty"
+                break
+            assumptions.append(text)
+        if unusable is not None:
+            reject(unusable)
+            continue
         row = {
             "kind": item["kind"], "option": option,
             "fact_ids": fact_ids, "requirement_ids": requirement_ids,
@@ -238,10 +229,12 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
             "reasoning": reasoning, "assumptions": assumptions,
             "change_condition": change_condition, "review_status": "not_checked",
         }
-        degraded = [note for note in (reasoning_note, change_note, assumption_note) if note]
-        inherited = item.get("prose_degraded")
-        if isinstance(inherited, list):
-            degraded.extend(note for note in inherited if isinstance(note, str))
+        # Only one fixed capacity-trim marker exists, and only it may be
+        # inherited. Arbitrary model strings must never reach this field because
+        # it is published in the public snapshot.
+        degraded = [assumption_note] if assumption_note == "assumptions_trimmed" else []
+        if item.get("prose_degraded") == ["assumptions_trimmed"] and not degraded:
+            degraded = ["assumptions_trimmed"]
         if degraded:
             # Fixed categories only; the row still needs review before display.
             row["prose_degraded"] = sorted(set(degraded))
@@ -323,7 +316,8 @@ def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain
     allowed = {"facts_binding_loss"}
     if any(key not in allowed and not key.startswith("analysis_") for key in diagnostic["errors"]):
         return False
-    if any(key in diagnostic["errors"] for key in ("analysis_invalid_list", "analysis_item_limit")):
+    if any(key in diagnostic["errors"]
+           for key in ("analysis_invalid_list", "analysis_dropped_item_limit")):
         return False
     def coverage(value):
         return {(row["kind"], row["option"], requirement)
@@ -351,7 +345,32 @@ def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain
             and not corrected.get("ranked_options") and no_upgrade)
 
 
-def calibrate_decision_analysis(recommendation):
+def calibration_rejection_reason(item, facts) -> str | None:
+    """Return one fixed category for a row this calibration pass will drop.
+
+    This explains a deletion that is otherwise invisible: a row removed here
+    leaves no trace in any public artefact. The categories are fixed strings so
+    they are safe to record where model prose, source text and raw exceptions
+    are not. Returns None when the row is accepted.
+    """
+    if not item.get("fact_ids"):
+        return "no_fact_reference"
+    for key in item["fact_ids"]:
+        fact = facts.get(key)
+        if fact is None:
+            return "addressed_fact_absent"
+        basis = item.get("basis")
+        addressed = {row["fact_id"]: row for row in basis} if isinstance(basis, list) else {}
+        if not reviewable_source_fact(fact) and not (
+            sentence_scoped_source_fact(fact)
+            and isinstance(addressed.get(key), dict)
+            and analysis_fact_reviewable(fact, addressed.get(key))
+        ):
+            return f"fact_not_reviewable:{fact.get('status', 'unknown')}"
+    return None
+
+
+def calibrate_decision_analysis(recommendation, diagnostics: dict | None = None):
     """Permit review only against facts calibrated by this citation pass.
 
     Network-only uncertainty grants pending review, never display or authority.
@@ -363,20 +382,23 @@ def calibrate_decision_analysis(recommendation):
         return recommendation
     facts = {row["id"]: row for row in recommendation.get("source_facts", [])}
     accepted = []
+    dropped: Counter = Counter()
     for item in recommendation["decision_analysis"]:
-        basis = item.get("basis")
-        addressed = {row["fact_id"]: row for row in basis} if isinstance(basis, list) else {}
-        if item["fact_ids"] and all(
-            key in facts and analysis_fact_reviewable(facts[key], addressed.get(key))
-            for key in item["fact_ids"]
-        ):
-            item["review_status"] = (
-                "sentence_scoped_pending_review" if any(
-                    sentence_scoped_source_fact(facts[key]) for key in item["fact_ids"]
-                ) else "human_review_required" if all(
-                    facts[key]["status"] == "verified" for key in item["fact_ids"]
-                ) else "network_unconfirmed_pending_review"
-            )
-            accepted.append(item)
+        reason = calibration_rejection_reason(item, facts)
+        if reason is not None:
+            dropped[reason] += 1
+            continue
+        item["review_status"] = (
+            "sentence_scoped_pending_review" if any(
+                sentence_scoped_source_fact(facts[key]) for key in item["fact_ids"]
+            ) else "human_review_required" if all(
+                facts[key]["status"] == "verified" for key in item["fact_ids"]
+            ) else "network_unconfirmed_pending_review"
+        )
+        accepted.append(item)
+    if diagnostics is not None:
+        diagnostics["rows_received"] = len(recommendation["decision_analysis"])
+        diagnostics["rows_accepted"] = len(accepted)
+        diagnostics["rows_dropped"] = dict(sorted(dropped.items()))
     recommendation["decision_analysis"] = accepted
     return recommendation
