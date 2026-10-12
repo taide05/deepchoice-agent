@@ -12,35 +12,72 @@ MAX_ROW_BASIS_REFS = 12
 KINDS = frozenset({"choice", "answer", "design"})
 
 
+_REFERENCE_MARKER = re.compile(r"https?://\S*|\[\[[^\]]*\]\]|\[source\s*:[^\]]*\]", re.I)
+
+
 def _prose_error(value, limit):
     if not isinstance(value, str):
         return "prose_type"
     if len(value) > limit:
         return "prose_length"
-    if re.search(r"https?://|\[\[|\[source\s*:", value, re.I):
+    if _REFERENCE_MARKER.search(value):
         return "prose_reference"
     if not " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", value).split()):
         return "prose_empty"
     return None
 
 
-def _text(value, limit):
-    if not isinstance(value, str) or len(value) > limit:
-        return ""
-    # Provenance and links are supplied by the runtime, never by model prose.
-    if re.search(r"https?://|\[\[|\[source\s*:", value, re.I):
-        return ""
-    return " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", value).split())
+def _sanitize_prose(value) -> tuple[str, str | None]:
+    """Return model prose plus its fixed state: clean text or a failure category.
+
+    Runtime-supplied provenance markers are removed, because provenance comes
+    only from `basis`, never from model prose. A field whose text survives the
+    removal keeps that text and reports `prose_reference`, so a stripped
+    citation is never presented as if the model wrote clean prose. A field that
+    was only a marker keeps the same category rather than being reported empty.
+    """
+    if not isinstance(value, str):
+        return "", "prose_type"
+    stripped = _REFERENCE_MARKER.sub(" ", value)
+    compact = " ".join(re.sub(r"[\x00-\x1f\x7f]+", " ", stripped).split())
+    if stripped != value:
+        # A stripped citation is always reported, whether or not text remains.
+        return compact, "prose_reference"
+    if not compact:
+        return "", "prose_empty"
+    return compact, None
 
 
-def _refs(value, allowed):
-    if not isinstance(value, list) or not 0 < len(value) <= 4:
+def _bounded_prose(value, limit) -> tuple[str, str | None]:
+    """Sanitize then bound one prose field; report the fixed category if cut.
+
+    Text that survives marker removal is kept so the row can still be reviewed;
+    only a field with no usable text left is returned empty, and it keeps the
+    category that explains why.
+    """
+    if not isinstance(value, str):
+        return "", "prose_type"
+    compact, note = _sanitize_prose(value)
+    if not compact:
+        return "", note or "prose_empty"
+    if len(compact) > limit:
+        return compact[:limit], "prose_length"
+    return compact, note
+
+
+def _refs(value, allowed, limit: int = 4):
+    """Validate every addressed reference, then bound the list to `limit`.
+
+    A non-string, unknown or duplicated address is an invalid address set and
+    still fails its own row; the excess of a merely longer list is dropped.
+    """
+    if not isinstance(value, list) or not 0 < len(value):
         return []
     if any(not isinstance(item, str) or item not in allowed for item in value):
         return []
     if len(set(value)) != len(value):
         return []
-    return value
+    return value[:limit]
 
 
 def original_analysis_requirements(requirements, query=""):
@@ -58,17 +95,22 @@ def bind_analysis_basis(raw, facts):
     """Copy addressed full saved sentences; never label an inference verified."""
     from ..citations.verifier import _split_sentences
 
-    if not isinstance(raw, list) or not 0 < len(raw) <= MAX_ROW_BASIS_FACTS:
+    if not isinstance(raw, list) or not 0 < len(raw):
         return None, "basis_missing_or_invalid"
     selected = []
-    seen = set()
+    seen = {}
     reference_count = 0
     for item in raw:
         if not isinstance(item, dict):
             return None, "basis_invalid_item"
         key = item.get("fact_id")
-        if not isinstance(key, str) or key not in facts or key in seen:
+        if not isinstance(key, str) or key not in facts:
             return None, "basis_invalid_fact"
+        if key not in seen and len(selected) >= MAX_ROW_BASIS_FACTS:
+            # More facts than one row may carry: the excess coordinate is
+            # dropped before its references are charged, so the documented
+            # per-row bound never masquerades as an invalid coordinate set.
+            continue
         text = facts[key].get("saved_text")
         if not isinstance(text, str) or not text:
             return None, "basis_invalid_fact"
@@ -86,9 +128,19 @@ def bind_analysis_basis(raw, facts):
         # their old numeric addresses as a different quotation during rendering.
         if "source_sentences" in item and item["source_sentences"] != source_sentences:
             return None, "basis_source_sentences_mismatch"
-        seen.add(key)
-        selected.append({"fact_id": key, "sentence_ids": list(indexes),
-                         "source_sentences": source_sentences})
+        if key in seen:
+            # The same fact addressed twice is one coordinate, not a fifth fact,
+            # so the row keeps its basis instead of being discarded whole.
+            merged = seen[key]
+            merged["sentence_ids"].extend(
+                index for index in indexes if index not in merged["sentence_ids"])
+            merged["source_sentences"].extend(
+                sentence for sentence in source_sentences
+                if sentence not in merged["source_sentences"])
+            continue
+        seen[key] = {"fact_id": key, "sentence_ids": list(indexes),
+                     "source_sentences": source_sentences}
+        selected.append(seen[key])
     return selected, None
 
 
@@ -114,9 +166,15 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
     if raw is None:
         return result
     result["decision_analysis"] = []
-    if not isinstance(raw, list) or len(raw) > MAX_ANALYSES:
-        reject("invalid_list" if not isinstance(raw, list) else "item_limit")
+    if not isinstance(raw, list):
+        reject("invalid_list")
         return result
+    if len(raw) > MAX_ANALYSES:
+        # A response over the row budget is a capacity overrun, not a malformed
+        # response. Keep the addressed rows in request order and drop only the
+        # excess, so one extra row cannot discard every independent valid row.
+        counts["dropped_item_limit"] = len(raw) - MAX_ANALYSES
+        raw = raw[:MAX_ANALYSES]
     original = original_analysis_requirements(requirements, query)
     facts = {row["id"]: row for row in result.get("source_facts", [])}
     options = {value for value in candidates if isinstance(value, str)} if isinstance(candidates, list) else set()
@@ -145,29 +203,51 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
         if not fact_ids or not requirement_ids:
             reject("invalid_fact_ids" if not fact_ids else "invalid_requirement_ids")
             continue
-        reasoning = _text(item.get("reasoning"), 1500)
-        change_condition = _text(item.get("change_condition"), 600)
+        reasoning, reasoning_note = _bounded_prose(item.get("reasoning"), 1500)
+        change_condition, change_note = _bounded_prose(item.get("change_condition"), 600)
         raw_assumptions = item.get("assumptions")
-        if not isinstance(raw_assumptions, list) or len(raw_assumptions) > 4:
+        if not isinstance(raw_assumptions, list):
             reject("invalid_assumptions")
             continue
-        assumptions = [_text(value, 300) for value in raw_assumptions]
-        if not (reasoning and change_condition and all(assumptions)):
-            errors = [_prose_error(item.get("reasoning"), 1500),
-                      _prose_error(item.get("change_condition"), 600)]
-            errors.extend(_prose_error(value, 300) for value in raw_assumptions)
-            # Exactly one fixed category per rejected analysis, never model text.
-            reject(next(error for error in errors if error))
+        assumptions, assumption_note = [], None
+        if len(raw_assumptions) > 4:
+            # More premises than one row may carry: keep the leading premises
+            # the row was built on and drop the excess, not the whole row.
+            assumption_note = "assumptions_trimmed"
+        for value in raw_assumptions[:4]:
+            text, note = _bounded_prose(value, 300)
+            if text:
+                assumptions.append(text)
+            elif note:
+                # An unusable premise is dropped on its own; the remaining
+                # premises and the row survive.
+                assumption_note = note
+        # An answer with no reasoning or no change condition has no verifiable
+        # conclusion to present, so only that row is rejected, with the fixed
+        # category that explains which part was unusable.
+        if not reasoning:
+            reject(reasoning_note or "prose_empty")
             continue
-        result["decision_analysis"].append({
+        if not change_condition:
+            reject(change_note or "prose_empty")
+            continue
+        row = {
             "kind": item["kind"], "option": option,
             "fact_ids": fact_ids, "requirement_ids": requirement_ids,
             "requirements": [original[key] for key in requirement_ids],
             "reasoning": reasoning, "assumptions": assumptions,
             "change_condition": change_condition, "review_status": "not_checked",
-        })
+        }
+        degraded = [note for note in (reasoning_note, change_note, assumption_note) if note]
+        inherited = item.get("prose_degraded")
+        if isinstance(inherited, list):
+            degraded.extend(note for note in inherited if isinstance(note, str))
+        if degraded:
+            # Fixed categories only; the row still needs review before display.
+            row["prose_degraded"] = sorted(set(degraded))
         if basis is not None:
-            result["decision_analysis"][-1]["basis"] = basis
+            row["basis"] = basis
+        result["decision_analysis"].append(row)
         counts["retained"] += 1
     return result
 
@@ -193,7 +273,12 @@ def inspect_synthesis_bindings(recommendation, chains, requirements, candidates,
     bound = bind_decision_analysis(bound, requirements, candidates, query, diagnostics=analysis, require_basis=True)
     if "decision_analysis" in recommendation and recommendation["decision_analysis"] is None:
         errors["analysis_invalid_list"] = 1
-    for reason, count in analysis["rejected"].items():
+    rejections = analysis["rejected"]
+    if analysis.get("dropped_item_limit"):
+        # A dropped over-limit row is a capacity event the caller must see, not
+        # a silent loss: the model addressed more rows than can be carried.
+        errors["analysis_dropped_item_limit"] = analysis["dropped_item_limit"]
+    for reason, count in rejections.items():
         # One invalid factual projection can invalidate every dependent analysis.
         if reason not in {"invalid_fact_ids", "basis_invalid_fact"} or not any(key.startswith("facts_") for key in errors):
             errors["analysis_" + reason] = count

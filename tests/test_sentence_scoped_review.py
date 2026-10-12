@@ -51,7 +51,7 @@ def test_only_addressed_verified_sentence_enters_full_source_review(reason):
         answer, {"analysis_id": "A2", "action": "withdraw"},
     ]))
     assert summary == {"status": "complete", "submitted": 2, "reviewed": 2,
-                       "retained": 1, "revised": 1, "withdrawn": 1}
+                       "retained": 1, "revised": 1, "withdrawn": 1, "unaddressed": 0}
     assert result["source_facts"][0]["status"] == "unknown"
     assert result["winner"] == recommendation["winner"]
     assert result["decision_analysis"][0]["review_status"] == "sentence_scoped_human_review_required"

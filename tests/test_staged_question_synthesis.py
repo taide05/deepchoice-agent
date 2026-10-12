@@ -274,8 +274,10 @@ async def test_more_offered_questions_does_not_expand_answer_output_authority(mo
     state = await run_staged(synth.ConclusionSynthesizerAgent(run_manifest=build_run_manifest(task)),
         {"task": task, "evidence_chains": CHAINS})
     assert model.await_count == 1
-    assert state["final_recommendation"]["decision_analysis"] == []
-    assert state["quality_signals"][0]["staged_generation"]["rows_rejected_limit"] == count
+    # Nine addressed rows exceed the eight-row bound: the excess is dropped and
+    # the addressed rows are kept, instead of discarding every row.
+    assert len(state["final_recommendation"]["decision_analysis"]) == 8
+    assert state["quality_signals"][0]["staged_generation"]["rows_dropped_item_limit"] == count - 8
     assert state["final_recommendation"]["answer_delivery"]["requirements"]["Q20"] == task["sub_questions"][-1]
 
 

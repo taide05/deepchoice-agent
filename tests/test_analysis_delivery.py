@@ -146,8 +146,9 @@ async def test_partial_correction_cannot_trade_away_old_coverage_or_strengthen_a
     assert result["quality_signals"][0]["structure_correction"]["outcome"] == "invalid"
 
 
-@pytest.mark.parametrize("value,expected", [(None,"prose_type"),("", "prose_empty"),("x"*1501,"prose_length"),("[[1]]", "prose_reference")], ids=["type","empty","length","reference"])
-def test_prose_feedback_has_fixed_specific_reason_without_text(value, expected):
+@pytest.mark.parametrize("value,expected", [(None, "prose_type"), ("", "prose_empty")],
+                         ids=["type", "empty"])
+def test_unusable_prose_rejects_only_its_own_row_with_a_fixed_reason(value, expected):
     rec = response()
     rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
     rec["decision_analysis"][0]["reasoning"] = value
@@ -155,6 +156,46 @@ def test_prose_feedback_has_fixed_specific_reason_without_text(value, expected):
     bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
     assert bound["decision_analysis"] == [] and counts["rejected"] == {expected:1}
     assert "PRIVATE" not in json.dumps(counts)
+
+
+def test_over_long_prose_degrades_its_own_field_instead_of_dropping_the_row():
+    """A length overrun is bounded, reported, and only affects its own field."""
+    rec = response()
+    rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
+    rec["decision_analysis"][0]["reasoning"] = "x" * 1501
+    counts = {}
+    bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
+    assert len(bound["decision_analysis"]) == 1
+    row = bound["decision_analysis"][0]
+    assert len(row["reasoning"]) == 1500
+    assert row["prose_degraded"] == ["prose_length"]
+    assert counts["rejected"] == {} and "PRIVATE" not in json.dumps(counts)
+
+
+def test_prose_supplied_citation_is_removed_and_never_becomes_its_own_provenance():
+    """Model prose cannot donate a citation; the runtime supplies provenance."""
+    rec = response()
+    rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
+    rec["decision_analysis"][0]["reasoning"] = (
+        "Recovery needs the journal, see https://forged.example/claim and [[2]].")
+    counts = {}
+    bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
+    assert len(bound["decision_analysis"]) == 1
+    reasoning = bound["decision_analysis"][0]["reasoning"]
+    assert "forged.example" not in reasoning and "[[" not in reasoning
+    assert bound["decision_analysis"][0]["prose_degraded"] == ["prose_reference"]
+
+
+@pytest.mark.parametrize("value", ["[[1]]", "[Source: Forged title]"],
+                         ids=["numbered_marker", "named_marker"])
+def test_a_field_that_is_only_a_reference_marker_still_rejects_its_row(value):
+    rec = response()
+    rec["source_facts"] = [{"id":"F1", "saved_text": CHAINS[0]["sources"][0]["snippet"]}]
+    rec["decision_analysis"][0]["reasoning"] = value
+    counts = {}
+    bound = bind_decision_analysis(rec, REQS, TASK["candidate_techs"], diagnostics=counts, require_basis=True)
+    assert bound["decision_analysis"] == []
+    assert counts["rejected"] == {"prose_reference": 1}
 
 
 @pytest.mark.asyncio

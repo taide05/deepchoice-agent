@@ -1,5 +1,58 @@
 # Changelog
 
+## [Unreleased] - 2026-10-12
+
+### Stop one invalid item from discarding independently valid answer content
+
+Two confirmed common causes of lost answer rows are repaired without adding a
+new rule, node, prompt or model call.
+
+**M-2 - collection-level clears replaced by per-item validation.** Four gates
+discarded every independently valid row when one item failed a collection
+bound: `bind_question_rows` returned `[]` for a response over the row budget,
+`bind_decision_analysis` returned no rows for the same reason, an over-long
+reference list discarded its row, and an over-long prose field discarded its
+row. A capacity overrun is now handled as a capacity overrun: the addressed
+items are kept in request order and only the excess is dropped, and the drop is
+reported (`rows_dropped_item_limit`, `basis_refs_trimmed`, `prose_degraded`).
+Address validity is unchanged and still row-fatal: an unknown, non-string or
+duplicated reference, an out-of-range sentence id, a mismatched saved quote and
+a missing `saved_text` all still reject their own row. The public
+request-input limit (`security/input_limits.py`) still rejects over-limit user
+input rather than truncating it; this change touches only internal model output.
+
+**M-3 - a review response is a batch of independent adjudications.** A single
+malformed row used to zero the whole `analysis_reviews` list, so every slot in
+that response was treated as unaddressed and dropped. Rows are now validated
+individually; a malformed row is discarded with one fixed category
+(`row_shape`/`action_shape`/`fields_shape`/`source_checks`/`duplicate_analysis_id`
+and, for revisions, the prose and identity gates) while the remaining rows of
+the same response still apply. A well-formed row for a slot outside the current
+review is ignored instead of invalidating its siblings. A revision may rewrite
+prose only: it may not move the slot to another option, drop its basis, or
+introduce a candidate its own basis does not cover. A revision is never
+truncated or cleaned to make it fit - an unusable revision is rejected so it
+cannot be published as an approved answer. `analysis_review` now also reports
+`unaddressed` and `row_rejections`, which separates "the reviewer never
+addressed this slot" from "the reviewer withdrew it".
+
+Boundaries preserved: citation `unknown` semantics, the display gate's
+requirement that a row's facts be verified or reviewable, the fixed
+validation-only plan for operational advice, `_candidate_attribution`,
+`_challenge_valid`, budget/lease/security/persistence contracts, and the
+withhold-on-withdraw behaviour.
+
+Fixed-source replay on frozen inputs: rows kept rises from 0 to 5 of 10 for an
+over-limit response, 0 to 1 for an over-long reference list, 0 to 1 for an
+over-long fact list, and 0 to 1 for an over-long prose field; the frozen
+snapshots' already-adjudicated rows display unchanged.
+
+Affected tests updated in the same change; `pyflakes` and `vulture`
+(`--min-confidence 100`, and 80) report nothing. Full suite: 3045 passed, 0
+failed, 810 errors that are all `tmp_path` fixture setup failures under the
+sandboxed run environment (no write access to a temp root), not assertion
+failures.
+
 ## [Unreleased] - 2026-10-10
 
 ### Withdraw unproven page enrichment and preserve lease authority

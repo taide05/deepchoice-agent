@@ -111,14 +111,17 @@ REVIEW_REPAIR_LIMIT = 3
 def _review_rejection(one, response):
     """Fixed category only; never persist model text or saved source content."""
     from ..utils.analysis_review import _challenge_valid
-    from ..utils.decision_analysis import MAX_ANALYSES
 
     if not isinstance(response, dict):
         return "response_shape"
     rows = response.get("analysis_reviews")
-    if not isinstance(rows, list) or len(rows) > MAX_ANALYSES:
+    if not isinstance(rows, list):
         return "list_shape"
     key = next(iter(one.slots))
+    # The response is a batch of independent adjudications: judge the row for
+    # this slot on its own. Rows for other slots are ignored here rather than
+    # invalidating an otherwise usable repair, because each slot is repaired
+    # and validated separately.
     matching = [row for row in rows if isinstance(row, dict)
                 and row.get("analysis_id") == key]
     if not matching:
@@ -339,6 +342,7 @@ class SelfReviewerAgent:
                     "submitted": context.submitted, "reviewed": len(adjudicated),
                     "retained": len(accepted), "revised": revised,
                     "withdrawn": context.submitted - len(accepted),
+                    "unaddressed": context.submitted - len(adjudicated),
                 }
                 recommendation["analysis_review"] = summary
         result = result or {}

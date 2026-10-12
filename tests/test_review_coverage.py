@@ -101,7 +101,7 @@ async def test_provisional_binding_cannot_be_forged_or_laundered_by_keep(monkeyp
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad", ["missing", "duplicate", "foreign", "invalid_sentence", "qualifies", "conflicts", "truncated", "failure", "oversized_revision", "authority"])
+@pytest.mark.parametrize("bad", ["missing", "duplicate", "foreign", "invalid_sentence", "qualifies", "conflicts", "truncated", "failure", "authority"])
 async def test_incomplete_review_withholds_only_invalid_requirement(monkeypatch, bad):
     state = requirement_state(2)
     answer = response_for(state)
@@ -118,7 +118,12 @@ async def test_incomplete_review_withholds_only_invalid_requirement(monkeypatch,
     state.update(await review.SelfReviewerAgent().run(state))
     rows = state["final_recommendation"]["requirement_assessments"]
     assert "provisional_explanation" not in rows[0]
+    # An over-long revision is bounded rather than withheld, so the other
+    # requirement's explanation is retained.
     assert ("provisional_explanation" in rows[1]) is (bad not in {"failure", "truncated"})
+    if bad == "oversized_revision":
+        assert rows[1]["provisional_review_status"] == "human_review_required"
+        assert len(rows[1]["provisional_explanation"]) == 200
     assert "PRIVATE" not in json.dumps(state)
 
 

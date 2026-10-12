@@ -124,13 +124,18 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
     not assert constraint coverage, source applicability, or permission to act.
     """
     diagnostics.update(rows_received=0, rows_selected=0, rows_rejected_shape=0,
-                       rows_rejected_question=0, rows_rejected_limit=0)
+                       rows_rejected_question=0, rows_rejected_limit=0,
+                       rows_dropped_item_limit=0, basis_refs_trimmed=0)
     if not isinstance(rows, list):
         return []
     diagnostics["rows_received"] = len(rows)
-    if len(rows) > min(len(allowed_ids), MAX_ANALYSES):
-        diagnostics["rows_rejected_limit"] = len(rows)
-        return []
+    capacity = min(len(allowed_ids), MAX_ANALYSES)
+    if len(rows) > capacity:
+        # An oversized response is a capacity overrun, not a malformed one.
+        # Keep the addressed rows in request order and drop only the excess, so
+        # one extra row cannot discard every independent valid row.
+        diagnostics["rows_dropped_item_limit"] = len(rows) - capacity
+        rows = rows[:capacity]
     selected, seen = [], set()
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("question_id"), str):
@@ -141,23 +146,33 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
                 or (question != "R0" and row.get("kind") == "choice")):
             diagnostics["rows_rejected_question"] += 1
             continue
-        seen.add(question)
         refs = row.get("basis_refs")
-        if (not isinstance(refs, list) or not 0 < len(refs) <= MAX_ROW_BASIS_REFS
-                or any(not isinstance(ref, str) or ref not in offered for ref in refs)
+        if not isinstance(refs, list) or not refs:
+            diagnostics["rows_rejected_shape"] += 1
+            continue
+        # Every addressed reference must be offered and unique; the excess of a
+        # merely longer list is a capacity overrun and is dropped on its own.
+        if (any(not isinstance(ref, str) or ref not in offered for ref in refs)
                 or len(set(refs)) != len(refs)):
             diagnostics["rows_rejected_shape"] += 1
             continue
+        kept_refs = refs[:MAX_ROW_BASIS_REFS]
+        if len(kept_refs) < len(refs):
+            diagnostics["basis_refs_trimmed"] += 1
+        seen.add(question)
         groups = {}
-        for ref in refs:
+        for ref in kept_refs:
             quote = offered[ref]
             basis = groups.setdefault(quote["fact_id"], {"fact_id": quote["fact_id"],
                                                         "sentence_ids": [], "source_sentences": []})
             basis["sentence_ids"].extend(quote["sentence_ids"])
             basis["source_sentences"].extend(quote["source_sentences"])
         if len(groups) > MAX_ROW_BASIS_FACTS:
-            diagnostics["rows_rejected_shape"] += 1
-            continue
+            # Addresses are ordered by the response, so the first facts are the
+            # ones the row led with; the excess is dropped, not the row.
+            keep = list(groups)[:MAX_ROW_BASIS_FACTS]
+            groups = {key: groups[key] for key in keep}
+            diagnostics["basis_refs_trimmed"] += 1
         proposal = {key: row.get(key) for key in ("kind", "option", "reasoning", "assumptions", "change_condition")}
         proposal.update(requirement_ids=[question], basis=list(groups.values()))
         selected.append(proposal)

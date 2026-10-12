@@ -42,11 +42,36 @@ def test_refs_copy_full_original_qualifiers_and_cannot_claim_constraint_coverage
     assert bound["decision_analysis"][0]["basis"] == rows[0]["basis"]
 
 
-@pytest.mark.parametrize("refs", [[], ["F1S1"], ["B1", "B1"],
-                                  ["B1", "B99"], [True], "B1", ["B1"] * 13])
+@pytest.mark.parametrize("refs", [[], ["F1S1"], ["B1", "B99"], [True], "B1"])
 def test_bad_reference_never_donates_a_partial_basis_or_guesses_coordinates(refs):
     _, offered = basis_reference_packet(FACTS, ["Alpha", "Beta"])
     assert bind_question_rows([row(refs=refs)], {"R0"}, offered, diagnostics={}) == []
+
+
+def test_duplicate_reference_address_is_an_invalid_address_set_for_its_own_row():
+    _, offered = basis_reference_packet(FACTS, ["Alpha", "Beta"])
+    diagnostics = {}
+    assert bind_question_rows([row(refs=["B1", "B1"])], {"R0"}, offered,
+                              diagnostics=diagnostics) == []
+    assert diagnostics["rows_rejected_shape"] == 1
+    # An independently valid row in the same batch is still accepted.
+    kept = bind_question_rows([row(refs=["B1", "B1"]), row()], {"R0", "Q1"}, offered,
+                              diagnostics={})
+    assert len(kept) == 1 and kept[0]["requirement_ids"] == ["R0"]
+
+
+def test_reference_capacity_overrun_keeps_the_first_addressed_refs():
+    """A longer reference list is a capacity overrun, not an invalid address."""
+    facts = [{"id": f"F{i}", "source_title": f"Guide {i}", "saved_text": " ".join(
+        f"Statement {i}-{j}." for j in range(1, 6))} for i in range(1, 4)]
+    _, offered = basis_reference_packet(facts, [])
+    assert len(offered) == 15
+    refs = [f"B{i}" for i in range(1, 14)]
+    diagnostics = {}
+    rows = bind_question_rows([row(refs=refs)], {"R0"}, offered, diagnostics=diagnostics)
+    assert diagnostics["rows_rejected_shape"] == 0
+    assert diagnostics["basis_refs_trimmed"] == 1
+    assert sum(len(b["sentence_ids"]) for b in rows[0]["basis"]) == 12
 
 
 def test_refs_preserve_separate_locations_and_reject_stale_source_text():
@@ -91,15 +116,32 @@ def test_total_reference_bound_replaces_per_fact_veto_without_losing_quote_ident
     assert len(rows[0]["basis"]) == 4
     assert [len(b["sentence_ids"]) for b in rows[0]["basis"]] == [3, 3, 3, 3]
     assert bind_analysis_basis(rows[0]["basis"], {fact["id"]: fact for fact in facts})[1] is None
-    assert bind_question_rows([row(refs=["B1", "B5", "B9", "B13", "B17"])],
-                              {"R0"}, offered, diagnostics={}) == []
+    # Addressing five facts exceeds the four-fact row bound, so the excess is
+    # dropped and the row is kept rather than discarded whole.
+    trimmed = bind_question_rows([row(refs=["B1", "B5", "B9", "B13", "B17"])],
+                                 {"R0"}, offered, diagnostics={})
+    assert [b["fact_id"] for b in trimmed[0]["basis"]] == ["F1", "F2", "F3", "F4"]
     oversized = rows[0]["basis"] + [{"fact_id": "F5", "sentence_ids": [1]}]
-    assert bind_analysis_basis(oversized, {fact["id"]: fact for fact in facts})[1] == "basis_missing_or_invalid"
+    kept, error = bind_analysis_basis(oversized, {fact["id"]: fact for fact in facts})
+    assert error is None
+    assert [row["fact_id"] for row in kept] == ["F1", "F2", "F3", "F4"]
     too_many_refs = [{"fact_id": "F1", "sentence_ids": [1, 2, 3, 4]},
                      {"fact_id": "F2", "sentence_ids": [1, 2, 3, 4]},
                      {"fact_id": "F3", "sentence_ids": [1, 2, 3, 4]},
                      {"fact_id": "F4", "sentence_ids": [1]}]
+    # A per-fact sentence overrun is still an invalid coordinate set.
     assert bind_analysis_basis(too_many_refs, {fact["id"]: fact for fact in facts})[1] == "basis_invalid_sentences"
+    # Addressing more facts than one row may carry keeps the leading facts.
+    five_facts = [{"fact_id": f"F{i}", "sentence_ids": [1]} for i in range(1, 6)]
+    trimmed, error = bind_analysis_basis(five_facts, {fact["id"]: fact for fact in facts})
+    assert error is None
+    assert [row["fact_id"] for row in trimmed] == ["F1", "F2", "F3", "F4"]
+    # The same fact addressed twice is one coordinate, not a fifth fact.
+    duplicate = [{"fact_id": "F1", "sentence_ids": [1]},
+                 {"fact_id": "F1", "sentence_ids": [2]}]
+    merged, error = bind_analysis_basis(duplicate, {fact["id"]: fact for fact in facts})
+    assert error is None and merged == [{"fact_id": "F1", "sentence_ids": [1, 2],
+                                         "source_sentences": merged[0]["source_sentences"]}]
 
 
 def test_ambiguous_duplicate_fact_ids_are_not_offered():
@@ -119,7 +161,11 @@ def test_passage_and_binding_sentence_policy_mismatch_offers_no_reference(monkey
 def test_duplicate_question_cannot_replace_an_invalid_first_basis():
     _, offered = basis_reference_packet(FACTS, ["Alpha", "Beta"])
     diagnostic = {}
-    assert bind_question_rows([row(refs=["B0"]), row()], {"R0", "Q1"}, offered,
-                              diagnostics=diagnostic) == []
+    # The invalid first basis is rejected on its own, so the duplicate question
+    # is still answered from the second, independently valid row.
+    selected = bind_question_rows([row(refs=["B0"]), row()], {"R0", "Q1"}, offered,
+                                  diagnostics=diagnostic)
+    assert len(selected) == 1 and selected[0]["requirement_ids"] == ["R0"]
+    assert [b["fact_id"] for b in selected[0]["basis"]] == ["F1"]
     assert diagnostic["rows_rejected_shape"] == 1
-    assert diagnostic["rows_rejected_question"] == 1
+    assert diagnostic["rows_rejected_question"] == 0

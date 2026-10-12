@@ -100,7 +100,9 @@ async def test_review_sees_whole_basis_and_original_unknown_then_revises_only_ow
     for key in ("source_facts", "winner", "action_plan_mode", "deployment_readiness"):
         assert rec[key] == before["final_recommendation"][key]
     assert rec["decision_analysis"][0]["basis"] == before["final_recommendation"]["decision_analysis"][0]["basis"]
-    assert rec["analysis_review"] == {"status": "complete", "submitted": 2, "reviewed": 2, "retained": 2, "revised": 1, "withdrawn": 0}
+    assert rec["analysis_review"] == {"status": "complete", "submitted": 2, "reviewed": 2,
+                                      "retained": 2, "revised": 1, "withdrawn": 0,
+                                      "unaddressed": 0}
     state.update(update)
     generated = await ReportGeneratorAgent().run(state)
     assert any(row["agent"] == "self_reviewer" for row in generated["quality_signals"])
@@ -129,10 +131,12 @@ async def test_missing_review_slot_gets_one_strict_targeted_repair(monkeypatch):
     update = await module.SelfReviewerAgent().run(state)
     assert calls == [["A1", "A2"], ["A2"]]
     rec = update["final_recommendation"]
+    # The response carried rows for both slots, so both are adjudicated; the
+    # repaired slot keeps its original reasoning because the repair was a keep.
     assert [row["reasoning"] for row in rec["decision_analysis"]] == [CORRECTED, GOOD]
     assert rec["analysis_review"] == {"status": "complete", "submitted": 2,
                                       "reviewed": 2, "retained": 2, "revised": 1,
-                                      "withdrawn": 0}
+                                      "withdrawn": 0, "unaddressed": 0}
     assert update["quality_signals"][0]["targeted_review_attempts"] == 1
     assert update["quality_signals"][0]["targeted_review_rejections"] == {}
     assert update["quality_signals"][0]["passed_count"] == 0
@@ -152,7 +156,7 @@ async def test_targeted_review_rejects_incomplete_source_challenge_with_fixed_ca
     assert rec["decision_analysis"][0]["reasoning"] == CORRECTED
     assert rec["analysis_review"] == {"status": "incomplete", "submitted": 2,
                                       "reviewed": 1, "retained": 1, "revised": 1,
-                                      "withdrawn": 1}
+                                      "withdrawn": 1, "unaddressed": 1}
     signal = update["quality_signals"][0]
     assert signal["targeted_review_attempts"] == 1
     assert signal["targeted_review_rejections"] == {"source_checks": 1}
