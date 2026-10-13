@@ -29,6 +29,25 @@ none, `CitationVerification` and every other public contract are unchanged, and
 rather than disproved. A refused route is not a wrong answer and is not
 reported as one.
 
+An independent read-only review of that first attempt found one defect, fixed
+here. The HTTP-status reason was recorded as `http_<status_code>`, an unbounded
+key family that was absent from the allowlist, so every HTTP-status fetch
+failure was silently dropped from the operator projection while `reached` was
+projected — the unqualified view the change set out to remove. The vocabulary
+now lives in exactly one place, `verifier.FETCH_CATEGORIES`, and the Trace
+allowlist imports it, so a written category can no longer be unprojectable. The
+reason is a fixed name (`http_unauthorized`, `http_forbidden`, `http_not_found`,
+`http_gone`, `http_rate_limited`, `http_server_error`, `http_other`) rather than
+status text, every recording site goes through one bounded recorder that drops
+anything outside the vocabulary, and the review's other note — that the guard
+protecting `exc.failure.value` lives in another module — no longer matters
+because that value is now filtered here too.
+
+Verification: `tests/test_citation_verifier.py` gains one parametrised test over
+eight status codes asserting each recorded category is both a named vocabulary
+member and actually projected, plus one test asserting no vocabulary member
+lacks an allowlist entry. Full suite 3866 passed, 0 failed; pyflakes clean.
+
 This is a diagnosis change, not a repair: it does not make a refused route
 succeed. The underlying condition — a citation URL that cannot be fetched when
 the selected outbound channel cannot bind the validated target — remains, and

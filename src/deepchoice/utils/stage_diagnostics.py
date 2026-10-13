@@ -4,6 +4,7 @@ Counts locate structural loss; they do not certify relevance or answer quality.
 Absent/malformed observations stay absent rather than becoming zero.
 """
 from .call_diagnostics import strict_json
+from ..citations.verifier import FETCH_CATEGORIES
 
 
 _BINDING_REASONS = (
@@ -12,17 +13,6 @@ _BINDING_REASONS = (
     "basis_fact_limit", "basis_invalid_sentences", "basis_source_sentences_mismatch",
     "invalid_fact_ids", "invalid_requirement_ids", "invalid_assumptions",
     "prose_type", "prose_length", "prose_reference", "prose_empty",
-)
-
-# Why a dynamic citation fetch did not yield page text. These mirror the
-# SafeFetchFailure codes plus the fetch-side classes the verifier already
-# distinguishes in its log; without them every non-answer collapses into one
-# indistinguishable "unknown" and a deterministic routing refusal cannot be
-# told apart from a transient network failure after the run.
-_FETCH_CATEGORIES = (
-    "safety_rejected", "route_unavailable", "route_unsupported", "dns_uncertain",
-    "timeout", "response_rejected", "rate_limited", "admission_denied",
-    "transport_uncertain", "unexpected_error", "reached",
 )
 
 
@@ -53,7 +43,7 @@ _PATHS = {
     "citation_validator": {
         **_fields("verified", "unsupported", "unreachable", "unknown",
                   "analyses_received", "analyses_rebound"),
-        **{"citation_fetch_" + key: ("citation_fetch", key) for key in _FETCH_CATEGORIES},
+        **{"citation_fetch_" + key: ("citation_fetch", key) for key in FETCH_CATEGORIES},
     },
     "self_reviewer": {
         **{key: ("analysis_review", key) for key in (

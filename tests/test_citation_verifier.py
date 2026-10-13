@@ -497,6 +497,49 @@ async def test_fetch_outcome_categories_are_without_a_record_when_not_requested(
     assert not hasattr(verification, "citation_fetch")
 
 
+@pytest.mark.parametrize("status_code,expected", [
+    (401, "http_unauthorized"), (403, "http_forbidden"), (404, "http_not_found"),
+    (410, "http_gone"), (429, "http_rate_limited"), (500, "http_server_error"),
+    (302, "http_other"), (503, "http_other"),
+], ids=["401", "403", "404", "410", "429", "500", "302", "503"])
+@pytest.mark.asyncio
+async def test_every_http_status_reason_is_a_named_category_and_is_projectable(
+        monkeypatch, status_code, expected):
+    """A non-2xx fetch must yield a category the Trace allowlist can name.
+
+    Recording a category the allowlist cannot project loses the reason again,
+    which is exactly what the operator view is supposed to prevent.
+    """
+    from deepchoice.utils.stage_diagnostics import FETCH_CATEGORIES, node_stage_counts
+
+    async def fake_fetch(*args, **kwargs):
+        return _response(status_code, "not the page we wanted")
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fake_fetch)
+    # The vocabulary and the writer must not drift apart.
+    assert expected in FETCH_CATEGORIES
+    citation_fetch: dict = {}
+    await verify_citations(
+        {"recommendation": "Use Remote. [Source: Remote]"},
+        _chains({"title": "Remote", "url": "https://example.com/docs", "snippet": ""}),
+        citation_fetch=citation_fetch,
+    )
+    assert citation_fetch == {expected: 1}
+    projected = node_stage_counts("citation_validator", {"quality_signals": [
+        {"agent": "citation_validator", "citation_fetch": citation_fetch}]})
+    assert projected.get(f"citation_fetch_{expected}") == 1
+
+
+@pytest.mark.asyncio
+async def test_every_recorded_category_is_projectable(monkeypatch):
+    """No fixed category may be written without a matching allowlist entry."""
+    from deepchoice.utils.stage_diagnostics import FETCH_CATEGORIES, _PATHS
+
+    allowed = set(_PATHS["citation_validator"])
+    missing = [key for key in FETCH_CATEGORIES if f"citation_fetch_{key}" not in allowed]
+    assert missing == []
+
+
 @pytest.mark.asyncio
 async def test_budget_rejection_prevents_fetch(monkeypatch):
     sent = False

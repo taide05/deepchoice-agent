@@ -813,6 +813,35 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
     return status, reason
 
 
+# Bounded reason vocabulary for a dynamic citation fetch. These are the only keys
+# this module can record: the SafeFetchFailure codes plus the fetch-side classes
+# the verifier distinguishes, a bounded set of HTTP status reasons, and `reached`
+# for a fetch that returned a body. Anything outside this tuple is dropped, so no
+# caller can widen the diagnostic with arbitrary text, and the Trace allowlist
+# imports this same tuple so a written category cannot become unprojectable.
+FETCH_CATEGORIES = (
+    "safety_rejected", "route_unavailable", "route_unsupported", "dns_uncertain",
+    "timeout", "response_rejected", "rate_limited", "admission_denied",
+    "transport_uncertain", "unexpected_error", "reached",
+    "http_unauthorized", "http_forbidden", "http_not_found", "http_gone",
+    "http_rate_limited", "http_server_error", "http_other",
+)
+
+# Bounded reason vocabulary for a non-2xx citation fetch. Only these keys can be
+# recorded, so a caller cannot widen the diagnostic with arbitrary status text,
+# and every one of them is nameable in the Trace projection.
+_HTTP_FETCH_CATEGORY = {
+    401: "http_unauthorized", 403: "http_forbidden", 404: "http_not_found",
+    410: "http_gone", 429: "http_rate_limited", 500: "http_server_error",
+}
+
+
+def _record_fetch_category(citation_fetch: dict, category: str | None) -> None:
+    """Count one fixed fetch outcome. Categories outside the vocabulary are dropped."""
+    if category in FETCH_CATEGORIES:
+        citation_fetch[category] = citation_fetch.get(category, 0) + 1
+
+
 async def _fetch_one(index: int, url: str,
                      citation_fetch: dict | None = None) -> _FetchOutcome:
     if citation_fetch is None:
@@ -844,39 +873,39 @@ async def _fetch_one(index: int, url: str,
         raise
     except UnsafeUrlError as exc:
         await unknown_call(reservations)
-        citation_fetch[exc.failure.value] = citation_fetch.get(exc.failure.value, 0) + 1
+        _record_fetch_category(citation_fetch, exc.failure.value)
         _LOGGER.warning(redact_text(f"citation_fetch_unknown category={exc.failure.value}"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except (TimeoutError, httpx.TimeoutException):
         await unknown_call(reservations)
-        citation_fetch["timeout"] = citation_fetch.get("timeout", 0) + 1
+        _record_fetch_category(citation_fetch, "timeout")
         _LOGGER.warning(redact_text("citation_fetch_unknown category=timeout"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except ProviderRateLimitError:
         await unknown_call(reservations)
-        citation_fetch["rate_limited"] = citation_fetch.get("rate_limited", 0) + 1
+        _record_fetch_category(citation_fetch, "rate_limited")
         _LOGGER.warning(redact_text("citation_fetch_unknown category=rate_limited"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except ProviderAdmissionError:
         await unknown_call(reservations)
-        citation_fetch["admission_denied"] = citation_fetch.get("admission_denied", 0) + 1
+        _record_fetch_category(citation_fetch, "admission_denied")
         _LOGGER.warning(redact_text("citation_fetch_unknown category=admission_denied"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except (OSError, httpx.TransportError):
         await unknown_call(reservations)
-        citation_fetch["transport_uncertain"] = citation_fetch.get("transport_uncertain", 0) + 1
+        _record_fetch_category(citation_fetch, "transport_uncertain")
         _LOGGER.warning(redact_text("citation_fetch_unknown category=transport_uncertain"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except Exception:
         await unknown_call(reservations)
-        citation_fetch["unexpected_error"] = citation_fetch.get("unexpected_error", 0) + 1
+        _record_fetch_category(citation_fetch, "unexpected_error")
         _LOGGER.warning(redact_text("citation_fetch_unknown category=unexpected_error"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
 
     await settle_call(reservations, {BudgetResource.HTTP_CALLS: 1})
     status_code = response.status_code
     if 200 <= status_code < 300:
-        citation_fetch["reached"] = citation_fetch.get("reached", 0) + 1
+        _record_fetch_category(citation_fetch, "reached")
         return _FetchOutcome(
             CitationStatus.VERIFIED,
             CitationReason.LEXICAL_SUPPORT,
@@ -889,12 +918,14 @@ async def _fetch_one(index: int, url: str,
             ),
         )
     if status_code in {401, 403, 404, 410}:
-        citation_fetch[f"http_{status_code}"] = citation_fetch.get(f"http_{status_code}", 0) + 1
+        _record_fetch_category(citation_fetch,
+                               _HTTP_FETCH_CATEGORY.get(status_code, "http_other"))
         return _FetchOutcome(
             CitationStatus.UNREACHABLE,
             CitationReason.NOT_PUBLICLY_ACCESSIBLE,
         )
-    citation_fetch[f"http_{status_code}"] = citation_fetch.get(f"http_{status_code}", 0) + 1
+    _record_fetch_category(citation_fetch,
+                           _HTTP_FETCH_CATEGORY.get(status_code, "http_other"))
     return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.HTTP_UNCERTAIN)
 
 
