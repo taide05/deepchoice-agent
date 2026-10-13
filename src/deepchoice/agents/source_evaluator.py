@@ -271,13 +271,6 @@ AUTHORITY_MAP = {
     "anonymous": 2,
 }
 
-VERIFIABILITY_MAP = {
-    "code": 10,
-    "benchmark": 8,
-    "citation": 6,
-    "opinion": 2,
-}
-
 
 def _host_in_family(host: str | None, family: str) -> bool:
     return host == family or (host is not None and host.endswith("." + family))
@@ -302,20 +295,6 @@ def classify_source_type(url: str, source: str) -> str:
         return "official_doc"
     return "tech_blog"
 
-def classify_evidence_type(snippet: str) -> str:
-    # Historical compatibility helper; the default ranker does not classify prose.
-    snip_lower = snippet.lower()
-    if any(kw in snip_lower for kw in ["```", "def ", "import ", "pip install", "npm install"]):
-        return "code"
-    if any(kw in snip_lower for kw in ["benchmark", "throughput", "latency", "rps", "tokens/s"]):
-        return "benchmark"
-    if any(kw in snip_lower for kw in ["according to", "cited by", "reference", "[1]", "[2]"]):
-        return "citation"
-    if any(kw in snip_lower for kw in ["i think", "in my opinion", "i prefer", "i believe"]):
-        return "opinion"
-    return "citation"
-
-
 def score_authority(source_type: str) -> int:
     return AUTHORITY_MAP.get(source_type, 4)
 
@@ -337,18 +316,6 @@ def score_timeliness(date_str: str | None) -> int:
         return 2
     except (ValueError, TypeError):
         return 5
-
-
-def score_consistency(supporting_sources: list[str]) -> int:
-    if len(supporting_sources) >= 2:
-        return 10
-    if len(supporting_sources) == 1:
-        return 6
-    return 4
-
-
-def score_verifiability(evidence_type: str) -> int:
-    return VERIFIABILITY_MAP.get(evidence_type, 4)
 
 
 def compute_total_score(scores: dict[str, int]) -> float:

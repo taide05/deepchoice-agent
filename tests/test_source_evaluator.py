@@ -11,13 +11,10 @@ from deepchoice.utils.source_scope import scope_sentences
 
 from deepchoice.agents.source_evaluator import (
     SourceEvaluatorAgent,
-    classify_evidence_type,
     classify_source_type,
     compute_total_score,
     score_authority,
-    score_consistency,
     score_timeliness,
-    score_verifiability,
 )
 
 
@@ -73,34 +70,6 @@ class TestScoreTimeliness:
         assert score_timeliness("") == 5
 
 
-class TestScoreConsistency:
-    def test_two_sources_agree(self):
-        assert score_consistency(["source_a", "source_b"]) == 10
-
-    def test_one_source_only(self):
-        assert score_consistency(["source_a"]) == 6
-
-    def test_isolated_no_others(self):
-        assert score_consistency([]) == 4
-
-
-class TestScoreVerifiability:
-    def test_runnable_code(self):
-        assert score_verifiability("code") == 10
-
-    def test_benchmark_data(self):
-        assert score_verifiability("benchmark") == 8
-
-    def test_has_citations(self):
-        assert score_verifiability("citation") == 6
-
-    def test_pure_opinion(self):
-        assert score_verifiability("opinion") == 2
-
-    def test_unknown_default(self):
-        assert score_verifiability("something_else") == 4
-
-
 class TestComputeTotalScore:
     def test_weighted_formula(self):
         scores = {"authority": 10, "timeliness": 10, "consistency": 10, "verifiability": 10}
@@ -134,20 +103,6 @@ class TestClassifySourceType:
 
     def test_chroma_preserves_known_http_official_document_classification(self):
         assert classify_source_type("https://docs.python.org/3/", "chroma") == "official_doc"
-
-
-class TestClassifyEvidenceType:
-    def test_code_block_is_code(self):
-        assert classify_evidence_type("here is a ```python\nimport foo\n``` example") == "code"
-
-    def test_benchmark_data(self):
-        assert classify_evidence_type("throughput was 500 rps with 20ms latency") == "benchmark"
-
-    def test_opinion_is_opinion(self):
-        assert classify_evidence_type("in my opinion this is the best framework") == "opinion"
-
-    def test_default_is_citation(self):
-        assert classify_evidence_type("A general description of the framework") == "citation"
 
 
 class TestSourceEvaluatorAgent:

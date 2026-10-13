@@ -2,6 +2,32 @@
 
 ## [Unreleased] - 2026-10-13
 
+### Remove the superseded source-scoring helpers and their mirror tests
+
+The default ranker reads two numbers per source, authority and timeliness, and
+combines them through `compute_source_priority`. Four helpers around it were
+still defined but nothing on the default path called them:
+`classify_evidence_type` (its own comment already called it a historical
+compatibility helper), `score_consistency`, `score_verifiability`, and the
+`VERIFIABILITY_MAP` that only `score_verifiability` read. They are deleted,
+together with the twelve test methods that did nothing but re-execute them
+(`TestScoreConsistency`, `TestScoreVerifiability` and
+`TestClassifyEvidenceType`, four, five and three methods respectively).
+
+`compute_total_score` stays, and so do its own two arithmetic tests. It is
+referenced only by tests, but those references are load-bearing:
+`test_source_priority.py` uses it as the control that reproduces the old
+four-component total and asserts it differs from the live priority, which is how
+the removal of the old opinion penalty is pinned. Deleting either the helper or
+its tests would delete that regression guard. `score_authority`,
+`score_timeliness`, `AUTHORITY_MAP` and the live `compute_source_priority`
+path are untouched, as are the `evidence_type = "unassessed"` and
+`supporting_sources == []` settings the default path actually writes.
+
+Verification: full suite 3854 passed, 0 failed, down exactly twelve tests and
+78 lines with no behavioural change (`pyflakes src/ tests/` clean, and every
+removed name has zero references anywhere in the tree).
+
 ### Record why a dynamic citation fetch did not produce page text
 
 A single fresh-case acceptance run produced a restricted report with no answer
