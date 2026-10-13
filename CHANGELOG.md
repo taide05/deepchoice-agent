@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased] - 2026-10-13
+
+### Record why a dynamic citation fetch did not produce page text
+
+A single fresh-case acceptance run produced a restricted report with no answer
+rows. Every one of its 17 citation checks carried the identical public reason
+`network_uncertain`, and all five selected facts therefore stayed `unknown`,
+which made the only analysis row unreviewable and withheld it. Nothing in the
+run's own artefacts could say why the fetches had failed.
+
+The answer existed, but only in the server log. `verifier._fetch_one` already
+classified every non-answer as `route_unsupported`, `timeout`, `rate_limited`,
+`admission_denied`, `transport_uncertain` or `unexpected_error`, and logged it —
+the run recorded `citation_fetch_unknown category=route_unsupported` four times.
+That classification was then discarded, so a deterministic routing refusal and
+a transient network failure were indistinguishable after the run.
+
+`verify_citations` now accepts an optional caller-owned `citation_fetch`
+mapping and records those same fixed categories in it. `CitationValidatorAgent`
+publishes the counts beside the existing citation counters, and the Trace
+allowlist projects them, so the operator view reports
+`citation_fetch_route_unsupported: 4` instead of an unqualified zero. The
+record holds fixed category names only: no URL, host, page text, exception type
+or exception message. The optional parameter is keyword-only and defaults to
+none, `CitationVerification` and every other public contract are unchanged, and
+`status_counts` is byte-identical, because `unknown` still means inconclusive
+rather than disproved. A refused route is not a wrong answer and is not
+reported as one.
+
+This is a diagnosis change, not a repair: it does not make a refused route
+succeed. The underlying condition — a citation URL that cannot be fetched when
+the selected outbound channel cannot bind the validated target — remains, and
+resolving it is an operational routing decision rather than a code change.
+
+Verification: `tests/test_citation_verifier.py` gains two regressions, one
+proving a refused route and a transport failure are recorded as different fixed
+categories while the public status stays `unknown`, and one proving the
+verification is unchanged when the record is not requested. Replaying the run's
+own recovered facts and evidence chains reproduces
+`{"route_unsupported": 4}` with `status_counts` unchanged at 17 `unknown`.
+
 ## [Unreleased] - 2026-10-12
 
 ### Stop one invalid item from discarding independently valid answer content

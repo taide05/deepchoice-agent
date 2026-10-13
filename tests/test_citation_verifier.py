@@ -439,6 +439,65 @@ async def test_citation_checks_are_bounded_with_an_explicit_unknown_summary(monk
 
 
 @pytest.mark.asyncio
+async def test_fetch_outcome_category_separates_routing_refusal_from_network_unknown(monkeypatch):
+    """A refused route and a network failure must not look the same afterwards.
+
+    Both are reported publicly as `unknown` (unknown is not disproof), but the
+    caller-owned record has to keep the fixed reason so an operator can tell a
+    deterministic routing refusal from a transient network failure.
+    """
+    from deepchoice.security.urls import SafeFetchFailure, UnsafeUrlError
+
+    async def refused(*args, **kwargs):
+        raise UnsafeUrlError("Selected outbound channel cannot bind the validated target",
+                            failure=SafeFetchFailure.ROUTE_UNSUPPORTED)
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", refused)
+    recommendation = {"recommendation": "Use Remote. [Source: Remote]"}
+    citation_fetch: dict = {}
+    verification, _ = await verify_citations(
+        recommendation,
+        _chains({"title": "Remote", "url": "https://example.com/docs", "snippet": ""}),
+        citation_fetch=citation_fetch,
+    )
+    # Public status is unchanged: a refused route is still only inconclusive.
+    assert verification.status_counts.unknown == 1
+    assert verification.status_counts.verified == 0
+    # The fixed category is now recoverable, and carries no exception text.
+    assert citation_fetch == {"route_unsupported": 1}
+    assert "example.com" not in json.dumps(citation_fetch)
+
+    # A transport failure keeps its own distinct category.
+    async def broken(*args, **kwargs):
+        raise OSError("connection reset by peer")
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", broken)
+    transport: dict = {}
+    await verify_citations(
+        recommendation,
+        _chains({"title": "Remote", "url": "https://example.com/docs", "snippet": ""}),
+        citation_fetch=transport,
+    )
+    assert transport == {"transport_uncertain": 1}
+
+
+@pytest.mark.asyncio
+async def test_fetch_outcome_categories_are_without_a_record_when_not_requested(monkeypatch):
+    """Omitting the optional record changes nothing about the verification."""
+    async def fake_fetch(*args, **kwargs):
+        return _response(200, "FastAPI supports APIs and deterministic checks." * 20)
+
+    monkeypatch.setattr("deepchoice.citations.verifier.safe_fetch", fake_fetch)
+    recommendation = {"recommendation": "FastAPI supports APIs. [Source: Docs]"}
+    verification, _ = await verify_citations(
+        recommendation,
+        _chains({"title": "Docs", "url": "https://example.com/docs", "snippet": ""}),
+    )
+    assert verification.status_counts.verified == 1
+    assert not hasattr(verification, "citation_fetch")
+
+
+@pytest.mark.asyncio
 async def test_budget_rejection_prevents_fetch(monkeypatch):
     sent = False
 

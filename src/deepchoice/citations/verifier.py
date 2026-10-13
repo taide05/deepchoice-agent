@@ -813,7 +813,11 @@ def _source_fact_support(claim, source, recommendation, evidence_chains, outcome
     return status, reason
 
 
-async def _fetch_one(index: int, url: str) -> _FetchOutcome:
+async def _fetch_one(index: int, url: str,
+                     citation_fetch: dict | None = None) -> _FetchOutcome:
+    if citation_fetch is None:
+        # The record is optional; without it the fetch behaves exactly as before.
+        citation_fetch = {}
     reservations = await reserve_call(
         (BudgetAmount(resource=BudgetResource.HTTP_CALLS, amount=1),),
         # Citation HTTP fetches are not Trace ``external_calls`` rows, so the
@@ -840,32 +844,39 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
         raise
     except UnsafeUrlError as exc:
         await unknown_call(reservations)
+        citation_fetch[exc.failure.value] = citation_fetch.get(exc.failure.value, 0) + 1
         _LOGGER.warning(redact_text(f"citation_fetch_unknown category={exc.failure.value}"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except (TimeoutError, httpx.TimeoutException):
         await unknown_call(reservations)
+        citation_fetch["timeout"] = citation_fetch.get("timeout", 0) + 1
         _LOGGER.warning(redact_text("citation_fetch_unknown category=timeout"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except ProviderRateLimitError:
         await unknown_call(reservations)
+        citation_fetch["rate_limited"] = citation_fetch.get("rate_limited", 0) + 1
         _LOGGER.warning(redact_text("citation_fetch_unknown category=rate_limited"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except ProviderAdmissionError:
         await unknown_call(reservations)
+        citation_fetch["admission_denied"] = citation_fetch.get("admission_denied", 0) + 1
         _LOGGER.warning(redact_text("citation_fetch_unknown category=admission_denied"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except (OSError, httpx.TransportError):
         await unknown_call(reservations)
+        citation_fetch["transport_uncertain"] = citation_fetch.get("transport_uncertain", 0) + 1
         _LOGGER.warning(redact_text("citation_fetch_unknown category=transport_uncertain"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
     except Exception:
         await unknown_call(reservations)
+        citation_fetch["unexpected_error"] = citation_fetch.get("unexpected_error", 0) + 1
         _LOGGER.warning(redact_text("citation_fetch_unknown category=unexpected_error"))
         return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.NETWORK_UNCERTAIN)
 
     await settle_call(reservations, {BudgetResource.HTTP_CALLS: 1})
     status_code = response.status_code
     if 200 <= status_code < 300:
+        citation_fetch["reached"] = citation_fetch.get("reached", 0) + 1
         return _FetchOutcome(
             CitationStatus.VERIFIED,
             CitationReason.LEXICAL_SUPPORT,
@@ -878,19 +889,22 @@ async def _fetch_one(index: int, url: str) -> _FetchOutcome:
             ),
         )
     if status_code in {401, 403, 404, 410}:
+        citation_fetch[f"http_{status_code}"] = citation_fetch.get(f"http_{status_code}", 0) + 1
         return _FetchOutcome(
             CitationStatus.UNREACHABLE,
             CitationReason.NOT_PUBLICLY_ACCESSIBLE,
         )
+    citation_fetch[f"http_{status_code}"] = citation_fetch.get(f"http_{status_code}", 0) + 1
     return _FetchOutcome(CitationStatus.UNKNOWN, CitationReason.HTTP_UNCERTAIN)
 
 
-async def _fetch_sources(urls: list[str]) -> dict[str, _FetchOutcome]:
+async def _fetch_sources(urls: list[str],
+                         citation_fetch: dict | None = None) -> dict[str, _FetchOutcome]:
     semaphore = asyncio.Semaphore(MAX_FETCH_CONCURRENCY)
 
     async def _limited(index: int, url: str) -> tuple[str, _FetchOutcome]:
         async with semaphore:
-            return url, await _fetch_one(index, url)
+            return url, await _fetch_one(index, url, citation_fetch)
 
     tasks = [
         asyncio.create_task(_limited(index, url))
@@ -929,9 +943,17 @@ async def verify_citations(
     recommendation: dict[str, Any],
     evidence_chains: list[dict[str, Any]],
     candidates: list[str] | tuple = (),
+    *,
+    citation_fetch: dict | None = None,
 ) -> tuple[CitationVerification, list[dict[str, Any]]]:
-    """Verify cited critical claims and project aggregate status onto sources."""
+    """Verify cited critical claims and project aggregate status onto sources.
 
+    ``citation_fetch`` is an optional caller-owned record of why each dynamic
+    fetch ended. It carries only fixed category names, never page text, URLs or
+    exception text, and it does not change the returned verification.
+    """
+
+    citation_fetch = citation_fetch if isinstance(citation_fetch, dict) else {}
     registry, registry_truncated = _source_registry(evidence_chains)
     offered_selection_ids = set()
     source_facts = recommendation.get("source_facts")
@@ -970,7 +992,11 @@ async def verify_citations(
             if source.canonical_url not in unique_urls:
                 unique_urls.append(source.canonical_url)
     admitted_urls = unique_urls[:MAX_UNIQUE_SOURCE_URLS]
-    outcomes = await _fetch_sources(admitted_urls)
+    # Why a fetch did not produce page text is already classified for the log.
+    # Keeping the same fixed counts here is what lets a run distinguish a
+    # routing refusal from a transient network unknown instead of reporting
+    # every one of them as an indistinguishable "unknown".
+    outcomes = await _fetch_sources(admitted_urls, citation_fetch)
 
     checks: list[CitationCheck] = []
     aggregate: dict[tuple[int, int], tuple[CitationStatus, CitationReason]] = {}

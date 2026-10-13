@@ -321,10 +321,12 @@ class CitationValidatorAgent:
             "Verifying critical-claim citations deterministically",
             agent="CITATION_VALIDATOR",
         )
+        citation_fetch: dict = {}
         verification, projected_chains = await verify_citations(
             verification_input if isinstance(verification_input, dict) else {},
             evidence_chains if isinstance(evidence_chains, list) else [],
             candidates=task.get("candidate_techs", []),
+            citation_fetch=citation_fetch,
         )
         counts = verification.status_counts
         calibration: dict = {}
@@ -349,6 +351,11 @@ class CitationValidatorAgent:
                 evidence_chains if isinstance(evidence_chains, list) else [],
                 calibration,
             )
+        # Fixed fetch-outcome counts. Without them every non-answer is recorded
+        # as the same "unknown", so a deterministic routing refusal and a
+        # transient network failure are indistinguishable after the run.
+        if citation_fetch:
+            output["quality_signals"][0]["citation_fetch"] = dict(sorted(citation_fetch.items()))
         # A row dropped by calibration leaves no other trace, so its fixed
         # categories are the only record of why it disappeared.
         if calibration:
