@@ -1684,7 +1684,9 @@ source-score-v15将已有missing_candidate暂缓资格从official扩展至commun
 source-score-v16默认总分为0.35×URL类别分+0.25×日期分+2.0；2.0仅维持历史默认
 4×0.20+6×0.20的分数尺度，不表示实测支持。默认scores.consistency/verifiability为
 null，evidence_type为unassessed，supporting_sources仍为空；正文关键字不进入计算。
-旧四项数值compute_total_score与分类/分项helper保留直接调用语义，历史公开快照不回填。
+旧四项数值compute_total_score保留直接调用语义，用于对照历史总分；分类helper
+（classify_evidence_type）与分项helper（score_consistency/score_verifiability）
+在无调用方后已删除，历史公开快照不回填。
 公开结果序列化保留新null与旧数值；前端四语言显示未评估，并说明排序先验及历史值。
 
 通用citation旧默认分保持，代码/benchmark加分消失；英文opinion原扣分取消会增加0.8，

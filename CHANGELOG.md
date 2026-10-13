@@ -12,7 +12,9 @@ compatibility helper), `score_consistency`, `score_verifiability`, and the
 `VERIFIABILITY_MAP` that only `score_verifiability` read. They are deleted,
 together with the twelve test methods that did nothing but re-execute them
 (`TestScoreConsistency`, `TestScoreVerifiability` and
-`TestClassifyEvidenceType`, four, five and three methods respectively).
+`TestClassifyEvidenceType`, three, five and four methods respectively), and the
+runtime contract's R38 note is corrected to stop claiming the removed helpers
+retain direct-call semantics.
 
 `compute_total_score` stays, and so do its own two arithmetic tests. It is
 referenced only by tests, but those references are load-bearing:
