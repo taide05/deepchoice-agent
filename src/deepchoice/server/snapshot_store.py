@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 
-OUTPUT_DIR = Path("./outputs")
+from ..persistence.database import OUTPUT_DIR
 
 _TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 

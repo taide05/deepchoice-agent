@@ -2,7 +2,6 @@ import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.errors import GraphInterrupt
@@ -35,8 +34,7 @@ from .query_analyzer import QueryAnalyzerAgent
 from .report_generator import ReportGeneratorAgent
 from .self_reviewer import SelfReviewerAgent
 from .source_evaluator import SourceEvaluatorAgent
-
-OUTPUT_DIR = Path("./outputs")
+from ..persistence.database import OUTPUT_DIR
 
 
 async def _get_sqlite_saver():

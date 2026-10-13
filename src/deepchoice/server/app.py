@@ -17,6 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
+from ..agents.report_generator import FORMAT_RENDERERS
 from ..contracts.api import (
     ResearchRequest,
     ResearchStartedResponse,
@@ -40,11 +41,15 @@ from ..contracts.errors import (
 )
 from ..contracts.manifest import build_run_manifest
 from ..formats.citations import build_toc, inject_citations, number_sources
-from ..formats.comparison_matrix import render as render_comparison_matrix
-from ..formats.evidence_first import render as render_evidence_first
 from ..formats.pdf import render_pdf
 from ..formats.what_why_how import render as render_what_why_how
-from ..persistence.database import DEFAULT_DB_PATH, DatabaseConnectionError, _await_cleanup, connect_database
+from ..persistence.database import (
+    DEFAULT_DB_PATH,
+    OUTPUT_DIR,
+    DatabaseConnectionError,
+    _await_cleanup,
+    connect_database,
+)
 from ..persistence.migrations import run_migrations
 from ..persistence.records import RunResultRecord, TaskWithRun
 from ..hitl import DecisionRecord
@@ -285,13 +290,7 @@ async def add_legacy_deprecation_headers(request: Request, call_next):
         response.headers.update(_LEGACY_DEPRECATION_HEADERS)
     return response
 
-OUTPUT_DIR = Path("./outputs")
 _active_tasks: dict[str, dict] = {}
-FORMAT_RENDERERS = {
-    "what_why_how": render_what_why_how,
-    "evidence_first": render_evidence_first,
-    "comparison_matrix": render_comparison_matrix,
-}
 
 
 def _get_task_service(request: Request) -> TaskService:

@@ -15,7 +15,14 @@ import aiosqlite
 from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 
 
-DEFAULT_DB_PATH = Path("outputs/deepchoice.db")
+# The runtime data directory. This module owns the on-disk layout: the product
+# database, the LangGraph checkpoint store and the legacy snapshot store all live
+# here, so the directory is stated once and derived, never restated. The value
+# stays relative on purpose - it resolves against the process working directory,
+# which existing run identities depend on.
+OUTPUT_DIR = Path("outputs")
+
+DEFAULT_DB_PATH = OUTPUT_DIR / "deepchoice.db"
 
 
 class DatabaseConnectionError(DeepChoiceError):
@@ -178,4 +185,4 @@ async def connect_database(
         raise DatabaseConnectionError(retryable=_is_locked_error(exc)) from None
 
 
-__all__ = ["DEFAULT_DB_PATH", "DatabaseConnectionError", "connect_database"]
+__all__ = ["DEFAULT_DB_PATH", "OUTPUT_DIR", "DatabaseConnectionError", "connect_database"]

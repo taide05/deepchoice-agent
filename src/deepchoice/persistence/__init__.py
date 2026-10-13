@@ -4,7 +4,7 @@ Connections returned by :func:`connect_database` are always caller-owned and
 must be closed by that caller. Importing this package has no filesystem effects.
 """
 
-from .database import DEFAULT_DB_PATH, DatabaseConnectionError, connect_database
+from .database import DEFAULT_DB_PATH, OUTPUT_DIR, DatabaseConnectionError, connect_database
 from .migrations import (
     MIGRATIONS,
     Migration,
@@ -47,6 +47,7 @@ __all__ = [
     "DecisionNotFoundError",
     "DecisionResolutionResult",
     "DEFAULT_DB_PATH",
+    "OUTPUT_DIR",
     "MIGRATIONS",
     "DatabaseConnectionError",
     "Migration",
