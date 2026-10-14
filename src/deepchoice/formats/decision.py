@@ -398,6 +398,26 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
     return lines
 
 
+def answer_delivery_question_keys(recommendation: dict) -> list[str]:
+    """The answer-slot identity, published by synthesis and read, not re-derived.
+
+    Snapshots written before the identity was published carry no ``questions``
+    list; for those the historical ``Q``/``R0`` key shape is still the only
+    available signal, so it remains the fallback rather than a second rule.
+    """
+    delivery = recommendation.get("answer_delivery")
+    if not isinstance(delivery, dict):
+        return []
+    published = delivery.get("questions")
+    if isinstance(published, list) and all(isinstance(key, str) for key in published):
+        return list(published)
+    inventory = delivery.get("requirements")
+    if not isinstance(inventory, dict):
+        return []
+    return [key for key in inventory
+            if isinstance(key, str) and (key.startswith("Q") or key == "R0")]
+
+
 def _render_answer_delivery(
     recommendation: dict, lang: str, *, visible: list[dict] | None = None,
 ) -> list[str]:
@@ -408,9 +428,9 @@ def _render_answer_delivery(
     lines = _render_model_analysis(recommendation, lang, visible=visible)
     addressed = {key for item in visible for key in item.get("requirement_ids", [])}
     inventory = recommendation["answer_delivery"]["requirements"]
-    missing = [(key, text) for key, text in inventory.items()
-               if isinstance(key, str) and (key.startswith("Q") or key == "R0")
-               and isinstance(text, str) and key not in addressed
+    keys = answer_delivery_question_keys(recommendation)
+    missing = [(key, inventory[key]) for key in keys
+               if isinstance(inventory.get(key), str) and key not in addressed
                and (key != "R0" or not any(item.get("kind") == "choice" for item in visible))]
     if missing:
         lines.extend(["### 尚无保留分析的问题" if zh else "### Questions without retained analysis", "",
@@ -483,8 +503,9 @@ def render_answer_report(state: dict, lang: str, format_name: str = "what_why_ho
         lines.extend(["## 原问题覆盖" if zh else "## Original question coverage", "",
                       "| 原问题 | 当前状态 |" if zh else "| Original question | Current status |",
                       "| --- | --- |"])
-        for key, question in inventory.items():
-            if not isinstance(key, str) or not (key.startswith("Q") or key == "R0"):
+        for key in answer_delivery_question_keys(rec):
+            question = inventory.get(key)
+            if not isinstance(question, str):
                 continue
             if key == "R0" and any(item.get("kind") == "choice" for item in visible):
                 has_answer = True

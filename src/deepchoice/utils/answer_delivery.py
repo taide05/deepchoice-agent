@@ -22,11 +22,18 @@ def expand_answer_response(value, requirements, query, *, require_compact=False)
             result.pop("answer_delivery", None)  # The model cannot grant this mode.
         return result
     from .decision_analysis import original_analysis_requirements
+    from .question_packet import question_rows
     valid = value.get("answer_contract") == ANSWER_CONTRACT
+    inventory = original_analysis_requirements(requirements, query)
+    # The answer-slot identity is published once, from the same view the model
+    # was offered and the binder validated. Constraint and analysis rows stay in
+    # the inventory as context; they are not questions of record.
+    questions = [key for key, _ in question_rows(query, requirements or [])]
     return {
         "answer_delivery": {
             "version": ANSWER_CONTRACT,
-            "requirements": original_analysis_requirements(requirements, query),
+            "requirements": inventory,
+            "questions": [key for key in questions if key in inventory],
         },
         "winner": "context_dependent", "ranked_options": [],
         "source_facts": deepcopy(value.get("source_facts", [])) if valid else [],

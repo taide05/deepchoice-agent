@@ -121,6 +121,49 @@ def test_compact_diagnostics_and_runtime_metadata_are_not_model_authority():
     assert "answer_delivery" not in expand_answer_response(legacy, [], "Question")
 
 
+def test_published_question_identity_is_the_offered_answer_slot_set():
+    """The answer slots are published where they are decided, not re-derived.
+
+    Constraint and analysis rows stay in the inventory as context; only the
+    original question and the frozen sub-questions are questions of record.
+    """
+    from deepchoice.formats.decision import answer_delivery_question_keys
+    from deepchoice.utils.question_packet import question_rows
+
+    requirements = [
+        {"id": "C1", "requirement": "must run on k8s", "kind": "frozen_constraint"},
+        {"id": "C2", "requirement": "budget sensitive", "kind": "scene_preference"},
+        {"id": "A1", "requirement": "how much ops effort", "kind": "analysis_constraint"},
+        {"id": "Q1", "requirement": "Which fits a small team?", "kind": "frozen_sub_question"},
+        {"id": "Q2", "requirement": "How fast is recovery?", "kind": "frozen_sub_question"},
+        {"id": "Q3", "requirement": "Model-derived extra", "kind": "analysis_sub_question"},
+    ]
+    result = expand_answer_response(
+        {"answer_contract": ANSWER_CONTRACT, "source_facts": [], "decision_analysis": []},
+        requirements, "Pick a queue",
+    )
+    delivery = result["answer_delivery"]
+
+    assert delivery["questions"] == ["R0", "Q1", "Q2"]
+    assert delivery["questions"] == [key for key, _ in question_rows("Pick a queue", requirements)]
+    # Constraints stay available as context without becoming answer slots.
+    assert {"C1", "C2"} <= set(delivery["requirements"])
+    assert not {"C1", "C2"} & set(delivery["questions"])
+    # Downstream reads the published identity rather than re-deriving it.
+    assert answer_delivery_question_keys(result) == delivery["questions"]
+
+
+def test_historical_snapshot_without_published_questions_still_renders():
+    """A snapshot written before the identity was published keeps working."""
+    from deepchoice.formats.decision import answer_delivery_question_keys
+
+    historical = {"answer_delivery": {
+        "version": ANSWER_CONTRACT,
+        "requirements": {"R0": "Pick a queue", "C1": "must run on k8s", "Q1": "Which fits?"},
+    }}
+    assert answer_delivery_question_keys(historical) == ["R0", "Q1"]
+
+
 async def test_durable_synthesis_cannot_fall_back_to_legacy_response(monkeypatch):
     from deepchoice.contracts.manifest import build_run_manifest
     from tests.test_synthesis_structure import response, TASK, CHAINS
