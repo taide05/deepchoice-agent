@@ -9,7 +9,6 @@ from copy import deepcopy
 from urllib.parse import urlsplit
 
 from .evidence import candidate_product_mentions, is_navigation_placeholder
-from .source_scope import MAX_SCOPE_CHARS, MAX_SCOPE_SENTENCES, MAX_SENTENCE_CHARS
 
 MAX_PACKET_BYTES = 24000
 MAX_PACKET_SOURCES = 24
@@ -23,8 +22,13 @@ def has_omission_context(sentences, start, end):
 
 
 def _source_coordinates(source):
-    """Keep original character spans, including Chinese sentence boundaries."""
-    from ..citations.verifier import _split_sentences
+    """Keep original character spans, including Chinese sentence boundaries.
+
+    Sentence identity, bounds and spans come from the single shared view in
+    ``source_scope``; this function only applies the fact-layer admissibility
+    rules and reports the spans in list form for range resolution.
+    """
+    from .source_scope import bounded_sentence_spans
 
     if not isinstance(source, dict):
         return None
@@ -36,23 +40,11 @@ def _source_coordinates(source):
     raw = source.get("snippet")
     if not isinstance(raw, str) or is_navigation_placeholder(raw):
         return None
-    text = " ".join(raw.split())
-    if not text or len(text) > MAX_SCOPE_CHARS:
+    view = bounded_sentence_spans(raw)
+    if view is None:
         return None
-    sentences = tuple(_split_sentences(text))
-    if (not sentences or len(sentences) > MAX_SCOPE_SENTENCES
-            or any(not row or len(row) > MAX_SENTENCE_CHARS for row in sentences)):
-        return None
-    spans, cursor = [], 0
-    for sentence in sentences:
-        start = text.find(sentence, cursor)
-        if start < 0 or text[cursor:start].strip():
-            return None
-        cursor = start + len(sentence)
-        spans.append((start, cursor))
-    if text[cursor:].strip():
-        return None
-    return text, sentences, spans
+    text, sentences, spans = view
+    return text, sentences, list(spans)
 
 
 def selection_sentences(source):

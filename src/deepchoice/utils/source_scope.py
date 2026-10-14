@@ -19,12 +19,18 @@ MAX_PROPOSAL_INPUT_CHARS = 16000
 MAX_PROPOSAL_MESSAGE_BYTES = 12000
 
 
-def scope_sentences(document: str) -> tuple[str, ...] | None:
-    """Number exact text units while retaining the original sentence separators.
+def bounded_sentence_spans(document: str) -> tuple[str, tuple[str, ...], tuple[tuple[int, int], ...]] | None:
+    """Normalize text, split it into exact sentences, and locate each one.
 
-    Consecutive sentences without intervening whitespace form one indivisible
-    unit. Actual sentence limits still apply, and range selection must copy the
-    whole unit; adding spaces or clipping a condition would alter source text.
+    This is the single validated sentence view. It returns the normalized text,
+    the sentences exactly as split, and each sentence's character span, or None
+    when the document is unusable - not a string, empty after normalization,
+    over ``MAX_SCOPE_CHARS``, over ``MAX_SCOPE_SENTENCES``, holding a sentence
+    over ``MAX_SENTENCE_CHARS``, or not reconstructible from its own sentences.
+
+    Callers that need a different grouping of these sentences derive it from
+    this result instead of re-parsing the text, so sentence identity is decided
+    in one place.
     """
     from ..citations.verifier import _split_sentences
 
@@ -37,17 +43,40 @@ def scope_sentences(document: str) -> tuple[str, ...] | None:
     if (not sentences or len(sentences) > MAX_SCOPE_SENTENCES
             or any(not sentence or len(sentence) > MAX_SENTENCE_CHARS for sentence in sentences)):
         return None
-    units: list[str] = []
+    spans: list[tuple[int, int]] = []
     cursor = 0
     for sentence in sentences:
         start = text.find(sentence, cursor)
+        if start < 0 or text[cursor:start].strip():
+            return None
+        cursor = start + len(sentence)
+        spans.append((start, cursor))
+    if text[cursor:].strip():
+        return None
+    return text, sentences, tuple(spans)
+
+
+def scope_sentences(document: str) -> tuple[str, ...] | None:
+    """Number exact text units while retaining the original sentence separators.
+
+    Consecutive sentences without intervening whitespace form one indivisible
+    unit. Actual sentence limits still apply, and range selection must copy the
+    whole unit; adding spaces or clipping a condition would alter source text.
+    """
+    view = bounded_sentence_spans(document)
+    if view is None:
+        return None
+    text, sentences, spans = view
+    units: list[str] = []
+    cursor = 0
+    for sentence, (start, end) in zip(sentences, spans):
         if start == cursor and units:
             units[-1] += sentence
         elif start == cursor or (start == cursor + 1 and text[cursor:start] == " "):
             units.append(sentence)
         else:
             return None
-        cursor = start + len(sentence)
+        cursor = end
     return tuple(units) if cursor == len(text) and " ".join(units) == text else None
 
 
