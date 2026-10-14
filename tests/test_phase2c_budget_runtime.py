@@ -39,6 +39,11 @@ from deepchoice.utils import llm as llm_module
 
 NOW = datetime(2026, 9, 15, 4, 0, tzinfo=UTC)
 
+# Ceiling for draining already-admitted work. The scan admits up to 15 calls and
+# each one commits its own reservation on one SQLite connection, so the wait has
+# to allow for that many sequential writes under contention while staying bounded.
+DRAIN_TIMEOUT_SECONDS = 5.0 + 2.0 * 15
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("call_limit", [96, 2])
@@ -78,10 +83,15 @@ async def test_scan_preserves_budget_and_drains_admitted_work(tmp_path, monkeypa
         release.set()
         if call_limit == 2:
             with pytest.raises(BudgetExceededError):
-                await asyncio.wait_for(pending, timeout=5)
+                await asyncio.wait_for(pending, timeout=DRAIN_TIMEOUT_SECONDS)
             assert dispatched == 2  # All other queued requests stayed local.
         else:
-            assert await asyncio.wait_for(pending, timeout=5) == []
+            # Each admitted call commits its own reservation, so the wait covers
+            # one sequential write per dispatched call rather than a flat
+            # deadline that assumes one. Still bounded, so a real stall fails.
+            assert await asyncio.wait_for(
+                pending, timeout=DRAIN_TIMEOUT_SECONDS
+            ) == []
             assert dispatched == 15 and manager._exhausted is None
         usage = await manager._usage()
         assert usage[BudgetResource.TOTAL_TOKENS] == dispatched * 300

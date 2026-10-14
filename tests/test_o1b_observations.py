@@ -3,6 +3,7 @@
 import asyncio
 import json
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -34,6 +35,11 @@ from deepchoice.utils.call_diagnostics import (
 
 
 NOW = datetime(2026, 9, 17, tzinfo=UTC)
+
+# Bounded ceiling for waiting on lease renewal progress. The renewal paths share
+# one SQLite writer, so progress is measured by the counters themselves; this
+# only stops a real stall from hanging the test.
+HEARTBEAT_WAIT_SECONDS = 8.0
 
 
 async def queued(tmp_path):
@@ -503,15 +509,27 @@ async def test_twelve_dedicated_lease_heartbeats_survive_primary_lock_backlog(tm
             for run in runs
         ]
         await lock.acquire()
-        for _ in range(200):
+        # Both renewal paths write to the same product database, so the
+        # broadcast renewal shares one SQLite writer with the twelve dedicated
+        # run heartbeats. Wait for the conditions themselves rather than a
+        # fixed number of 10 ms sleeps, and keep a bounded deadline so a real
+        # stall still fails instead of hanging.
+        deadline = time.monotonic() + max(
+            HEARTBEAT_WAIT_SECONDS, 20 * guard._heartbeat_seconds
+        )
+        while time.monotonic() < deadline:
             if (
                 guard.observations()["renewals"] >= 2
                 and coordinator.heartbeat_observations()["successes"] >= 12
             ):
                 break
-            await asyncio.sleep(0.01)
-        else:
-            raise AssertionError(f"dedicated lease renewals did not start: {guard.observations()} {coordinator.heartbeat_observations()} {[runner.done() for runner in runners.values()]}")
+            await asyncio.sleep(guard._heartbeat_seconds)
+        assert guard.observations()["renewals"] >= 2, (
+            f"dedicated lease renewals did not start: {guard.observations()} "
+            f"{coordinator.heartbeat_observations()} "
+            f"{[runner.done() for runner in runners.values()]}"
+        )
+        assert coordinator.heartbeat_observations()["successes"] >= 12
 
         # Exceed the accepted lease window while ordinary product work is
         # unable to acquire the primary application lock.
