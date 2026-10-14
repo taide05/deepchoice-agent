@@ -164,6 +164,33 @@ def test_historical_snapshot_without_published_questions_still_renders():
     assert answer_delivery_question_keys(historical) == ["R0", "Q1"]
 
 
+def test_renderers_read_the_published_order_instead_of_re_deriving_it():
+    """The published list drives the coverage table, not the key shape.
+
+    Reverting the renderers to the inline prefix filter would keep every other
+    test green and only silently restore the historical order, so this pins the
+    rendered order itself.
+    """
+    from deepchoice.formats.decision import render_answer_report
+
+    # Deliberately not "Q"/"R0" shaped and not in inventory order: only a
+    # renderer that actually reads the published list can produce this output.
+    recommendation = {
+        "answer_delivery": {
+            "version": ANSWER_CONTRACT,
+            "requirements": {"R0": "Pick a queue", "Q1": "Second question?"},
+            "questions": ["Q1", "R0"],
+        },
+        "source_facts": [],
+        "decision_analysis": [],
+    }
+    state = {"task": {"query": "Pick a queue"}, "final_recommendation": recommendation}
+    report = render_answer_report(state, "en", "comparison_matrix")
+
+    coverage = report.split("## Original question coverage", 1)[1]
+    assert coverage.index("Second question?") < coverage.index("Pick a queue")
+
+
 async def test_durable_synthesis_cannot_fall_back_to_legacy_response(monkeypatch):
     from deepchoice.contracts.manifest import build_run_manifest
     from tests.test_synthesis_structure import response, TASK, CHAINS

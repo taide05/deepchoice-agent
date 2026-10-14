@@ -2,6 +2,24 @@
 
 ## [Unreleased] - 2026-10-14
 
+### Publish the answer-slot identity where it is decided
+
+`final_recommendation.answer_delivery` gains a `questions` list: the answer
+slots, in the order the model was offered them, built from the same
+`question_rows` view the binder validates against. The comparison-matrix
+coverage table and the missing-question list now read that list instead of each
+re-deriving "which keys are questions" from the `Q`/`R0` key shape.
+
+Snapshot shape: additive. `requirements` keeps every key it had, so existing
+readers and pre-change snapshots are unaffected; a snapshot without `questions`
+still renders through the historical key reading. Constraint, scene and analysis
+rows stay in `requirements` as context and are not answer slots.
+
+Reader-visible change: the coverage table and the missing-question list now
+print the original question (`R0`) first, matching the offered order, where they
+previously printed it last because the inventory appended it after the
+requirement rows. Same rows and statuses, different order.
+
 ### End the one-version compatibility period for the legacy research API
 
 `/api/v1/tasks/*` is now the only product interface. The following routes were
