@@ -1,24 +1,27 @@
 """Stop lines for the single authorized diagnostic run.
 
-The candidate revision (48b32bd) predates the durable budget layer, so the
-three limits are enforced here, at the real dispatch points, before any request
-leaves the process. Nothing is persisted and no durable budget system is added.
+The candidate revision (48b32bd) predates the durable budget layer, so the three
+limits are enforced here, at real dispatch points, before any request leaves the
+process. Nothing is persisted and no durable budget system is added, and no
+research node, prompt, parsing or retry rule is changed.
 
-  LLM requests   hard cap. Counted by subclassing the OpenAI async client and
-                 wrapping `request()`, which is the single funnel that
-                 `chat.completions.create` reaches through `_post`. Every real
-                 HTTP attempt increments exactly once, so the retry loop in
-                 utils.llm and any SDK-level retry are both included.
-  Tavily POSTs   hard cap, counted in the keypool transport that every Tavily
-                 search POST goes through, so key-failover retries count too.
-  Wall clock     dispatch deadline from arming. A request already in flight
-                 cannot be interrupted; this stops new dispatches, which is
-                 what gets recorded.
+  LLM requests   Counted in `_prepare_request`, which the installed SDK calls
+                 inside its retry loop immediately before each real send, so
+                 every attempt is counted whether it comes from utils.llm's own
+                 retry loop or from SDK-internal retries.
+  Tavily POSTs   Counted for api.tavily.com inside httpx.AsyncClient.post, so the
+                 search transport, key probing and key failover are all covered.
+  Wall clock     Measured from the moment research actually starts, not from
+                 service start, and enforced outside the async-for consumption so
+                 the async generator interface is preserved. The deadline cancels
+                 the research instead of only refusing later dispatches.
 
-Nothing here changes research nodes, prompts, parsing or retry policy.
+A stop reached in one category stops the whole run: both guards consult one
+shared stop state, so no further send of either kind happens afterwards.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 
@@ -31,43 +34,91 @@ _state: dict = {
     "tavily_posts": 0,
     "llm_rejected": 0,
     "tavily_rejected": 0,
-    "started_at": None,
+    "started_at": None,          # arming time
+    "run_started_at": None,      # research start: what the wall clock uses
     "stop_reason": None,
+    "stop_at": None,
     "events": [],
 }
 
+# Verification-only: shifts the research clock so a deadline can be exercised
+# without waiting. Left at zero in a real run.
+_run_clock_offset_s = 0.0
+
 
 class DispatchLimitReached(RuntimeError):
-    """Raised instead of dispatching once a stop line has been reached."""
+    """Raised once any stop line has been reached; aborts the run."""
 
 
+def normalize_single_tavily_key() -> int:
+    """Reduce the Tavily configuration to exactly one key.
+
+    Run before anything imports the key pool. Both environment names are set to
+    the same single key so that re-reading them later cannot rebuild a multi-key
+    pool, and a pool-wide re-probe is never enabled.
+    """
+    os.environ.pop("TAVILY_REPROBE", None)
+    raw = os.environ.get("TAVILY_API_KEYS", "") or os.environ.get("TAVILY_API_KEY", "")
+    first = next((part.strip() for part in raw.split(",") if part.strip()), "")
+    if not first:
+        return 0
+    os.environ["TAVILY_API_KEYS"] = first
+    os.environ["TAVILY_API_KEY"] = first
+    return 1
+
+
+# ---------------------------------------------------------------- stop state
 def _note(kind: str, detail: str = "") -> None:
     started = _state["started_at"]
     elapsed = round(time.monotonic() - started, 1) if started else 0.0
+    if _state["stop_at"] is None:
+        _state["stop_at"] = time.monotonic()
     _state["events"].append({"elapsed_s": elapsed, "kind": kind, "detail": detail})
     if _state["stop_reason"] is None:
         _state["stop_reason"] = kind
     print(f"[stop-line] {kind} {detail} (t+{elapsed}s)", flush=True)
 
 
-def _deadline_hit() -> bool:
-    started = _state["started_at"]
+def stopped() -> bool:
+    """One global stop state, consulted by every dispatch path."""
+    return _state["stop_reason"] is not None
+
+
+def _run_elapsed() -> float | None:
+    started = _state["run_started_at"]
     if started is None:
-        return False
-    if time.monotonic() - started >= WALL_CLOCK_MAX_S:
-        if _state["stop_reason"] is None:
-            _note("wall_clock", f">={WALL_CLOCK_MAX_S}s")
-        return True
-    return False
+        return None
+    return time.monotonic() - started + _run_clock_offset_s
 
 
-def _limit_reached() -> bool:
-    """True once any stop line has been reached."""
-    return (
-        _state["llm_requests"] >= LLM_REQUESTS_MAX
-        or _state["tavily_posts"] >= TAVILY_POSTS_MAX
-        or _state["stop_reason"] is not None
-    )
+def set_run_clock_offset(seconds: float) -> None:
+    """Verification-only clock shift; no effect when left at zero."""
+    global _run_clock_offset_s
+    _run_clock_offset_s = float(seconds)
+
+
+def _check(kind: str) -> None:
+    """Raise if this run may no longer dispatch.
+
+    Order matters: the shared stop flag is consulted first, so once any category
+    has tripped, every later dispatch of either category is refused.
+    """
+    if stopped():
+        raise DispatchLimitReached(
+            f"run already stopped by {_state['stop_reason']}; refusing new dispatch"
+        )
+    elapsed = _run_elapsed()
+    if elapsed is not None and elapsed >= WALL_CLOCK_MAX_S:
+        _note("wall_clock", f"research exceeded {WALL_CLOCK_MAX_S}s")
+        raise DispatchLimitReached(
+            f"research wall clock reached ({WALL_CLOCK_MAX_S}s)"
+        )
+    if kind == "llm" and _state["llm_requests"] >= LLM_REQUESTS_MAX:
+        _note("llm_requests", f"cap {LLM_REQUESTS_MAX} reached")
+        raise DispatchLimitReached(f"LLM request stop line reached ({LLM_REQUESTS_MAX})")
+    if kind == "tavily" and _state["tavily_posts"] >= TAVILY_POSTS_MAX:
+        _note("tavily_posts", f"cap {TAVILY_POSTS_MAX} reached")
+        raise DispatchLimitReached(f"Tavily POST stop line reached ({TAVILY_POSTS_MAX})")
 
 
 def snapshot() -> dict:
@@ -79,135 +130,106 @@ def snapshot() -> dict:
     )
     if _state["started_at"] is not None:
         out["elapsed_s"] = round(time.monotonic() - _state["started_at"], 1)
+    elapsed = _run_elapsed()
+    if elapsed is not None:
+        out["run_elapsed_s"] = round(elapsed, 1)
     return out
 
 
-def _guard(counter: str, rejected: str, cap: int, label: str, deadline_kind: str) -> None:
-    if _deadline_hit():
-        _state[rejected] += 1
-        raise DispatchLimitReached(f"wall clock stop line reached ({label})")
-    if _state[counter] >= cap:
-        _state[rejected] += 1
-        _note(counter, f"cap {cap} reached")
-        raise DispatchLimitReached(f"{label} stop line reached ({cap})")
-
-
-def arm_run_timer() -> None:
-    """Start the wall clock at research dispatch and cancel work past the limit.
-
-    Separate from arm() because the research clock starts when the run is
-    dispatched, not when the service starts. Wrapping the orchestrator's stream
-    gives run-level cancellation: `asyncio.wait_for` cancels the graph task when
-    the deadline passes, so cancellable work stops rather than only being
-    refused at the next dispatch.
-    """
-    from deepchoice.agents import orchestrator
-
-    original = orchestrator.ChiefEditorAgent.astream_research_task
+# ---------------------------------------------------------------- run timing
+def start_run_clock() -> None:
+    """Start the research wall clock. Called when a run actually begins."""
     _state["run_started_at"] = time.monotonic()
-
-    def timed(self, *args, **kwargs):
-        async def runner():
-            return await original(self, *args, **kwargs)
-
-        return _wall_guard(runner())
-
-    orchestrator.ChiefEditorAgent.astream_research_task = timed
-    print(f"[stop-line] research wall clock started: {WALL_CLOCK_MAX_S}s", flush=True)
+    print(f"[stop-line] research clock started ({WALL_CLOCK_MAX_S}s)", flush=True)
 
 
-async def _wall_guard(coro):
-    import asyncio
-
-    try:
-        return await asyncio.wait_for(coro, timeout=WALL_CLOCK_MAX_S)
-    except asyncio.TimeoutError:
-        _note("wall_clock", f"research exceeded {WALL_CLOCK_MAX_S}s; work cancelled")
-        raise DispatchLimitReached(
-            f"research wall clock reached ({WALL_CLOCK_MAX_S}s); work cancelled"
-        ) from None
-
-
+# ---------------------------------------------------------------- arming
 def arm() -> None:
     """Patch the real dispatch points. Call after credentials are configured."""
     import httpx
-    import openai
     from deepchoice.utils import llm as llm_module
 
     _state["started_at"] = time.monotonic()
-
-    # chat.completions.create() calls self._post(...). That attribute is bound
-    # per resource instance, not defined on a class, so the counter is installed
-    # by subclassing the client and wrapping the resource's own _post after
-    # construction. Every real send attempt goes through it, so the retry loop
-    # in utils.llm and any SDK-internal retry are each counted once.
     base_client = llm_module.AsyncOpenAI
 
     class CountingAsyncOpenAI(base_client):
+        """Counts every real send attempt by hooking the pre-send step.
+
+        The installed SDK calls `_prepare_request(request)` inside its retry
+        loop, directly before the network send, so this counts one per actual
+        attempt regardless of where the retry came from.
+        """
+
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            resource = self.chat.completions
-            inner = resource._post
+            inner = self._prepare_request
 
-            async def counted_post(*a, **kw):
-                _guard("llm_requests", "llm_rejected", LLM_REQUESTS_MAX,
-                       "LLM request", "llm")
+            async def counted_prepare(request, *a, **kw):
+                _check("llm")
                 _state["llm_requests"] += 1
-                return await inner(*a, **kw)
+                if stopped():
+                    _state["llm_rejected"] += 1
+                return await inner(request, *a, **kw)
 
-            resource._post = counted_post
+            self._prepare_request = counted_prepare
 
     llm_module.AsyncOpenAI = CountingAsyncOpenAI
 
-    # Every Tavily POST in this revision goes to one endpoint, whatever client
-    # created it: the search transport in TavilySearch._do_search (key probing
-    # and failover both use it) and the outbound health probe. Counting by
-    # destination catches all of them without depending on internal wiring.
     original_client_post = httpx.AsyncClient.post
 
     async def counted_client_post(self, url, *args, **kwargs):
         target = url if isinstance(url, str) else str(url)
         if "api.tavily.com" in target:
-            _guard("tavily_posts", "tavily_rejected", TAVILY_POSTS_MAX,
-                   "Tavily POST", "tavily")
+            try:
+                _check("tavily")
+            except DispatchLimitReached:
+                _state["tavily_rejected"] += 1
+                raise
             _state["tavily_posts"] += 1
         return await original_client_post(self, url, *args, **kwargs)
 
     httpx.AsyncClient.post = counted_client_post
 
-    # post_with_failover treats every transport error as "try the next key", so a
-    # stop-line exception would be swallowed into a (None, None) return and then
-    # raised as "no Tavily API key available". Re-raise it after the call so a
-    # reached limit aborts the research instead of degrading into a normal
-    # network failure. Only the stop-line error is affected; ordinary transport
-    # errors keep their existing failover behaviour.
-    import deepchoice.retrievers.tavily_keypool as keypool
-    import deepchoice.retrievers.tavily_search as tavily_search
-
-    original_failover = keypool.post_with_failover
-
-    async def limit_aware_failover(post, payload, *args, **kwargs):
-        outcome = None
-        try:
-            outcome = await original_failover(post, payload, *args, **kwargs)
-        except DispatchLimitReached:
-            raise
-        except Exception:
-            if _limit_reached():
-                raise DispatchLimitReached(
-                    "stop line reached during Tavily failover"
-                ) from None
-            raise
-        if _limit_reached() and (not outcome or outcome[0] is None):
-            raise DispatchLimitReached("stop line reached during Tavily failover")
-        return outcome
-
-    keypool.post_with_failover = limit_aware_failover
-    tavily_search.post_with_failover = limit_aware_failover
-
     print(
-        f"[stop-line] armed: LLM<= {LLM_REQUESTS_MAX} requests "
-        f"(per-client _post), Tavily<= {TAVILY_POSTS_MAX} POSTs "
-        f"(api.tavily.com via httpx), wall<= {WALL_CLOCK_MAX_S}s",
+        f"[stop-line] armed: LLM<= {LLM_REQUESTS_MAX} requests (_prepare_request), "
+        f"Tavily<= {TAVILY_POSTS_MAX} POSTs (api.tavily.com), "
+        f"wall<= {WALL_CLOCK_MAX_S}s from research start",
         flush=True,
     )
+
+
+def arm_run_timer() -> None:
+    """Wrap the research stream so the deadline cancels work, keeping async-for.
+
+    The wrapper is itself an async generator, so callers keep consuming it with
+    `async for`; the time check happens between yields, which is outside the
+    consumption and therefore does not change the stream contract.
+    """
+    from deepchoice.agents import orchestrator
+
+    original = orchestrator.ChiefEditorAgent.astream_research_task
+
+    async def timed_stream(self, *args, **kwargs):
+        start_run_clock()
+        source = original(self, *args, **kwargs)
+        async for event in source:
+            elapsed = _run_elapsed() or 0.0
+            if elapsed >= WALL_CLOCK_MAX_S:
+                _note("wall_clock", f"research exceeded {WALL_CLOCK_MAX_S}s")
+                aclose = getattr(source, "aclose", None)
+                if aclose is not None:
+                    await aclose()
+                raise DispatchLimitReached(
+                    f"research wall clock reached ({WALL_CLOCK_MAX_S}s); cancelled"
+                )
+            if stopped():
+                aclose = getattr(source, "aclose", None)
+                if aclose is not None:
+                    await aclose()
+                raise DispatchLimitReached(
+                    f"run stopped by {_state['stop_reason']}; research cancelled"
+                )
+            yield event
+
+    orchestrator.ChiefEditorAgent.astream_research_task = timed_stream
+    print("[stop-line] research stream timer installed (async generator)", flush=True)

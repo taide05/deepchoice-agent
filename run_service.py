@@ -50,12 +50,6 @@ def main() -> int:
     os.chdir(WORKTREE)
     sys.path.insert(0, str(SRC))
 
-    # A single key only, and never a pool-wide re-probe.
-    os.environ.pop("TAVILY_REPROBE", None)
-    keys = os.environ.get("TAVILY_API_KEYS", "")
-    if keys:
-        os.environ["TAVILY_API_KEYS"] = keys.split(",")[0].strip()
-
     loaded = load_credentials()
     print("credentials loaded (values not shown):")
     for name, state in sorted(loaded.items()):
@@ -68,7 +62,15 @@ def main() -> int:
 
     import run_limits
 
+    # One Tavily key only, before anything can build a pool from both names.
+    key_count = run_limits.normalize_single_tavily_key()
+    print(f"tavily keys after normalisation: {key_count} (single-key mode)")
+    if key_count == 0:
+        print("BLOCKED: no Tavily key available after normalisation.")
+        return 2
+
     run_limits.arm()
+    run_limits.arm_run_timer()
 
     # ---- verify the REAL import and the REAL resolved paths ----
     import deepchoice
