@@ -16,10 +16,12 @@ from deepchoice.contracts.errors import DeepChoiceError, ErrorCategory
 
 
 # The runtime data directory. This module owns the on-disk layout: the product
-# database, the LangGraph checkpoint store and the legacy snapshot store all live
-# here, so the directory is stated once and derived, never restated. The value
-# stays relative on purpose - it resolves against the process working directory,
-# which existing run identities depend on.
+# database and the LangGraph checkpoint store live here, so the directory is
+# stated once and derived, never restated. It also holds historical snapshot
+# files written by the retired /research path, which the read-only legacy import
+# still reads; that store had no owner module of its own. The value stays
+# relative on purpose - it resolves against the process working directory, which
+# existing run identities depend on.
 OUTPUT_DIR = Path("outputs")
 
 DEFAULT_DB_PATH = OUTPUT_DIR / "deepchoice.db"

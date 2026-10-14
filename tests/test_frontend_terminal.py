@@ -74,7 +74,7 @@ def test_resume_keeps_endpoint_cas_and_accepts_server_new_run(monkeypatch, statu
     assert at.session_state["research_terminal_status"] == "interrupted"
 
 
-@pytest.mark.parametrize("operation", ["start", "resume", "stream", "legacy"])
+@pytest.mark.parametrize("operation", ["start", "resume", "stream"])
 def test_request_failures_do_not_expose_private_details_or_resubmit(monkeypatch, operation):
     at = prepare(monkeypatch, "failed")
     marker="PRIVATE_SECRET_SENTINEL"
@@ -102,12 +102,7 @@ def test_request_failures_do_not_expose_private_details_or_resubmit(monkeypatch,
         at.session_state["research_failed"]=False
         at.session_state["research_running"]=True
         at.session_state["research_terminal_status"]=None
-        if operation=="stream":
-            monkeypatch.setattr(httpx,"stream",fail)
-        else:
-            monkeypatch.setattr(httpx,"stream",lambda *a,**kw: _RawStream([
-                'event: run.progress', 'data: {"node":"__error__","detail":"'+marker+'"}', ''
-            ]))
+        monkeypatch.setattr(httpx,"stream",fail)
         at.run()
         assert at.session_state["research_connection_lost"] == (operation=="stream")
     assert not at.exception

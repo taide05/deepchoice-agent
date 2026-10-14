@@ -89,8 +89,8 @@ async def lifespan(application: FastAPI):
             await run_migrations(connection)
         repository = SQLiteTaskRunRepository(connection, connection_lock)
         if str(resolved_database_path) == ":memory:":
-            # A second SQLite :memory: connection is a different database.
-            # Keep the compatibility path usable; durable deployments use a
+            # A second SQLite :memory: connection is a different database. The
+            # in-memory case shares one connection; durable deployments use a
             # filesystem database and receive the isolated lease connection.
             lease_connection = connection
             lease_lock = connection_lock

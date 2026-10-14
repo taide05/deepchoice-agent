@@ -1902,11 +1902,6 @@ def _render_research_progress():
     live_nodes, live_order = {}, []
     first_ts = last_ts = None
 
-    def _complete():
-        progress_bar.progress(1.0, text=t("progress_done", lang))
-        st.session_state.research_running = False
-        st.session_state.research_complete = True
-
     try:
         got_terminal = False
         got_decision_pause = False
@@ -1968,13 +1963,6 @@ def _render_research_progress():
                             break
                         continue
                     node = event.get("node")
-                    if node == "__done__":
-                        _complete(); got_terminal = True; break
-                    if node == "__error__":
-                        st.warning(t("research_unconfirmed_message", lang))
-                        st.session_state.research_running = False
-                        st.session_state.research_failed = True
-                        return
                     phase = event.get("phase") or NODE_TO_PHASE.get(node, "")
                     if phase in PHASES:
                         idx = PHASES.index(phase)
