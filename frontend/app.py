@@ -73,7 +73,6 @@ T = {
         "decision_pending": "研究已暂停，等待你的选择。",
         "progress_init": "初始化...",
         "progress_phase": "阶段 {idx}/7: {name}",
-        "progress_done": "研究完成",
         "loss_connection": "与研究服务器连接中断:",
         "research_failed_message": "研究失败。可以重试，开始新的运行。",
         "research_timeout_message": "研究超时。可以重试，开始新的运行。",
@@ -254,7 +253,6 @@ T = {
         "decision_pending": "Research is paused and waiting for your choice.",
         "progress_init": "Initializing...",
         "progress_phase": "Phase {idx}/7: {name}",
-        "progress_done": "Research complete",
         "loss_connection": "Lost connection to research server:",
         "research_failed_message": "Research failed. You can retry with a new run.",
         "research_timeout_message": "Research timed out. You can retry with a new run.",
@@ -435,7 +433,6 @@ T = {
         "decision_pending": "研究は一時停止中です。選択してください。",
         "progress_init": "初期化中...",
         "progress_phase": "フェーズ {idx}/7: {name}",
-        "progress_done": "研究完了",
         "loss_connection": "サーバー接続が失われました:",
         "research_failed_message": "調査に失敗しました。新しい実行で再試行できます。",
         "research_timeout_message": "調査がタイムアウトしました。新しい実行で再試行できます。",
@@ -616,7 +613,6 @@ T = {
         "decision_pending": "연구가 일시 중지되었습니다. 선택해 주세요.",
         "progress_init": "초기화 중...",
         "progress_phase": "단계 {idx}/7: {name}",
-        "progress_done": "연구 완료",
         "loss_connection": "연구 서버 연결 손실:",
         "research_failed_message": "연구 실패. 새 실행으로 다시 시도할 수 있습니다.",
         "research_timeout_message": "연구 시간 초과. 새 실행으로 다시 시도할 수 있습니다.",
@@ -899,9 +895,9 @@ API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
 PHASES = ["query_analysis", "retrieval", "source_evaluation", "conflict_detection",
           "evidence_chain", "self_review", "report_generation"]
 
-# Fallback copy of NODE_TO_PHASE from src/deepchoice/server/app.py (server is the
-# single source of truth — keep the two tables in sync). Used only when a stream
-# event is missing its "phase" field.
+# Workflow node name -> progress phase. This table is now the only one: the
+# server's duplicate was removed with the retired legacy SSE formatter, and the
+# durable payload carries `node` only.
 NODE_TO_PHASE = {
     "query_analyzer": "query_analysis",
     "query_adapter": "query_analysis",

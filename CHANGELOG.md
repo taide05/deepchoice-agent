@@ -54,8 +54,10 @@ asserts the retired in-process starter cannot come back.
 
 Residue of that retirement, cleaned up afterwards: the frontend's handling of
 the `__done__` and `__error__` event markers and its local `_complete` helper,
-which only the retired SSE formatter produced, are gone (`phase` handling stays
-— it still arrives); the two comments that still described the deleted local
+which only the retired SSE formatter produced, are gone; the durable payload
+carries `node` only, so the frontend maps it with its own node-to-phase table,
+and `progress_done` went with `_complete` as its last consumer. The two comments
+that still described the deleted local
 snapshot store and the retired compatibility path now describe the current
 layout, with the historical snapshot files and the import that still reads them
 named explicitly. The `legacy` parametrization of the frontend request-failure
