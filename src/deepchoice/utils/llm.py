@@ -11,7 +11,6 @@ from langchain_core.utils.json import parse_json_markdown
 from openai import APIConnectionError, AsyncOpenAI
 
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
-DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # Diagnostics (task 0.2): optional observer hook + current-case context.
 # Both default to inert so the production path is unchanged when disabled.
@@ -47,6 +46,15 @@ def _env(*names: str, default: str = "") -> str:
 # Tier -> provider config (user decision 2026-09-01): two flash tiers —
 # deepseek-flash (the hot, high-frequency path) and qwen-flash (report
 # synthesis + conflict re-arbitration).
+#
+# RECOVERY ADAPTER (2026-10-14): this revision is 48b32bd + a service
+# adaptation, NOT a reproduction of the historical model setup. The retired
+# Qwen/DashScope tier no longer has credentials, so the qwen-flash tier name is
+# kept for the unchanged call sites but served by the current DeepSeek service
+# and credential. The Qwen-only `enable_thinking` payload is dropped because it
+# is not part of the DeepSeek request contract. No research node, prompt or
+# answer-handling rule is changed; only the transport target. Callers that still
+# request `model="qwen-flash"` therefore no longer select a second provider.
 TIERS = {
     "deepseek-flash": {
         "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
@@ -54,12 +62,9 @@ TIERS = {
         "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),
     },
     "qwen-flash": {
-        "model": _env("QW_FLASH_MODEL", "PRO_MODEL", default="qwen3.8-flash"),
-        "base": _env("QW_FLASH_BASE_URL", "PRO_BASE_URL", "LLM_BASE_URL", default=DASHSCOPE_BASE),
-        "key": _env("QW_FLASH_API_KEY", "PRO_API_KEY", "LLM_API_KEY"),
-        # Qwen3* thinks by default — this doubles latency. Turn it off for
-        # deterministic JSON synthesis/re-arbitration (the timeout root cause).
-        "extra_body": {"enable_thinking": False},
+        "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
+        "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
+        "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),
     },
 }
 
