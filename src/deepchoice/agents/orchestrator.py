@@ -34,19 +34,6 @@ from .query_analyzer import QueryAnalyzerAgent
 from .report_generator import ReportGeneratorAgent
 from .self_reviewer import SelfReviewerAgent
 from .source_evaluator import SourceEvaluatorAgent
-from ..persistence.database import OUTPUT_DIR
-
-
-async def _get_sqlite_saver():
-    try:
-        import aiosqlite
-        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-    except ImportError:
-        return None
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    db_path = str(OUTPUT_DIR / "checkpoints.db")
-    conn = await aiosqlite.connect(db_path)
-    return AsyncSqliteSaver(conn)
 
 
 class ChiefEditorAgent:

@@ -12,10 +12,18 @@
 Streamlit 默认创建、查询、事件、取消、恢复和结果读取均使用 `/api/v1/tasks/*`，并保存
 `Last-Event-ID` 以支持断线 replay/resync。
 
-`POST /research` 是一条已弃用的独立兼容路径，仍使用进程内 `_active_tasks` 和旧 SSE。
-它创建的任务不会自动登记为 durable task，也不具备新 API 的取消、恢复、lease/fencing
-或 durable replay 保证。旧接口保留一版并返回 `Deprecation`、`Warning` 和 successor `Link`
-响应头；旧结果读取在本地文件不存在时只读 durable artifact，不会创建或重复执行任务。
+`POST /research`、`GET /research/*`、`GET /tasks/{task_id}` 与 `GET /history` 曾是一条已弃用的
+独立兼容路径，使用进程内 `_active_tasks` 和旧 SSE（见本文档历史身份条款）。**该一版兼容期已于
+2026-10-14 结束：这 11 条路由、`_active_tasks` 注册表、旧 SSE 队列与多路复用、旧任务执行与
+取消处理、本地快照存储 `server/snapshot_store.py`（`save_snapshot`/`save_report`/
+`save_failed_snapshot`/`load_snapshot`/`list_history`）以及读取回退
+`_legacy_snapshot_or_durable_result` 均已删除。** 旧调用方需迁移到 `/api/v1/tasks/*`；
+`Deprecation`/`Warning`/`Link` 兼容响应头随之移除。
+
+仍保留不变：历史文件导入（`server/legacy_import.py`，只读、直接子级、按路径/哈希幂等、
+冲突保留、启动后受管后台任务）、`/api/v1/tasks/*` durable 结果查询、迁移、恢复与
+`scripts/runtime_db.py` 备份/校验/恢复演练。既有快照文件、报告、产品库与检查点库**未被删除、
+改写或迁移**，仅不再有 HTTP 读取入口。
 
 ## 2. 身份、状态与版本
 
@@ -96,8 +104,8 @@ unreachable撤回边界保持。HTTP检查来源事实，不验证模型分析�
 提议，但不证明比较充分性，不授予winner/部署权限；跨候选借证仍由原绑定与自审拦截。
 
 带manifest的ConclusionSynthesizerAgent.run是引用前的联合节点；完整调用使用ChiefEditorAgent。
-无manifest的旧agent单调用接口保持。旧POST /research仍构建manifest并执行当前图，保持
-其非持久生命周期与HITL旁路。历史workflow v1–v5及原prompt身份仍可读、身份有效，
+无manifest的旧agent单调用接口保持。历史上旧POST /research曾构建manifest并执行当前图并保持
+其非持久生命周期与HITL旁路（该路由已随一版兼容期结束移除）。历史workflow v1–v5及原prompt身份仍可读、身份有效，
 但不兼容同run恢复；须以新run执行。SQLite恢复验证联合节点完成后继续引用而不重复生成。
 
 official v11用现有目录名/别名匹配到的明确比较对象优先分配原两个根名额，背景技术靠后，
@@ -463,11 +471,11 @@ quality_signals分别统计conflicts_found与scan_unknown_count；unresolved_cou
 
 默认取消仲裁和补搜外呼；`gather_evidence`保留请求及manifest的输入值，用于历史输入身份，
 在OpenAPI标记deprecated并说明scan-only不受此开关影响，公开质量信号记录requested及
-effective=false。这同样适用于已弃用`/research`的当前graph，不增加新的HTTP入口。
+effective=false。历史上这同样适用于已弃用`/research`的当前graph（该路由已移除），不增加新的HTTP入口。
 2026-10-10明确退役旧直接代理的`legacy_arbitration=True`入口、仲裁/再仲裁及三个补搜工具；
 仓库产品与评估入口均无调用者，专用测试同步移除。直接构造时传该旧参数现拒绝。
 当前扫描、范围、unknown、预算/Trace及取消后drain行为保持；历史manifest和Trace只读兼容保持。
-公开`gather_evidence`及`/research`兼容入口保持上述行为。该闲置实现退役不证明报告质量改善。
+公开`gather_evidence`元数据输入保持上述行为；`/research`兼容入口历史上曾保持同样行为，已随一版兼容期结束移除。该闲置实现退役不证明报告质量改善。
 标题筛对、未提供完整坐标的短描述、模型范围漏判与保守排除仍可能丢失或误用事实。
 词法核验、自审与hash均不是语义证明；真实质量收益尚未测量。
 
@@ -566,7 +574,7 @@ self-review v7，三模板 what-why-how-v18 / evidence-first-v17 / comparison-ma
 阅读顺序并只展示已保留分析，未触及的问题明确列出；触及原问题不宣称完整回答。
 自审留下的公开关键缺口以固定提示显示，长操作计划在紧凑报告中只保留安全边界说明。
 超出需求上限时不发表新分析。旧结果读取及无 manifest 的直接调用保留旧投影路径；
-/research 启动时也生成当前 manifest，因此新运行采用当前紧凑契约。
+历史上 /research 启动时也生成当前 manifest（该路由已移除），因此新运行采用当前紧凑契约。
 工作流顺序为 citation_validator → self_reviewer → evidence_decision_gate → report_generator。
 自审先降低置信度，再由原唯一 gate 判断结构不足与实质不确定；没有新增 HITL 门或自动重搜。
 旧 research-v1–v3 身份可读，不能以新图恢复旧检查点；旧 pending 仍允许 cancel。
@@ -886,7 +894,7 @@ HITL 绑定的旧 run 同样不能换模型恢复：未过期 pending decision �
 ### 3.1 Durable HITL 决策暂停与恢复
 
 - 新运行的唯一人工决策门为 `evidence-insufficient`，位于引用验证之后、报告渲染之前；它只在
-  证据结构不足且推荐方向实质不确定时触发。`POST /research` 及无 `RunContext` 执行不进入该
+  证据结构不足且推荐方向实质不确定时触发。无 `RunContext` 执行不进入该
   durable 决策路径。
 - schema v10 的 `hitl_decisions` 记录决策状态及其产品库接受的 checkpoint 引用、run、state
   schema 和暂停 execution epoch。LangGraph checkpoint payload 仍保存在 checkpoint store。
@@ -1027,7 +1035,7 @@ SSE 规则：
   `0.0.0.0:8000` 直接暴露公网；远程部署必须由认证反向代理限制访问，多用户化前必须补齐
   API token/会话认证与 tenant ownership。
 - 产品 DB 与 checkpoint DB 必须作为一组备份和恢复。
-- 旧 `/research` 创建/SSE 仅用于一版兼容，任何新消费者必须使用 durable API。
+- 旧 `/research` 创建/SSE 的一版兼容期已于 2026-10-14 结束并移除；任何调用方必须使用 durable API。
 - SSE keepalive 和事件 retention 延后到真实反向代理或生产部署接入前完成。
 - Phase 2 Trace 与观测失败不得影响 task state 或 durable SSE 的正确性；预算账本属于
   fail-closed 正确性路径，预留失败必须阻止外呼并使 run 进入可解释终态。
@@ -1228,7 +1236,7 @@ proxy/forward 仍拒绝，公开引用状态/reason、预算与节拍不变。
 内容核对 identity，仍可读取，但跨策略 same-run resume 必须拒绝。恢复时配置哈希变化也
 拒绝；`RunContext` 内部携带持久化 manifest 的策略/哈希，safe-fetch 在探测/外呼前核对
 resolver 的固定配置，漂移 fail closed。内部配置不进入 public result/event/Trace。
-该新增代理能力只用于绑定 RunContext 的 durable 执行；legacy `/research` 和其他无 context
+该新增代理能力只用于绑定 RunContext 的 durable 执行；无 context
 执行仍拒绝代理动态 URL，原 direct 路径不因该兼容约束新增拒绝。
 
 `SAFE_FETCH_TRUSTED_LOCAL_PROXY` 默认空且独立于 `LOCAL_PROXY`；只有显式设为严格

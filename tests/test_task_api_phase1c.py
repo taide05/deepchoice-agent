@@ -38,17 +38,13 @@ def _payload(query: str = "compare FastAPI and Flask") -> dict[str, object]:
     return {"query": query}
 
 
-def test_task_api_persists_queue_without_starting_research(tmp_path: Path, monkeypatch) -> None:
+def test_task_api_persists_queue_without_starting_research(tmp_path: Path) -> None:
     path = tmp_path / "product.db"
     app_module.app.state.product_database_path = path
-    called = False
+    # Creating a task queues it; execution belongs to the coordinator. The
+    # retired in-process starter must not come back on any route.
+    assert not hasattr(app_module, "_run_research")
 
-    async def fail_if_called(*_args, **_kwargs):
-        nonlocal called
-        called = True
-        raise AssertionError("queue API must not start research")
-
-    monkeypatch.setattr(app_module, "_run_research", fail_if_called)
     with TestClient(app_module.app) as client:
         response = client.post("/api/v1/tasks", json=_payload())
         assert response.status_code == 202
@@ -65,7 +61,6 @@ def test_task_api_persists_queue_without_starting_research(tmp_path: Path, monke
         listed = client.get("/api/v1/tasks", params={"limit": 1})
         assert listed.status_code == 200
         assert listed.json()["items"][0]["task"]["task_id"] == task_id
-    assert called is False
 
     app_module.app.state.product_database_path = path
     with TestClient(app_module.app) as client:

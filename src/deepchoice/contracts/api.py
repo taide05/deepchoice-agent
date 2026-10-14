@@ -77,15 +77,6 @@ class ResearchRequest(BaseModel):
         return self
 
 
-class ResearchStartedResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    schema_version: Literal[1] = 1
-    task_id: str
-    status: Literal["started"] = "started"
-    manifest_id: str
-
-
 class TaskRecordResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 

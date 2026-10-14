@@ -183,12 +183,12 @@ When adding a setting, update the code default, tests, README configuration sect
 - Cache only successful retrieval results that pass the `RetrievalResult` contract and provenance validation. Do not cache failed, invalid, or oversized results.
 - Use the product SQLite store with TTL. Cache keys are hashes over the normalized request, source, immutable run manifest identity, and cache-policy version; never persist plaintext requests in cache keys or cache metadata.
 - Coalesce same-key in-flight retrievals within a run using process-local single-flight. Cache hits and coalesced waiters do not reserve `retrieval_calls` and do not create external-call Trace rows; only an actual outbound retrieval does.
-- Bypass the cache for the deprecated `/research` compatibility path and any execution without a `RunContext`. Preserve both `BaseRetriever.retrieve()` and the legacy `search()` interface.
+- Bypass the cache for any execution without a `RunContext`. Preserve both `BaseRetriever.retrieve()` and the legacy `search()` interface.
 - `RETRIEVAL_CACHE_ENABLED` defaults to `1`; setting it to `0` safely bypasses reads and writes. Pass it through Docker configuration. This cache is retrieval-only; do not add LLM response caching.
 
 ### Phase 1 durable runtime
 
-- The Streamlit default path and full durable lifecycle contract use `/api/v1/tasks/*`. `POST /research` remains a deprecated, separate in-memory compatibility path for one compatibility version; do not add new consumers to it.
+- The Streamlit default path and full durable lifecycle contract use `/api/v1/tasks/*`. That is the only product interface: the one-version compatibility period for the old `POST /research`, `GET /research/*`, `GET /tasks/{task_id}` and `GET /history` paths ended on 2026-10-14 and those routes, their in-process task registry, their own SSE and the local snapshot store were removed. Do not reintroduce them or add new consumers to anything but `/api/v1/tasks/*`.
 - Change task/latest-run state and append the corresponding `task_events` record through one repository transaction. API handlers, coordinators, and agents must not write lifecycle tables or events directly.
 - Preserve CAS and fencing semantics: a losing task/run version check or stale `(lease_owner, execution_epoch)` must produce no state mutation, event, or checkpoint reference. Heartbeats renew ownership without user events.
 - Treat lease acquisition and terminal finalization as cancellation-sensitive authority changes. Shutdown must let an in-flight acquisition settle, then fence/finalize any committed grant before propagating cancellation; never leave a committed `running` row merely because the caller was cancelled before receiving the grant.
@@ -340,7 +340,7 @@ When adding a setting, update the code default, tests, README configuration sect
   LangGraph checkpoint payloads.
 - Only the `evidence-insufficient` gate is in scope. It can pause only when evidence is structurally
   insufficient and the recommendation is materially uncertain. It runs after citation verification
-  and before report rendering; the legacy `/research` path and executions without `RunContext` bypass
+  and before report rendering; executions without `RunContext` bypass
   durable decisions.
 - Supported actions are `provide_context` (required bounded supplemental text), `limited_report`
   (report from evidence already collected, clearly marked as restricted), and `cancel` (terminal,

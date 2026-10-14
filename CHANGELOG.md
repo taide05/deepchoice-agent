@@ -1,5 +1,57 @@
 # Changelog
 
+## [Unreleased] - 2026-10-14
+
+### End the one-version compatibility period for the legacy research API
+
+`/api/v1/tasks/*` is now the only product interface. The following routes were
+removed, together with the chain that existed only to serve them:
+
+```
+POST /research
+GET  /research/{task_id}/stream
+GET  /research/{task_id}/status
+GET  /research/{task_id}/checkpoints
+GET  /research/{task_id}/report
+GET  /research/{task_id}/annotated
+GET  /research/{task_id}/export
+GET  /research/{task_id}/snapshot
+POST /research/{task_id}/regenerate
+GET  /tasks/{task_id}
+GET  /history
+```
+
+Removed with them: the in-process `_active_tasks` registry; the old task
+execution and failure handling (`_run_research`, `_format_event`) and the
+retired in-process checkpointer factory `_get_sqlite_saver`; the old SSE
+sentinels and their queue multiplexer; the local snapshot store
+`server/snapshot_store.py` (`save_snapshot`, `save_report`,
+`save_failed_snapshot`, `load_snapshot`, `list_history`) and the
+`_legacy_snapshot_or_durable_result` read fallback that preferred it over the
+durable result; the `Deprecation`/`Warning`/`Link` compatibility middleware;
+and the now-unused `ResearchStartedResponse` contract. Callers of the retired
+routes must migrate to `/api/v1/tasks/*`.
+
+This is a public compatibility change, not an internal refactor, and it is
+recorded as such. What is preserved unchanged: every `/api/v1/tasks/*` durable
+result query; task/run lifecycle, CAS and fencing; the separate product and
+LangGraph checkpoint databases with their transactions, migrations, recovery
+and `scripts/runtime_db.py` pair backup/verify/restore; budget, safe outbound
+fetch, redaction and citation semantics; the read-only, direct-child,
+path/hash-idempotent legacy snapshot import; and all existing snapshot files,
+reports, product databases, checkpoint databases and run material, which were
+not deleted, rewritten or migrated — they simply no longer have an HTTP read
+route.
+
+Tests: the suite dedicated to the retired routes was deleted. Coverage that
+also applies to the durable path was kept, not dropped — the annotated/export
+format matrix, content-type and attachment headers, the HTML sanitization
+boundary, the report-format override behaviour and the missing-task cases now
+drive `GET /api/v1/tasks/{task_id}/annotated` and `.../export` through the
+product database; the `ResearchRequest` bound checks and the structured-error
+redaction tests now drive `POST /api/v1/tasks`; and the durable queue test
+asserts the retired in-process starter cannot come back.
+
 ## [Unreleased] - 2026-10-13
 
 ### Remove the superseded source-scoring helpers and their mirror tests

@@ -178,18 +178,6 @@ def test_durable_sse_rejects_invalid_cursor_and_missing_task() -> None:
         assert missing.json()["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_legacy_status_aliases_read_durable_tasks() -> None:
-    with TestClient(app_module.app) as client:
-        task_id, _ = _create_cancelled(client)
-        for path in (f"/research/{task_id}/status", f"/tasks/{task_id}"):
-            response = client.get(path)
-            assert response.status_code == 200
-            payload = response.json()
-            assert payload["task_id"] == task_id
-            assert payload["status"] == "failed"
-            assert payload["error_detail"]["code"] == "TASK_CANCELLED"
-
-
 def test_lifespan_imports_legacy_snapshot_once(tmp_path: Path) -> None:
     legacy_root = tmp_path / "legacy"
     snapshot_dir = legacy_root / "legacy-task"

@@ -30,7 +30,7 @@ DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型
 
 旧直接代理的`legacy_arbitration=True`及其仲裁/再仲裁/补搜工具已退役；当前产品只扫描
 冲突并保留未解决或未知状态。公开`gather_evidence`作为已弃用输入元数据保留，实际不补搜。
-历史运行与Trace仍可读取，`/research`和检索器兼容接口保持。
+历史运行与Trace仍可读取，检索器兼容接口保持；旧 `/research` HTTP 接口已随一版兼容期结束移除。
 
 ## 设计重点
 
@@ -119,7 +119,8 @@ py -3.12 -m venv .venv
 ### 运行、报告与恢复
 
 - 新调用方使用 `/api/v1/tasks/*`；本地 API 文档在 `http://localhost:8000/docs`。
-  旧 `POST /research` 是一版弃用兼容入口。
+  旧 `POST /research`、`GET /research/*`、`GET /tasks/{task_id}` 与 `GET /history` 的一版兼容期
+  已于 2026-10-14 结束并移除；这些旧调用方需迁移到 `/api/v1/tasks/*`。
 - 任务状态、结果与完成事件原子写入产品 SQLite；页面用 SSE 显示进度。网络断开后通过
   任务快照与事件游标续接，故障保持可见。可恢复的中断续接兼容检查点，失败/超时重试创建新 run。
 - 证据不足时只有一个人工决策点：补充信息、生成受限报告、取消。重复提交相同动作幂等，
@@ -236,7 +237,7 @@ src/deepchoice/
 ├── outbound/        # 出站通道路由、代理/转发、探测与审计
 ├── clarify/         # 前置澄清模块
 ├── formats/         # 3 种报告格式
-├── server/          # FastAPI（29 端点：app.py 25 + clarify_routes 4，含 durable decision、Trace 摘要与 SSE）
+├── server/          # FastAPI（18 端点：app.py 14 + clarify_routes 4，含 durable decision、Trace 摘要与 SSE）
 ├── state.py         # ResearchState TypedDict
 └── utils/           # LLM 客户端 / BGE-M3 嵌入
 

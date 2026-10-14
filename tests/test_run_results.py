@@ -434,7 +434,6 @@ def test_durable_result_api_and_legacy_fallback(durable_client, monkeypatch):
         )
 
     client.portal.call(complete)
-    monkeypatch.setattr(app_module, "load_snapshot", lambda _task_id: None)
 
     snapshot = client.get(f"/api/v1/tasks/{task_id}/snapshot")
     assert snapshot.status_code == 200
@@ -448,14 +447,6 @@ def test_durable_result_api_and_legacy_fallback(durable_client, monkeypatch):
     export = client.get(f"/api/v1/tasks/{task_id}/export?format=md")
     assert export.status_code == 200
     assert export.text == "# Durable report"
-
-    legacy = client.get(f"/research/{task_id}/report")
-    assert legacy.status_code == 200
-    assert legacy.headers["deprecation"] == "true"
-    assert legacy.json()["report"]
-    legacy_snapshot = client.get(f"/research/{task_id}/snapshot")
-    assert legacy_snapshot.status_code == 200
-    assert legacy_snapshot.headers["warning"].startswith("299 DeepChoice")
 
 
 def test_result_api_distinguishes_not_ready_and_terminal_unavailable(durable_client):

@@ -2,7 +2,6 @@
 
 from .api import (
     ResearchRequest,
-    ResearchStartedResponse,
     RunRecordResponse,
     TaskDetailResponse,
     TaskListResponse,
@@ -24,7 +23,6 @@ __all__ = [
     "ErrorResponse",
     "CoreAssetRegistry",
     "ResearchRequest",
-    "ResearchStartedResponse",
     "RunRecordResponse",
     "RunManifest",
     "TaskDetailResponse",

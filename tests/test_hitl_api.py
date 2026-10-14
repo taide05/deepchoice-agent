@@ -138,22 +138,3 @@ def test_decision_api_is_public_bounded_idempotent_and_recoverable():
         assert len(recovered) == 1
         assert recovered[0].run_id == run_id
         assert recovered[0].resume is True
-
-
-def test_legacy_research_route_does_not_expose_decision_api_behavior(monkeypatch):
-    class LegacyOrchestrator:
-        task_id = "legacy-task"
-
-        async def astream_research_task(self):
-            yield {"report_generator": {"report": "# legacy"}}
-
-        async def get_state(self):
-            class State:
-                values = {"report": "# legacy", "current_phase": "self_reviewer"}
-            return State()
-
-    monkeypatch.setattr(app_module, "ChiefEditorAgent", lambda *_args, **_kwargs: LegacyOrchestrator())
-    with TestClient(app_module.app) as client:
-        response = client.post("/research", json={"query": "A vs B"})
-        assert response.status_code in {200, 202}
-        assert "decision" not in response.text.lower()
