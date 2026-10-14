@@ -529,7 +529,11 @@ async def test_twelve_dedicated_lease_heartbeats_survive_primary_lock_backlog(tm
             f"{coordinator.heartbeat_observations()} "
             f"{[runner.done() for runner in runners.values()]}"
         )
-        assert coordinator.heartbeat_observations()["successes"] >= 12
+        assert coordinator.heartbeat_observations()["successes"] >= 12, (
+            f"dedicated run heartbeats did not all start: {guard.observations()} "
+            f"{coordinator.heartbeat_observations()} "
+            f"{[runner.done() for runner in runners.values()]}"
+        )
 
         # Exceed the accepted lease window while ordinary product work is
         # unable to acquire the primary application lock.
