@@ -118,7 +118,19 @@ def render(state: dict) -> str:
             lines.append(f"- {L['basis'][lang]}: {c.get('reasoning', '')}")
             lines.append("")
     else:
-        lines.append(L["no_disputes"][lang])
+        # "No disputes" is only a finding when the check ran to completion.
+        check = state.get("conflict_check") or {}
+        outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
+        unscanned = int(outcomes.get("unscanned") or 0)
+        scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
+        if not check or unscanned or scanned == 0:
+            lines.append(
+                "冲突检查未完成，缺失争议不代表来源一致。" if lang == "zh"
+                else "The conflict check did not complete; a missing dispute does "
+                     "not mean the sources agree."
+            )
+        else:
+            lines.append(L["no_disputes"][lang])
 
     rec = state.get("final_recommendation", {})
     winner = rec.get("winner", "")

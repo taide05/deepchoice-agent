@@ -178,22 +178,30 @@ class TestIncompleteIsNotNoDifference:
 
     @pytest.mark.asyncio
     async def test_report_states_an_unfinished_check(self):
+        from deepchoice.formats.comparison_matrix import render as render_matrix
+        from deepchoice.formats.evidence_first import render as render_evidence
         from deepchoice.formats.what_why_how import render
 
-        state = {
+        base = {
             "task": {"query": "Kafka vs Redis"}, "evidence_chains": [],
-            "conflicts": [], "knowledge_gaps": [],
-            "conflict_check": {"pairs_scanned": 4,
-                               "scan_outcomes": {"unscanned": 4, "difference": 0,
-                                                 "no_difference": 0}},
+            "conflicts": [], "knowledge_gaps": [], "final_recommendation": {},
+            "confidence": "low",
         }
-        report = render(state)
-        assert "did not complete" in report or "未完成" in report
-
-        untouched = {**state, "conflict_check": {
+        unfinished = {**base, "conflict_check": {
+            "pairs_scanned": 4,
+            "scan_outcomes": {"unscanned": 4, "difference": 0, "no_difference": 0}}}
+        completed = {**base, "conflict_check": {
             "pairs_scanned": 4,
             "scan_outcomes": {"unscanned": 0, "difference": 0, "no_difference": 4}}}
-        assert "did not complete" not in render(untouched)
+
+        markers = ("did not complete", "未完成")
+        for name, renderer in (("what_why_how", render),
+                               ("comparison_matrix", render_matrix),
+                               ("evidence_first", render_evidence)):
+            assert any(m in renderer(unfinished) for m in markers), \
+                f"{name} did not state the unfinished check"
+            assert not any(m in renderer(completed) for m in markers), \
+                f"{name} treated a completed check as unfinished"
 
 
 class TestSourceEvaluation:

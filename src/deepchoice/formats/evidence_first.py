@@ -87,7 +87,20 @@ def render(state: dict) -> str:
             lines.append(f"  - {T['claim_a'][lang]}: {_link(c.get('claim_a', ''), c.get('source_a', {}))}")
             lines.append(f"  - {T['claim_b'][lang]}: {_link(c.get('claim_b', ''), c.get('source_b', {}))}")
     else:
-        lines.append(T["no_disputes"][lang])
+        # As in the other renderers: absence of a dispute is a finding only when
+        # the conflict check actually completed.
+        check = state.get("conflict_check") or {}
+        outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
+        unscanned = int(outcomes.get("unscanned") or 0)
+        scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
+        if not check or unscanned or scanned == 0:
+            lines.append(
+                "冲突检查未完成，缺失争议不代表来源一致。" if lang == "zh"
+                else "The conflict check did not complete; a missing dispute does "
+                     "not mean the sources agree."
+            )
+        else:
+            lines.append(T["no_disputes"][lang])
 
     lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}"])
     for g in state.get("knowledge_gaps", []):
