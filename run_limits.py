@@ -97,6 +97,12 @@ def set_run_clock_offset(seconds: float) -> None:
     _run_clock_offset_s = float(seconds)
 
 
+def set_wall_clock_max(seconds: float) -> None:
+    """Verification-only: shorten the real deadline. Not used in a real run."""
+    global WALL_CLOCK_MAX_S
+    WALL_CLOCK_MAX_S = float(seconds)
+
+
 def _check(kind: str) -> None:
     """Raise if this run may no longer dispatch.
 
@@ -199,11 +205,20 @@ def arm() -> None:
 
 
 def arm_run_timer() -> None:
-    """Wrap the research stream so the deadline cancels work, keeping async-for.
+    """Bound the whole consumption by elapsed research time, as an async generator.
 
-    The wrapper is itself an async generator, so callers keep consuming it with
-    `async for`; the time check happens between yields, which is outside the
-    consumption and therefore does not change the stream contract.
+    The wrapper stays an async generator so callers keep using `async for`.
+
+    Each wait for the next event runs inside its own `asyncio.timeout` armed with
+    the time REMAINING against one deadline taken at research start. So the total
+    consumption cannot exceed the limit, waiting for an event never renews the
+    full budget, and an upstream that stalls without ever producing an event
+    still expires. The scope is disarmed while the wrapper is suspended at a
+    yield, so our deadline can never cancel work that belongs to the consumer.
+
+    Our own expiry is told apart from an upstream TimeoutError by asking the
+    scope whether it expired; an upstream TimeoutError raised inside the scope
+    leaves it unexpired and is re-raised as upstream behaviour.
     """
     from deepchoice.agents import orchestrator
 
@@ -211,25 +226,55 @@ def arm_run_timer() -> None:
 
     async def timed_stream(self, *args, **kwargs):
         start_run_clock()
+        deadline = time.monotonic() + WALL_CLOCK_MAX_S
         source = original(self, *args, **kwargs)
-        async for event in source:
-            elapsed = _run_elapsed() or 0.0
-            if elapsed >= WALL_CLOCK_MAX_S:
-                _note("wall_clock", f"research exceeded {WALL_CLOCK_MAX_S}s")
-                aclose = getattr(source, "aclose", None)
-                if aclose is not None:
+
+        async def close_source() -> None:
+            aclose = getattr(source, "aclose", None)
+            if aclose is not None:
+                try:
                     await aclose()
-                raise DispatchLimitReached(
-                    f"research wall clock reached ({WALL_CLOCK_MAX_S}s); cancelled"
-                )
-            if stopped():
-                aclose = getattr(source, "aclose", None)
-                if aclose is not None:
-                    await aclose()
-                raise DispatchLimitReached(
-                    f"run stopped by {_state['stop_reason']}; research cancelled"
-                )
-            yield event
+                except Exception:
+                    pass  # cleanup must not replace the stop reason
+
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    _note("wall_clock", f"research exceeded {WALL_CLOCK_MAX_S}s")
+                    await close_source()
+                    raise DispatchLimitReached(
+                        f"research wall clock reached ({WALL_CLOCK_MAX_S}s); cancelled"
+                    )
+                scope = asyncio.timeout(remaining)
+                try:
+                    async with scope:
+                        event = await source.__anext__()
+                except StopAsyncIteration:
+                    break
+                except TimeoutError:
+                    if scope.expired():
+                        _note("wall_clock", f"research exceeded {WALL_CLOCK_MAX_S}s")
+                        await close_source()
+                        raise DispatchLimitReached(
+                            f"research wall clock reached ({WALL_CLOCK_MAX_S}s); "
+                            "cancelled"
+                        ) from None
+                    await close_source()
+                    raise
+                if stopped():
+                    await close_source()
+                    raise DispatchLimitReached(
+                        f"run stopped by {_state['stop_reason']}; research cancelled"
+                    )
+                yield event
+        except asyncio.CancelledError:
+            # External cancellation is not ours to swallow.
+            await close_source()
+            raise
+        except DispatchLimitReached:
+            await close_source()
+            raise
 
     orchestrator.ChiefEditorAgent.astream_research_task = timed_stream
     print("[stop-line] research stream timer installed (async generator)", flush=True)
