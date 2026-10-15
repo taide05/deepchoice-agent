@@ -12,12 +12,10 @@ from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 # ---------------------------------------------------------------------------
-# Concurrency limits. Two flash tiers: deepseek-flash (500/min) + qwen-flash.
-# Env-tunable — set LLM_DS_CONCURRENCY / LLM_QW_CONCURRENCY to the provider RPM.
-# QW_SEM is the separate re-arbitration-path gate (qwen-flash tier).
+# Concurrency limit for the DeepSeek flash tier (500/min).
+# Env-tunable — set LLM_DS_CONCURRENCY to the provider RPM.
 # ---------------------------------------------------------------------------
 FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_DS_CONCURRENCY", "80")))
-QW_SEM = asyncio.Semaphore(int(os.environ.get("LLM_QW_CONCURRENCY", "10")))
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -340,18 +338,28 @@ Return ONLY a JSON object:
                 response_format="json",
                 usage=usage,
             )
-        if isinstance(result, dict) and result.get("has_difference"):
-            return result
-        if isinstance(result, dict):
-            # The model answered and found no disagreement. That is a completed
-            # scan with a negative result, not a failure.
-            return {"has_difference": False, "type": "none"}
-        return None
     except Exception as e:
         print_agent_output(f"Conflict scan failed: {e}", agent="CONFLICT_DETECTOR")
         # No answer at all. The caller records this as unscanned instead of
         # treating it as evidence that no conflict exists.
         raise
+
+    # A judgement exists only when the reply states `has_difference` as a real
+    # boolean. call_model returns {} for unparsable output, and the model can
+    # return "" or "false" for the field, so anything else carries no
+    # judgement and must not be read as "no difference".
+    verdict = result.get("has_difference") if isinstance(result, dict) else None
+    if isinstance(verdict, bool):
+        if verdict:
+            return result
+        # The model answered and found no disagreement. That is a completed scan
+        # with a negative result, not a failure.
+        return {"has_difference": False, "type": "none"}
+    print_agent_output(
+        f"Conflict scan returned no usable judgement: {result!r}"[:200],
+        agent="CONFLICT_DETECTOR",
+    )
+    return None
 
 
 # Coverage of the conflict check for the current run. A completed scan that found
@@ -360,6 +368,13 @@ Return ONLY a JSON object:
 # a state framework.
 conflict_detector_coverage: dict = {}
 
+
+def _record_coverage(**fields) -> dict:
+    """Replace the coverage record. Never merged, so a stale run cannot leak."""
+    conflict_detector_coverage.clear()
+    conflict_detector_coverage.update(fields)
+    return dict(conflict_detector_coverage)
+
 # Outcomes the scan can report. Anything else is not a completed judgement.
 SCAN_DIFFERENCE = "difference"
 SCAN_NO_DIFFERENCE = "no_difference"
@@ -367,8 +382,13 @@ SCAN_UNSCANNED = "unscanned"
 
 
 def conflict_check_incomplete() -> bool:
-    """Whether any candidate pair was left unjudged this run."""
-    outcomes = conflict_detector_coverage.get("scan_outcomes") or {}
+    """Whether any candidate pair was left unjudged this run.
+
+    Reads the scan's own outcome record, which find_contradictions resets at the
+    start of every call. That covers both entry points: a direct scan call and
+    the agent, which copies the same outcomes into the coverage record.
+    """
+    outcomes = getattr(find_contradictions, "last_outcomes", None) or {}
     return bool(outcomes.get(SCAN_UNSCANNED))
 
 
@@ -388,13 +408,13 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
-        conflict_detector_coverage.update({
-            "pairs_scanned": 0,
-            "pairs_arbitrated": 0,
-            "pairs_evidence": 0,
-            "scan_outcomes": {"difference": 0, "no_difference": 0, "unscanned": 0},
-            "reason": "too_few_high_score_sources",
-        })
+        _record_coverage(
+            pairs_scanned=0,
+            pairs_arbitrated=0,
+            pairs_evidence=0,
+            scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
+            reason="too_few_high_score_sources",
+        )
         return []
 
     titles = [s.get("title", "") for s in high_score_sources]
@@ -423,13 +443,13 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
             f"(missing_title={rejected['missing_title']})",
             agent="CONFLICT_DETECTOR",
         )
-        conflict_detector_coverage.update({
-            "pairs_scanned": 0,
-            "pairs_arbitrated": 0,
-            "pairs_evidence": 0,
-            "scan_outcomes": {"difference": 0, "no_difference": 0, "unscanned": 0},
-            "reason": "no_candidate_pairs",
-        })
+        _record_coverage(
+            pairs_scanned=0,
+            pairs_arbitrated=0,
+            pairs_evidence=0,
+            scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
+            reason="no_candidate_pairs",
+        )
         return []
 
     candidates.sort(key=lambda x: x[2], reverse=True)
@@ -529,13 +549,13 @@ class ConflictDetectorAgent:
         if not pairs:
             outcomes = dict(getattr(find_contradictions, "last_outcomes", {}))
             incomplete = bool(outcomes.get(SCAN_UNSCANNED))
-            conflict_detector_coverage.update({
-                "pairs_scanned": 0,
-                "pairs_arbitrated": 0,
-                "pairs_evidence": 0,
-                "scan_outcomes": outcomes,
-                "reason": "no_pairs_confirmed",
-            })
+            check = _record_coverage(
+                pairs_scanned=0,
+                pairs_arbitrated=0,
+                pairs_evidence=0,
+                scan_outcomes=outcomes,
+                reason="no_pairs_confirmed",
+            )
             print_agent_output(
                 f"No confirmed contradictory pairs "
                 f"(scan {outcomes}, incomplete={incomplete})",
@@ -543,7 +563,7 @@ class ConflictDetectorAgent:
             )
             return {
                 "conflicts": [],
-                "conflict_check": dict(conflict_detector_coverage),
+                "conflict_check": check,
                 "quality_signals": [{
                     "agent": "conflict_detector",
                     "conflicts_found": 0,
@@ -618,27 +638,34 @@ class ConflictDetectorAgent:
         )
 
         conflicts = []
+        # Track the pair index alongside its conflict row, so a later stage can
+        # address the original pair. Using the position inside `conflicts` would
+        # be off by the number of failed arbitrations, spending the single
+        # evidence slot on a pair that had already failed.
+        conflict_pairs = []
         low_confidence = []
+        failed_arbitrations = 0
         for pair, result in zip(pairs, raw_conflicts):
             if isinstance(result, Exception):
                 print_agent_output(
                     f"Arbitration failed: {result}", agent="CONFLICT_DETECTOR")
+                failed_arbitrations += 1
                 continue
             conflicts.append(result)
+            conflict_pairs.append(pair)
             if result.get("confidence") == "low":
                 low_confidence.append(len(conflicts) - 1)
 
         # Evidence gathering stays bounded exactly as before: the single most
         # ambiguous pair only.
         evidence_pairs = low_confidence[:1] if self.gather_evidence else []
-        if self.gather_evidence and not evidence_pairs and low_confidence:
+        if not self.gather_evidence and low_confidence:
             print_agent_output(
-                f"Evidence gathering disabled or out of budget: "
-                f"{len(low_confidence)} ambiguous pair(s)",
+                f"Evidence gathering disabled: {len(low_confidence)} ambiguous pair(s)",
                 agent="CONFLICT_DETECTOR",
             )
         for index in evidence_pairs:
-            pair = pairs[index]
+            pair = conflict_pairs[index]
             evidence = ""
             try:
                 evidence = await _gather_evidence(
@@ -665,8 +692,13 @@ class ConflictDetectorAgent:
             "pairs_scanned": len(pairs),
             "pairs_arbitrated": len(conflicts),
             "pairs_evidence": len(evidence_pairs),
+            # A scan-confirmed pair whose arbitration failed produced no conflict
+            # row. Recorded so the loss is visible instead of looking like the
+            # scan never found anything.
+            "pairs_arbitration_failed": failed_arbitrations,
             "scan_outcomes": dict(getattr(find_contradictions, "last_outcomes", {})),
         }
+        conflict_detector_coverage.clear()
         conflict_detector_coverage.update(coverage)
 
         return {

@@ -148,9 +148,12 @@ class SourceEvaluatorAgent:
         # checked, and consistency must not be raised on that basis. The field
         # stays empty so nothing downstream can read unproven support as support,
         # and `strong` stays unreachable rather than being manufactured.
+        # consistency keeps its existing empty-support value rather than being
+        # zeroed: zeroing would lower every total by 0.8 against unchanged
+        # thresholds, which is a scoring change this repair is not making.
         for s in source_scores:
             s["supporting_sources"] = []
-            s["scores"]["consistency"] = 0
+            s["scores"]["consistency"] = score_consistency([])
             s["total_score"] = compute_total_score(s["scores"])
 
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)

@@ -25,9 +25,20 @@ def _sources(count: int) -> list[dict]:
 
 
 def _embedding_all_similar(dim: int = 8):
-    """Every pair is above threshold, so the pair cap is what limits the scan."""
+    """Distinct vectors that all stay above threshold, so every pair is a candidate.
+
+    Distinct rather than identical on purpose: identical titles once let a
+    withdrawn duplicate-exclusion rule empty the candidate list, which made a
+    "cap" assertion pass without any pair actually being scanned.
+    """
     def encode(titles):
-        return np.ones((len(titles), dim))
+        rows = []
+        for index in range(len(titles)):
+            row = np.ones(dim)
+            row[0] = 1.0 - 0.01 * (index % 3)
+            row[1] = 1.0 - 0.01 * ((index // 3) % 3)
+            rows.append(row)
+        return np.array(rows) if rows else np.ones((0, dim))
     return types.SimpleNamespace(encode=encode)
 
 
@@ -46,7 +57,9 @@ class TestScanWorkBound:
         pairs = await cd.find_contradictions(_sources(29), "topic", usage=[])
 
         assert pairs == []
-        assert len(scanned) <= 15, f"scanned {len(scanned)} pairs, cap is 15"
+        # A cap assertion is only meaningful if pairs were actually scanned.
+        assert scanned, "no pair reached the scan, so the cap was never exercised"
+        assert len(scanned) == 15, f"scanned {len(scanned)} pairs, cap is 15"
 
     @pytest.mark.asyncio
     async def test_evidence_gathering_stays_at_the_single_pair_bound(self, monkeypatch):
@@ -80,6 +93,7 @@ class TestScanWorkBound:
             "token_usage": [],
         })
 
+        assert gathered, "the ambiguous pair must still get evidence"
         assert len(gathered) == 1, f"evidence gathered for {len(gathered)} pairs"
         assert "conflict_rearbitration" not in arbitrated
         check = result["conflict_check"]
@@ -119,6 +133,7 @@ class TestScanWorkBound:
             "source_scores": strong, "task": {"query": "t"}, "token_usage": [],
         })
         assert message_calls == [], "the rule path made an LLM call"
+        assert gathered == [], "the rule path paid the evidence search cost"
 
 
 class TestIncompleteIsNotNoDifference:
@@ -139,24 +154,98 @@ class TestIncompleteIsNotNoDifference:
         assert result["quality_signals"][0]["conflict_check_incomplete"] is True
 
     @pytest.mark.asyncio
-    async def test_empty_and_malformed_scan_responses_are_unscanned(self, monkeypatch):
-        """An empty object or a wrong-typed response is not 'no difference'."""
+    async def test_evidence_slot_targets_the_ambiguous_pair_not_a_failed_one(self, monkeypatch):
+        """A failed arbitration must not shift the evidence slot onto another pair.
+
+        The slot index is a position among the pairs that produced a conflict; it
+        must not be a position in the filtered list, or a failure earlier in the
+        scan silently spends the one evidence search on the wrong pair and drops
+        the pair that was actually ambiguous.
+        """
         monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
-        replies = iter([{}, {"has_difference": "no"}, None, []])
 
-        async def odd_scan(src_a, src_b, query, usage=None):
-            reply = next(replies, None)
-            if not isinstance(reply, dict):
-                return None
-            if not reply.get("has_difference") is True:
-                return {"has_difference": False, "type": "none"} if "has_difference" in reply else None
-            return reply
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "e"}
 
-        monkeypatch.setattr(cd, "_scan_pair_contradiction", odd_scan)
-        await cd.find_contradictions(_sources(4), "t", usage=[])
-        # `{}` and the non-dict replies carry no judgement, so they are unscanned.
-        assert cd.find_contradictions.last_outcomes["unscanned"] >= 1
+        gathered = []
+        arbitrations = {"n": 0}
+
+        async def fake_gather(topic, claim_a, claim_b, usage=None):
+            gathered.append((claim_a, claim_b))
+            return "gathered evidence"
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            if tag != "conflict_arbitration":
+                return {"resolution": "a", "confidence": "low", "reasoning": "r"}
+            arbitrations["n"] += 1
+            if arbitrations["n"] == 1:
+                raise RuntimeError("first arbitration fails")
+            return {"resolution": "a", "confidence": "low", "reasoning": "r"}
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "_gather_evidence", fake_gather)
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+
+        result = await cd.ConflictDetectorAgent(gather_evidence=True).run({
+            "source_scores": _sources(4), "task": {"query": "t"}, "token_usage": [],
+        })
+
+        assert len(gathered) == 1, f"evidence gathered for {len(gathered)} pairs"
+        # The pair that failed arbitration must not be the one that gets evidence.
+        failed_pair = ("Source 0 comparison", "Source 1 comparison")
+        assert gathered[0] != failed_pair, (
+            "the single evidence search was spent on a pair whose arbitration failed"
+        )
+        # And the failure has to be visible rather than silently dropped.
+        check = result["conflict_check"]
+        assert check["pairs_arbitration_failed"] == 1, check
+        assert check["pairs_arbitrated"] == check["scan_outcomes"]["difference"] - 1, check
+
+    @pytest.mark.asyncio
+    async def test_unusable_model_replies_are_unscanned_not_no_difference(self, monkeypatch):
+        """Drive the REAL scan function with the replies that carry no judgement.
+
+        call_model returns {} for output it cannot parse and the model can return
+        an empty or string value for the field, so these replies must not be
+        recorded as a completed 'no difference'.
+        """
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        unusable = [{}, {"has_difference": ""}, {"has_difference": None},
+                    {"has_difference": "false"}, None, []]
+        replies = iter(unusable)
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            return next(replies, {})
+
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+        # The real _scan_pair_contradiction is under test here.
+        await cd.find_contradictions(_sources(3), "t", usage=[])
+
+        outcomes = cd.find_contradictions.last_outcomes
+        assert outcomes["no_difference"] == 0, \
+            f"an unusable reply was recorded as no difference: {outcomes}"
+        assert outcomes["difference"] == 0, \
+            f"a wrong-typed reply manufactured a difference: {outcomes}"
+        assert outcomes["unscanned"] > 0
         assert cd.conflict_check_incomplete() is True
+
+    @pytest.mark.asyncio
+    async def test_a_real_negative_verdict_still_counts_as_completed(self, monkeypatch):
+        """A usable boolean false is a completed scan, not an unscanned pair."""
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            return {"has_difference": False, "type": "none", "explanation": ""}
+
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+        await cd.find_contradictions(_sources(3), "t", usage=[])
+
+        outcomes = cd.find_contradictions.last_outcomes
+        assert outcomes["no_difference"] > 0
+        assert outcomes["unscanned"] == 0
+        assert cd.conflict_check_incomplete() is False
 
     @pytest.mark.asyncio
     async def test_synthesizer_is_not_told_no_conflicts_when_incomplete(self):
@@ -213,24 +302,35 @@ class TestSourceEvaluation:
         assert se.classify_source_type(
             "https://docs.confluent.io/kafka", "chroma") == "official_doc"
 
-    def test_same_title_opposite_bodies_cannot_manufacture_strong(self):
-        """Identical titles with unrelated bodies must not create support."""
-        rows = [
-            {"url": "https://a", "title": "Kafka vs Redis", "snippet": "kafka is faster",
-             "source_type": "tech_blog", "evidence_type": "opinion",
-             "scores": {"authority": 7, "timeliness": 8, "consistency": 0,
-                        "verifiability": 2},
-             "total_score": 0, "supporting_sources": []},
-            {"url": "https://b", "title": "Kafka vs Redis", "snippet": "redis is slower",
-             "source_type": "tech_blog", "evidence_type": "opinion",
-             "scores": {"authority": 7, "timeliness": 8, "consistency": 0,
-                        "verifiability": 2},
-             "total_score": 0, "supporting_sources": []},
-        ]
-        for row in rows:
-            row["total_score"] = se.compute_total_score(row["scores"])
+    @pytest.mark.asyncio
+    async def test_same_title_opposite_bodies_cannot_manufacture_strong(self):
+        """Identical titles with opposite bodies must not create support.
 
+        Runs the real source evaluator, so the test fails if any rule starts
+        populating support from title evidence alone.
+        """
         from deepchoice.agents.evidence_chain import build_evidence_chain
+        from deepchoice.agents.source_evaluator import SourceEvaluatorAgent
+
+        channels = [{
+            "source": "tavily",
+            "results": [
+                {"url": "https://a", "title": "Kafka vs Redis", "date": "2026-01-01",
+                 "snippet": "Kafka is the faster option here."},
+                {"url": "https://b", "title": "Kafka vs Redis", "date": "2026-01-01",
+                 "snippet": "Redis is the slower option here."},
+            ],
+        }]
+        state = await SourceEvaluatorAgent().run({
+            "task": {"query": "Kafka vs Redis", "candidate_techs": ["Kafka", "Redis"]},
+            "search_results": channels,
+            "token_usage": [],
+        })
+        rows = state["source_scores"]
+        assert len(rows) == 2
+        # Same titles, conflicting bodies: no support may be inferred.
+        assert all(not row["supporting_sources"] for row in rows), \
+            [row["supporting_sources"] for row in rows]
 
         chains = build_evidence_chain(rows, [])
         assert all(c["evidence_strength"] != "strong" for c in chains), \

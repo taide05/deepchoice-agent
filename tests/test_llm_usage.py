@@ -217,13 +217,14 @@ class TestSummarizeUsage:
 
 def _embedding_fake(dim=8):
     def encode(titles):
-        # Distinct vectors per title: conflict candidates are selected from a
-        # similarity band now, so identical vectors would make every pair look
-        # like a duplicate and the scan under test would never run.
+        # Distinct vectors per title, all above the candidate similarity
+        # threshold, so the title-similarity pre-filter produces candidate pairs
+        # and the scan under test actually runs.
         rows = []
         for index in range(len(titles)):
             row = np.ones(dim)
-            row[index % dim] += 0.5
+            row[0] = 1.0 - 0.01 * (index % 3)
+            row[1] = 1.0 - 0.01 * ((index // 3) % 3)
             rows.append(row)
         return np.array(rows) if rows else np.ones((0, dim))
     return types.SimpleNamespace(encode=encode)
