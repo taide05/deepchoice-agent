@@ -77,6 +77,33 @@ def render(state: dict) -> str:
             lines.append(f"- {T['confidence'][lang]}: {c.get('confidence', 'low')}")
             lines.append("")
 
+    # An empty conflict list is only "no conflicts" when the check actually
+    # completed. An unfinished or never-started check is stated as such, so the
+    # report cannot pass it off as reassurance.
+    check = state.get("conflict_check") or {}
+    outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
+    unscanned = int(outcomes.get("unscanned") or 0)
+    scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
+    if not conflicts:
+        if not check or unscanned or scanned == 0:
+            if lang == "zh":
+                detail = (f"未完成分类的候选对 {unscanned} 组（已扫描 {scanned} 组）"
+                          if unscanned else f"没有候选对进入该检查（{check.get('reason', '未记录')}）"
+                          if check else "本次运行没有记录冲突检查覆盖情况")
+                lines.extend(["## 冲突检查状态", "",
+                              f"**冲突检查未完成。** {detail}。",
+                              "缺失冲突不代表来源之间没有分歧，只代表本次没有完成判定。", ""])
+            else:
+                detail = (f"{unscanned} candidate pair(s) were not classified "
+                          f"(of {scanned} scanned)" if unscanned
+                          else f"no candidate pair reached the check "
+                               f"({check.get('reason', 'unrecorded')})" if check
+                          else "this run recorded no conflict-check coverage")
+                lines.extend(["## Conflict check status", "",
+                              f"**The conflict check did not complete.** {detail}.",
+                              "A missing conflict does not mean the sources agree; "
+                              "it means the judgement was not finished.", ""])
+
     if gaps:
         lines.extend([T["unknown"][lang], ""])
         for g in gaps:

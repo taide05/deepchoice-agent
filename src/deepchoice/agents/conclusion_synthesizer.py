@@ -96,15 +96,43 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
     return "\n".join(lines), mapping
 
 
-def _summarize_conflicts(conflicts: list[dict]) -> str:
+def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = None) -> str:
+    """Describe the conflict check without collapsing 'not finished' into 'none'.
+
+    An empty list means the check found no confirmed contradiction only when the
+    check actually ran to completion over its candidate pairs. Otherwise the
+    synthesizer is told the check is incomplete, so it cannot present an
+    unfinished scan as reassurance.
+    """
+    check = conflict_check or {}
+    outcomes = check.get("scan_outcomes") or {}
+    unscanned = int(outcomes.get("unscanned") or 0)
+    scanned = int(check.get("pairs_scanned") or 0)
     if not conflicts:
-        return "No conflicts found."
+        if not check:
+            return ("No confirmed conflicts, but this run recorded no conflict "
+                    "check coverage: treat the absence as unverified.")
+        if unscanned:
+            return (f"CONFLICT CHECK INCOMPLETE: {unscanned} candidate pair(s) "
+                    f"were not classified out of {scanned} scanned. Do not state "
+                    f"or imply that no conflicts exist.")
+        if scanned == 0:
+            return ("No candidate pairs qualified for the conflict check "
+                    f"({check.get('reason', 'no candidates')}); absence of "
+                    "conflicts was never tested.")
+        return (f"Conflict check completed over {scanned} candidate pair(s) and "
+                f"found no confirmed contradiction.")
     lines = []
     for i, c in enumerate(conflicts):
         lines.append(
             f"{i+1}. {c.get('claim_a', '')} vs {c.get('claim_b', '')} "
             f"— resolution: {c.get('resolution', 'unknown')} "
             f"(confidence: {c.get('confidence', 'N/A')})"
+        )
+    if unscanned:
+        lines.append(
+            f"NOTE: {unscanned} further candidate pair(s) were not classified, so "
+            f"this list is partial."
         )
     return "\n".join(lines)
 
@@ -267,6 +295,7 @@ class ConclusionSynthesizerAgent:
         task = research_state["task"]
         evidence_chains = research_state.get("evidence_chains", [])
         conflicts = research_state.get("conflicts", [])
+        conflict_check = research_state.get("conflict_check") or {}
 
         print_agent_output(
             f"Synthesizing final recommendation from {len(evidence_chains)} evidence chains",
@@ -283,7 +312,7 @@ class ConclusionSynthesizerAgent:
                 query=task["query"],
                 scene_context=task.get("scene_context", "team"),
                 evidence_chains=evidence_text,
-                conflicts=_summarize_conflicts(conflicts),
+                conflicts=_summarize_conflicts(conflicts, conflict_check),
                 source_count=len(research_state.get("source_scores", [])),
                 strong_count=strong_count,
                 disputed_count=disputed_count,

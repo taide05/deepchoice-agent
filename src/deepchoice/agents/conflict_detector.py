@@ -354,6 +354,24 @@ Return ONLY a JSON object:
         raise
 
 
+# Coverage of the conflict check for the current run. A completed scan that found
+# no difference and a scan that never completed are different facts, and a bare
+# conflict list cannot express the difference. This is a plain counter dict, not
+# a state framework.
+conflict_detector_coverage: dict = {}
+
+# Outcomes the scan can report. Anything else is not a completed judgement.
+SCAN_DIFFERENCE = "difference"
+SCAN_NO_DIFFERENCE = "no_difference"
+SCAN_UNSCANNED = "unscanned"
+
+
+def conflict_check_incomplete() -> bool:
+    """Whether any candidate pair was left unjudged this run."""
+    outcomes = conflict_detector_coverage.get("scan_outcomes") or {}
+    return bool(outcomes.get(SCAN_UNSCANNED))
+
+
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
                                threshold: float = 0.65,
                                usage: list | None = None) -> list[dict]:
@@ -370,30 +388,52 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
+        conflict_detector_coverage.update({
+            "pairs_scanned": 0,
+            "pairs_arbitrated": 0,
+            "pairs_evidence": 0,
+            "scan_outcomes": {"difference": 0, "no_difference": 0, "unscanned": 0},
+            "reason": "too_few_high_score_sources",
+        })
         return []
 
     titles = [s.get("title", "") for s in high_score_sources]
     embeddings = await asyncio.to_thread(model.encode, titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
-    # Candidate selection. Similar titles are pairs about the same question, not
-    # pairs that disagree: the previous filter kept only titrates above a high
-    # similarity threshold, which selects near-duplicates and therefore pairs
-    # that agree, while the scan looks for winner/tradeoff/vendor disagreement.
-    from ..recovery_repair import partition_candidates
-
-    candidates, rejected = partition_candidates(
-        high_score_sources, embeddings, norms, np=np)
+    # Candidate pairs (BGE similarity — LLM handles semantic filtering). The
+    # bound is deliberate and unchanged: at most 15 pairs are scanned, ranked by
+    # similarity, so the scan cost stays proportional to the source count rather
+    # than growing with every possible pair.
+    candidates: list[tuple[int, int, float]] = []
+    rejected = {"missing_title": 0}
+    for i in range(len(high_score_sources)):
+        for j in range(i + 1, len(high_score_sources)):
+            if not titles[i] or not titles[j]:
+                rejected["missing_title"] += 1
+                continue
+            sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
+            if sim < threshold:
+                continue
+            candidates.append((i, j, sim))
 
     if not candidates:
         print_agent_output(
-            f"No comparable pairs after candidate selection "
-            f"(unrelated={rejected['unrelated']}, "
-            f"near_duplicate={rejected['near_duplicate']}, "
-            f"missing_title={rejected['missing_title']})",
+            f"No candidate pairs above the similarity threshold "
+            f"(missing_title={rejected['missing_title']})",
             agent="CONFLICT_DETECTOR",
         )
+        conflict_detector_coverage.update({
+            "pairs_scanned": 0,
+            "pairs_arbitrated": 0,
+            "pairs_evidence": 0,
+            "scan_outcomes": {"difference": 0, "no_difference": 0, "unscanned": 0},
+            "reason": "no_candidate_pairs",
+        })
         return []
+
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    candidates = candidates[:15]
 
     # LLM scan in parallel. A pair the scan could not classify is reported as
     # unscanned rather than being folded into "no difference": an empty conflict
@@ -487,10 +527,31 @@ class ConflictDetectorAgent:
         local_usage: list = []
         pairs = await find_contradictions(source_scores, query_topic=query, usage=local_usage)
         if not pairs:
-            print_agent_output("No contradictory pairs found after LLM scan", agent="CONFLICT_DETECTOR")
+            outcomes = dict(getattr(find_contradictions, "last_outcomes", {}))
+            incomplete = bool(outcomes.get(SCAN_UNSCANNED))
+            conflict_detector_coverage.update({
+                "pairs_scanned": 0,
+                "pairs_arbitrated": 0,
+                "pairs_evidence": 0,
+                "scan_outcomes": outcomes,
+                "reason": "no_pairs_confirmed",
+            })
+            print_agent_output(
+                f"No confirmed contradictory pairs "
+                f"(scan {outcomes}, incomplete={incomplete})",
+                agent="CONFLICT_DETECTOR",
+            )
             return {
                 "conflicts": [],
-                "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
+                "conflict_check": dict(conflict_detector_coverage),
+                "quality_signals": [{
+                    "agent": "conflict_detector",
+                    "conflicts_found": 0,
+                    "resolved_count": 0,
+                    "scan_no_difference": outcomes.get(SCAN_NO_DIFFERENCE, 0),
+                    "scan_unscanned": outcomes.get(SCAN_UNSCANNED, 0),
+                    "conflict_check_incomplete": incomplete,
+                }],
                 "token_usage": research_state.get("token_usage", [])
                 + [summarize_usage("conflict_detector", local_usage)],
             }
@@ -527,77 +588,90 @@ class ConflictDetectorAgent:
                 "difference_explanation": pair.get("difference_explanation", ""),
             }
 
-        # Each pair is arbitrated exactly once. The prompt carries whatever
-        # evidence was gathered for that pair beforehand, instead of being asked
-        # the same question twice -- once on titles and again on the same titles
-        # with evidence appended under a second 300s call.
-        async def _arbitrate_one(pair: dict) -> dict:
+        # A pair is arbitrated once on titles, and the single ambiguous pair is
+        # then arbitrated once more with gathered evidence. That second call is
+        # the only one whose input actually differs from the first. The removed
+        # work is the pair being judged twice on identical titles.
+        async def _arbitrate_one(pair: dict, evidence: str = "") -> dict:
             det = _deterministic_arbitration(pair["source_a"], pair["source_b"])
             if det is not None:
+                # The deterministic rule decides from scores alone and needs no
+                # evidence, so it must not pay the multi-search cost.
                 return _build_conflict(pair, det, model="deepseek-flash(rule)")
+            source_a = pair["source_a"]
+            source_b = pair["source_b"]
+            if evidence:
+                note = f"\n\n[Evidence from additional search: {evidence}]"
+                source_a = dict(source_a, title=f"{source_a.get('title', '')}{note}")
+                source_b = dict(source_b, title=f"{source_b.get('title', '')}{note}")
             async with FLASH_SEM:
                 result = await call_model(
-                    _make_prompt(pair["source_a"], pair["source_b"]),
+                    _make_prompt(source_a, source_b),
                     model="deepseek-flash", tag="conflict_arbitration",
                     response_format="json",
                     usage=local_usage,
                 )
             return _build_conflict(pair, result, model="deepseek-flash")
 
-        # Evidence is gathered for the pairs that will actually be arbitrated, so
-        # the single arbitration call sees it. Gathering first also means the
-        # expensive multi-search step happens for known pairs rather than after
-        # a redundant second arbitration.
-        if self.gather_evidence:
-            sem = asyncio.Semaphore(3)  # Evidence gathering is heavy (multi-API per pair)
-
-            async def _prepare_pair(pair: dict) -> dict:
-                async with sem:
-                    a = pair["source_a"]
-                    b = pair["source_b"]
-                    evidence = ""
-                    try:
-                        evidence = await _gather_evidence(
-                            topic=query,
-                            claim_a=a.get("title", ""),
-                            claim_b=b.get("title", ""),
-                            usage=local_usage,
-                        )
-                    except Exception as e:
-                        print_agent_output(
-                            f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
-                    if not evidence:
-                        return pair
-                    note = f"\n\n[Evidence from additional search: {evidence}]"
-                    return {
-                        **pair,
-                        "source_a": dict(a, title=f"{a.get('title', '')}{note}"),
-                        "source_b": dict(b, title=f"{b.get('title', '')}{note}"),
-                        "evidence_collected": evidence[:500],
-                    }
-
-            print_agent_output(
-                f"Evidence gathering before arbitration: {len(pairs)} pair(s)",
-                agent="CONFLICT_DETECTOR",
-            )
-            pairs = list(await asyncio.gather(*[_prepare_pair(p) for p in pairs]))
-
         raw_conflicts = await asyncio.gather(
             *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
         )
 
         conflicts = []
+        low_confidence = []
         for pair, result in zip(pairs, raw_conflicts):
             if isinstance(result, Exception):
                 print_agent_output(
                     f"Arbitration failed: {result}", agent="CONFLICT_DETECTOR")
                 continue
-            if pair.get("evidence_collected"):
-                result["evidence_collected"] = pair["evidence_collected"]
             conflicts.append(result)
+            if result.get("confidence") == "low":
+                low_confidence.append(len(conflicts) - 1)
+
+        # Evidence gathering stays bounded exactly as before: the single most
+        # ambiguous pair only.
+        evidence_pairs = low_confidence[:1] if self.gather_evidence else []
+        if self.gather_evidence and not evidence_pairs and low_confidence:
+            print_agent_output(
+                f"Evidence gathering disabled or out of budget: "
+                f"{len(low_confidence)} ambiguous pair(s)",
+                agent="CONFLICT_DETECTOR",
+            )
+        for index in evidence_pairs:
+            pair = pairs[index]
+            evidence = ""
+            try:
+                evidence = await _gather_evidence(
+                    topic=query,
+                    claim_a=pair["source_a"].get("title", ""),
+                    claim_b=pair["source_b"].get("title", ""),
+                    usage=local_usage,
+                )
+            except Exception as e:
+                print_agent_output(
+                    f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+            if not evidence:
+                continue
+            try:
+                revised = await _arbitrate_one(pair, evidence)
+            except Exception as e:
+                print_agent_output(
+                    f"Evidence arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                continue
+            revised["evidence_collected"] = evidence[:500]
+            conflicts[index] = revised
+
+        coverage = {
+            "pairs_scanned": len(pairs),
+            "pairs_arbitrated": len(conflicts),
+            "pairs_evidence": len(evidence_pairs),
+            "scan_outcomes": dict(getattr(find_contradictions, "last_outcomes", {})),
+        }
+        conflict_detector_coverage.update(coverage)
 
         return {
             "conflicts": conflicts,
+            "conflict_check": dict(conflict_detector_coverage),
             "quality_signals": [{
                 "agent": "conflict_detector",
                 "conflicts_found": len(conflicts),
@@ -611,9 +685,10 @@ class ConflictDetectorAgent:
                 ),
                 # Pairs the scan could not classify, so partial coverage stays
                 # visible instead of looking like a clean empty result.
-                "scan_unscanned": getattr(find_contradictions, "last_outcomes", {}).get("unscanned", 0),
-                "scan_no_difference": getattr(find_contradictions, "last_outcomes", {}).get("no_difference", 0),
-                "pairs_arbitrated": len(pairs),
+                "scan_unscanned": coverage["scan_outcomes"].get(SCAN_UNSCANNED, 0),
+                "scan_no_difference": coverage["scan_outcomes"].get(SCAN_NO_DIFFERENCE, 0),
+                "conflict_check_incomplete": conflict_check_incomplete(),
+                "pairs_arbitrated": len(conflicts),
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("conflict_detector", local_usage)],

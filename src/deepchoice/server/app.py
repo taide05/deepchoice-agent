@@ -142,6 +142,18 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
                 await conn.close()
             except Exception:
                 pass
+        # Save the request counters when this research ends, whatever the
+        # outcome, instead of waiting for the whole service to stop. This
+        # persists the counters that already exist; it adds no new accounting.
+        try:
+            import run_limits
+
+            run_limits.persist_counts(str(OUTPUT_DIR / task_id))
+        except Exception as persist_counts_err:
+            print_agent_output(
+                f"Could not persist run counters for {task_id}: {persist_counts_err}",
+                agent="SERVER",
+            )
 
 
 @app.get("/research/{task_id}/stream")

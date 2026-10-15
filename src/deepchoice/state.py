@@ -8,6 +8,7 @@ class ResearchState(TypedDict):
     search_results: list[dict]
     source_scores: list[dict]
     conflicts: list[dict]
+    conflict_check: dict
     evidence_chains: list[dict]
     final_recommendation: dict
     report: str

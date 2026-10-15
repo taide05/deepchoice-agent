@@ -143,14 +143,14 @@ class SourceEvaluatorAgent:
                 "supporting_sources": [],
             })
 
-        # Support requires the other source to be about the same question. An
-        # unrelated high-scoring page must not corroborate this one, which is
-        # what counting every source over 6.0 did.
-        from ..recovery_repair import apply_score_support
-
-        support_stats = apply_score_support(source_scores)
+        # Support between sources is not established by this node. Deriving it
+        # from title-term overlap would invent a corroboration the pipeline never
+        # checked, and consistency must not be raised on that basis. The field
+        # stays empty so nothing downstream can read unproven support as support,
+        # and `strong` stays unreachable rather than being manufactured.
         for s in source_scores:
-            s["scores"]["consistency"] = score_consistency(s["supporting_sources"])
+            s["supporting_sources"] = []
+            s["scores"]["consistency"] = 0
             s["total_score"] = compute_total_score(s["scores"])
 
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)
@@ -167,7 +167,6 @@ class SourceEvaluatorAgent:
                 "avg_score": avg_score,
                 "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),
                 "low_score_count": sum(1 for s in source_scores if s["total_score"] < 5.0),
-                "support_eligible": support_stats["eligible"],
-                "support_same_subject_rejected": support_stats["rejected_unrelated"],
+                "support_unestablished": len(source_scores),
             }],
         }
