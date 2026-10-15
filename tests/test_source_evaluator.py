@@ -117,7 +117,13 @@ class TestClassifySourceType:
         assert classify_source_type("https://langchain.readthedocs.io/en/latest/", "unknown") == "official_doc"
 
     def test_chroma_source(self):
-        assert classify_source_type("some-internal-id", "chroma") == "official_doc"
+        # A local knowledge-base hit is a retrieved document, not a vendor
+        # document: authority has to come from its URL, as for any other source.
+        assert classify_source_type(
+            "https://example.com/blog/redis-vs-kafka", "chroma") == "tech_blog"
+        # A chroma hit on a docs.* host is still official, on the URL.
+        assert classify_source_type(
+            "https://docs.confluent.io/kafka", "chroma") == "official_doc"
 
 
 class TestClassifyEvidenceType:

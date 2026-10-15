@@ -143,6 +143,29 @@ def snapshot() -> dict:
 
 
 # ---------------------------------------------------------------- run timing
+def persist_counts(directory: str | None = None) -> str | None:
+    """Write the counters beside the run's own outputs.
+
+    The counters live in this process, so without this an aborted run leaves no
+    record of how many requests it actually made. This writes the existing
+    counters as they are; it adds no budget or observability system.
+    """
+    import json
+    import pathlib
+
+    target = pathlib.Path(directory) if directory else pathlib.Path.cwd() / "outputs"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        path = target / "run_limits_counts.json"
+        path.write_text(json.dumps(snapshot(), ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+        print(f"[stop-line] counts written to {path}", flush=True)
+        return str(path)
+    except Exception as exc:
+        print(f"[stop-line] could not write counts: {exc}", flush=True)
+        return None
+
+
 def start_run_clock() -> None:
     """Start the research wall clock. Called when a run actually begins."""
     _state["run_started_at"] = time.monotonic()

@@ -37,8 +37,10 @@ def classify_source_type(url: str, source: str) -> str:
         return "reddit"
     if source == "official" or "readthedocs" in url_lower or "docs." in url_lower:
         return "official_doc"
-    if source == "chroma":
-        return "official_doc"
+    # A local knowledge-base hit is a retrieved document, not a vendor document.
+    # Its authority must come from the URL, exactly as for every other source;
+    # treating the retriever name as proof of officialness gave a locally stored
+    # markdown file authority 10.
     if "blog" in url_lower or "medium.com" in url_lower or "dev.to" in url_lower:
         return "tech_blog"
     return "tech_blog"
@@ -141,13 +143,14 @@ class SourceEvaluatorAgent:
                 "supporting_sources": [],
             })
 
+        # Support requires the other source to be about the same question. An
+        # unrelated high-scoring page must not corroborate this one, which is
+        # what counting every source over 6.0 did.
+        from ..recovery_repair import apply_score_support
+
+        support_stats = apply_score_support(source_scores)
         for s in source_scores:
-            similar = [
-                x["url"] for x in source_scores
-                if x["url"] != s["url"] and x["total_score"] >= 6.0
-            ]
-            s["supporting_sources"] = similar[:3]
-            s["scores"]["consistency"] = score_consistency(similar)
+            s["scores"]["consistency"] = score_consistency(s["supporting_sources"])
             s["total_score"] = compute_total_score(s["scores"])
 
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)
@@ -164,5 +167,7 @@ class SourceEvaluatorAgent:
                 "avg_score": avg_score,
                 "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),
                 "low_score_count": sum(1 for s in source_scores if s["total_score"] < 5.0),
+                "support_eligible": support_stats["eligible"],
+                "support_same_subject_rejected": support_stats["rejected_unrelated"],
             }],
         }

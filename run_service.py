@@ -121,7 +121,12 @@ def main() -> int:
     print(f"\nbinding http://{HOST}:{PORT}\n", flush=True)
     import uvicorn
 
-    uvicorn.run("deepchoice.server.app:app", host=HOST, port=PORT, log_level="info")
+    try:
+        uvicorn.run("deepchoice.server.app:app", host=HOST, port=PORT, log_level="info")
+    finally:
+        # Persist the counters when the service stops, so an aborted or
+        # interrupted run still leaves its actual request counts on disk.
+        run_limits.persist_counts(str(WORKTREE / "outputs"))
     return 0
 
 

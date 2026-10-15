@@ -342,10 +342,16 @@ Return ONLY a JSON object:
             )
         if isinstance(result, dict) and result.get("has_difference"):
             return result
+        if isinstance(result, dict):
+            # The model answered and found no disagreement. That is a completed
+            # scan with a negative result, not a failure.
+            return {"has_difference": False, "type": "none"}
         return None
     except Exception as e:
         print_agent_output(f"Conflict scan failed: {e}", agent="CONFLICT_DETECTOR")
-        return None
+        # No answer at all. The caller records this as unscanned instead of
+        # treating it as evidence that no conflict exists.
+        raise
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
@@ -356,6 +362,11 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     Pipeline: BGE similarity pre-filter → LLM contradiction scan
     (replaces old negation-word matching).
     """
+    # Reset the outcome record for this call so a later reader can never see a
+    # previous call's counts and read an incomplete scan as a clean one.
+    find_contradictions.last_outcomes = {
+        "difference": 0, "no_difference": 0, "unscanned": 0}
+    find_contradictions.last_rejected = {}
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     if len(high_score_sources) < 2:
@@ -365,32 +376,48 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     embeddings = await asyncio.to_thread(model.encode, titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
-    # Build candidate pairs (BGE similarity — LLM handles semantic filtering)
-    candidates: list[tuple[int, int, float]] = []
-    for i in range(len(high_score_sources)):
-        for j in range(i + 1, len(high_score_sources)):
-            if not titles[i] or not titles[j]:
-                continue
-            sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
-            if sim < threshold:
-                continue
-            candidates.append((i, j, sim))
+    # Candidate selection. Similar titles are pairs about the same question, not
+    # pairs that disagree: the previous filter kept only titrates above a high
+    # similarity threshold, which selects near-duplicates and therefore pairs
+    # that agree, while the scan looks for winner/tradeoff/vendor disagreement.
+    from ..recovery_repair import partition_candidates
+
+    candidates, rejected = partition_candidates(
+        high_score_sources, embeddings, norms, np=np)
 
     if not candidates:
+        print_agent_output(
+            f"No comparable pairs after candidate selection "
+            f"(unrelated={rejected['unrelated']}, "
+            f"near_duplicate={rejected['near_duplicate']}, "
+            f"missing_title={rejected['missing_title']})",
+            agent="CONFLICT_DETECTOR",
+        )
         return []
 
-    # Cap at top-15 by similarity to prevent O(n²) explosion with many sources
-    candidates.sort(key=lambda x: x[2], reverse=True)
-    candidates = candidates[:15]
+    # LLM scan in parallel. A pair the scan could not classify is reported as
+    # unscanned rather than being folded into "no difference": an empty conflict
+    # list must not silently mean "we did not finish looking".
+    outcomes = {"difference": 0, "no_difference": 0, "unscanned": 0}
 
-    # LLM scan in parallel
     async def _scan(cand):
         i, j, sim = cand
-        info = await _scan_pair_contradiction(
-            high_score_sources[i], high_score_sources[j], query_topic,
-            usage=usage,
-        )
-        return (i, j, sim, info) if info else None
+        try:
+            info = await _scan_pair_contradiction(
+                high_score_sources[i], high_score_sources[j], query_topic,
+                usage=usage,
+            )
+        except Exception as exc:
+            print_agent_output(
+                f"Conflict scan error for pair ({i},{j}): {exc}",
+                agent="CONFLICT_DETECTOR",
+            )
+            return (i, j, sim, None, "unscanned")
+        if info is None:
+            return (i, j, sim, None, "unscanned")
+        if not info.get("has_difference"):
+            return (i, j, sim, None, "no_difference")
+        return (i, j, sim, info, "difference")
 
     print_agent_output(
         f"LLM scanning {len(candidates)} candidate pairs for contradictions",
@@ -400,17 +427,40 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
 
     pairs = []
     for r in scan_results:
-        if r is not None:
-            i, j, sim, info = r
-            pairs.append({
-                "source_a": high_score_sources[i],
-                "source_b": high_score_sources[j],
-                "similarity": round(sim, 3),
-                "difference_type": info.get("type", "unknown"),
-                "difference_explanation": info.get("explanation", ""),
-            })
+        i, j, sim, info, outcome = r
+        outcomes[outcome] += 1
+        if outcome != "difference":
+            continue
+        pairs.append({
+            "source_a": high_score_sources[i],
+            "source_b": high_score_sources[j],
+            "similarity": round(sim, 3),
+            "difference_type": info.get("type", "unknown"),
+            "difference_explanation": info.get("explanation", ""),
+        })
+
+    if outcomes["unscanned"]:
+        # Visible incompleteness: these pairs were never classified, so the
+        # conflict list is partial. Reported rather than passed off as clean.
+        print_agent_output(
+            f"WARNING: {outcomes['unscanned']} pair(s) were not scanned; "
+            f"the conflict list is incomplete",
+            agent="CONFLICT_DETECTOR",
+        )
+    print_agent_output(
+        f"Scan outcomes: differences={outcomes['difference']} "
+        f"no_difference={outcomes['no_difference']} "
+        f"unscanned={outcomes['unscanned']}",
+        agent="CONFLICT_DETECTOR",
+    )
+    find_contradictions.last_outcomes = dict(outcomes)
+    find_contradictions.last_rejected = dict(rejected)
 
     return pairs
+
+
+find_contradictions.last_outcomes = {}
+find_contradictions.last_rejected = {}
 
 
 # ---------------------------------------------------------------------------
@@ -477,7 +527,10 @@ class ConflictDetectorAgent:
                 "difference_explanation": pair.get("difference_explanation", ""),
             }
 
-        # --- Stage 1: Flash arbitration (parallel) ---
+        # Each pair is arbitrated exactly once. The prompt carries whatever
+        # evidence was gathered for that pair beforehand, instead of being asked
+        # the same question twice -- once on titles and again on the same titles
+        # with evidence appended under a second 300s call.
         async def _arbitrate_one(pair: dict) -> dict:
             det = _deterministic_arbitration(pair["source_a"], pair["source_b"])
             if det is not None:
@@ -491,32 +544,14 @@ class ConflictDetectorAgent:
                 )
             return _build_conflict(pair, result, model="deepseek-flash")
 
-        raw_conflicts = await asyncio.gather(
-            *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
-        )
-
-        conflicts = []
-        low_confidence_pairs = []
-        for pair, result in zip(pairs, raw_conflicts):
-            if isinstance(result, Exception):
-                print_agent_output(f"Flash arbitration failed: {result}", agent="CONFLICT_DETECTOR")
-                continue
-            conflicts.append(result)
-            if result["confidence"] == "low":
-                low_confidence_pairs.append(pair)
-
-        # Cap evidence gathering at top-1 most ambiguous pair (sorted by confidence gap)
-        low_confidence_pairs = low_confidence_pairs[:1]
-
-        # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
-        if low_confidence_pairs and self.gather_evidence:
-            print_agent_output(
-                f"Evidence-gathering re-arbitration: {len(low_confidence_pairs)} pair(s)",
-                agent="CONFLICT_DETECTOR",
-            )
+        # Evidence is gathered for the pairs that will actually be arbitrated, so
+        # the single arbitration call sees it. Gathering first also means the
+        # expensive multi-search step happens for known pairs rather than after
+        # a redundant second arbitration.
+        if self.gather_evidence:
             sem = asyncio.Semaphore(3)  # Evidence gathering is heavy (multi-API per pair)
 
-            async def _re_arbitrate(idx: int, pair: dict) -> int | None:
+            async def _prepare_pair(pair: dict) -> dict:
                 async with sem:
                     a = pair["source_a"]
                     b = pair["source_b"]
@@ -529,69 +564,58 @@ class ConflictDetectorAgent:
                             usage=local_usage,
                         )
                     except Exception as e:
-                        print_agent_output(f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+                        print_agent_output(
+                            f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+                    if not evidence:
+                        return pair
+                    note = f"\n\n[Evidence from additional search: {evidence}]"
+                    return {
+                        **pair,
+                        "source_a": dict(a, title=f"{a.get('title', '')}{note}"),
+                        "source_b": dict(b, title=f"{b.get('title', '')}{note}"),
+                        "evidence_collected": evidence[:500],
+                    }
 
-                    enriched_claim_a = a.get("title", "")
-                    enriched_claim_b = b.get("title", "")
-                    if evidence:
-                        enriched_claim_a = (
-                            f"{a.get('title', '')}\n\n"
-                            f"[Evidence from additional search: {evidence}]"
-                        )
-                        enriched_claim_b = (
-                            f"{b.get('title', '')}\n\n"
-                            f"[Evidence from additional search: {evidence}]"
-                        )
-
-                    enriched_a = dict(a, title=enriched_claim_a)
-                    enriched_b = dict(b, title=enriched_claim_b)
-
-                    try:
-                        async with QW_SEM:
-                            qw_result = await call_model(
-                                _make_prompt(enriched_a, enriched_b),
-                                model="qwen-flash", tag="conflict_rearbitration",
-                                response_format="json",
-                                timeout=300.0,
-                                usage=local_usage,
-                            )
-                    except Exception as e:
-                        print_agent_output(f"Pro re-arbitration failed: {e}", agent="CONFLICT_DETECTOR")
-                        return None
-
-                    qw_conflict = _build_conflict(pair, qw_result, model="qwen-flash+evidence")
-                    qw_conflict["evidence_collected"] = evidence[:500] if evidence else ""
-                    return idx, qw_conflict
-
-            re_results = await asyncio.gather(
-                *[_re_arbitrate(i, p) for i, p in enumerate(low_confidence_pairs)],
-                return_exceptions=True,
-            )
-            for r in re_results:
-                if isinstance(r, Exception):
-                    continue
-                if r is not None:
-                    idx, qw_conflict = r
-                    if idx < len(conflicts):
-                        conflicts[idx] = qw_conflict
-        elif low_confidence_pairs:
             print_agent_output(
-                f"Skipping evidence gathering (disabled): {len(low_confidence_pairs)} pair(s)",
+                f"Evidence gathering before arbitration: {len(pairs)} pair(s)",
                 agent="CONFLICT_DETECTOR",
             )
+            pairs = list(await asyncio.gather(*[_prepare_pair(p) for p in pairs]))
 
-        resolved_count = sum(
-            1 for c in conflicts
-            if c.get("resolution") not in ("insufficient_data", None)
+        raw_conflicts = await asyncio.gather(
+            *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
         )
+
+        conflicts = []
+        for pair, result in zip(pairs, raw_conflicts):
+            if isinstance(result, Exception):
+                print_agent_output(
+                    f"Arbitration failed: {result}", agent="CONFLICT_DETECTOR")
+                continue
+            if pair.get("evidence_collected"):
+                result["evidence_collected"] = pair["evidence_collected"]
+            conflicts.append(result)
+
         return {
             "conflicts": conflicts,
             "quality_signals": [{
                 "agent": "conflict_detector",
                 "conflicts_found": len(conflicts),
-                "resolved_count": resolved_count,
-                "unresolved_count": len(conflicts) - resolved_count,
+                "resolved_count": sum(
+                    1 for c in conflicts
+                    if c.get("resolution") not in ("insufficient_data", None)
+                ),
+                "unresolved_count": sum(
+                    1 for c in conflicts
+                    if c.get("resolution") in ("insufficient_data", None)
+                ),
+                # Pairs the scan could not classify, so partial coverage stays
+                # visible instead of looking like a clean empty result.
+                "scan_unscanned": getattr(find_contradictions, "last_outcomes", {}).get("unscanned", 0),
+                "scan_no_difference": getattr(find_contradictions, "last_outcomes", {}).get("no_difference", 0),
+                "pairs_arbitrated": len(pairs),
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("conflict_detector", local_usage)],
         }
+
