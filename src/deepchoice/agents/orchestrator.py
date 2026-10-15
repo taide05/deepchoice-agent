@@ -70,6 +70,13 @@ class ChiefEditorAgent:
             timing = dict(state.get("agent_timing", {}))
             timing[name] = elapsed
             result["agent_timing"] = timing
+            # Carry any sub-stage split the node published (conflict_detector
+            # reports scan / arbitration / evidence / re-arbitration seconds), so
+            # a slow node reads as its real stages instead of one opaque total.
+            stage_timing = (result.get("conflict_check") or {}).get("stage_timing_s")
+            if isinstance(stage_timing, dict):
+                for stage, seconds in stage_timing.items():
+                    timing[f"{name}:{stage}"] = seconds
             result["current_phase"] = name
             return result
         return _wrapper

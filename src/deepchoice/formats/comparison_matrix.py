@@ -123,12 +123,21 @@ def render(state: dict) -> str:
         outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
         unscanned = int(outcomes.get("unscanned") or 0)
         scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
-        if not check or unscanned or scanned == 0:
-            lines.append(
-                "冲突检查未完成，缺失争议不代表来源一致。" if lang == "zh"
-                else "The conflict check did not complete; a missing dispute does "
-                     "not mean the sources agree."
-            )
+        arb_failed = (int(check.get("pairs_arbitration_failed") or 0)
+                      if isinstance(check, dict) else 0)
+        if not check or unscanned or arb_failed or scanned == 0:
+            if arb_failed:
+                lines.append(
+                    f"发现 {arb_failed} 组潜在分歧，但未完成裁定。" if lang == "zh"
+                    else f"{arb_failed} candidate pair(s) showed a potential "
+                         f"disagreement that was not resolved."
+                )
+            else:
+                lines.append(
+                    "冲突检查未完成，缺失争议不代表来源一致。" if lang == "zh"
+                    else "The conflict check did not complete; a missing dispute does "
+                         "not mean the sources agree."
+                )
         else:
             lines.append(L["no_disputes"][lang])
 

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 
 import httpx
 import numpy as np
@@ -375,6 +376,18 @@ def _record_coverage(**fields) -> dict:
     conflict_detector_coverage.update(fields)
     return dict(conflict_detector_coverage)
 
+
+# Per-stage elapsed seconds for this node, so a slow run can be read as scan vs
+# arbitration vs evidence vs re-arbitration instead of one opaque node duration.
+# Plain dict of floats; not a tracing system.
+conflict_stage_timing: dict = {}
+
+
+def _stage(name: str, started: float) -> None:
+    conflict_stage_timing[name] = round(
+        conflict_stage_timing.get(name, 0.0) + (time.monotonic() - started), 2)
+
+
 # Outcomes the scan can report. Anything else is not a completed judgement.
 SCAN_DIFFERENCE = "difference"
 SCAN_NO_DIFFERENCE = "no_difference"
@@ -382,14 +395,22 @@ SCAN_UNSCANNED = "unscanned"
 
 
 def conflict_check_incomplete() -> bool:
-    """Whether any candidate pair was left unjudged this run.
+    """Whether any confirmed difference was left without a resolution.
 
-    Reads the scan's own outcome record, which find_contradictions resets at the
-    start of every call. That covers both entry points: a direct scan call and
-    the agent, which copies the same outcomes into the coverage record.
+    Two ways the check can be unfinished, and both read as incomplete:
+
+      * the scan never classified a candidate pair, so a difference could not be
+        found; and
+      * the scan DID find a difference but its arbitration produced no row, so a
+        real disagreement was confirmed and then left unresolved.
+
+    The second case must not read as "check complete, no conflicts": the
+    disagreement exists and simply was not adjudicated.
     """
     outcomes = getattr(find_contradictions, "last_outcomes", None) or {}
-    return bool(outcomes.get(SCAN_UNSCANNED))
+    if outcomes.get(SCAN_UNSCANNED):
+        return True
+    return bool(conflict_detector_coverage.get("pairs_arbitration_failed"))
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
@@ -483,7 +504,9 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
         f"LLM scanning {len(candidates)} candidate pairs for contradictions",
         agent="CONFLICT_DETECTOR",
     )
+    _scan_started = time.monotonic()
     scan_results = await asyncio.gather(*[_scan(c) for c in candidates])
+    _stage("scan_s", _scan_started)
 
     pairs = []
     for r in scan_results:
@@ -637,9 +660,11 @@ class ConflictDetectorAgent:
                 )
             return _build_conflict(pair, result, model="deepseek-flash")
 
+        _arb_started = time.monotonic()
         raw_conflicts = await asyncio.gather(
             *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
         )
+        _stage("initial_arbitration_s", _arb_started)
 
         conflicts = []
         # Track the pair index alongside its conflict row, so a later stage can
@@ -671,6 +696,7 @@ class ConflictDetectorAgent:
         for index in evidence_pairs:
             pair = conflict_pairs[index]
             evidence = ""
+            _ev_started = time.monotonic()
             try:
                 evidence = await _gather_evidence(
                     topic=query,
@@ -681,14 +707,19 @@ class ConflictDetectorAgent:
             except Exception as e:
                 print_agent_output(
                     f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+            finally:
+                _stage("evidence_gathering_s", _ev_started)
             if not evidence:
                 continue
+            _re_started = time.monotonic()
             try:
                 revised = await _arbitrate_one(pair, evidence)
             except Exception as e:
                 print_agent_output(
                     f"Evidence arbitration failed: {e}", agent="CONFLICT_DETECTOR")
                 continue
+            finally:
+                _stage("re_arbitration_s", _re_started)
             revised["evidence_collected"] = evidence[:500]
             conflicts[index] = revised
 
@@ -701,6 +732,9 @@ class ConflictDetectorAgent:
             # scan never found anything.
             "pairs_arbitration_failed": failed_arbitrations,
             "scan_outcomes": dict(getattr(find_contradictions, "last_outcomes", {})),
+            # Where this node's time went, so a slow run reads as scan vs
+            # arbitration vs evidence vs re-arbitration.
+            "stage_timing_s": dict(conflict_stage_timing),
         }
         conflict_detector_coverage.clear()
         conflict_detector_coverage.update(coverage)

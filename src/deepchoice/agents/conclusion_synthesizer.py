@@ -102,12 +102,14 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
     An empty list means the check found no confirmed contradiction only when the
     check actually ran to completion over its candidate pairs. Otherwise the
     synthesizer is told the check is incomplete, so it cannot present an
-    unfinished scan as reassurance.
+    unfinished scan as reassurance -- including the case where the scan found a
+    difference and its ruling then failed.
     """
     check = conflict_check or {}
     outcomes = check.get("scan_outcomes") or {}
     unscanned = int(outcomes.get("unscanned") or 0)
     scanned = int(check.get("pairs_scanned") or 0)
+    arbitration_failed = int(check.get("pairs_arbitration_failed") or 0)
     if not conflicts:
         if not check:
             return ("No confirmed conflicts, but this run recorded no conflict "
@@ -116,6 +118,13 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
             return (f"CONFLICT CHECK INCOMPLETE: {unscanned} candidate pair(s) "
                     f"were not classified out of {scanned} scanned. Do not state "
                     f"or imply that no conflicts exist.")
+        if arbitration_failed:
+            # A difference was confirmed and then not adjudicated. That is a
+            # live disagreement, not an absence of disagreement.
+            return (f"CONFLICT CHECK INCOMPLETE: {arbitration_failed} candidate "
+                    f"pair(s) showed a potential disagreement but the ruling was "
+                    f"not completed. Present them as unresolved potential "
+                    f"disagreements; do not state or imply that no conflicts exist.")
         if scanned == 0:
             return ("No candidate pairs qualified for the conflict check "
                     f"({check.get('reason', 'no candidates')}); absence of "
@@ -133,6 +142,12 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
         lines.append(
             f"NOTE: {unscanned} further candidate pair(s) were not classified, so "
             f"this list is partial."
+        )
+    if arbitration_failed:
+        lines.append(
+            f"NOTE: {arbitration_failed} further pair(s) showed a potential "
+            f"disagreement that was not adjudicated; present them as unresolved "
+            f"potential disagreements rather than omitting them."
         )
     return "\n".join(lines)
 

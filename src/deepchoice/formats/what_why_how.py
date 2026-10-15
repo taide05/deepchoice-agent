@@ -84,21 +84,36 @@ def render(state: dict) -> str:
     outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
     unscanned = int(outcomes.get("unscanned") or 0)
     scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
+    arb_failed = (int(check.get("pairs_arbitration_failed") or 0)
+                  if isinstance(check, dict) else 0)
     if not conflicts:
-        if not check or unscanned or scanned == 0:
+        if not check or unscanned or arb_failed or scanned == 0:
             if lang == "zh":
-                detail = (f"未完成分类的候选对 {unscanned} 组（已扫描 {scanned} 组）"
-                          if unscanned else f"没有候选对进入该检查（{check.get('reason', '未记录')}）"
-                          if check else "本次运行没有记录冲突检查覆盖情况")
+                if arb_failed:
+                    detail = (f"发现 {arb_failed} 组潜在分歧，但**未完成裁定**"
+                              f"（已扫描 {scanned} 组）")
+                elif unscanned:
+                    detail = f"未完成分类的候选对 {unscanned} 组（已扫描 {scanned} 组）"
+                elif check:
+                    detail = f"没有候选对进入该检查（{check.get('reason', '未记录')}）"
+                else:
+                    detail = "本次运行没有记录冲突检查覆盖情况"
                 lines.extend(["## 冲突检查状态", "",
                               f"**冲突检查未完成。** {detail}。",
                               "缺失冲突不代表来源之间没有分歧，只代表本次没有完成判定。", ""])
             else:
-                detail = (f"{unscanned} candidate pair(s) were not classified "
-                          f"(of {scanned} scanned)" if unscanned
-                          else f"no candidate pair reached the check "
-                               f"({check.get('reason', 'unrecorded')})" if check
-                          else "this run recorded no conflict-check coverage")
+                if arb_failed:
+                    detail = (f"{arb_failed} candidate pair(s) showed a potential "
+                              f"disagreement and the ruling was not completed "
+                              f"(of {scanned} scanned)")
+                elif unscanned:
+                    detail = (f"{unscanned} candidate pair(s) were not classified "
+                              f"(of {scanned} scanned)")
+                elif check:
+                    detail = (f"no candidate pair reached the check "
+                              f"({check.get('reason', 'unrecorded')})")
+                else:
+                    detail = "this run recorded no conflict-check coverage"
                 lines.extend(["## Conflict check status", "",
                               f"**The conflict check did not complete.** {detail}.",
                               "A missing conflict does not mean the sources agree; "

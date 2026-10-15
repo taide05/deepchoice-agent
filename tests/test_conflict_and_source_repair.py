@@ -259,6 +259,64 @@ class TestIncompleteIsNotNoDifference:
             assert cd.conflict_check_incomplete() is True
 
     @pytest.mark.asyncio
+    async def test_failed_arbitration_reads_as_unresolved_not_as_no_conflict(
+            self, monkeypatch):
+        """A confirmed difference whose ruling failed is a live disagreement.
+
+        End to end: the scan confirms a difference, its arbitration fails, and the
+        report must say a potential disagreement was not resolved rather than that
+        the check completed with no conflicts.
+        """
+        from deepchoice.agents.conclusion_synthesizer import _summarize_conflicts
+        from deepchoice.formats.comparison_matrix import render as render_matrix
+        from deepchoice.formats.evidence_first import render as render_evidence
+        from deepchoice.formats.what_why_how import render
+
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "e"}
+
+        async def failing_call_model(prompt, model="x", tag="", **kwargs):
+            raise RuntimeError("arbitration provider down")
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "call_model", failing_call_model)
+
+        result = await cd.ConflictDetectorAgent(gather_evidence=True).run({
+            "source_scores": _sources(4), "task": {"query": "t"}, "token_usage": [],
+        })
+
+        check = result["conflict_check"]
+        assert result["conflicts"] == []
+        assert check["scan_outcomes"]["difference"] > 0, check
+        assert check["pairs_arbitration_failed"] > 0, check
+        assert cd.conflict_check_incomplete() is True, check
+
+        # The synthesizer must be told this is unfinished, not conflict-free.
+        told = _summarize_conflicts(result["conflicts"], check)
+        assert "INCOMPLETE" in told, told
+        assert ("unresolved potential disagreements" in told
+                or "ruling was not completed" in told), told
+
+        # And so must every renderer.
+        state = {
+            "task": {"query": "Kafka vs Redis"}, "evidence_chains": [],
+            "conflicts": result["conflicts"], "knowledge_gaps": [],
+            "final_recommendation": {}, "confidence": "low",
+            "conflict_check": check,
+        }
+        for name, renderer in (("what_why_how", render),
+                               ("comparison_matrix", render_matrix),
+                               ("evidence_first", render_evidence)):
+            out = renderer(state)
+            assert ("did not complete" in out or "未完成" in out
+                    or "not resolved" in out), f"{name} hid the failed ruling"
+            assert "No significant disputes" not in out, name
+            assert "No major disputes" not in out, name
+
+    @pytest.mark.asyncio
     async def test_coverage_is_replaced_not_merged_between_runs(self, monkeypatch):
         """A second run must not inherit the first run's coverage or reason.
 
