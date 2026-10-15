@@ -550,7 +550,11 @@ class ConflictDetectorAgent:
             outcomes = dict(getattr(find_contradictions, "last_outcomes", {}))
             incomplete = bool(outcomes.get(SCAN_UNSCANNED))
             check = _record_coverage(
-                pairs_scanned=0,
+                # The scan did run; the count comes from what it classified.
+                # Reporting 0 here would say no pair was ever examined.
+                pairs_scanned=(int(outcomes.get(SCAN_DIFFERENCE, 0))
+                               + int(outcomes.get(SCAN_NO_DIFFERENCE, 0))
+                               + int(outcomes.get(SCAN_UNSCANNED, 0))),
                 pairs_arbitrated=0,
                 pairs_evidence=0,
                 scan_outcomes=outcomes,

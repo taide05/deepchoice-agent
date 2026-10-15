@@ -124,14 +124,27 @@ class TestScanWorkBound:
         monkeypatch.setattr(cd, "_gather_evidence", fake_gather)
         monkeypatch.setattr(cd, "call_model", fake_call_model)
 
-        # A clear score gap is decided by the deterministic rule.
+        # Both sources must clear the >= 5.0 high-score gate, or the node exits
+        # before reaching any arbitration and the rule path is never exercised.
+        # The 4.5 gap is decisive, so the rule decides without an LLM call.
         strong = [{"url": "https://a", "title": "A comparison", "snippet": "s",
                    "total_score": 9.5, "scores": {"authority": 10}},
                   {"url": "https://b", "title": "A comparison too", "snippet": "s",
-                   "total_score": 2.0, "scores": {"authority": 2}}]
-        await cd.ConflictDetectorAgent(gather_evidence=True).run({
+                   "total_score": 5.0, "scores": {"authority": 5}}]
+        # Guard the fixture itself: if these stop reaching arbitration, the
+        # assertions below would pass without testing anything.
+        assert all(s["total_score"] >= 5.0 for s in strong)
+        assert cd._deterministic_arbitration(strong[0], strong[1]) is not None
+
+        result = await cd.ConflictDetectorAgent(gather_evidence=True).run({
             "source_scores": strong, "task": {"query": "t"}, "token_usage": [],
         })
+        assert result["conflict_check"]["pairs_scanned"] > 0, \
+            "the run never reached the scan, so the rule path was not tested"
+        assert result["conflicts"], "the decisive gap should still yield a conflict"
+        assert all(c["arbiter_model"] == "deepseek-flash(rule)"
+                   for c in result["conflicts"]), \
+            [c["arbiter_model"] for c in result["conflicts"]]
         assert message_calls == [], "the rule path made an LLM call"
         assert gathered == [], "the rule path paid the evidence search cost"
 
@@ -204,32 +217,84 @@ class TestIncompleteIsNotNoDifference:
 
     @pytest.mark.asyncio
     async def test_unusable_model_replies_are_unscanned_not_no_difference(self, monkeypatch):
-        """Drive the REAL scan function with the replies that carry no judgement.
+        """Drive the REAL scan function, one reply per run.
 
-        call_model returns {} for output it cannot parse and the model can return
-        an empty or string value for the field, so these replies must not be
-        recorded as a completed 'no difference'.
+        call_model returns {} for output it cannot parse, and the model can return
+        an empty, None, string or numeric value for the field. None of those
+        carries a judgement, so none may be recorded as a completed 'no
+        difference' (or, for a truthy string, as a difference).
+
+        Each reply is exercised in its own run: a single run consumes as many
+        replies as it has candidate pairs, so a longer list would leave the later
+        cases untested.
         """
         monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
 
-        unusable = [{}, {"has_difference": ""}, {"has_difference": None},
-                    {"has_difference": "false"}, None, []]
-        replies = iter(unusable)
+        unusable = [
+            {},                         # unparsable output -> {} from call_model
+            {"has_difference": ""},     # empty string
+            {"has_difference": None},   # explicit null
+            {"has_difference": "false"},  # truthy string: previously a difference
+            {"has_difference": "true"},
+            {"has_difference": 0},      # numeric, not a bool
+            {"has_difference": 1},
+            {"type": "none"},           # field missing
+            None,                       # non-dict reply
+            [],
+        ]
+        for reply in unusable:
+            async def fake_call_model(prompt, model="x", tag="", _reply=reply, **kwargs):
+                return _reply
+
+            monkeypatch.setattr(cd, "call_model", fake_call_model)
+            # The real _scan_pair_contradiction is under test here.
+            await cd.find_contradictions(_sources(3), "t", usage=[])
+
+            outcomes = cd.find_contradictions.last_outcomes
+            assert outcomes["no_difference"] == 0, \
+                f"reply {reply!r} was recorded as no difference: {outcomes}"
+            assert outcomes["difference"] == 0, \
+                f"reply {reply!r} manufactured a difference: {outcomes}"
+            assert outcomes["unscanned"] > 0, f"reply {reply!r}: {outcomes}"
+            assert cd.conflict_check_incomplete() is True
+
+    @pytest.mark.asyncio
+    async def test_coverage_is_replaced_not_merged_between_runs(self, monkeypatch):
+        """A second run must not inherit the first run's coverage or reason.
+
+        The coverage record is module-level, so in a long-lived server a merged
+        update would leave a stale reason or count visible to a later run.
+        """
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        # Run 1: too few high-score sources, which records a specific reason.
+        await cd.find_contradictions(
+            [{"url": "https://only", "title": "Only source", "snippet": "s",
+              "total_score": 7.0, "scores": {"authority": 7}}], "t", usage=[])
+        first = dict(cd.conflict_detector_coverage)
+        assert first.get("reason") == "too_few_high_score_sources", first
+
+        # Run 2: a different outcome that takes the conflict path and sets its own
+        # fields, without the "reason" key run 1 recorded.
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "e"}
 
         async def fake_call_model(prompt, model="x", tag="", **kwargs):
-            return next(replies, {})
+            return {"resolution": "a", "confidence": "high", "reasoning": "r"}
 
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
         monkeypatch.setattr(cd, "call_model", fake_call_model)
-        # The real _scan_pair_contradiction is under test here.
-        await cd.find_contradictions(_sources(3), "t", usage=[])
+        await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": _sources(4), "task": {"query": "t"}, "token_usage": [],
+        })
+        second = dict(cd.conflict_detector_coverage)
 
-        outcomes = cd.find_contradictions.last_outcomes
-        assert outcomes["no_difference"] == 0, \
-            f"an unusable reply was recorded as no difference: {outcomes}"
-        assert outcomes["difference"] == 0, \
-            f"a wrong-typed reply manufactured a difference: {outcomes}"
-        assert outcomes["unscanned"] > 0
-        assert cd.conflict_check_incomplete() is True
+        assert second.get("pairs_scanned", 0) > 0, second
+        assert second.get("pairs_arbitrated", 0) > 0, second
+        # The first run's reason must not survive into the second record.
+        assert "reason" not in second, \
+            f"run 1 coverage leaked into run 2: {second}"
 
     @pytest.mark.asyncio
     async def test_a_real_negative_verdict_still_counts_as_completed(self, monkeypatch):
@@ -331,6 +396,10 @@ class TestSourceEvaluation:
         # Same titles, conflicting bodies: no support may be inferred.
         assert all(not row["supporting_sources"] for row in rows), \
             [row["supporting_sources"] for row in rows]
+        # Consistency keeps its empty-support value; zeroing it would lower every
+        # total by 0.8 against unchanged thresholds.
+        assert all(row["scores"]["consistency"] == se.score_consistency([])
+                   for row in rows), [row["scores"] for row in rows]
 
         chains = build_evidence_chain(rows, [])
         assert all(c["evidence_strength"] != "strong" for c in chains), \
