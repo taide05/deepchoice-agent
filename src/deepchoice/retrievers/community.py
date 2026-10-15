@@ -33,7 +33,8 @@ class CommunitySearch(BaseRetriever):
     source = "community"
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
+                         adapted_queries: list[str] | None = None,
+                         candidate_techs: list[str] | None = None) -> list[dict]:
         keywords = (adapted_queries[0] if adapted_queries else query).replace(" vs ", " ").replace(" versus ", " ")[:150]
         results = []
 

@@ -53,10 +53,14 @@ class MultiRetrieverAgent:
             sub_questions = _supplement_sub_questions(sub_questions, query)
 
         tasks = []
+        candidate_techs = list(research_state.get("task", {}).get("candidate_techs") or [])
         for name, cls in RETRIEVER_REGISTRY.items():
             retriever = cls()
             adapted = adapted_queries.get(name, []) if adapted_queries else []
-            tasks.append(retriever.search(query, sub_questions, adapted_queries=adapted))
+            # Candidates travel with the retrieval so the official source can
+            # select by declared identity instead of by ordinary query words.
+            tasks.append(retriever.search(query, sub_questions, adapted_queries=adapted,
+                                          candidate_techs=candidate_techs))
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
 

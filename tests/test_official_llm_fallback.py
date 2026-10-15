@@ -63,7 +63,9 @@ async def _run_search(monkeypatch, llm_result, fail_urls=()):
 
     monkeypatch.setattr(official_mod, "call_model", fake_call_model)
     retriever = official_mod.OfficialSearch()
-    return await retriever._do_search("supabase vs firebase", [], 10, ["supabase"])
+    # Declared candidates drive the fallback; adapted query words no longer can.
+    return await retriever._do_search(
+        "supabase vs firebase", [], 10, ["supabase"], ["supabase", "firebase"])
 
 
 class TestFallbackConcurrency:
@@ -92,7 +94,8 @@ class TestFallbackConcurrency:
         async def drive():
             retriever = official_mod.OfficialSearch()
             task = asyncio.create_task(
-                retriever._do_search("zed vs helix", [], 10, ["zed", "helix"])
+                retriever._do_search("zed vs helix", [], 10, ["zed", "helix"],
+                                     ["zed", "helix"])
             )
             try:
                 for _ in range(100):
@@ -155,7 +158,7 @@ class TestSeedPrecedence:
         _patch_outbound(monkeypatch)
 
         out = asyncio.run(official_mod.OfficialSearch()._do_search(
-            "python vs go", [], 10, None))
+            "python vs go", [], 10, None, ["python", "go"]))
         urls = [r["url"] for r in out]
         assert any("docs.python.org" in u for u in urls), urls
         assert not any("python.langchain.com" in u for u in urls)
@@ -174,9 +177,12 @@ class TestFallbackGenericFilter:
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
         _patch_outbound(monkeypatch)
 
-        asyncio.run(official_mod.OfficialSearch()._do_search(
+        # Ordinary words are search aids, not research targets, so they must not
+        # reach the fallback at all.
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
             "docs", [], 10, ["docs", "code", "url"]))
         assert calls == [], f"LLM called for generic terms: {calls}"
+        assert out == []
 
 
 class TestNGramMatching:
@@ -191,7 +197,15 @@ class TestNGramMatching:
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
         _patch_outbound(monkeypatch)
         retriever = official_mod.OfficialSearch()
-        return await retriever._do_search(query, [], 10, None)
+        return await retriever._do_search(query, [], 10, None, self._declared(query))
+
+    @staticmethod
+    def _declared(query: str) -> list[str]:
+        """Declared candidates for these fixtures, split from the 'vs' query."""
+        import re
+
+        return [p.strip() for p in re.split(r"\s+vs\.?\s+", query, flags=re.IGNORECASE)
+                if p.strip()]
 
     def test_space_separated_multiword_matches_seed(self, monkeypatch):
         import asyncio
@@ -231,12 +245,12 @@ class TestPyPIPassRestriction:
         monkeypatch.setattr(official_mod._outbound, "make_client", _make_client)
         return client
 
-    async def _search(self, query, monkeypatch, llm_result=None):
+    async def _search(self, query, monkeypatch, llm_result=None, candidate_techs=None):
         async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):
             return llm_result if llm_result is not None else {"url": None}
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
         retriever = official_mod.OfficialSearch()
-        return await retriever._do_search(query, [], 10, None)
+        return await retriever._do_search(query, [], 10, None, candidate_techs or [])
 
     def test_scenario_query_skips_pypi(self, monkeypatch):
         import asyncio
@@ -246,8 +260,13 @@ class TestPyPIPassRestriction:
         assert not any("pypi.org" in u for u in client.called_urls), \
             f"PyPI called on scenario query: {client.called_urls}"
 
-    def test_vs_query_still_uses_pypi(self, monkeypatch):
+    def test_pypi_is_no_longer_a_source_of_candidates(self, monkeypatch):
+        """The PyPI pass resolved candidates from ordinary query words, so a
+        package name could enter the run as a research object. Candidate
+        identity comes from the declared list instead."""
         import asyncio
         client = self._client_with_recorder(monkeypatch)
-        asyncio.run(self._search("FastAPI vs Flask", monkeypatch))
-        assert any("pypi.org" in u for u in client.called_urls)
+        asyncio.run(self._search("FastAPI vs Flask", monkeypatch,
+                                 candidate_techs=["FastAPI", "Flask"]))
+        assert not any("pypi.org" in u for u in client.called_urls), \
+            f"PyPI still resolves candidates from query words: {client.called_urls}"

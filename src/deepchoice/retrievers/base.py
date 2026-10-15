@@ -14,11 +14,13 @@ class BaseRetriever:
     source: str = "base"
 
     async def search(self, query: str, sub_questions: list[str], max_results: int = 7,
-                     adapted_queries: list[str] | None = None) -> dict:
+                     adapted_queries: list[str] | None = None,
+                     candidate_techs: list[str] | None = None) -> dict:
         t0 = time.monotonic()
         try:
             results = await self._do_search(query, sub_questions, max_results,
-                                            adapted_queries=adapted_queries or [])
+                                            adapted_queries=adapted_queries or [],
+                                            candidate_techs=candidate_techs or [])
             return {
                 "source": self.source,
                 "status": "success",
@@ -44,5 +46,6 @@ class BaseRetriever:
             }
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
+                         adapted_queries: list[str] | None = None,
+                         candidate_techs: list[str] | None = None) -> list[dict]:
         raise NotImplementedError

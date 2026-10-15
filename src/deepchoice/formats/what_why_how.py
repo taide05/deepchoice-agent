@@ -7,6 +7,41 @@ def _link(text: str, src: dict) -> str:
     return f"[{text}]({url})" if url else text
 
 
+def _cited_sources(text: str, chain_sources: dict[str, list[str]]) -> list[str]:
+    """Sources the text itself cites, in the order it cites them.
+
+    The synthesizer already binds each claim to its real source and writes
+    '[Source: <title>]'. The renderer therefore reports the citation that exists
+    instead of guessing one: matching the text against source titles by shared
+    words attached unrelated sources to a claim.
+    """
+    import re
+
+    listed: list[str] = []
+    for title in re.findall(r"\[Source:\s*([^\]]+)\]", text or ""):
+        title = title.strip()
+        for srcs in chain_sources.values():
+            for link in srcs:
+                if link.startswith(f"[{title}]"):
+                    if link not in listed:
+                        listed.append(link)
+    return listed[:3]
+
+
+def _candidate_tokens(candidate: str) -> list[str]:
+    """Distinctive lowercase tokens of a candidate name."""
+    from ..utils.candidate_identity import candidate_tokens
+
+    return candidate_tokens([candidate])
+
+
+def _content_or_gap(src: dict) -> str:
+    """The source's body text, or an explicit statement that there is none."""
+    from ..utils.candidate_identity import bounded_content_summary
+
+    return bounded_content_summary(src, limit=300)
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
@@ -47,13 +82,45 @@ def render(state: dict) -> str:
 
     lines.extend([T["what"][lang], ""])
 
-    strong_chains = [c for c in chains if c.get("evidence_strength") == "strong"]
-    for c in strong_chains[:5]:
-        lines.append(f"- **{c.get('conclusion', '')}**")
-        for src in c.get("sources", []):
-            lines.append(f"  - Source: [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
+    # The candidates themselves, from the same structure the rest of the report
+    # uses. This is not gated on evidence strength: with no strong chain the
+    # section used to render empty, which left the reader without the options the
+    # report is about. Insufficient material is stated, not hidden.
+    candidates = [str(c).strip() for c in (task.get("candidate_techs") or []) if str(c).strip()]
+    if candidates:
+        # Sources that actually name each candidate, for its stated basis.
+        def _mentions(candidate: str) -> list[dict]:
+            tokens = [t for t in _candidate_tokens(candidate) if len(t) >= 4]
+            if not tokens:
+                return []
+            found = []
+            for c in chains:
+                for src in c.get("sources", []):
+                    blob = f"{src.get('title', '')} {src.get('url', '')} " \
+                           f"{src.get('snippet', '')}".lower()
+                    if any(t in blob for t in tokens):
+                        found.append(src)
+            return found
 
-    lines.extend(["", T["why"][lang], ""])
+        for candidate in candidates:
+            lines.append(f"### {candidate}")
+            basis = _mentions(candidate)
+            if basis:
+                for src in basis[:2]:
+                    content = _content_or_gap(src)
+                    lines.append(f"- {src.get('title', '')} — "
+                                 f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
+                    lines.append(f"  - {content}")
+            else:
+                lines.append("- 本次检索未取得明确指向该候选的材料；"
+                             "不代表该候选不适用，只代表本轮没有资料。"
+                             if lang == "zh"
+                             else "- No retrieved material explicitly covered this "
+                                  "candidate; that is a gap in this run, not a judgement "
+                                  "on the candidate.")
+            lines.append("")
+
+    lines.extend([T["why"][lang], ""])
 
     for c in chains[:10]:
         tag = " [DISPUTED]" if c.get("disputed") else ""
@@ -164,28 +231,18 @@ def render(state: dict) -> str:
         for opt in rec["ranked_options"]:
             rationale = opt.get('rationale', '')
             lines.append(f"- **#{opt.get('rank', '?')} {opt.get('name', '')}**: {rationale}")
-            # Inject matching source citations
-            matched = []
-            rationale_lower = rationale.lower()
-            for conclusion, srcs in chain_sources.items():
-                if any(w in rationale_lower for w in conclusion.split()[:5]):
-                    matched.extend(srcs[:1])  # max 1 per chain
-            if matched:
-                lines.append(f"  *Sources: {'; '.join(matched[:3])}*")
+            linked = _cited_sources(rationale, chain_sources)
+            if linked:
+                lines.append(f"  *Sources: {'; '.join(linked)}*")
         lines.append("")
     if rec.get("trade_offs"):
         lines.append(T["trade_offs"][lang])
         for t in rec["trade_offs"]:
             finding = t.get('finding', '')
             lines.append(f"- **{t.get('dimension', '')}**: {finding}")
-            # Inject matching source citations
-            matched = []
-            finding_lower = finding.lower()
-            for conclusion, srcs in chain_sources.items():
-                if any(w in finding_lower for w in conclusion.split()[:5]):
-                    matched.extend(srcs[:1])
-            if matched:
-                lines.append(f"  *Sources: {'; '.join(matched[:3])}*")
+            linked = _cited_sources(finding, chain_sources)
+            if linked:
+                lines.append(f"  *Sources: {'; '.join(linked)}*")
         lines.append("")
     if rec.get("scene_fit_note"):
         lines.append(f"**{T['scene_fit'][lang]}:** {rec['scene_fit_note']}")

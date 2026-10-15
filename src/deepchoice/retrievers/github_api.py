@@ -56,7 +56,8 @@ class GitHubSearch(BaseRetriever):
         return headers
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
+                         adapted_queries: list[str] | None = None,
+                         candidate_techs: list[str] | None = None) -> list[dict]:
         # Strategy 1: Extract technology names and search for them
         tech_names = _extract_tech_names(query, sub_questions)
 

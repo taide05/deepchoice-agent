@@ -69,15 +69,39 @@ Return ONLY a JSON object:
 }}"""
 
 
-def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]:
+def _summarize_chains(evidence_chains: list[dict],
+                      candidate_techs: list[str] | None = None) -> tuple[str, dict[int, str]]:
     """Format evidence chains for the prompt, assigning each source a stable
     number ([[N]]) that the model cites instead of a verbatim title. Returns
     the rendered text plus the number -> title mapping used to bind citations
     back to [Source: title] after synthesis.
+
+    Each source carries its URL and its bounded body text, not just a title and
+    a score. A title is an identity, not a statement: a source whose body was
+    never collected is marked as carrying no content, so the model cannot cite a
+    navigation label as if it were a finding.
     """
+    from ..utils.candidate_identity import bounded_content_summary, candidate_proper_nouns
+
+    header: list[str] = []
+    names = candidate_proper_nouns(candidate_techs or [])
+    if names:
+        header = [
+            "## Declared candidates for this question",
+            "",
+            "These are the only technologies in scope. Do not introduce any other "
+            "product as a candidate, and do not replace one of these with a "
+            "same-word product you happen to have seen in a source:",
+            "",
+        ]
+        header += [f"- {name}" for name in names]
+        header.append("")
+
     if not evidence_chains:
-        return "No evidence chains available.", {}
-    lines: list[str] = [
+        return "\n".join(header + ["No evidence chains available."]), {}
+
+    lines: list[str] = list(header)
+    lines += [
         "Evidence sources — cite each by its number in double brackets, e.g. [[1]]:",
         "",
     ]
@@ -91,7 +115,11 @@ def _summarize_chains(evidence_chains: list[dict]) -> tuple[str, dict[int, str]]
             n += 1
             title = src.get("title", "Unknown")
             mapping[n] = title
+            url = src.get("url", "")
             lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
+            if url:
+                lines.append(f"       url: {url}")
+            lines.append(f"       content: {bounded_content_summary(src)}")
         lines.append("")
     return "\n".join(lines), mapping
 
@@ -320,7 +348,8 @@ class ConclusionSynthesizerAgent:
         strong_count = sum(1 for c in evidence_chains if c.get("evidence_strength") == "strong")
         disputed_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
-        evidence_text, cite_map = _summarize_chains(evidence_chains)
+        evidence_text, cite_map = _summarize_chains(
+            evidence_chains, task.get("candidate_techs") or [])
         prompt = [{
             "role": "user",
             "content": SYNTHESIS_PROMPT.format(

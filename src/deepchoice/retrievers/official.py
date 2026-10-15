@@ -183,9 +183,19 @@ class OfficialSearch(BaseRetriever):
             return False
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
-        all_text = " ".join(adapted_queries) if adapted_queries else query
-        keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
+                         adapted_queries: list[str] | None = None,
+                         candidate_techs: list[str] | None = None) -> list[dict]:
+        # Only declared candidates may introduce an official source. The adapted
+        # queries are search aids: an ordinary word in them is not a research
+        # target, and a learned-cache hit is not proof of candidacy either.
+        from ..utils.candidate_identity import (
+            bounded_content_summary,
+            candidate_names_key,
+            mapping_key_for,
+            normalize_term,
+        )
+
+        candidates = [c for c in (candidate_techs or []) if str(c).strip()]
         learned = load_learned()
         # Curated seed always wins: a learned entry must never shadow a
         # hand-verified mapping (e.g. a harvested 'python' entry once
@@ -193,82 +203,73 @@ class OfficialSearch(BaseRetriever):
         lookup = {**learned, **TECH_DOCS}
         results = []
 
-        # Pass 1: curated seed + learned cache via normalized n-gram matching.
-        # Space-separated multi-word terms ('AWS Lambda') match hyphenated or
-        # dotted keys ('aws-lambda', 'next.js') through alnum normalization.
-        norm_lookup = {_normalize(k): k for k in lookup}
-        for alias, target in _TECH_ALIASES.items():
-            if target in lookup:
-                norm_lookup[_normalize(alias)] = target
-        matched_norms: set[str] = set()
-        matched_ngram_components: set[str] = set()
-        for n in (1, 2, 3):
-            for i in range(len(keywords) - n + 1):
-                phrase = " ".join(keywords[i:i + n])
-                norm = _normalize(phrase)
-                key = norm_lookup.get(norm)
-                if key is None or norm in matched_norms:
-                    continue
-                matched_norms.add(norm)
-                matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
-                doc = lookup[key]
-                results.append({
-                    "url": doc["url"],
-                    "title": doc["title"],
-                    "snippet": f"Official documentation site for {key}",
-                    "date": "",
-                })
+        if not candidates:
+            # No declared identity, so nothing may be promoted to "official".
+            # Better an explicit gap than an unowned official-looking source.
+            return []
 
-        # Pass 1.5: LLM fallback for unmapped candidate terms (validated + learned)
-        unmapped = []
-        for kw in keywords:
-            kw_clean = kw.strip().rstrip(".").rstrip(",")
-            if (kw_clean not in lookup and kw_clean not in unmapped
-                    and is_plausible_term(kw_clean)
-                    and _normalize(kw_clean) not in matched_ngram_components):
-                unmapped.append(kw_clean)
-        async def _resolve_fallback(kw):
-            url = await self._propose_official_url(kw)
-            if not url or not domain_label_match(kw, url):
+        # Mapping entries that a declared candidate actually names. This is the
+        # whole bound: an unmapped candidate yields no official source rather
+        # than matching on a shared ordinary word.
+        named_keys = set(mapping_key_for(candidates, lookup))
+
+        # Match whole declared candidate names against the mapping, so
+        # 'PostgreSQL' inside 'pgvector on Amazon RDS for PostgreSQL' resolves to
+        # the PostgreSQL docs, while 'vector' inside 'pgvector' cannot resolve to
+        # an unrelated product that merely shares that word.
+        for candidate in candidates:
+            named = [k for k in named_keys if candidate_names_key(candidate, k)]
+            if not named:
+                continue
+            # Longest match wins, so a candidate naming both 'postgresql' and a
+            # more specific key resolves to the more specific one.
+            key = max(named, key=lambda k: len(_normalize(k)))
+            if key not in lookup:
+                continue
+            doc = lookup[key]
+            entry = {
+                "url": doc["url"],
+                "title": doc["title"],
+                "snippet": doc.get("snippet", ""),
+                "date": "",
+            }
+            # A mapping entry supplies a link, not facts. Say which it is.
+            entry["snippet"] = bounded_content_summary(entry)
+            if entry["url"] not in {r["url"] for r in results}:
+                results.append(entry)
+
+        # LLM fallback stays available, but only for a declared candidate that the
+        # mapping does not name — never for an ordinary word from the query.
+        unmapped_candidates = [
+            c for c in candidates
+            if not any(normalize_term(k) in normalize_term(c) for k in named_keys)
+        ]
+
+        async def _resolve_fallback(candidate):
+            url = await self._propose_official_url(candidate)
+            if not url or not domain_label_match(candidate, url):
                 return None
             if not _looks_official(url):
                 return None
             if not await self._verify_reachable(url):
                 return None
-            return kw, url
+            return candidate, url
 
-        pending = unmapped[:_LLM_FALLBACK_MAX]
-        resolved = await asyncio.gather(*[_resolve_fallback(kw) for kw in pending])
+        pending = unmapped_candidates[:_LLM_FALLBACK_MAX]
+        resolved = await asyncio.gather(*[_resolve_fallback(c) for c in pending])
         for item in resolved:
             if item is None:
                 continue
-            kw, url = item
-            learn(kw, url, f"{kw} — Official Documentation", via="llm")
-            lookup[kw] = {"url": url, "title": f"{kw} — Official Documentation"}
-            results.append({
+            candidate, url = item
+            learn(candidate, url, f"{candidate} — Official Documentation", via="llm")
+            entry = {
                 "url": url,
-                "title": f"{kw} — Official Documentation",
-                "snippet": f"Official documentation site for {kw}",
+                "title": f"{candidate} — Official Documentation",
+                "snippet": "",
                 "date": "",
-            })
+            }
+            entry["snippet"] = bounded_content_summary(entry)
+            if entry["url"] not in {r["url"] for r in results}:
+                results.append(entry)
 
-        # Pass 2: PyPI search for packages. Restricted to vs-style comparison
-        # queries — on open-scenario queries the tokens are ordinary English
-        # words ('feature', 'team', 'wants'), and PyPI matches polluted the
-        # evidence chains with junk packages (recommended "flag (PyPI)" once).
-        if _is_vs_query(query):
-            async with await _outbound.make_client("official") as client:
-                for kw in keywords[:3]:
-                    if len(kw) < 3:
-                        continue
-                    resp = await client.get(f"https://pypi.org/pypi/{kw}/json")
-                    if resp.status_code != 200:
-                        continue
-                    info = resp.json().get("info", {})
-                    results.append({
-                        "url": info.get("package_url", f"https://pypi.org/project/{kw}/"),
-                        "title": f"{kw} (PyPI)",
-                        "snippet": f"Version: {info.get('version', 'N/A')}, Summary: {info.get('summary', '')}",
-                        "date": "",
-                    })
         return results[:max_results]

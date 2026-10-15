@@ -318,7 +318,8 @@ class TestErrorReporting:
         def __init__(self, exc: Exception):
             self._exc = exc
 
-        async def _do_search(self, query, sub_questions, max_results, adapted_queries=None):
+        async def _do_search(self, query, sub_questions, max_results, adapted_queries=None,
+                             candidate_techs=None):
             raise self._exc
 
     @pytest.mark.asyncio
@@ -350,7 +351,8 @@ class TestErrorReporting:
 
         class EmptyErrRetriever:
             source = "empty_err"
-            async def search(self, query, sub_questions, max_results=7, adapted_queries=None):
+            async def search(self, query, sub_questions, max_results=7, adapted_queries=None,
+                             candidate_techs=None):
                 raise httpx.ReadTimeout("")
 
         agent = MultiRetrieverAgent()
@@ -418,7 +420,8 @@ class TestMultiRetriever:
 
         class MockRetriever:
             source = "mock"
-            async def search(self, query, sub_questions, max_results=7, adapted_queries=None):
+            async def search(self, query, sub_questions, max_results=7, adapted_queries=None,
+                             candidate_techs=None):
                 return {"source": self.source, "status": "success", "results": [], "error": None, "latency_ms": 100}
 
         agent = MultiRetrieverAgent()
@@ -440,7 +443,8 @@ class TestMultiRetriever:
 
         class FailingRetriever:
             source = "fail"
-            async def search(self, query, sub_questions, max_results=7, adapted_queries=None):
+            async def search(self, query, sub_questions, max_results=7, adapted_queries=None,
+                             candidate_techs=None):
                 raise Exception("broken")
 
         agent = MultiRetrieverAgent()
