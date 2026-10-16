@@ -7,7 +7,43 @@ from .conclusion_synthesizer import (
 )
 from .report_generator import render_report
 
-REVIEW_SYSTEM = """You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
+# The fields the reviewer may correct: only the justification text it is asked to
+# check. The choice, the ranking order and the candidate names are not the
+# reviewer's to change.
+#
+# The set covers every field the report prints verbatim, not only the
+# per-candidate ones: a decisive error named in the recommendation, the winner
+# rationale, the confidence rationale or a trade-off finding was reported and
+# then still displayed, which is the outcome this is meant to remove. It is the
+# single definition: the contract sent to the model is generated from it.
+_CORRECTABLE_OPTION_FIELDS = ("rationale", "key_strength", "key_weakness",
+                              "constraint_fit_reason")
+_CORRECTABLE_TOP_FIELDS = ("recommendation", "winner_rationale",
+                           "confidence_rationale", "evidence_summary",
+                           "scene_fit_note")
+_CORRECTABLE_TRADEOFF_FIELDS = ("finding", "impact")
+_CORRECTABLE_FIELDS = (_CORRECTABLE_OPTION_FIELDS + _CORRECTABLE_TOP_FIELDS
+                       + _CORRECTABLE_TRADEOFF_FIELDS)
+
+
+def _field_map() -> str:
+    """The contract's field list, generated from the one registry above.
+
+    Written from the same tuple the applier uses, so the two cannot drift: a
+    field added to the registry is described to the model automatically, and a
+    field the applier does not accept cannot appear here.
+    """
+    return (
+        "* per-candidate (option = candidate name): "
+        + ", ".join(_CORRECTABLE_OPTION_FIELDS) + "\n"
+        "* top-level (option = \"\"): "
+        + ", ".join(_CORRECTABLE_TOP_FIELDS) + "\n"
+        "* trade-off (option = dimension): "
+        + ", ".join(_CORRECTABLE_TRADEOFF_FIELDS)
+    )
+
+
+REVIEW_SYSTEM = f"""You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
 
 Answer YES or NO for each, with a brief note:
 1. Source support: citation coverage is PRE-COMPUTED by the pipeline (see "Citation Coverage" in the input) — use that number, do NOT re-evaluate from the report text.
@@ -25,7 +61,7 @@ Confidence Assessment:
 If confidence is not "high", list specific information gaps as search queries.
 
 Return ONLY a JSON object (numbers are examples; give your own real values):
-{"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw>", "reason": "<what was wrong and which source contradicts it>"}]}
+{{"checks": [{{"item": 1, "passed": true, "note": "..."}}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw>", "reason": "<what was wrong and which source contradicts it>"}}]}}
 
 "corrections" is how a decisive error is fixed, not merely noted. A decisive
 error is a figure, unit or scale the cited source does not state (or states
@@ -36,14 +72,10 @@ return a correction entry that names WHERE it is stated:
   exact name as shown in "Decision Claims To Check". For a trade-off field it is
   that trade-off's dimension, exactly as shown there. Leave it empty ("") for a
   top-level field.
-- "field" is one of:
-  * per-candidate (selector = candidate name): rationale, key_strength,
-    key_weakness, constraint_fit_reason
-  * top-level (selector = ""): recommendation, winner_rationale,
-    confidence_rationale, evidence_summary, scene_fit_note
-  * trade-off (selector = dimension): finding, impact
-  Each of these is printed in the report, so an error left in any of them stays
-  on display. A field not in this list cannot be corrected.
+- "field" is one of the fields listed here — the only fields that can be
+  corrected. Each is printed in the report, so an error left in any of them
+  stays on display:
+{_field_map()}
 - "action": "revise" with the corrected field text when a cited source supports
   a corrected version — keep everything in the field that is still supported,
   change only what is wrong, and do not blank the field; "withdraw" when no cited
@@ -62,23 +94,6 @@ cannot correct or withdraw from the material given — because the field is miss
 from the list above, or you cannot tell which entry owns it — goes in
 knowledge_gaps and is left as it is."""
 
-# The reviewer may only revise these fields: they are the justification text it
-# is asked to check. The choice, the ranking order and the candidate names are
-# not the reviewer's to change.
-#
-# The set covers every field the report prints verbatim, not only the
-# per-candidate ones: a decisive error named in the recommendation, the
-# winner rationale, the confidence rationale or a trade-off finding was
-# previously reported and then still displayed, which is the outcome this is
-# meant to remove.
-_CORRECTABLE_OPTION_FIELDS = ("rationale", "key_strength", "key_weakness",
-                              "constraint_fit_reason")
-_CORRECTABLE_TOP_FIELDS = ("recommendation", "winner_rationale",
-                           "confidence_rationale", "evidence_summary",
-                           "scene_fit_note")
-_CORRECTABLE_TRADEOFF_FIELDS = ("finding", "impact")
-_CORRECTABLE_FIELDS = (_CORRECTABLE_OPTION_FIELDS + _CORRECTABLE_TOP_FIELDS
-                       + _CORRECTABLE_TRADEOFF_FIELDS)
 # "option" may name a ranked option, a trade-off dimension, or be omitted for a
 # top-level field. These are matched case-insensitively on the trimmed value.
 _WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
@@ -187,14 +202,18 @@ def _apply_corrections(recommendation: dict, corrections,
             # source that is not in the citable set is a claim of support that
             # does not exist; resolving it would leave the claim attached to
             # nothing, so that revision is withdrawn instead.
+            #
+            # Resolution can also leave the field empty — a revision consisting
+            # only of markers loses all of them — and an empty field both blanks
+            # the answer and hides the reason. That is the withdrawn case too.
             resolved = resolve_citations(corrected, evidence_chains, cite_map)
-            if unresolved_citations(resolved, evidence_chains):
+            if not resolved.strip() or unresolved_citations(resolved, evidence_chains):
                 target[field] = _withdrawn_note(
                     str(recommendation.get("recommendation") or ""))
                 applied.append({
                     "option": owner, "field": field, "action": "withdraw",
                     "withdrawn_marker": True,
-                    "reason": ("revision cited a source outside the citable set: "
+                    "reason": ("revision left nothing citable in the field: "
                                + reason)[:200],
                     "changed": before != target.get(field),
                 })
@@ -394,7 +413,7 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         # nothing else about the run is disturbed.
         reviewed_state = dict(research_state)
         reviewed_state["final_recommendation"] = recommendation
-        final_report, _fmt = render_report(reviewed_state)
+        final_report, _ = render_report(reviewed_state)
 
         return {
             "report": final_report,

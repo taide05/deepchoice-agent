@@ -116,9 +116,9 @@ def _summarize_chains(evidence_chains: list[dict],
     for i, c in enumerate(evidence_chains):
         strength = c.get("evidence_strength", "unknown")
         disputed = " [DISPUTED]" if c.get("disputed") else ""
-        citable = [s for s in c.get("sources", [])[:4] if has_factual_content(s)]
+        citable = [s for s in c.get("sources", [])[:4] if is_citable_source(s)]
         for src in c.get("sources", [])[:4]:
-            if not has_factual_content(src):
+            if not is_citable_source(src):
                 link = src.get("url", "")
                 if link and link not in navigation:
                     navigation.append(link)
@@ -284,12 +284,17 @@ def _is_real_title(norm: str, real: set[str]) -> bool:
 
 def _sanitize_text(text: str, real: set[str]) -> str:
     """Remove fabricated [Source: title] citations from a text block, keeping
-    only titles whose normalized form is in `real`."""
+    only titles whose normalized form is in `real`.
+
+    A marker missing its closing bracket is also removed. It is not a citation
+    the report can use, and leaving it would both display a fabricated title and
+    hide it from the checks below, which look for closed markers.
+    """
     if not text:
         return text
     out: list[str] = []
     last = 0
-    for m in re.finditer(r'\[Source:[^\]]*\]', text, re.IGNORECASE):
+    for m in _SOURCE_MARKER.finditer(text):
         out.append(text[last:m.start()])
         titles = re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]
         kept = []
@@ -304,26 +309,32 @@ def _sanitize_text(text: str, real: set[str]) -> str:
     return ''.join(out)
 
 
-_CITATION_MARKER = re.compile(r'\[Source:[^\]]*\]|\[\[\d+\]\]', re.IGNORECASE)
+# A closed marker, or one that never closes. The unclosed form runs to the end of
+# the text: it is still a claimed citation, so it must be seen and removed rather
+# than passing through as ordinary prose.
+_SOURCE_MARKER = re.compile(r'\[Source:[^\]]*\]|\[Source:[^\]]*$', re.IGNORECASE)
+# A source number, with the spacing and sign variants a model may emit. Anything
+# that resolves to no entry in the mapping is dropped.
+_CITE_NUMBER = re.compile(r'\[\[\s*(-?\d+)\s*\]\]')
 
 
-def has_citation_marker(text: str) -> bool:
-    """True when text still carries a citation marker of either form.
+def is_citable_source(source: dict) -> bool:
+    """Whether a source may be cited: it must have collected body text.
 
-    Used to tell a resolved citation (a title from the citable set) from a
-    marker that survived resolution, which means it named nothing real.
+    The single predicate behind the citable set, the number mapping and the
+    sanitizer, so those three cannot disagree about what counts as a basis.
     """
-    return bool(text) and bool(_CITATION_MARKER.search(text))
+    from ..utils.candidate_identity import has_factual_content
+
+    return has_factual_content(source)
 
 
 def _citable_titles(evidence_chains: list[dict]) -> set[str]:
     """The normalized titles that may be cited: fact-bearing sources only."""
-    from ..utils.candidate_identity import has_factual_content
-
     real: set[str] = set()
     for c in evidence_chains or []:
         for src in c.get("sources", [])[:4]:
-            if not has_factual_content(src):
+            if not is_citable_source(src):
                 continue
             t = src.get("title", "")
             if t:
@@ -342,10 +353,10 @@ def unresolved_citations(text: str, evidence_chains: list[dict]) -> bool:
     """
     if not text:
         return False
-    if re.search(r'\[\[\d+\]\]', text):
+    if _CITE_NUMBER.search(text):
         return True
     real = _citable_titles(evidence_chains)
-    for m in re.finditer(r'\[Source:[^\]]*\]', text, re.IGNORECASE):
+    for m in _SOURCE_MARKER.finditer(text):
         for t in re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]:
             title = re.split(r'[,;\[\]]', t)[0].strip()
             if title and not _is_real_title(_norm_title(title), real):
@@ -399,16 +410,7 @@ def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
     body is a navigation link, so writing its title as a source is stripped just
     like any other fabrication.
     """
-    from ..utils.candidate_identity import has_factual_content
-
-    real: set[str] = set()
-    for c in evidence_chains:
-        for src in c.get("sources", [])[:4]:
-            if not has_factual_content(src):
-                continue
-            t = src.get("title", "")
-            if t:
-                real.add(_norm_title(t))
+    real = _citable_titles(evidence_chains)
     for field in _CITATION_TEXT_FIELDS:
         if result.get(field):
             result[field] = _sanitize_text(result[field], real)
@@ -436,7 +438,7 @@ def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
             title = mapping.get(int(m.group(1)))
             return f"[Source: {title}]" if title else ""
 
-        return re.sub(r"\[\[(\d+)\]\]", _sub, text)
+        return _CITE_NUMBER.sub(_sub, text)
 
     for field in _CITATION_TEXT_FIELDS:
         if result.get(field):

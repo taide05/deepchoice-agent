@@ -25,8 +25,18 @@ FAILED_RUN = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
 
 
 def _failed_run_state() -> dict:
+    """The preserved failed run, used as fixed input.
+
+    Deliberately not a skip: these regressions are only meaningful against this
+    material. A silent skip would report green on a checkout that never ran
+    them, which is worse than a red test that says the fixture is missing.
+    """
     if not FAILED_RUN.exists():
-        pytest.skip(f"failed-run snapshot not present at {FAILED_RUN}")
+        pytest.fail(
+            f"required fixture missing: {FAILED_RUN}. These regressions are "
+            f"pinned to the preserved run's saved material and cannot be "
+            f"evaluated without it."
+        )
     return json.loads(FAILED_RUN.read_text(encoding="utf-8"))
 
 
@@ -434,13 +444,43 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         assert got == "理由无需引用"
 
     def test_resolution_uses_the_synthesis_rule_not_a_copy(self):
-        """Both paths must call the same helper, so the rule cannot drift."""
-        src = inspect.getsource(cs.resolve_citations)
-        assert "_sanitize_text" in src and "_bind_citations" in src \
-            and "_sanitize_citations" in src
-        reviewer_src = inspect.getsource(sr._apply_corrections)
-        assert "resolve_citations(" in reviewer_src
-        assert "unresolved_citations(" in reviewer_src
+        """Both paths must call the same helper. Asserted by behaviour: the
+        synthesis path and the reviewer path must remove exactly the same
+        fabricated marker from the same evidence."""
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        text = "理由 [Source: Unknown invented title] [[999]]"
+        via_synthesis = cs.resolve_citations(text, state["evidence_chains"], mapping)
+        rec = json.loads(json.dumps(state["final_recommendation"]))
+        sr._apply_corrections(rec, [{
+            "option": "ClickHouse", "field": "rationale", "action": "revise",
+            "corrected": text, "reason": "t"}],
+            evidence_chains=state["evidence_chains"], cite_map=mapping)
+        via_reviewer = next(o for o in rec["ranked_options"]
+                            if o["name"] == "ClickHouse")["rationale"]
+        assert "Unknown invented title" not in via_synthesis
+        assert "Unknown invented title" not in via_reviewer
+        # And the reviewer's revision is the resolved text, not the raw input.
+        assert via_reviewer == via_synthesis
+
+    def test_a_marker_that_never_closes_is_removed(self):
+        """`[Source: X` with no closing bracket is still a claimed citation."""
+        _applied, got = self._apply("probe [Source: Unknown invented title")
+        assert "Unknown invented title" not in got, got
+
+    def test_number_spacing_and_sign_variants_do_not_survive(self):
+        for text in ("理由 [[ 999 ]]", "理由 [[-1]]", "理由 [[ 1 ]]"):
+            _applied, got = self._apply(text)
+            assert "[[" not in got, (text, got)
+
+    def test_a_markers_only_revision_is_withdrawn_not_blanked(self):
+        """Stripping the markers left the field whitespace, which blanked the
+        answer and hid why. It must become the withdrawal note."""
+        for text in ("[Source: Unknown invented title] [[999]]", "[[999]]",
+                     "[Source: Navigation only]"):
+            _applied, got = self._apply(text)
+            assert "撤回" in got, (text, got)
 
 
 class TestTheContractSentToTheModel:
@@ -470,14 +510,42 @@ class TestTheContractSentToTheModel:
         for field in sr._CORRECTABLE_FIELDS:
             assert field in system, f"{field} is accepted but never described"
 
-    def test_the_contract_describes_no_field_the_executor_rejects(self):
+    def test_the_executor_field_set_has_one_definition(self):
+        """The set is defined in one place, so the contract cannot describe a
+        field the applier does not know, or omit one it does."""
+        assert sr._CORRECTABLE_FIELDS == (
+            sr._CORRECTABLE_OPTION_FIELDS + sr._CORRECTABLE_TOP_FIELDS
+            + sr._CORRECTABLE_TRADEOFF_FIELDS)
+        assert len(sr._CORRECTABLE_FIELDS) == len(set(sr._CORRECTABLE_FIELDS))
+
+    def test_the_contract_and_the_applier_cannot_drift(self):
+        """Every field the contract lists must be one the applier accepts, and
+        the contract must list them all. Guarded against a field being added to
+        one side only, which a copied list of names cannot catch."""
         system, _user = self._system_prompt()
-        claimed = set(re.findall(
-            r"\b(rationale|key_strength|key_weakness|constraint_fit_reason"
-            r"|recommendation|winner_rationale|confidence_rationale"
-            r"|evidence_summary|scene_fit_note|finding|impact)\b", system))
-        assert claimed <= set(sr._CORRECTABLE_FIELDS), \
-            f"described but rejected: {sorted(claimed - set(sr._CORRECTABLE_FIELDS))}"
+        listed = set(self._contract_fields(system))
+        assert listed == set(sr._CORRECTABLE_FIELDS), (
+            f"contract only: {sorted(listed - set(sr._CORRECTABLE_FIELDS))}; "
+            f"applier only: {sorted(set(sr._CORRECTABLE_FIELDS) - listed)}")
+
+    @staticmethod
+    def _contract_fields(system: str) -> list[str]:
+        """Field names the contract lists, read from its own generated map.
+
+        The map is written as `* <family> (option = <selector>): a, b, c`, so the
+        names come from the text the model actually received rather than from a
+        copy of the list kept in this test.
+        """
+        fields: list[str] = []
+        for line in system.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("*") or "):" not in stripped:
+                continue
+            names = stripped.split("):", 1)[1]
+            found = [n.strip() for n in names.split(",") if n.strip()]
+            if found and all(re.fullmatch(r"[a-z_]+", n) for n in found):
+                fields.extend(found)
+        return fields
 
     def test_the_contract_says_how_to_select_each_family(self):
         system, _user = self._system_prompt()
