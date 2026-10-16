@@ -36,6 +36,23 @@ FAILED_RUN = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
               / "e3b1c837-d2e1-46a1-b77c-c46eefe41dea" / "research_snapshot.json")
 
 
+def _similar_embeddings(dim: int = 8):
+    """Distinct vectors that stay above the candidate similarity threshold."""
+    import types
+
+    import numpy as np
+
+    def encode(titles):
+        rows = []
+        for index in range(len(titles)):
+            row = np.ones(dim)
+            row[0] = 1.0 - 0.01 * (index % 3)
+            row[1] = 1.0 - 0.01 * ((index // 3) % 3)
+            rows.append(row)
+        return np.array(rows) if rows else np.ones((0, dim))
+    return types.SimpleNamespace(encode=encode)
+
+
 def _failed_run_state() -> dict:
     """The real failed-run material, preserved unedited."""
     if not FAILED_RUN.exists():
@@ -448,6 +465,53 @@ class TestBodyLessSourcesAcrossEveryRoute:
 
         cited = re.findall(r"\[Source:\s*([^\]]+)\]", bound["recommendation"])
         assert cited == [real["title"]], cited
+
+    @pytest.mark.asyncio
+    async def test_conflict_rows_keep_the_snippet_for_ordinary_sources(self, monkeypatch):
+        """Drive the real conflict construction, where the bug lived.
+
+        _cited_source rebuilt each source as {url, score}, dropping the snippet;
+        the renderers then saw no body and branded every ordinary evidence source
+        as body-less. A test that hand-builds the conflicts dict never executes
+        that function, so it would pass even if the snippet were stripped again.
+        """
+        import asyncio
+
+        from deepchoice.agents import conflict_detector as cd
+        from deepchoice.utils.candidate_identity import has_factual_content
+
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _similar_embeddings())
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "e"}
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+
+        ordinary = {"url": "https://blog.example/a", "title": "Benchmark A",
+                    "snippet": "Benchmark A measured p95 at 20ms on 1M vectors.",
+                    "total_score": 9.5, "scores": {"authority": 9}}
+        nav = {"url": self.NAV["url"], "title": self.NAV["title"], "snippet": "",
+               "has_body": False, "total_score": 5.0, "scores": {"authority": 5}}
+
+        result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": [ordinary, nav],
+            "task": {"query": "t", "candidate_techs": ["PostgreSQL"]},
+            "token_usage": [],
+        })
+        conflicts = result["conflicts"]
+        assert conflicts, "the decisive score gap should build a conflict row"
+
+        rows = [c[k] for c in conflicts for k in ("source_a", "source_b")]
+        by_url = {row.get("url"): row for row in rows}
+        ordinary_row = by_url.get(ordinary["url"])
+        assert ordinary_row is not None, by_url
+        # The snippet must survive, or the renderer judges it body-less.
+        assert ordinary_row.get("snippet") == ordinary["snippet"], ordinary_row
+        assert has_factual_content(ordinary_row) is True, ordinary_row
+        nav_row = by_url.get(nav["url"])
+        assert nav_row is not None and nav_row.get("has_body") is False, by_url
+        assert has_factual_content(nav_row) is False, nav_row
 
     def test_a_fact_bearing_claim_source_is_not_mislabelled(self):
         """The shape every non-official retriever produces: a real snippet and NO
