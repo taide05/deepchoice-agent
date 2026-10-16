@@ -67,15 +67,21 @@ class SelfReviewerAgent:
             for s in upstream_signals
         ) if upstream_signals else "No upstream quality signals available."
 
+        # The reviewer is asked to check claims against the cited source text, so
+        # the source text must be in the payload. Titles alone made the decisive
+        # comparison impossible: the run's wrong scale (5 万亿) was visible while
+        # the source that says 500 亿 was not, so the review could not catch it.
+        from ..utils.candidate_identity import bounded_content_summary
+
         chains_summary = []
         for c in research_state.get("evidence_chains", []):
             strength = c.get("evidence_strength", "unknown")
             conclusion = c.get("conclusion", "")[:200]
-            sources = c.get("sources", [])
-            source_titles = [s.get("title", "?")[:80] for s in sources[:2]]
-            chains_summary.append(
-                f"[{strength}] {conclusion} (sources: {', '.join(source_titles)})"
-            )
+            chains_summary.append(f"[{strength}] {conclusion}")
+            for s in (c.get("sources") or [])[:2]:
+                chains_summary.append(f"    source: {s.get('title', '?')[:80]}")
+                chains_summary.append(
+                    f"      text: {bounded_content_summary(s, limit=700)}")
         chains_text = "\n".join(chains_summary) if chains_summary else "No evidence chains."
 
         cite_stats = _citation_coverage(research_state.get("final_recommendation", {}))

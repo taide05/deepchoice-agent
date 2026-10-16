@@ -195,46 +195,9 @@ def names_candidate(text: str, candidate: str) -> bool:
     return any(got[i:i + width] == want for i in range(len(got) - width + 1))
 
 
-def candidate_for_source(source: dict, candidate_techs) -> str | None:
-    """The declared candidate a source is demonstrably about, or None.
-
-    Attribution requires the source to name the candidate in full, as a phrase.
-    A source that shares only part of a candidate's name is not evidence about
-    that candidate: 'PostgreSQL 17 release notes' is not material for 'Amazon
-    Aurora PostgreSQL with pgvector'. Such material is reported as unassigned
-    rather than assigned to the candidate it most resembles.
-
-    This deliberately does not consult a word list. A curated list of
-    'distinguishing' words would decide attribution from how a term was
-    classified rather than from what the source actually names.
-    """
-    candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
-    if not candidates:
-        return None
-    title = source.get("title", "")
-    url = source.get("url", "")
-    # Longest name first, so a source naming the specific product is attributed
-    # to it rather than to a shorter candidate whose name it also contains.
-    for candidate in sorted(candidates, key=len, reverse=True):
-        if names_candidate(title, candidate) or names_candidate(url, candidate):
-            return candidate
-    return None
-
-
-UNASSIGNED = "__unassigned__"
-
-
-def index_sources_by_candidate(source_scores, candidate_techs) -> dict:
-    """Group sources under the declared candidate each one is demonstrably about.
-
-    Returns {candidate: [sources]} plus the UNASSIGNED key for material that
-    cannot be attributed. Unattributable material is reported as unassigned
-    rather than pushed onto whichever candidate shares a word.
-    """
-    index: dict[str, list[dict]] = {str(c).strip(): [] for c in (candidate_techs or [])
-                                    if str(c).strip()}
-    index[UNASSIGNED] = []
-    for source in source_scores or []:
-        owner = candidate_for_source(source, candidate_techs)
-        index[owner if owner in index else UNASSIGNED].append(source)
-    return index
+# The renderer no longer maps sources onto candidates. Candidate explanations
+# come from the synthesis result, which is the one place that decided what each
+# candidate is for; a page may cover several products, so it is not forced to own
+# one. `names_candidate` above remains in use for the official-source mapping
+# lookup, which is a different question (which curated docs entry does this
+# declared candidate name).

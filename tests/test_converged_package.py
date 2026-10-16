@@ -17,7 +17,7 @@ from deepchoice.agents import conclusion_synthesizer as cs
 from deepchoice.agents import orchestrator as orch
 from deepchoice.agents import self_reviewer as sr
 from deepchoice.formats.what_why_how import render
-from deepchoice.utils.candidate_identity import candidate_for_source
+from deepchoice.utils.candidate_identity import names_candidate
 
 FAILED_RUN = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
               / "8049500c-bd39-44e4-81bb-a1fbbebac780" / "research_snapshot.json")
@@ -27,6 +27,29 @@ def _failed_run_state() -> dict:
     if not FAILED_RUN.exists():
         pytest.skip(f"failed-run snapshot not present at {FAILED_RUN}")
     return json.loads(FAILED_RUN.read_text(encoding="utf-8"))
+
+
+def _reviewer_payload(state: dict) -> str:
+    """The complete text the self-review node sends to the model.
+
+    Runs the real node with `call_model` intercepted, so the assertion is on the
+    payload that is actually built rather than on a copy of its logic.
+    """
+    captured: dict[str, str] = {}
+
+    async def fake_call_model(prompt, **kwargs):
+        captured["payload"] = "\n".join(
+            str(m.get("content", "")) for m in prompt if isinstance(m, dict))
+        return {"confidence": "low", "knowledge_gaps": [], "passed_count": 0}
+
+    real = sr.call_model
+    sr.call_model = fake_call_model
+    try:
+        asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
+    finally:
+        sr.call_model = real
+    assert captured.get("payload"), "the reviewer built no payload"
+    return captured["payload"]
 
 
 class TestCitationBinding:
@@ -129,26 +152,35 @@ class TestReviewSeesTheDecisionClaims:
         assert "claims_text" in source
         assert "{claims_text}" in source, "the reviewer prompt never receives it"
 
-    def test_the_claims_summary_exposes_the_three_named_errors(self):
-        """Replay the block the node builds and confirm each error's text is in it."""
+    def test_the_reviewer_payload_carries_the_source_text(self):
+        """The reviewer is told to check claims against the cited source text, so
+        the source text must be in what it receives.
+
+        Titles alone made the decisive comparison impossible: the run's wrong
+        scale (5 万亿) was visible while the source saying 500 亿 was not, so the
+        error could not be caught.
+        """
         state = _failed_run_state()
-        parts = []
-        for opt in (state.get("final_recommendation") or {}).get("ranked_options") or []:
-            for field in ("rationale", "constraint_fit_reason", "key_strength",
-                          "key_weakness"):
-                if opt.get(field):
-                    parts.append(str(opt[field]))
-        for to in (state.get("final_recommendation") or {}).get("trade_offs") or []:
-            if to.get("finding"):
-                parts.append(str(to["finding"]))
-        blob = "\n".join(parts)
-        assert "5 万亿" in blob, "the wrong scale is not visible to the reviewer"
-        assert "Serverless" in blob, "the #1 justification is not visible"
-        assert "Athena" in blob, "the dismissed candidate is not visible"
+        payload = _reviewer_payload(state)
+        assert "500 亿" in payload, \
+            "the source stating the real scale is not in the reviewer payload"
+        # And it is the source text, not just a title, that carries it.
+        assert "在高达 500 亿行" in payload, payload[:200]
+
+    def test_the_reviewer_payload_carries_the_three_named_claims(self):
+        """Replay the payload the node builds; each error's claim text must be in
+        it, alongside the source material needed to judge it."""
+        state = _failed_run_state()
+        payload = _reviewer_payload(state)
+        assert "5 万亿" in payload, "the wrong scale is not visible to the reviewer"
+        assert "Serverless" in payload, "the #1 justification is not visible"
+        assert "Athena" in payload, "the dismissed candidate is not visible"
+        # The Athena source's own text is present, so its dismissal is checkable.
+        assert "per terabyte scanned" in payload.lower() or "¥41.20" in payload
 
     def test_the_wrong_scale_is_absent_from_the_cited_source(self):
-        """The source says 500 亿 rows; the report says 5 万亿. The reviewer now
-        has both the claim and the source text in front of it."""
+        """The source says 500 亿 rows and never says 5 万亿, so the two are
+        distinguishable inside the payload the reviewer receives."""
         state = _failed_run_state()
         source_body = ""
         for chain in state.get("evidence_chains") or []:
@@ -205,18 +237,13 @@ class TestSubjectGuessingStaysRemoved:
         import deepchoice.utils.candidate_identity as cid
 
         for removed in ("_DISAMBIGUATING", "_QUALIFIER", "subject_tokens",
-                        "identity_phrase", "_mentioned_in_body", "_LEADING_STOP"):
+                        "identity_phrase", "_mentioned_in_body", "_LEADING_STOP",
+                        "candidate_for_source", "index_sources_by_candidate",
+                        "UNASSIGNED"):
             assert not hasattr(cid, removed), f"{removed} was reintroduced"
 
-    def test_attribution_is_name_based_only(self):
-        # A page naming the candidate is attributed.
-        assert candidate_for_source(
-            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs",
-             "snippet": "ClickHouse stores logs columnar."},
-            ["ClickHouse"]) == "ClickHouse"
-        # A page naming a different product is not guessed onto a candidate.
-        assert candidate_for_source(
-            {"title": "SelectDB vs Elasticsearch",
-             "url": "https://www.selectdb.com/blog/1398",
-             "snippet": "SelectDB 采用列式存储。"},
-            ["ClickHouse"]) is None
+    def test_name_matching_is_the_only_rule_left(self):
+        # A page naming the candidate matches its name.
+        assert names_candidate("ClickHouse for logs", "ClickHouse")
+        # A page naming a different product is not matched onto a candidate.
+        assert not names_candidate("SelectDB vs Elasticsearch", "ClickHouse")

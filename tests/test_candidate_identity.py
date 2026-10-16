@@ -22,13 +22,11 @@ from deepchoice.agents.conclusion_synthesizer import _summarize_chains
 from deepchoice.formats.what_why_how import _cited_sources, render
 from deepchoice.retrievers.official import TECH_DOCS, OfficialSearch
 from deepchoice.utils.candidate_identity import (
-    UNASSIGNED,
     bounded_content_summary,
-    candidate_for_source,
     candidate_tokens,
     has_factual_content,
-    index_sources_by_candidate,
     mapping_key_for,
+    names_candidate,
     split_navigation_label,
 )
 
@@ -310,114 +308,50 @@ class TestNavigationLinksAreNotCitable:
         assert "Real Page" in result["recommendation"]
 
 
-class TestCandidateAssociation:
-    """Explicit association: a source belongs to a candidate only when the page is
-    about it, not because a word is shared.
+class TestCandidateNameMatching:
+    """Name matching for the official-source mapping lookup.
 
-    A page must name the candidate (in full, or by its identity phrase) AND its
-    collected body must actually discuss it. Fixtures therefore carry a body: a
-    title alone is not material.
+    The renderer no longer maps sources onto candidates, so there is no
+    attribution function left to test. What remains is `names_candidate`, which
+    decides whether a declared candidate names a curated mapping entry; it must
+    stay name-based and must not consult a word list.
     """
 
     CANDIDATES = ["Amazon OpenSearch Service", "Amazon OpenSearch Serverless",
                   "Amazon Athena over S3", "ClickHouse"]
 
-    def test_shared_word_alone_is_not_an_association(self):
-        assert candidate_for_source(
-            {"title": "What is serverless computing?",
-             "url": "https://ex.com/serverless",
-             "snippet": "Serverless computing abstracts capacity planning."},
-            self.CANDIDATES) is None
+    def test_a_shared_word_is_not_a_name_match(self):
+        assert not names_candidate("What is serverless computing?", "ClickHouse")
+        assert not names_candidate("serverless architecture", "Amazon OpenSearch Serverless")
 
-    def test_serverless_page_does_not_land_on_the_generic_service(self):
-        owner = candidate_for_source(
-            {"title": "Amazon OpenSearch Serverless pricing",
-             "url": "https://aws.amazon.com/opensearch-serverless",
-             "snippet": "Amazon OpenSearch Serverless bills by OCU-hour."},
-            self.CANDIDATES)
-        assert owner == "Amazon OpenSearch Serverless", owner
+    def test_a_full_name_still_matches(self):
+        assert names_candidate("Amazon Athena over S3 pricing", "Amazon Athena over S3")
+        assert names_candidate("ClickHouse for logs", "ClickHouse")
+        assert names_candidate("Amazon OpenSearch Serverless pricing",
+                               "Amazon OpenSearch Serverless")
 
-    def test_named_candidates_still_match(self):
-        assert candidate_for_source(
-            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs",
-             "snippet": "ClickHouse stores logs in a columnar format."},
-            self.CANDIDATES) == "ClickHouse"
-        assert candidate_for_source(
-            {"title": "Amazon Athena over S3 pricing",
-             "url": "https://aws.amazon.com/athena",
-             "snippet": "Amazon Athena charges per terabyte scanned."},
-            self.CANDIDATES) == "Amazon Athena over S3"
+    def test_a_partial_name_is_not_a_match(self):
+        """Sharing part of a candidate's name does not name it.
 
-    def test_a_partial_name_match_is_not_an_association(self):
-        """Sharing part of a candidate's name does not make a source about it.
-
-        'PostgreSQL 17 release notes' is not material for 'Amazon Aurora
-        PostgreSQL with pgvector'. It is reported as unassigned rather than
-        attributed to whichever candidate it most resembles.
+        'PostgreSQL 17 release notes' does not name 'Amazon Aurora PostgreSQL
+        with pgvector'; the whole name must appear as a run of words.
         """
-        candidates = ["PostgreSQL", "Amazon Aurora PostgreSQL with pgvector"]
-        assert candidate_for_source(
-            {"title": "PostgreSQL 17 release notes",
-             "url": "https://www.postgresql.org/docs/release-17",
-             "snippet": "PostgreSQL 17 release notes cover vacuum improvements."},
-            candidates) == "PostgreSQL"
-        assert candidate_for_source(
-            {"title": "Amazon Aurora PostgreSQL with pgvector",
-             "url": "https://aws.amazon.com/rds/aurora/pgvector",
-             "snippet": "Amazon Aurora PostgreSQL with pgvector supports HNSW."},
-            candidates) == "Amazon Aurora PostgreSQL with pgvector"
-        # A source about neither is unassigned, not dealt to the nearest name.
-        assert candidate_for_source(
-            {"title": "Log analytics benchmark", "url": "https://x/bench",
-             "snippet": "A benchmark of log pipelines."},
-            candidates) is None
+        assert names_candidate("PostgreSQL 17 release notes", "PostgreSQL")
+        assert not names_candidate("PostgreSQL 17 release notes",
+                                   "Amazon Aurora PostgreSQL with pgvector")
+        assert names_candidate("Amazon Aurora PostgreSQL with pgvector limits",
+                               "Amazon Aurora PostgreSQL with pgvector")
 
-    def test_a_page_subject_is_not_guessed(self):
-        """Attribution stays name-based; it does not infer a page's subject.
-
-        An earlier attempt added word lists and title-prefix rules to decide what
-        a page is "about". A page may cover several products, so it is not forced
-        to own one, and those rules are not reinstated here: a page that names the
-        candidate is attributed, and one that does not is left unassigned rather
-        than guessed at.
-        """
+    def test_no_subject_guessing_rules(self):
+        """Attribution must not infer a page's subject from word lists or title
+        prefixes. Those rules were withdrawn and must not return."""
         import deepchoice.utils.candidate_identity as cid
 
         for removed in ("_DISAMBIGUATING", "_QUALIFIER", "subject_tokens",
-                        "identity_phrase", "_mentioned_in_body"):
+                        "identity_phrase", "_mentioned_in_body", "_LEADING_STOP",
+                        "candidate_for_source", "index_sources_by_candidate",
+                        "UNASSIGNED"):
             assert not hasattr(cid, removed), f"{removed} was reintroduced"
-        # A page naming a different product simply does not match a candidate.
-        assert candidate_for_source(
-            {"title": "SelectDB vs Elasticsearch",
-             "url": "https://www.selectdb.com/blog/1398",
-             "snippet": "SelectDB 采用列式存储，性能优于 Elasticsearch；ClickHouse 也在对比中。"},
-            self.CANDIDATES) is None
-
-    def test_specific_candidate_wins_over_a_shorter_one(self):
-        candidates = ["Amazon Aurora PostgreSQL with pgvector", "PostgreSQL"]
-        assert candidate_for_source(
-            {"title": "Amazon Aurora PostgreSQL with pgvector limits",
-             "url": "https://aws.amazon.com/rds/aurora",
-             "snippet": "Amazon Aurora PostgreSQL with pgvector has index limits."},
-            candidates) == "Amazon Aurora PostgreSQL with pgvector"
-
-    def test_no_word_list_decides_attribution(self):
-        """Attribution must not depend on a curated 'distinguishing' word list."""
-        import deepchoice.utils.candidate_identity as cid
-
-        assert not hasattr(cid, "_DISAMBIGUATING")
-
-    def test_unassignable_material_is_listed_not_dealt_out(self):
-        sources = [
-            {"title": "Log analytics benchmark", "url": "https://x/bench",
-             "snippet": "A benchmark of log pipelines.", "score": 7.0},
-            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs",
-             "snippet": "ClickHouse stores logs columnar.", "score": 7.0},
-        ]
-        index = index_sources_by_candidate(sources, self.CANDIDATES)
-        assert [s["title"] for s in index[UNASSIGNED]] == ["Log analytics benchmark"]
-        assert [s["title"] for s in index["ClickHouse"]] == ["ClickHouse for logs"]
-        assert index["Amazon OpenSearch Service"] == []
 
     def test_what_lists_the_sources_the_recommendation_cites(self):
         """The links under What are the recommendation's own citations, resolved
