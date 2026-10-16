@@ -1412,7 +1412,14 @@ def _render_results():
 
     with tab2:
         st.markdown(f"### {t('source_ratings_title', lang)}")
-        for s in snapshot.get("source_scores", [])[:12]:
+        # A page whose body was never collected is a navigation link, not a
+        # rated source: showing it with authority/evidence scores presents it as
+        # evidence the report does not have.
+        rated = [s for s in snapshot.get("source_scores", [])
+                 if s.get("has_body", True) is not False]
+        links_only = [s for s in snapshot.get("source_scores", [])
+                      if s.get("has_body", True) is False]
+        for s in rated[:12]:
             score = s.get("total_score", 0)
             score_color = "#4ade80" if score >= 7 else ("#fbbf24" if score >= 5 else "#f87171")
             st.markdown(f"""
@@ -1426,6 +1433,19 @@ def _render_results():
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+        if links_only:
+            st.caption(
+                f"{len(links_only)} link(s) discovered without a page body; "
+                "listed only as navigation, not rated as sources."
+            )
+            for s in links_only[:10]:
+                url = str(s.get("url", ""))
+                title = _esc(str(s.get("title", "Source"))[:70])
+                if url.startswith(("http://", "https://")):
+                    st.markdown(f"- [{title}]({url})")
+                else:
+                    st.markdown(f"- {title}")
 
     with tab3:
         st.json(snapshot)

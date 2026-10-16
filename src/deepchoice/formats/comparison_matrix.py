@@ -7,6 +7,27 @@ def _link(text: str, src: dict) -> str:
     return f"[{text}]({url})" if url else text
 
 
+def _has_body(src: dict) -> bool:
+    from ..utils.candidate_identity import has_factual_content
+
+    return has_factual_content(src)
+
+
+def _claim_source(conflict: dict, key: str, lang: str) -> str:
+    """A dispute claim's source, or a stated gap when it carries no body.
+
+    The link stays visible, but a page whose body was never collected is labelled
+    as such instead of being shown as the claim's source.
+    """
+    src = conflict.get(key, {}) or {}
+    claim = conflict.get("claim_a" if key == "source_a" else "claim_b", "") or "N/A"
+    if _has_body(src):
+        return _link(claim, src)
+    note = "无正文（仅导航链接）" if lang == "zh" else \
+        "no body collected (navigation link only)"
+    return f"{_link(claim, src)} — {note}"
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Comparison")
@@ -112,8 +133,9 @@ def render(state: dict) -> str:
     if conflicts:
         for i, c in enumerate(conflicts):
             lines.append(f"### {L['dispute'][lang]} {i+1}")
-            lines.append(f"- {L['claim_a'][lang]}: {_link(c.get('claim_a', 'N/A'), c.get('source_a', {}))}")
-            lines.append(f"- {L['claim_b'][lang]}: {_link(c.get('claim_b', 'N/A'), c.get('source_b', {}))}")
+            for label, key in ((L["claim_a"][lang], "source_a"),
+                               (L["claim_b"][lang], "source_b")):
+                lines.append(f"- {label}: {_claim_source(c, key, lang)}")
             lines.append(f"- {L['resolution'][lang]}: **{c.get('resolution', L['unresolved'][lang])}**")
             lines.append(f"- {L['basis'][lang]}: {c.get('reasoning', '')}")
             lines.append("")

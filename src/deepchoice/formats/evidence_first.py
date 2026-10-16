@@ -13,6 +13,23 @@ def _has_body(src: dict) -> bool:
     return has_factual_content(src)
 
 
+def _claim_source(conflict: dict, key: str, lang: str) -> str:
+    """A dispute claim's source, or a stated gap when it carries no body.
+
+    The link stays visible so the reader can reach the page, but it is labelled
+    as carrying no content and is never presented as a usable basis.
+    """
+    src = conflict.get(key, {}) or {}
+    claim = conflict.get("claim_a" if key == "source_a" else "claim_b", "")
+    if _has_body(src):
+        return _link(claim, src)
+    url = src.get("url", "")
+    link = f"[{claim}]({url})" if url else claim
+    note = "无正文（仅导航链接）" if lang == "zh" else \
+        "no body collected (navigation link only)"
+    return f"{link} — {note}"
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
@@ -99,8 +116,9 @@ def render(state: dict) -> str:
     if conflicts:
         for c in conflicts:
             lines.append(f"- {c.get('resolution', 'unresolved')}: {c.get('reasoning', '')[:200]}")
-            lines.append(f"  - {T['claim_a'][lang]}: {_link(c.get('claim_a', ''), c.get('source_a', {}))}")
-            lines.append(f"  - {T['claim_b'][lang]}: {_link(c.get('claim_b', ''), c.get('source_b', {}))}")
+            for label, key in ((T["claim_a"][lang], "source_a"),
+                               (T["claim_b"][lang], "source_b")):
+                lines.append(f"  - {label}: {_claim_source(c, key, lang)}")
     else:
         # As in the other renderers: absence of a dispute is a finding only when
         # the conflict check actually completed.

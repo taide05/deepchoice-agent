@@ -41,6 +41,25 @@ def _has_body(src: dict) -> bool:
     return has_factual_content(src)
 
 
+def _claim_source(conflict: dict, key: str, lang: str) -> str:
+    """A dispute claim's source, or a stated gap when it has no body.
+
+    A body-less navigation link may be shown as a plain link — the reader must be
+    able to reach the page — but it is labelled as carrying no content and is
+    never numbered as a citable source.
+    """
+    src = conflict.get(key, {}) or {}
+    claim = conflict.get("claim_a" if key == "source_a" else "claim_b", "")
+    url = src.get("url", "")
+    score = src.get("score", "N/A")
+    if _has_body(src):
+        return f"{_link(claim, src)} (score: {score})"
+    link = f"[{claim}]({url})" if url else claim
+    note = "无正文（仅导航链接），不能作为依据。" if lang == "zh" else \
+        "no body collected (navigation link only); not usable as a basis."
+    return f"{link} — {note}"
+
+
 from ..utils.candidate_identity import (  # noqa: E402
     UNASSIGNED,
     index_sources_by_candidate,
@@ -113,8 +132,13 @@ def render(state: dict) -> str:
         for candidate in candidates:
             lines.append(f"### {candidate}")
             basis = index.get(candidate) or []
-            if basis:
-                for src in basis[:2]:
+            # A body-less link is not material for the candidate. Reporting one
+            # as its basis, with a score, both presented a link as evidence and
+            # suppressed the honest "no material" gap line.
+            material = [src for src in basis if _has_body(src)]
+            links = [src for src in basis if not _has_body(src)]
+            if material:
+                for src in material[:2]:
                     lines.append(f"- {src.get('title', '')} — "
                                  f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
                     lines.append(f"  - {_content_or_gap(src)}")
@@ -125,6 +149,13 @@ def render(state: dict) -> str:
                              else "- No retrieved material explicitly covered this "
                                   "candidate; that is a gap in this run, not a judgement "
                                   "on the candidate.")
+            if links:
+                lines.append("  - 仅有导航链接（无正文），不能作为该候选的依据："
+                             if lang == "zh" else
+                             "  - Navigation link(s) only, no body collected; not usable "
+                             "as this candidate's basis:")
+                for src in links[:3]:
+                    lines.append(f"    - [{src.get('title', '')}]({src.get('url', '')})")
             lines.append("")
 
         unassigned = index.get(UNASSIGNED) or []
@@ -175,8 +206,9 @@ def render(state: dict) -> str:
         lines.extend([T["disputes"][lang], ""])
         for i, c in enumerate(conflicts):
             lines.append(f"### {T['conflict'][lang]} {i+1}: {c.get('resolution', 'unresolved')}")
-            lines.append(f"- {T['claim_a'][lang]}: {_link(c.get('claim_a', ''), c.get('source_a', {}))} (score: {c.get('source_a', {}).get('score', 'N/A')})")
-            lines.append(f"- {T['claim_b'][lang]}: {_link(c.get('claim_b', ''), c.get('source_b', {}))} (score: {c.get('source_b', {}).get('score', 'N/A')})")
+            for label, key in ((T["claim_a"][lang], "source_a"),
+                               (T["claim_b"][lang], "source_b")):
+                lines.append(f"- {label}: {_claim_source(c, key, lang)}")
             lines.append(f"- {T['resolution'][lang]}: {c.get('reasoning', '')}")
             lines.append(f"- {T['key_factor'][lang]}: {c.get('key_factor', '')}")
             lines.append(f"- {T['confidence'][lang]}: {c.get('confidence', 'low')}")

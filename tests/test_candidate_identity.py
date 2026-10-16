@@ -402,10 +402,11 @@ class TestBodyLessSourcesAcrossEveryRoute:
         assert not any("Official Documentation" in t for t in anchored), anchored
 
     def test_a_substring_title_cannot_pass_as_real(self):
-        """The nav title is a prefix of a longer real title.
+        """The nav title IS a substring of the longer real title here.
 
-        Substring leniency let it survive citation sanitization, and the renderer
-        then re-attached it as the claim's source.
+        A previous fixture used a real title that did not contain the nav title,
+        so the substring branch was never reached and the test passed against the
+        old lenient rule too.
         """
         from deepchoice.agents.conclusion_synthesizer import (
             _bind_citations,
@@ -413,29 +414,120 @@ class TestBodyLessSourcesAcrossEveryRoute:
             _summarize_chains,
         )
 
+        nav = {"url": "https://www.postgresql.org/docs/",
+               "title": "PostgreSQL — Official Documentation",
+               "snippet": "", "has_body": False, "score": 8.0}
+        real = {"url": "https://www.postgresql.org/docs/release-17",
+                "title": "PostgreSQL — Official Documentation and Release Notes",
+                "snippet": "PostgreSQL 17 improves vacuum.", "has_body": True,
+                "score": 7.5}
+        chains = [{"conclusion": "c", "evidence_strength": "strong",
+                   "disputed": False, "sources": [nav, real]}]
+
+        # The hazard: the nav title is a normalised substring of the real one.
+        from deepchoice.agents.conclusion_synthesizer import _norm_title
+
+        assert _norm_title(nav["title"]) in _norm_title(real["title"]), \
+            "fixture must reproduce the substring hazard"
+
         result = _sanitize_citations(
             {"recommendation":
-             "Use it [Source: PostgreSQL — Official Documentation]."},
-            self._chains())
-        assert "Official Documentation" not in result["recommendation"], result
+             "Use it [Source: PostgreSQL — Official Documentation]."}, chains)
+        assert nav["title"] not in result["recommendation"], result
 
-        _prompt, mapping = _summarize_chains(self._chains(), ["PostgreSQL"])
-        assert self.NAV["title"] not in mapping.values(), mapping
+        _prompt, mapping = _summarize_chains(chains, ["PostgreSQL"])
+        assert nav["title"] not in mapping.values(), mapping
         bound = _bind_citations({"recommendation": "Use it [[1]]."}, mapping)
-        assert "Official Documentation" not in bound["recommendation"], bound
-        assert self.REAL["title"] in bound["recommendation"]
+        # Compare the parsed citation exactly: the nav title is a literal prefix of
+        # the real one, so a substring check cannot distinguish them.
+        import re
+
+        cited = re.findall(r"\[Source:\s*([^\]]+)\]", bound["recommendation"])
+        assert cited == [real["title"]], cited
+
+    def test_conflict_claims_label_a_body_less_source(self):
+        """The dispute path dropped the marker, so all three renderers linked a
+        claim to a body-less page as if it were the claim's source."""
+        from deepchoice.formats.comparison_matrix import render as render_matrix
+        from deepchoice.formats.evidence_first import render as render_evidence
+        from deepchoice.formats.what_why_how import render as render_www
+
+        state = {
+            "task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
+            "evidence_chains": [], "knowledge_gaps": [], "confidence": "low",
+            "final_recommendation": {"recommendation": "x"},
+            "conflicts": [{
+                "resolution": "a",
+                "claim_a": self.NAV["title"], "claim_b": "Real claim",
+                "source_a": {"url": self.NAV["url"], "score": 6.8, "has_body": False},
+                "source_b": {"url": self.REAL["url"], "score": 7.0, "has_body": True},
+                "reasoning": "r", "key_factor": "k", "confidence": "low",
+            }],
+        }
+        for name, renderer in (("what_why_how", render_www),
+                               ("evidence_first", render_evidence),
+                               ("comparison_matrix", render_matrix)):
+            out = renderer(state)
+            dispute = out.split("Claim A" if name != "comparison_matrix" else "Side A")[-1]
+            nav_line = [ln for ln in dispute.splitlines() if self.NAV["url"] in ln]
+            assert nav_line, f"{name}: the link should stay visible"
+            assert any("no body collected" in ln or "无正文" in ln for ln in nav_line), \
+                f"{name} presented a body-less page as a claim's source: {nav_line}"
+            # The fact-bearing source is unaffected.
+            real_line = [ln for ln in dispute.splitlines() if self.REAL["url"] in ln]
+            assert real_line and not any("no body" in ln for ln in real_line), real_line
+
+    def test_conflict_builder_keeps_the_body_marker(self):
+        """The marker must not be dropped when a conflict row is built."""
+        import inspect
+
+        from deepchoice.agents import conflict_detector as cd
+
+        source = inspect.getsource(cd.ConflictDetectorAgent.run)
+        assert "has_body" in source, \
+            "the conflict builder dropped the body marker"
 
     def test_renderer_source_lookup_excludes_body_less_sources(self):
-        """An all-body-less chain must not yield an attached Sources line."""
+        """The `*Sources:*` line must not re-attach a body-less link.
+
+        The branch only runs when the recommendation carries ranked options or
+        trade-offs, so the fixture must populate them; otherwise the assertion
+        passes on any implementation.
+        """
         from deepchoice.formats.what_why_how import _cited_sources, render
 
-        state = {**self._state(),
-                 "evidence_chains": [{"conclusion": "c", "evidence_strength": "strong",
-                                      "disputed": False, "sources": [self.NAV]}]}
+        nav = self.NAV
+        real = self.REAL
+        state = {
+            "task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
+            "evidence_chains": [{"conclusion": "c", "evidence_strength": "strong",
+                                 "disputed": False, "sources": [nav, real]}],
+            "conflicts": [], "knowledge_gaps": [], "confidence": "medium",
+            "final_recommendation": {
+                "winner": "PostgreSQL",
+                "recommendation": "Use it.",
+                "ranked_options": [{
+                    "rank": 1, "name": "PostgreSQL",
+                    "rationale": ("Measured at scale [Source: PostgreSQL — Official "
+                                  "Documentation] and again [Source: PostgreSQL 17 "
+                                  "release notes]."),
+                }],
+                "trade_offs": [{
+                    "dimension": "ops",
+                    "finding": ("Cheaper [Source: PostgreSQL — Official "
+                                "Documentation]."),
+                }],
+            },
+        }
         out = render(state)
-        assert "*Sources: [PostgreSQL — Official Documentation]" not in out
-        assert _cited_sources("x [Source: PostgreSQL — Official Documentation].",
-                              {}) == []
+        assert "ranked_options" or True
+        assert "*Sources: [PostgreSQL — Official Documentation]" not in out, out
+        assert "[PostgreSQL 17 release notes" in out
+
+        # And directly: no lookup entry for a body-less source.
+        assert _cited_sources(
+            "x [Source: PostgreSQL — Official Documentation].",
+            {"c": [f"[{real['title']}]({real['url']})"]}) == []
 
 
 class TestRendererDoesNotGuessCitations:

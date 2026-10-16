@@ -618,12 +618,23 @@ class ConflictDetectorAgent:
                 )},
             ]
 
+        def _cited_source(src: dict) -> dict:
+            """The claim's source, keeping the body marker.
+
+            Dropping the marker let a body-less navigation link be presented as
+            the source of a claim in every renderer's disputes section.
+            """
+            entry = {"url": src["url"], "score": src["total_score"]}
+            if "has_body" in src:
+                entry["has_body"] = src["has_body"]
+            return entry
+
         def _build_conflict(pair: dict, result: dict, model: str = "flash") -> dict:
             return {
                 "claim_a": pair["source_a"].get("title", ""),
                 "claim_b": pair["source_b"].get("title", ""),
-                "source_a": {"url": pair["source_a"]["url"], "score": pair["source_a"]["total_score"]},
-                "source_b": {"url": pair["source_b"]["url"], "score": pair["source_b"]["total_score"]},
+                "source_a": _cited_source(pair["source_a"]),
+                "source_b": _cited_source(pair["source_b"]),
                 "similarity": pair["similarity"],
                 "resolution": result.get("resolution", "insufficient_data"),
                 "confidence": result.get("confidence", "low"),
