@@ -149,15 +149,66 @@ class TestWhatRendersCandidates:
         for candidate in state["task"]["candidate_techs"]:
             assert candidate in what, f"{candidate} missing from What"
 
-    def test_candidate_without_material_states_the_gap(self):
+    def test_candidate_without_an_explanation_states_the_gap(self):
+        """What reads the candidate explanations from the synthesis result.
+
+        A candidate the synthesis did not explain is stated as a gap rather than
+        filled by the renderer's own guess about which sources belong to it.
+        """
         state = {
-            "task": {"query": "X vs Y", "candidate_techs": ["Totally Unretrieved Thing"]},
+            "task": {"query": "X vs Y", "candidate_techs": ["Totally Unexplained Thing"]},
             "evidence_chains": [], "conflicts": [], "knowledge_gaps": [],
             "final_recommendation": {}, "confidence": "low",
         }
-        what = render(state).split("## Why")[0]
-        assert "Totally Unretrieved Thing" in what
-        assert "No retrieved material" in what or "未取得明确指向" in what
+        what = render(state).split("\n## Why")[0]
+        assert "Totally Unexplained Thing" in what
+        assert "本次合成未给出该候选的说明" in what or \
+            "synthesis produced no explanation" in what
+
+    def test_candidate_explanation_comes_from_the_recommendation(self):
+        """The What bullet for a candidate is the ranking's own explanation, so
+        the two sections cannot disagree about what the candidate is."""
+        state = {
+            "task": {"query": "X vs Y", "candidate_techs": ["Candidate A", "Candidate B"]},
+            "evidence_chains": [], "conflicts": [], "knowledge_gaps": [],
+            "confidence": "low",
+            "final_recommendation": {
+                "winner": "Candidate A",
+                "recommendation": "Pick A.",
+                "ranked_options": [{
+                    "rank": 1, "name": "Candidate A", "constraint_fit": "high",
+                    "rationale": "Fits the stated constraint [Source: Real Source].",
+                    "key_strength": "Simple to operate [Source: Real Source].",
+                    "key_weakness": "Costs more at scale [Source: Real Source].",
+                }],
+            },
+        }
+        what = render(state).split("\n## Why")[0]
+        assert "Fits the stated constraint" in what
+        assert "Simple to operate" in what
+        assert "Costs more at scale" in what
+        # Candidate B has no explanation and is reported as a gap, not guessed at.
+        section_b = what.split("### Candidate B")[-1]
+        assert "本次合成未给出该候选的说明" in section_b or \
+            "synthesis produced no explanation" in section_b
+
+    def test_a_multiline_explanation_is_not_truncated(self):
+        """A newline inside a model field used to break the bullet and drop the
+        rest of that candidate's explanation."""
+        state = {
+            "task": {"query": "X vs Y", "candidate_techs": ["Candidate A"]},
+            "evidence_chains": [], "conflicts": [], "knowledge_gaps": [],
+            "confidence": "low",
+            "final_recommendation": {
+                "recommendation": "Pick A.",
+                "ranked_options": [{
+                    "rank": 1, "name": "Candidate A",
+                    "rationale": "First line.\nSecond line with the real reason.",
+                }],
+            },
+        }
+        what = render(state).split("\n## Why")[0]
+        assert "Second line with the real reason." in what
 
 
 class TestNavigationLinksAreNotCitable:
@@ -297,37 +348,6 @@ class TestCandidateAssociation:
              "snippet": "Amazon Athena charges per terabyte scanned."},
             self.CANDIDATES) == "Amazon Athena over S3"
 
-    def test_a_page_named_for_the_product_is_material(self):
-        """A page titled after the product it documents is that product's material.
-
-        Requiring the full candidate name ('Amazon Athena over S3') reported real
-        Athena documentation as a gap; the identity phrase is what a page uses.
-        """
-        assert candidate_for_source(
-            {"title": "Amazon Athena - Serverless Interactive Query Service",
-             "url": "https://aws.amazon.com/athena/",
-             "snippet": "With Amazon Athena, you pay only for the queries you run."},
-            self.CANDIDATES) == "Amazon Athena over S3"
-
-    def test_a_page_about_another_product_is_not_material(self):
-        """A page whose own subject is a different product is not the candidate's
-        material, even when it mentions the candidate in its body."""
-        assert candidate_for_source(
-            {"title": "可观测性方案怎么选？SelectDB vs Elasticsearch vs ClickHouse — SelectDB 博客",
-             "url": "https://www.selectdb.com/blog/1398",
-             "snippet": "SelectDB 采用列式存储，性能优于 Elasticsearch；ClickHouse 也在对比中。"},
-            self.CANDIDATES) is None
-
-    def test_a_title_naming_a_product_the_body_never_discusses(self):
-        """The Elastic pricing page names the candidate in its title while its
-        collected text is about Elastic's own pricing."""
-        assert candidate_for_source(
-            {"title": "Amazon OpenSearch 对比 Elasticsearch | Elastic",
-             "url": "https://www.elastic.co/cn/amazon-opensearch-service",
-             "snippet": "Observability 和 Security 根据数据摄取和保留计算费用；"
-                        "Search 起价仅为每月 $24。"},
-            self.CANDIDATES) is None
-
     def test_a_partial_name_match_is_not_an_association(self):
         """Sharing part of a candidate's name does not make a source about it.
 
@@ -351,6 +371,27 @@ class TestCandidateAssociation:
             {"title": "Log analytics benchmark", "url": "https://x/bench",
              "snippet": "A benchmark of log pipelines."},
             candidates) is None
+
+    def test_a_page_subject_is_not_guessed(self):
+        """Attribution stays name-based; it does not infer a page's subject.
+
+        An earlier attempt added word lists and title-prefix rules to decide what
+        a page is "about". A page may cover several products, so it is not forced
+        to own one, and those rules are not reinstated here: a page that names the
+        candidate is attributed, and one that does not is left unassigned rather
+        than guessed at.
+        """
+        import deepchoice.utils.candidate_identity as cid
+
+        for removed in ("_DISAMBIGUATING", "_QUALIFIER", "subject_tokens",
+                        "identity_phrase", "_mentioned_in_body"):
+            assert not hasattr(cid, removed), f"{removed} was reintroduced"
+        # A page naming a different product simply does not match a candidate.
+        assert candidate_for_source(
+            {"title": "SelectDB vs Elasticsearch",
+             "url": "https://www.selectdb.com/blog/1398",
+             "snippet": "SelectDB 采用列式存储，性能优于 Elasticsearch；ClickHouse 也在对比中。"},
+            self.CANDIDATES) is None
 
     def test_specific_candidate_wins_over_a_shorter_one(self):
         candidates = ["Amazon Aurora PostgreSQL with pgvector", "PostgreSQL"]
@@ -378,20 +419,37 @@ class TestCandidateAssociation:
         assert [s["title"] for s in index["ClickHouse"]] == ["ClickHouse for logs"]
         assert index["Amazon OpenSearch Service"] == []
 
-    def test_what_shows_unassigned_material_separately(self):
+    def test_what_lists_the_sources_the_recommendation_cites(self):
+        """The links under What are the recommendation's own citations, resolved
+        through the evidence chains, and a body-less link is not among them."""
         state = {
             "task": {"query": "logs", "candidate_techs": self.CANDIDATES},
             "evidence_chains": [{
                 "conclusion": "Log analytics benchmark",
                 "evidence_strength": "moderate",
-                "sources": [{"title": "Log analytics benchmark", "url": "https://x/bench",
-                             "snippet": "body", "score": 7.0}],
+                "sources": [
+                    {"title": "Real Benchmark", "url": "https://x/bench",
+                     "snippet": "A measured benchmark body.", "score": 7.0},
+                    {"title": "PostgreSQL Docs Link", "url": "https://www.postgresql.org/docs/",
+                     "snippet": "", "has_body": False, "score": 6.0},
+                ],
             }],
-            "conflicts": [], "knowledge_gaps": [], "final_recommendation": {},
-            "confidence": "low",
+            "conflicts": [], "knowledge_gaps": [], "confidence": "low",
+            "final_recommendation": {
+                "recommendation": "Use it [Source: Real Benchmark].",
+                "ranked_options": [{"rank": 1, "name": "ClickHouse",
+                                    "rationale": "Columnar [Source: Real Benchmark]."}],
+            },
         }
-        what = render(state).split("## Why")[0]
-        assert "Unassigned material" in what or "未归属材料" in what
+        what = render(state).split("\n## Why")[0]
+        assert "https://x/bench" in what, "the cited source should be reachable"
+        # A body-less link is listed only under the navigation heading, never as a
+        # cited source for the recommendation.
+        cited_part = what.split("**Navigation links")[0].split("**导航链接")[0]
+        assert "https://www.postgresql.org/docs/" not in cited_part, \
+            "a body-less link must not be listed as a cited source"
+        assert "https://www.postgresql.org/docs/" in what, \
+            "the navigation link should still be reachable"
         for candidate in self.CANDIDATES:
             assert f"### {candidate}" in what
 

@@ -93,17 +93,27 @@ class TestFullPipeline:
         assert all_nodes <= set(result["agent_timing"].keys())
 
     @pytest.mark.asyncio
-    async def test_pipeline_triggers_retry_on_low_confidence(self):
+    async def test_pipeline_ends_after_review_without_discarding_it(self):
+        """A low-confidence review ends the run instead of restarting the graph.
+
+        The restart entered at query_analyzer and overwrote the reviewer's own
+        output, so the run served a pre-review report while having paid for the
+        review, and the loop could repeat because the restart reset the pass
+        counter. The reviewed result is terminal; confidence and knowledge_gaps
+        already record that it is provisional.
+        """
         task = {"query": "test", "scene_context": "team", "constraints": [], "report_format": "evidence_first"}
         orchestrator = ChiefEditorAgent(task)
 
-        call_count = {"review": 0}
+        call_count = {"review": 0, "analyzer": 0}
 
         async def mock_review(*args, **kwargs):
             call_count["review"] += 1
-            if call_count["review"] == 1:
-                return MOCK_REVIEW_LOW
-            return MOCK_REVIEW_MEDIUM
+            return MOCK_REVIEW_LOW
+
+        async def mock_analyzer(*args, **kwargs):
+            call_count["analyzer"] += 1
+            return MOCK_QUERY_RESULT
 
         with (
             patch("deepchoice.agents.orchestrator.QueryAnalyzerAgent.run", new=_make_mock_run(MOCK_QUERY_RESULT)),
@@ -116,8 +126,8 @@ class TestFullPipeline:
         ):
             result = await orchestrator.run_research_task()
 
-        assert call_count["review"] >= 2, "SelfReviewer should be called at least twice (retry after low confidence)"
-        assert result["confidence"] == "medium"
+        assert call_count["review"] == 1, "the reviewer must not be asked to redo its own work"
+        assert result["confidence"] == "low"
         assert result["current_phase"] == "self_reviewer"
 
     @pytest.mark.asyncio

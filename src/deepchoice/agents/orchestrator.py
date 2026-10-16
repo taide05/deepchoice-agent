@@ -104,34 +104,14 @@ class ChiefEditorAgent:
         workflow.add_edge("evidence_chain", "conclusion_synthesizer")
         workflow.add_edge("conclusion_synthesizer", "report_generator")
         workflow.add_edge("report_generator", "self_reviewer")
-        workflow.add_conditional_edges(
-            "self_reviewer",
-            self._route_after_review,
-            {
-                "end": END,
-                "retry_small": "query_adapter",
-                "retry_full": "query_analyzer",
-            },
-        )
+        # The reviewed result is terminal. A retry restarted the graph from
+        # query_analyzer and overwrote the reviewer's output, so the served report
+        # was pre-review while the review had been paid for; the restart also reset
+        # the pass counter, so the loop could repeat. Confidence and knowledge_gaps
+        # already mark a low-confidence result as provisional.
+        workflow.add_edge("self_reviewer", END)
 
         return workflow
-
-    def _route_after_review(self, state: ResearchState) -> str:
-        confidence = state.get("confidence", "medium")
-        retry_count = state.get("retry_count", 0)
-        gaps = state.get("knowledge_gaps", [])
-
-        if confidence in ("high", "medium"):
-            return "end"
-        # self_reviewer increments retry_count before routing, so retry_count==1
-        # means "first low-confidence pass" (retry allowed); >1 means already
-        # retried once (stop, to avoid looping forever).
-        if retry_count > 1:
-            return "end"
-
-        if len(gaps) <= 2:
-            return "retry_small"
-        return "retry_full"
 
     def init_research_team(self, start_from="query_analyzer"):
         agents = self._initialize_agents()

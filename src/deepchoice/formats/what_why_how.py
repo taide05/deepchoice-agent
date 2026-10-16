@@ -28,11 +28,55 @@ def _cited_sources(text: str, chain_sources: dict[str, list[str]]) -> list[str]:
     return listed[:3]
 
 
-def _content_or_gap(src: dict) -> str:
-    """The source's body text, or an explicit statement that there is none."""
-    from ..utils.candidate_identity import bounded_content_summary
+def _one_line(value) -> str:
+    """Collapse model text to a single markdown line.
 
-    return bounded_content_summary(src, limit=300)
+    A newline inside a value breaks the bullet it is placed in and truncates the
+    rest of that candidate's explanation.
+    """
+    return " ".join(str(value or "").split())
+
+
+def _cited_source_links(rec: dict, chains: list[dict]) -> list[tuple[str, str]]:
+    """The links behind the recommendation's own citations.
+
+    Reads the titles the synthesis result cites and resolves them to the URLs in
+    the evidence chains, so the candidate explanations and the references come
+    from one source of truth. Body-less links are excluded: they are not a basis.
+    """
+    import re
+
+    from ..utils.candidate_identity import has_factual_content
+
+    by_title: dict[str, str] = {}
+    for chain in chains or []:
+        for src in chain.get("sources", []):
+            title = src.get("title", "")
+            url = src.get("url", "")
+            if title and url and has_factual_content(src):
+                by_title.setdefault(title, url)
+
+    ordered: list[tuple[str, str]] = []
+    for opt in (rec or {}).get("ranked_options") or []:
+        if not isinstance(opt, dict):
+            continue
+        blob = " ".join(str(opt.get(f) or "") for f in
+                        ("rationale", "constraint_fit_reason", "key_strength",
+                         "key_weakness"))
+        for name in re.findall(r"\[Source:\s*([^\]]+)\]", blob):
+            for part in name.split(", Source:"):
+                part = part.strip()
+                url = by_title.get(part)
+                if url and (part, url) not in ordered:
+                    ordered.append((part, url))
+    for name in re.findall(r"\[Source:\s*([^\]]+)\]",
+                           str((rec or {}).get("recommendation") or "")):
+        for part in name.split(", Source:"):
+            part = part.strip()
+            url = by_title.get(part)
+            if url and (part, url) not in ordered:
+                ordered.append((part, url))
+    return ordered
 
 
 def _has_body(src: dict) -> bool:
@@ -60,18 +104,15 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
     return f"{link} — {note}"
 
 
-from ..utils.candidate_identity import (  # noqa: E402
-    UNASSIGNED,
-    index_sources_by_candidate,
-)
-
-
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
     gaps = state.get("knowledge_gaps", [])
+    # Read once, before the sections that reuse it, so the candidate
+    # explanations, the ranking and the references all come from this one result.
+    rec = state.get("final_recommendation", {}) or {}
     lang = _lang(query)
 
     T = {
@@ -106,78 +147,70 @@ def render(state: dict) -> str:
 
     lines.extend([T["what"][lang], ""])
 
-    # The candidates themselves, from the same structure the rest of the report
-    # uses. This is not gated on evidence strength: with no strong chain the
-    # section used to render empty, which left the reader without the options the
-    # report is about. Insufficient material is stated, not hidden.
+    # Candidate explanations come from the synthesis result, which is the one
+    # place that decided what each candidate is for. The renderer used to build
+    # its own picture by mapping sources onto candidates, so What and the
+    # recommendation could disagree — and that mapping had to guess a page's
+    # subject, which a page covering several products cannot answer.
+    #
+    # Reusing the synthesis result removes a second, competing judgement rather
+    # than adding a rule. A candidate with no explanation is stated as such.
     candidates = [str(c).strip() for c in (task.get("candidate_techs") or []) if str(c).strip()]
     if candidates:
-        # Explicit association: a source belongs to a candidate only when its own
-        # name, site or URL identifies that candidate. Sharing a word such as
-        # 'serverless' is not an association, so unmatched material is listed as
-        # unassigned instead of being dealt onto whichever candidate matches a
-        # keyword.
-        all_sources = [src for c in chains for src in c.get("sources", [])]
-        seen_urls: set[str] = set()
-        flattened: list[dict] = []
-        for src in all_sources:
-            url = src.get("url", "")
-            if url and url in seen_urls:
-                continue
-            if url:
-                seen_urls.add(url)
-            flattened.append(src)
-        index = index_sources_by_candidate(flattened, candidates)
+        explained = {}
+        for opt in (rec or {}).get("ranked_options") or []:
+            if isinstance(opt, dict) and str(opt.get("name", "")).strip():
+                explained[str(opt["name"]).strip()] = opt
 
         for candidate in candidates:
             lines.append(f"### {candidate}")
-            basis = index.get(candidate) or []
-            # A body-less link is not material for the candidate. Reporting one
-            # as its basis, with a score, both presented a link as evidence and
-            # suppressed the honest "no material" gap line.
-            material = [src for src in basis if _has_body(src)]
-            links = [src for src in basis if not _has_body(src)]
-            if material:
-                for src in material[:2]:
-                    lines.append(f"- {src.get('title', '')} — "
-                                 f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
-                    lines.append(f"  - {_content_or_gap(src)}")
+            opt = explained.get(candidate)
+            if opt:
+                # Model text may carry newlines; a raw one would break the bullet
+                # and silently truncate the candidate's explanation.
+                if opt.get("constraint_fit"):
+                    lines.append(f"- {T['scene_fit'][lang]}: {opt['constraint_fit']}")
+                for field, label in (("rationale", "理由" if lang == "zh" else "Rationale"),
+                                     ("key_strength", "优势" if lang == "zh" else "Advantage"),
+                                     ("key_weakness", "局限" if lang == "zh" else "Limit")):
+                    value = _one_line(opt.get(field))
+                    if value:
+                        lines.append(f"- {label}: {value}")
             else:
-                lines.append("- 本次检索未取得明确指向该候选的材料；"
-                             "不代表该候选不适用，只代表本轮没有资料。"
-                             if lang == "zh"
-                             else "- No retrieved material explicitly covered this "
-                                  "candidate; that is a gap in this run, not a judgement "
-                                  "on the candidate.")
-            if links:
-                lines.append("  - 仅有导航链接（无正文），不能作为该候选的依据："
+                lines.append("- 本次合成未给出该候选的说明；这是本轮的资料缺口，"
+                             "不代表该候选不适用。"
                              if lang == "zh" else
-                             "  - Navigation link(s) only, no body collected; not usable "
-                             "as this candidate's basis:")
-                for src in links[:3]:
-                    lines.append(f"    - [{src.get('title', '')}]({src.get('url', '')})")
+                             "- The synthesis produced no explanation for this "
+                             "candidate. That is a gap in this run, not a judgement "
+                             "on the candidate.")
             lines.append("")
 
-        unassigned = index.get(UNASSIGNED) or []
-        if unassigned:
-            lines.append("**未归属材料**" if lang == "zh" else "**Unassigned material**")
-            lines.append("")
-            lines.append("以下材料无法确认归属到上述任一候选，仅供参考，不作为某候选的依据。"
-                         if lang == "zh" else
-                         "The following material could not be attributed to any "
-                         "candidate above. It is listed for reference only and is not "
-                         "presented as any candidate's basis.")
-            lines.append("")
-            for src in unassigned[:5]:
-                lines.append(f"- {src.get('title', '')} — "
-                             f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
-                # Unassigned material may be a link with no body; say which it is
-                # rather than leaving it to look like a usable source.
+        # The sources behind those explanations, so the reader can reach them.
+        # They are listed as the report's references, not assigned to a candidate:
+        # a page may discuss several candidates and is not forced to own one.
+        lines.append("**引用来源**" if lang == "zh" else "**Cited sources**")
+        lines.append("")
+        for title, url in _cited_source_links(rec, chains)[:10]:
+            lines.append(f"- [{title}]({url})")
+        lines.append("")
+
+        # Discovered links are listed separately as navigation. They stay
+        # reachable, and saying what they are keeps them from reading as a basis:
+        # a page may cover several products, so it is not assigned to one.
+        nav_links: list[tuple[str, str]] = []
+        for chain in chains:
+            for src in chain.get("sources", []):
                 if not _has_body(src):
-                    lines.append("  - 无正文（仅导航链接），不能作为依据。"
-                                 if lang == "zh" else
-                                 "  - No body collected (navigation link only); not "
-                                 "usable as a basis.")
+                    url = src.get("url", "")
+                    title = src.get("title", "")
+                    if url and (title, url) not in nav_links:
+                        nav_links.append((title, url))
+        if nav_links:
+            lines.append("**导航链接（无正文，不能作为依据）**" if lang == "zh"
+                         else "**Navigation links (no body collected; not usable as a basis)**")
+            lines.append("")
+            for title, url in nav_links[:10]:
+                lines.append(f"- [{title}]({url})")
             lines.append("")
 
     lines.extend([T["why"][lang], ""])
@@ -262,7 +295,6 @@ def render(state: dict) -> str:
             lines.append(f"- {g}")
         lines.append("")
 
-    rec = state.get("final_recommendation", {})
     lines.extend([T["how"][lang], ""])
 
     winner = rec.get("winner", "")

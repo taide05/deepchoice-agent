@@ -80,6 +80,29 @@ class SelfReviewerAgent:
 
         cite_stats = _citation_coverage(research_state.get("final_recommendation", {}))
 
+        # The per-candidate justifications decide the ranking, but nothing reviewed
+        # them: the reviewer saw only the headline. They are supplied here so a
+        # wrong scale, an unsupported justification or an unsupported dismissal can
+        # be caught before rendering.
+        claims_summary: list[str] = []
+        for opt in (research_state.get("final_recommendation") or {}).get("ranked_options") or []:
+            if not isinstance(opt, dict):
+                continue
+            claims_summary.append(
+                f"#{opt.get('rank', '?')} {opt.get('name', '')} "
+                f"(constraint_fit={opt.get('constraint_fit', '?')})")
+            for field in ("rationale", "constraint_fit_reason", "key_strength",
+                          "key_weakness"):
+                value = opt.get(field)
+                if value:
+                    claims_summary.append(f"    {field}: {value}")
+        for to in (research_state.get("final_recommendation") or {}).get("trade_offs") or []:
+            if isinstance(to, dict) and to.get("finding"):
+                claims_summary.append(
+                    f"trade-off [{to.get('dimension', '')}]: {to.get('finding')}")
+        claims_text = "\n".join(claims_summary) if claims_summary else \
+            "No ranked options were produced."
+
         user_content = f"""## Report
 {research_state.get("report", "")}
 
@@ -96,6 +119,19 @@ Uncited: {cite_stats["uncited_fields"]}
 
 ## Pipeline Quality Signals
 {signals_text}
+
+## Decision Claims To Check
+The per-candidate justifications below are what the report presents as its
+reasons. Check each against the evidence chains and the cited source text:
+- a figure, unit or scale that the cited source does not state (or states
+  differently) is a decisive error;
+- a justification with no supporting source for its specific assertion is a
+  decisive error;
+- a candidate dismissed for a reason the sources do not support is a decisive
+  error.
+Report each such case in knowledge_gaps, naming the candidate and the claim.
+
+{claims_text}
 
 ## Retry Count
 {research_state.get("retry_count", 0)}"""
