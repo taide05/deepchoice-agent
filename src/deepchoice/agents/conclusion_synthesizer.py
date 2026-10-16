@@ -304,6 +304,83 @@ def _sanitize_text(text: str, real: set[str]) -> str:
     return ''.join(out)
 
 
+_CITATION_MARKER = re.compile(r'\[Source:[^\]]*\]|\[\[\d+\]\]', re.IGNORECASE)
+
+
+def has_citation_marker(text: str) -> bool:
+    """True when text still carries a citation marker of either form.
+
+    Used to tell a resolved citation (a title from the citable set) from a
+    marker that survived resolution, which means it named nothing real.
+    """
+    return bool(text) and bool(_CITATION_MARKER.search(text))
+
+
+def _citable_titles(evidence_chains: list[dict]) -> set[str]:
+    """The normalized titles that may be cited: fact-bearing sources only."""
+    from ..utils.candidate_identity import has_factual_content
+
+    real: set[str] = set()
+    for c in evidence_chains or []:
+        for src in c.get("sources", [])[:4]:
+            if not has_factual_content(src):
+                continue
+            t = src.get("title", "")
+            if t:
+                real.add(_norm_title(t))
+    return real
+
+
+def unresolved_citations(text: str, evidence_chains: list[dict]) -> bool:
+    """True when text still carries a citation that names nothing citable.
+
+    A resolved citation is a `[Source: title]` whose titles are all in the
+    citable set. A `[[N]]` number is only valid if the mapping covered it, and
+    resolution replaces those, so any surviving number is out of range. A
+    verbatim title that is not in the set is a fabrication. Either means the
+    text claims support that does not exist.
+    """
+    if not text:
+        return False
+    if re.search(r'\[\[\d+\]\]', text):
+        return True
+    real = _citable_titles(evidence_chains)
+    for m in re.finditer(r'\[Source:[^\]]*\]', text, re.IGNORECASE):
+        for t in re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]:
+            title = re.split(r'[,;\[\]]', t)[0].strip()
+            if title and not _is_real_title(_norm_title(title), real):
+                return True
+    return False
+
+
+def resolve_citations(text: str, evidence_chains: list[dict],
+                      mapping: dict[int, str]) -> str:
+    """Apply this pipeline's citation rules to one block of text.
+
+    Verbatim titles are scrubbed against the citable set, source numbers are
+    bound through the mapping built from that same set, and the result is
+    scrubbed again so a bound title cannot become a route around the check.
+    Unknown titles, navigation-only sources and out-of-range numbers all
+    disappear; a legitimate citation survives unchanged.
+
+    Both synthesis and the self-review's revisions use this, so a revision
+    cannot reintroduce a citation the synthesizer would have removed. This
+    keeps citation identity and handling consistent; it is not a claim that a
+    cited source supports the sentence it is attached to.
+    """
+    if not text:
+        return text
+    # These helpers walk the known field names of a synthesis result, so the
+    # block is passed under one of those names rather than an ad-hoc key.
+    holder = {"recommendation": text}
+    holder = _sanitize_citations(
+        _bind_citations({"recommendation": _sanitize_text(text, _citable_titles(evidence_chains))},
+                        mapping),
+        evidence_chains,
+    )
+    return holder["recommendation"]
+
+
 # Every field the prompt asks to cite must be bound and sanitized. Leaving one
 # out left raw [[N]] markers in the rendered report: the model cites
 # confidence_rationale, but nothing converted its numbers.

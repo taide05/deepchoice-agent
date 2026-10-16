@@ -10,6 +10,7 @@ import asyncio
 import inspect
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -368,6 +369,227 @@ class TestReviewCorrectionsReachTheReport:
             assert {"low": 0, "medium": 1, "high": 2}[confidence] <= prior_level, \
                 f"reviewer value {value!r} raised confidence to {confidence!r}"
             assert out["final_recommendation"]["confidence"] == confidence
+
+
+class TestRevisedCitationsFollowTheSynthesisRules:
+    """A revision is the reviewer's own prose, so it must go through the same
+    citation rules as synthesis. Without that, a revision could reintroduce an
+    unknown title, a navigation-only page or an out-of-range number."""
+
+    REVISION = "修订内容 [Source: Unknown invented title] [Source: Navigation only] [[999]]"
+
+    def _ctx(self):
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        return state, mapping
+
+    def _apply(self, text, field="rationale", chains=None, mapping=None):
+        state, real_mapping = self._ctx()
+        rec = json.loads(json.dumps(state["final_recommendation"]))
+        applied, rejected = sr._apply_corrections(
+            rec, [{"option": "ClickHouse", "field": field, "action": "revise",
+                   "corrected": text, "reason": "test"}],
+            evidence_chains=chains if chains is not None else state["evidence_chains"],
+            cite_map=mapping if mapping is not None else real_mapping,
+        )
+        got = next(o for o in rec["ranked_options"] if o["name"] == "ClickHouse")[field]
+        return applied, got
+
+    def test_the_reported_leak_is_closed(self):
+        """The exact reported payload must not survive as text."""
+        _applied, got = self._apply(self.REVISION)
+        assert "Unknown invented title" not in got, got
+        assert "Navigation only" not in got, got
+        assert "[[999]]" not in got, got
+
+    def test_a_navigation_only_source_cannot_be_cited(self):
+        """A page with no collected body is not a basis, even when it is in the
+        evidence: naming it must not make it citable."""
+        state, mapping = self._ctx()
+        nav = {"title": "Navigation only", "url": "https://nav.example/x",
+               "snippet": "", "has_body": False}
+        chains = json.loads(json.dumps(state["evidence_chains"]))
+        chains[0]["sources"].append(nav)
+        _applied, got = self._apply("理由 [Source: Navigation only]",
+                                   chains=chains, mapping=mapping)
+        assert "Navigation only" not in got, got
+
+    def test_an_out_of_range_number_is_dropped(self):
+        _applied, got = self._apply("理由 [[999999]]")
+        assert "[[999999]]" not in got, got
+
+    def test_a_legitimate_citation_survives(self):
+        """The reviewer's own valid citation must not be stripped."""
+        _state, mapping = self._ctx()
+        number = sorted(mapping)[0]
+        title = mapping[number]
+        for text in (f"理由 [Source: {title}]", f"理由 [[{number}]]"):
+            _applied, got = self._apply(text)
+            assert "撤回" not in got, got
+            assert title in got, (text, got)
+
+    def test_a_revision_with_no_citation_is_kept(self):
+        _applied, got = self._apply("理由无需引用")
+        assert got == "理由无需引用"
+
+    def test_resolution_uses_the_synthesis_rule_not_a_copy(self):
+        """Both paths must call the same helper, so the rule cannot drift."""
+        src = inspect.getsource(cs.resolve_citations)
+        assert "_sanitize_text" in src and "_bind_citations" in src \
+            and "_sanitize_citations" in src
+        reviewer_src = inspect.getsource(sr._apply_corrections)
+        assert "resolve_citations(" in reviewer_src
+        assert "unresolved_citations(" in reviewer_src
+
+
+class TestTheContractSentToTheModel:
+    """The executor accepted top-level and trade-off fields while the prompt only
+    described four per-candidate ones, so the model was never told it could use
+    them. A simulated response proves the executor accepts; it does not prove the
+    model knows what to send."""
+
+    def _system_prompt(self):
+        captured = {}
+
+        async def fake_call_model(prompt, **kwargs):
+            captured["system"] = prompt[0]["content"]
+            captured["user"] = prompt[1]["content"]
+            return {"confidence": "low", "knowledge_gaps": [], "corrections": []}
+
+        real = sr.call_model
+        sr.call_model = fake_call_model
+        try:
+            asyncio.run(sr.SelfReviewerAgent().run(dict(_failed_run_state())))
+        finally:
+            sr.call_model = real
+        return captured["system"], captured["user"]
+
+    def test_every_executor_field_is_described(self):
+        system, _user = self._system_prompt()
+        for field in sr._CORRECTABLE_FIELDS:
+            assert field in system, f"{field} is accepted but never described"
+
+    def test_the_contract_describes_no_field_the_executor_rejects(self):
+        system, _user = self._system_prompt()
+        claimed = set(re.findall(
+            r"\b(rationale|key_strength|key_weakness|constraint_fit_reason"
+            r"|recommendation|winner_rationale|confidence_rationale"
+            r"|evidence_summary|scene_fit_note|finding|impact)\b", system))
+        assert claimed <= set(sr._CORRECTABLE_FIELDS), \
+            f"described but rejected: {sorted(claimed - set(sr._CORRECTABLE_FIELDS))}"
+
+    def test_the_contract_says_how_to_select_each_family(self):
+        system, _user = self._system_prompt()
+        lowered = system.lower()
+        assert "candidate" in lowered and "name" in lowered
+        assert "dimension" in lowered
+        assert '""' in system and "empty" in lowered
+
+    def test_the_contract_requires_corrections_not_only_gaps(self):
+        system, _user = self._system_prompt()
+        assert "knowledge_gaps" in system
+        assert "not acceptable" in system
+
+    def test_the_contract_does_not_force_invention(self):
+        system, _user = self._system_prompt()
+        lowered = system.lower()
+        assert "invent" in lowered
+        assert "withdraw" in lowered
+
+    def test_the_json_example_is_valid(self):
+        """A placeholder like `"passed_count": N` is not valid JSON and a model
+        can copy it into a numeric field."""
+        system, _user = self._system_prompt()
+        line = next(ln for ln in system.splitlines() if ln.strip().startswith('{"checks"'))
+        example = json.loads(line.strip())
+        assert example["corrections"], "the example must show a corrections entry"
+        assert {"option", "field", "action", "reason"} <= set(example["corrections"][0])
+
+    def test_the_payload_still_carries_what_the_review_must_compare(self):
+        _system, user = self._system_prompt()
+        for name in ("ClickHouse", "Amazon OpenSearch Serverless"):
+            assert name in user
+        assert "在高达 500 亿行" in user, "the cited source text must be supplied"
+
+
+class TestTheReviewedResultReachesEveryArtefact:
+    """The graph rendered the draft, the reviewer corrected the recommendation,
+    and the server then saved the pre-review draft. The endpoints re-render, so
+    they looked updated while report.md and the snapshot did not."""
+
+    REVIEW = {
+        "confidence": "low", "knowledge_gaps": [], "passed_count": 5,
+        "corrections": [{
+            "option": "ClickHouse", "field": "rationale", "action": "revise",
+            "corrected": ("公开基准称其在 500 亿行级 OTel 日志上磁盘占用约降 5 倍"
+                          " [Source: ClickHouse 填平 Elasticsearch 护城河？日志分析新选择！ - InfoQ]。"),
+            "reason": "来源写 500 亿，报告的 5 万亿无来源支持。"}],
+    }
+
+    def _state_with_draft(self):
+        state = _failed_run_state()
+        state = dict(state)
+        state["report"] = render(state)
+        return state
+
+    def _run(self, review, state=None):
+        state = state if state is not None else self._state_with_draft()
+        captured = {}
+
+        async def fake_call_model(prompt, **kwargs):
+            captured["user"] = prompt[1]["content"]
+            return review
+
+        real = sr.call_model
+        sr.call_model = fake_call_model
+        try:
+            return asyncio.run(sr.SelfReviewerAgent().run(dict(state))), state, captured
+        finally:
+            sr.call_model = real
+
+    def test_the_reviewer_still_receives_the_draft(self):
+        _out, state, captured = self._run(self.REVIEW)
+        assert "## Report" in captured["user"]
+        assert state["report"][:80] in captured["user"], \
+            "the reviewer must be able to read the draft it is reviewing"
+
+    def test_the_returned_report_is_the_reviewed_body(self):
+        out, _state, _cap = self._run(self.REVIEW)
+        assert out["report"], "a report must be returned for saving"
+        assert "5 万亿" not in out["report"]
+        assert "500 亿" in out["report"]
+
+    def test_the_saved_report_matches_a_fresh_render_of_the_final_state(self):
+        """report.md, the snapshot and the endpoints must show one result."""
+        out, state, _cap = self._run(self.REVIEW)
+        merged = {**state, "report": out["report"],
+                  "final_recommendation": out["final_recommendation"]}
+        assert render(merged) == out["report"]
+
+    def test_the_pre_review_draft_is_not_what_gets_saved(self):
+        _out, state, _cap = self._run(self.REVIEW)
+        assert "5 万亿" in state["report"], "fixture: the draft had the error"
+        assert "5 万亿" not in _out["report"]
+
+    def test_a_withdrawal_path_is_consistent_too(self):
+        review = {"confidence": "low", "knowledge_gaps": [], "corrections": [
+            {"option": "ClickHouse", "field": "key_strength",
+             "action": "withdraw", "reason": "无来源支持。"}]}
+        out, state, _cap = self._run(review)
+        assert "撤回" in out["report"]
+        merged = {**state, "final_recommendation": out["final_recommendation"]}
+        assert render(merged) == out["report"]
+
+    def test_a_run_with_no_corrections_is_consistent_too(self):
+        out, state, _cap = self._run(
+            {"confidence": "high", "knowledge_gaps": [], "corrections": []})
+        merged = {**state, "final_recommendation": out["final_recommendation"]}
+        assert render(merged) == out["report"]
+
+    def test_the_draft_is_not_mutated(self):
+        _out, state, _cap = self._run(self.REVIEW)
+        assert "5 万亿" in state["report"]
 
 
 class TestSubjectGuessingStaysRemoved:

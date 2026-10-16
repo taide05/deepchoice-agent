@@ -1,5 +1,11 @@
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
+from .conclusion_synthesizer import (
+    _summarize_chains,
+    resolve_citations,
+    unresolved_citations,
+)
+from .report_generator import render_report
 
 REVIEW_SYSTEM = """You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
 
@@ -18,21 +24,43 @@ Confidence Assessment:
 
 If confidence is not "high", list specific information gaps as search queries.
 
-Return ONLY a JSON object:
-{"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": N, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{"option": "<exact ranked option name>", "field": "rationale|key_strength|key_weakness|constraint_fit_reason", "action": "revise|withdraw", "corrected": "<the field with the error fixed, using only what the cited source supports>", "reason": "<what was wrong and which source contradicts it>"}]}
+Return ONLY a JSON object (numbers are examples; give your own real values):
+{"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw>", "reason": "<what was wrong and which source contradicts it>"}]}
 
-"corrections" is how a decisive error is fixed, not merely noted. For every
-decisive error you find in a ranked option's fields (a figure, unit or scale the
-cited source does not state; a justification no source supports; a dismissal the
-sources do not support), return one correction entry:
-- "revise" with the corrected field text when the cited source supports a
-  corrected version — keep everything in the field that is still supported and
-  change only what is wrong; do not blank the field;
-- "withdraw" when no cited source supports the claim at all; the field is then
-  replaced with a note that it was withdrawn.
-Do not emit a correction without a "reason" naming the source that contradicts
-the claim. Listing a decisive error only in knowledge_gaps leaves it displayed
-unchanged, which is not acceptable."""
+"corrections" is how a decisive error is fixed, not merely noted. A decisive
+error is a figure, unit or scale the cited source does not state (or states
+differently), a justification no source supports, or a candidate dismissed for a
+reason the sources do not support — anywhere the report states it. For every one,
+return a correction entry that names WHERE it is stated:
+- "option" is the selector. For a per-candidate field it is that candidate's
+  exact name as shown in "Decision Claims To Check". For a trade-off field it is
+  that trade-off's dimension, exactly as shown there. Leave it empty ("") for a
+  top-level field.
+- "field" is one of:
+  * per-candidate (selector = candidate name): rationale, key_strength,
+    key_weakness, constraint_fit_reason
+  * top-level (selector = ""): recommendation, winner_rationale,
+    confidence_rationale, evidence_summary, scene_fit_note
+  * trade-off (selector = dimension): finding, impact
+  Each of these is printed in the report, so an error left in any of them stays
+  on display. A field not in this list cannot be corrected.
+- "action": "revise" with the corrected field text when a cited source supports
+  a corrected version — keep everything in the field that is still supported,
+  change only what is wrong, and do not blank the field; "withdraw" when no cited
+  source supports the claim at all, in which case that one field is replaced with
+  a note that it was withdrawn.
+
+You are not asked to invent a better answer. If the material does not support a
+corrected version, withdraw the claim or leave the field out of "corrections"
+entirely and record the gap in knowledge_gaps. Do not emit a correction without a
+"reason" naming the source that contradicts the claim, and do not fill a field
+from your own knowledge.
+
+A decisive error reported only in knowledge_gaps is left displayed unchanged,
+which is not acceptable: it must also appear in "corrections". An error you
+cannot correct or withdraw from the material given — because the field is missing
+from the list above, or you cannot tell which entry owns it — goes in
+knowledge_gaps and is left as it is."""
 
 # The reviewer may only revise these fields: they are the justification text it
 # is asked to check. The choice, the ranking order and the candidate names are
@@ -72,7 +100,9 @@ def _withdrawn_note(text: str) -> str:
         else _WITHDRAWN_NOTE
 
 
-def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], list[str]]:
+def _apply_corrections(recommendation: dict, corrections,
+                       evidence_chains: list[dict] | None = None,
+                       cite_map: dict[int, str] | None = None) -> tuple[list[dict], list[str]]:
     """Apply the reviewer's field-level corrections to the recommendation.
 
     Deterministic: the reviewer says which field is wrong and what the source
@@ -82,11 +112,16 @@ def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], l
 
     `option` selects a ranked option by name, or a trade-off by dimension; it may
     be empty for a top-level field such as `recommendation`.
+
+    Revised text goes through `resolve_citations`, the same rule synthesis uses,
+    so a revision cannot reintroduce a citation the synthesizer would remove.
     """
     applied: list[dict] = []
     rejected: list[str] = []
     if not isinstance(corrections, list):
         return applied, rejected
+    evidence_chains = evidence_chains or []
+    cite_map = cite_map or {}
     options = [o for o in (recommendation.get("ranked_options") or [])
                if isinstance(o, dict)]
     trade_offs = [t for t in (recommendation.get("trade_offs") or [])
@@ -147,7 +182,24 @@ def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], l
             if not corrected:
                 rejected.append(f"revise without corrected text: {name}/{field}")
                 continue
-            target[field] = corrected
+            # The revision goes through the same citation rules as synthesis. A
+            # revision is the reviewer's own prose, so a marker it attaches to a
+            # source that is not in the citable set is a claim of support that
+            # does not exist; resolving it would leave the claim attached to
+            # nothing, so that revision is withdrawn instead.
+            resolved = resolve_citations(corrected, evidence_chains, cite_map)
+            if unresolved_citations(resolved, evidence_chains):
+                target[field] = _withdrawn_note(
+                    str(recommendation.get("recommendation") or ""))
+                applied.append({
+                    "option": owner, "field": field, "action": "withdraw",
+                    "withdrawn_marker": True,
+                    "reason": ("revision cited a source outside the citable set: "
+                               + reason)[:200],
+                    "changed": before != target.get(field),
+                })
+                continue
+            target[field] = resolved
         applied.append({"option": owner, "field": field, "action": action,
                         "reason": reason[:200], "changed": before != target.get(field)})
     return applied, rejected
@@ -302,7 +354,19 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         import copy
 
         recommendation = copy.deepcopy(research_state.get("final_recommendation") or {})
-        applied, rejected = _apply_corrections(recommendation, result.get("corrections"))
+        # The citation rules for a revision are the synthesis rules, applied to
+        # the same evidence: the citable set and the number -> title mapping both
+        # come from the one builder the synthesizer uses, so a revision cannot
+        # cite a source that the synthesizer would have refused.
+        _evidence_text, cite_map = _summarize_chains(
+            research_state.get("evidence_chains") or [],
+            (research_state.get("task") or {}).get("candidate_techs"),
+        )
+        applied, rejected = _apply_corrections(
+            recommendation, result.get("corrections"),
+            evidence_chains=research_state.get("evidence_chains") or [],
+            cite_map=cite_map,
+        )
 
         # The top-level confidence and the recommendation's own confidence are one
         # verdict, not two: the review is the later judgement, so both report it
@@ -319,7 +383,21 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         confidence = min(candidates, key=lambda c: _LEVELS[c]) if candidates else "low"
         recommendation["confidence"] = confidence
 
+        # The report body is re-rendered from the reviewed state, so the saved
+        # report.md, the snapshot's `report`, the report endpoint, the reading
+        # view and every export all show the post-review result. Reusing the
+        # generator's own render call keeps the draft the reviewer just read and
+        # the final body on one rule.
+        #
+        # The reviewed state is assembled from a copy of the incoming state, so
+        # the draft the reviewer read is still what `research_state` holds and
+        # nothing else about the run is disturbed.
+        reviewed_state = dict(research_state)
+        reviewed_state["final_recommendation"] = recommendation
+        final_report, _fmt = render_report(reviewed_state)
+
         return {
+            "report": final_report,
             "final_recommendation": recommendation,
             "confidence": confidence,
             "knowledge_gaps": result.get("knowledge_gaps", []),
@@ -334,6 +412,7 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
                 "corrections_applied": len(applied),
                 "corrections_rejected": len(rejected),
                 "corrected_fields": [f"{c['option']}/{c['field']}" for c in applied],
+                "report_rerendered": True,
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],

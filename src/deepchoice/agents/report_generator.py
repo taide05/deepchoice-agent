@@ -10,6 +10,19 @@ FORMAT_RENDERERS = {
 }
 
 
+def render_report(research_state: dict) -> tuple[str, str]:
+    """Render the report body from the current state, and the format used.
+
+    The one place the report text is produced. Self-review is given the draft
+    this returns; after review the same call produces the final body from the
+    corrected state, so the two cannot diverge and a correction reaches every
+    artefact that renders from the state.
+    """
+    fmt = research_state["task"].get("report_format", "what_why_how")
+    renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)
+    return renderer(research_state), fmt
+
+
 class ReportGeneratorAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None):
         self.websocket = websocket
@@ -40,8 +53,7 @@ class ReportGeneratorAgent:
                     f"Conclusions are based on the available sources and may miss perspectives from unavailable ones."
                 )
 
-        renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)
-        report = renderer(research_state)
+        report, fmt = render_report(research_state)
 
         rec = research_state.get("final_recommendation", {})
         return {
