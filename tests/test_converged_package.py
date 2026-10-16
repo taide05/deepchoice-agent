@@ -495,6 +495,37 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         assert "Unknown invented title" not in got, got
         assert "[[999]]" not in got, got
 
+    def test_a_title_containing_a_commas_survives_resolution(self):
+        """The reviewer path scrubbed a second time, after binding, and the
+        sanitizer splits a marker's titles on commas — so a real title such as
+        'Deploy, Calibrate, Monitor, Heal …' was truncated and dropped. The
+        reviewer path must therefore follow the node's order exactly."""
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        comma_titles = {n: t for n, t in mapping.items() if "," in t}
+        assert comma_titles, "fixture: expected a title containing a comma"
+        for number, title in comma_titles.items():
+            via_synthesis = cs.resolve_citations(
+                f"理由 [[{number}]]", state["evidence_chains"], mapping)
+            assert title in via_synthesis, (number, via_synthesis)
+            _applied, via_reviewer = self._apply(f"理由 [[{number}]]")
+            assert title in via_reviewer, (number, via_reviewer)
+            assert via_reviewer == via_synthesis, (number, via_reviewer)
+
+    def test_a_bound_citation_is_not_reported_as_unresolved(self):
+        """A comma-bearing title made the unresolved check split the marker and
+        call a correct citation unresolved, which withdrew it."""
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        for number, title in mapping.items():
+            if "," not in title:
+                continue
+            resolved = cs.resolve_citations(
+                f"理由 [[{number}]]", state["evidence_chains"], mapping)
+            assert not cs.unresolved_citations(resolved, state["evidence_chains"])
+
     def test_a_wider_grammar_cannot_turn_prose_into_a_citation(self):
         """A looser number grammar matched ordinary text and resolved it to real
         sources, fabricating an attribution the model never made. Every source
@@ -521,10 +552,15 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         """The guard must not stop the model's own convention from working: the
         prompt asks for `[[N]]`, which a model often writes unspaced."""
         _state, mapping = self._ctx()
-        number = sorted(mapping)[0]
+        numbers = sorted(mapping)
+        number = numbers[0]
         title = mapping[number]
+        # A multi-source marker is checked against two distinct numbers: one
+        # number twice de-duplicates to a single title, which the whole-content
+        # check in unresolved_citations cannot tell from a leftover plain title.
+        multi = f"{number},{numbers[1]}" if len(numbers) > 1 else str(number)
         for text in (f"理由[[{number}]]", f"理由 [[{number}]]", f"理由：[[{number}]]",
-                     f"理由 [[{number},{number}]]", f"text [[{number}]] more"):
+                     f"理由 [[{multi}]]", f"text [[{number}]] more"):
             _applied, got = self._apply(text)
             assert title in got, (text, got)
 

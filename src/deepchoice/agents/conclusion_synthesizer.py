@@ -376,25 +376,42 @@ def _citable_titles(evidence_chains: list[dict]) -> set[str]:
     return real
 
 
+def _marker_titles(body: str) -> list[str]:
+    """The titles a `[Source: ...]` body contains.
+
+    Binding writes several titles into one marker as `A, Source: B`, so that
+    separator is tried first and each part is then checked whole. Only if that
+    yields nothing is the body read as a single title, which is what preserves a
+    real title that itself contains commas.
+    """
+    if re.search(r',\s*Source:', body, re.IGNORECASE):
+        return [p.strip() for p in re.split(r',\s*Source:\s*', body,
+                                            flags=re.IGNORECASE) if p.strip()]
+    return [body.strip()] if body.strip() else []
+
+
 def unresolved_citations(text: str, evidence_chains: list[dict]) -> bool:
     """True when text still carries a citation that names nothing citable.
 
-    A resolved citation is a `[Source: title]` whose titles are all in the
-    citable set. A `[[N]]` number is only valid if the mapping covered it, and
-    resolution replaces those, so any surviving number is out of range. A
-    verbatim title that is not in the set is a fabrication. Either means the
+    A resolved citation is a `[Source: ...]` whose titles are all in the citable
+    set. A `[[N]]` number is only valid if the mapping covered it, and resolution
+    replaces those, so any surviving number is out of range. Either means the
     text claims support that does not exist.
     """
     if not text:
         return False
-    if _CITE_NUMBER.search(text):
+    if _CITE_NUMBER.search(text) or _CITE_LEFTOVER.search(text):
         return True
     real = _citable_titles(evidence_chains)
     for m in _SOURCE_MARKER.finditer(text):
-        for t in re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]:
-            title = re.split(r'[,;\[\]]', t)[0].strip()
-            if title and not _is_real_title(_norm_title(title), real):
-                return True
+        body = re.split(r'^\[Source:\s*', m.group(0), flags=re.IGNORECASE)[-1]
+        if body.endswith(']'):
+            body = body[:-1]
+        titles = _marker_titles(body)
+        if not titles:
+            return True
+        if any(not _is_real_title(_norm_title(t), real) for t in titles):
+            return True
     return False
 
 
@@ -402,11 +419,12 @@ def resolve_citations(text: str, evidence_chains: list[dict],
                       mapping: dict[int, str]) -> str:
     """Apply this pipeline's citation rules to one block of text.
 
-    Verbatim titles are scrubbed against the citable set, source numbers are
-    bound through the mapping built from that same set, and the result is
-    scrubbed again so a bound title cannot become a route around the check.
-    Unknown titles, navigation-only sources and out-of-range numbers all
-    disappear; a legitimate citation survives unchanged.
+    The order is the synthesis order: scrub verbatim titles, then bind source
+    numbers, and do not scrub again. A second scrub would run over the markers
+    binding just produced, and the sanitizer splits a marker's titles on commas —
+    so a real title that contains a comma ("Deploy, Calibrate, Monitor, Heal …")
+    was truncated to its first word and then dropped as unrecognised. Binding
+    output is already built from the citable set, so it needs no second pass.
 
     Both synthesis and the self-review's revisions use this, so a revision
     cannot reintroduce a citation the synthesizer would have removed. This
@@ -417,13 +435,9 @@ def resolve_citations(text: str, evidence_chains: list[dict],
         return text
     # These helpers walk the known field names of a synthesis result, so the
     # block is passed under one of those names rather than an ad-hoc key.
-    holder = {"recommendation": text}
-    holder = _sanitize_citations(
-        _bind_citations({"recommendation": _sanitize_text(text, _citable_titles(evidence_chains))},
-                        mapping),
-        evidence_chains,
-    )
-    return holder["recommendation"]
+    scrubbed = _sanitize_text(text, _citable_titles(evidence_chains))
+    bound = _bind_citations({"recommendation": scrubbed}, mapping)["recommendation"]
+    return bound
 
 
 # Every field the prompt asks to cite must be bound and sanitized. Leaving one
