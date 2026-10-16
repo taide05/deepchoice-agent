@@ -35,11 +35,41 @@ the claim. Listing a decisive error only in knowledge_gaps leaves it displayed
 unchanged, which is not acceptable."""
 
 # The reviewer may only revise these fields: they are the justification text it
-# is asked to check. Choice, ranking order and the recommendation itself are not
-# the reviewer's to change.
-_CORRECTABLE_FIELDS = ("rationale", "key_strength", "key_weakness",
-                       "constraint_fit_reason")
+# is asked to check. The choice, the ranking order and the candidate names are
+# not the reviewer's to change.
+#
+# The set covers every field the report prints verbatim, not only the
+# per-candidate ones: a decisive error named in the recommendation, the
+# winner rationale, the confidence rationale or a trade-off finding was
+# previously reported and then still displayed, which is the outcome this is
+# meant to remove.
+_CORRECTABLE_OPTION_FIELDS = ("rationale", "key_strength", "key_weakness",
+                              "constraint_fit_reason")
+_CORRECTABLE_TOP_FIELDS = ("recommendation", "winner_rationale",
+                           "confidence_rationale", "evidence_summary",
+                           "scene_fit_note")
+_CORRECTABLE_TRADEOFF_FIELDS = ("finding", "impact")
+_CORRECTABLE_FIELDS = (_CORRECTABLE_OPTION_FIELDS + _CORRECTABLE_TOP_FIELDS
+                       + _CORRECTABLE_TRADEOFF_FIELDS)
+# "option" may name a ranked option, a trade-off dimension, or be omitted for a
+# top-level field. These are matched case-insensitively on the trimmed value.
 _WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
+_WITHDRAWN_NOTE_EN = ("(withdrawn by self-review: no cited source supports this "
+                      "claim)")
+_LEVELS = {"low": 0, "medium": 1, "high": 2}
+
+
+def _normalize_confidence(value) -> str | None:
+    """Map a reviewer's confidence to one of the three levels, or None."""
+    if isinstance(value, bool) or not isinstance(value, str):
+        return None
+    level = value.strip().lower()
+    return level if level in _LEVELS else None
+
+
+def _withdrawn_note(text: str) -> str:
+    return _WITHDRAWN_NOTE_EN if not any("\u4e00" <= c <= "\u9fff" for c in text or "") \
+        else _WITHDRAWN_NOTE
 
 
 def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], list[str]]:
@@ -49,6 +79,9 @@ def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], l
     supports; this replaces that field and nothing else. A decisive error is
     therefore fixed or withdrawn in the served result instead of only lowering
     confidence, and the untouched answers are preserved.
+
+    `option` selects a ranked option by name, or a trade-off by dimension; it may
+    be empty for a top-level field such as `recommendation`.
     """
     applied: list[dict] = []
     rejected: list[str] = []
@@ -56,18 +89,16 @@ def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], l
         return applied, rejected
     options = [o for o in (recommendation.get("ranked_options") or [])
                if isinstance(o, dict)]
+    trade_offs = [t for t in (recommendation.get("trade_offs") or [])
+                  if isinstance(t, dict)]
     for item in corrections:
         if not isinstance(item, dict):
             rejected.append("correction is not an object")
             continue
-        name = str(item.get("option", "")).strip()
-        field = str(item.get("field", "")).strip()
-        action = str(item.get("action", "")).strip().lower()
-        reason = str(item.get("reason", "")).strip()
-        target = next((o for o in options if str(o.get("name", "")).strip() == name), None)
-        if target is None:
-            rejected.append(f"unknown option: {name!r}")
-            continue
+        name = str(item.get("option") or "").strip()
+        field = str(item.get("field") or "").strip()
+        action = str(item.get("action") or "").strip().lower()
+        reason = str(item.get("reason") or "").strip()
         if field not in _CORRECTABLE_FIELDS:
             rejected.append(f"field not correctable: {field!r}")
             continue
@@ -78,18 +109,49 @@ def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], l
             # A correction without a stated basis is not applied.
             rejected.append(f"no reason given for {name}/{field}")
             continue
+
+        # Resolve the owner by field family first. A top-level field is not owned
+        # by a ranked option, so a correction that happens to name one must still
+        # reach the top level rather than being rejected as absent from it.
+        target = None
+        owner = ""
+        if field in _CORRECTABLE_TOP_FIELDS:
+            target, owner = recommendation, field
+        elif field in _CORRECTABLE_TRADEOFF_FIELDS:
+            match = next((t for t in trade_offs
+                          if name and str(t.get("dimension", "")).strip().casefold()
+                          == name.casefold()), None)
+            if match is None and not name and len(trade_offs) == 1:
+                match = trade_offs[0]
+            if match is None:
+                rejected.append(f"cannot tell which trade-off owns {field!r}")
+                continue
+            target, owner = match, str(match.get("dimension") or field)
+        else:
+            target = next((o for o in options
+                           if str(o.get("name", "")).strip().casefold() == name.casefold()),
+                          None)
+            if target is None:
+                rejected.append(f"unknown option: {name!r}")
+                continue
+            owner = str(target.get("name") or name)
+        if field not in target:
+            rejected.append(f"{field!r} is not present on the named entry")
+            continue
+
         before = target.get(field)
         if action == "withdraw":
-            target[field] = _WITHDRAWN_NOTE
+            target[field] = _withdrawn_note(str(recommendation.get("recommendation") or ""))
         else:
-            corrected = str(item.get("corrected", "")).strip()
+            corrected = str(item.get("corrected") or "").strip()
             if not corrected:
                 rejected.append(f"revise without corrected text: {name}/{field}")
                 continue
             target[field] = corrected
-        applied.append({"option": name, "field": field, "action": action,
+        applied.append({"option": owner, "field": field, "action": action,
                         "reason": reason[:200], "changed": before != target.get(field)})
     return applied, rejected
+
 
 
 
@@ -242,16 +304,19 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         recommendation = copy.deepcopy(research_state.get("final_recommendation") or {})
         applied, rejected = _apply_corrections(recommendation, result.get("corrections"))
 
-        confidence = result.get("confidence", "medium")
         # The top-level confidence and the recommendation's own confidence are one
         # verdict, not two: the review is the later judgement, so both report it
-        # and neither can contradict the other. A withdrawn or revised claim can
-        # only lower it.
-        levels = {"low": 0, "medium": 1, "high": 2}
-        prior = recommendation.get("confidence")
-        if isinstance(prior, str) and prior in levels and isinstance(confidence, str) \
-                and confidence in levels:
-            confidence = min((confidence, prior), key=lambda c: levels[c])
+        # and neither can contradict the other.
+        #
+        # Normalized first. Requiring the exact lowercase triple meant any other
+        # spelling skipped the cap entirely, so a reviewer answering "HIGH" raised
+        # a low-confidence result and an invalid value reached the report. An
+        # unusable answer now falls back to the weaker of the two priors rather
+        # than passing through.
+        prior = _normalize_confidence(recommendation.get("confidence"))
+        reviewed = _normalize_confidence(result.get("confidence"))
+        candidates = [c for c in (reviewed, prior) if c is not None]
+        confidence = min(candidates, key=lambda c: _LEVELS[c]) if candidates else "low"
         recommendation["confidence"] = confidence
 
         return {

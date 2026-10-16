@@ -250,18 +250,18 @@ class TestReviewCorrectionsReachTheReport:
              "action": "withdraw", "reason": "所引来源正文不支持该断言。"},
             {"option": "No Such Option", "field": "rationale", "action": "withdraw",
              "reason": "unknown option"},
-            {"option": "ClickHouse", "field": "recommendation", "action": "withdraw",
-             "reason": "field not correctable"},
+            {"option": "ClickHouse", "field": "name", "action": "withdraw",
+             "reason": "not a correctable field"},
             {"option": "ClickHouse", "field": "key_weakness", "action": "withdraw",
              "reason": ""},
         ],
     }
 
-    def _run(self, state=None):
+    def _run_with(self, review, state=None):
         state = state or _failed_run_state()
 
         async def fake_call_model(prompt, **kwargs):
-            return self.REVIEW
+            return review
 
         real = sr.call_model
         sr.call_model = fake_call_model
@@ -269,6 +269,9 @@ class TestReviewCorrectionsReachTheReport:
             return asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
         finally:
             sr.call_model = real
+
+    def _run(self, state=None):
+        return self._run_with(self.REVIEW, state)
 
     @staticmethod
     def _opt(rec, name):
@@ -322,6 +325,49 @@ class TestReviewCorrectionsReachTheReport:
         assert "500 亿" in report
         assert "5 万亿" not in report
         assert "撤回" in report
+
+    def test_a_top_level_field_the_report_prints_is_correctable(self):
+        """The recommendation, winner rationale and confidence rationale are
+        printed verbatim, so an error there must be correctable too — the review
+        found them omitted, which left a reported error on display."""
+        review = {"confidence": "low", "knowledge_gaps": [], "corrections": [
+            {"option": "ClickHouse", "field": "recommendation",
+             "action": "revise", "corrected": "在 500 亿行级日志上选 ClickHouse。",
+             "reason": "来源写 500 亿。"},
+            {"option": "ClickHouse", "field": "winner_rationale",
+             "action": "withdraw", "reason": "无来源支持。"},
+        ]}
+        out = self._run_with(review)
+        rec = out["final_recommendation"]
+        assert rec["recommendation"] == "在 500 亿行级日志上选 ClickHouse。"
+        assert "撤回" in rec["winner_rationale"] or "withdrawn" in rec["winner_rationale"]
+        assert out["quality_signals"][0]["corrections_rejected"] == 0
+
+    def test_a_trade_off_finding_is_correctable(self):
+        review = {"confidence": "low", "knowledge_gaps": [], "corrections": [
+            {"option": "成本可预测性", "field": "finding", "action": "withdraw",
+             "reason": "无来源支持。"},
+        ]}
+        out = self._run_with(review)
+        rec = out["final_recommendation"]
+        target = next(t for t in rec["trade_offs"]
+                      if t.get("dimension") == "成本可预测性")
+        assert "撤回" in target["finding"] or "withdrawn" in target["finding"]
+        assert out["quality_signals"][0]["corrections_applied"] == 1
+
+    def test_an_unusable_confidence_cannot_raise_the_result(self):
+        """The cap required the exact lowercase triple, so any other spelling
+        skipped it and an invalid value reached the report."""
+        prior_level = {"low": 0, "medium": 1, "high": 2}[
+            _failed_run_state()["final_recommendation"]["confidence"]]
+        for value in ("HIGH", "High", " high", "medium ", "unknown", "", None, 2, True):
+            out = self._run_with({"confidence": value, "knowledge_gaps": [],
+                                  "corrections": []})
+            confidence = out["confidence"]
+            assert confidence in ("low", "medium", "high"), (value, confidence)
+            assert {"low": 0, "medium": 1, "high": 2}[confidence] <= prior_level, \
+                f"reviewer value {value!r} raised confidence to {confidence!r}"
+            assert out["final_recommendation"]["confidence"] == confidence
 
 
 class TestSubjectGuessingStaysRemoved:
