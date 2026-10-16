@@ -476,11 +476,24 @@ class TestRevisedCitationsFollowTheSynthesisRules:
 
     def test_a_markers_only_revision_is_withdrawn_not_blanked(self):
         """Stripping the markers left the field whitespace, which blanked the
-        answer and hid why. It must become the withdrawal note."""
+        answer and hid why. A revision that is nothing but markers must become
+        the withdrawal note, whose language follows the field it replaces."""
         for text in ("[Source: Unknown invented title] [[999]]", "[[999]]",
-                     "[Source: Navigation only]"):
+                     "[Source: Navigation only]",
+                     "  [Source: Unknown invented title]  ",
+                     "[Source: Unknown invented title"):
             _applied, got = self._apply(text)
-            assert "撤回" in got, (text, got)
+            assert got.strip(), f"blanked by {text!r}"
+            assert "撤回" in got or "withdrawn" in got.lower(), (text, got)
+
+    def test_a_revision_with_prose_keeps_its_prose(self):
+        """A marker stripped from a revision that also says something keeps the
+        statement: dropping the claim as well would lose an answer the reviewer
+        did support."""
+        _applied, got = self._apply("理由 [Source: Unknown invented title] [[999]] 说明")
+        assert "理由" in got and "说明" in got, got
+        assert "Unknown invented title" not in got, got
+        assert "[[999]]" not in got, got
 
 
 class TestTheContractSentToTheModel:

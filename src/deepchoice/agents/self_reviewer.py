@@ -4,6 +4,7 @@ from .conclusion_synthesizer import (
     _summarize_chains,
     resolve_citations,
     unresolved_citations,
+    withdrawal_note,
 )
 from .report_generator import render_report
 
@@ -96,9 +97,6 @@ knowledge_gaps and is left as it is."""
 
 # "option" may name a ranked option, a trade-off dimension, or be omitted for a
 # top-level field. These are matched case-insensitively on the trimmed value.
-_WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
-_WITHDRAWN_NOTE_EN = ("(withdrawn by self-review: no cited source supports this "
-                      "claim)")
 _LEVELS = {"low": 0, "medium": 1, "high": 2}
 
 
@@ -108,11 +106,6 @@ def _normalize_confidence(value) -> str | None:
         return None
     level = value.strip().lower()
     return level if level in _LEVELS else None
-
-
-def _withdrawn_note(text: str) -> str:
-    return _WITHDRAWN_NOTE_EN if not any("\u4e00" <= c <= "\u9fff" for c in text or "") \
-        else _WITHDRAWN_NOTE
 
 
 def _apply_corrections(recommendation: dict, corrections,
@@ -191,7 +184,7 @@ def _apply_corrections(recommendation: dict, corrections,
 
         before = target.get(field)
         if action == "withdraw":
-            target[field] = _withdrawn_note(str(recommendation.get("recommendation") or ""))
+            target[field] = withdrawal_note(str(recommendation.get("recommendation") or ""))
         else:
             corrected = str(item.get("corrected") or "").strip()
             if not corrected:
@@ -208,7 +201,7 @@ def _apply_corrections(recommendation: dict, corrections,
             # the answer and hides the reason. That is the withdrawn case too.
             resolved = resolve_citations(corrected, evidence_chains, cite_map)
             if not resolved.strip() or unresolved_citations(resolved, evidence_chains):
-                target[field] = _withdrawn_note(
+                target[field] = withdrawal_note(
                     str(recommendation.get("recommendation") or ""))
                 applied.append({
                     "option": owner, "field": field, "action": "withdraw",

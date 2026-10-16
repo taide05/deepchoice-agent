@@ -85,7 +85,6 @@ def _summarize_chains(evidence_chains: list[dict],
     from ..utils.candidate_identity import (
         bounded_content_summary,
         candidate_proper_nouns,
-        has_factual_content,
     )
 
     header: list[str] = []
@@ -313,9 +312,28 @@ def _sanitize_text(text: str, real: set[str]) -> str:
 # the text: it is still a claimed citation, so it must be seen and removed rather
 # than passing through as ordinary prose.
 _SOURCE_MARKER = re.compile(r'\[Source:[^\]]*\]|\[Source:[^\]]*$', re.IGNORECASE)
-# A source number, with the spacing and sign variants a model may emit. Anything
-# that resolves to no entry in the mapping is dropped.
-_CITE_NUMBER = re.compile(r'\[\[\s*(-?\d+)\s*\]\]')
+# A source number, or a list of them, with the spacing, sign and bracket-nesting
+# variants a model may emit. The match runs only to the first closing pair, so
+# malformed forms like [[1][2]] are treated as one marker naming source 1 rather
+# than left behind as text. Anything mapping to no entry is dropped.
+_CITE_NUMBER = re.compile(r'\[\[(.+?)\]\]')
+
+
+_WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
+_WITHDRAWN_NOTE_EN = ("(withdrawn: no cited source supports this claim)")
+
+
+def withdrawal_note(text: str) -> str:
+    """The note that replaces a claim nothing citable supports.
+
+    Follows the language of the field it replaces, so a withdrawn claim reads as
+    part of the report rather than as a stray foreign sentence. Shared by the
+    synthesis scrub and the self-review, so a withdrawal looks the same wherever
+    it happens.
+    """
+    if text and any("\u4e00" <= c <= "\u9fff" for c in text):
+        return _WITHDRAWN_NOTE
+    return _WITHDRAWN_NOTE_EN
 
 
 def is_citable_source(source: dict) -> bool:
@@ -411,17 +429,29 @@ def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
     like any other fabrication.
     """
     real = _citable_titles(evidence_chains)
+
+    def _clean(value: str) -> str:
+        """Scrub a field, and record that it has no content left.
+
+        A field whose entire content was a fabricated marker becomes empty.
+        Emptied is not the same as never having had content: the claim was
+        withdrawn by this pass, and printing a blank leaves the reader unable to
+        tell the difference. The marker is replaced with a withdrawal note.
+        """
+        cleaned = _sanitize_text(value, real)
+        return cleaned if cleaned.strip() else withdrawal_note(value)
+
     for field in _CITATION_TEXT_FIELDS:
         if result.get(field):
-            result[field] = _sanitize_text(result[field], real)
+            result[field] = _clean(result[field])
     for opt in result.get("ranked_options", []):
         for field in _CITATION_OPT_FIELDS:
             if opt.get(field):
-                opt[field] = _sanitize_text(opt[field], real)
+                opt[field] = _clean(opt[field])
     for to in result.get("trade_offs", []):
         for field in _CITATION_TRADEOFF_FIELDS:
             if to.get(field):
-                to[field] = _sanitize_text(to[field], real)
+                to[field] = _clean(to[field])
     return result
 
 
@@ -435,8 +465,18 @@ def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
             return text
 
         def _sub(m: re.Match[str]) -> str:
-            title = mapping.get(int(m.group(1)))
-            return f"[Source: {title}]" if title else ""
+            # The marker may name several sources, or be malformed. The leading
+            # number is what it cites, and any further numbers in the same pair
+            # are additional sources. A number with no entry is dropped, and if
+            # none resolve the whole marker disappears rather than leaving its
+            # digits behind as text.
+            numbers = re.findall(r'\d+', m.group(1))
+            if not numbers:
+                return ""
+            titles = [mapping[int(n)] for n in numbers if int(n) in mapping]
+            if not titles:
+                return ""
+            return '[Source: ' + ', Source: '.join(titles) + ']'
 
         return _CITE_NUMBER.sub(_sub, text)
 
