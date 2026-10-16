@@ -19,7 +19,78 @@ Confidence Assessment:
 If confidence is not "high", list specific information gaps as search queries.
 
 Return ONLY a JSON object:
-{"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": N, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"]}"""
+{"checks": [{"item": 1, "passed": true, "note": "..."}], "passed_count": N, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{"option": "<exact ranked option name>", "field": "rationale|key_strength|key_weakness|constraint_fit_reason", "action": "revise|withdraw", "corrected": "<the field with the error fixed, using only what the cited source supports>", "reason": "<what was wrong and which source contradicts it>"}]}
+
+"corrections" is how a decisive error is fixed, not merely noted. For every
+decisive error you find in a ranked option's fields (a figure, unit or scale the
+cited source does not state; a justification no source supports; a dismissal the
+sources do not support), return one correction entry:
+- "revise" with the corrected field text when the cited source supports a
+  corrected version — keep everything in the field that is still supported and
+  change only what is wrong; do not blank the field;
+- "withdraw" when no cited source supports the claim at all; the field is then
+  replaced with a note that it was withdrawn.
+Do not emit a correction without a "reason" naming the source that contradicts
+the claim. Listing a decisive error only in knowledge_gaps leaves it displayed
+unchanged, which is not acceptable."""
+
+# The reviewer may only revise these fields: they are the justification text it
+# is asked to check. Choice, ranking order and the recommendation itself are not
+# the reviewer's to change.
+_CORRECTABLE_FIELDS = ("rationale", "key_strength", "key_weakness",
+                       "constraint_fit_reason")
+_WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
+
+
+def _apply_corrections(recommendation: dict, corrections) -> tuple[list[dict], list[str]]:
+    """Apply the reviewer's field-level corrections to the recommendation.
+
+    Deterministic: the reviewer says which field is wrong and what the source
+    supports; this replaces that field and nothing else. A decisive error is
+    therefore fixed or withdrawn in the served result instead of only lowering
+    confidence, and the untouched answers are preserved.
+    """
+    applied: list[dict] = []
+    rejected: list[str] = []
+    if not isinstance(corrections, list):
+        return applied, rejected
+    options = [o for o in (recommendation.get("ranked_options") or [])
+               if isinstance(o, dict)]
+    for item in corrections:
+        if not isinstance(item, dict):
+            rejected.append("correction is not an object")
+            continue
+        name = str(item.get("option", "")).strip()
+        field = str(item.get("field", "")).strip()
+        action = str(item.get("action", "")).strip().lower()
+        reason = str(item.get("reason", "")).strip()
+        target = next((o for o in options if str(o.get("name", "")).strip() == name), None)
+        if target is None:
+            rejected.append(f"unknown option: {name!r}")
+            continue
+        if field not in _CORRECTABLE_FIELDS:
+            rejected.append(f"field not correctable: {field!r}")
+            continue
+        if action not in ("revise", "withdraw"):
+            rejected.append(f"unknown action: {action!r}")
+            continue
+        if not reason:
+            # A correction without a stated basis is not applied.
+            rejected.append(f"no reason given for {name}/{field}")
+            continue
+        before = target.get(field)
+        if action == "withdraw":
+            target[field] = _WITHDRAWN_NOTE
+        else:
+            corrected = str(item.get("corrected", "")).strip()
+            if not corrected:
+                rejected.append(f"revise without corrected text: {name}/{field}")
+                continue
+            target[field] = corrected
+        applied.append({"option": name, "field": field, "action": action,
+                        "reason": reason[:200], "changed": before != target.get(field)})
+    return applied, rejected
+
 
 
 _CITATION_FIELDS = ("recommendation", "winner_rationale", "evidence_summary",
@@ -158,16 +229,46 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         if not isinstance(result, dict):
             result = {}
 
+        # A decisive error must change the served result, not only its
+        # confidence. The reviewer names the field and what the source supports;
+        # this applies it deterministically, in place, so the report the endpoints
+        # render from carries the correction.
+        #
+        # Deep-copied first: editing the caller's nested dicts in place would also
+        # rewrite the checkpointed pre-review state, so the report would look
+        # unchanged and the original would be lost.
+        import copy
+
+        recommendation = copy.deepcopy(research_state.get("final_recommendation") or {})
+        applied, rejected = _apply_corrections(recommendation, result.get("corrections"))
+
+        confidence = result.get("confidence", "medium")
+        # The top-level confidence and the recommendation's own confidence are one
+        # verdict, not two: the review is the later judgement, so both report it
+        # and neither can contradict the other. A withdrawn or revised claim can
+        # only lower it.
+        levels = {"low": 0, "medium": 1, "high": 2}
+        prior = recommendation.get("confidence")
+        if isinstance(prior, str) and prior in levels and isinstance(confidence, str) \
+                and confidence in levels:
+            confidence = min((confidence, prior), key=lambda c: levels[c])
+        recommendation["confidence"] = confidence
+
         return {
-            "confidence": result.get("confidence", "medium"),
+            "final_recommendation": recommendation,
+            "confidence": confidence,
             "knowledge_gaps": result.get("knowledge_gaps", []),
             "retry_count": research_state.get("retry_count", 0) + 1,
             "quality_signals": [{
                 "agent": "self_reviewer",
                 "passed_count": result.get("passed_count", 0),
                 "total_checks": 6,
-                "confidence": result.get("confidence", "medium"),
+                "confidence": confidence,
                 "gaps_found": len(result.get("knowledge_gaps", [])),
+                # Counts and fixed categories only; never model prose.
+                "corrections_applied": len(applied),
+                "corrections_rejected": len(rejected),
+                "corrected_fields": [f"{c['option']}/{c['field']}" for c in applied],
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],

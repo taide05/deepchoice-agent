@@ -228,6 +228,102 @@ class TestWhatReusesOneExplanation:
         assert "https://" in what, "the cited source should be reachable"
 
 
+class TestReviewCorrectionsReachTheReport:
+    """A decisive error must be revised or withdrawn in the served result.
+
+    Lowering confidence and adding a gap left the error on display. With the
+    preserved run as fixed input, the reviewer's corrections are applied to the
+    recommendation the endpoints render from.
+    """
+
+    REVIEW = {
+        "checks": [{"item": 1, "passed": True, "note": "ok"}],
+        "passed_count": 5,
+        "confidence": "low",
+        "knowledge_gaps": ["independent benchmark"],
+        "corrections": [
+            {"option": "ClickHouse", "field": "rationale", "action": "revise",
+             "corrected": ("公开基准称其在 500 亿行级 OTel 日志上磁盘占用约降 5 倍"
+                           " [Source: ClickHouse 填平 Elasticsearch 护城河？日志分析新选择！ - InfoQ]。"),
+             "reason": "来源写 500 亿；报告写成 5 万亿，把同段的能力上限当成了基准规模。"},
+            {"option": "Amazon OpenSearch Serverless", "field": "key_strength",
+             "action": "withdraw", "reason": "所引来源正文不支持该断言。"},
+            {"option": "No Such Option", "field": "rationale", "action": "withdraw",
+             "reason": "unknown option"},
+            {"option": "ClickHouse", "field": "recommendation", "action": "withdraw",
+             "reason": "field not correctable"},
+            {"option": "ClickHouse", "field": "key_weakness", "action": "withdraw",
+             "reason": ""},
+        ],
+    }
+
+    def _run(self, state=None):
+        state = state or _failed_run_state()
+
+        async def fake_call_model(prompt, **kwargs):
+            return self.REVIEW
+
+        real = sr.call_model
+        sr.call_model = fake_call_model
+        try:
+            return asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
+        finally:
+            sr.call_model = real
+
+    @staticmethod
+    def _opt(rec, name):
+        return next(o for o in rec["ranked_options"] if o["name"] == name)
+
+    def test_the_wrong_scale_is_revised_not_merely_noted(self):
+        state = _failed_run_state()
+        out = self._run(state)
+        after = self._opt(out["final_recommendation"], "ClickHouse")["rationale"]
+        assert "5 万亿" not in after, after
+        assert "500 亿" in after, after
+        assert len(after) > 60, "the field must stay a substantive answer"
+
+    def test_an_unsupported_justification_is_withdrawn(self):
+        state = _failed_run_state()
+        name = "Amazon OpenSearch Serverless"
+        out = self._run(state)
+        after = self._opt(out["final_recommendation"], name)["key_strength"]
+        before = self._opt(state["final_recommendation"], name)["key_strength"]
+        assert after != before
+        assert "撤回" in after, after
+        # The sibling field is untouched: a correction is not a blanket clearing.
+        assert (self._opt(out["final_recommendation"], name)["rationale"]
+                == self._opt(state["final_recommendation"], name)["rationale"])
+
+    def test_the_input_recommendation_is_not_mutated(self):
+        """Editing the caller's nested dicts in place would also rewrite the
+        checkpointed pre-review state, hiding the change."""
+        state = _failed_run_state()
+        before = json.dumps(state["final_recommendation"], ensure_ascii=False)
+        self._run(state)
+        assert json.dumps(state["final_recommendation"], ensure_ascii=False) == before
+
+    def test_only_valid_corrections_are_applied(self):
+        out = self._run()
+        signal = out["quality_signals"][0]
+        assert signal["corrections_applied"] == 2, signal
+        assert signal["corrections_rejected"] == 3, signal
+
+    def test_confidence_does_not_contradict_itself(self):
+        state = _failed_run_state()
+        out = self._run(state)
+        assert out["confidence"] == out["final_recommendation"]["confidence"]
+        levels = {"low": 0, "medium": 1, "high": 2}
+        assert levels[out["confidence"]] <= levels[state["final_recommendation"]["confidence"]]
+
+    def test_the_served_report_reflects_the_correction(self):
+        state = _failed_run_state()
+        out = self._run(state)
+        report = render({**state, "final_recommendation": out["final_recommendation"]})
+        assert "500 亿" in report
+        assert "5 万亿" not in report
+        assert "撤回" in report
+
+
 class TestSubjectGuessingStaysRemoved:
     """An earlier attempt added word lists and title-prefix rules to decide a
     page's subject. A page may cover several products, so it is not forced to own
