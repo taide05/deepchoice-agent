@@ -51,3 +51,7 @@ tavily_key_state.json
 .ruff_cache/
 .mypy_cache/
 review-*.txt
+
+# Local cleanup archive: review probes and findings kept for reproduction.
+# Local only - session material, never part of a code commit.
+/local_cleanup_archive/
