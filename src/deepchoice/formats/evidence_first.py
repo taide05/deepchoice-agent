@@ -91,6 +91,7 @@ def render(state: dict) -> str:
         # never collected is navigation and must not be listed as this chain's
         # strongest evidence, or exported as if it were.
         factual_top = [s for s in top.get("sources", []) if _has_body(s)]
+        links_top = [s for s in top.get("sources", []) if not _has_body(s)]
         if factual_top:
             for src in factual_top:
                 lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
@@ -98,6 +99,12 @@ def render(state: dict) -> str:
             lines.append("No fact-bearing source was collected for this chain; "
                          "recorded as a material gap." if lang != "zh"
                          else "本条未取得正文来源，记为资料缺口。")
+        # A discovered link stays reachable even when it is not evidence.
+        for src in links_top:
+            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) — "
+                         + ("导航链接，无正文，不能作为依据。" if lang == "zh"
+                            else "navigation link only, no body collected; not usable "
+                                 "as a basis."))
         lines.append("")
         lines.append(T["supporting"][lang])
         moderate = [c for c in chains if c.get("evidence_strength") == "moderate"][:3]

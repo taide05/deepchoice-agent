@@ -619,14 +619,18 @@ class ConflictDetectorAgent:
             ]
 
         def _cited_source(src: dict) -> dict:
-            """The claim's source, keeping the body marker.
+            """The claim's source, keeping what the renderer needs to judge it.
 
-            Dropping the marker let a body-less navigation link be presented as
-            the source of a claim in every renderer's disputes section.
+            The marker says whether a body was collected; the snippet is the body.
+            Dropping either one made has_factual_content fall back to an empty
+            string and brand an ordinary evidence source as carrying no body.
             """
             entry = {"url": src["url"], "score": src["total_score"]}
             if "has_body" in src:
                 entry["has_body"] = src["has_body"]
+            snippet = src.get("snippet")
+            if snippet:
+                entry["snippet"] = snippet
             return entry
 
         def _build_conflict(pair: dict, result: dict, model: str = "flash") -> dict:

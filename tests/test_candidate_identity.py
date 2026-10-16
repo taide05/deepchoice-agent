@@ -379,7 +379,11 @@ class TestBodyLessSourcesAcrossEveryRoute:
         # exact linked line, since one source URL is a prefix of the other.
         section = out.split("### Strongest Evidence")[-1].split("### Supporting")[0]
         nav_line = f"[{self.NAV['title']}]({self.NAV['url']})"
-        assert nav_line not in section, section[:300]
+        # It may be listed, but only as a labelled navigation link, never as
+        # unlabelled evidence.
+        for line in section.splitlines():
+            if nav_line in line:
+                assert "navigation link only" in line or "导航链接" in line, line
         assert "[PostgreSQL 17 release notes]" in section
 
     def test_reading_view_payload_never_numbers_it(self):
@@ -445,7 +449,73 @@ class TestBodyLessSourcesAcrossEveryRoute:
         cited = re.findall(r"\[Source:\s*([^\]]+)\]", bound["recommendation"])
         assert cited == [real["title"]], cited
 
+    def test_a_fact_bearing_claim_source_is_not_mislabelled(self):
+        """The shape every non-official retriever produces: a real snippet and NO
+        has_body marker. Nothing in the pipeline ever sets has_body=True, so a
+        label decided from a stripped dict branded ordinary evidence as body-less.
+        """
+        from deepchoice.formats.comparison_matrix import render as render_matrix
+        from deepchoice.formats.evidence_first import render as render_evidence
+        from deepchoice.formats.what_why_how import render as render_www
+
+        ordinary = {"url": "https://blog.example/a", "score": 8.0,
+                    "snippet": "Benchmark A measured p95 at 20ms."}
+        state = {
+            "task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
+            "evidence_chains": [], "knowledge_gaps": [], "confidence": "low",
+            "final_recommendation": {"recommendation": "x"},
+            "conflicts": [{
+                "resolution": "a", "claim_a": "Benchmark A", "claim_b": "Docs page",
+                "source_a": dict(ordinary),
+                "source_b": {"url": self.NAV["url"], "score": 6.8, "has_body": False},
+                "reasoning": "r", "key_factor": "k", "confidence": "low",
+            }],
+        }
+        for name, renderer in (("what_why_how", render_www),
+                               ("evidence_first", render_evidence),
+                               ("comparison_matrix", render_matrix)):
+            out = renderer(state)
+            line = [ln for ln in out.splitlines() if ordinary["url"] in ln]
+            assert line, f"{name}: the ordinary source vanished"
+            assert not any("no body" in ln or "无正文" in ln for ln in line), \
+                f"{name} mislabelled a fact-bearing source: {line}"
+            # And the body-less one is still labelled.
+            nav_line = [ln for ln in out.splitlines() if self.NAV["url"] in ln]
+            assert any("no body" in ln or "无正文" in ln for ln in nav_line), \
+                f"{name} lost the body-less label"
+
+    def test_plain_has_factual_content_for_an_ordinary_source(self):
+        from deepchoice.utils.candidate_identity import has_factual_content
+
+        assert has_factual_content(
+            {"url": "https://x/a", "snippet": "A real body with a measurement."})
+        assert not has_factual_content(
+            {"url": "https://x/b", "snippet": "", "has_body": False})
+        # The marker wins even when a body is present: a page whose text was not
+        # kept is not evidence.
+        assert not has_factual_content(
+            {"url": "https://x/c", "snippet": "looks like a body",
+             "has_body": False})
+
+    def test_evidence_first_keeps_a_navigation_link_reachable_without_disputes(self):
+        """Outside the disputes section the link used to disappear entirely, so
+        the reader could not reach the page at all."""
+        from deepchoice.formats.evidence_first import render as render_evidence
+
+        state = {
+            "task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
+            "evidence_chains": [{"conclusion": "c", "evidence_strength": "strong",
+                                 "disputed": False, "sources": [self.NAV]}],
+            "conflicts": [], "knowledge_gaps": [], "confidence": "high",
+            "final_recommendation": {"recommendation": "x"},
+        }
+        out = render_evidence(state)
+        assert self.NAV["url"] in out, "the navigation link disappeared"
+        assert "navigation link only" in out or "导航链接" in out
+
     def test_conflict_claims_label_a_body_less_source(self):
+        """The dispute path dropped the marker, so all three renderers linked a
+        claim to a body-less page as if it were the claim's source."""
         """The dispute path dropped the marker, so all three renderers linked a
         claim to a body-less page as if it were the claim's source."""
         from deepchoice.formats.comparison_matrix import render as render_matrix
