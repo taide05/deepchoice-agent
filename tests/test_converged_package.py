@@ -495,6 +495,85 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         assert "Unknown invented title" not in got, got
         assert "[[999]]" not in got, got
 
+    def test_a_wider_grammar_cannot_turn_prose_into_a_citation(self):
+        """A looser number grammar (`[[.+?]]`) matched ordinary text — an array
+        index, an interval — and resolved it to a real source, fabricating an
+        attribution the model never made. That is worse than leaving a marker
+        unresolved, so these forms must never gain a `[Source: ...]`."""
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        real_title = mapping[sorted(mapping)[0]]
+        for text in ("the interval [[0, 1]] is normalized",
+                     "code: arr[[1, 2]] = x"):
+            via_synthesis = cs.resolve_citations(text, state["evidence_chains"], mapping)
+            assert real_title not in via_synthesis, (text, via_synthesis)
+            _applied, via_reviewer = self._apply(text)
+            assert real_title not in via_reviewer, (text, via_reviewer)
+
+    def test_a_word_marker_is_left_as_written(self):
+        """Only numeric markers are treated as citations."""
+        for text in ("见 [[附录]] 说明", 'quoted "[[the manual]]" text'):
+            _applied, got = self._apply(text)
+            assert got == text, (text, got)
+
+
+class TestTheSynthesisPipelineLeavesNoBlankField:
+    """Binding ran after the sanitizer and could empty a field on its own, so the
+    scrub never saw it: a withdrawn claim was printed as a blank line, and the
+    report lost the recommendation rather than saying the claim was withdrawn."""
+
+    def _pipeline(self, field: str, text: str):
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        result = {field: text}
+        cs._sanitize_citations(result, state["evidence_chains"])
+        cs._bind_citations(result, mapping)
+        return result[field]
+
+    def test_a_top_level_field_is_not_left_blank(self):
+        for text in ("[[999]]", "[[999,888]]", "[[1 2]]", "[[1.0]]"):
+            got = self._pipeline("recommendation", text)
+            assert got.strip(), f"{text!r} left the field blank"
+            assert "withdraw" in got.lower(), (text, got)
+
+    def test_an_option_field_is_not_left_blank(self):
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        result = {"ranked_options": [{"name": "C", "rationale": "[[999]]"}]}
+        cs._sanitize_citations(result, state["evidence_chains"])
+        cs._bind_citations(result, mapping)
+        got = result["ranked_options"][0]["rationale"]
+        assert got.strip() and "withdraw" in got.lower(), got
+
+    def test_a_trade_off_field_is_not_left_blank(self):
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        result = {"trade_offs": [{"dimension": "d", "finding": "[[999]]"}]}
+        cs._sanitize_citations(result, state["evidence_chains"])
+        cs._bind_citations(result, mapping)
+        got = result["trade_offs"][0]["finding"]
+        assert got.strip() and "withdraw" in got.lower(), got
+
+    def test_the_report_keeps_the_line_instead_of_dropping_it(self):
+        """The served body lost its advice line entirely; it must carry the note."""
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        rec = json.loads(json.dumps(state["final_recommendation"]))
+        rec["recommendation"] = "[[999,888]]"
+        cs._sanitize_citations(rec, state["evidence_chains"])
+        cs._bind_citations(rec, mapping)
+        body = render({**state, "final_recommendation": rec})
+        assert "**建议:**" in body or "**Recommendation:**" in body
+        assert "withdraw" in body.lower() or "撤回" in body
+
+    def test_ordinary_fields_are_untouched(self):
+        assert self._pipeline("recommendation", "理由无需引用") == "理由无需引用"
+
 
 class TestTheContractSentToTheModel:
     """The executor accepted top-level and trade-off fields while the prompt only

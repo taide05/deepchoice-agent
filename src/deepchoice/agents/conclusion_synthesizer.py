@@ -312,11 +312,18 @@ def _sanitize_text(text: str, real: set[str]) -> str:
 # the text: it is still a claimed citation, so it must be seen and removed rather
 # than passing through as ordinary prose.
 _SOURCE_MARKER = re.compile(r'\[Source:[^\]]*\]|\[Source:[^\]]*$', re.IGNORECASE)
-# A source number, or a list of them, with the spacing, sign and bracket-nesting
-# variants a model may emit. The match runs only to the first closing pair, so
-# malformed forms like [[1][2]] are treated as one marker naming source 1 rather
-# than left behind as text. Anything mapping to no entry is dropped.
-_CITE_NUMBER = re.compile(r'\[\[(.+?)\]\]')
+# A source number, or a comma-separated list of them, with the spacing and sign
+# variants a model may emit. The grammar resolves only an unspaced list:
+# `[[1]]`, `[[1,2]]`, `[[+1]]`, `[[ 1 ]]`. A space between the numbers is what
+# separates a citation from ordinary text — an interval `[[0, 1]]` or an array
+# index `arr[[1, 2]] = x` — and a looser grammar turned those into a fabricated
+# attribution, which is worse than leaving an unresolved marker as text.
+_CITE_NUMBER = re.compile(r'\[\[(\s*[+-]?\d+(?:\s*[,;][+-]?\d+)*\s*)\]\]')
+# A leftover marker holding only digits and separators. It is a citation this
+# pipeline cannot resolve — `[[1 2]]`, `[[1, 2]]`, `[[1.0]]` — so it goes rather
+# than being printed as text. A marker containing words (`[[附录]]`) is not
+# matched and is left as written.
+_CITE_LEFTOVER = re.compile(r'\[\[\s*[+\-0-9][0-9\s,;.\-]*\]\]')
 
 
 _WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
@@ -465,20 +472,26 @@ def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
             return text
 
         def _sub(m: re.Match[str]) -> str:
-            # The marker may name several sources, or be malformed. The leading
-            # number is what it cites, and any further numbers in the same pair
-            # are additional sources. A number with no entry is dropped, and if
-            # none resolve the whole marker disappears rather than leaving its
-            # digits behind as text.
-            numbers = re.findall(r'\d+', m.group(1))
-            if not numbers:
-                return ""
-            titles = [mapping[int(n)] for n in numbers if int(n) in mapping]
+            # The marker may name several sources. Each number binds to its own
+            # title; a number with no entry is dropped, and if none resolve the
+            # whole marker disappears rather than leaving its digits as text.
+            # A non-positive number is never a source, so it is dropped too.
+            numbers = re.findall(r'[+-]?\d+', m.group(1))
+            titles = [mapping[int(n)] for n in numbers
+                      if int(n) > 0 and int(n) in mapping]
             if not titles:
                 return ""
             return '[Source: ' + ', Source: '.join(titles) + ']'
 
-        return _CITE_NUMBER.sub(_sub, text)
+        bound = _CITE_NUMBER.sub(_sub, text)
+        # Anything left that is only digits and separators was not a citation
+        # this pipeline can resolve; printing it as text would show a marker the
+        # reader cannot follow, so it goes.
+        bound = _CITE_LEFTOVER.sub("", bound)
+        # Binding can consume a field's entire content. An emptied field is a
+        # withdrawn claim, not a blank one, and this pass is the last chance to
+        # say so: the sanitizer ran first and skips a field that is now empty.
+        return bound if bound.strip() else withdrawal_note(text)
 
     for field in _CITATION_TEXT_FIELDS:
         if result.get(field):
