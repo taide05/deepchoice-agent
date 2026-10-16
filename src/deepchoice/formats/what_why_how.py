@@ -42,6 +42,15 @@ def _content_or_gap(src: dict) -> str:
     return bounded_content_summary(src, limit=300)
 
 
+def _import_identity():
+    from ..utils.candidate_identity import UNASSIGNED, index_sources_by_candidate
+
+    return UNASSIGNED, index_sources_by_candidate
+
+
+UNASSIGNED, index_sources_by_candidate = _import_identity()
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
@@ -88,29 +97,31 @@ def render(state: dict) -> str:
     # report is about. Insufficient material is stated, not hidden.
     candidates = [str(c).strip() for c in (task.get("candidate_techs") or []) if str(c).strip()]
     if candidates:
-        # Sources that actually name each candidate, for its stated basis.
-        def _mentions(candidate: str) -> list[dict]:
-            tokens = [t for t in _candidate_tokens(candidate) if len(t) >= 4]
-            if not tokens:
-                return []
-            found = []
-            for c in chains:
-                for src in c.get("sources", []):
-                    blob = f"{src.get('title', '')} {src.get('url', '')} " \
-                           f"{src.get('snippet', '')}".lower()
-                    if any(t in blob for t in tokens):
-                        found.append(src)
-            return found
+        # Explicit association: a source belongs to a candidate only when its own
+        # name, site or URL identifies that candidate. Sharing a word such as
+        # 'serverless' is not an association, so unmatched material is listed as
+        # unassigned instead of being dealt onto whichever candidate matches a
+        # keyword.
+        all_sources = [src for c in chains for src in c.get("sources", [])]
+        seen_urls: set[str] = set()
+        flattened: list[dict] = []
+        for src in all_sources:
+            url = src.get("url", "")
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
+            flattened.append(src)
+        index = index_sources_by_candidate(flattened, candidates)
 
         for candidate in candidates:
             lines.append(f"### {candidate}")
-            basis = _mentions(candidate)
+            basis = index.get(candidate) or []
             if basis:
                 for src in basis[:2]:
-                    content = _content_or_gap(src)
                     lines.append(f"- {src.get('title', '')} — "
                                  f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
-                    lines.append(f"  - {content}")
+                    lines.append(f"  - {_content_or_gap(src)}")
             else:
                 lines.append("- 本次检索未取得明确指向该候选的材料；"
                              "不代表该候选不适用，只代表本轮没有资料。"
@@ -118,6 +129,21 @@ def render(state: dict) -> str:
                              else "- No retrieved material explicitly covered this "
                                   "candidate; that is a gap in this run, not a judgement "
                                   "on the candidate.")
+            lines.append("")
+
+        unassigned = index.get(UNASSIGNED) or []
+        if unassigned:
+            lines.append("**未归属材料**" if lang == "zh" else "**Unassigned material**")
+            lines.append("")
+            lines.append("以下材料无法确认归属到上述任一候选，仅供参考，不作为某候选的依据。"
+                         if lang == "zh" else
+                         "The following material could not be attributed to any "
+                         "candidate above. It is listed for reference only and is not "
+                         "presented as any candidate's basis.")
+            lines.append("")
+            for src in unassigned[:5]:
+                lines.append(f"- {src.get('title', '')} — "
+                             f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
             lines.append("")
 
     lines.extend([T["why"][lang], ""])

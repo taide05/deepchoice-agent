@@ -43,8 +43,10 @@ class TestPromptGuards:
         assert "no sentence or field may be left uncited" in cs_mod.SYNTHESIS_PROMPT
 
     def test_summarize_chains_includes_up_to_four_titles(self):
+        # Each source carries a body, since a source without one is a navigation
+        # link and is deliberately excluded from the citable set.
         chains = [{"evidence_strength": "strong", "conclusion": "c",
-                   "sources": [{"title": f"T{i}"} for i in range(5)]}]
+                   "sources": [{"title": f"T{i}", "snippet": f"body {i}"} for i in range(5)]}]
         text, mapping = cs_mod._summarize_chains(chains)
         assert "T0" in text and "T3" in text  # up to the 4th source title
         assert "T4" not in text  # 5th source excluded
@@ -171,7 +173,9 @@ class TestConstraintFitValidation:
 
 class TestCitationSanitization:
     def _chains(self, titles):
-        return [{"sources": [{"title": t} for t in titles]}]
+        # A body is required for a source to be citable at all; a source without
+        # one is a navigation link, which is covered separately.
+        return [{"sources": [{"title": t, "snippet": f"body of {t}"} for t in titles]}]
 
     def test_removes_fabricated_citation(self):
         result = {"recommendation": "Use X [Source: Fake Docs]."}

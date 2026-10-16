@@ -78,10 +78,15 @@ def _summarize_chains(evidence_chains: list[dict],
 
     Each source carries its URL and its bounded body text, not just a title and
     a score. A title is an identity, not a statement: a source whose body was
-    never collected is marked as carrying no content, so the model cannot cite a
-    navigation label as if it were a finding.
+    never collected is a navigation link, is excluded from the citable set and
+    from the citation mapping, and is listed separately as non-citable. That way
+    naming such a page by its title cannot smuggle it in as a source either.
     """
-    from ..utils.candidate_identity import bounded_content_summary, candidate_proper_nouns
+    from ..utils.candidate_identity import (
+        bounded_content_summary,
+        candidate_proper_nouns,
+        has_factual_content,
+    )
 
     header: list[str] = []
     names = candidate_proper_nouns(candidate_techs or [])
@@ -106,12 +111,24 @@ def _summarize_chains(evidence_chains: list[dict],
         "",
     ]
     mapping: dict[int, str] = {}
+    navigation: list[str] = []
     n = 0
     for i, c in enumerate(evidence_chains):
         strength = c.get("evidence_strength", "unknown")
         disputed = " [DISPUTED]" if c.get("disputed") else ""
-        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {c.get('conclusion', 'Untitled')}")
+        citable = [s for s in c.get("sources", [])[:4] if has_factual_content(s)]
         for src in c.get("sources", [])[:4]:
+            if not has_factual_content(src):
+                link = src.get("url", "")
+                if link and link not in navigation:
+                    navigation.append(link)
+        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {c.get('conclusion', 'Untitled')}")
+        if not citable:
+            lines.append("  no fact-bearing source — this chain states nothing on its "
+                         "own; record a material gap instead of citing it")
+            lines.append("")
+            continue
+        for src in citable:
             n += 1
             title = src.get("title", "Unknown")
             mapping[n] = title
@@ -121,6 +138,20 @@ def _summarize_chains(evidence_chains: list[dict],
                 lines.append(f"       url: {url}")
             lines.append(f"       content: {bounded_content_summary(src)}")
         lines.append("")
+
+    if navigation:
+        # Discovered links, not evidence. They carry no citable number, so they
+        # cannot be cited even by writing their title verbatim.
+        lines += [
+            "## Navigation links — NOT citable",
+            "",
+            "These pages were found but no body was collected, so they state nothing "
+            "here. Do not cite them, and do not write their titles as a source:",
+            "",
+        ]
+        lines += [f"- {link}" for link in navigation[:10]]
+        lines.append("")
+
     return "\n".join(lines), mapping
 
 
@@ -278,10 +309,19 @@ _CITATION_TRADEOFF_FIELDS = ("finding", "impact")
 
 def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
     """Strip hallucinated [Source: title] citations (title not among the real
-    source titles fed to the synthesizer) from every factual claim field."""
+    source titles fed to the synthesizer) from every factual claim field.
+
+    Only fact-bearing sources are real here. A discovered page with no collected
+    body is a navigation link, so writing its title as a source is stripped just
+    like any other fabrication.
+    """
+    from ..utils.candidate_identity import has_factual_content
+
     real: set[str] = set()
     for c in evidence_chains:
         for src in c.get("sources", [])[:4]:
+            if not has_factual_content(src):
+                continue
             t = src.get("title", "")
             if t:
                 real.add(_norm_title(t))

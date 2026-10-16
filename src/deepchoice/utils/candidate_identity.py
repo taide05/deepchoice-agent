@@ -21,12 +21,21 @@ import re
 # Words that carry no identity in a product name. A token from here never makes
 # a mapping entry count as "named by this candidate".
 _GENERIC = frozenset("""
-on in for with and or the a an of to using use used via at by from
+on in for with and or the a an of to using use used via at by from as
 official documentation docs site database server managed service store
 amazon aws google cloud azure self hosted hostable
+over under between versus vs than
 """.split())
 
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9.+#-]*")
+
+# Tokens that distinguish between products sharing a name, so a source must
+# contain them to be attributed to that candidate. Ordinary words such as 'over'
+# and 'with' are not here: they disambiguate nothing.
+_DISAMBIGUATING = frozenset("""
+serverless managed self hosted cloud enterprise pro plus lite
+streams cluster vector search analytics warehouse
+""".split())
 
 
 def normalize_term(value: str) -> str:
@@ -140,3 +149,84 @@ def bounded_content_summary(source: dict, limit: int = 600) -> str:
     if len(content) > limit:
         content = content[:limit].rstrip() + "…"
     return content
+
+
+def has_factual_content(source: dict) -> bool:
+    """Whether a source carries a body that could support a claim.
+
+    A discovered link with no body is navigation. It may be shown as a link, but
+    it cannot be a citable fact source: its title says what the page is called,
+    not what is true.
+    """
+    content, _ = split_navigation_label(source.get("snippet", ""))
+    if content:
+        return True
+    body = source.get("content") or source.get("body") or ""
+    return bool(str(body).strip())
+
+
+def _word_present(token: str, haystack: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", haystack) is not None
+
+
+def candidate_for_source(source: dict, candidate_techs) -> str | None:
+    """The declared candidate a source is demonstrably about, or None.
+
+    Association is name-based: the source's own title or URL must name the
+    candidate. Sharing a generic word is not an association, so a page that
+    merely contains 'serverless' is not thereby about a serverless candidate, and
+    a page naming no candidate is unattributed rather than dealt to one.
+
+    The most specific match wins, so 'Amazon OpenSearch Serverless' is not
+    reported as 'Amazon OpenSearch Service'.
+    """
+    candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
+    if not candidates:
+        return None
+    title = source.get("title", "")
+    url = source.get("url", "")
+    haystack = f"{title} {url}".lower()
+
+    matches: list[str] = []
+    for candidate in candidates:
+        if candidate_names_key(title, candidate) or candidate_names_key(url, candidate):
+            matches.append(candidate)
+            continue
+        tokens = [t for t in candidate_tokens([candidate]) if len(t) >= 4]
+        if not tokens:
+            continue
+        # The candidate's most distinctive token must appear as a whole word, so
+        # 'Athena' matches 'Query S3 with Athena'. Where the candidate has further
+        # words that actually disambiguate it ('Serverless'), those must appear
+        # too: a page that only mentions the shared word 'opensearch' does not
+        # establish which OpenSearch product it is about.
+        primary = max(tokens, key=len)
+        if not _word_present(primary, haystack):
+            continue
+        extras = [t for t in tokens if t != primary and t in _DISAMBIGUATING]
+        if all(_word_present(t, haystack) for t in extras):
+            matches.append(candidate)
+    if not matches:
+        return None
+    # Prefer the most specific match, so a serverless page is not attributed to
+    # the generic service.
+    return max(matches, key=lambda c: (len(str(c)), len(candidate_tokens([c]))))
+
+
+UNASSIGNED = "__unassigned__"
+
+
+def index_sources_by_candidate(source_scores, candidate_techs) -> dict:
+    """Group sources under the declared candidate each one is demonstrably about.
+
+    Returns {candidate: [sources]} plus the UNASSIGNED key for material that
+    cannot be attributed. Unattributable material is reported as unassigned
+    rather than pushed onto whichever candidate shares a word.
+    """
+    index: dict[str, list[dict]] = {str(c).strip(): [] for c in (candidate_techs or [])
+                                    if str(c).strip()}
+    index[UNASSIGNED] = []
+    for source in source_scores or []:
+        owner = candidate_for_source(source, candidate_techs)
+        index[owner if owner in index else UNASSIGNED].append(source)
+    return index

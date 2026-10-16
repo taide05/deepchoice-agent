@@ -22,8 +22,12 @@ from deepchoice.agents.conclusion_synthesizer import _summarize_chains
 from deepchoice.formats.what_why_how import _cited_sources, render
 from deepchoice.retrievers.official import TECH_DOCS, OfficialSearch
 from deepchoice.utils.candidate_identity import (
+    UNASSIGNED,
     bounded_content_summary,
+    candidate_for_source,
     candidate_tokens,
+    has_factual_content,
+    index_sources_by_candidate,
     mapping_key_for,
     split_navigation_label,
 )
@@ -137,6 +141,119 @@ class TestWhatRendersCandidates:
         what = render(state).split("## Why")[0]
         assert "Totally Unretrieved Thing" in what
         assert "No retrieved material" in what or "未取得明确指向" in what
+
+
+class TestNavigationLinksAreNotCitable:
+    """A discovered link with no body is navigation, not evidence.
+
+    It stays visible as a link, but it cannot be a citable fact source and does
+    not appear in the citation mapping — writing its title verbatim must not
+    smuggle it in either.
+    """
+
+    def test_navigation_source_has_no_factual_content(self):
+        assert not has_factual_content({
+            "title": "vector — Official Documentation",
+            "snippet": "Official documentation site for vector"})
+        assert has_factual_content({"title": "t", "snippet": "a real body"})
+
+    def test_navigation_source_is_excluded_from_the_citation_mapping(self):
+        nav = {"title": "vector — Official Documentation", "url": "https://vector.dev/docs/",
+               "snippet": "Official documentation site for vector", "score": 6.8}
+        real = {"title": "Real Page", "url": "https://real/page",
+                "snippet": "pgvector HNSW measured at sub-20ms on 1M vectors.",
+                "score": 7.0}
+        text, mapping = _summarize_chains(
+            [{"conclusion": "c", "evidence_strength": "moderate",
+              "sources": [nav, real]}], ["pgvector"])
+
+        assert "vector — Official Documentation" not in mapping.values(), \
+            "a navigation link entered the citation mapping"
+        assert "Real Page" in mapping.values()
+        assert "NOT citable" in text
+        assert "https://vector.dev/docs/" in text, "the link should still be visible"
+
+    def test_a_chain_with_only_navigation_is_a_stated_gap(self):
+        nav = {"title": "vector — Official Documentation", "url": "https://vector.dev/docs/",
+               "snippet": "Official documentation site for vector", "score": 6.8}
+        text, mapping = _summarize_chains(
+            [{"conclusion": "c", "evidence_strength": "moderate", "sources": [nav]}],
+            ["pgvector"])
+        assert mapping == {}
+        assert "no fact-bearing source" in text
+
+    def test_writing_a_navigation_title_verbatim_is_stripped(self):
+        from deepchoice.agents.conclusion_synthesizer import _sanitize_citations
+
+        nav = {"title": "vector — Official Documentation", "url": "https://vector.dev/docs/",
+               "snippet": "Official documentation site for vector", "score": 6.8}
+        real = {"title": "Real Page", "url": "https://real/page",
+                "snippet": "body", "score": 7.0}
+        chains = [{"conclusion": "c", "evidence_strength": "moderate",
+                   "sources": [nav, real]}]
+        result = _sanitize_citations({
+            "recommendation": "Use pgvector [Source: vector — Official Documentation] "
+                              "and it is fast [Source: Real Page].",
+        }, chains)
+        assert "vector — Official Documentation" not in result["recommendation"], \
+            "a navigation title was accepted as a citation"
+        assert "Real Page" in result["recommendation"]
+
+
+class TestCandidateAssociation:
+    """Explicit association: a source belongs to a candidate only when it names
+    it, not because a word is shared."""
+
+    CANDIDATES = ["Amazon OpenSearch Service", "Amazon OpenSearch Serverless",
+                  "Amazon Athena over S3", "ClickHouse"]
+
+    def test_shared_word_alone_is_not_an_association(self):
+        assert candidate_for_source(
+            {"title": "What is serverless computing?", "url": "https://ex.com/serverless"},
+            self.CANDIDATES) is None
+
+    def test_serverless_page_does_not_land_on_the_generic_service(self):
+        owner = candidate_for_source(
+            {"title": "Amazon OpenSearch Serverless pricing",
+             "url": "https://aws.amazon.com/opensearch-serverless"}, self.CANDIDATES)
+        assert owner == "Amazon OpenSearch Serverless", owner
+
+    def test_named_candidates_still_match(self):
+        assert candidate_for_source(
+            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs"},
+            self.CANDIDATES) == "ClickHouse"
+        assert candidate_for_source(
+            {"title": "Query S3 with Athena", "url": "https://docs.aws.amazon.com/athena"},
+            self.CANDIDATES) == "Amazon Athena over S3"
+
+    def test_unassignable_material_is_listed_not_dealt_out(self):
+        sources = [
+            {"title": "Log analytics benchmark", "url": "https://x/bench",
+             "snippet": "body", "score": 7.0},
+            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs",
+             "snippet": "body", "score": 7.0},
+        ]
+        index = index_sources_by_candidate(sources, self.CANDIDATES)
+        assert [s["title"] for s in index[UNASSIGNED]] == ["Log analytics benchmark"]
+        assert [s["title"] for s in index["ClickHouse"]] == ["ClickHouse for logs"]
+        assert index["Amazon OpenSearch Service"] == []
+
+    def test_what_shows_unassigned_material_separately(self):
+        state = {
+            "task": {"query": "logs", "candidate_techs": self.CANDIDATES},
+            "evidence_chains": [{
+                "conclusion": "Log analytics benchmark",
+                "evidence_strength": "moderate",
+                "sources": [{"title": "Log analytics benchmark", "url": "https://x/bench",
+                             "snippet": "body", "score": 7.0}],
+            }],
+            "conflicts": [], "knowledge_gaps": [], "final_recommendation": {},
+            "confidence": "low",
+        }
+        what = render(state).split("## Why")[0]
+        assert "Unassigned material" in what or "未归属材料" in what
+        for candidate in self.CANDIDATES:
+            assert f"### {candidate}" in what
 
 
 class TestRendererDoesNotGuessCitations:
