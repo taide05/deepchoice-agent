@@ -89,21 +89,25 @@
 
 **这是本轮最重要的发现。**
 
-用本次运行的 checkpoint 逐节点回放：
+用本次运行的 checkpoint 逐节点回放（`outputs/checkpoints.db`，thread
+`8049500c-bd39-44e4-81bb-a1fbbebac780`）：
 
 ```
 … → conclusion_synthesizer → report_generator → self_reviewer → query_analyzer
                                                                      ↑ 回到起点
 ```
 
-- `self_reviewer` **确实运行了**（消耗 20 448 tokens，完成 12 793）。
-- 但它返回 `confidence: low` 且 `knowledge_gaps` 有 5 条（>2），
-  `_route_after_review` 于是走 **`retry_full` → `query_analyzer`**，
-  **整张图从检索重跑**，把自审自己的输出**覆盖掉**。
-- 重跑时 `retry_count` 被重置，因此**循环还能继续**，图**从未到达 `END`**。
-- 最终快照里 `quality_signals` 只剩 `query_analyzer`，**没有任何 self_reviewer 痕迹**；
-  被保存的报告是**自审之前**的那一份（`confidence_rationale` 仍带 `[[16]]` 就是证据——
-  它从未经过自审后的绑定）。
+**逐条区分代码事实、运行证据与推测：**
+
+| 类别 | 内容 |
+|---|---|
+| **代码事实**（读代码可证） | `orchestrator.py` 的 `_route_after_review` 在 `confidence` 非 high/medium 且 `retry_count <= 1` 时返回 `retry_small`(→`query_adapter`) 或 `retry_full`(→`query_analyzer`)；`retry_full` **从起点重跑整图**。 |
+| **运行证据**（checkpoint 实测） | 该次运行的 checkpoint 序列确实出现 `self_reviewer → query_analyzer`；**最终快照停在 `#26 phase='query_analyzer'`**，`quality_signals` 只剩 `query_analyzer`，**没有 self_reviewer 痕迹**；被保存的报告是**自审之前**那一份（`confidence_rationale` 仍带 `[[16]]`）。自审实际消耗 **20 448 tokens**。 |
+| **推测（已撤回）** | 我此前写"**`query_analyzer` 重置计数导致无限循环**"。**撤回**：我**没有**观察到第二次进入自审，checkpoint 里只有一段 `self_reviewer → query_analyzer`；`retry_count` 的值也**未出现在 checkpoint 的 channel 值中**，无法从材料确认它被重置。"无限循环"是读代码后对最坏情况的**推断**，不是证据。 |
+
+**代码事实中确有一条值得记录**：`retry_count` 是**唯一的**重跑护栏，而它由**每次运行结束时的
+`self_reviewer`** 递增；这使得"重跑预算"与"复核结论"共用一个计数——这正是我修掉它的理由，
+但**不是**"已观测到无限循环"。
 
 **结论：自审的结论从未生效，报告是"未经自审"的产物，而自审的成本已经付掉。**
 
