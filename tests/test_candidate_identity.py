@@ -157,6 +157,48 @@ class TestNavigationLinksAreNotCitable:
             "snippet": "Official documentation site for vector"})
         assert has_factual_content({"title": "t", "snippet": "a real body"})
 
+    def test_the_retriever_output_shape_is_recognised(self):
+        """The shape official.py actually emits must be treated as navigation.
+
+        It marks the entry and leaves the snippet empty. A previous attempt
+        checked only the raw caption text while the producer wrote a non-empty
+        'NO CONTENT RETRIEVED — …' sentence, so every body-less official source
+        stayed citable through the numbered path.
+        """
+        from deepchoice.retrievers.official import OfficialSearch
+
+        entry = {"url": "https://www.postgresql.org/docs/",
+                 "title": "PostgreSQL — Official Documentation",
+                 "snippet": "", "has_body": False}
+        assert not has_factual_content(entry)
+
+        # And the placeholder sentence is not content either, whichever way it
+        # arrives.
+        assert not has_factual_content({
+            "title": "PostgreSQL — Official Documentation",
+            "snippet": ("NO CONTENT RETRIEVED — PostgreSQL — Official Documentation "
+                        "is a documentation link only; its page body was not "
+                        "collected, so it states nothing about this question.")})
+
+    @pytest.mark.asyncio
+    async def test_official_retriever_marks_its_entries_as_body_less(self):
+        """Drive the real retriever: its entries must be non-citable."""
+        search = OfficialSearch()
+        out = await search._do_search(
+            "pgvector on RDS", [], 10, [], ["PostgreSQL"])
+        assert out, "the candidate should resolve a curated docs entry"
+        for entry in out:
+            assert has_factual_content(entry) is False, entry
+
+    def test_official_placeholder_never_enters_the_citation_registry(self):
+        """The renderer's numbered citation path must exclude it too."""
+        from deepchoice.formats.citations import number_sources
+
+        entry = {"url": "https://www.postgresql.org/docs/",
+                 "title": "PostgreSQL — Official Documentation",
+                 "snippet": "", "has_body": False}
+        assert number_sources([{"sources": [entry]}]) == []
+
     def test_navigation_source_is_excluded_from_the_citation_mapping(self):
         nav = {"title": "vector — Official Documentation", "url": "https://vector.dev/docs/",
                "snippet": "Official documentation site for vector", "score": 6.8}
@@ -223,8 +265,42 @@ class TestCandidateAssociation:
             {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs"},
             self.CANDIDATES) == "ClickHouse"
         assert candidate_for_source(
-            {"title": "Query S3 with Athena", "url": "https://docs.aws.amazon.com/athena"},
-            self.CANDIDATES) == "Amazon Athena over S3"
+            {"title": "Amazon Athena over S3 pricing",
+             "url": "https://aws.amazon.com/athena"}, self.CANDIDATES) == "Amazon Athena over S3"
+
+    def test_a_partial_name_match_is_not_an_association(self):
+        """Sharing part of a candidate's name does not make a source about it.
+
+        'PostgreSQL 17 release notes' is not material for 'Amazon Aurora
+        PostgreSQL with pgvector'. It is reported as unassigned rather than
+        attributed to whichever candidate it most resembles.
+        """
+        candidates = ["PostgreSQL", "Amazon Aurora PostgreSQL with pgvector"]
+        assert candidate_for_source(
+            {"title": "PostgreSQL 17 release notes",
+             "url": "https://www.postgresql.org/docs/release-17"},
+            candidates) == "PostgreSQL"
+        assert candidate_for_source(
+            {"title": "Amazon Aurora PostgreSQL with pgvector",
+             "url": "https://aws.amazon.com/rds/aurora/pgvector"},
+            candidates) == "Amazon Aurora PostgreSQL with pgvector"
+        # A source about neither is unassigned, not dealt to the nearest name.
+        assert candidate_for_source(
+            {"title": "Log analytics benchmark", "url": "https://x/bench"},
+            candidates) is None
+
+    def test_specific_candidate_wins_over_a_shorter_one(self):
+        candidates = ["Amazon Aurora PostgreSQL with pgvector", "PostgreSQL"]
+        assert candidate_for_source(
+            {"title": "Amazon Aurora PostgreSQL with pgvector limits",
+             "url": "https://aws.amazon.com/rds/aurora"}, candidates) == \
+            "Amazon Aurora PostgreSQL with pgvector"
+
+    def test_no_word_list_decides_attribution(self):
+        """Attribution must not depend on a curated 'distinguishing' word list."""
+        import deepchoice.utils.candidate_identity as cid
+
+        assert not hasattr(cid, "_DISAMBIGUATING")
 
     def test_unassignable_material_is_listed_not_dealt_out(self):
         sources = [

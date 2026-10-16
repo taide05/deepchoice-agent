@@ -189,7 +189,6 @@ class OfficialSearch(BaseRetriever):
         # queries are search aids: an ordinary word in them is not a research
         # target, and a learned-cache hit is not proof of candidacy either.
         from ..utils.candidate_identity import (
-            bounded_content_summary,
             candidate_names_key,
             mapping_key_for,
             normalize_term,
@@ -230,11 +229,12 @@ class OfficialSearch(BaseRetriever):
             entry = {
                 "url": doc["url"],
                 "title": doc["title"],
-                "snippet": doc.get("snippet", ""),
+                # A mapping entry supplies a link, not a body. No page content was
+                # collected, so this source is navigation and must not be citable.
+                "snippet": "",
+                "has_body": False,
                 "date": "",
             }
-            # A mapping entry supplies a link, not facts. Say which it is.
-            entry["snippet"] = bounded_content_summary(entry)
             if entry["url"] not in {r["url"] for r in results}:
                 results.append(entry)
 
@@ -265,10 +265,11 @@ class OfficialSearch(BaseRetriever):
             entry = {
                 "url": url,
                 "title": f"{candidate} — Official Documentation",
+                # A verified link only; no page body was collected.
                 "snippet": "",
+                "has_body": False,
                 "date": "",
             }
-            entry["snippet"] = bounded_content_summary(entry)
             if entry["url"] not in {r["url"] for r in results}:
                 results.append(entry)
 

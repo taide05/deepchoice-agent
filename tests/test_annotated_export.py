@@ -16,7 +16,8 @@ SNAPSHOT = {
             "evidence_strength": "strong",
             "disputed": False,
             "sources": [
-                {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 8},
+                {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 8,
+                 "snippet": "Measured async throughput under load."},
             ],
         },
         {
@@ -24,7 +25,8 @@ SNAPSHOT = {
             "evidence_strength": "moderate",
             "disputed": False,
             "sources": [
-                {"title": "Flask Docs", "url": "https://flask.palletsprojects.com/", "score": 7},
+                {"title": "Flask Docs", "url": "https://flask.palletsprojects.com/", "score": 7,
+                 "snippet": "Flask documents its minimal application core."},
             ],
         },
     ],

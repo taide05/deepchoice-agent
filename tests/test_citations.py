@@ -7,8 +7,10 @@ CHAINS = [
         "evidence_strength": "strong",
         "disputed": False,
         "sources": [
-            {"title": "LangGraph Docs", "url": "https://docs.langgraph.io/", "score": 9},
-            {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 7},
+            {"title": "LangGraph Docs", "url": "https://docs.langgraph.io/", "score": 9,
+             "snippet": "LangGraph documents cyclic graphs and checkpointing."},
+            {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 7,
+             "snippet": "Measured latency and throughput across frameworks."},
         ],
     },
     {
@@ -16,14 +18,16 @@ CHAINS = [
         "evidence_strength": "moderate",
         "disputed": False,
         "sources": [
-            {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 6},
+            {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 6,
+             "snippet": "Measured latency and throughput across frameworks."},
         ],
     },
     {
         "conclusion": "No-url chain",
         "evidence_strength": "weak",
         "disputed": False,
-        "sources": [{"title": "Mystery Source", "url": "", "score": 3}],
+        "sources": [{"title": "Mystery Source", "url": "", "score": 3,
+                     "snippet": "A body that exists but has no URL."}],
     },
 ]
 

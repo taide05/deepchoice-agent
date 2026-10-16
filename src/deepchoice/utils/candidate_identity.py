@@ -19,23 +19,15 @@ from __future__ import annotations
 import re
 
 # Words that carry no identity in a product name. A token from here never makes
-# a mapping entry count as "named by this candidate".
+# a mapping entry count as "named by this candidate". This list predates the
+# candidate-attribution work; attribution itself no longer consults word lists.
 _GENERIC = frozenset("""
-on in for with and or the a an of to using use used via at by from as
+on in for with and or the a an of to using use used via at by from
 official documentation docs site database server managed service store
 amazon aws google cloud azure self hosted hostable
-over under between versus vs than
 """.split())
 
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9.+#-]*")
-
-# Tokens that distinguish between products sharing a name, so a source must
-# contain them to be attributed to that candidate. Ordinary words such as 'over'
-# and 'with' are not here: they disambiguate nothing.
-_DISAMBIGUATING = frozenset("""
-serverless managed self hosted cloud enterprise pro plus lite
-streams cluster vector search analytics warehouse
-""".split())
 
 
 def normalize_term(value: str) -> str:
@@ -128,6 +120,11 @@ def split_navigation_label(text: str) -> tuple[str, bool]:
         r"[Oo]fficial documentation site for .+\.?", body
     ) or body.lower().startswith("official documentation site for"):
         return "", True
+    # The explicit gap sentence produced by bounded_content_summary is also not
+    # content. It is a statement about the source, not by it, and must not become
+    # citable merely because it is a non-empty string.
+    if body.startswith("NO CONTENT RETRIEVED"):
+        return "", True
     return body, False
 
 
@@ -157,7 +154,14 @@ def has_factual_content(source: dict) -> bool:
     A discovered link with no body is navigation. It may be shown as a link, but
     it cannot be a citable fact source: its title says what the page is called,
     not what is true.
+
+    `has_body` is the authoritative marker, set where the source is created when
+    no page body was collected. The string shape is only a fallback, because
+    relying on a placeholder's exact wording is how a body-less source stayed
+    citable before: the gap sentence is non-empty and reads as text.
     """
+    if "has_body" in source:
+        return bool(source.get("has_body"))
     content, _ = split_navigation_label(source.get("snippet", ""))
     if content:
         return True
@@ -169,48 +173,52 @@ def _word_present(token: str, haystack: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", haystack) is not None
 
 
+def names_candidate(text: str, candidate: str) -> bool:
+    """Whether a text names the candidate in full, as a phrase.
+
+    Stricter than the mapping lookup: the candidate's whole name must appear as a
+    run of words, so 'Amazon Aurora PostgreSQL with pgvector pricing' names the
+    candidate while 'PostgreSQL 17 release notes' does not. Sharing part of a
+    name establishes nothing about a source's subject.
+    """
+    want = [normalize_term(t) for t in _name_tokens(candidate)]
+    want = [t for t in want if t]
+    if not want:
+        return False
+    if len(want) == 1:
+        # A one-word candidate is named only by that exact word.
+        got = [normalize_term(t) for t in _name_tokens(text)]
+        return want[0] in got
+    got = [normalize_term(t) for t in _name_tokens(text)]
+    got = [t for t in got if t]
+    width = len(want)
+    return any(got[i:i + width] == want for i in range(len(got) - width + 1))
+
+
 def candidate_for_source(source: dict, candidate_techs) -> str | None:
     """The declared candidate a source is demonstrably about, or None.
 
-    Association is name-based: the source's own title or URL must name the
-    candidate. Sharing a generic word is not an association, so a page that
-    merely contains 'serverless' is not thereby about a serverless candidate, and
-    a page naming no candidate is unattributed rather than dealt to one.
+    Attribution requires the source to name the candidate in full, as a phrase.
+    A source that shares only part of a candidate's name is not evidence about
+    that candidate: 'PostgreSQL 17 release notes' is not material for 'Amazon
+    Aurora PostgreSQL with pgvector'. Such material is reported as unassigned
+    rather than assigned to the candidate it most resembles.
 
-    The most specific match wins, so 'Amazon OpenSearch Serverless' is not
-    reported as 'Amazon OpenSearch Service'.
+    This deliberately does not consult a word list. A curated list of
+    'distinguishing' words would decide attribution from how a term was
+    classified rather than from what the source actually names.
     """
     candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
     if not candidates:
         return None
     title = source.get("title", "")
     url = source.get("url", "")
-    haystack = f"{title} {url}".lower()
-
-    matches: list[str] = []
-    for candidate in candidates:
-        if candidate_names_key(title, candidate) or candidate_names_key(url, candidate):
-            matches.append(candidate)
-            continue
-        tokens = [t for t in candidate_tokens([candidate]) if len(t) >= 4]
-        if not tokens:
-            continue
-        # The candidate's most distinctive token must appear as a whole word, so
-        # 'Athena' matches 'Query S3 with Athena'. Where the candidate has further
-        # words that actually disambiguate it ('Serverless'), those must appear
-        # too: a page that only mentions the shared word 'opensearch' does not
-        # establish which OpenSearch product it is about.
-        primary = max(tokens, key=len)
-        if not _word_present(primary, haystack):
-            continue
-        extras = [t for t in tokens if t != primary and t in _DISAMBIGUATING]
-        if all(_word_present(t, haystack) for t in extras):
-            matches.append(candidate)
-    if not matches:
-        return None
-    # Prefer the most specific match, so a serverless page is not attributed to
-    # the generic service.
-    return max(matches, key=lambda c: (len(str(c)), len(candidate_tokens([c]))))
+    # Longest name first, so a source naming the specific product is attributed
+    # to it rather than to a shorter candidate whose name it also contains.
+    for candidate in sorted(candidates, key=len, reverse=True):
+        if names_candidate(title, candidate) or names_candidate(url, candidate):
+            return candidate
+    return None
 
 
 UNASSIGNED = "__unassigned__"

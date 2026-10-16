@@ -28,13 +28,6 @@ def _cited_sources(text: str, chain_sources: dict[str, list[str]]) -> list[str]:
     return listed[:3]
 
 
-def _candidate_tokens(candidate: str) -> list[str]:
-    """Distinctive lowercase tokens of a candidate name."""
-    from ..utils.candidate_identity import candidate_tokens
-
-    return candidate_tokens([candidate])
-
-
 def _content_or_gap(src: dict) -> str:
     """The source's body text, or an explicit statement that there is none."""
     from ..utils.candidate_identity import bounded_content_summary
@@ -42,13 +35,16 @@ def _content_or_gap(src: dict) -> str:
     return bounded_content_summary(src, limit=300)
 
 
-def _import_identity():
-    from ..utils.candidate_identity import UNASSIGNED, index_sources_by_candidate
+def _has_body(src: dict) -> bool:
+    from ..utils.candidate_identity import has_factual_content
 
-    return UNASSIGNED, index_sources_by_candidate
+    return has_factual_content(src)
 
 
-UNASSIGNED, index_sources_by_candidate = _import_identity()
+from ..utils.candidate_identity import (  # noqa: E402
+    UNASSIGNED,
+    index_sources_by_candidate,
+)
 
 
 def render(state: dict) -> str:
@@ -152,8 +148,17 @@ def render(state: dict) -> str:
         tag = " [DISPUTED]" if c.get("disputed") else ""
         lines.append(f"### {c.get('conclusion', '')}{tag}")
         lines.append(f"**{T['evidence_strength'][lang]}:** {c.get('evidence_strength', 'unknown')}")
-        for src in c.get("sources", [])[:2]:
-            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) — score: {src.get('score', 'N/A')}")
+        # Only fact-bearing sources are listed as basis. A navigation link is
+        # shown under the navigation note elsewhere, not as evidence here.
+        factual = [s for s in c.get("sources", []) if _has_body(s)]
+        if factual:
+            for src in factual[:2]:
+                lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) — score: {src.get('score', 'N/A')}")
+        else:
+            lines.append("- 无正文来源；本条无法支撑论断，记为资料缺口。"
+                         if lang == "zh" else
+                         "- No fact-bearing source; this chain states nothing and is "
+                         "recorded as a material gap.")
         lines.append("")
     if len(chains) > 10:
         lines.append(f"*(+{len(chains) - 10} more evidence chains — see full report via API)*")
@@ -285,16 +290,15 @@ def render(state: dict) -> str:
 
     lines.append(T["references"][lang])
     ref_count = 0
-    total_sources = sum(len(c.get("sources", [])) for c in chains)
-    for c in chains:
-        for src in c.get("sources", []):
-            if ref_count >= 12:
-                break
-            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')})")
-            ref_count += 1
+    # References list the sources that actually carry content. A navigation link
+    # is not a reference for any claim in this report.
+    body_sources = [src for c in chains for src in c.get("sources", []) if _has_body(src)]
+    for src in body_sources:
         if ref_count >= 12:
             break
-    if total_sources > 12:
-        lines.append(f"*(+{total_sources - 12} more sources)")
+        lines.append(f"- [{src.get('title', '')}]({src.get('url', '')})")
+        ref_count += 1
+    if len(body_sources) > 12:
+        lines.append(f"*(+{len(body_sources) - 12} more sources)")
 
     return "\n".join(lines)

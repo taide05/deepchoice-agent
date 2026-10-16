@@ -11,11 +11,19 @@ def number_sources(chains: list[dict]) -> list[dict]:
 
     Returns registry entries: {"n", "url", "title", "chain_idx"}. The frontend
     renders one evidence card per entry with id="ev-{n}".
+
+    Only fact-bearing sources are numbered. A discovered link whose page body was
+    never collected is navigation, not evidence: giving it a citation number and
+    an evidence card would present it as a source of the report's claims.
     """
+    from ..utils.candidate_identity import has_factual_content
+
     registry: list[dict] = []
     seen: set[str] = set()
     for chain_idx, chain in enumerate(chains):
         for src in chain.get("sources", []):
+            if not has_factual_content(src):
+                continue
             url = src.get("url", "")
             if not url or url in seen:
                 continue
