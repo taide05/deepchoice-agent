@@ -313,12 +313,21 @@ def _sanitize_text(text: str, real: set[str]) -> str:
 # than passing through as ordinary prose.
 _SOURCE_MARKER = re.compile(r'\[Source:[^\]]*\]|\[Source:[^\]]*$', re.IGNORECASE)
 # A source number, or a comma-separated list of them, with the spacing and sign
-# variants a model may emit. The grammar resolves only an unspaced list:
-# `[[1]]`, `[[1,2]]`, `[[+1]]`, `[[ 1 ]]`. A space between the numbers is what
-# separates a citation from ordinary text — an interval `[[0, 1]]` or an array
-# index `arr[[1, 2]] = x` — and a looser grammar turned those into a fabricated
-# attribution, which is worse than leaving an unresolved marker as text.
-_CITE_NUMBER = re.compile(r'\[\[(\s*[+-]?\d+(?:\s*[,;][+-]?\d+)*\s*)\]\]')
+# variants a model may emit. Two guards keep ordinary text out of it, because a
+# looser grammar resolved an interval or an array index to a real source and
+# fabricated an attribution the model never made:
+#   - the numbers must be unspaced, which separates `[[1,2]]` from `[[0, 1]]`;
+#   - the marker must not sit in an indexing context. A preceding word or `]`
+#     makes it a subscript (`arr[[1,2]]`, `arr[0][[1,2]]`), as does a following
+#     `[`, `=` or `]` (`[[1,2]] = x`, `[[1,2]][0]`). A model writes a citation
+#     after a space or punctuation and at the end of a clause, so those contexts
+#     stay valid — including after CJK text, which is not an indexing host.
+# The inner pattern excludes brackets so an unspaced pair of separate markers
+# (`x[[1]]y[[2]]z`) is not read as one citation running across both.
+_CITE_NUMBER = re.compile(
+    r'(?<!\])(?<![A-Za-z0-9_])'
+    r'\[\[(\s*[+-]?\d+(?:\s*[,;][+-]?\d+)*\s*)\]\]'
+    r'(?!\s*[\[\]=])')
 # A leftover marker holding only digits and separators. It is a citation this
 # pipeline cannot resolve — `[[1 2]]`, `[[1, 2]]`, `[[1.0]]` — so it goes rather
 # than being printed as text. A marker containing words (`[[附录]]`) is not

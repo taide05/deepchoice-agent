@@ -496,20 +496,37 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         assert "[[999]]" not in got, got
 
     def test_a_wider_grammar_cannot_turn_prose_into_a_citation(self):
-        """A looser number grammar (`[[.+?]]`) matched ordinary text — an array
-        index, an interval — and resolved it to a real source, fabricating an
-        attribution the model never made. That is worse than leaving a marker
-        unresolved, so these forms must never gain a `[Source: ...]`."""
+        """A looser number grammar matched ordinary text and resolved it to real
+        sources, fabricating an attribution the model never made. Every source
+        title must stay absent from such text, not just the first one."""
         state = _failed_run_state()
         _prompt, mapping = cs._summarize_chains(
             state["evidence_chains"], state["task"]["candidate_techs"])
-        real_title = mapping[sorted(mapping)[0]]
+        all_titles = set(mapping.values())
         for text in ("the interval [[0, 1]] is normalized",
-                     "code: arr[[1, 2]] = x"):
+                     "code: arr[[1, 2]] = x",
+                     "code: arr[[1,2]] = x",
+                     "x[[1]]y[[2]]z",
+                     "matrix m[[2,3]] element",
+                     "list[[1,2]] = values",
+                     "row[[2,3]][0]",
+                     "a[[1]]b"):
             via_synthesis = cs.resolve_citations(text, state["evidence_chains"], mapping)
-            assert real_title not in via_synthesis, (text, via_synthesis)
             _applied, via_reviewer = self._apply(text)
-            assert real_title not in via_reviewer, (text, via_reviewer)
+            for got in (via_synthesis, via_reviewer):
+                leaked = all_titles & {t for t in all_titles if t in got}
+                assert not leaked, (text, sorted(leaked)[:2], got)
+
+    def test_a_citation_shaped_marker_still_resolves(self):
+        """The guard must not stop the model's own convention from working: the
+        prompt asks for `[[N]]`, which a model often writes unspaced."""
+        _state, mapping = self._ctx()
+        number = sorted(mapping)[0]
+        title = mapping[number]
+        for text in (f"理由[[{number}]]", f"理由 [[{number}]]", f"理由：[[{number}]]",
+                     f"理由 [[{number},{number}]]", f"text [[{number}]] more"):
+            _applied, got = self._apply(text)
+            assert title in got, (text, got)
 
     def test_a_word_marker_is_left_as_written(self):
         """Only numeric markers are treated as citations."""
