@@ -140,6 +140,13 @@ def render(state: dict) -> str:
             for src in unassigned[:5]:
                 lines.append(f"- {src.get('title', '')} — "
                              f"[link]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
+                # Unassigned material may be a link with no body; say which it is
+                # rather than leaving it to look like a usable source.
+                if not _has_body(src):
+                    lines.append("  - 无正文（仅导航链接），不能作为依据。"
+                                 if lang == "zh" else
+                                 "  - No body collected (navigation link only); not "
+                                 "usable as a basis.")
             lines.append("")
 
     lines.extend([T["why"][lang], ""])
@@ -247,11 +254,14 @@ def render(state: dict) -> str:
         lines.append(f"**{T['recommendation'][lang]}:** {rec['recommendation']}")
         lines.append("")
 
-    # Build source citation lookup from evidence chains (keyword -> source info)
+    # Build source citation lookup from evidence chains. Only fact-bearing
+    # sources are listed: a navigation link is not a reference for any claim.
     chain_sources: dict[str, list[str]] = {}
     for c in chains:
         conclusion = c.get("conclusion", "").lower()
         for src in c.get("sources", []):
+            if not _has_body(src):
+                continue
             title = src.get("title", "")
             url = src.get("url", "")
             if title and url:

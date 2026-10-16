@@ -132,7 +132,7 @@ class SourceEvaluatorAgent:
             }
             total = compute_total_score(scores)
 
-            source_scores.append({
+            entry = {
                 "url": url,
                 "title": result.get("title", ""),
                 "snippet": result.get("snippet", ""),
@@ -141,7 +141,12 @@ class SourceEvaluatorAgent:
                 "scores": scores,
                 "total_score": total,
                 "supporting_sources": [],
-            })
+            }
+            # Preserve the retriever's own body marker so downstream stages can
+            # tell navigation from evidence without re-deriving it from text.
+            if "has_body" in result:
+                entry["has_body"] = result["has_body"]
+            source_scores.append(entry)
 
         # Support between sources is not established by this node. Deriving it
         # from title-term overlap would invent a corroboration the pipeline never

@@ -1379,7 +1379,13 @@ def _render_results():
                         src_parts = []
                         for src in chain.get("sources", []):
                             url = str(src.get("url", ""))
-                            n = url_to_n.get(url, cit["n"])
+                            # Only numbered sources carry a citation number. A
+                            # discovered link with no collected body is not in the
+                            # registry, so falling back to this card's number
+                            # would show it as cited evidence.
+                            if url not in url_to_n:
+                                continue
+                            n = url_to_n[url]
                             title = _esc(src.get("title", ""))
                             if url.startswith(("http://", "https://")):
                                 link = (f'<a href="{_esc(url)}" target="_blank" '

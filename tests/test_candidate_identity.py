@@ -332,6 +332,112 @@ class TestCandidateAssociation:
             assert f"### {candidate}" in what
 
 
+class TestBodyLessSourcesAcrossEveryRoute:
+    """A body-less source must not be presented as evidence on any route.
+
+    The retriever marker, the prompt and the citation registry were fixed first,
+    but three renderer/UI routes still leaked it: evidence_first's evidence list,
+    the reading view's evidence card, and the renderer's re-attached
+    '*Sources:*' line (which worked because a short title is a substring of a
+    longer real one).
+    """
+
+    NAV = {"url": "https://www.postgresql.org/docs/",
+           "title": "PostgreSQL — Official Documentation",
+           "snippet": "", "has_body": False, "score": 8.0}
+    REAL = {"url": "https://www.postgresql.org/docs/release-17",
+            "title": "PostgreSQL 17 release notes",
+            "snippet": "PostgreSQL 17 improves vacuum and logical replication.",
+            "has_body": True, "score": 7.5}
+
+    def _chains(self):
+        return [{"conclusion": "c", "evidence_strength": "strong", "disputed": False,
+                 "sources": [self.NAV, self.REAL]}]
+
+    def _state(self):
+        return {"task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
+                "evidence_chains": self._chains(), "conflicts": [],
+                "knowledge_gaps": [], "final_recommendation": {},
+                "confidence": "medium"}
+
+    def test_marker_survives_evidence_chain(self):
+        from deepchoice.agents.evidence_chain import build_evidence_chain
+
+        chains = build_evidence_chain([
+            {"url": self.NAV["url"], "title": self.NAV["title"], "snippet": "",
+             "has_body": False, "total_score": 8.0, "scores": {},
+             "supporting_sources": []},
+        ], [])
+        assert chains[0]["sources"][0].get("has_body") is False
+
+    def test_evidence_first_does_not_list_it_as_evidence(self):
+        from deepchoice.formats.evidence_first import render as render_evidence
+
+        out = render_evidence(self._state())
+        # Scope to the evidence list itself: the link may still appear elsewhere
+        # as a navigation reference, but not as this chain's evidence. Compare the
+        # exact linked line, since one source URL is a prefix of the other.
+        section = out.split("### Strongest Evidence")[-1].split("### Supporting")[0]
+        nav_line = f"[{self.NAV['title']}]({self.NAV['url']})"
+        assert nav_line not in section, section[:300]
+        assert "[PostgreSQL 17 release notes]" in section
+
+    def test_reading_view_payload_never_numbers_it(self):
+        """The UI falls back to the card's own number for unknown URLs, so a
+        body-less URL must not be in the registry at all."""
+        from deepchoice.formats.citations import number_sources
+
+        registry = number_sources(self._chains())
+        assert [r["url"] for r in registry] == [self.REAL["url"]]
+
+    def test_no_citation_anchor_lands_on_a_body_less_title(self):
+        import re
+
+        from deepchoice.formats.citations import inject_citations, number_sources
+        from deepchoice.formats.what_why_how import render
+
+        registry = number_sources(self._chains())
+        marked = inject_citations(render(self._state()), registry)
+        anchored = re.findall(r"([^>\n]*?)<sup><a class=\"cite\"", marked)
+        assert not any("Official Documentation" in t for t in anchored), anchored
+
+    def test_a_substring_title_cannot_pass_as_real(self):
+        """The nav title is a prefix of a longer real title.
+
+        Substring leniency let it survive citation sanitization, and the renderer
+        then re-attached it as the claim's source.
+        """
+        from deepchoice.agents.conclusion_synthesizer import (
+            _bind_citations,
+            _sanitize_citations,
+            _summarize_chains,
+        )
+
+        result = _sanitize_citations(
+            {"recommendation":
+             "Use it [Source: PostgreSQL — Official Documentation]."},
+            self._chains())
+        assert "Official Documentation" not in result["recommendation"], result
+
+        _prompt, mapping = _summarize_chains(self._chains(), ["PostgreSQL"])
+        assert self.NAV["title"] not in mapping.values(), mapping
+        bound = _bind_citations({"recommendation": "Use it [[1]]."}, mapping)
+        assert "Official Documentation" not in bound["recommendation"], bound
+        assert self.REAL["title"] in bound["recommendation"]
+
+    def test_renderer_source_lookup_excludes_body_less_sources(self):
+        """An all-body-less chain must not yield an attached Sources line."""
+        from deepchoice.formats.what_why_how import _cited_sources, render
+
+        state = {**self._state(),
+                 "evidence_chains": [{"conclusion": "c", "evidence_strength": "strong",
+                                      "disputed": False, "sources": [self.NAV]}]}
+        out = render(state)
+        assert "*Sources: [PostgreSQL — Official Documentation]" not in out
+        assert _cited_sources("x [Source: PostgreSQL — Official Documentation].",
+                              {}) == []
+
+
 class TestRendererDoesNotGuessCitations:
     def test_uncited_text_attaches_nothing(self):
         assert _cited_sources("prose with no citation", {}) == []

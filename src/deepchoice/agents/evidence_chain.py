@@ -16,8 +16,14 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
             "url": s["url"],
             "title": s.get("title", ""),
             "snippet": s.get("snippet", ""),
+            # Carry the body marker through. Without it every consumer falls back
+            # to guessing from the snippet text, and a body-less link can be
+            # presented as evidence again further down.
+            "has_body": s.get("has_body", None),
             "score": s["total_score"],
         }]
+        if evidence_sources[0]["has_body"] is None:
+            evidence_sources[0].pop("has_body")
 
         if s["total_score"] >= 8.0 and len(s.get("supporting_sources", [])) >= 1:
             strength = "strong"

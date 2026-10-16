@@ -271,12 +271,15 @@ def _norm_title(s: str) -> str:
 
 
 def _is_real_title(norm: str, real: set[str]) -> bool:
-    """Exact, or a sufficiently-long substring of a real source title.
+    """Exact match against a real source title.
 
-    A bare tech name (e.g. 'react') is a substring of nearly every real title
-    and must not count as a real citation — require a meaningful fragment.
+    Substring matching was relaxed to accept a long fragment, but a shorter title
+    is often a substring of a longer real one: 'PostgreSQL — Official
+    Documentation' sits inside a fuller page title, so a body-less navigation
+    link passed as a real source and the renderer then re-attached it. A citation
+    must name a source that exists, exactly.
     """
-    return any(norm == rt or (len(norm) >= 8 and norm in rt) for rt in real)
+    return norm in real
 
 
 def _sanitize_text(text: str, real: set[str]) -> str:

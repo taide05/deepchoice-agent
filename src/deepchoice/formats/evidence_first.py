@@ -7,6 +7,12 @@ def _link(text: str, src: dict) -> str:
     return f"[{text}]({url})" if url else text
 
 
+def _has_body(src: dict) -> bool:
+    from ..utils.candidate_identity import has_factual_content
+
+    return has_factual_content(src)
+
+
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
@@ -64,8 +70,17 @@ def render(state: dict) -> str:
 
     if top:
         lines.append(T["strongest"][lang])
-        for src in top.get("sources", []):
-            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
+        # Only fact-bearing sources are evidence. A discovered link whose body was
+        # never collected is navigation and must not be listed as this chain's
+        # strongest evidence, or exported as if it were.
+        factual_top = [s for s in top.get("sources", []) if _has_body(s)]
+        if factual_top:
+            for src in factual_top:
+                lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
+        else:
+            lines.append("No fact-bearing source was collected for this chain; "
+                         "recorded as a material gap." if lang != "zh"
+                         else "本条未取得正文来源，记为资料缺口。")
         lines.append("")
         lines.append(T["supporting"][lang])
         moderate = [c for c in chains if c.get("evidence_strength") == "moderate"][:3]
