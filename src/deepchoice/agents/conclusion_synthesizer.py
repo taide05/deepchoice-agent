@@ -304,8 +304,12 @@ def _sanitize_text(text: str, real: set[str]) -> str:
     return ''.join(out)
 
 
+# Every field the prompt asks to cite must be bound and sanitized. Leaving one
+# out left raw [[N]] markers in the rendered report: the model cites
+# confidence_rationale, but nothing converted its numbers.
 _CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
-                         "evidence_summary", "scene_fit_note")
+                         "evidence_summary", "scene_fit_note",
+                         "confidence_rationale")
 _CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness", "constraint_fit_reason")
 _CITATION_TRADEOFF_FIELDS = ("finding", "impact")
 

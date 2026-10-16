@@ -29,6 +29,24 @@ amazon aws google cloud azure self hosted hostable
 
 _TOKEN = re.compile(r"[a-z0-9][a-z0-9.+#-]*")
 
+# Only articles and prepositions stop an identity phrase from the front. Words
+# like 'amazon' are part of a product's name, and treating them as generic
+# truncated 'Amazon Athena over S3' to nothing, so real material was reported as
+# a gap.
+_LEADING_STOP = frozenset("""
+a an the of for on in with and or to using use used via at by from
+self hosted managed over under
+""".split())
+
+# Words that mark the start of a variant or qualifier rather than the identity:
+# 'Amazon OpenSearch Serverless' is the Serverless variant of OpenSearch, and
+# 'Athena over S3' adds a qualifier. Both stop the identity phrase, so the
+# Serverless page still resolves to Serverless via its full-name match.
+_QUALIFIER = frozenset("""
+serverless service managed provisioned over on via using with
+s3 cloud enterprise basic standard premium
+""".split())
+
 
 def normalize_term(value: str) -> str:
     """Lowercase alphanumerics only, as the mapping lookup does."""
@@ -195,28 +213,143 @@ def names_candidate(text: str, candidate: str) -> bool:
     return any(got[i:i + width] == want for i in range(len(got) - width + 1))
 
 
+def identity_phrase(candidate: str) -> tuple[str, ...]:
+    """The candidate's leading identity phrase, as normalized tokens.
+
+    'Amazon Athena over S3' -> ('amazon', 'athena'); 'ClickHouse' -> ('clickhouse').
+    A page about the product is normally titled with this much of the name, so
+    requiring the rest ('over S3') reported real Athena material as a gap.
+
+    The run stops at the first qualifier — a preposition, a size/number token, or
+    a generic product word — because everything after that is a variant or a
+    qualifier rather than the identity itself.
+    """
+    run: list[str] = []
+    for token in str(candidate).split():
+        clean = re.sub(r"[^a-z0-9]", "", token.strip().lower())
+        if not clean or clean in _LEADING_STOP or clean in _QUALIFIER:
+            break
+        run.append(clean)
+    return tuple(run)
+
+
+def phrase_present(phrase: tuple[str, ...], text: str) -> bool:
+    """Whether the text contains the token sequence as a contiguous phrase."""
+    if not phrase:
+        return False
+    wanted = [normalize_term(tok) for tok in phrase]
+    got = [normalize_term(t) for t in _name_tokens(text)]
+    got = [t for t in got if t]
+    width = len(wanted)
+    return any(got[i:i + width] == wanted for i in range(len(got) - width + 1))
+
+
+def subject_tokens(source: dict) -> tuple[str, ...]:
+    """The tokens naming a source's own subject, from its title and host.
+
+    A page titles itself after what it is about: 'Amazon OpenSearch 对比
+    Elasticsearch | Elastic' is Elastic's page, and it appears in a site's own
+    listing. This is used only to decide that a page is about something else — it
+    never attributes a page to a candidate.
+    """
+    title = str(source.get("title", "") or "")
+    url = str(source.get("url", "") or "")
+    run: list[str] = []
+    for token in _name_tokens(title):
+        clean = re.sub(r"[^a-z0-9]", "", token)
+        if not clean or clean in _LEADING_STOP:
+            break
+        run.append(clean)
+        if len(run) >= 3:
+            break
+    host = ""
+    match = re.match(r"https?://([^/]+)", url)
+    if match:
+        host = re.sub(r"^www\.", "", match.group(1).split(":")[0])
+        host = host.split(".")[0]
+    if host:
+        run.append(re.sub(r"[^a-z0-9]", "", host.lower()))
+    return tuple(t for t in run if t)
+
+
+def _mentioned_in_body(candidate: str, body: str) -> bool:
+    """Whether the body text actually discusses the candidate.
+
+    The title may name a product while the collected text is about a different
+    one, which is how a third-party comparison page became another product's
+    basis. Either the identity phrase or the candidate's own name must appear.
+    """
+    if not body.strip():
+        return False
+    text = f"{body}"
+    if phrase_present(identity_phrase(candidate), text):
+        return True
+    return names_candidate(text, candidate)
+
+
 def candidate_for_source(source: dict, candidate_techs) -> str | None:
     """The declared candidate a source is demonstrably about, or None.
 
-    Attribution requires the source to name the candidate in full, as a phrase.
-    A source that shares only part of a candidate's name is not evidence about
-    that candidate: 'PostgreSQL 17 release notes' is not material for 'Amazon
-    Aurora PostgreSQL with pgvector'. Such material is reported as unassigned
-    rather than assigned to the candidate it most resembles.
+    Two levels, both name-based and neither consulting a word list:
 
-    This deliberately does not consult a word list. A curated list of
-    'distinguishing' words would decide attribution from how a term was
-    classified rather than from what the source actually names.
+    1. The source names the candidate in full. A source sharing only part of a
+       name is not evidence about it — 'PostgreSQL 17 release notes' is not
+       material for 'Amazon Aurora PostgreSQL with pgvector'.
+    2. The source names the candidate's identity phrase — the leading proper-noun
+       run. A page is normally titled 'Amazon Athena - Serverless Interactive
+       Query Service' when it is about the candidate 'Amazon Athena over S3', and
+       requiring the full name there reported real material as a gap.
+
+    Longest candidate first, so a source naming the specific product is not
+    attributed to a shorter candidate whose name it also contains.
     """
     candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
     if not candidates:
         return None
     title = source.get("title", "")
     url = source.get("url", "")
-    # Longest name first, so a source naming the specific product is attributed
-    # to it rather than to a shorter candidate whose name it also contains.
-    for candidate in sorted(candidates, key=len, reverse=True):
+    ordered = sorted(candidates, key=len, reverse=True)
+
+    # A page's own subject decides first. If the page names some other product or
+    # vendor as its subject and only mentions this candidate in passing, its body
+    # is not this candidate's material: the Elastic pricing page and the SelectDB
+    # comparison are about Elastic and SelectDB, not the candidate they mention.
+    subject = subject_tokens(source)
+    if subject:
+        def _names_candidate_identity(candidate: str) -> bool:
+            phrase = identity_phrase(candidate)
+            if not phrase:
+                return True
+            width = len(phrase)
+            return any(subject[i:i + width] == phrase
+                       for i in range(len(subject) - width + 1))
+
+        named = [c for c in ordered if _names_candidate_identity(c)]
+        if named:
+            # The page's subject is one of the declared candidates, but its body
+            # must actually discuss it: a third-party comparison titled after one
+            # product whose text is entirely about another is not that product's
+            # material. Mention of the candidate is the weakest acceptable link,
+            # and stricter than the title alone.
+            body = f"{source.get('snippet', '') or ''}"
+            discussed = [c for c in named if _mentioned_in_body(c, body)]
+            if not discussed:
+                return None
+            for candidate in discussed:
+                if names_candidate(title, candidate) or names_candidate(url, candidate):
+                    return candidate
+            return discussed[0]
+        # The page has an identifiable subject and it is none of the declared
+        # candidates, so this is material about something else. It stays
+        # unassigned rather than becoming the basis of a candidate it only
+        # mentions — third-party and vendor comparison pages are the common case.
+        return None
+
+    for candidate in ordered:
         if names_candidate(title, candidate) or names_candidate(url, candidate):
+            return candidate
+    for candidate in ordered:
+        if phrase_present(identity_phrase(candidate), f"{title} {url}"):
             return candidate
     return None
 

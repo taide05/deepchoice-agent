@@ -260,30 +260,73 @@ class TestNavigationLinksAreNotCitable:
 
 
 class TestCandidateAssociation:
-    """Explicit association: a source belongs to a candidate only when it names
-    it, not because a word is shared."""
+    """Explicit association: a source belongs to a candidate only when the page is
+    about it, not because a word is shared.
+
+    A page must name the candidate (in full, or by its identity phrase) AND its
+    collected body must actually discuss it. Fixtures therefore carry a body: a
+    title alone is not material.
+    """
 
     CANDIDATES = ["Amazon OpenSearch Service", "Amazon OpenSearch Serverless",
                   "Amazon Athena over S3", "ClickHouse"]
 
     def test_shared_word_alone_is_not_an_association(self):
         assert candidate_for_source(
-            {"title": "What is serverless computing?", "url": "https://ex.com/serverless"},
+            {"title": "What is serverless computing?",
+             "url": "https://ex.com/serverless",
+             "snippet": "Serverless computing abstracts capacity planning."},
             self.CANDIDATES) is None
 
     def test_serverless_page_does_not_land_on_the_generic_service(self):
         owner = candidate_for_source(
             {"title": "Amazon OpenSearch Serverless pricing",
-             "url": "https://aws.amazon.com/opensearch-serverless"}, self.CANDIDATES)
+             "url": "https://aws.amazon.com/opensearch-serverless",
+             "snippet": "Amazon OpenSearch Serverless bills by OCU-hour."},
+            self.CANDIDATES)
         assert owner == "Amazon OpenSearch Serverless", owner
 
     def test_named_candidates_still_match(self):
         assert candidate_for_source(
-            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs"},
+            {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs",
+             "snippet": "ClickHouse stores logs in a columnar format."},
             self.CANDIDATES) == "ClickHouse"
         assert candidate_for_source(
             {"title": "Amazon Athena over S3 pricing",
-             "url": "https://aws.amazon.com/athena"}, self.CANDIDATES) == "Amazon Athena over S3"
+             "url": "https://aws.amazon.com/athena",
+             "snippet": "Amazon Athena charges per terabyte scanned."},
+            self.CANDIDATES) == "Amazon Athena over S3"
+
+    def test_a_page_named_for_the_product_is_material(self):
+        """A page titled after the product it documents is that product's material.
+
+        Requiring the full candidate name ('Amazon Athena over S3') reported real
+        Athena documentation as a gap; the identity phrase is what a page uses.
+        """
+        assert candidate_for_source(
+            {"title": "Amazon Athena - Serverless Interactive Query Service",
+             "url": "https://aws.amazon.com/athena/",
+             "snippet": "With Amazon Athena, you pay only for the queries you run."},
+            self.CANDIDATES) == "Amazon Athena over S3"
+
+    def test_a_page_about_another_product_is_not_material(self):
+        """A page whose own subject is a different product is not the candidate's
+        material, even when it mentions the candidate in its body."""
+        assert candidate_for_source(
+            {"title": "可观测性方案怎么选？SelectDB vs Elasticsearch vs ClickHouse — SelectDB 博客",
+             "url": "https://www.selectdb.com/blog/1398",
+             "snippet": "SelectDB 采用列式存储，性能优于 Elasticsearch；ClickHouse 也在对比中。"},
+            self.CANDIDATES) is None
+
+    def test_a_title_naming_a_product_the_body_never_discusses(self):
+        """The Elastic pricing page names the candidate in its title while its
+        collected text is about Elastic's own pricing."""
+        assert candidate_for_source(
+            {"title": "Amazon OpenSearch 对比 Elasticsearch | Elastic",
+             "url": "https://www.elastic.co/cn/amazon-opensearch-service",
+             "snippet": "Observability 和 Security 根据数据摄取和保留计算费用；"
+                        "Search 起价仅为每月 $24。"},
+            self.CANDIDATES) is None
 
     def test_a_partial_name_match_is_not_an_association(self):
         """Sharing part of a candidate's name does not make a source about it.
@@ -295,23 +338,27 @@ class TestCandidateAssociation:
         candidates = ["PostgreSQL", "Amazon Aurora PostgreSQL with pgvector"]
         assert candidate_for_source(
             {"title": "PostgreSQL 17 release notes",
-             "url": "https://www.postgresql.org/docs/release-17"},
+             "url": "https://www.postgresql.org/docs/release-17",
+             "snippet": "PostgreSQL 17 release notes cover vacuum improvements."},
             candidates) == "PostgreSQL"
         assert candidate_for_source(
             {"title": "Amazon Aurora PostgreSQL with pgvector",
-             "url": "https://aws.amazon.com/rds/aurora/pgvector"},
+             "url": "https://aws.amazon.com/rds/aurora/pgvector",
+             "snippet": "Amazon Aurora PostgreSQL with pgvector supports HNSW."},
             candidates) == "Amazon Aurora PostgreSQL with pgvector"
         # A source about neither is unassigned, not dealt to the nearest name.
         assert candidate_for_source(
-            {"title": "Log analytics benchmark", "url": "https://x/bench"},
+            {"title": "Log analytics benchmark", "url": "https://x/bench",
+             "snippet": "A benchmark of log pipelines."},
             candidates) is None
 
     def test_specific_candidate_wins_over_a_shorter_one(self):
         candidates = ["Amazon Aurora PostgreSQL with pgvector", "PostgreSQL"]
         assert candidate_for_source(
             {"title": "Amazon Aurora PostgreSQL with pgvector limits",
-             "url": "https://aws.amazon.com/rds/aurora"}, candidates) == \
-            "Amazon Aurora PostgreSQL with pgvector"
+             "url": "https://aws.amazon.com/rds/aurora",
+             "snippet": "Amazon Aurora PostgreSQL with pgvector has index limits."},
+            candidates) == "Amazon Aurora PostgreSQL with pgvector"
 
     def test_no_word_list_decides_attribution(self):
         """Attribution must not depend on a curated 'distinguishing' word list."""
@@ -322,9 +369,9 @@ class TestCandidateAssociation:
     def test_unassignable_material_is_listed_not_dealt_out(self):
         sources = [
             {"title": "Log analytics benchmark", "url": "https://x/bench",
-             "snippet": "body", "score": 7.0},
+             "snippet": "A benchmark of log pipelines.", "score": 7.0},
             {"title": "ClickHouse for logs", "url": "https://clickhouse.com/docs",
-             "snippet": "body", "score": 7.0},
+             "snippet": "ClickHouse stores logs columnar.", "score": 7.0},
         ]
         index = index_sources_by_candidate(sources, self.CANDIDATES)
         assert [s["title"] for s in index[UNASSIGNED]] == ["Log analytics benchmark"]
