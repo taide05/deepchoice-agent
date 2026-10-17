@@ -1,3 +1,6 @@
+from .coverage import derive_data_source_note
+
+
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
@@ -114,9 +117,14 @@ def render(state: dict) -> str:
     lines = [
         L["title"][lang],
         "",
+    ]
+    data_note = derive_data_source_note(state)
+    if data_note:
+        lines.extend([f"> {data_note}", ""])
+    lines.extend([
         f"| {L['col_dim'][lang]} | {L['col_criterion'][lang]} | {L['col_strength'][lang]} |",
         "|------|------|---------|",
-    ]
+    ])
 
     for dim_key, dim_info in dims.items():
         label = dim_info[f"label_{lang}"]

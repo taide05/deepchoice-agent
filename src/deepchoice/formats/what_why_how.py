@@ -1,3 +1,7 @@
+from .coverage import derive_data_source_note
+from ..agents.conclusion_synthesizer import clean_label
+
+
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
@@ -37,46 +41,80 @@ def _one_line(value) -> str:
     return " ".join(str(value or "").split())
 
 
-def _cited_source_links(rec: dict, chains: list[dict]) -> list[tuple[str, str]]:
-    """The links behind the recommendation's own citations.
+_CITED_TEXT_FIELDS = ("recommendation", "winner_rationale", "confidence_rationale",
+                      "evidence_summary", "scene_fit_note")
+_CITED_OPTION_FIELDS = ("rationale", "constraint_fit_reason", "key_strength",
+                        "key_weakness")
+_CITED_TRADEOFF_FIELDS = ("finding", "impact")
 
-    Reads the titles the synthesis result cites and resolves them to the URLs in
-    the evidence chains, so the candidate explanations and the references come
-    from one source of truth. Body-less links are excluded: they are not a basis.
+
+def _used_sources(rec: dict, chains: list[dict]) -> list[dict]:
+    """The sources the synthesis result actually cites, with their provenance.
+
+    A source belongs here only because the recommendation cites it — not because
+    it was retrieved. Retrieval order and score say how a result was found, not
+    that it supports anything, so material the synthesis did not use must not be
+    presented as this report's basis.
+
+    Body-less links are excluded: a link with no collected body is navigation,
+    not a basis.
     """
     import re
 
     from ..utils.candidate_identity import has_factual_content
 
-    by_title: dict[str, str] = {}
+    by_title: dict[str, dict] = {}
     for chain in chains or []:
         for src in chain.get("sources", []):
             title = src.get("title", "")
-            url = src.get("url", "")
-            if title and url and has_factual_content(src):
-                by_title.setdefault(title, url)
+            if title and src.get("url") and has_factual_content(src):
+                by_title.setdefault(title, src)
 
-    ordered: list[tuple[str, str]] = []
+    blobs: list[str] = [str((rec or {}).get(f) or "") for f in _CITED_TEXT_FIELDS]
     for opt in (rec or {}).get("ranked_options") or []:
-        if not isinstance(opt, dict):
-            continue
-        blob = " ".join(str(opt.get(f) or "") for f in
-                        ("rationale", "constraint_fit_reason", "key_strength",
-                         "key_weakness"))
-        for name in re.findall(r"\[Source:\s*([^\]]+)\]", blob):
-            for part in name.split(", Source:"):
-                part = part.strip()
-                url = by_title.get(part)
-                if url and (part, url) not in ordered:
-                    ordered.append((part, url))
-    for name in re.findall(r"\[Source:\s*([^\]]+)\]",
-                           str((rec or {}).get("recommendation") or "")):
-        for part in name.split(", Source:"):
-            part = part.strip()
-            url = by_title.get(part)
-            if url and (part, url) not in ordered:
-                ordered.append((part, url))
-    return ordered
+        if isinstance(opt, dict):
+            blobs.extend(str(opt.get(f) or "") for f in _CITED_OPTION_FIELDS)
+    for to in (rec or {}).get("trade_offs") or []:
+        if isinstance(to, dict):
+            blobs.extend(str(to.get(f) or "") for f in _CITED_TRADEOFF_FIELDS)
+
+    used: dict[str, dict] = {}
+    for blob in blobs:
+        for marker in re.findall(r"\[Source:\s*([^\]]+)\]", blob):
+            for part in marker.split(", Source:"):
+                title = part.strip()
+                src = by_title.get(title)
+                if not src:
+                    continue
+                entry = used.setdefault(title, {
+                    "title": title,
+                    "url": src.get("url", ""),
+                    "provenance": src.get("provenance", "unknown"),
+                    "channel": src.get("channel", ""),
+                    "citations": 0,
+                })
+                entry["citations"] += 1
+    return list(used.values())
+
+
+def _source_provenance_note(src: dict, lang: str) -> str:
+    """Describe a source's origin honestly, without calling local material public.
+
+    Only material whose origin could be mistaken for something else is
+    annotated: locally held documents and evaluation material. A page fetched
+    from the web needs no note — its URL already says where it came from.
+    """
+    provenance = str(src.get("provenance") or "").strip().lower()
+    channel = str(src.get("channel") or "").strip().lower()
+    url = str(src.get("url", "")).lower()
+    if provenance == "benchmark_ground_truth" or channel == "benchmark_ground_truth":
+        return "（评测答案材料）" if lang == "zh" else " (benchmark answer material)"
+    if channel == "local_kb" or url.startswith("file://"):
+        return "（本地知识库文档）" if lang == "zh" else " (local knowledge-base document)"
+    if url.startswith(("http://", "https://")):
+        return ""
+    return "（出处未知）" if lang == "zh" else " (provenance unknown)"
+
 
 
 def _has_body(src: dict) -> bool:
@@ -118,7 +156,7 @@ def render(state: dict) -> str:
     T = {
         "title_suffix": {"en": " — Decision Brief", "zh": " — 技术决策简报"},
         "what": {"en": "## What: Understanding the Candidates", "zh": "## What: 了解候选方案"},
-        "why": {"en": "## Why: Evidence-Driven Judgment", "zh": "## Why: 证据驱动的判断"},
+        "why": {"en": "## Why: How the Sources Were Used", "zh": "## Why: 依据的实际使用"},
         "evidence_strength": {"en": "Evidence strength", "zh": "证据强度"},
         "disputes": {"en": "## Disputes & Resolutions", "zh": "## 争议与裁决"},
         "conflict": {"en": "Conflict", "zh": "争议"},
@@ -141,7 +179,7 @@ def render(state: dict) -> str:
 
     lines = [f"# {query}{T['title_suffix'][lang]}", ""]
 
-    data_note = state.get("data_source_note", "")
+    data_note = derive_data_source_note(state)
     if data_note:
         lines.extend([f"> {data_note}", ""])
 
@@ -185,14 +223,9 @@ def render(state: dict) -> str:
                              "on the candidate.")
             lines.append("")
 
-        # The sources behind those explanations, so the reader can reach them.
-        # They are listed as the report's references, not assigned to a candidate:
-        # a page may discuss several candidates and is not forced to own one.
-        lines.append("**引用来源**" if lang == "zh" else "**Cited sources**")
-        lines.append("")
-        for title, url in _cited_source_links(rec, chains)[:10]:
-            lines.append(f"- [{title}]({url})")
-        lines.append("")
+        # The cited-source list lives in the References section at the end, where
+        # it is derived once from the sources the synthesis actually used. Keeping
+        # a second copy here made the two drift apart.
 
         # Discovered links are listed separately as navigation. They stay
         # reachable, and saying what they are keeps them from reading as a basis:
@@ -215,25 +248,44 @@ def render(state: dict) -> str:
 
     lines.extend([T["why"][lang], ""])
 
-    for c in chains[:10]:
-        tag = " [DISPUTED]" if c.get("disputed") else ""
-        lines.append(f"### {c.get('conclusion', '')}{tag}")
-        lines.append(f"**{T['evidence_strength'][lang]}:** {c.get('evidence_strength', 'unknown')}")
-        # Only fact-bearing sources are listed as basis. A navigation link is
-        # shown under the navigation note elsewhere, not as evidence here.
-        factual = [s for s in c.get("sources", []) if _has_body(s)]
-        if factual:
-            for src in factual[:2]:
-                lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) — score: {src.get('score', 'N/A')}")
+    # What the recommendation actually used. A retrieval hit is not a finding: the
+    # previous version turned every scored result into a heading with an "evidence
+    # strength" derived from its metadata score, which presented a search result
+    # as an established judgment. The basis is now the set of sources the
+    # synthesis result cites; everything else stays in the raw retrieval record
+    # (source_scores / search_results in the snapshot) and is not a basis here.
+    used = _used_sources(rec, chains)
+    if used:
+        if lang == "zh":
+            lines.append(f"本次推荐实际引用了 {len(used)} 个来源；引用次数表示该来源在推荐中被使用的次数，"
+                         "不表示其支持强度：")
         else:
-            lines.append("- 无正文来源；本条无法支撑论断，记为资料缺口。"
-                         if lang == "zh" else
-                         "- No fact-bearing source; this chain states nothing and is "
-                         "recorded as a material gap.")
+            lines.append(f"The recommendation cites {len(used)} source(s). The citation "
+                         "count shows how often a source is used, not how strongly it "
+                         "supports a claim:")
         lines.append("")
-    if len(chains) > 10:
-        lines.append(f"*(+{len(chains) - 10} more evidence chains — see full report via API)*")
+        for src in used[:12]:
+            note = _source_provenance_note(src, lang)
+            lines.append(f"- [{src['title']}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")
+    else:
+        lines.extend([
+            "本次合成结果没有引用任何可追溯的来源；这不代表检索没有返回材料，"
+            "只代表本报告没有用它作为依据。" if lang == "zh"
+            else "The synthesis result cites no traceable source. That does not mean "
+                 "retrieval returned nothing; it means this report does not rely on it.",
+            "",
+        ])
+
+    retrieved = sum(len(c.get("sources") or []) for c in chains)
+    if retrieved > len(used):
+        lines.extend([
+            f"其余 {retrieved - len(used)} 条检索结果未进入本报告的依据，保留在原始检索记录中。"
+            if lang == "zh"
+            else f"The other {retrieved - len(used)} retrieved item(s) are not part of "
+                 f"this report's basis and remain in the raw retrieval record.",
+            "",
+        ])
 
     if conflicts:
         lines.extend([T["disputes"][lang], ""])
@@ -289,10 +341,23 @@ def render(state: dict) -> str:
                               "A missing conflict does not mean the sources agree; "
                               "it means the judgement was not finished.", ""])
 
-    if gaps:
+    # Open questions and material gaps are both "what we don't know yet". The
+    # model writes `unresolved_questions` into the recommendation, but nothing
+    # rendered them, so questions the synthesis itself flagged disappeared. They
+    # are shown here, de-duplicated against the gaps the review recorded.
+    unresolved = [str(q).strip() for q in (rec.get("unresolved_questions") or [])
+                  if str(q).strip()]
+    unknown_items: list[str] = []
+    for item in list(unresolved) + [str(g).strip() for g in gaps if str(g).strip()]:
+        if item and item not in unknown_items:
+            unknown_items.append(item)
+    if unknown_items:
         lines.extend([T["unknown"][lang], ""])
-        for g in gaps:
-            lines.append(f"- {g}")
+        for item in unknown_items:
+            # Display-only text: a raw source number the model left in a gap is
+            # not a followable citation, so it is cleaned with the same helper
+            # used for other labels.
+            lines.append(f"- {clean_label(item)}")
         lines.append("")
 
     lines.extend([T["how"][lang], ""])
@@ -344,7 +409,11 @@ def render(state: dict) -> str:
         lines.append(T["trade_offs"][lang])
         for t in rec["trade_offs"]:
             finding = t.get('finding', '')
-            lines.append(f"- **{t.get('dimension', '')}**: {finding}")
+            # The label is display-only. A saved snapshot may still carry a raw
+            # source number from before the label was normalised, so it is
+            # cleaned here with the same helper the synthesis and the self-review
+            # locating use — one identity for display and for locating.
+            lines.append(f"- **{clean_label(t.get('dimension', ''))}**: {finding}")
             linked = _cited_sources(finding, chain_sources)
             if linked:
                 lines.append(f"  *Sources: {'; '.join(linked)}*")
@@ -363,16 +432,17 @@ def render(state: dict) -> str:
         ])
 
     lines.append(T["references"][lang])
-    ref_count = 0
-    # References list the sources that actually carry content. A navigation link
-    # is not a reference for any claim in this report.
-    body_sources = [src for c in chains for src in c.get("sources", []) if _has_body(src)]
-    for src in body_sources:
-        if ref_count >= 12:
-            break
-        lines.append(f"- [{src.get('title', '')}]({src.get('url', '')})")
-        ref_count += 1
-    if len(body_sources) > 12:
-        lines.append(f"*(+{len(body_sources) - 12} more sources)")
+    # References are the same set the Why section just derived: the sources the
+    # synthesis result actually used. Retrieving a page does not make it a
+    # reference for a claim, so unused material is not listed here.
+    refs = _used_sources(rec, chains)
+    for src in refs[:12]:
+        note = _source_provenance_note(src, lang)
+        lines.append(f"- [{src['title']}]({src['url']}){note}")
+    if len(refs) > 12:
+        lines.append(f"*(+{len(refs) - 12} more sources used)")
+    if not refs:
+        lines.append("- 本次没有可追溯的引用来源。" if lang == "zh"
+                     else "- No traceable source was used in this run.")
 
     return "\n".join(lines)

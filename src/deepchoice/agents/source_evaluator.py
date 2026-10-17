@@ -14,6 +14,9 @@ AUTHORITY_MAP = {
     "github": 6,
     "stackoverflow": 5,
     "reddit": 4,
+    # A document from this machine's own knowledge base has no external
+    # authority. It is not a published source and must not be scored like one.
+    "local_document": 3,
     "anonymous": 2,
 }
 
@@ -27,6 +30,11 @@ VERIFIABILITY_MAP = {
 
 def classify_source_type(url: str, source: str) -> str:
     url_lower = url.lower()
+    # A local file is this machine's own material. Check it before the generic
+    # URL rules, so a local markdown file cannot inherit a published source's
+    # authority from a word in its path.
+    if url_lower.startswith("file://"):
+        return "local_document"
     if "arxiv.org" in url_lower:
         return "arxiv_paper"
     if "github.com" in url_lower:
@@ -136,12 +144,19 @@ class SourceEvaluatorAgent:
                 "url": url,
                 "title": result.get("title", ""),
                 "snippet": result.get("snippet", ""),
+                "date": result.get("date", ""),
                 "source_type": source_type,
                 "evidence_type": evidence_type,
                 "scores": scores,
                 "total_score": total,
                 "supporting_sources": [],
             }
+            # Where this material came from travels with it. Unknown provenance
+            # stays `unknown`; it is never upgraded to a published source.
+            if "provenance" in result:
+                entry["provenance"] = result["provenance"]
+            if "channel" in result:
+                entry["channel"] = result["channel"]
             # Preserve the retriever's own body marker so downstream stages can
             # tell navigation from evidence without re-deriving it from text.
             if "has_body" in result:

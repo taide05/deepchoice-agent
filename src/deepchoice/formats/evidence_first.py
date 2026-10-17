@@ -1,3 +1,6 @@
+from .coverage import derive_data_source_note
+
+
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
@@ -69,8 +72,11 @@ def render(state: dict) -> str:
     lines = [
         f"# {query}{T['title_suffix'][lang]}",
         "",
-        T["conclusion"][lang],
     ]
+    data_note = derive_data_source_note(state)
+    if data_note:
+        lines.extend([f"> {data_note}", ""])
+    lines.append(T["conclusion"][lang])
     if winner:
         lines.append(f"**Winner: {winner}**")
         if rec.get("winner_rationale"):

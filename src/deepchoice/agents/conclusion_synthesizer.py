@@ -15,16 +15,20 @@ SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all eviden
 ## Scene Context
 {scene_context}
 
-## Evidence Chains (with strength ratings)
+## Original Sub-Questions
+The user's question was broken into these sub-questions. Answer each one in the
+recommendation or in `unresolved_questions`; do not drop one silently.
+{sub_questions}
+
+## Retrieved Source Material
 {evidence_chains}
 
 ## Conflicts Found
 {conflicts}
 
 ## Source Score Summary
-Total sources scored: {source_count}
-Strong evidence chains (strength=strong): {strong_count}
-Disputed findings: {disputed_count}
+Total sources retrieved: {source_count}
+Confirmed contradictions among sources: {disputed_count}
 
 ## Language
 - Output explanatory/reasoning text (recommendation, rationale, trade-off findings, evidence_summary, confidence_rationale, scene_fit_note) in the SAME language as the original query.
@@ -32,12 +36,12 @@ Disputed findings: {disputed_count}
 - This applies to the "name" field in ranked_options as well: keep the framework/library name as-is.
 
 ## Synthesis Rules
-1. Weight strong evidence chains more heavily than moderate or weak ones
+1. The retrieved sources are ranked by retrieval priority, NOT by how strongly they support anything. Read each source's content; cite it only for what it states, and do not treat the retrieval score or a source's popularity as evidence.
 2. Acknowledge disputed findings — don't pretend they don't exist
-3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong evidence for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it.
+3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong content in a source for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it.
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale. If the highest constraint-fit is TIED, set "winner" to "context_dependent" (rule 7).
 5. If evidence is insufficient for a definitive answer, say so honestly
-6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Evidence sources above — NEVER invent a number that is not listed.
+6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Retrieved sources above — NEVER invent a number that is not listed.
 7. Winner selection: name a winner ONLY when evidence clearly favors one option for the scene. If balanced — both have meaningful evidence and neither clearly wins — set "winner" to "context_dependent" and give a conditional recommendation ("choose X if ..., choose Y if ..."). If your own rationale says "depends on"/"hinges on"/"context-dependent", the winner MUST be "context_dependent".
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
 9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
@@ -106,14 +110,17 @@ def _summarize_chains(evidence_chains: list[dict],
 
     lines: list[str] = list(header)
     lines += [
-        "Evidence sources — cite each by its number in double brackets, e.g. [[1]]:",
+        "Retrieved sources — cite each by its number in double brackets, e.g. [[1]]:",
+        "",
+        "These are retrieval results, not findings. The number and the retrieval",
+        "score express how the source was found, not whether it supports a claim.",
+        "Read each source's content and cite it only for what that content states.",
         "",
     ]
     mapping: dict[int, str] = {}
     navigation: list[str] = []
     n = 0
     for i, c in enumerate(evidence_chains):
-        strength = c.get("evidence_strength", "unknown")
         disputed = " [DISPUTED]" if c.get("disputed") else ""
         citable = [s for s in c.get("sources", [])[:4] if is_citable_source(s)]
         for src in c.get("sources", [])[:4]:
@@ -121,10 +128,11 @@ def _summarize_chains(evidence_chains: list[dict],
                 link = src.get("url", "")
                 if link and link not in navigation:
                     navigation.append(link)
-        lines.append(f"Chain {i + 1} [{strength}]{disputed}: {c.get('conclusion', 'Untitled')}")
         if not citable:
-            lines.append("  no fact-bearing source — this chain states nothing on its "
-                         "own; record a material gap instead of citing it")
+            # Nothing to read, so nothing to cite. Recorded, not presented as a
+            # finding, so the model records a gap instead of citing a link.
+            lines.append("(no fact-bearing source in this retrieved item — record a "
+                         "material gap instead of citing it)")
             lines.append("")
             continue
         for src in citable:
@@ -132,11 +140,18 @@ def _summarize_chains(evidence_chains: list[dict],
             title = src.get("title", "Unknown")
             mapping[n] = title
             url = src.get("url", "")
-            lines.append(f"  [[{n}]] {title} (score: {src.get('score', 'N/A')})")
+            lines.append(f"[[{n}]] {title}{disputed}")
             if url:
                 lines.append(f"       url: {url}")
+            # Where the material came from, so the model cannot mistake local or
+            # evaluation material for a published source.
+            provenance = src.get("provenance")
+            channel = src.get("channel")
+            if provenance or channel:
+                lines.append(f"       provenance: {provenance or 'unknown'}; "
+                             f"channel: {channel or 'unknown'}")
             lines.append(f"       content: {bounded_content_summary(src)}")
-        lines.append("")
+            lines.append("")
 
     if navigation:
         # Discovered links, not evidence. They carry no citable number, so they
@@ -536,6 +551,35 @@ def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
     return result
 
 
+def clean_label(text: str) -> str:
+    """Strip citation markers from a display label.
+
+    A trade-off `dimension` is a label, not a factual claim: the model put source
+    numbers in it and they were printed verbatim ("内存效率与成本 [[16]]").
+    The label is not a field that can be revised — it is also the key the
+    self-review uses to locate a trade-off — so the markers are removed and the
+    remaining text is the one identity used for both display and locating.
+
+    Reuses the compiled marker patterns already used for citation handling; no
+    second grammar is introduced.
+    """
+    if not text:
+        return text
+    cleaned = _CITE_NUMBER.sub("", str(text))
+    cleaned = _CITE_LEFTOVER.sub("", cleaned)
+    cleaned = _SOURCE_MARKER.sub("", cleaned)
+    # Collapse the spacing the removals left behind.
+    return " ".join(cleaned.split())
+
+
+def _normalize_labels(result: dict) -> dict:
+    """Normalise display labels in the synthesis result."""
+    for to in result.get("trade_offs", []) or []:
+        if isinstance(to, dict) and to.get("dimension"):
+            to["dimension"] = clean_label(to["dimension"])
+    return result
+
+
 class ConclusionSynthesizerAgent:
     def __init__(self, websocket=None, stream_output=None, headers=None):
         self.websocket = websocket
@@ -553,20 +597,25 @@ class ConclusionSynthesizerAgent:
             agent="CONCLUSION_SYNTHESIZER",
         )
 
-        strong_count = sum(1 for c in evidence_chains if c.get("evidence_strength") == "strong")
         disputed_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
         evidence_text, cite_map = _summarize_chains(
             evidence_chains, task.get("candidate_techs") or [])
+        # The same sub-questions the self-review is given. Synthesis used to
+        # receive only the original query, so the questions the pipeline had
+        # already decomposed could be silently dropped from the answer.
+        sub_questions = [str(q).strip() for q in (research_state.get("sub_questions") or [])
+                         if str(q).strip()]
         prompt = [{
             "role": "user",
             "content": SYNTHESIS_PROMPT.format(
                 query=task["query"],
                 scene_context=task.get("scene_context", "team"),
+                sub_questions=("\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions, 1))
+                               if sub_questions else "(none recorded)"),
                 evidence_chains=evidence_text,
                 conflicts=_summarize_conflicts(conflicts, conflict_check),
                 source_count=len(research_state.get("source_scores", [])),
-                strong_count=strong_count,
                 disputed_count=disputed_count,
             ),
         }]
@@ -592,7 +641,6 @@ class ConclusionSynthesizerAgent:
         quality_signals = [{
             "agent": "conclusion_synthesizer",
             "evidence_chain_count": len(evidence_chains),
-            "strong_chains": strong_count,
             "disputed_chains": disputed_count,
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
@@ -602,6 +650,7 @@ class ConclusionSynthesizerAgent:
         _validate_constraint_fit(result)
         _sanitize_citations(result, evidence_chains)
         _bind_citations(result, cite_map)
+        _normalize_labels(result)
 
         return {
             "final_recommendation": result,

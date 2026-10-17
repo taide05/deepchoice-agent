@@ -801,8 +801,9 @@ class TestTheReviewedResultReachesEveryArtefact:
     def test_the_saved_report_matches_a_fresh_render_of_the_final_state(self):
         """report.md, the snapshot and the endpoints must show one result."""
         out, state, _cap = self._run(self.REVIEW)
-        merged = {**state, "report": out["report"],
-                  "final_recommendation": out["final_recommendation"]}
+        merged = {**state, "final_recommendation": out["final_recommendation"],
+                  "confidence": out["confidence"],
+                  "knowledge_gaps": out["knowledge_gaps"]}
         assert render(merged) == out["report"]
 
     def test_the_pre_review_draft_is_not_what_gets_saved(self):
@@ -816,13 +817,17 @@ class TestTheReviewedResultReachesEveryArtefact:
              "action": "withdraw", "reason": "无来源支持。"}]}
         out, state, _cap = self._run(review)
         assert "撤回" in out["report"]
-        merged = {**state, "final_recommendation": out["final_recommendation"]}
+        merged = {**state, "final_recommendation": out["final_recommendation"],
+                  "confidence": out["confidence"],
+                  "knowledge_gaps": out["knowledge_gaps"]}
         assert render(merged) == out["report"]
 
     def test_a_run_with_no_corrections_is_consistent_too(self):
         out, state, _cap = self._run(
             {"confidence": "high", "knowledge_gaps": [], "corrections": []})
-        merged = {**state, "final_recommendation": out["final_recommendation"]}
+        merged = {**state, "final_recommendation": out["final_recommendation"],
+                  "confidence": out["confidence"],
+                  "knowledge_gaps": out["knowledge_gaps"]}
         assert render(merged) == out["report"]
 
     def test_the_draft_is_not_mutated(self):

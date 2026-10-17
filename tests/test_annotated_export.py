@@ -31,7 +31,15 @@ SNAPSHOT = {
         },
     ],
     "conflicts": [],
-    "final_recommendation": {"winner": "FastAPI", "winner_rationale": "async support"},
+    "final_recommendation": {
+        "winner": "FastAPI",
+        "winner_rationale": "async support [Source: Benchmark Post]",
+        # The report's basis is the set of sources the synthesis result actually
+        # cites, so the fixture cites them. A retrieved chain that is never
+        # cited is no longer presented as a reference.
+        "recommendation": "Adopt FastAPI for async throughput [Source: Benchmark Post], "
+                          "and keep Flask for small apps [Source: Flask Docs].",
+    },
     "confidence": "high",
 }
 
@@ -79,7 +87,9 @@ class TestExportEndpoint:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/markdown")
         assert 'attachment; filename="deepchoice-report-' in resp.headers["content-disposition"]
-        assert "FastAPI wins on async throughput" in resp.text
+        # The export carries the recommendation and its cited sources.
+        assert "Adopt FastAPI for async throughput" in resp.text
+        assert "Benchmark Post" in resp.text
 
     def test_pdf_export_returns_pdf_bytes(self):
         resp = client.get(f"/research/{TASK_ID}/export", params={"format": "pdf"})

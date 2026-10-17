@@ -2,6 +2,7 @@ from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import (
     _summarize_chains,
+    clean_label,
     resolve_citations,
     unresolved_citations,
     withdrawal_note,
@@ -161,9 +162,13 @@ def _apply_corrections(recommendation: dict, corrections,
         if field in _CORRECTABLE_TOP_FIELDS:
             target, owner = recommendation, field
         elif field in _CORRECTABLE_TRADEOFF_FIELDS:
+            # The label the reviewer sees is the normalised one, so locating uses
+            # the same identity: both sides are cleaned with the same helper, and
+            # a marker the reviewer echoes back cannot make the entry unfindable.
+            wanted = clean_label(name).casefold()
             match = next((t for t in trade_offs
-                          if name and str(t.get("dimension", "")).strip().casefold()
-                          == name.casefold()), None)
+                          if wanted and clean_label(str(t.get("dimension", ""))).casefold()
+                          == wanted), None)
             if match is None and not name and len(trade_offs) == 1:
                 match = trade_offs[0]
             if match is None:
@@ -265,21 +270,31 @@ class SelfReviewerAgent:
         ) if upstream_signals else "No upstream quality signals available."
 
         # The reviewer is asked to check claims against the cited source text, so
+        # The reviewer is asked to check claims against the cited source text, so
         # the source text must be in the payload. Titles alone made the decisive
         # comparison impossible: the run's wrong scale (5 万亿) was visible while
         # the source that says 500 亿 was not, so the review could not catch it.
+        #
+        # The sources are listed as retrieved material, with no strength band: a
+        # retrieval score is not evidence, and labelling it as such in the review
+        # payload invited the reviewer to endorse the ranking for the wrong reason.
         from ..utils.candidate_identity import bounded_content_summary
 
         chains_summary = []
         for c in research_state.get("evidence_chains", []):
-            strength = c.get("evidence_strength", "unknown")
-            conclusion = c.get("conclusion", "")[:200]
-            chains_summary.append(f"[{strength}] {conclusion}")
+            disputed = " [DISPUTED]" if c.get("disputed") else ""
+            chains_summary.append(f"retrieved item{disputed}:")
             for s in (c.get("sources") or [])[:2]:
                 chains_summary.append(f"    source: {s.get('title', '?')[:80]}")
+                provenance = s.get("provenance")
+                channel = s.get("channel")
+                if provenance or channel:
+                    chains_summary.append(
+                        f"      provenance: {provenance or 'unknown'}; "
+                        f"channel: {channel or 'unknown'}")
                 chains_summary.append(
                     f"      text: {bounded_content_summary(s, limit=700)}")
-        chains_text = "\n".join(chains_summary) if chains_summary else "No evidence chains."
+        chains_text = "\n".join(chains_summary) if chains_summary else "No retrieved sources."
 
         cite_stats = _citation_coverage(research_state.get("final_recommendation", {}))
 
@@ -395,17 +410,18 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         confidence = min(candidates, key=lambda c: _LEVELS[c]) if candidates else "low"
         recommendation["confidence"] = confidence
 
-        # The report body is re-rendered from the reviewed state, so the saved
-        # report.md, the snapshot's `report`, the report endpoint, the reading
-        # view and every export all show the post-review result. Reusing the
-        # generator's own render call keeps the draft the reviewer just read and
-        # the final body on one rule.
+        # The report body is re-rendered from the **complete** reviewed state, so
+        # the saved report.md, the snapshot's `report`, the report endpoint, the
+        # reading view and every export all show the same post-review result.
         #
-        # The reviewed state is assembled from a copy of the incoming state, so
-        # the draft the reviewer read is still what `research_state` holds and
-        # nothing else about the run is disturbed.
+        # Previously only the recommendation was merged: the reviewer's own
+        # confidence and knowledge_gaps were returned but never part of the state
+        # it rendered from, so the saved file omitted the "what we don't know yet"
+        # section that the endpoint (rendering from the final snapshot) showed.
         reviewed_state = dict(research_state)
         reviewed_state["final_recommendation"] = recommendation
+        reviewed_state["confidence"] = confidence
+        reviewed_state["knowledge_gaps"] = list(result.get("knowledge_gaps") or [])
         final_report, _ = render_report(reviewed_state)
 
         return {

@@ -21,6 +21,9 @@ Thumbs.db
 
 # Project
 chroma_kb/chroma_db/
+# Pre-change copy of the index, kept so its history is not lost when the
+# provenance metadata is migrated.
+chroma_kb/chroma_db.pre_provenance/
 chroma_db/
 outputs/
 .env

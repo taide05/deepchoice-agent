@@ -375,12 +375,16 @@ class TestCandidateNameMatching:
                                     "rationale": "Columnar [Source: Real Benchmark]."}],
             },
         }
-        what = render(state).split("\n## Why")[0]
-        assert "https://x/bench" in what, "the cited source should be reachable"
+        report = render(state)
+        what = report.split("\n## Why")[0]
+        # The cited-source list is derived once, in References, from the sources
+        # the synthesis result actually cites. It is no longer duplicated under
+        # What, where the two copies could drift apart.
+        references = report.split("### References")[-1]
+        assert "https://x/bench" in references, "the cited source should be reachable"
         # A body-less link is listed only under the navigation heading, never as a
         # cited source for the recommendation.
-        cited_part = what.split("**Navigation links")[0].split("**导航链接")[0]
-        assert "https://www.postgresql.org/docs/" not in cited_part, \
+        assert "https://www.postgresql.org/docs/" not in references, \
             "a body-less link must not be listed as a cited source"
         assert "https://www.postgresql.org/docs/" in what, \
             "the navigation link should still be reachable"
