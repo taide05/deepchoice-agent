@@ -406,6 +406,19 @@ class TestTheOtherReportFormatsShareTheBasis:
         from deepchoice.formats.comparison_matrix import render as render_matrix
         from deepchoice.formats.evidence_first import render as render_evidence
         state = v4_state()
+        # Take the shape the current chain builder produces. The preserved
+        # snapshot still holds the OLD chain shape (a title as `conclusion`, a
+        # score-derived `evidence_strength`, a `score`), so rendering it would not
+        # exercise the defect this class pins: the other formats reading fields
+        # that the builder no longer emits.
+        state["evidence_chains"] = [
+            {"conclusion": "", "evidence_strength": "unknown",
+             "retrieval_score": (c.get("sources") or [{}])[0].get("score", 6.0),
+             "disputed": c.get("disputed", False),
+             "sources": [{k: v for k, v in (s or {}).items() if k != "score"}
+                         for s in (c.get("sources") or [])]}
+            for c in state["evidence_chains"]
+        ]
         return state, render_evidence(state), render_matrix(state)
 
     def test_no_format_renders_a_removed_field_as_content(self):
@@ -424,8 +437,14 @@ class TestTheOtherReportFormatsShareTheBasis:
 
     def test_the_matrix_compares_the_synthesis_candidates(self):
         state, _evidence, matrix = self._renders()
+        # The matrix is built from the synthesis result's per-candidate fields.
+        # The old format printed a five-row keyword-derived dimension table; these
+        # headers only exist in the candidate comparison.
+        assert "约束适配" in matrix or "Constraint fit" in matrix
         for opt in state["final_recommendation"]["ranked_options"]:
             assert opt["name"] in matrix, f"candidate missing from the matrix: {opt['name']}"
+            assert str(opt.get("rationale") or "")[:40] in matrix, \
+                f"the matrix lost {opt['name']}'s own rationale"
 
     def test_every_format_lists_the_same_used_sources(self):
         from deepchoice.formats.basis import used_sources
