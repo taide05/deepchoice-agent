@@ -526,6 +526,29 @@ class TestRevisedCitationsFollowTheSynthesisRules:
                 f"理由 [[{number}]]", state["evidence_chains"], mapping)
             assert not cs.unresolved_citations(resolved, state["evidence_chains"])
 
+    def test_a_non_positive_number_rejects_the_whole_marker(self):
+        """A marker containing a non-positive number is not a source list — an
+        interval `[[0,1]]` or `[[-1,2]]`. Binding its remaining in-range numbers
+        gave a real source to text that cites nothing, so the whole marker is
+        rejected rather than only the bad number being filtered out.
+
+        These are the unspaced forms; the spaced variant is covered above, and
+        only the unspaced one reaches binding at all.
+        """
+        state = _failed_run_state()
+        _prompt, mapping = cs._summarize_chains(
+            state["evidence_chains"], state["task"]["candidate_techs"])
+        all_titles = set(mapping.values())
+        cases = ("[[0,1]]", "[[0,2]]", "[[-1,2]]",
+                 "the interval [[0,1]] is normalized", "x=[[0,1]]")
+        for text in cases:
+            for label, got in (
+                ("synthesis", cs.resolve_citations(text, state["evidence_chains"], mapping)),
+                ("reviewer", self._apply(text)[1]),
+            ):
+                leaked = {t for t in all_titles if t in got}
+                assert not leaked, (label, text, sorted(leaked)[:1], got)
+
     def test_a_wider_grammar_cannot_turn_prose_into_a_citation(self):
         """A looser number grammar matched ordinary text and resolved it to real
         sources, fabricating an attribution the model never made. Every source

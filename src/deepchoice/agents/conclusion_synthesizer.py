@@ -498,10 +498,16 @@ def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
             # The marker may name several sources. Each number binds to its own
             # title; a number with no entry is dropped, and if none resolve the
             # whole marker disappears rather than leaving its digits as text.
-            # A non-positive number is never a source, so it is dropped too.
-            numbers = re.findall(r'[+-]?\d+', m.group(1))
-            titles = [mapping[int(n)] for n in numbers
-                      if int(n) > 0 and int(n) in mapping]
+            #
+            # A non-positive number means the window is not a citation at all — an
+            # interval such as [[0,1]] or [[-1,2]], not a source list. Binding the
+            # marker's other numbers in that case gave a real source to text that
+            # cites nothing, so the whole marker is rejected. Rejecting it and
+            # filtering the number are different outcomes and must not be mixed.
+            numbers = [int(n) for n in re.findall(r'[+-]?\d+', m.group(1))]
+            if any(n <= 0 for n in numbers):
+                return ""
+            titles = [mapping[n] for n in numbers if n in mapping]
             if not titles:
                 return ""
             return '[Source: ' + ', Source: '.join(titles) + ']'

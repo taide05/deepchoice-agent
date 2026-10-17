@@ -55,3 +55,7 @@ review-*.txt
 # Local cleanup archive: review probes and findings kept for reproduction.
 # Local only - session material, never part of a code commit.
 /local_cleanup_archive/
+
+# Test scratch kept inside the worktree so nothing is written to a drive root.
+/.pytest-tmp/
+/.scratch/
