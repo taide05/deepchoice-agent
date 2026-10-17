@@ -956,31 +956,72 @@ class TestGuardBindsTheLaunchTree:
             # the real system) is still running.
             (run_dir / "run_state.json").write_text(
                 json.dumps({**base, "state": "cancelled"}), encoding="utf-8")
-            time.sleep(600)
+            time.sleep(20)
         """), encoding="utf-8")
         env = dict(os.environ)
         env["DEEPCHOICE_SERVICE_TOKEN"] = token
         child = subprocess.Popen([sys.executable, str(child_script), str(run_dir)],
                                  env=env)
+        outcome = {}
         started = time.monotonic()
-        try:
-            record = run_guard.guard_service(
+
+        def run_guard_call():
+            outcome["record"] = run_guard.guard_service(
                 child, outputs_dir=tmp_path, wall_clock_max_s=0.8,
                 service_started_epoch=time.time() - 1,
-                cancel_fn=lambda task_id: "cancelled_by_guard", service_token=token,
+                cancel_fn=lambda task_id: "cancelled_by_guard",
+                service_token=token,
                 poll_s=0.05, grace_s=0.2, kill_grace_s=3.0,
                 log=lambda message: None)
-        finally:
-            if child.poll() is None:
-                child.kill()
+
+        worker = threading.Thread(target=run_guard_call, daemon=True)
+        worker.start()
+        worker.join(timeout=8.0)
         elapsed = time.monotonic() - started
+        if worker.is_alive():
+            # A guard that treats a terminal task state as a stopped process would
+            # wait for the blocked child instead of enforcing the deadline. Kill
+            # the child to let the worker unwind, then fail rather than hang.
+            child.kill()
+            worker.join(timeout=5.0)
+            pytest.fail("the guard did not enforce the deadline for a terminal "
+                        "task state whose process was still running")
+        if child.poll() is None:
+            child.kill()
+        record = outcome["record"]
 
         assert record["forced"] is True
         assert record["reason"] == "wall_clock", \
             "a terminal task state must not be treated as a stopped process"
         assert record["task_state_at_stop"] == "cancelled"
         assert record["exit_confirmed"] is True
-        assert elapsed >= 0.8, f"the guard acted before the deadline: {elapsed:.2f}s"
+        assert elapsed < 8.0, f"the guard took too long: {elapsed:.2f}s"
+
+    def test_an_already_dead_bound_process_is_not_signalled(self, tmp_path,
+                                                            monkeypatch):
+        """If the bound process is gone before the signal, no pid is signalled."""
+        signalled = []
+        monkeypatch.setattr(run_guard, "bind_service_process",
+                            lambda launcher, record: {
+                                "launcher_pid": launcher, "record_pid": record,
+                                "record_pid_matched_launch": False,
+                                "bound_pid": 999999, "source": "test_bound",
+                                "candidates": [], "reason": "test"})
+        monkeypatch.setattr(run_guard, "terminate_pid",
+                            lambda pid: signalled.append(pid) or True)
+        child = subprocess.Popen([sys.executable, "-c",
+                                  "import time; time.sleep(2)"])
+        try:
+            record = run_guard._stop_bound_process(
+                child, {"launcher_pid": child.pid, "record_pid": None,
+                        "bound_pid": 999999}, 0.2, 0.05)
+        finally:
+            child.kill()
+        assert signalled == [], "an already-dead pid must not be signalled"
+        assert record["bound_pid_signalled"] is False
+        assert record["exit_confirmed"] is True, \
+            "a process already gone is a confirmed stop"
+
 
     def test_binding_uses_launch_relationship_when_record_is_unverified(self):
         child = subprocess.Popen([sys.executable, "-c",

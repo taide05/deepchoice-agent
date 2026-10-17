@@ -201,6 +201,21 @@ def begin_run(task_id: str, directory: str) -> None:
         raise RunRecordError(
             "run record could not be established: identity or counters were not written"
         )
+    # A leftover file from an earlier attempt in the same directory must not be
+    # mistaken for this run's counters.
+    try:
+        counts_payload = json.loads(
+            (_run_dir / "run_limits_counts.json").read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RunRecordError(
+            f"run record could not be established: counters unreadable: {exc}"
+        ) from exc
+    if (counts_payload.get("task_id") != task_id
+            or counts_payload.get("run_started_at_epoch")
+            != _state["run_started_at_epoch"]):
+        raise RunRecordError(
+            "run record could not be established: counters do not belong to this run"
+        )
     print(f"[stop-line] run record started for {task_id}", flush=True)
 
 

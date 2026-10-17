@@ -101,6 +101,15 @@ def direct_children(parent_pid: int) -> list[int] | None:
 
         k32 = ctypes.windll.kernel32
         k32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        k32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        k32.Process32First.argtypes = [wintypes.HANDLE,
+                                       ctypes.POINTER(PROCESSENTRY32)]
+        k32.Process32First.restype = wintypes.BOOL
+        k32.Process32Next.argtypes = [wintypes.HANDLE,
+                                      ctypes.POINTER(PROCESSENTRY32)]
+        k32.Process32Next.restype = wintypes.BOOL
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.CloseHandle.restype = wintypes.BOOL
         snapshot = k32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
         invalid = wintypes.HANDLE(-1).value
         if snapshot in (invalid, None):
@@ -310,6 +319,23 @@ def _residual_identity(binding: dict, child) -> dict:
     }
 
 
+def _refresh_binding(binding: dict) -> dict:
+    """Re-establish the bound pid from the launch relationship before signalling.
+
+    A child can exit between enumeration and the terminate call; re-enumerating
+    and only signalling a still-present child closes that window. A pid that can
+    no longer be shown to be in the launch tree is never signalled.
+    """
+    launcher = binding.get("launcher_pid")
+    if not isinstance(launcher, int):
+        return binding
+    fresh = bind_service_process(launcher, binding.get("record_pid"))
+    if fresh.get("bound_pid") != binding.get("bound_pid"):
+        fresh["rebound"] = True
+        fresh["rebound_from"] = binding.get("bound_pid")
+    return fresh
+
+
 def _stop_bound_process(child, binding: dict, kill_grace_s: float,
                         poll_s: float) -> dict:
     """Stop and confirm the bound service interpreter.
@@ -318,6 +344,7 @@ def _stop_bound_process(child, binding: dict, kill_grace_s: float,
     process exiting. If only the launcher process exits, the execution has not
     been shown to stop.
     """
+    binding = _refresh_binding(binding)
     bound = binding.get("bound_pid")
     record = {
         "binding": binding,
@@ -329,22 +356,38 @@ def _stop_bound_process(child, binding: dict, kill_grace_s: float,
         record["stop_failed"] = True
         record["note"] = ("no process was bound to the launcher's process tree; "
                           "no termination signal was sent to an unverified pid")
-        return record | {"exit_confirmed": False, "launcher_exit_confirmed": child.poll() is not None}
-
-    # Only the bound interpreter is targeted; the record pid is never signalled
-    # unless it is the bound interpreter.
-    if terminate_pid(bound):
+        return record | {"exit_confirmed": False,
+                         "launcher_exit_confirmed": child.poll() is not None}
+    if not _pid_alive(bound):
+        # The bound process is already gone; never signal a pid that is no longer
+        # the process we bound.
+        record["note"] = "the bound interpreter was already gone before signalling"
+    elif terminate_pid(bound):
         record["bound_pid_signalled"] = True
+        record["record_pid_signalled"] = (bound == binding.get("record_pid"))
     else:
         record["termination_failures"] += 1
-    record["record_pid_signalled"] = (bound == binding.get("record_pid"))
+    record["record_pid_signalled"] = bound == binding.get("record_pid")
     _wait_for_death(bound, kill_grace_s, poll_s)
     if _pid_alive(bound):
         record["termination_failures"] += 1
-        terminate_pid(bound)
-        _wait_for_death(bound, kill_grace_s, poll_s)
+        refreshed = _refresh_binding(binding)
+        rebound = refreshed.get("bound_pid")
+        if rebound != bound:
+            # The pid may have been recycled; only the currently bound process may
+            # be signalled.
+            record["rebound_before_retry"] = {
+                "from": bound, "to": rebound,
+                "source": refreshed.get("source"),
+            }
+            binding = refreshed
+            bound = rebound
+            record["binding"] = binding
+        if bound is not None and _pid_alive(bound):
+            terminate_pid(bound)
+            _wait_for_death(bound, kill_grace_s, poll_s)
 
-    interpreter_dead = not _pid_alive(bound)
+    interpreter_dead = bound is not None and not _pid_alive(bound)
 
     # The launcher-created process may be a redirector; let it settle, then reap
     # it as owned cleanup. Its exit is recorded but is not the exit confirmation.
@@ -479,11 +522,19 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
                 poll_s, clock, log,
                 task_state_at_stop=state_record.get("state"))
 
-        # Nothing could be bound, but the record still names a live process. It is
-        # not proof of ownership, so it is not signalled — and the stop cannot be
-        # reported as confirmed.
-        if (binding_probe.get("bound_pid") is None
-                and isinstance(record_pid, int) and _pid_alive(record_pid)):
+        # Nothing could be bound. If the record names a live process it is not
+        # proof of ownership, so it is not signalled. If process enumeration was
+        # unavailable, an orphaned interpreter could still be alive behind this
+        # exit, so the stop is reported as unconfirmed rather than normal.
+        unbound_unconfirmed = (
+            binding_probe.get("bound_pid") is None
+            and (binding_probe.get("source") == "unavailable"
+                 or (isinstance(record_pid, int) and _pid_alive(record_pid))))
+        if unbound_unconfirmed:
+            residual_pids = []
+            if isinstance(record_pid, int) and _pid_alive(record_pid):
+                residual_pids.append({"pid": record_pid, "role": "record_pid",
+                                      "alive": True})
             record = {
                 "task_id": armed["task_id"],
                 "forced": True,
@@ -502,14 +553,13 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
                 "stop_failed": True,
                 "task_state_at_stop": state_record.get("state"),
                 "note": ("the launcher-created process exited and no interpreter "
-                         "could be bound to it; the process named in the record was "
-                         "not signalled and its stop is unconfirmed"),
+                         "could be bound to it; no unverified pid was signalled "
+                         "and the stop is unconfirmed"),
                 "residual": {
                     "bound_pid": None,
                     "binding_source": binding_probe.get("source"),
                     "record_pid": record_pid,
-                    "residual_pids": [{"pid": record_pid, "role": "record_pid",
-                                       "alive": True}],
+                    "residual_pids": residual_pids,
                 },
                 "confirmed_dispatch_count": count_confirmed_dispatches(
                     outputs_dir, service_started_epoch, service_token=service_token),
@@ -518,7 +568,7 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
             record["exited_at_iso"] = _iso(record["exited_at_epoch"])
             record["record_path"] = _write_stop_record(armed, record)
             log(f"[guard] stop NOT confirmed for run {armed['task_id']}: "
-                f"no bound interpreter; residual record pid {record_pid}")
+                f"no bound interpreter ({binding_probe.get('source')})")
             return record
         _wait_for_death(binding_probe.get("bound_pid"), kill_grace_s, poll_s)
 
