@@ -16,11 +16,13 @@ printed, copied or committed.
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 WORKTREE = Path(__file__).resolve().parent
@@ -144,6 +146,14 @@ def main() -> int:
     env["DEEPCHOICE_WORKTREE"] = str(WORKTREE)
     env["DEEPCHOICE_HOST"] = HOST
     env["DEEPCHOICE_PORT"] = str(PORT)
+    # The guard recognises this service's runs by this token, not by process ids:
+    # a virtualenv python.exe is a launcher and the service runs as its child.
+    service_token = uuid.uuid4().hex
+    env["DEEPCHOICE_SERVICE_TOKEN"] = service_token
+    # Offline model stack for the child; set before transformers is imported there.
+    env["HF_HUB_OFFLINE"] = "1"
+    env["TRANSFORMERS_OFFLINE"] = "1"
+    env["HF_HUB_DISABLE_TELEMETRY"] = "1"
     env["PYTHONPATH"] = os.pathsep.join(
         [str(SRC), str(WORKTREE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
 
@@ -166,8 +176,29 @@ def main() -> int:
             wall_clock_max_s=float(run_limits.WALL_CLOCK_MAX_S),
             service_started_epoch=service_started_epoch,
             cancel_fn=cancel_via_http,
+            service_token=service_token,
             log=lambda message: print(message, flush=True),
         )
+    except Exception as guard_err:
+        # The guard itself failed; say so next to the runs and stop the child, but
+        # never pretend a stop record exists.
+        print(f"[launcher] guard failed: {type(guard_err).__name__}: {guard_err}",
+              flush=True)
+        try:
+            (WORKTREE / "outputs").mkdir(parents=True, exist_ok=True)
+            (WORKTREE / "outputs" / "guard_failure.json").write_text(
+                json.dumps({
+                    "at_epoch": time.time(),
+                    "at_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z",
+                                            time.localtime(time.time())),
+                    "service_pid": child.pid,
+                    "error": f"{type(guard_err).__name__}: {guard_err}",
+                    "note": "no guard_stop record could be written; the child was "
+                            "terminated by the launcher's cleanup",
+                }, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        raise
     finally:
         if child.poll() is None:
             child.terminate()

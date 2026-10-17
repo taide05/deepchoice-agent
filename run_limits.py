@@ -113,6 +113,9 @@ def _run_state(mutate: dict | None = None) -> dict:
         "task_id": _task_id,
         "state": "running",
         "pid": os.getpid(),
+        # The launcher's per-service token: how its guard knows this run belongs
+        # to the child it started, without depending on process ids.
+        "service_token": os.environ.get("DEEPCHOICE_SERVICE_TOKEN"),
         "started_at_epoch": _state.get("run_started_at_epoch"),
         "started_at_iso": _iso(_state.get("run_started_at_epoch")),
         "ended_at_epoch": None,
@@ -162,14 +165,16 @@ def begin_run(task_id: str, directory: str) -> None:
     global _run_dir, _task_id
     _run_dir = pathlib.Path(directory)
     _task_id = task_id
-    if _state.get("run_started_at_epoch") is None:
-        _state["run_started_at_epoch"] = time.time()
+    # Each run gets its own clock. Reusing an earlier run's start would make the
+    # guard treat a fresh run as already near its deadline.
+    _state["run_started_at_epoch"] = time.time()
+    if _state.get("run_started_at") is None or _state.get("run_ended"):
+        _state["run_started_at"] = time.monotonic()
+        _state["run_ended"] = False
     _state["counts_at_start"] = {
         "llm_requests": _state["llm_requests"],
         "tavily_posts": _state["tavily_posts"],
     }
-    if _state.get("run_started_at") is None:
-        _state["run_started_at"] = time.monotonic()
     record = _run_state({"state": "running"})
     _write_run_state(record)
     _persist_active()
@@ -191,6 +196,7 @@ def end_run(state: str, detail: str = "") -> None:
     })
     _write_run_state(record)
     _persist_active()
+    _state["run_ended"] = True
     print(f"[stop-line] run record ended: {state}"
           f"{(' — ' + detail) if detail else ''}", flush=True)
 

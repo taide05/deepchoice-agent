@@ -16,6 +16,10 @@ class ResearchState(TypedDict):
     knowledge_gaps: list[str]
     retry_count: int
     partial_failures: list[str]
+    # Sources that returned no research material (as opposed to failing). Kept in
+    # state so the snapshot preserves which source is empty and why; an
+    # undeclared field would be dropped by the graph on write.
+    empty_sources: list[dict]
     quality_signals: list[dict]
     current_phase: str
     agent_timing: dict

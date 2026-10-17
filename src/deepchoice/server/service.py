@@ -15,11 +15,30 @@ import os
 import sys
 from pathlib import Path
 
+OFFLINE_MODEL_ENV = {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "HF_HUB_DISABLE_TELEMETRY": "1",
+}
+
+
+def configure_offline_model_stack() -> None:
+    """Force the model stack offline, locally to this process.
+
+    Must run before transformers / huggingface_hub are imported: they read these
+    into module constants at import time. Even with ``local_files_only=True``,
+    the hub's header builder otherwise performs one agent-detection GET. This
+    changes this process only — no shared environment, proxy or model download.
+    """
+    os.environ.update(OFFLINE_MODEL_ENV)
+
 
 def main() -> int:
     worktree = Path(os.environ.get("DEEPCHOICE_WORKTREE", ".")).resolve()
     os.chdir(worktree)
     sys.path.insert(0, str(worktree / "src"))
+
+    configure_offline_model_stack()
 
     host = os.environ.get("DEEPCHOICE_HOST", "127.0.0.1")
     port = int(os.environ.get("DEEPCHOICE_PORT", "8100"))

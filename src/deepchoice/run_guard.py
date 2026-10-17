@@ -21,7 +21,10 @@ the final consumption is recorded as unknown rather than as zero.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
+import signal
+import subprocess
 import time
 
 POLL_S = 0.5
@@ -31,6 +34,8 @@ DEFAULT_KILL_GRACE_S = 5.0
 # Tolerance when telling this service's runs from older run records on disk.
 RUN_START_TOLERANCE_S = 5.0
 
+_STILL_ACTIVE = 259
+
 
 def _iso(epoch: float | None) -> str | None:
     if epoch is None:
@@ -38,12 +43,55 @@ def _iso(epoch: float | None) -> str | None:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(epoch))
 
 
-def find_active_run(outputs_dir, service_started_epoch: float) -> dict | None:
+def _pid_alive(pid: int) -> bool:
+    """Whether the process is still running, without signalling it."""
+    if os.name == "nt":
+        import ctypes
+
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            return bool(ok) and code.value == _STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _terminate_pid(pid: int) -> bool:
+    """Terminate one process the run record names as this run's service process.
+
+    On Windows a virtualenv's python.exe is a launcher: Popen reports the
+    launcher pid while the interpreter that runs the service is its child. The
+    record carries the interpreter's own pid, so that is the process stopped.
+    """
+    try:
+        if os.name == "nt":
+            result = subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                                    capture_output=True, text=True, timeout=10)
+            return result.returncode == 0
+        os.kill(pid, signal.SIGTERM)
+        return True
+    except Exception:
+        return False
+
+
+
+def find_active_run(outputs_dir, service_started_epoch: float,
+                    service_token: str | None = None) -> dict | None:
     """The newest run this service started that is still marked running.
 
-    Only records created by this service are considered (started at or after
-    service start), so an older run left on disk can never supply the deadline
-    for the current one.
+    When the launcher supplies its per-service token, the record must carry the
+    same token: a stale record from an older process can never supply the current
+    deadline. The token travels by environment variable rather than by process id,
+    because a virtualenv's python.exe is a launcher and the service runs as a
+    child process with a different pid.
     """
     outputs = pathlib.Path(outputs_dir)
     if not outputs.is_dir():
@@ -56,6 +104,9 @@ def find_active_run(outputs_dir, service_started_epoch: float) -> dict | None:
             continue  # a partially written record is not evidence of a run
         if record.get("state") != "running":
             continue
+        if service_token is not None:
+            if record.get("service_token") != service_token:
+                continue
         started = record.get("started_at_epoch")
         if not isinstance(started, (int, float)):
             continue
@@ -66,10 +117,39 @@ def find_active_run(outputs_dir, service_started_epoch: float) -> dict | None:
             "dir": state_path.parent,
             "state_path": state_path,
             "started_at_epoch": float(started),
+            "record": record,
         })
     if not active:
         return None
     return max(active, key=lambda item: item["started_at_epoch"])
+
+
+def count_confirmed_dispatches(outputs_dir, service_started_epoch: float,
+                              service_token: str | None = None) -> int:
+    """How many runs this service actually dispatched, as far as the records show.
+
+    A run record is written by the research task itself, so a dispatch that never
+    reached a record cannot be counted — hence "confirmed". The value is measured
+    from the run records, not assumed.
+    """
+    outputs = pathlib.Path(outputs_dir)
+    if not outputs.is_dir():
+        return 0
+    count = 0
+    for state_path in outputs.glob("*/run_state.json"):
+        try:
+            record = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if service_token is not None and record.get("service_token") != service_token:
+            continue
+        started = record.get("started_at_epoch")
+        if not isinstance(started, (int, float)):
+            continue
+        if started < service_started_epoch - RUN_START_TOLERANCE_S:
+            continue
+        count += 1
+    return count
 
 
 def _read_json(path: pathlib.Path) -> dict:
@@ -96,18 +176,23 @@ def _write_stop_record(run: dict, record: dict) -> str | None:
 
 def guard_service(child, outputs_dir, wall_clock_max_s: float,
                   service_started_epoch: float, cancel_fn,
+                  service_token: str | None = None,
                   poll_s: float = POLL_S, grace_s: float = DEFAULT_GRACE_S,
                   kill_grace_s: float = DEFAULT_KILL_GRACE_S,
                   clock=time.time, log=print) -> dict:
     """Watch the service child until it exits, or force it down at the deadline.
 
-    `child` must be the process the launcher itself spawned; only that process is
-    ever signalled. `cancel_fn(task_id)` is the normal cancellation path and must
-    return quickly (the caller bounds it) — a failure or timeout here does not
-    prevent the final step.
+    `child` is the process the launcher itself spawned and `service_token` is the
+    token only this launcher gave its child, so only this service's run can arm
+    the deadline. On Windows Popen reports a launcher pid while the interpreter
+    that runs the service is its child; the run record carries that interpreter's
+    pid and it is the process stopped. `cancel_fn(task_id)` is the normal
+    cancellation path and must return quickly (the caller bounds it) — a failure
+    or timeout here does not prevent the final step.
     """
     while child.poll() is None:
-        run = find_active_run(outputs_dir, service_started_epoch)
+        run = find_active_run(outputs_dir, service_started_epoch,
+                              service_token=service_token)
         if run is None:
             time.sleep(poll_s)
             continue
@@ -155,20 +240,32 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
                 f"(code {child.returncode})")
             return record
 
-        # --- bounded escalation, dedicated child only -----------------------
+        # --- bounded escalation, this run's dedicated process only ----------
+        service_pid = run.get("record", {}).get("pid")
         record["terminate_at_epoch"] = clock()
-        child.terminate()
+        record["service_process_pid"] = service_pid
+        target_terminated = False
+        if isinstance(service_pid, int) and service_pid != child.pid:
+            # The interpreter that runs the service (a virtualenv python.exe
+            # launcher reports a different pid through Popen).
+            target_terminated = _terminate_pid(service_pid)
+        if not target_terminated:
+            child.terminate()
         _wait_for_exit(child, kill_grace_s, poll_s)
         if child.poll() is None:
             record["kill_at_epoch"] = clock()
+            if isinstance(service_pid, int) and service_pid != child.pid:
+                _terminate_pid(service_pid)
             child.kill()
             _wait_for_exit(child, kill_grace_s, poll_s)
 
         exited_at = clock()
         exit_confirmed = child.poll() is not None
+        if not exit_confirmed and isinstance(service_pid, int):
+            exit_confirmed = not _pid_alive(service_pid)
         record.update({
             "forced": True,
-            "terminate_sent": True,
+            "service_process_terminated": target_terminated,
             "exit_code": child.returncode,
             "exit_confirmed": exit_confirmed,
             "exited_at_epoch": exited_at,
@@ -176,8 +273,8 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
             "overrun_s": round(max(0.0, exited_at - deadline), 1),
         })
         if not exit_confirmed:
-            record["note"] = ("the dedicated child could not be confirmed gone; "
-                              "no other process was signalled")
+            record["note"] = ("the dedicated service process could not be "
+                              "confirmed gone; no other process was signalled")
 
         # What the run confirmed about itself before it was stopped.
         counts = _read_json(pathlib.Path(run["dir"]) / "run_limits_counts.json")
@@ -186,10 +283,11 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
             "llm_requests": counts.get("llm_requests"),
             "tavily_posts": counts.get("tavily_posts"),
         }
-        record["confirmed_dispatch_count"] = 1
+        record["confirmed_dispatch_count"] = count_confirmed_dispatches(
+            outputs_dir, service_started_epoch, service_token=service_token)
         record["dispatches_confirmed"] = (
-            "one research task is recorded for this run; a request in flight when "
-            "the process was stopped may not be counted")
+            "measured from the run records of this service; a request in flight "
+            "when the process was stopped may not be counted")
         record["record_path"] = _write_stop_record(run, record)
         log(f"[guard] forced stop of run {run['task_id']} at deadline "
             f"{_iso(deadline)}; exit confirmed={exit_confirmed} "
