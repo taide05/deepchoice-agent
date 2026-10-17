@@ -417,8 +417,12 @@ class TestBodyLessSourcesAcrossEveryRoute:
     def _state(self):
         return {"task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
                 "evidence_chains": self._chains(), "conflicts": [],
-                "knowledge_gaps": [], "final_recommendation": {},
-                "confidence": "medium"}
+                "knowledge_gaps": [], "confidence": "medium",
+                # A basis only exists if the synthesis result cites a source;
+                # the report derives 'used' from the citations, not from what was
+                # retrieved.
+                "final_recommendation": {
+                    "recommendation": f"Use it [Source: {self.REAL['title']}]."}}
 
     def test_marker_survives_evidence_chain(self):
         from deepchoice.agents.evidence_chain import build_evidence_chain
@@ -434,17 +438,15 @@ class TestBodyLessSourcesAcrossEveryRoute:
         from deepchoice.formats.evidence_first import render as render_evidence
 
         out = render_evidence(self._state())
-        # Scope to the evidence list itself: the link may still appear elsewhere
-        # as a navigation reference, but not as this chain's evidence. Compare the
-        # exact linked line, since one source URL is a prefix of the other.
-        section = out.split("### Strongest Evidence")[-1].split("### Supporting")[0]
+        # The body-less link may still appear, but only as a labelled navigation
+        # link. It must never be presented as a source the report relies on.
         nav_line = f"[{self.NAV['title']}]({self.NAV['url']})"
-        # It may be listed, but only as a labelled navigation link, never as
-        # unlabelled evidence.
-        for line in section.splitlines():
+        for line in out.splitlines():
             if nav_line in line:
                 assert "navigation link only" in line or "导航链接" in line, line
-        assert "[PostgreSQL 17 release notes]" in section
+        # The cited, fact-bearing source is the report's basis.
+        assert f"[{self.REAL['title']}]({self.REAL['url']}) ×1" in out
+        assert "[PostgreSQL 17 release notes]" in out
 
     def test_reading_view_payload_never_numbers_it(self):
         """The UI falls back to the card's own number for unknown URLs, so a

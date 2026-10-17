@@ -82,7 +82,6 @@ class TestBenchmarkAnswersAreNotResearchBasis:
     for the question that set is meant to evaluate."""
 
     def test_the_generated_documents_declare_their_provenance(self):
-        from deepchoice.agents.conclusion_synthesizer import _summarize_chains  # noqa: F401
         kb = pathlib.Path(r"D:\deepchoice-precodex\chroma_kb")
         marked = sorted((kb / "data" / "benchmark_answers").glob("*.md"))
         assert marked, "fixture: the generated answer documents exist"
@@ -225,29 +224,33 @@ class TestRetrievalHitsAreNotJudgments:
         assert "[strong]" not in payload
 
     def test_the_report_basis_is_the_sources_synthesis_actually_used(self):
+        import re
+
+        from deepchoice.formats.basis import used_sources
+
         state = v4_state()
         report = render(state)
-        why = report.split("## Why")[1].split("## 争议")[0] if "## Why" in report else ""
+        why = report.split("## Why")[1].split("## 争议")[0]
         assert why, "the Why section is present"
-        # Every source named in the Why section must appear as a citation in the
-        # synthesis result; an unused retrieval hit must not be presented there.
-        rec = state["final_recommendation"]
-        import re
-        cited = set()
-        blobs = [str(rec.get(f) or "") for f in
-                 ("recommendation", "winner_rationale", "confidence_rationale",
-                  "evidence_summary", "scene_fit_note")]
-        for opt in rec.get("ranked_options") or []:
-            blobs.extend(str(opt.get(f) or "") for f in
-                         ("rationale", "constraint_fit_reason", "key_strength",
-                          "key_weakness"))
-        for to in rec.get("trade_offs") or []:
-            blobs.extend(str(to.get(f) or "") for f in ("finding", "impact"))
-        for blob in blobs:
-            cited.update(p.strip() for p in
-                         re.findall(r"\[Source:\s*([^\]]+)\]", blob))
-        for name in re.findall(r"^- \[(.+?)\]\(.+?\) ×\d+", why, re.MULTILINE):
-            assert name in cited, f"unused retrieval hit presented as basis: {name}"
+        used = used_sources(state["final_recommendation"], state["evidence_chains"])
+        assert used, "fixture: the synthesis cites sources"
+        # The Why section must name exactly the sources production derives as
+        # used — not every retrieved hit. It is compared against the production
+        # helper rather than re-deriving the set here.
+        listed = set(re.findall(r"^- \[(.+?)\]\(.+?\) ×\d+", why, re.MULTILINE))
+        assert listed, "the Why section lists no sources at all"
+        assert listed == {u["title"] for u in used}, (
+            f"presented but not used: {sorted(listed - {u['title'] for u in used})}; "
+            f"used but not presented: {sorted({u['title'] for u in used} - listed)}")
+        # An unused retrieval hit must not appear as a basis anywhere.
+        unused = {s.get("title") for c in state["evidence_chains"]
+                  for s in (c.get("sources") or [])} - {u["title"] for u in used}
+        references = report.split("### References")[-1].split("### 参考来源")[-1]
+        for title in unused:
+            if not title:
+                continue
+            assert f"[{title}]" not in references, \
+                f"unused retrieval hit listed as a reference: {title}"
 
 
 class TestFinalArtefactsAgree:
@@ -335,19 +338,25 @@ class TestFinalArtefactsAgree:
         assert clean_label("内存效率与成本 [[16]]") == "内存效率与成本"
 
     def test_legitimate_citations_survive_all_of_this(self):
+        import re
         state = v4_state()
         report = render(state)
         rec = state["final_recommendation"]
         title = None
         for opt in rec.get("ranked_options") or []:
-            import re
             found = re.findall(r"\[Source:\s*([^\]]+)\]", str(opt.get("rationale") or ""))
             if found:
                 title = found[0]
                 break
         assert title, "fixture: the recommendation cites a source"
+        # The inline citation survives, and the source is also listed in the
+        # References section derived from the used-source set.
         assert f"[Source: {title}]" in report
+        references = report.split("### References")[-1]
+        assert title in references
 
+
+class TestUnresolvedQuestionsAreRendered:
     """The synthesis writes `unresolved_questions` into the recommendation, but
     no renderer printed them, so questions it could not answer vanished."""
 
@@ -374,9 +383,58 @@ class TestFinalArtefactsAgree:
             assert clean_label(gap) in report, f"review gap lost: {gap[:40]}"
 
     def test_a_duplicate_is_shown_once(self):
+        from deepchoice.agents.conclusion_synthesizer import clean_label
+
         state = v4_state()
         gap = (state.get("knowledge_gaps") or [""])[0]
         rec = json.loads(json.dumps(state["final_recommendation"]))
         rec["unresolved_questions"] = [gap]
         report = render({**state, "final_recommendation": rec})
-        assert report.count(f"- {gap}") == 1
+        # The question must actually be rendered (not skipped), exactly once.
+        shown = clean_label(gap)
+        assert shown in report
+        assert report.count(f"- {shown}") == 1
+
+
+class TestTheOtherReportFormatsShareTheBasis:
+    """The comparison and evidence-first formats still read the chain
+    `conclusion`/`evidence_strength`/`score` fields after the chain builder
+    stopped supplying them, so they rendered empty conclusions and "(unknown)".
+    Both are selectable through /report?format=, /export and /regenerate."""
+
+    def _renders(self):
+        from deepchoice.formats.comparison_matrix import render as render_matrix
+        from deepchoice.formats.evidence_first import render as render_evidence
+        state = v4_state()
+        return state, render_evidence(state), render_matrix(state)
+
+    def test_no_format_renders_a_removed_field_as_content(self):
+        _state, evidence, matrix = self._renders()
+        for name, text in (("evidence_first", evidence), ("comparison_matrix", matrix)):
+            for marker in ("(unknown)", "score: N/A", "strength: unknown",
+                           "Insufficient evidence", "数据不足"):
+                assert marker not in text, f"{name} rendered {marker!r}"
+
+    def test_no_format_prints_a_dangling_citation_number(self):
+        import re
+        for name, text in zip(("evidence_first", "comparison_matrix"),
+                              self._renders()[1:]):
+            assert not re.search(r"\[\[\s*-?\d+\s*\]\]", text), \
+                f"{name} printed a dangling citation number"
+
+    def test_the_matrix_compares_the_synthesis_candidates(self):
+        state, _evidence, matrix = self._renders()
+        for opt in state["final_recommendation"]["ranked_options"]:
+            assert opt["name"] in matrix, f"candidate missing from the matrix: {opt['name']}"
+
+    def test_every_format_lists_the_same_used_sources(self):
+        from deepchoice.formats.basis import used_sources
+
+        state, evidence, matrix = self._renders()
+        names = [s["title"] for s in used_sources(state["final_recommendation"],
+                                                  state["evidence_chains"])]
+        assert names, "fixture: the synthesis cites sources"
+        for title in names:
+            assert title in evidence, f"evidence_first lost {title}"
+            assert title in matrix, f"comparison_matrix lost {title}"
+

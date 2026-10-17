@@ -1,3 +1,4 @@
+from .basis import source_provenance_note, used_sources
 from .coverage import derive_data_source_note
 from ..agents.conclusion_synthesizer import clean_label
 
@@ -39,82 +40,6 @@ def _one_line(value) -> str:
     rest of that candidate's explanation.
     """
     return " ".join(str(value or "").split())
-
-
-_CITED_TEXT_FIELDS = ("recommendation", "winner_rationale", "confidence_rationale",
-                      "evidence_summary", "scene_fit_note")
-_CITED_OPTION_FIELDS = ("rationale", "constraint_fit_reason", "key_strength",
-                        "key_weakness")
-_CITED_TRADEOFF_FIELDS = ("finding", "impact")
-
-
-def _used_sources(rec: dict, chains: list[dict]) -> list[dict]:
-    """The sources the synthesis result actually cites, with their provenance.
-
-    A source belongs here only because the recommendation cites it — not because
-    it was retrieved. Retrieval order and score say how a result was found, not
-    that it supports anything, so material the synthesis did not use must not be
-    presented as this report's basis.
-
-    Body-less links are excluded: a link with no collected body is navigation,
-    not a basis.
-    """
-    import re
-
-    from ..utils.candidate_identity import has_factual_content
-
-    by_title: dict[str, dict] = {}
-    for chain in chains or []:
-        for src in chain.get("sources", []):
-            title = src.get("title", "")
-            if title and src.get("url") and has_factual_content(src):
-                by_title.setdefault(title, src)
-
-    blobs: list[str] = [str((rec or {}).get(f) or "") for f in _CITED_TEXT_FIELDS]
-    for opt in (rec or {}).get("ranked_options") or []:
-        if isinstance(opt, dict):
-            blobs.extend(str(opt.get(f) or "") for f in _CITED_OPTION_FIELDS)
-    for to in (rec or {}).get("trade_offs") or []:
-        if isinstance(to, dict):
-            blobs.extend(str(to.get(f) or "") for f in _CITED_TRADEOFF_FIELDS)
-
-    used: dict[str, dict] = {}
-    for blob in blobs:
-        for marker in re.findall(r"\[Source:\s*([^\]]+)\]", blob):
-            for part in marker.split(", Source:"):
-                title = part.strip()
-                src = by_title.get(title)
-                if not src:
-                    continue
-                entry = used.setdefault(title, {
-                    "title": title,
-                    "url": src.get("url", ""),
-                    "provenance": src.get("provenance", "unknown"),
-                    "channel": src.get("channel", ""),
-                    "citations": 0,
-                })
-                entry["citations"] += 1
-    return list(used.values())
-
-
-def _source_provenance_note(src: dict, lang: str) -> str:
-    """Describe a source's origin honestly, without calling local material public.
-
-    Only material whose origin could be mistaken for something else is
-    annotated: locally held documents and evaluation material. A page fetched
-    from the web needs no note — its URL already says where it came from.
-    """
-    provenance = str(src.get("provenance") or "").strip().lower()
-    channel = str(src.get("channel") or "").strip().lower()
-    url = str(src.get("url", "")).lower()
-    if provenance == "benchmark_ground_truth" or channel == "benchmark_ground_truth":
-        return "（评测答案材料）" if lang == "zh" else " (benchmark answer material)"
-    if channel == "local_kb" or url.startswith("file://"):
-        return "（本地知识库文档）" if lang == "zh" else " (local knowledge-base document)"
-    if url.startswith(("http://", "https://")):
-        return ""
-    return "（出处未知）" if lang == "zh" else " (provenance unknown)"
-
 
 
 def _has_body(src: dict) -> bool:
@@ -254,7 +179,7 @@ def render(state: dict) -> str:
     # as an established judgment. The basis is now the set of sources the
     # synthesis result cites; everything else stays in the raw retrieval record
     # (source_scores / search_results in the snapshot) and is not a basis here.
-    used = _used_sources(rec, chains)
+    used = used_sources(rec, chains)
     if used:
         if lang == "zh":
             lines.append(f"本次推荐实际引用了 {len(used)} 个来源；引用次数表示该来源在推荐中被使用的次数，"
@@ -265,7 +190,7 @@ def render(state: dict) -> str:
                          "supports a claim:")
         lines.append("")
         for src in used[:12]:
-            note = _source_provenance_note(src, lang)
+            note = source_provenance_note(src, lang)
             lines.append(f"- [{src['title']}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")
     else:
@@ -435,9 +360,9 @@ def render(state: dict) -> str:
     # References are the same set the Why section just derived: the sources the
     # synthesis result actually used. Retrieving a page does not make it a
     # reference for a claim, so unused material is not listed here.
-    refs = _used_sources(rec, chains)
+    refs = used_sources(rec, chains)
     for src in refs[:12]:
-        note = _source_provenance_note(src, lang)
+        note = source_provenance_note(src, lang)
         lines.append(f"- [{src['title']}]({src['url']}){note}")
     if len(refs) > 12:
         lines.append(f"*(+{len(refs) - 12} more sources used)")

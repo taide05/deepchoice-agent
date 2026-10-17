@@ -1,8 +1,15 @@
+from ..agents.conclusion_synthesizer import clean_label
+from .basis import source_provenance_note, used_sources
 from .coverage import derive_data_source_note
 
 
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
+
+
+def _cell(value) -> str:
+    """A markdown table cell: one line, and no cell separator inside it."""
+    return " ".join(str(value or "").split()).replace("|", "\\|") or "—"
 
 
 def _link(text: str, src: dict) -> str:
@@ -39,12 +46,15 @@ def render(state: dict) -> str:
     lang = _lang(query)
 
     L = {
-        "title": {"en": f"# {query} — 5-Dimension Comparison Matrix", "zh": f"# {query} — 五维对比矩阵"},
-        "col_dim": {"en": "Dimension", "zh": "维度"},
-        "col_criterion": {"en": "Criterion", "zh": "判据"},
-        "col_strength": {"en": "Evidence Strength", "zh": "证据强度"},
-        "no_data": {"en": "Insufficient data", "zh": "数据不足"},
-        "no_evidence": {"en": "Insufficient evidence", "zh": "证据不足"},
+        "title": {"en": f"# {query} — Candidate Comparison", "zh": f"# {query} — 候选对比"},
+        "col_candidate": {"en": "Candidate", "zh": "候选"},
+        "col_fit": {"en": "Constraint fit", "zh": "约束适配"},
+        "col_rationale": {"en": "Why", "zh": "理由"},
+        "col_strength": {"en": "Advantage", "zh": "优势"},
+        "col_weakness": {"en": "Limitation", "zh": "局限"},
+        "no_candidates": {"en": "The synthesis produced no per-candidate comparison.",
+                          "zh": "本次合成结果没有给出按候选的对比。"},
+        "no_data": {"en": "not stated", "zh": "未给出"},
         "disputes_title": {"en": "## Disputes & Conflicts", "zh": "## 争议与分歧"},
         "dispute": {"en": "Dispute", "zh": "争议"},
         "claim_a": {"en": "Side A", "zh": "A方"},
@@ -62,58 +72,23 @@ def render(state: dict) -> str:
         "ranking": {"en": "### Ranking", "zh": "### 排序"},
         "tradeoffs": {"en": "### Trade-offs", "zh": "### 权衡"},
         "scene_fit": {"en": "Scene Fit", "zh": "场景适配"},
-        "top_basis": {"en": "Top basis", "zh": "首选依据"},
-        "best_available": {"en": "Best available basis", "zh": "最佳可用依据"},
+        "sources_used": {"en": "### Sources Used", "zh": "### 使用的来源"},
+        "no_used_source": {"en": "The synthesis result cites no traceable source.",
+                           "zh": "本次合成结果没有引用任何可追溯的来源。"},
         "confidence": {"en": "Confidence", "zh": "置信度"},
         "next_steps": {"en": "### Next Steps", "zh": "### 下一步"},
-        "step1": {"en": "1. Independently verify the strongest evidence source", "zh": "1. 验证最强证据来源的独立性"},
+        "step1": {"en": "1. Independently verify the cited sources", "zh": "1. 独立验证所引来源"},
         "step2": {"en": "2. Run targeted supplementary searches on disputed items", "zh": "2. 对争议点做针对性补充搜索"},
         "step3": {"en": "3. Build a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
     }
 
-    dims = {
-        "functionality": {
-            "label_en": "Functionality", "label_zh": "功能覆盖",
-            "kw_en": ["feature", "api", "capability", "coverage", "support"],
-            "kw_zh": ["功能", "特性", "接口", "覆盖"],
-        },
-        "performance": {
-            "label_en": "Performance", "label_zh": "性能表现",
-            "kw_en": ["performance", "throughput", "latency", "benchmark", "speed", "fast"],
-            "kw_zh": ["性能", "吞吐", "延迟", "基准"],
-        },
-        "ecosystem": {
-            "label_en": "Ecosystem", "label_zh": "生态与社区",
-            "kw_en": ["ecosystem", "community", "plugin", "documentation", "star"],
-            "kw_zh": ["生态", "社区", "插件", "文档"],
-        },
-        "dx": {
-            "label_en": "Developer Experience", "label_zh": "开发体验",
-            "kw_en": ["learning", "developer", "debug", "productivity", "experience", "simple"],
-            "kw_zh": ["学习", "开发", "调试", "效率", "简单"],
-        },
-        "scenario": {
-            "label_en": "Scenario Fit", "label_zh": "场景适配",
-            "kw_en": ["scenario", "fit", "deploy", "production", "scale", "solo"],
-            "kw_zh": ["场景", "部署", "生产", "规模", "个人"],
-        },
-    }
+    rec = state.get("final_recommendation", {}) or {}
 
-    # Classify evidence chains into dimensions
-    dim_results = {}
-    for dim_key, dim_info in dims.items():
-        rows = []
-        keywords = dim_info["kw_en"] + dim_info["kw_zh"]
-        for chain in chains:
-            conclusion = (chain.get("conclusion") or "").lower()
-            sources = chain.get("sources") or []
-            snippet = (sources[0].get("snippet") or "") if sources else ""
-            if any(kw in conclusion for kw in keywords) or any(kw in snippet.lower() for kw in keywords):
-                strength = chain.get("evidence_strength", "unknown")
-                dispute = " [disputed]" if chain.get("disputed") else ""
-                rows.append(f"- {chain.get('conclusion', '')} ({strength}){dispute}")
-        dim_results[dim_key] = rows
-
+    # The comparison comes from the synthesis result's own per-candidate
+    # explanations. The previous version sorted retrieval hits into five fixed
+    # "dimensions" by matching keywords in their titles and snippets and labelled
+    # each row with an "evidence strength" taken from its retrieval score — a
+    # judgement the pipeline never reached, built from a keyword table.
     lines = [
         L["title"][lang],
         "",
@@ -121,21 +96,23 @@ def render(state: dict) -> str:
     data_note = derive_data_source_note(state)
     if data_note:
         lines.extend([f"> {data_note}", ""])
-    lines.extend([
-        f"| {L['col_dim'][lang]} | {L['col_criterion'][lang]} | {L['col_strength'][lang]} |",
-        "|------|------|---------|",
-    ])
 
-    for dim_key, dim_info in dims.items():
-        label = dim_info[f"label_{lang}"]
-        rows = dim_results[dim_key]
-        if rows:
-            first_row = rows[0].lstrip("- ")
-            lines.append(f"| **{label}** | {first_row} | |")
-            for row in rows[1:]:
-                lines.append(f"| | {row.lstrip('- ')} | |")
-        else:
-            lines.append(f"| **{label}** | {L['no_data'][lang]} | — |")
+    options = [o for o in (rec.get("ranked_options") or []) if isinstance(o, dict)]
+    if options:
+        lines.append(f"| {L['col_candidate'][lang]} | {L['col_fit'][lang]} | "
+                     f"{L['col_rationale'][lang]} | {L['col_strength'][lang]} | "
+                     f"{L['col_weakness'][lang]} |")
+        lines.append("|---|---|---|---|---|")
+        for opt in options:
+            cells = [f"**#{opt.get('rank', '?')} {opt.get('name', '')}**",
+                     _cell(opt.get("constraint_fit")),
+                     _cell(opt.get("rationale")),
+                     _cell(opt.get("key_strength")),
+                     _cell(opt.get("key_weakness"))]
+            lines.append("| " + " | ".join(cells) + " |")
+        lines.append("")
+    else:
+        lines.extend([L["no_candidates"][lang], ""])
 
     lines.extend(["", L["disputes_title"][lang], ""])
     if conflicts:
@@ -171,7 +148,6 @@ def render(state: dict) -> str:
         else:
             lines.append(L["no_disputes"][lang])
 
-    rec = state.get("final_recommendation", {})
     winner = rec.get("winner", "")
     if not winner and rec.get("ranked_options"):
         winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
@@ -198,18 +174,25 @@ def render(state: dict) -> str:
             lines.append("")
             lines.append(L["tradeoffs"][lang])
             for t in rec["trade_offs"]:
-                lines.append(f"- **{t.get('dimension', '')}**: {t.get('finding', '')}")
+                # A dimension is a display label; a saved snapshot may still carry
+                # a raw source number in it, so it is cleaned for display exactly
+                # as the other format does.
+                lines.append(f"- **{clean_label(t.get('dimension', ''))}**: "
+                             f"{t.get('finding', '')}")
         if rec.get("scene_fit_note"):
             lines.append(f"\n*{L['scene_fit'][lang]}: {rec['scene_fit_note']}*")
     else:
-        strong = [c for c in chains if c.get("evidence_strength") == "strong" and not c.get("disputed")]
-        if strong:
-            lines.append(f"{L['top_basis'][lang]}: {strong[0].get('conclusion', '')}")
-        else:
-            top_chain = chains[0] if chains else None
-            if top_chain:
-                strength = top_chain.get('evidence_strength', 'unknown')
-                lines.append(f"{L['best_available'][lang]}: {top_chain.get('conclusion', '')} (strength: {strength})")
+        lines.extend(["", L["no_candidates"][lang], ""])
+
+    # The sources this report actually relies on, derived like every other format.
+    used = used_sources(rec, chains)
+    lines.extend(["", L["sources_used"][lang], ""])
+    if used:
+        for src in used[:12]:
+            note = source_provenance_note(src, lang)
+            lines.append(f"- [{src['title']}]({src['url']}){note}")
+    else:
+        lines.append(L["no_used_source"][lang])
 
     lines.extend([
         "",

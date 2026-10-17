@@ -118,7 +118,10 @@ class TestExportEndpoint:
             params={"format": "md", "report_format": "comparison_matrix"},
         )
         assert resp.status_code == 200
-        assert "5-Dimension Comparison Matrix" in resp.text
+        # The matrix now compares the synthesis result's candidates instead of
+        # sorting retrieval hits into five keyword-derived dimensions.
+        assert "Candidate Comparison" in resp.text
+        assert "FastAPI" in resp.text
 
     def test_stored_report_format_used_when_param_absent(self, monkeypatch):
         snap = dict(SNAPSHOT)

@@ -1,3 +1,4 @@
+from .basis import source_provenance_note, used_sources
 from .coverage import derive_data_source_note
 
 
@@ -45,10 +46,19 @@ def render(state: dict) -> str:
         "conclusion": {"en": "## Conclusion", "zh": "## 结论"},
         "insufficient": {"en": "Insufficient evidence to draw a conclusion.", "zh": "证据不足以得出结论。"},
         "trust": {"en": "## Why Trust This Conclusion", "zh": "## 证据可信度"},
-        "strongest": {"en": "### Strongest Evidence", "zh": "### 最强证据"},
-        "supporting": {"en": "### Supporting Evidence Chain", "zh": "### 支撑证据链"},
-        "counter": {"en": "## Counter-Evidence", "zh": "## 反面证据"},
-        "no_counter": {"en": "No significant counter-evidence found.", "zh": "未发现显著反面证据。"},
+        "sources_used": {"en": "The conclusion cites {n} source(s). The count shows how "
+                               "often a source is used, not how strongly it supports a claim:",
+                         "zh": "本次结论实际引用了 {n} 个来源；引用次数表示使用次数，不表示支持强度："},
+        "no_used_source": {"en": "The synthesis result cites no traceable source. That does "
+                                 "not mean retrieval returned nothing; it means this report "
+                                 "does not rely on it.",
+                           "zh": "本次合成结果没有引用任何可追溯的来源；这不代表检索没有返回材料，"
+                                 "只代表本报告没有用它作为依据。"},
+        "navigation": {"en": "**Navigation links (no body collected; not usable as a basis)**",
+                       "zh": "**导航链接（无正文，不能作为依据）**"},
+        "unused_note": {"en": "The other {n} retrieved item(s) are not part of this report's "
+                              "basis and remain in the raw retrieval record.",
+                        "zh": "其余 {n} 条检索结果未进入本报告的依据，保留在原始检索记录中。"},
         "disputes": {"en": "## Disputes", "zh": "## 争议"},
         "no_disputes": {"en": "No major disputes detected.", "zh": "未检测到重大争议。"},
         "claim_a": {"en": "Claim A", "zh": "主张 A"},
@@ -60,9 +70,6 @@ def render(state: dict) -> str:
         "step2": {"en": "2. Check if the disputed claims affect your use case", "zh": "2. 检查争议项是否影响你的使用场景"},
         "step3": {"en": "3. Run a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
     }
-
-    strong = [c for c in chains if c.get("evidence_strength") == "strong"]
-    top = strong[0] if strong else (chains[0] if chains else None)
 
     rec = state.get("final_recommendation", {})
     winner = rec.get("winner", "")
@@ -88,42 +95,44 @@ def render(state: dict) -> str:
             lines.append("")
             lines.append(f"*{rec['confidence_rationale']}*")
     else:
-        lines.append(top.get('conclusion', '') if top else T["insufficient"][lang])
-    lines.extend(["", T["trust"][lang]])
+        lines.append(T["insufficient"][lang])
+    lines.extend(["", T["trust"][lang], ""])
 
-    if top:
-        lines.append(T["strongest"][lang])
-        # Only fact-bearing sources are evidence. A discovered link whose body was
-        # never collected is navigation and must not be listed as this chain's
-        # strongest evidence, or exported as if it were.
-        factual_top = [s for s in top.get("sources", []) if _has_body(s)]
-        links_top = [s for s in top.get("sources", []) if not _has_body(s)]
-        if factual_top:
-            for src in factual_top:
-                lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) (score: {src.get('score', 'N/A')})")
-        else:
-            lines.append("No fact-bearing source was collected for this chain; "
-                         "recorded as a material gap." if lang != "zh"
-                         else "本条未取得正文来源，记为资料缺口。")
-        # A discovered link stays reachable even when it is not evidence.
-        for src in links_top:
-            lines.append(f"- [{src.get('title', '')}]({src.get('url', '')}) — "
-                         + ("导航链接，无正文，不能作为依据。" if lang == "zh"
-                            else "navigation link only, no body collected; not usable "
-                                 "as a basis."))
+    # The basis is what the synthesis result cites, derived the same way as in
+    # every other format. A retrieved page is not a finding: rendering each hit
+    # as a "conclusion" with a strength taken from its retrieval score presented
+    # a search result as an established judgement.
+    used = used_sources(rec, chains)
+    if used:
+        lines.append(T["sources_used"][lang].format(n=len(used)))
         lines.append("")
-        lines.append(T["supporting"][lang])
-        moderate = [c for c in chains if c.get("evidence_strength") == "moderate"][:3]
-        for c in moderate:
-            lines.append(f"- {c.get('conclusion', '')}")
-
-    lines.extend(["", T["counter"][lang], ""])
-    disputed = [c for c in chains if c.get("disputed")]
-    if disputed:
-        for c in disputed:
-            lines.append(f"- {c.get('conclusion', '')} (disputed)")
+        for src in used[:12]:
+            note = source_provenance_note(src, lang)
+            lines.append(f"- [{src['title']}]({src['url']}) ×{src['citations']}{note}")
+        lines.append("")
     else:
-        lines.append(T["no_counter"][lang])
+        lines.append(T["no_used_source"][lang])
+        lines.append("")
+
+    # Discovered links with no body stay reachable, labelled as navigation.
+    nav = [s for c in chains for s in c.get("sources", []) if not _has_body(s)]
+    if nav:
+        seen = set()
+        for src in nav:
+            url = src.get("url", "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            note = ("导航链接，无正文，不能作为依据。" if lang == "zh"
+                    else "navigation link only, no body collected; not usable "
+                         "as a basis.")
+            lines.append(f"- [{src.get('title', '')}]({url}) — {note}")
+        lines.append("")
+
+    retrieved = sum(len(c.get("sources") or []) for c in chains)
+    if retrieved > len(used):
+        lines.append(T["unused_note"][lang].format(n=retrieved - len(used)))
+        lines.append("")
 
     lines.extend(["", T["disputes"][lang], ""])
     if conflicts:
