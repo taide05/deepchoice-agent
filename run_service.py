@@ -167,9 +167,9 @@ def main() -> int:
     print(f"[launcher] service pid {child.pid}; the guard owns this process only",
           flush=True)
 
-    from deepchoice.run_guard import guard_service
-
     try:
+        from deepchoice.run_guard import guard_service
+
         record = guard_service(
             child,
             outputs_dir=WORKTREE / "outputs",
