@@ -532,14 +532,16 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         gave a real source to text that cites nothing, so the whole marker is
         rejected rather than only the bad number being filtered out.
 
-        These are the unspaced forms; the spaced variant is covered above, and
-        only the unspaced one reaches binding at all.
+        Both the unspaced and the spaced form reach the binding pass, so both are
+        covered here. The assertion is on the rendered text, so it fails whether
+        the title leaks or the marker is silently left unresolved as a title.
         """
         state = _failed_run_state()
         _prompt, mapping = cs._summarize_chains(
             state["evidence_chains"], state["task"]["candidate_techs"])
         all_titles = set(mapping.values())
-        cases = ("[[0,1]]", "[[0,2]]", "[[-1,2]]",
+        cases = ("[[0,1]]", "[[0,2]]", "[[-1,2]]", "[[ 0,1 ]]", "[[ 0, 1 ]]",
+                 "[[+0,1]]", "[[0,0]]", "[[1,0]]",
                  "the interval [[0,1]] is normalized", "x=[[0,1]]")
         for text in cases:
             for label, got in (
