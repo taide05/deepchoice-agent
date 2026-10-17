@@ -76,6 +76,56 @@ class TestOriginalQuestionsReachSynthesis:
             "inspect").getsource(sr.SelfReviewerAgent.run)
 
 
+class TestFlaggedSourcesAreNotCalledConfirmedContradictions:
+    """The synthesis prompt labelled a count of sources that appeared in a
+    compared pair as 'Confirmed contradictions among sources'. A flag covers a
+    position difference, a factual contradiction, or a comparison whose ruling
+    was not finished, so that label overstated what the pipeline established."""
+
+    def _state_with_conflicts(self, resolutions):
+        state = dict(v4_state())
+        state["conflicts"] = [
+            {"claim_a": f"claim A{i}", "claim_b": f"claim B{i}",
+             "resolution": res, "confidence": "low", "reasoning": "r",
+             "source_a": {"url": f"https://a{i}.example/x", "title": f"A{i}"},
+             "source_b": {"url": f"https://b{i}.example/x", "title": f"B{i}"}}
+            for i, res in enumerate(resolutions)
+        ]
+        state["conflict_check"] = {"pairs_scanned": len(resolutions),
+                                   "pairs_arbitrated": len(resolutions),
+                                   "pairs_evidence": 0,
+                                   "pairs_arbitration_failed": 0,
+                                   "scan_outcomes": {"difference": len(resolutions),
+                                                     "no_difference": 0, "unscanned": 0}}
+        return state
+
+    def test_the_prompt_does_not_claim_confirmed_contradictions(self):
+        payload = synthesis_prompt(
+            self._state_with_conflicts(["A_correct", "insufficient_data"]))
+        assert "Confirmed contradictions" not in payload
+        assert "Sources flagged in a conflict pair" in payload
+
+    def test_the_prompt_keeps_the_three_kinds_distinct(self):
+        payload = synthesis_prompt(
+            self._state_with_conflicts(["A_correct", "insufficient_data"]))
+        # Compare on one line: the prompt is wrapped, so phrases may span a
+        # newline.
+        flattened = " ".join(payload.lower().split())
+        # The label must say a flag can be any of the three, not that it is one.
+        assert "difference of position" in flattened
+        assert "factual contradiction" in flattened
+        assert "not finished" in flattened or "not completed" in flattened
+        # And each conflict's recorded resolution is still presented verbatim, so
+        # an unfinished comparison is not silently upgraded.
+        assert "resolution: A_correct" in payload
+        assert "resolution: insufficient_data" in payload
+
+    def test_an_unresolved_flag_is_not_presented_as_a_contradiction(self):
+        payload = synthesis_prompt(self._state_with_conflicts(["insufficient_data"]))
+        assert "Confirmed contradictions" not in payload
+        assert "resolution: insufficient_data" in payload
+
+
 class TestBenchmarkAnswersAreNotResearchBasis:
     """The knowledge base was populated from benchmark cases' own ground-truth
     answers. A document that IS the expected answer cannot be cited as evidence

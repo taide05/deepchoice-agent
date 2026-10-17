@@ -28,7 +28,11 @@ recommendation or in `unresolved_questions`; do not drop one silently.
 
 ## Source Score Summary
 Total sources retrieved: {source_count}
-Confirmed contradictions among sources: {disputed_count}
+Sources flagged in a conflict pair: {flagged_source_count}
+A flag means the source took part in a compared pair. It may be a difference of
+position, a factual contradiction, or a comparison whose ruling was not finished —
+the per-conflict resolutions above say which. A flag is not by itself proof that
+the source is wrong or that the two sources contradict.
 
 ## Language
 - Output explanatory/reasoning text (recommendation, rationale, trade-off findings, evidence_summary, confidence_rationale, scene_fit_note) in the SAME language as the original query.
@@ -597,7 +601,11 @@ class ConclusionSynthesizerAgent:
             agent="CONCLUSION_SYNTHESIZER",
         )
 
-        disputed_count = sum(1 for c in evidence_chains if c.get("disputed"))
+        # How many retrieved sources appeared in a compared pair. This is not a
+        # count of contradictions: a pair may be a position difference, an actual
+        # factual contradiction, or a comparison whose ruling was not finished, and
+        # the per-conflict resolution is what distinguishes them.
+        flagged_source_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
         evidence_text, cite_map = _summarize_chains(
             evidence_chains, task.get("candidate_techs") or [])
@@ -616,7 +624,7 @@ class ConclusionSynthesizerAgent:
                 evidence_chains=evidence_text,
                 conflicts=_summarize_conflicts(conflicts, conflict_check),
                 source_count=len(research_state.get("source_scores", [])),
-                disputed_count=disputed_count,
+                flagged_source_count=flagged_source_count,
             ),
         }]
 
@@ -641,7 +649,8 @@ class ConclusionSynthesizerAgent:
         quality_signals = [{
             "agent": "conclusion_synthesizer",
             "evidence_chain_count": len(evidence_chains),
-            "disputed_chains": disputed_count,
+            # Sources that appeared in a compared pair; not a contradiction count.
+            "flagged_sources": flagged_source_count,
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
         }]
