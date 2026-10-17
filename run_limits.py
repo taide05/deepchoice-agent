@@ -18,11 +18,20 @@ research node, prompt, parsing or retry rule is changed.
 
 A stop reached in one category stops the whole run: both guards consult one
 shared stop state, so no further send of either kind happens afterwards.
+
+A run also leaves its own minimal record: identity and limits at research start,
+counters on every change, and final state when it ends. That record is written
+from the research process itself, so a run that is killed by the launcher's
+process guard still leaves what was confirmed, rather than waiting for a clean
+finish that never happens. It reuses the existing counters; it adds no new
+observation system and stores no credentials or request content.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import pathlib
 import time
 
 LLM_REQUESTS_MAX = int(os.environ.get("PRECODEX_LLM_MAX", "40"))
@@ -44,6 +53,12 @@ _state: dict = {
 # Verification-only: shifts the research clock so a deadline can be exercised
 # without waiting. Left at zero in a real run.
 _run_clock_offset_s = 0.0
+
+# The running research's output directory and identity. Set at research start;
+# counters are written here as they change, so an abnormal exit still leaves its
+# confirmed counts on disk.
+_run_dir: pathlib.Path | None = None
+_task_id: str | None = None
 
 
 class DispatchLimitReached(RuntimeError):
@@ -77,11 +92,107 @@ def _note(kind: str, detail: str = "") -> None:
     if _state["stop_reason"] is None:
         _state["stop_reason"] = kind
     print(f"[stop-line] {kind} {detail} (t+{elapsed}s)", flush=True)
+    _persist_active()
 
 
 def stopped() -> bool:
     """One global stop state, consulted by every dispatch path."""
     return _state["stop_reason"] is not None
+
+
+# ------------------------------------------------------------ run record
+def _iso(epoch: float | None) -> str | None:
+    if epoch is None:
+        return None
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(epoch))
+
+
+def _run_state(mutate: dict | None = None) -> dict:
+    """Current run-state record, optionally updated with `mutate`."""
+    record = {
+        "task_id": _task_id,
+        "state": "running",
+        "pid": os.getpid(),
+        "started_at_epoch": _state.get("run_started_at_epoch"),
+        "started_at_iso": _iso(_state.get("run_started_at_epoch")),
+        "ended_at_epoch": None,
+        "ended_at_iso": None,
+        "wall_clock_max_s": WALL_CLOCK_MAX_S,
+        "llm_requests_max": LLM_REQUESTS_MAX,
+        "tavily_posts_max": TAVILY_POSTS_MAX,
+        "stop_reason": _state.get("stop_reason"),
+        "counts_at_start": _state.get("counts_at_start"),
+        "counts": {
+            "llm_requests": _state["llm_requests"],
+            "tavily_posts": _state["tavily_posts"],
+        },
+    }
+    if mutate:
+        record.update(mutate)
+    return record
+
+
+def _write_run_state(record: dict) -> str | None:
+    if _run_dir is None:
+        return None
+    try:
+        _run_dir.mkdir(parents=True, exist_ok=True)
+        path = _run_dir / "run_state.json"
+        path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        return str(path)
+    except Exception as exc:
+        print(f"[stop-line] could not write run state: {exc}", flush=True)
+        return None
+
+
+def _persist_active() -> None:
+    """Write the counters as they change while a run is active."""
+    if _run_dir is None:
+        return
+    persist_counts(str(_run_dir))
+
+
+def begin_run(task_id: str, directory: str) -> None:
+    """Record the run's identity at the moment research actually starts.
+
+    Called from the research task itself, before the first node runs. The wall
+    clock and the launcher's guard both take their start from here, not from
+    service start.
+    """
+    global _run_dir, _task_id
+    _run_dir = pathlib.Path(directory)
+    _task_id = task_id
+    if _state.get("run_started_at_epoch") is None:
+        _state["run_started_at_epoch"] = time.time()
+    _state["counts_at_start"] = {
+        "llm_requests": _state["llm_requests"],
+        "tavily_posts": _state["tavily_posts"],
+    }
+    if _state.get("run_started_at") is None:
+        _state["run_started_at"] = time.monotonic()
+    record = _run_state({"state": "running"})
+    _write_run_state(record)
+    _persist_active()
+    print(f"[stop-line] run record started for {task_id}", flush=True)
+
+
+def end_run(state: str, detail: str = "") -> None:
+    """Record how the run ended, from the research process itself.
+
+    `state` is one of complete / failed / cancelled — a forced termination is
+    never written here as complete; the launcher's guard records that separately.
+    """
+    record = _run_state({
+        "state": state,
+        "detail": detail,
+        "stop_reason": _state.get("stop_reason"),
+        "ended_at_epoch": time.time(),
+        "ended_at_iso": _iso(time.time()),
+    })
+    _write_run_state(record)
+    _persist_active()
+    print(f"[stop-line] run record ended: {state}"
+          f"{(' — ' + detail) if detail else ''}", flush=True)
 
 
 def _run_elapsed() -> float | None:
@@ -130,6 +241,7 @@ def _check(kind: str) -> None:
 def snapshot() -> dict:
     out = dict(_state)
     out.update(
+        task_id=_task_id,
         llm_requests_max=LLM_REQUESTS_MAX,
         tavily_posts_max=TAVILY_POSTS_MAX,
         wall_clock_max_s=WALL_CLOCK_MAX_S,
@@ -167,8 +279,17 @@ def persist_counts(directory: str | None = None) -> str | None:
 
 
 def start_run_clock() -> None:
-    """Start the research wall clock. Called when a run actually begins."""
+    """Start the research wall clock. Called when a run actually begins.
+
+    Idempotent: `begin_run` already starts it from the research task, and the
+    stream timer also arms it. The first start wins, so the guard, the timer and
+    the in-process checks all measure from the same moment.
+    """
+    if _state["run_started_at"] is not None:
+        return
     _state["run_started_at"] = time.monotonic()
+    if _state.get("run_started_at_epoch") is None:
+        _state["run_started_at_epoch"] = time.time()
     print(f"[stop-line] research clock started ({WALL_CLOCK_MAX_S}s)", flush=True)
 
 
@@ -198,6 +319,9 @@ def arm() -> None:
                 _state["llm_requests"] += 1
                 if stopped():
                     _state["llm_rejected"] += 1
+                # Persist as it changes: a killed run must leave the confirmed
+                # count rather than wait for a clean finish.
+                _persist_active()
                 return await inner(request, *a, **kw)
 
             self._prepare_request = counted_prepare
@@ -215,6 +339,7 @@ def arm() -> None:
                 _state["tavily_rejected"] += 1
                 raise
             _state["tavily_posts"] += 1
+            _persist_active()
         return await original_client_post(self, url, *args, **kwargs)
 
     httpx.AsyncClient.post = counted_client_post

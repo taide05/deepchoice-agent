@@ -83,11 +83,32 @@ async def start_research(task: dict):
         "queue": asyncio.Queue(),
         "events": [],
         "status": "running",
+        "cancel_requested": False,
     }
 
-    asyncio.create_task(_run_research(task_id, orchestrator))
+    # The handle is kept so a normal cancellation can reach the running task.
+    _active_tasks[task_id]["task"] = asyncio.create_task(
+        _run_research(task_id, orchestrator))
 
     return {"task_id": task_id, "status": "started"}
+
+
+@app.post("/research/{task_id}/cancel")
+async def cancel_research(task_id: str):
+    """Normal cancellation path, used by the launcher before a forced stop.
+
+    Cancelling the asyncio task is enough when the event loop is running. If the
+    loop is blocked (which is the case the launcher's process guard exists for),
+    this request times out and the guard stops the dedicated process instead.
+    """
+    entry = _active_tasks.get(task_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"no active research {task_id}")
+    entry["cancel_requested"] = True
+    task = entry.get("task")
+    if task is not None and not task.done():
+        task.cancel()
+    return {"task_id": task_id, "status": "cancelling"}
 
 
 def _format_event(event: dict) -> str:
@@ -106,6 +127,19 @@ def _format_event(event: dict) -> str:
 
 async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
     entry = _active_tasks[task_id]
+
+    # The run record starts from here — the moment research actually begins —
+    # not from service start, and before the first node can block. The launcher's
+    # guard takes its deadline from this record.
+    try:
+        import run_limits
+
+        run_limits.begin_run(task_id, str(OUTPUT_DIR / task_id))
+    except Exception as begin_err:
+        print_agent_output(
+            f"Could not start run record for {task_id}: {begin_err}", agent="SERVER")
+
+    end_state = "failed"
     try:
         async for event in orchestrator.astream_research_task():
             entry["events"].append(event)
@@ -120,6 +154,15 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
         entry["status"] = "complete"
         entry["result"] = result
         entry["queue"].put_nowait(_STREAM_DONE)
+        end_state = "complete"
+    except asyncio.CancelledError:
+        # Normal cancellation (HTTP cancel or stream timer). Recorded as
+        # cancelled — never as complete, and never as a forced stop.
+        entry["status"] = "cancelled"
+        entry["events"].append({"__error__": {"detail": "research cancelled"}})
+        entry["queue"].put_nowait(_STREAM_ERROR)
+        end_state = "cancelled"
+        raise
     except Exception as e:
         # I1 fix: persist whatever the checkpoint holds so a failed run is
         # inspectable after restart instead of vanishing with process memory.
@@ -133,6 +176,7 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
         entry["error"] = str(e)
         entry["events"].append({"__error__": {"detail": str(e)}})
         entry["queue"].put_nowait(_STREAM_ERROR)
+        end_state = "failed"
     finally:
         # I6 fix: the per-request sqlite connection must not outlive the task.
         checkpointer = getattr(orchestrator, "checkpointer", None)
@@ -148,6 +192,9 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
         try:
             import run_limits
 
+            # Record how the run ended before the counters, so an abnormal exit
+            # can never be read as a completion.
+            run_limits.end_run(end_state)
             run_limits.persist_counts(str(OUTPUT_DIR / task_id))
         except Exception as persist_counts_err:
             print_agent_output(

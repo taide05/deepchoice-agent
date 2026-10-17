@@ -66,6 +66,7 @@ class MultiRetrieverAgent:
 
         search_results = []
         partial_failures = []
+        empty_sources = []
         for name, result in zip(RETRIEVER_REGISTRY.keys(), raw_results):
             if isinstance(result, Exception):
                 search_results.append({
@@ -77,6 +78,14 @@ class MultiRetrieverAgent:
                 search_results.append(result)
                 if result["status"] == "failed":
                     partial_failures.append(name)
+                elif result["status"] == "empty":
+                    # No research material in this source. Distinct from a
+                    # failure: nothing was attempted and nothing broke, so it is
+                    # reported as empty rather than counted as unavailable.
+                    empty_sources.append({
+                        "source": name,
+                        "reason": result.get("empty_reason", ""),
+                    })
 
         # Self-updating official docs: learn term -> URL pairs from search evidence
         # (curated seed terms are never re-learned)
@@ -94,10 +103,12 @@ class MultiRetrieverAgent:
         return {
             "search_results": search_results,
             "partial_failures": partial_failures,
+            "empty_sources": empty_sources,
             "quality_signals": [{
                 "agent": "multi_retriever",
                 "retrievers_used": len(RETRIEVER_REGISTRY),
                 "retrievers_failed": len(partial_failures),
+                "retrievers_empty": len(empty_sources),
                 "total_results": sum(len(r.get("results", [])) for r in search_results),
                 "had_adapted_queries": bool(adapted_queries),
             }],

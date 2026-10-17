@@ -163,22 +163,29 @@ class TestBenchmarkAnswersAreNotResearchBasis:
         from deepchoice.retrievers import chroma_kb as mod
 
         class FakeCollection:
+            METADATAS = [
+                {"title": "redis-vs-memcached",
+                 "url": "file:///kb/data/benchmark_answers/redis-vs-memcached.md",
+                 "provenance": "benchmark_ground_truth",
+                 "source_type": "benchmark_answers",
+                 "channel": "local_kb", "date": ""},
+                {"title": "Real Doc",
+                 "url": "file:///kb/data/blogs/real-doc.md",
+                 "provenance": "unknown",
+                 "source_type": "blogs",
+                 "channel": "local_kb", "date": ""},
+            ]
+
+            def get(self, **kwargs):
+                # The pre-check reads metadata only; it must see one research
+                # document so retrieval is allowed to proceed.
+                return {"ids": ["a", "b"], "metadatas": self.METADATAS}
+
             def query(self, **kwargs):
                 return {
                     "ids": [["benchmark_answers/redis-vs-memcached.md",
                              "blogs/real-doc.md"]],
-                    "metadatas": [[
-                        {"title": "redis-vs-memcached",
-                         "url": "file:///kb/data/benchmark_answers/redis-vs-memcached.md",
-                         "provenance": "benchmark_ground_truth",
-                         "source_type": "benchmark_answers",
-                         "channel": "local_kb", "date": ""},
-                        {"title": "Real Doc",
-                         "url": "file:///kb/data/blogs/real-doc.md",
-                         "provenance": "unknown",
-                         "source_type": "blogs",
-                         "channel": "local_kb", "date": ""},
-                    ]],
+                    "metadatas": [self.METADATAS],
                     "documents": [["answer body", "documented body"]],
                 }
 

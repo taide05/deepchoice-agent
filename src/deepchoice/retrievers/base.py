@@ -10,6 +10,20 @@ def error_text(e: Exception) -> str:
     return f"{type(e).__name__}: {msg}" if msg else f"{type(e).__name__}()"
 
 
+class NoRetrievableMaterial(Exception):
+    """The source has no research material to search — not a failure.
+
+    Reported as ``status="empty"`` with a reason, so "the index holds nothing
+    usable" is not confused with "the source broke". No model is loaded and no
+    request is sent to discover this.
+    """
+
+    def __init__(self, reason: str, detail: str = ""):
+        super().__init__(reason)
+        self.reason = reason
+        self.detail = detail
+
+
 class BaseRetriever:
     source: str = "base"
 
@@ -26,6 +40,17 @@ class BaseRetriever:
                 "status": "success",
                 "results": results,
                 "error": None,
+                "latency_ms": round((time.monotonic() - t0) * 1000),
+            }
+        except NoRetrievableMaterial as empty:
+            # Not an error: no external call was attempted and nothing failed.
+            return {
+                "source": self.source,
+                "status": "empty",
+                "results": [],
+                "error": None,
+                "empty_reason": empty.reason,
+                "empty_detail": empty.detail,
                 "latency_ms": round((time.monotonic() - t0) * 1000),
             }
         except Exception as e:
