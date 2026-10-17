@@ -362,8 +362,11 @@ class TestTheGuardStopsABlockedChild:
         assert record["reason"] == "wall_clock"
         assert record["exit_confirmed"] is True
         assert child.poll() is not None, "the dedicated child must be gone"
-        assert record["service_process_terminated"] is True, \
-            "the interpreter that wrote the run record must be the process stopped"
+        assert record["bound_pid_signalled"] is True, \
+            "the interpreter that runs the service must be the process stopped"
+        assert record["binding"]["source"] == "record_corroborated"
+        assert record["binding"]["record_pid_matched_launch"] is True
+        assert record["stop_failed"] is False
         assert elapsed < 15, f"the guard took too long: {elapsed:.1f}s"
         assert record["cancel_result"].startswith("failed"), \
             "the blocked normal-cancel path must be recorded as failed"
@@ -378,6 +381,7 @@ class TestTheGuardStopsABlockedChild:
         assert written["final_consumption"] == "unknown"
         assert written["confirmed_dispatch_count"] == 1, \
             "the dispatch count must be measured from the run records"
+        assert written["exit_confirmed"] is True
 
         # The child was killed, so its record still says running — a forced
         # termination is never rewritten as complete.
@@ -390,8 +394,8 @@ class TestTheGuardStopsABlockedChild:
             "no new local dispatch may appear after a forced stop"
 
     def test_only_this_runs_processes_are_signalled(self):
-        """The guard holds the child handle and the run record's own pid; it never
-        scans for processes or signals anything by name."""
+        """The guard binds a pid through the launch relationship and stops only
+        that pid; it never scans for processes or signals anything by name."""
         import inspect
 
         source = inspect.getsource(run_guard)
@@ -399,6 +403,7 @@ class TestTheGuardStopsABlockedChild:
             assert forbidden not in source, f"guard must not use {forbidden!r}"
         # taskkill is used with an explicit pid only.
         assert '["taskkill", "/PID", str(pid), "/F"]' in source
+
 
 
 class TestEmptySourceSurvivesTheGraph:
@@ -730,3 +735,273 @@ class TestEmptySourceIsNotAFailure:
         signal = out["quality_signals"][0]
         assert signal["retrievers_failed"] == 0
         assert signal["retrievers_empty"] == 1
+
+
+class TestRunRecordGatesDispatch:
+    """A run that cannot write its identity/start/limits record must not start."""
+
+    def test_a_write_denial_fails_the_task_before_any_node_runs(self, tmp_path,
+                                                                monkeypatch):
+        import deepchoice.server.app as app_module
+        import run_limits
+
+        # Real write denial at the filesystem level: the run output directory path
+        # exists as a regular file, so creating the per-run directory fails.
+        blocker = tmp_path / "outputs"
+        blocker.write_text("not a directory", encoding="utf-8")
+
+        called = {"astream": 0}
+
+        class StubOrchestrator:
+            def __init__(self, task, checkpointer=None, thread_id=None):
+                self.task_id = "no-record-task"
+                self.checkpointer = None
+                self.live_phase = None
+
+            async def astream_research_task(self):
+                called["astream"] += 1
+                if False:  # pragma: no cover - an empty async generator
+                    yield {}
+
+            async def get_state(self):
+                return None
+
+        async def no_saver():
+            return None
+
+        monkeypatch.setattr(app_module, "OUTPUT_DIR", blocker)
+        monkeypatch.setattr(app_module, "ChiefEditorAgent", StubOrchestrator)
+        monkeypatch.setattr(app_module, "_get_sqlite_saver", no_saver)
+
+        before = (run_limits._state["llm_requests"],
+                  run_limits._state["tavily_posts"])
+        from fastapi.testclient import TestClient
+
+        with TestClient(app_module.app) as client:
+            response = client.post("/research", json={"query": "q"})
+            assert response.status_code == 200
+            task_id = response.json()["task_id"]
+            status = {}
+            for _ in range(100):
+                status = client.get(f"/research/{task_id}/status").json()
+                if status["status"] != "running":
+                    break
+                time.sleep(0.02)
+
+        # The task failed explicitly rather than staying "running".
+        assert status["status"] == "failed", status
+        assert "run record" in status["error"]
+        # No research node ran and no research outbound call was made.
+        assert called["astream"] == 0
+        after = (run_limits._state["llm_requests"],
+                 run_limits._state["tavily_posts"])
+        assert after == before
+        assert app_module._active_tasks[task_id]["status"] == "failed"
+
+    def test_begin_run_raises_when_the_record_cannot_be_written(self, tmp_path,
+                                                                monkeypatch):
+        import run_limits
+
+        def broken_write(record, strict=False):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(run_limits, "_write_run_state", broken_write)
+        with pytest.raises(run_limits.RunRecordError) as excinfo:
+            run_limits.begin_run("task-x", str(tmp_path / "run"))
+        assert "run record could not be established" in str(excinfo.value)
+
+    def test_begin_run_fails_when_the_directory_cannot_be_created(self, tmp_path):
+        import run_limits
+
+        blocker = tmp_path / "blocked"
+        blocker.write_text("not a directory", encoding="utf-8")
+        with pytest.raises(run_limits.RunRecordError):
+            run_limits.begin_run("task-y", str(blocker / "run"))
+
+
+class TestGuardBindsTheLaunchTree:
+    def _mock_binding(self, monkeypatch, bound_pid, source="test_bound"):
+        def fake_bind(launcher_pid, record_pid):
+            return {
+                "launcher_pid": launcher_pid, "record_pid": record_pid,
+                "record_pid_matched_launch": False, "bound_pid": bound_pid,
+                "source": source, "candidates": [], "reason": "test",
+            }
+
+        monkeypatch.setattr(run_guard, "bind_service_process", fake_bind)
+        return fake_bind
+
+    def test_a_record_naming_an_unrelated_process_is_not_signalled(self, tmp_path):
+        decoy = subprocess.Popen([sys.executable, "-c",
+                                  "import time; time.sleep(120)"])
+        token = "bind-token"
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        child_script = tmp_path / "child.py"
+        child_script.write_text(textwrap.dedent("""
+            import json, os, pathlib, sys, time
+            run_dir = pathlib.Path(sys.argv[1])
+            decoy_pid = int(sys.argv[2])
+            (run_dir / "run_state.json").write_text(json.dumps({
+                "task_id": "bind-task", "state": "running", "pid": decoy_pid,
+                "service_token": os.environ.get("DEEPCHOICE_SERVICE_TOKEN"),
+                "started_at_epoch": time.time(),
+            }), encoding="utf-8")
+            time.sleep(600)
+        """), encoding="utf-8")
+        env = dict(os.environ)
+        env["DEEPCHOICE_SERVICE_TOKEN"] = token
+        child = subprocess.Popen([sys.executable, str(child_script),
+                                  str(run_dir), str(decoy.pid)], env=env)
+        try:
+            record = run_guard.guard_service(
+                child,
+                outputs_dir=tmp_path,
+                wall_clock_max_s=1.0,
+                service_started_epoch=time.time() - 1,
+                cancel_fn=lambda task_id: "not_attempted",
+                service_token=token,
+                poll_s=0.05,
+                grace_s=0.2,
+                kill_grace_s=3.0,
+                log=lambda message: None,
+            )
+            # Capture before cleanup, so the assertion sees the state the guard
+            # left behind.
+            decoy_survived = decoy.poll() is None
+        finally:
+            if child.poll() is None:
+                child.kill()
+            try:
+                run_guard.terminate_pid(decoy.pid)
+            except Exception:
+                decoy.kill()
+
+        assert record["forced"] is True
+        assert record["binding"]["source"] == "launch_relationship"
+        assert record["binding"]["record_pid_matched_launch"] is False
+        assert record["binding"]["bound_pid"] != decoy.pid
+        assert record["record_pid_signalled"] is False, \
+            "the pid named in the record must not be signalled when it is unrelated"
+        assert record["exit_confirmed"] is True
+        # The unrelated process survived the stop.
+        assert decoy_survived, "a process named only by the run record was signalled"
+
+    def test_a_failed_interpreter_stop_is_not_reported_as_confirmed(self, tmp_path,
+                                                                    monkeypatch):
+        """Launcher-created process already gone, bound interpreter survives."""
+        survivor = subprocess.Popen([sys.executable, "-c",
+                                     "import time; time.sleep(120)"])
+        self._mock_binding(monkeypatch, survivor.pid)
+        monkeypatch.setattr(run_guard, "terminate_pid", lambda pid: False)
+
+        token = "fail-token"
+        run_dir = tmp_path / "fail-run"
+        run_dir.mkdir()
+        (run_dir / "run_state.json").write_text(json.dumps({
+            "task_id": "fail-task", "state": "running", "pid": survivor.pid,
+            "service_token": token, "started_at_epoch": time.time() - 1,
+        }), encoding="utf-8")
+        (run_dir / "run_limits_counts.json").write_text(json.dumps({
+            "llm_requests": 5, "tavily_posts": 1}), encoding="utf-8")
+
+        # The launcher-created process exits immediately; the record's run was
+        # armed before that.
+        child = subprocess.Popen([sys.executable, "-c",
+                                  "import time; time.sleep(0.2)"])
+        try:
+            record = run_guard.guard_service(
+                child, outputs_dir=tmp_path, wall_clock_max_s=900.0,
+                service_started_epoch=time.time() - 1,
+                cancel_fn=lambda task_id: "not_attempted", service_token=token,
+                poll_s=0.05, grace_s=0.1, kill_grace_s=0.2,
+                log=lambda message: None)
+        finally:
+            try:
+                run_guard.terminate_pid(survivor.pid)
+            except Exception:
+                survivor.kill()
+
+        assert record["reason"] == "launcher_exited"
+        assert record["exit_confirmed"] is False, \
+            "a surviving interpreter must not be reported as a confirmed stop"
+        assert record["stop_failed"] is True
+        assert record["residual"]["residual_pids"], "the surviving process must be named"
+        assert any(item["alive"] for item in record["residual"]["residual_pids"])
+        stop_file = run_dir / "guard_stop.json"
+        written = json.loads(stop_file.read_text(encoding="utf-8"))
+        assert written["stop_failed"] is True
+        assert written["exit_confirmed"] is False
+        assert written["residual"]["residual_pids"]
+
+    def test_a_terminal_task_state_does_not_end_enforcement(self, tmp_path):
+        """A cancelled coroutine may leave a worker thread blocked: the guard must
+        keep the deadline armed and still stop the process."""
+        token = "cancel-token"
+        run_dir = tmp_path / "cancel-run"
+        run_dir.mkdir()
+        child_script = tmp_path / "cancel_child.py"
+        child_script.write_text(textwrap.dedent("""
+            import json, os, pathlib, sys, time
+            run_dir = pathlib.Path(sys.argv[1])
+            base = {
+                "task_id": "cancel-task", "pid": os.getpid(),
+                "service_token": os.environ.get("DEEPCHOICE_SERVICE_TOKEN"),
+                "started_at_epoch": time.time(),
+            }
+            (run_dir / "run_state.json").write_text(
+                json.dumps({**base, "state": "running"}), encoding="utf-8")
+            time.sleep(0.1)
+            # The task reports itself cancelled while this process (a worker in
+            # the real system) is still running.
+            (run_dir / "run_state.json").write_text(
+                json.dumps({**base, "state": "cancelled"}), encoding="utf-8")
+            time.sleep(600)
+        """), encoding="utf-8")
+        env = dict(os.environ)
+        env["DEEPCHOICE_SERVICE_TOKEN"] = token
+        child = subprocess.Popen([sys.executable, str(child_script), str(run_dir)],
+                                 env=env)
+        started = time.monotonic()
+        try:
+            record = run_guard.guard_service(
+                child, outputs_dir=tmp_path, wall_clock_max_s=0.8,
+                service_started_epoch=time.time() - 1,
+                cancel_fn=lambda task_id: "cancelled_by_guard", service_token=token,
+                poll_s=0.05, grace_s=0.2, kill_grace_s=3.0,
+                log=lambda message: None)
+        finally:
+            if child.poll() is None:
+                child.kill()
+        elapsed = time.monotonic() - started
+
+        assert record["forced"] is True
+        assert record["reason"] == "wall_clock", \
+            "a terminal task state must not be treated as a stopped process"
+        assert record["task_state_at_stop"] == "cancelled"
+        assert record["exit_confirmed"] is True
+        assert elapsed >= 0.8, f"the guard acted before the deadline: {elapsed:.2f}s"
+
+    def test_binding_uses_launch_relationship_when_record_is_unverified(self):
+        child = subprocess.Popen([sys.executable, "-c",
+                                  "import time; time.sleep(30)"])
+        try:
+            time.sleep(0.4)
+            children = run_guard.direct_children(child.pid)
+            assert children, "the launcher-created process must have a child"
+            interpreter = children[0]
+            unverified = run_guard.bind_service_process(child.pid, 999999)
+            assert unverified["bound_pid"] == interpreter
+            assert unverified["source"] == "launch_relationship"
+            corroborated = run_guard.bind_service_process(child.pid, interpreter)
+            assert corroborated["bound_pid"] == interpreter
+            assert corroborated["source"] == "record_corroborated"
+        finally:
+            child.kill()
+
+    def test_binding_is_unavailable_without_process_enumeration(self, monkeypatch):
+        monkeypatch.setattr(run_guard, "direct_children", lambda pid: None)
+        binding = run_guard.bind_service_process(4242, 4243)
+        assert binding["bound_pid"] is None
+        assert binding["source"] == "unavailable"
+

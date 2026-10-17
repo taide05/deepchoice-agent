@@ -65,6 +65,14 @@ class DispatchLimitReached(RuntimeError):
     """Raised once any stop line has been reached; aborts the run."""
 
 
+class RunRecordError(RuntimeError):
+    """The run record could not be established, so research must not start.
+
+    The guard's deadline and any later reconstruction both depend on this record;
+    starting the graph without it would be an untracked run.
+    """
+
+
 def normalize_single_tavily_key() -> int:
     """Reduce the Tavily configuration to exactly one key.
 
@@ -135,8 +143,11 @@ def _run_state(mutate: dict | None = None) -> dict:
     return record
 
 
-def _write_run_state(record: dict) -> str | None:
+def _write_run_state(record: dict, strict: bool = False) -> str | None:
+    """Write the run record. Strict writes raise: the record gates dispatch."""
     if _run_dir is None:
+        if strict:
+            raise RunRecordError("no run output directory was set")
         return None
     try:
         _run_dir.mkdir(parents=True, exist_ok=True)
@@ -144,23 +155,26 @@ def _write_run_state(record: dict) -> str | None:
         path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         return str(path)
     except Exception as exc:
+        if strict:
+            raise
         print(f"[stop-line] could not write run state: {exc}", flush=True)
         return None
 
 
-def _persist_active() -> None:
+def _persist_active() -> bool:
     """Write the counters as they change while a run is active."""
     if _run_dir is None:
-        return
+        return False
     persist_counts(str(_run_dir))
+    return (_run_dir / "run_limits_counts.json").is_file()
 
 
 def begin_run(task_id: str, directory: str) -> None:
     """Record the run's identity at the moment research actually starts.
 
-    Called from the research task itself, before the first node runs. The wall
-    clock and the launcher's guard both take their start from here, not from
-    service start.
+    This is a precondition for dispatch, not a courtesy log line: if the identity,
+    start time and limits cannot be written, the caller must not enter the graph
+    or make a research outbound call, and raises RunRecordError.
     """
     global _run_dir, _task_id
     _run_dir = pathlib.Path(directory)
@@ -176,8 +190,17 @@ def begin_run(task_id: str, directory: str) -> None:
         "tavily_posts": _state["tavily_posts"],
     }
     record = _run_state({"state": "running"})
-    _write_run_state(record)
-    _persist_active()
+    try:
+        state_path = _write_run_state(record, strict=True)
+        counts_written = _persist_active()
+    except Exception as exc:
+        raise RunRecordError(
+            f"run record could not be established: {type(exc).__name__}: {exc}"
+        ) from exc
+    if not state_path or not pathlib.Path(state_path).is_file() or not counts_written:
+        raise RunRecordError(
+            "run record could not be established: identity or counters were not written"
+        )
     print(f"[stop-line] run record started for {task_id}", flush=True)
 
 

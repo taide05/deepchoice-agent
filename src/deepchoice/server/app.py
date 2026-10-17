@@ -125,19 +125,50 @@ def _format_event(event: dict) -> str:
     return f"event: {node_name}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 
 
+async def _fail_before_dispatch(task_id: str, entry: dict, detail: str) -> None:
+    """Fail the task visibly when research could not be started at all.
+
+    No graph node runs and no research outbound call is made: the run record is a
+    precondition for dispatch, so a missing record is a task failure rather than a
+    warning printed beside a running task.
+    """
+    detail = f"research not started: {detail}"
+    entry["status"] = "failed"
+    entry["error"] = detail
+    entry["events"].append({"__error__": {"detail": detail}})
+    entry["queue"].put_nowait(_STREAM_ERROR)
+    print_agent_output(f"{detail} ({task_id})", agent="SERVER")
+    # The research task never ran, so its finally-block cleanup never will.
+    checkpointer = getattr(entry.get("orchestrator"), "checkpointer", None)
+    conn = getattr(checkpointer, "conn", None)
+    if conn is not None:
+        try:
+            await conn.close()
+        except Exception:
+            pass
+    try:
+        import run_limits
+
+        # Best effort only; the record itself could not be written.
+        run_limits.persist_counts(str(OUTPUT_DIR / task_id))
+    except Exception:
+        pass
+
+
 async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
     entry = _active_tasks[task_id]
 
     # The run record starts from here — the moment research actually begins —
     # not from service start, and before the first node can block. The launcher's
-    # guard takes its deadline from this record.
-    try:
-        import run_limits
+    # guard takes its deadline from this record, so if it cannot be established
+    # the task fails here: no node runs and no research outbound call is made.
+    import run_limits
 
+    try:
         run_limits.begin_run(task_id, str(OUTPUT_DIR / task_id))
-    except Exception as begin_err:
-        print_agent_output(
-            f"Could not start run record for {task_id}: {begin_err}", agent="SERVER")
+    except Exception as record_err:
+        await _fail_before_dispatch(task_id, entry, str(record_err))
+        return
 
     end_state = "failed"
     try:
