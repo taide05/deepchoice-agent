@@ -308,13 +308,21 @@ def _residual_identity(binding: dict, child) -> dict:
     if bound and _pid_alive(bound):
         residual.append({"pid": bound, "role": "service_interpreter",
                          "alive": True})
+    record_pid = binding.get("record_pid")
+    if (isinstance(record_pid, int) and record_pid != bound
+            and _pid_alive(record_pid)):
+        # Named by the record but not bound to the launch tree. It is never
+        # signalled, so it is reported as an unverified residual identity rather
+        # than omitted from the stop record.
+        residual.append({"pid": record_pid, "role": "record_pid_unverified",
+                         "alive": True})
     if child.poll() is None:
         residual.append({"pid": child.pid, "role": "launcher_created_process",
                          "alive": True})
     return {
         "bound_pid": bound,
         "binding_source": binding.get("source"),
-        "record_pid": binding.get("record_pid"),
+        "record_pid": record_pid,
         "residual_pids": residual,
     }
 
@@ -356,6 +364,7 @@ def _stop_bound_process(child, binding: dict, kill_grace_s: float,
         record["stop_failed"] = True
         record["note"] = ("no process was bound to the launcher's process tree; "
                           "no termination signal was sent to an unverified pid")
+        record["residual"] = _residual_identity(binding, child)
         return record | {"exit_confirmed": False,
                          "launcher_exit_confirmed": child.poll() is not None}
     if not _pid_alive(bound):

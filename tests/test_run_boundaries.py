@@ -818,6 +818,24 @@ class TestRunRecordGatesDispatch:
         with pytest.raises(run_limits.RunRecordError):
             run_limits.begin_run("task-y", str(blocker / "run"))
 
+    def test_begin_run_rejects_counters_that_belong_to_another_run(self, tmp_path,
+                                                                   monkeypatch):
+        """A leftover counts file must not satisfy the record precondition."""
+        import run_limits
+
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        (run_dir / "run_limits_counts.json").write_text(json.dumps({
+            "task_id": "some-other-task", "run_started_at_epoch": 1.0,
+        }), encoding="utf-8")
+        # The fresh counts write fails silently (non-strict persist), leaving the
+        # leftover file for the identity check to reject.
+        monkeypatch.setattr(run_limits, "persist_counts",
+                            lambda directory=None: str(run_dir / "run_limits_counts.json"))
+        with pytest.raises(run_limits.RunRecordError) as excinfo:
+            run_limits.begin_run("task-z", str(run_dir))
+        assert "do not belong to this run" in str(excinfo.value)
+
 
 class TestGuardBindsTheLaunchTree:
     def _mock_binding(self, monkeypatch, bound_pid, source="test_bound"):
@@ -934,6 +952,73 @@ class TestGuardBindsTheLaunchTree:
         assert written["exit_confirmed"] is False
         assert written["residual"]["residual_pids"]
 
+    def test_an_unbound_stop_reports_stop_failed_and_residual_identity(self, tmp_path,
+                                                                      monkeypatch):
+        """If nothing can be bound, no pid is signalled, and the stop record names
+        the identity that may still be running."""
+        token = "unbound-token"
+        run_dir = tmp_path / "unbound-run"
+        run_dir.mkdir()
+        child_script = tmp_path / "unbound_child.py"
+        child_script.write_text(textwrap.dedent("""
+            import json, os, pathlib, sys, time
+            run_dir = pathlib.Path(sys.argv[1])
+            (run_dir / "run_state.json").write_text(json.dumps({
+                "task_id": "unbound-task", "state": "running", "pid": os.getpid(),
+                "service_token": os.environ.get("DEEPCHOICE_SERVICE_TOKEN"),
+                "started_at_epoch": time.time(),
+            }), encoding="utf-8")
+            time.sleep(600)
+        """), encoding="utf-8")
+        env = dict(os.environ)
+        env["DEEPCHOICE_SERVICE_TOKEN"] = token
+        child = subprocess.Popen([sys.executable, str(child_script), str(run_dir)],
+                                 env=env)
+        run_record = {}
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            try:
+                run_record = json.loads(
+                    (run_dir / "run_state.json").read_text(encoding="utf-8"))
+                break
+            except Exception:
+                time.sleep(0.05)
+        assert run_record, "fixture: the child must write the run record"
+        interpreter_pid = run_record["pid"]
+
+        signalled = []
+
+        def unresolved_bind(launcher_pid, record_pid):
+            return {"launcher_pid": launcher_pid, "record_pid": record_pid,
+                    "record_pid_matched_launch": False, "bound_pid": None,
+                    "source": "unresolved", "candidates": [], "reason": "test"}
+
+        monkeypatch.setattr(run_guard, "bind_service_process", unresolved_bind)
+        monkeypatch.setattr(run_guard, "terminate_pid",
+                            lambda pid: signalled.append(pid) or True)
+        try:
+            record = run_guard.guard_service(
+                child, outputs_dir=tmp_path, wall_clock_max_s=1.0,
+                service_started_epoch=time.time() - 1,
+                cancel_fn=lambda task_id: "not_attempted", service_token=token,
+                poll_s=0.05, grace_s=0.2, kill_grace_s=1.0,
+                log=lambda message: None)
+        finally:
+            subprocess.run(["taskkill", "/PID", str(interpreter_pid), "/F"],
+                           capture_output=True, text=True)
+            if child.poll() is None:
+                child.kill()
+
+        assert signalled == [], "an unbound pid must never be signalled"
+        assert record["forced"] is True
+        assert record["exit_confirmed"] is False
+        assert record["stop_failed"] is True
+        residual = record["residual"]
+        assert residual["record_pid"] == interpreter_pid
+        identities = {item["pid"] for item in residual["residual_pids"]}
+        assert interpreter_pid in identities, \
+            "the unverified record pid must be reported as a residual identity"
+
     def test_a_terminal_task_state_does_not_end_enforcement(self, tmp_path):
         """A cancelled coroutine may leave a worker thread blocked: the guard must
         keep the deadline armed and still stop the process."""
@@ -1045,4 +1130,21 @@ class TestGuardBindsTheLaunchTree:
         binding = run_guard.bind_service_process(4242, 4243)
         assert binding["bound_pid"] is None
         assert binding["source"] == "unavailable"
+
+    def test_refresh_binding_reports_a_changed_target(self, monkeypatch):
+        """A pid that can no longer be bound is replaced and the change recorded,
+        so a later signal targets the current binding."""
+
+        def rebound_bind(launcher_pid, record_pid):
+            return {"launcher_pid": launcher_pid, "record_pid": record_pid,
+                    "record_pid_matched_launch": False,
+                    "bound_pid": 2222, "source": "test_bound",
+                    "candidates": [], "reason": "test"}
+
+        monkeypatch.setattr(run_guard, "bind_service_process", rebound_bind)
+        refreshed = run_guard._refresh_binding(
+            {"launcher_pid": 999, "record_pid": 5, "bound_pid": 1111})
+        assert refreshed["bound_pid"] == 2222
+        assert refreshed["rebound"] is True
+        assert refreshed["rebound_from"] == 1111
 
