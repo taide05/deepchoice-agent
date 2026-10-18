@@ -82,12 +82,15 @@ class TestCitationBinding:
             assert field in prompt, f"{field} is not requested by the prompt"
             assert field in bound, f"{field} is requested but never bound"
 
-    def test_bound_markers_are_converted_and_unknown_ones_dropped(self):
+    def test_bound_markers_are_converted_and_unknown_ones_located(self):
         mapping = {1: "Real Source"}
-        bound = cs._bind_citations(
-            {"confidence_rationale": "Zero strong chains [[1]] plus [[999]]."}, mapping)
-        assert "[[" not in bound["confidence_rationale"]
-        assert "[Source: Real Source]" in bound["confidence_rationale"]
+        bound = cs.apply_citation_rules(
+            {"confidence_rationale": "Zero strong chains [[1]] plus [[999]]."}, [], mapping)
+        text = bound["confidence_rationale"]
+        assert "[Source: Real Source]" in text
+        assert "[[999]]" not in text, "the raw number must not be displayed"
+        assert "999" in text, "the unresolved citation must stay locatable"
+        assert "引用未解析" in text or "citation-unresolved" in text
 
     def test_the_saved_run_no_longer_keeps_raw_markers(self):
         """Replay: the field that held [[16]] [[17]] [[22]] binds cleanly."""
@@ -96,7 +99,8 @@ class TestCitationBinding:
         candidates = state["task"]["candidate_techs"]
         _prompt, mapping = cs._summarize_chains(chains, candidates)
         raw = "强证据链为 0，6 条发现存在争议 [[16]] [[17]] [[22]]。"
-        bound = cs._bind_citations({"confidence_rationale": raw}, mapping)
+        bound = cs.apply_citation_rules({"confidence_rationale": raw}, chains,
+                                        mapping)
         assert "[[" not in bound["confidence_rationale"], bound
 
 
@@ -157,11 +161,15 @@ class TestReviewSeesTheDecisionClaims:
     them: the reviewer received only the headline. A wrong scale, an unsupported
     justification and an unsupported dismissal all lived there."""
 
-    def test_claims_text_carries_the_ranked_justifications(self):
-        state = _failed_run_state()
+    def test_the_payload_has_one_content_block_and_a_locating_index(self):
+        """The report body carries the claims; the locator list must not repeat
+        the same prose, and the source register is included for checking."""
         source = inspect.getsource(sr.SelfReviewerAgent.run)
-        assert "claims_text" in source
-        assert "{claims_text}" in source, "the reviewer prompt never receives it"
+        assert "## Report To Review" in source
+        assert "{research_state.get(\"report\", \"\")}" in source
+        assert "revision_targets" in source and "{revision_targets}" in source
+        assert "source_register_text" in source and "{source_register_text}" in source
+        assert "{claims_text}" not in source, "the duplicated claims block is gone"
 
     def test_the_reviewer_payload_carries_the_source_text(self):
         """The reviewer is told to check claims against the cited source text, so
@@ -407,11 +415,12 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         return applied, got
 
     def test_the_reported_leak_is_closed(self):
-        """The exact reported payload must not survive as text."""
+        """The exact reported payload must not survive as citations."""
         _applied, got = self._apply(self.REVISION)
-        assert "Unknown invented title" not in got, got
-        assert "Navigation only" not in got, got
+        assert "[Source: Unknown invented title]" not in got, got
+        assert "[Source: Navigation only]" not in got, got
         assert "[[999]]" not in got, got
+        assert "引用未解析" in got or "citation-unresolved" in got, got
 
     def test_a_navigation_only_source_cannot_be_cited(self):
         """A page with no collected body is not a basis, even when it is in the
@@ -423,11 +432,14 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         chains[0]["sources"].append(nav)
         _applied, got = self._apply("理由 [Source: Navigation only]",
                                    chains=chains, mapping=mapping)
-        assert "Navigation only" not in got, got
+        assert "[Source: Navigation only]" not in got, got
+        assert "引用未解析" in got or "citation-unresolved" in got, got
 
-    def test_an_out_of_range_number_is_dropped(self):
+    def test_an_out_of_range_number_is_located_not_dropped(self):
         _applied, got = self._apply("理由 [[999999]]")
         assert "[[999999]]" not in got, got
+        assert "999999" in got, got
+        assert "引用未解析" in got or "citation-unresolved" in got, got
 
     def test_a_legitimate_citation_survives(self):
         """The reviewer's own valid citation must not be stripped."""
@@ -459,20 +471,34 @@ class TestRevisedCitationsFollowTheSynthesisRules:
             evidence_chains=state["evidence_chains"], cite_map=mapping)
         via_reviewer = next(o for o in rec["ranked_options"]
                             if o["name"] == "ClickHouse")["rationale"]
-        assert "Unknown invented title" not in via_synthesis
-        assert "Unknown invented title" not in via_reviewer
+        assert "[Source: Unknown invented title]" not in via_synthesis
+        assert "[Source: Unknown invented title]" not in via_reviewer
+        assert "引用未解析" in via_synthesis or "citation-unresolved" in via_synthesis
         # And the reviewer's revision is the resolved text, not the raw input.
         assert via_reviewer == via_synthesis
 
-    def test_a_marker_that_never_closes_is_removed(self):
-        """`[Source: X` with no closing bracket is still a claimed citation."""
+    def test_a_marker_that_never_closes_is_not_treated_as_a_source(self):
+        """`[Source: X` with no closing bracket is still a claimed citation; it
+        is not accepted as a source, and its title stays locatable as a gap."""
         _applied, got = self._apply("probe [Source: Unknown invented title")
-        assert "Unknown invented title" not in got, got
+        assert "[Source: Unknown invented title" not in got, got
+        assert "引用未解析" in got or "citation-unresolved" in got, got
 
     def test_number_spacing_and_sign_variants_do_not_survive(self):
-        for text in ("理由 [[ 999 ]]", "理由 [[-1]]", "理由 [[ 1 ]]"):
-            _applied, got = self._apply(text)
-            assert "[[" not in got, (text, got)
+        # An unknown positive number becomes a locatable gap; a known number
+        # binds even with spaces around it; a negative number is not a citation
+        # at all and is left as written rather than fabricating a source for it.
+        _applied, got = self._apply("理由 [[ 999 ]]")
+        assert "[[" not in got, got
+        assert "引用未解析" in got or "citation-unresolved" in got, got
+
+        _state, mapping = self._ctx()
+        number = sorted(mapping)[0]
+        _applied, got = self._apply(f"理由 [[ {number} ]]")
+        assert mapping[number] in got, got
+
+        _applied, got = self._apply("理由 [[-1]]")
+        assert got == "理由 [[-1]]", got
 
     def test_a_markers_only_revision_is_withdrawn_not_blanked(self):
         """Stripping the markers left the field whitespace, which blanked the
@@ -492,8 +518,9 @@ class TestRevisedCitationsFollowTheSynthesisRules:
         did support."""
         _applied, got = self._apply("理由 [Source: Unknown invented title] [[999]] 说明")
         assert "理由" in got and "说明" in got, got
-        assert "Unknown invented title" not in got, got
+        assert "[Source: Unknown invented title]" not in got, got
         assert "[[999]]" not in got, got
+        assert "引用未解析" in got or "citation-unresolved" in got, got
 
     def test_a_title_containing_a_commas_survives_resolution(self):
         """The reviewer path scrubbed a second time, after binding, and the
@@ -603,11 +630,8 @@ class TestTheSynthesisPipelineLeavesNoBlankField:
 
     def _pipeline(self, field: str, text: str):
         state = _failed_run_state()
-        _prompt, mapping = cs._summarize_chains(
-            state["evidence_chains"], state["task"]["candidate_techs"])
         result = {field: text}
-        cs._sanitize_citations(result, state["evidence_chains"])
-        cs._bind_citations(result, mapping)
+        cs.apply_citation_rules(result, state["evidence_chains"])
         return result[field]
 
     def test_a_top_level_field_is_not_left_blank(self):
@@ -621,8 +645,7 @@ class TestTheSynthesisPipelineLeavesNoBlankField:
         _prompt, mapping = cs._summarize_chains(
             state["evidence_chains"], state["task"]["candidate_techs"])
         result = {"ranked_options": [{"name": "C", "rationale": "[[999]]"}]}
-        cs._sanitize_citations(result, state["evidence_chains"])
-        cs._bind_citations(result, mapping)
+        cs.apply_citation_rules(result, state["evidence_chains"], mapping)
         got = result["ranked_options"][0]["rationale"]
         assert got.strip() and "withdraw" in got.lower(), got
 
@@ -631,8 +654,7 @@ class TestTheSynthesisPipelineLeavesNoBlankField:
         _prompt, mapping = cs._summarize_chains(
             state["evidence_chains"], state["task"]["candidate_techs"])
         result = {"trade_offs": [{"dimension": "d", "finding": "[[999]]"}]}
-        cs._sanitize_citations(result, state["evidence_chains"])
-        cs._bind_citations(result, mapping)
+        cs.apply_citation_rules(result, state["evidence_chains"], mapping)
         got = result["trade_offs"][0]["finding"]
         assert got.strip() and "withdraw" in got.lower(), got
 
@@ -643,8 +665,7 @@ class TestTheSynthesisPipelineLeavesNoBlankField:
             state["evidence_chains"], state["task"]["candidate_techs"])
         rec = json.loads(json.dumps(state["final_recommendation"]))
         rec["recommendation"] = "[[999,888]]"
-        cs._sanitize_citations(rec, state["evidence_chains"])
-        cs._bind_citations(rec, mapping)
+        cs.apply_citation_rules(rec, state["evidence_chains"], mapping)
         body = render({**state, "final_recommendation": rec})
         assert "**建议:**" in body or "**Recommendation:**" in body
         assert "withdraw" in body.lower() or "撤回" in body

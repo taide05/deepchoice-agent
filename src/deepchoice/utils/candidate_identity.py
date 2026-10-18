@@ -128,15 +128,33 @@ def split_navigation_label(text: str) -> tuple[str, bool]:
     return body, False
 
 
+def source_content(source: dict) -> str:
+    """The stored body text of a source, from content/body/snippet.
+
+    One extraction used by both the admission predicate and every display of a
+    source's text, so a source accepted because it carries `content` cannot be
+    shown as having no body (or vice versa).
+    """
+    for key in ("content", "body", "snippet"):
+        value = source.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        content, _navigation_only = split_navigation_label(value)
+        if content:
+            return content
+    return ""
+
+
 def bounded_content_summary(source: dict, limit: int = 600) -> str:
     """The factual content of a source, or an explicit gap.
 
     Uses whatever body was stored with the source. When there is none, says so
     rather than substituting the title or an official-looking label.
     """
-    content, navigation_only = split_navigation_label(source.get("snippet", ""))
+    content = source_content(source)
     if not content:
         title = source.get("title", "") or "this source"
+        _content, navigation_only = split_navigation_label(source.get("snippet", ""))
         if navigation_only:
             return (f"NO CONTENT RETRIEVED — {title} is a documentation link only; "
                     f"its page body was not collected, so it states nothing about "
@@ -156,17 +174,12 @@ def has_factual_content(source: dict) -> bool:
     not what is true.
 
     `has_body` is the authoritative marker, set where the source is created when
-    no page body was collected. The string shape is only a fallback, because
-    relying on a placeholder's exact wording is how a body-less source stayed
-    citable before: the gap sentence is non-empty and reads as text.
+    no page body was collected. The body text is the fallback and is read through
+    the same `source_content` extraction the sources are displayed with.
     """
     if "has_body" in source:
         return bool(source.get("has_body"))
-    content, _ = split_navigation_label(source.get("snippet", ""))
-    if content:
-        return True
-    body = source.get("content") or source.get("body") or ""
-    return bool(str(body).strip())
+    return bool(source_content(source))
 
 
 def _word_present(token: str, haystack: str) -> bool:

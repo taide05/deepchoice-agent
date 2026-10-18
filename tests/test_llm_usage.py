@@ -389,8 +389,10 @@ class TestDeterministicArbitration:
 
 
 class TestCitationCoverage:
-    def test_counts_cited_and_uncited(self):
+    def test_counts_cited_and_uncited_with_locations(self):
         from deepchoice.agents.self_reviewer import _citation_coverage
+
+        chains = [{"sources": [{"title": "A", "snippet": "body of A"}]}]
         fr = {
             "recommendation": "Use X [Source: A].",
             "winner_rationale": "X wins [Source: A].",
@@ -398,15 +400,31 @@ class TestCitationCoverage:
                                 "key_weakness": "w"}],
             "trade_offs": [{"finding": "f [Source: A]", "impact": "i"}],
         }
-        out = _citation_coverage(fr)
+        out = _citation_coverage(fr, evidence_chains=chains)
         assert out["total_fields"] == 7
         assert out["cited_fields"] == 4
         assert out["uncited_fields"] == 3
+        assert out["uncited_locations"] == [
+            "option=?/key_strength", "option=?/key_weakness", "trade-off=?/impact"]
+        assert out["unresolved_locations"] == []
+
+    def test_the_completeness_report_is_not_a_support_verdict(self):
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+
+        lowered = REVIEW_SYSTEM.lower()
+        assert "pre-computed" not in lowered, \
+            "the reviewer must not be told the citation count settles support"
+        assert "do not re-evaluate" not in lowered
+        assert "not proof" in lowered or "not a proof" in lowered
 
     def test_empty_recommendation_is_zeroed(self):
         from deepchoice.agents.self_reviewer import _citation_coverage
         out = _citation_coverage({})
-        assert out == {"total_fields": 0, "cited_fields": 0, "uncited_fields": 0}
+        assert out["total_fields"] == 0
+        assert out["cited_fields"] == 0
+        assert out["uncited_fields"] == 0
+        assert out["uncited_locations"] == []
+        assert out["unresolved_locations"] == []
 
 
 class TestDetectScene:

@@ -77,6 +77,56 @@ Return ONLY a JSON object:
 }}"""
 
 
+def build_source_registry(evidence_chains: list[dict]) -> dict:
+    """The numbered source identities shared by every consumer of citations.
+
+    Synthesis, literal-marker resolution, the self-review payload and reviewer
+    revisions all read citations from this one registry, so a number, a canonical
+    title and the body text behind them cannot disagree between the reporting
+    paths. Only fact-bearing sources are registered; a navigation link is recorded
+    separately and can never be cited.
+    """
+    from ..utils.candidate_identity import source_content
+
+    entries: list[dict] = []
+    chains: list[list[dict]] = []
+    navigation: list[str] = []
+    number = 0
+    for chain in evidence_chains or []:
+        chain_entries: list[dict] = []
+        for source in (chain.get("sources") or [])[:4]:
+            if not is_citable_source(source):
+                link = source.get("url", "")
+                if link and link not in navigation:
+                    navigation.append(link)
+                continue
+            number += 1
+            title = str(source.get("title") or "Unknown")
+            entry = {
+                "number": number,
+                "title": title,
+                "url": str(source.get("url") or ""),
+                "body": source_content(source),
+                "provenance": source.get("provenance") or "",
+                "channel": source.get("channel") or "",
+                "disputed": bool(chain.get("disputed")),
+            }
+            chain_entries.append(entry)
+            entries.append(entry)
+        chains.append(chain_entries)
+
+    by_norm: dict[str, list[dict]] = {}
+    for entry in entries:
+        by_norm.setdefault(_norm_title(entry["title"]), []).append(entry)
+    return {
+        "entries": entries,
+        "chains": chains,
+        "navigation": navigation,
+        "mapping": {entry["number"]: entry["title"] for entry in entries},
+        "by_norm": by_norm,
+    }
+
+
 def _summarize_chains(evidence_chains: list[dict],
                       candidate_techs: list[str] | None = None) -> tuple[str, dict[int, str]]:
     """Format evidence chains for the prompt, assigning each source a stable
@@ -85,16 +135,17 @@ def _summarize_chains(evidence_chains: list[dict],
     back to [Source: title] after synthesis.
 
     Each source carries its URL and its bounded body text, not just a title and
-    a score. A title is an identity, not a statement: a source whose body was
-    never collected is a navigation link, is excluded from the citable set and
-    from the citation mapping, and is listed separately as non-citable. That way
-    naming such a page by its title cannot smuggle it in as a source either.
+    a score. The numbers come from `build_source_registry`, the same registry the
+    citation engine and the self-review use, so prompt numbering and binding
+    cannot drift apart. A source whose body was never collected is a navigation
+    link: it gets no number and is listed separately.
     """
     from ..utils.candidate_identity import (
         bounded_content_summary,
         candidate_proper_nouns,
     )
 
+    registry = build_source_registry(evidence_chains)
     header: list[str] = []
     names = candidate_proper_nouns(candidate_techs or [])
     if names:
@@ -121,43 +172,32 @@ def _summarize_chains(evidence_chains: list[dict],
         "Read each source's content and cite it only for what that content states.",
         "",
     ]
-    mapping: dict[int, str] = {}
-    navigation: list[str] = []
-    n = 0
-    for i, c in enumerate(evidence_chains):
-        disputed = " [DISPUTED]" if c.get("disputed") else ""
-        citable = [s for s in c.get("sources", [])[:4] if is_citable_source(s)]
-        for src in c.get("sources", [])[:4]:
-            if not is_citable_source(src):
-                link = src.get("url", "")
-                if link and link not in navigation:
-                    navigation.append(link)
-        if not citable:
+    for chain_entries in registry["chains"]:
+        if not chain_entries:
             # Nothing to read, so nothing to cite. Recorded, not presented as a
             # finding, so the model records a gap instead of citing a link.
             lines.append("(no fact-bearing source in this retrieved item — record a "
                          "material gap instead of citing it)")
             lines.append("")
             continue
-        for src in citable:
-            n += 1
-            title = src.get("title", "Unknown")
-            mapping[n] = title
-            url = src.get("url", "")
-            lines.append(f"[[{n}]] {title}{disputed}")
-            if url:
-                lines.append(f"       url: {url}")
+        for entry in chain_entries:
+            disputed = " [DISPUTED]" if entry["disputed"] else ""
+            lines.append(f"[[{entry['number']}]] {entry['title']}{disputed}")
+            if entry["url"]:
+                lines.append(f"       url: {entry['url']}")
             # Where the material came from, so the model cannot mistake local or
             # evaluation material for a published source.
-            provenance = src.get("provenance")
-            channel = src.get("channel")
-            if provenance or channel:
-                lines.append(f"       provenance: {provenance or 'unknown'}; "
-                             f"channel: {channel or 'unknown'}")
-            lines.append(f"       content: {bounded_content_summary(src)}")
+            if entry["provenance"] or entry["channel"]:
+                lines.append(f"       provenance: {entry['provenance'] or 'unknown'}; "
+                             f"channel: {entry['channel'] or 'unknown'}")
+            source_stub = {
+                "title": entry["title"],
+                "content": entry["body"],
+            }
+            lines.append(f"       content: {bounded_content_summary(source_stub)}")
             lines.append("")
 
-    if navigation:
+    if registry["navigation"]:
         # Discovered links, not evidence. They carry no citable number, so they
         # cannot be cited even by writing their title verbatim.
         lines += [
@@ -167,10 +207,10 @@ def _summarize_chains(evidence_chains: list[dict],
             "here. Do not cite them, and do not write their titles as a source:",
             "",
         ]
-        lines += [f"- {link}" for link in navigation[:10]]
+        lines += [f"- {link}" for link in registry["navigation"][:10]]
         lines.append("")
 
-    return "\n".join(lines), mapping
+    return "\n".join(lines), dict(registry["mapping"])
 
 
 def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = None) -> str:
@@ -288,47 +328,12 @@ def _norm_title(s: str) -> str:
     return "".join(c for c in s.lower() if c.isalnum())
 
 
-def _is_real_title(norm: str, real: set[str]) -> bool:
-    """Exact match against a real source title.
-
-    Substring matching was relaxed to accept a long fragment, but a shorter title
-    is often a substring of a longer real one: 'PostgreSQL — Official
-    Documentation' sits inside a fuller page title, so a body-less navigation
-    link passed as a real source and the renderer then re-attached it. A citation
-    must name a source that exists, exactly.
-    """
-    return norm in real
-
-
-def _sanitize_text(text: str, real: set[str]) -> str:
-    """Remove fabricated [Source: title] citations from a text block, keeping
-    only titles whose normalized form is in `real`.
-
-    A marker missing its closing bracket is also removed. It is not a citation
-    the report can use, and leaving it would both display a fabricated title and
-    hide it from the checks below, which look for closed markers.
-    """
-    if not text:
-        return text
-    out: list[str] = []
-    last = 0
-    for m in _SOURCE_MARKER.finditer(text):
-        out.append(text[last:m.start()])
-        titles = re.split(r'Source:\s*', m.group(0), flags=re.IGNORECASE)[1:]
-        kept = []
-        for t in titles:
-            title = re.split(r'[,;\[\]]', t)[0].strip()
-            if title and _is_real_title(_norm_title(title), real):
-                kept.append(title)
-        if kept:
-            out.append('[Source: ' + ', Source: '.join(kept) + ']')
-        last = m.end()
-    out.append(text[last:])
-    return ''.join(out)
+def _has_cjk(text: str) -> bool:
+    return any("\u4e00" <= c <= "\u9fff" for c in (text or ""))
 
 
 # A closed marker, or one that never closes. The unclosed form runs to the end of
-# the text: it is still a claimed citation, so it must be seen and removed rather
+# the text: it is still a claimed citation, so it must be seen and handled rather
 # than passing through as ordinary prose.
 _SOURCE_MARKER = re.compile(r'\[Source:[^\]]*\]|\[Source:[^\]]*$', re.IGNORECASE)
 # A source number, or a comma-separated list of them, with the spacing and sign
@@ -348,10 +353,35 @@ _CITE_NUMBER = re.compile(
     r'\[\[(\s*[+-]?\d+(?:\s*[,;][+-]?\d+)*\s*)\]\]'
     r'(?!\s*[\[\]=])')
 # A leftover marker holding only digits and separators. It is a citation this
-# pipeline cannot resolve — `[[1 2]]`, `[[1, 2]]`, `[[1.0]]` — so it goes rather
-# than being printed as text. A marker containing words (`[[附录]]`) is not
-# matched and is left as written.
+# pipeline cannot resolve — `[[1 2]]`, `[[1, 2]]`, `[[1.0]]` — so it is reported
+# as an unresolved citation rather than being printed as text or silently
+# removed. A marker containing words (`[[附录]]`) is not matched and is left as
+# written.
 _CITE_LEFTOVER = re.compile(r'\[\[\s*[+\-0-9][0-9\s,;.\-]*\]\]')
+
+
+# Every field the prompt asks to cite must be resolved and listed. Leaving one
+# out left raw [[N]] markers in the rendered report: the model cites
+# confidence_rationale, but nothing converted its numbers. Self-review
+# completeness reads these same tuples.
+_CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
+                         "evidence_summary", "scene_fit_note",
+                         "confidence_rationale")
+_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness",
+                        "constraint_fit_reason")
+_CITATION_TRADEOFF_FIELDS = ("finding", "impact")
+
+
+def is_citable_source(source: dict) -> bool:
+    """Whether a source may be cited: it must have collected body text.
+
+    The single predicate behind the citable set, the numbered registry and the
+    body shown to every consumer, so they cannot disagree about what counts as a
+    basis. The body is read through the same extraction that displays it.
+    """
+    from ..utils.candidate_identity import has_factual_content
+
+    return has_factual_content(source)
 
 
 _WITHDRAWN_NOTE = "（本项理由已被自审撤回：无可引来源支持其论断）"
@@ -363,196 +393,371 @@ def withdrawal_note(text: str) -> str:
 
     Follows the language of the field it replaces, so a withdrawn claim reads as
     part of the report rather than as a stray foreign sentence. Shared by the
-    synthesis scrub and the self-review, so a withdrawal looks the same wherever
-    it happens.
+    synthesis citation pass and the self-review, so a withdrawal looks the same
+    wherever it happens.
     """
     if text and any("\u4e00" <= c <= "\u9fff" for c in text):
         return _WITHDRAWN_NOTE
     return _WITHDRAWN_NOTE_EN
 
 
-def is_citable_source(source: dict) -> bool:
-    """Whether a source may be cited: it must have collected body text.
+# An unresolved citation is left in the text so the claim cannot read as
+# supported, but it is marked so it is never mistaken for a citation the reader
+# can follow. The wording is deliberately a gap, not a truth verdict.
+_CITATION_GAP_ZH = "〔引用未解析：{}〕"
+_CITATION_GAP_EN = "[citation-unresolved: {}]"
+_CITATION_GAP_MARK = re.compile(
+    r"〔引用未解析：[^〕]*〕|\[citation-unresolved: [^\]]*\]")
+_SOURCE_TITLES_IN_MARKER = re.compile(r"^\[Source:\s*", re.IGNORECASE)
+_VISIBLE_STRIP = re.compile(
+    r"\[Source:[^\]]*\]|〔引用未解析：[^〕]*〕|\[citation-unresolved: [^\]]*\]")
+_VISIBLE_PUNCT = re.compile(
+    r"[\s。，、；：！？.,;:!?()（）\[\]〔〕\"'“”‘’…—\-]+")
 
-    The single predicate behind the citable set, the number mapping and the
-    sanitizer, so those three cannot disagree about what counts as a basis.
+
+def citation_gap_note(raw: str, context: str = "") -> str:
+    """A locatable marker for a citation this pipeline could not resolve.
+
+    Says what happened (the citation is unresolved), not whether the claim is
+    true: an unverifiable citation is not evidence that the statement is false.
     """
-    from ..utils.candidate_identity import has_factual_content
-
-    return has_factual_content(source)
-
-
-def _citable_titles(evidence_chains: list[dict]) -> set[str]:
-    """The normalized titles that may be cited: fact-bearing sources only."""
-    real: set[str] = set()
-    for c in evidence_chains or []:
-        for src in c.get("sources", [])[:4]:
-            if not is_citable_source(src):
-                continue
-            t = src.get("title", "")
-            if t:
-                real.add(_norm_title(t))
-    return real
+    raw = " ".join(str(raw).split())
+    template = _CITATION_GAP_ZH if _has_cjk(context or raw) else _CITATION_GAP_EN
+    return template.format(raw)
 
 
-def _marker_titles(body: str) -> list[str]:
-    """The titles a `[Source: ...]` body contains.
+def citation_gap_number(numbers: list[int], context: str = "") -> str:
+    label = "来源编号" if _has_cjk(context) else "source number"
+    return citation_gap_note(f"{label} {', '.join(str(n) for n in numbers)}", context)
 
-    Binding writes several titles into one marker as `A, Source: B`, so that
-    separator is tried first and each part is then checked whole. Only if that
-    yields nothing is the body read as a single title, which is what preserves a
-    real title that itself contains commas.
+
+def citation_gap_title(title: str, context: str = "") -> str:
+    label = "来源标题" if _has_cjk(context) else "source title"
+    return citation_gap_note(f"{label} “{title}”", context)
+
+
+def citation_gap_marker(marker: str, context: str = "") -> str:
+    label = "来源标记" if _has_cjk(context) else "source marker"
+    inner = " ".join(str(marker).strip("[]").split())
+    return citation_gap_note(f"{label} {inner}", context)
+
+
+def has_substantive_content(text: str) -> bool:
+    """Whether a field still says something beyond citation/gap markers.
+
+    A field holding only citations is not an answer; it must not be counted as
+    one even when every marker in it resolved.
     """
-    if re.search(r',\s*Source:', body, re.IGNORECASE):
-        return [p.strip() for p in re.split(r',\s*Source:\s*', body,
-                                            flags=re.IGNORECASE) if p.strip()]
+    stripped = _VISIBLE_STRIP.sub("", text or "")
+    return bool(_VISIBLE_PUNCT.sub("", stripped))
+
+
+def canonical_source_title(registry: dict, title: str) -> str | None:
+    """The registered title a written title names, or None.
+
+    Full identity first: the whole written title is compared after normalization,
+    so a real title containing commas or semicolons is not split. If the same
+    normalized title maps to more than one distinct source identity, the title is
+    ambiguous and is not resolved to an arbitrary one of them.
+
+    A canonical title emitted from a number is itself matched by this rule on a
+    later pass. Two distinct registered sources that share one title make that
+    emitted form ambiguous; because the ambiguity must not be resolved
+    arbitrarily, a second pass over the same field keeps the gap rather than
+    picking a source. Binding runs once per field in the normal path, so emitted
+    canonical titles are not re-resolved there.
+    """
+    key = _norm_title(title or "")
+    if not key:
+        return None
+    matches = registry.get("by_norm", {}).get(key, [])
+    identities = {(entry["title"], entry["url"]) for entry in matches}
+    if len(identities) != 1:
+        return None
+    return matches[0]["title"]
+
+
+def _split_literal_source_body(body: str) -> list[str]:
+    """Parts of a `[Source: ...]` body, splitting only on the explicit separator.
+
+    The binding output writes several titles as `A, Source: B`, so that separator
+    is tried first and, when present, each part is taken whole. Otherwise the body
+    is one title, which preserves a real title that itself contains commas.
+    """
+    if re.search(r",\s*Source:", body, re.IGNORECASE):
+        return [part.strip() for part in
+                re.split(r",\s*Source:\s*", body, flags=re.IGNORECASE)
+                if part.strip()]
     return [body.strip()] if body.strip() else []
 
 
-def unresolved_citations(text: str, evidence_chains: list[dict]) -> bool:
-    """True when text still carries a citation that names nothing citable.
+def _resolve_number_marker(marker: str, inner: str, mapping: dict[int, str],
+                           context: str) -> str:
+    """Bind a `[[N]]` marker's known numbers; leave unresolved ones as a gap.
 
-    A resolved citation is a `[Source: ...]` whose titles are all in the citable
-    set. A `[[N]]` number is only valid if the mapping covered it, and resolution
-    replaces those, so any surviving number is out of range. Either means the
-    text claims support that does not exist.
+    A marker containing a non-positive number is not a source list at all (an
+    interval or array index), so it is left exactly as written: it never becomes
+    a citation and never becomes a citation gap either.
+    """
+    numbers = [int(n) for n in re.findall(r"[+-]?\d+", inner)]
+    if any(n <= 0 for n in numbers):
+        return marker
+    known: list[str] = []
+    unknown: list[int] = []
+    for number in numbers:
+        title = mapping.get(number)
+        if title and title not in known:
+            known.append(title)
+        elif title is None:
+            unknown.append(number)
+    parts: list[str] = []
+    if known:
+        parts.append("[Source: " + ", Source: ".join(known) + "]")
+    if unknown:
+        parts.append(citation_gap_number(unknown, context))
+    return "".join(parts)
+
+
+def _resolve_source_marker(marker: str, registry: dict, context: str) -> str:
+    """Resolve a literal `[Source: title]` against the registered identities."""
+    body = _SOURCE_TITLES_IN_MARKER.sub("", marker)
+    if body.endswith("]"):
+        body = body[:-1]
+    parts = _split_literal_source_body(body)
+    if not parts:
+        return citation_gap_note(
+            "缺少来源标题" if _has_cjk(context) else "missing source title", context)
+    resolved: list[str] = []
+    gaps: list[str] = []
+    for part in parts:
+        canonical = canonical_source_title(registry, part)
+        if canonical and canonical not in resolved:
+            resolved.append(canonical)
+        else:
+            # Includes the ambiguous case: a title that names more than one
+            # registered source is not silently attached to one of them.
+            gaps.append(citation_gap_title(part, context))
+    out = ""
+    if resolved:
+        out += "[Source: " + ", Source: ".join(resolved) + "]"
+    out += "".join(gaps)
+    return out
+
+
+def _in_indexing_context(text: str, start: int, end: int) -> bool:
+    """Whether a numeric bracket sits where a citation would not.
+
+    These are the same guards the number pattern itself uses; they keep array
+    indices and matrix notation from being turned into citations or gaps.
+    """
+    before = (text or "")[:start].rstrip()
+    if before:
+        previous = before[-1]
+        # A marker written immediately after another citation marker is another
+        # citation, not an index into the preceding one.
+        another_citation_before = bool(
+            before.endswith("]]")
+            and re.search(r"\[\[\s*[+-]?\d+(?:\s*[,;][+-]?\d+)*\s*\]\]$", before))
+        if not another_citation_before and previous.isascii() and (
+                previous.isalnum() or previous in "_]"):
+            # ASCII word characters and `]` are the indexing contexts the number
+            # pattern already excludes. CJK text is not an indexing host, so a
+            # citation may follow it directly.
+            return True
+    after = (text or "")[end:].lstrip()
+    if re.match(r"\[\[\s*[+-]?\d", after):
+        # Another citation marker follows: this is the adjacent-marker case the
+        # number pattern declines, not an index into the first marker.
+        return False
+    return bool(after) and after[0] in "[=]"
+
+
+# One scanner over the text, so the order of handling a marker is explicit and a
+# marker inserted by one rule is never re-read by another.
+_CITATION_TOKEN = re.compile(
+    r"(?P<number>" + _CITE_NUMBER.pattern + r")"
+    r"|(?P<source>" + _SOURCE_MARKER.pattern + r")"
+    r"|(?P<leftover>" + _CITE_LEFTOVER.pattern + r")",
+    re.IGNORECASE)
+
+
+def _bare_number_marker(marker: str) -> str | None:
+    """The inner numbers of a simple `[[N]]` marker, or None.
+
+    The number pattern deliberately declines a marker followed by another
+    bracket (an index like `[[1,2]][0]`), which also catches two citation markers
+    written next to each other (`[[16]] [[17]]`). When a leftover marker is a
+    plain number list, it is a citation the model wrote, so it is resolved as one
+    instead of being left behind as a raw marker.
+    """
+    match = re.fullmatch(r"\[\[\s*([+-]?\d+(?:\s*[,;][+-]?\d+)*)\s*\]\]",
+                         marker)
+    return match.group(1) if match else None
+
+
+def resolve_text(text: str, evidence_chains: list[dict] | None = None,
+                 mapping: dict[int, str] | None = None,
+                 registry: dict | None = None) -> str:
+    """Apply every citation rule to one block of text in a single pass.
+
+    Known numbers and registered titles become the registered canonical title;
+    anything that cannot be resolved is left as a locatable gap instead of being
+    silently deleted. The result is the text the report should show; it is not a
+    judgement that any cited source supports the sentence.
+    """
+    if not text:
+        return text
+    registry = registry or build_source_registry(evidence_chains or [])
+    effective_mapping = (dict(registry.get("mapping") or {})
+                         if mapping is None else mapping)
+    out: list[str] = []
+    last = 0
+    for match in _CITATION_TOKEN.finditer(text):
+        out.append(text[last:match.start()])
+        marker = match.group(0)
+        if match.group("number") is not None:
+            inner = _CITE_NUMBER.match(marker).group(1)
+            out.append(_resolve_number_marker(marker, inner, effective_mapping,
+                                              text))
+        elif match.group("source") is not None:
+            out.append(_resolve_source_marker(marker, registry, text))
+        else:
+            if _in_indexing_context(text, match.start(), match.end()):
+                out.append(marker)
+                last = match.end()
+                continue
+            inner = _bare_number_marker(marker)
+            if inner is not None:
+                out.append(_resolve_number_marker(marker, inner,
+                                                  effective_mapping, text))
+            else:
+                out.append(citation_gap_marker(marker, text))
+        last = match.end()
+    out.append(text[last:])
+    return "".join(out)
+
+
+def citation_field_locations(result: dict) -> list[tuple[str, dict, str]]:
+    """Every field the pipeline asks the model to cite, with a stable locator.
+
+    One traversal for binding, for the self-review completeness report and for
+    the reviewer's revision parsing; the three cannot miss a different set.
+    """
+    locations: list[tuple[str, dict, str]] = []
+    for field in _CITATION_TEXT_FIELDS:
+        if result.get(field):
+            locations.append((field, result, field))
+    for option in result.get("ranked_options") or []:
+        if not isinstance(option, dict):
+            continue
+        label = str(option.get("name") or "?")
+        for field in _CITATION_OPT_FIELDS:
+            if option.get(field):
+                locations.append((f"option={label}/{field}", option, field))
+    for trade_off in result.get("trade_offs") or []:
+        if not isinstance(trade_off, dict):
+            continue
+        label = str(trade_off.get("dimension") or "?")
+        for field in _CITATION_TRADEOFF_FIELDS:
+            if trade_off.get(field):
+                locations.append((f"trade-off={label}/{field}", trade_off, field))
+    return locations
+
+
+def apply_citation_rules(result: dict, evidence_chains: list[dict],
+                         mapping: dict[int, str] | None = None) -> dict:
+    """Resolve citations in every cited field exactly once.
+
+    Replaces the previous two-pass scrub-then-bind sequence, whose scrub step
+    could truncate a bound title at a comma. A field that carried prose and is
+    left with no substantive content (only markers or unresolved gaps) is
+    recorded as withdrawn rather than silently blanked.
+    """
+    registry = build_source_registry(evidence_chains)
+    effective_mapping = (dict(registry["mapping"]) if mapping is None else mapping)
+    for _locator, container, field in citation_field_locations(result):
+        original = str(container[field])
+        resolved = resolve_text(original, registry=registry,
+                                mapping=effective_mapping)
+        if has_substantive_content(original) and not has_substantive_content(resolved):
+            resolved = withdrawal_note(original)
+        container[field] = resolved
+    return result
+
+
+def unresolved_citations(text: str, evidence_chains: list[dict] | None = None,
+                         registry: dict | None = None) -> bool:
+    """True when text still carries a citation this pipeline could not resolve.
+
+    That includes a gap marker, a raw number marker, or a literal `[Source:]`
+    whose titles are not all registered. A non-positive number marker (interval,
+    array index) is not a citation and is not counted. This says the citation is
+    unresolved; it does not say the sentence is false.
     """
     if not text:
         return False
-    if _CITE_NUMBER.search(text) or _CITE_LEFTOVER.search(text):
+    if _CITATION_GAP_MARK.search(text):
         return True
-    real = _citable_titles(evidence_chains)
-    for m in _SOURCE_MARKER.finditer(text):
-        body = re.split(r'^\[Source:\s*', m.group(0), flags=re.IGNORECASE)[-1]
-        if body.endswith(']'):
-            body = body[:-1]
-        titles = _marker_titles(body)
-        if not titles:
+    registry = registry or build_source_registry(evidence_chains or [])
+    for match in _CITATION_TOKEN.finditer(text):
+        if match.group("number") is not None:
+            inner = _CITE_NUMBER.match(match.group(0)).group(1)
+            numbers = [int(n) for n in re.findall(r"[+-]?\d+", inner)]
+            if any(n <= 0 for n in numbers):
+                continue
             return True
-        if any(not _is_real_title(_norm_title(t), real) for t in titles):
+        if match.group("source") is not None:
+            body = _SOURCE_TITLES_IN_MARKER.sub("", match.group(0))
+            if body.endswith("]"):
+                body = body[:-1]
+            parts = _split_literal_source_body(body)
+            if not parts:
+                return True
+            for part in parts:
+                if canonical_source_title(registry, part) is None:
+                    return True
+        else:
+            if not _in_indexing_context(text, match.start(), match.end()):
+                return True
+    return False
+
+
+_BOUND_SOURCE_MARKER = re.compile(r"\[Source:[^\]]*\]")
+
+
+def has_bound_citation(text: str, registry: dict) -> bool:
+    """Whether text carries at least one citation resolved to a registered source.
+
+    Identity/format only: this says a citation is attached and resolvable, not
+    that the cited source supports the sentence.
+    """
+    for match in _BOUND_SOURCE_MARKER.finditer(text or ""):
+        body = _SOURCE_TITLES_IN_MARKER.sub("", match.group(0))
+        if body.endswith("]"):
+            body = body[:-1]
+        parts = _split_literal_source_body(body)
+        if parts and all(canonical_source_title(registry, part) for part in parts):
             return True
     return False
 
 
 def resolve_citations(text: str, evidence_chains: list[dict],
-                      mapping: dict[int, str]) -> str:
-    """Apply this pipeline's citation rules to one block of text.
+                      mapping: dict[int, str] | None = None,
+                      registry: dict | None = None) -> str:
+    """Resolve one block of text with this pipeline's citation rules.
 
-    The order is the synthesis order: scrub verbatim titles, then bind source
-    numbers, and do not scrub again. A second scrub would run over the markers
-    binding just produced, and the sanitizer splits a marker's titles on commas —
-    so a real title that contains a comma ("Deploy, Calibrate, Monitor, Heal …")
-    was truncated to its first word and then dropped as unrecognised. Binding
-    output is already built from the citable set, so it needs no second pass.
-
-    Both synthesis and the self-review's revisions use this, so a revision
-    cannot reintroduce a citation the synthesizer would have removed. This
-    keeps citation identity and handling consistent; it is not a claim that a
-    cited source supports the sentence it is attached to.
+    Synthesis and the self-review's revisions both call this, and the caller may
+    pass the same registry the source list was rendered from. A block that loses
+    all substantive content becomes the withdrawal note.
     """
     if not text:
         return text
-    # These helpers walk the known field names of a synthesis result, so the
-    # block is passed under one of those names rather than an ad-hoc key.
-    scrubbed = _sanitize_text(text, _citable_titles(evidence_chains))
-    bound = _bind_citations({"recommendation": scrubbed}, mapping)["recommendation"]
-    return bound
-
-
-# Every field the prompt asks to cite must be bound and sanitized. Leaving one
-# out left raw [[N]] markers in the rendered report: the model cites
-# confidence_rationale, but nothing converted its numbers.
-_CITATION_TEXT_FIELDS = ("recommendation", "winner_rationale",
-                         "evidence_summary", "scene_fit_note",
-                         "confidence_rationale")
-_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness", "constraint_fit_reason")
-_CITATION_TRADEOFF_FIELDS = ("finding", "impact")
-
-
-def _sanitize_citations(result: dict, evidence_chains: list[dict]) -> dict:
-    """Strip hallucinated [Source: title] citations (title not among the real
-    source titles fed to the synthesizer) from every factual claim field.
-
-    Only fact-bearing sources are real here. A discovered page with no collected
-    body is a navigation link, so writing its title as a source is stripped just
-    like any other fabrication.
-    """
-    real = _citable_titles(evidence_chains)
-
-    def _clean(value: str) -> str:
-        """Scrub a field, and record that it has no content left.
-
-        A field whose entire content was a fabricated marker becomes empty.
-        Emptied is not the same as never having had content: the claim was
-        withdrawn by this pass, and printing a blank leaves the reader unable to
-        tell the difference. The marker is replaced with a withdrawal note.
-        """
-        cleaned = _sanitize_text(value, real)
-        return cleaned if cleaned.strip() else withdrawal_note(value)
-
-    for field in _CITATION_TEXT_FIELDS:
-        if result.get(field):
-            result[field] = _clean(result[field])
-    for opt in result.get("ranked_options", []):
-        for field in _CITATION_OPT_FIELDS:
-            if opt.get(field):
-                opt[field] = _clean(opt[field])
-    for to in result.get("trade_offs", []):
-        for field in _CITATION_TRADEOFF_FIELDS:
-            if to.get(field):
-                to[field] = _clean(to[field])
-    return result
-
-
-def _bind_citations(result: dict, mapping: dict[int, str]) -> dict:
-    """Replace source-number citations [[N]] with the real [Source: title]
-    they denote. Unknown numbers are dropped (never fabricated). Runs AFTER
-    _sanitize_citations so verbatim [Source: ...] is scrubbed first and the
-    bound titles are not re-processed by the title sanitizer."""
-    def _bind(text: str) -> str:
-        if not text:
-            return text
-
-        def _sub(m: re.Match[str]) -> str:
-            # The marker may name several sources. Each number binds to its own
-            # title; a number with no entry is dropped, and if none resolve the
-            # whole marker disappears rather than leaving its digits as text.
-            #
-            # A non-positive number means the window is not a citation at all — an
-            # interval such as [[0,1]] or [[-1,2]], not a source list. Binding the
-            # marker's other numbers in that case gave a real source to text that
-            # cites nothing, so the whole marker is rejected. Rejecting it and
-            # filtering the number are different outcomes and must not be mixed.
-            numbers = [int(n) for n in re.findall(r'[+-]?\d+', m.group(1))]
-            if any(n <= 0 for n in numbers):
-                return ""
-            titles = [mapping[n] for n in numbers if n in mapping]
-            if not titles:
-                return ""
-            return '[Source: ' + ', Source: '.join(titles) + ']'
-
-        bound = _CITE_NUMBER.sub(_sub, text)
-        # Anything left that is only digits and separators was not a citation
-        # this pipeline can resolve; printing it as text would show a marker the
-        # reader cannot follow, so it goes.
-        bound = _CITE_LEFTOVER.sub("", bound)
-        # Binding can consume a field's entire content. An emptied field is a
-        # withdrawn claim, not a blank one, and this pass is the last chance to
-        # say so: the sanitizer ran first and skips a field that is now empty.
-        return bound if bound.strip() else withdrawal_note(text)
-
-    for field in _CITATION_TEXT_FIELDS:
-        if result.get(field):
-            result[field] = _bind(result[field])
-    for opt in result.get("ranked_options", []):
-        for field in _CITATION_OPT_FIELDS:
-            if opt.get(field):
-                opt[field] = _bind(opt[field])
-    for to in result.get("trade_offs", []):
-        for field in _CITATION_TRADEOFF_FIELDS:
-            if to.get(field):
-                to[field] = _bind(to[field])
-    return result
+    registry = registry or build_source_registry(evidence_chains)
+    effective_mapping = (dict(registry["mapping"]) if mapping is None else mapping)
+    resolved = resolve_text(text, registry=registry, mapping=effective_mapping)
+    if has_substantive_content(text) and not has_substantive_content(resolved):
+        return withdrawal_note(text)
+    return resolved
 
 
 def clean_label(text: str) -> str:
@@ -657,8 +862,11 @@ class ConclusionSynthesizerAgent:
 
         _validate_winner(result)
         _validate_constraint_fit(result)
-        _sanitize_citations(result, evidence_chains)
-        _bind_citations(result, cite_map)
+        # One pass over one shared field list: numbers and literal titles are
+        # resolved against the same numbered source registry the prompt used, a
+        # bound title is canonicalised once, and an unresolvable citation stays
+        # visible as a gap instead of being deleted.
+        apply_citation_rules(result, evidence_chains, cite_map)
         _normalize_labels(result)
 
         return {

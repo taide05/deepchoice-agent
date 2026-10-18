@@ -1,8 +1,10 @@
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import (
-    _summarize_chains,
+    build_source_registry,
+    citation_field_locations,
     clean_label,
+    has_substantive_content,
     resolve_citations,
     unresolved_citations,
     withdrawal_note,
@@ -27,6 +29,13 @@ _CORRECTABLE_TRADEOFF_FIELDS = ("finding", "impact")
 _CORRECTABLE_FIELDS = (_CORRECTABLE_OPTION_FIELDS + _CORRECTABLE_TOP_FIELDS
                        + _CORRECTABLE_TRADEOFF_FIELDS)
 
+# Correctable fields the `what_why_how` renderer does not print: they are still
+# part of the served result (other formats and the snapshot carry them), so the
+# reviewer must see their current text to review them, but repeating the printed
+# ones would make the payload a second copy of the report.
+_UNRENDERED_CORRECTABLE_FIELDS = ("evidence_summary", "constraint_fit_reason",
+                                 "impact")
+
 
 def _field_map() -> str:
     """The contract's field list, generated from the one registry above.
@@ -48,11 +57,11 @@ def _field_map() -> str:
 REVIEW_SYSTEM = f"""You are a rigorous quality reviewer. Evaluate research reports against a 6-item checklist.
 
 Answer YES or NO for each, with a brief note:
-1. Source support: citation coverage is PRE-COMPUTED by the pipeline (see "Citation Coverage" in the input) — use that number, do NOT re-evaluate from the report text.
-2. Unsourced claims: the pre-computed "Uncited" count is authoritative — use it, do NOT re-count.
+1. Source support: the pipeline only verifies that a citation names a registered source; a citation marker is NOT proof that the source supports the specific claim. For each decisive claim you check, compare the claim against the source body in the Source Register.
+2. Citation completeness: the "Citation Completeness" section is computed from the same field list that binding uses. It lists fields with no citation and fields whose citation could not be resolved. Treat both as things to check, not as automatic truth verdicts: an uncited claim may still be a recorded gap, and an unresolved citation is not evidence that the claim is false.
 3. Does the recommendation cover all 5 comparison dimensions? (Functionality, Performance, Ecosystem, Developer Experience, Scenario Fit)
 4. Are there unlabeled information conflicts?
-5. Are any user sub-questions unanswered?
+5. Are any user sub-questions unanswered? Check each original sub-question against the report, and say which ones have no substantive answer rather than only a marker or a gap note.
 6. Are there counter-examples or negative findings not flagged?
 
 Confidence Assessment:
@@ -71,12 +80,14 @@ differently), a justification no source supports, or a candidate dismissed for a
 reason the sources do not support — anywhere the report states it. For every one,
 return a correction entry that names WHERE it is stated:
 - "option" is the selector. For a per-candidate field it is that candidate's
-  exact name as shown in "Decision Claims To Check". For a trade-off field it is
-  that trade-off's dimension, exactly as shown there. Leave it empty ("") for a
+  exact name as shown in "Revision Targets". For a trade-off field it is that
+  trade-off's dimension, exactly as shown there. Leave it empty ("") for a
   top-level field.
 - "field" is one of the fields listed here — the only fields that can be
-  corrected. Each is printed in the report, so an error left in any of them
-  stays on display:
+  corrected. Most are printed in the report. A field marked "(not printed by
+  this report format)" is still part of the served result and its current text
+  is supplied under "Revision Targets"; an error left in any listed field is
+  still served to the reader:
 {_field_map()}
 - "action": "revise" with the corrected field text when a cited source supports
   a corrected version — keep everything in the field that is still supported,
@@ -111,7 +122,8 @@ def _normalize_confidence(value) -> str | None:
 
 def _apply_corrections(recommendation: dict, corrections,
                        evidence_chains: list[dict] | None = None,
-                       cite_map: dict[int, str] | None = None) -> tuple[list[dict], list[str]]:
+                       cite_map: dict[int, str] | None = None,
+                       registry: dict | None = None) -> tuple[list[dict], list[str]]:
     """Apply the reviewer's field-level corrections to the recommendation.
 
     Deterministic: the reviewer says which field is wrong and what the source
@@ -123,7 +135,9 @@ def _apply_corrections(recommendation: dict, corrections,
     be empty for a top-level field such as `recommendation`.
 
     Revised text goes through `resolve_citations`, the same rule synthesis uses,
-    so a revision cannot reintroduce a citation the synthesizer would remove.
+    against the same numbered registry: a registered title is canonicalised, an
+    unregistered one stays visible as a located gap, and a revision that says
+    nothing beyond markers is withdrawn rather than counted as an answer.
     """
     applied: list[dict] = []
     rejected: list[str] = []
@@ -195,17 +209,15 @@ def _apply_corrections(recommendation: dict, corrections,
             if not corrected:
                 rejected.append(f"revise without corrected text: {name}/{field}")
                 continue
-            # The revision goes through the same citation rules as synthesis. A
-            # revision is the reviewer's own prose, so a marker it attaches to a
-            # source that is not in the citable set is a claim of support that
-            # does not exist; resolving it would leave the claim attached to
-            # nothing, so that revision is withdrawn instead.
-            #
-            # Resolution can also leave the field empty — a revision consisting
-            # only of markers loses all of them — and an empty field both blanks
-            # the answer and hides the reason. That is the withdrawn case too.
-            resolved = resolve_citations(corrected, evidence_chains, cite_map)
-            if not resolved.strip() or unresolved_citations(resolved, evidence_chains):
+            # The revision goes through the same citation rules as synthesis,
+            # against the same numbered registry the reviewer read. A citation
+            # that cannot be resolved stays visible as a gap, so the reviewer's
+            # prose is neither silently stripped nor presented as supported. A
+            # revision that is nothing but markers has no substantive content and
+            # is withdrawn rather than counted as an answer.
+            resolved = resolve_citations(corrected, evidence_chains, cite_map,
+                                         registry=registry)
+            if not has_substantive_content(resolved):
                 target[field] = withdrawal_note(
                     str(recommendation.get("recommendation") or ""))
                 applied.append({
@@ -224,34 +236,99 @@ def _apply_corrections(recommendation: dict, corrections,
 
 
 
-_CITATION_FIELDS = ("recommendation", "winner_rationale", "evidence_summary",
-                    "scene_fit_note")
-_CITATION_OPT_FIELDS = ("rationale", "key_strength", "key_weakness")
-_CITATION_TRADEOFF_FIELDS = ("finding", "impact")
+def _citation_coverage(fr: dict, evidence_chains: list[dict] | None = None,
+                       registry: dict | None = None) -> dict:
+    """Deterministic citation completeness for the self-review input.
 
-
-def _citation_coverage(fr: dict) -> dict:
-    """Deterministic citation coverage for self-review items 1/2.
-
-    Counts factual-claim fields that carry at least one [Source: title], so the
-    reviewer trusts a pre-computed fact instead of re-reading the report.
+    This is a completeness report, not a support judgement. It walks the same
+    field list that citation binding walks, so a field cannot be counted by one
+    rule and missed by another, and it lists the fields that carry no citation
+    or carry a citation that could not be resolved. Neither is a truth verdict:
+    an uncited claim may be a recorded gap, and an unresolved citation is not
+    evidence that the claim is false.
     """
-    fields: list[str] = []
-    for f in _CITATION_FIELDS:
-        if fr.get(f):
-            fields.append(fr[f])
-    for opt in fr.get("ranked_options", []):
-        for f in _CITATION_OPT_FIELDS:
-            if opt.get(f):
-                fields.append(opt[f])
-    for to in fr.get("trade_offs", []):
-        for f in _CITATION_TRADEOFF_FIELDS:
-            if to.get(f):
-                fields.append(to[f])
-    total = len(fields)
-    uncited = sum(1 for f in fields if "[Source:" not in f)
-    return {"total_fields": total, "cited_fields": total - uncited,
-            "uncited_fields": uncited}
+    from .conclusion_synthesizer import has_bound_citation
+
+    registry = registry or build_source_registry(evidence_chains or [])
+    locations = citation_field_locations(fr)
+    uncited: list[str] = []
+    unresolved: list[str] = []
+    for locator, container, field in locations:
+        text = str(container.get(field) or "")
+        if not has_bound_citation(text, registry):
+            uncited.append(locator)
+        if unresolved_citations(text, registry=registry):
+            unresolved.append(locator)
+    return {
+        "total_fields": len(locations),
+        "cited_fields": len(locations) - len(uncited),
+        "uncited_fields": len(uncited),
+        "uncited_locations": uncited,
+        "unresolved_locations": unresolved,
+    }
+
+
+def _source_register_text(registry: dict, limit: int = 900) -> str:
+    """The numbered sources, with full title, URL and body, for the reviewer.
+
+    Rendered from the same registry the synthesizer numbered its prompt with, so
+    the reviewer can cite a number back into a revision and the number means the
+    same source in both paths. The body is the same extraction the report uses,
+    not a separate snippet-only summary.
+    """
+    entries = registry.get("entries") or []
+    if not entries:
+        return "No citable sources were registered."
+    lines: list[str] = []
+    for entry in entries:
+        lines.append(f"[[{entry['number']}]] {entry['title']}")
+        if entry.get("url"):
+            lines.append(f"    url: {entry['url']}")
+        body = " ".join(str(entry.get("body") or "").split())
+        if len(body) > limit:
+            body = body[:limit].rstrip() + "…"
+        lines.append(f"    body: {body or '(no body text stored)'}")
+    if registry.get("navigation"):
+        lines.append("")
+        lines.append("Navigation links (no body collected; NOT citable):")
+        lines += [f"- {link}" for link in registry["navigation"][:10]]
+    return "\n".join(lines)
+
+
+def _revision_targets_text(recommendation: dict) -> str:
+    """Where each correctable field lives, without repeating printed prose.
+
+    The report above is the authoritative content; this is the locating index the
+    reviewer needs to name a field in a correction. Fields the report format does
+    not print are the exception: their current text is included here, because the
+    reviewer cannot check a claim that is nowhere in the payload.
+    """
+    def _entry(label: str, container: dict, field: str) -> str:
+        locator = f"{label}: {field}"
+        if field in _UNRENDERED_CORRECTABLE_FIELDS:
+            text = " ".join(str(container.get(field) or "").split())
+            return f"{locator} (not printed by this report format) — {text}"
+        return locator
+
+    lines: list[str] = []
+    for field in _CORRECTABLE_TOP_FIELDS:
+        if recommendation.get(field):
+            lines.append(_entry("top-level", recommendation, field))
+    for option in recommendation.get("ranked_options") or []:
+        if not isinstance(option, dict):
+            continue
+        for field in _CORRECTABLE_OPTION_FIELDS:
+            if option.get(field):
+                lines.append(_entry(f"option={option.get('name', '?')}",
+                                    option, field))
+    for trade_off in recommendation.get("trade_offs") or []:
+        if not isinstance(trade_off, dict):
+            continue
+        for field in _CORRECTABLE_TRADEOFF_FIELDS:
+            if trade_off.get(field):
+                lines.append(_entry(f"trade-off={trade_off.get('dimension', '?')}",
+                                    trade_off, field))
+    return "\n".join(lines) if lines else "No correctable fields are present."
 
 
 class SelfReviewerAgent:
@@ -269,87 +346,55 @@ class SelfReviewerAgent:
             for s in upstream_signals
         ) if upstream_signals else "No upstream quality signals available."
 
-        # The reviewer is asked to check claims against the cited source text, so
-        # The reviewer is asked to check claims against the cited source text, so
-        # the source text must be in the payload. Titles alone made the decisive
-        # comparison impossible: the run's wrong scale (5 万亿) was visible while
-        # the source that says 500 亿 was not, so the review could not catch it.
-        #
-        # The sources are listed as retrieved material, with no strength band: a
-        # retrieval score is not evidence, and labelling it as such in the review
-        # payload invited the reviewer to endorse the ranking for the wrong reason.
-        from ..utils.candidate_identity import bounded_content_summary
+        # One source package for the whole review: the same numbered registry the
+        # synthesizer used, with full title, URL and body. The reviewer can check
+        # a specific claim against the body and cite a number back in a revision;
+        # a number means the same source in both paths.
+        registry = build_source_registry(research_state.get("evidence_chains") or [])
+        recommendation = research_state.get("final_recommendation") or {}
 
-        chains_summary = []
-        for c in research_state.get("evidence_chains", []):
-            disputed = " [DISPUTED]" if c.get("disputed") else ""
-            chains_summary.append(f"retrieved item{disputed}:")
-            for s in (c.get("sources") or [])[:2]:
-                chains_summary.append(f"    source: {s.get('title', '?')[:80]}")
-                provenance = s.get("provenance")
-                channel = s.get("channel")
-                if provenance or channel:
-                    chains_summary.append(
-                        f"      provenance: {provenance or 'unknown'}; "
-                        f"channel: {channel or 'unknown'}")
-                chains_summary.append(
-                    f"      text: {bounded_content_summary(s, limit=700)}")
-        chains_text = "\n".join(chains_summary) if chains_summary else "No retrieved sources."
+        source_register_text = _source_register_text(registry)
+        revision_targets = _revision_targets_text(recommendation)
+        cite_stats = _citation_coverage(recommendation, registry=registry)
+        uncited_text = ("\n".join(f"- {locator}" for locator in cite_stats["uncited_locations"])
+                        or "none")
+        unresolved_text = ("\n".join(f"- {locator}" for locator in cite_stats["unresolved_locations"])
+                           or "none")
+        recorded_questions = list(recommendation.get("unresolved_questions") or []) + \
+            list(research_state.get("knowledge_gaps") or [])
+        recorded_text = ("\n".join(f"- {question}" for question in recorded_questions)
+                         or "none recorded")
 
-        cite_stats = _citation_coverage(research_state.get("final_recommendation", {}))
+        user_content = f"""## Report To Review
+The report body below is the served content; the later sections add the source
+material and a locating index. Check the claims in the report against the source
+bodies, not against the citation markers.
 
-        # The per-candidate justifications decide the ranking, but nothing reviewed
-        # them: the reviewer saw only the headline. They are supplied here so a
-        # wrong scale, an unsupported justification or an unsupported dismissal can
-        # be caught before rendering.
-        claims_summary: list[str] = []
-        for opt in (research_state.get("final_recommendation") or {}).get("ranked_options") or []:
-            if not isinstance(opt, dict):
-                continue
-            claims_summary.append(
-                f"#{opt.get('rank', '?')} {opt.get('name', '')} "
-                f"(constraint_fit={opt.get('constraint_fit', '?')})")
-            for field in ("rationale", "constraint_fit_reason", "key_strength",
-                          "key_weakness"):
-                value = opt.get(field)
-                if value:
-                    claims_summary.append(f"    {field}: {value}")
-        for to in (research_state.get("final_recommendation") or {}).get("trade_offs") or []:
-            if isinstance(to, dict) and to.get("finding"):
-                claims_summary.append(
-                    f"trade-off [{to.get('dimension', '')}]: {to.get('finding')}")
-        claims_text = "\n".join(claims_summary) if claims_summary else \
-            "No ranked options were produced."
-
-        user_content = f"""## Report
 {research_state.get("report", "")}
 
-## Citation Coverage (pre-computed — trust this, do NOT re-evaluate)
+## Citation Completeness (deterministic; a citation is not proof of support)
 Total claim fields: {cite_stats["total_fields"]}
-Cited: {cite_stats["cited_fields"]}
-Uncited: {cite_stats["uncited_fields"]}
+Fields carrying a resolvable citation: {cite_stats["cited_fields"]}
+Fields with no citation: {cite_stats["uncited_fields"]}
+Field locations with no citation:
+{uncited_text}
+Field locations with an unresolved citation:
+{unresolved_text}
 
-## Evidence Chains
-{chains_text}
+## Source Register (numbered; same numbering as synthesis)
+{source_register_text}
 
 ## Original Sub-Questions
 {research_state.get("sub_questions", [])}
 
+## Open Questions Recorded By Synthesis
+{recorded_text}
+
+## Revision Targets (locations only; content is in the report above)
+{revision_targets}
+
 ## Pipeline Quality Signals
 {signals_text}
-
-## Decision Claims To Check
-The per-candidate justifications below are what the report presents as its
-reasons. Check each against the evidence chains and the cited source text:
-- a figure, unit or scale that the cited source does not state (or states
-  differently) is a decisive error;
-- a justification with no supporting source for its specific assertion is a
-  decisive error;
-- a candidate dismissed for a reason the sources do not support is a decisive
-  error.
-Report each such case in knowledge_gaps, naming the candidate and the claim.
-
-{claims_text}
 
 ## Retry Count
 {research_state.get("retry_count", 0)}"""
@@ -380,19 +425,15 @@ Report each such case in knowledge_gaps, naming the candidate and the claim.
         # unchanged and the original would be lost.
         import copy
 
-        recommendation = copy.deepcopy(research_state.get("final_recommendation") or {})
-        # The citation rules for a revision are the synthesis rules, applied to
-        # the same evidence: the citable set and the number -> title mapping both
-        # come from the one builder the synthesizer uses, so a revision cannot
-        # cite a source that the synthesizer would have refused.
-        _evidence_text, cite_map = _summarize_chains(
-            research_state.get("evidence_chains") or [],
-            (research_state.get("task") or {}).get("candidate_techs"),
-        )
+        recommendation = copy.deepcopy(recommendation)
+        # Revisions are resolved with the same numbered source registry the
+        # reviewer read, so a number the reviewer cites means the source it saw,
+        # and a title is matched by full identity rather than truncated.
         applied, rejected = _apply_corrections(
             recommendation, result.get("corrections"),
             evidence_chains=research_state.get("evidence_chains") or [],
-            cite_map=cite_map,
+            cite_map=dict(registry["mapping"]),
+            registry=registry,
         )
 
         # The top-level confidence and the recommendation's own confidence are one

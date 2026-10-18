@@ -178,24 +178,30 @@ class TestCitationSanitization:
         return [{"sources": [{"title": t, "snippet": f"body of {t}"} for t in titles]}]
 
     def test_removes_fabricated_citation(self):
+        """A fabricated title is no longer silently deleted: it becomes a
+        locatable unresolved-citation gap, so the claim does not look supported."""
         result = {"recommendation": "Use X [Source: Fake Docs]."}
-        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
-        assert "Fake Docs" not in result["recommendation"]
+        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
+        assert "[Source: Fake Docs]" not in result["recommendation"]
+        assert "Fake Docs" in result["recommendation"], "the gap must locate the title"
+        assert "引用未解析" in result["recommendation"] or \
+            "citation-unresolved" in result["recommendation"]
 
     def test_keeps_real_citation(self):
         result = {"recommendation": "Use X [Source: Real Docs]."}
-        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
+        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
         assert "[Source: Real Docs]" in result["recommendation"]
 
     def test_mixed_keeps_real_removes_fake(self):
         result = {"recommendation": "Use X [Source: Real Docs, Source: Fake Docs]."}
-        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
-        assert "Real Docs" in result["recommendation"]
-        assert "Fake Docs" not in result["recommendation"]
+        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
+        assert "[Source: Real Docs]" in result["recommendation"]
+        assert "[Source: Fake Docs]" not in result["recommendation"]
+        assert "Fake Docs" in result["recommendation"], "the unresolved one is located"
 
     def test_all_fabricated_removes_bracket(self):
         result = {"recommendation": "Use X [Source: Fake Docs]."}
-        cs_mod._sanitize_citations(result, self._chains(["Real Docs"]))
+        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
         assert "[Source:" not in result["recommendation"]
 
     def test_run_sanitizes_citations(self, monkeypatch):
@@ -208,19 +214,28 @@ class TestCitationSanitization:
         }))
         import asyncio
         out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert "Made Up Docs" not in out["final_recommendation"]["recommendation"]
+        recommendation = out["final_recommendation"]["recommendation"]
+        assert "[Source: Made Up Docs]" not in recommendation
+        assert "Made Up Docs" in recommendation
+        assert "引用未解析" in recommendation or "citation-unresolved" in recommendation
 
 
 class TestBindCitations:
     def test_binds_number_to_real_title(self):
         result = {"recommendation": "Use X [[1]] and Y [[2]]."}
-        cs_mod._bind_citations(result, {1: "FastAPI Docs", 2: "Flask Docs"})
+        cs_mod.apply_citation_rules(result, [], {1: "FastAPI Docs", 2: "Flask Docs"})
         assert result["recommendation"] == "Use X [Source: FastAPI Docs] and Y [Source: Flask Docs]."
 
     def test_drops_unknown_number(self):
+        """An unknown number is not printed as a citation, but it is not dropped
+        silently either: it stays as a locatable unresolved-citation gap."""
         result = {"recommendation": "Use X [[99]]."}
-        cs_mod._bind_citations(result, {1: "FastAPI Docs"})
-        assert result["recommendation"] == "Use X ."
+        cs_mod.apply_citation_rules(result, [], {1: "FastAPI Docs"})
+        assert "[Source:" not in result["recommendation"]
+        assert "[[99]]" not in result["recommendation"]
+        assert "99" in result["recommendation"]
+        assert "citation-unresolved" in result["recommendation"].lower() or \
+            "引用未解析" in result["recommendation"]
 
     def test_binds_all_fields(self):
         result = {
@@ -230,7 +245,7 @@ class TestBindCitations:
                                 "key_weakness": "w [[2]]"}],
             "trade_offs": [{"finding": "f [[1]]", "impact": "i [[2]]"}],
         }
-        cs_mod._bind_citations(result, {1: "A", 2: "B"})
+        cs_mod.apply_citation_rules(result, [], {1: "A", 2: "B"})
         assert result["recommendation"] == "Use X [Source: A]."
         assert result["winner_rationale"] == "X wins [Source: A]."
         assert result["ranked_options"][0]["key_strength"] == "s [Source: A]"

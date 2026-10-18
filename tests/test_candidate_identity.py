@@ -291,7 +291,9 @@ class TestNavigationLinksAreNotCitable:
         assert "no fact-bearing source" in text
 
     def test_writing_a_navigation_title_verbatim_is_stripped(self):
-        from deepchoice.agents.conclusion_synthesizer import _sanitize_citations
+        """The navigation title is not accepted as a citation; it is kept only as
+        an unresolved-citation gap, so the claim cannot read as supported."""
+        from deepchoice.agents.conclusion_synthesizer import apply_citation_rules
 
         nav = {"title": "vector — Official Documentation", "url": "https://vector.dev/docs/",
                "snippet": "Official documentation site for vector", "score": 6.8}
@@ -299,13 +301,15 @@ class TestNavigationLinksAreNotCitable:
                 "snippet": "body", "score": 7.0}
         chains = [{"conclusion": "c", "evidence_strength": "moderate",
                    "sources": [nav, real]}]
-        result = _sanitize_citations({
+        result = apply_citation_rules({
             "recommendation": "Use pgvector [Source: vector — Official Documentation] "
                               "and it is fast [Source: Real Page].",
         }, chains)
-        assert "vector — Official Documentation" not in result["recommendation"], \
+        assert "[Source: vector — Official Documentation]" not in result["recommendation"], \
             "a navigation title was accepted as a citation"
         assert "Real Page" in result["recommendation"]
+        assert "引用未解析" in result["recommendation"] or \
+            "citation-unresolved" in result["recommendation"]
 
 
 class TestCandidateNameMatching:
@@ -475,9 +479,8 @@ class TestBodyLessSourcesAcrossEveryRoute:
         old lenient rule too.
         """
         from deepchoice.agents.conclusion_synthesizer import (
-            _bind_citations,
-            _sanitize_citations,
             _summarize_chains,
+            apply_citation_rules,
         )
 
         nav = {"url": "https://www.postgresql.org/docs/",
@@ -496,14 +499,20 @@ class TestBodyLessSourcesAcrossEveryRoute:
         assert _norm_title(nav["title"]) in _norm_title(real["title"]), \
             "fixture must reproduce the substring hazard"
 
-        result = _sanitize_citations(
+        result = apply_citation_rules(
             {"recommendation":
              "Use it [Source: PostgreSQL — Official Documentation]."}, chains)
-        assert nav["title"] not in result["recommendation"], result
+        # The navigation title is not accepted as a source. It remains only as a
+        # located gap, never as a `[Source: ...]` citation.
+        assert "[Source: PostgreSQL — Official Documentation]" not in \
+            result["recommendation"], result
+        assert "引用未解析" in result["recommendation"] or \
+            "citation-unresolved" in result["recommendation"], result
 
         _prompt, mapping = _summarize_chains(chains, ["PostgreSQL"])
         assert nav["title"] not in mapping.values(), mapping
-        bound = _bind_citations({"recommendation": "Use it [[1]]."}, mapping)
+        bound = apply_citation_rules({"recommendation": "Use it [[1]]."}, chains,
+                                     mapping)
         # Compare the parsed citation exactly: the nav title is a literal prefix of
         # the real one, so a substring check cannot distinguish them.
         import re
