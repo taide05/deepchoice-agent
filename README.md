@@ -1,5 +1,26 @@
 # DeepChoice — AI 驱动的技术选型深度研究 Agent
 
+## 当前实验状态与维护入口（2026-10-19）
+
+本工作树是 `precodex/deepseek-adapter` 恢复实验，文档修改前代码基点为
+`0e6305a3a590e99fccccadd946530594c4d2202b`。第七次真实报告运行完成，内容未通过，
+注释角标定界仍有缺陷；原始报告保留。当前不声称已达到投递水平，新研究或批量评测尚未授权。
+单份合格报告只作阶段门槛；最终需要代表性数据集上的质量、可靠性、效率指标、公平简单基线
+比较和完整使用链路。百例以上为规划规模，实际样本数、阈值与预算在执行前冻结。
+
+唯一维护入口位于配套的 `deepchoice-agent` 工作树：
+[路线](../deepchoice-agent/docs/current-roadmap.md)、
+[评估协议](../deepchoice-agent/docs/product-effectiveness-optimization.md)、
+[执行规则](../deepchoice-agent/docs/optimization-execution.md)、
+[当前状态](../deepchoice-agent/docs/o1-execution-status.md)。以上相对链接依赖本机两个同级工作树；
+单独检出时需取得相应维护文档，不从旧 README 命令推导运行授权。
+
+共享目标与评测口径不代表运行契约相同：本实验仍使用旧 `/research` 接口，现代分支使用
+`/api/v1/tasks/*`；不得把其 durable 合约、工程测试或质量结论移植成本分支已实现事实，
+本分支成果也未据此声明已集成到现代产品。正式评测前先选定交付分支及实际运行器。
+以下功能、模型和配置说明有历史内容，须以本分支代码与冻结配置核对；历史 300-case 数字
+保留原日期和分母，不能用于当前内容质量声明。
+
 DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI vs Flask 该选哪个"就能自动搜索 6 路数据源、给每篇信源打分、检测矛盾观点并用两阶段仲裁解决、最终输出有据可查的对比推荐报告。
 
 ## 为什么值得关注
@@ -129,12 +150,16 @@ docker run -p 8000:8000 --env-file .env \
 | official_doc 召回率 | **65.6%**（346/528） | 官方文档直连 222 条（91 种子 + 131 运行时自学习入库，2026-08-31 种子化） |
 | 端到端延迟 P50 | **342.1s** | 中位数——约 5.7 分钟完成一次技术选型研究 |
 | 端到端延迟 P95 | **445.3s** | 95 分位——480s 预算内 |
-| 报告质量 A 级 | **99%**（297/300） | 5 项确定性质检（不调 LLM） |
+| 报告质量 A 级（历史名称） | **99%**（297/300） | 5 项确定性结构检查（不调 LLM）；不表示事实正确或内容有据可用 |
 
 > **数据来源**：以上数字来自 300 case 混合基准（`benchmarks/cases_eval_300.json` = 150 TC + 150 OS）。采集分 3 批（`--batch 1/2/3 --batch-size 100`），超时/变体集中补跑（`cases_retry_all.json`）后按 case_id 替换合并。评测覆盖经 3 轮审计修正（case 标注缺陷 T1/T2/T3 修正、OS acceptable 补齐托管维度、变体 query 双场景矛盾清除）。**诚实口径**：Top-1 92.0% 是修正评测覆盖后的真实值——剩余 miss 为真·两难（标注无共识，按设计保留）、模型主流偏差、以及模型真错（详见 case 审计记录）。2026-08-31 终测归档；全量测试 **227 passed + 1 skipped**。
 
+结构 A 级、推荐标签命中和引用标题存在不等于语义质量；补跑替换合并后的任务成功率
+不等于首次运行成功率。新正式指标须附数据集版本、日期、分母、基线及限制后另行发布，
+不覆盖历史数字。以下命令仅保留历史采集方法，旧路径和并发参数不作为当前运行指令。
+
 ```bash
-# 重现 300 case 混合基准（3 批 + 合并）
+# 历史 300 case 采集方法（非当前执行授权，不能保证重现旧结果）
 cd D:\deepchoice-agent
 python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 1 --batch-size 100 --concurrency 12
 python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 2 --batch-size 100 --concurrency 12
