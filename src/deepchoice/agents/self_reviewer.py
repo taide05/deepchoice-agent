@@ -1,11 +1,17 @@
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import (
+    CITATION_SOURCES_KEY,
+    _CITATION_OPT_FIELDS,
+    _CITATION_TEXT_FIELDS,
+    _CITATION_TRADEOFF_FIELDS,
     build_source_registry,
     citation_field_locations,
+    citation_gap_present,
     clean_label,
+    field_locator,
     has_substantive_content,
-    resolve_citations,
+    resolve_citations_with_sources,
     unresolved_citations,
     withdrawal_note,
 )
@@ -15,26 +21,19 @@ from .report_generator import render_report
 # check. The choice, the ranking order and the candidate names are not the
 # reviewer's to change.
 #
-# The set covers every field the report prints verbatim, not only the
-# per-candidate ones: a decisive error named in the recommendation, the winner
-# rationale, the confidence rationale or a trade-off finding was reported and
-# then still displayed, which is the outcome this is meant to remove. It is the
-# single definition: the contract sent to the model is generated from it.
-_CORRECTABLE_OPTION_FIELDS = ("rationale", "key_strength", "key_weakness",
-                              "constraint_fit_reason")
-_CORRECTABLE_TOP_FIELDS = ("recommendation", "winner_rationale",
-                           "confidence_rationale", "evidence_summary",
-                           "scene_fit_note")
-_CORRECTABLE_TRADEOFF_FIELDS = ("finding", "impact")
+# The set is the same traversal the citation binding uses — one definition, so a
+# field cannot be bound but unreviewed, or reviewed but impossible to bind. It
+# covers every field the result carries, not only the ones one report format
+# happens to print: a decisive error in the evidence summary, a constraint-fit
+# reason, the confidence rationale or a trade-off impact is served to the reader
+# through the snapshot and other formats. The contract sent to the model and the
+# review body are generated from it, so review coverage cannot depend on the
+# user's report format.
+_CORRECTABLE_OPTION_FIELDS = tuple(_CITATION_OPT_FIELDS)
+_CORRECTABLE_TOP_FIELDS = tuple(_CITATION_TEXT_FIELDS)
+_CORRECTABLE_TRADEOFF_FIELDS = tuple(_CITATION_TRADEOFF_FIELDS)
 _CORRECTABLE_FIELDS = (_CORRECTABLE_OPTION_FIELDS + _CORRECTABLE_TOP_FIELDS
                        + _CORRECTABLE_TRADEOFF_FIELDS)
-
-# Correctable fields the `what_why_how` renderer does not print: they are still
-# part of the served result (other formats and the snapshot carry them), so the
-# reviewer must see their current text to review them, but repeating the printed
-# ones would make the payload a second copy of the report.
-_UNRENDERED_CORRECTABLE_FIELDS = ("evidence_summary", "constraint_fit_reason",
-                                 "impact")
 
 
 def _field_map() -> str:
@@ -60,8 +59,8 @@ Answer YES or NO for each, with a brief note:
 1. Source support: the pipeline only verifies that a citation names a registered source; a citation marker is NOT proof that the source supports the specific claim. For each decisive claim you check, compare the claim against the source body in the Source Register.
 2. Citation completeness: the "Citation Completeness" section is computed from the same field list that binding uses. It lists fields with no citation and fields whose citation could not be resolved. Treat both as things to check, not as automatic truth verdicts: an uncited claim may still be a recorded gap, and an unresolved citation is not evidence that the claim is false.
 3. Does the recommendation cover all 5 comparison dimensions? (Functionality, Performance, Ecosystem, Developer Experience, Scenario Fit)
-4. Are there unlabeled information conflicts?
-5. Are any user sub-questions unanswered? Check each original sub-question against the report, and say which ones have no substantive answer rather than only a marker or a gap note.
+4. Are there unlabeled information conflicts? The recorded conflicts, if any, are under "Recorded Conflicts"; compare their resolutions with the claims in the fields.
+5. Are any user sub-questions unanswered? Check each original sub-question against the fields below, and say which ones have no substantive answer rather than only a marker or a gap note.
 6. Are there counter-examples or negative findings not flagged?
 
 Confidence Assessment:
@@ -77,17 +76,16 @@ Return ONLY a JSON object (numbers are examples; give your own real values):
 "corrections" is how a decisive error is fixed, not merely noted. A decisive
 error is a figure, unit or scale the cited source does not state (or states
 differently), a justification no source supports, or a candidate dismissed for a
-reason the sources do not support — anywhere the report states it. For every one,
-return a correction entry that names WHERE it is stated:
+reason the sources do not support — anywhere the served fields state it. For
+every one, return a correction entry that names WHERE it is stated:
 - "option" is the selector. For a per-candidate field it is that candidate's
-  exact name as shown in "Revision Targets". For a trade-off field it is that
+  exact name as shown in "Fields To Review". For a trade-off field it is that
   trade-off's dimension, exactly as shown there. Leave it empty ("") for a
   top-level field.
 - "field" is one of the fields listed here — the only fields that can be
-  corrected. Most are printed in the report. A field marked "(not printed by
-  this report format)" is still part of the served result and its current text
-  is supplied under "Revision Targets"; an error left in any listed field is
-  still served to the reader:
+  corrected. Every listed field the result carries is present in "Fields To
+  Review" with its current text, regardless of which report format the user
+  selected; a field absent from the result cannot be corrected:
 {_field_map()}
 - "action": "revise" with the corrected field text when a cited source supports
   a corrected version — keep everything in the field that is still supported,
@@ -120,6 +118,19 @@ def _normalize_confidence(value) -> str | None:
     return level if level in _LEVELS else None
 
 
+def _set_field_bindings(recommendation: dict, locator: str,
+                        bindings: list[dict]) -> None:
+    """Record (or clear) the registered identities of one revised field."""
+    identity_map = recommendation.get(CITATION_SOURCES_KEY)
+    if not isinstance(identity_map, dict):
+        identity_map = {}
+        recommendation[CITATION_SOURCES_KEY] = identity_map
+    if bindings:
+        identity_map[locator] = bindings
+    else:
+        identity_map.pop(locator, None)
+
+
 def _apply_corrections(recommendation: dict, corrections,
                        evidence_chains: list[dict] | None = None,
                        cite_map: dict[int, str] | None = None,
@@ -134,10 +145,13 @@ def _apply_corrections(recommendation: dict, corrections,
     `option` selects a ranked option by name, or a trade-off by dimension; it may
     be empty for a top-level field such as `recommendation`.
 
-    Revised text goes through `resolve_citations`, the same rule synthesis uses,
-    against the same numbered registry: a registered title is canonicalised, an
-    unregistered one stays visible as a located gap, and a revision that says
-    nothing beyond markers is withdrawn rather than counted as an answer.
+    Revised text goes through the same resolution synthesis uses, against the same
+    numbered registry: a registered title is canonicalised, an unregistered one
+    stays visible as a located gap, and a revision that says nothing beyond
+    markers is withdrawn rather than counted as an answer. A revised field's
+    identity bindings are written to the recommendation's citation map under the
+    same locator, so a reviewer revision cannot fall back to title guessing in the
+    report renderers.
     """
     applied: list[dict] = []
     rejected: list[str] = []
@@ -201,9 +215,17 @@ def _apply_corrections(recommendation: dict, corrections,
             rejected.append(f"{field!r} is not present on the named entry")
             continue
 
+        if field in _CORRECTABLE_TOP_FIELDS:
+            locator = field_locator(recommendation, field)
+        elif field in _CORRECTABLE_TRADEOFF_FIELDS:
+            locator = field_locator(target, field, "trade-off")
+        else:
+            locator = field_locator(target, field, "option")
+
         before = target.get(field)
         if action == "withdraw":
             target[field] = withdrawal_note(str(recommendation.get("recommendation") or ""))
+            _set_field_bindings(recommendation, locator, [])
         else:
             corrected = str(item.get("corrected") or "").strip()
             if not corrected:
@@ -215,11 +237,12 @@ def _apply_corrections(recommendation: dict, corrections,
             # prose is neither silently stripped nor presented as supported. A
             # revision that is nothing but markers has no substantive content and
             # is withdrawn rather than counted as an answer.
-            resolved = resolve_citations(corrected, evidence_chains, cite_map,
-                                         registry=registry)
+            resolved, bindings = resolve_citations_with_sources(
+                corrected, evidence_chains, cite_map, registry=registry)
             if not has_substantive_content(resolved):
                 target[field] = withdrawal_note(
                     str(recommendation.get("recommendation") or ""))
+                _set_field_bindings(recommendation, locator, [])
                 applied.append({
                     "option": owner, "field": field, "action": "withdraw",
                     "withdrawn_marker": True,
@@ -229,6 +252,7 @@ def _apply_corrections(recommendation: dict, corrections,
                 })
                 continue
             target[field] = resolved
+            _set_field_bindings(recommendation, locator, bindings)
         applied.append({"option": owner, "field": field, "action": action,
                         "reason": reason[:200], "changed": before != target.get(field)})
     return applied, rejected
@@ -246,18 +270,34 @@ def _citation_coverage(fr: dict, evidence_chains: list[dict] | None = None,
     or carry a citation that could not be resolved. Neither is a truth verdict:
     an uncited claim may be a recorded gap, and an unresolved citation is not
     evidence that the claim is false.
+
+    When the recommendation carries the registered identity map, completeness is
+    read from it; a display title shared by two sources therefore does not make a
+    correctly resolved citation look unresolved. Only historical material without
+    the map falls back to title inspection.
     """
     from .conclusion_synthesizer import has_bound_citation
 
     registry = registry or build_source_registry(evidence_chains or [])
     locations = citation_field_locations(fr)
+    identity_map = fr.get(CITATION_SOURCES_KEY)
+    identity_map = identity_map if isinstance(identity_map, dict) else None
     uncited: list[str] = []
     unresolved: list[str] = []
     for locator, container, field in locations:
         text = str(container.get(field) or "")
-        if not has_bound_citation(text, registry):
+        if identity_map is not None and locator in identity_map:
+            cited = bool(identity_map.get(locator))
+            unresolved_flag = citation_gap_present(text)
+        else:
+            # No identity for this field: historical text, or a partial map from
+            # a record revised later. Title inspection is the honest fallback and
+            # never guesses an ambiguous source.
+            cited = has_bound_citation(text, registry)
+            unresolved_flag = unresolved_citations(text, registry=registry)
+        if not cited:
             uncited.append(locator)
-        if unresolved_citations(text, registry=registry):
+        if unresolved_flag:
             unresolved.append(locator)
     return {
         "total_fields": len(locations),
@@ -295,40 +335,21 @@ def _source_register_text(registry: dict, limit: int = 900) -> str:
     return "\n".join(lines)
 
 
-def _revision_targets_text(recommendation: dict) -> str:
-    """Where each correctable field lives, without repeating printed prose.
+def _review_fields_text(recommendation: dict) -> str:
+    """The complete, located body of every correctable field to review.
 
-    The report above is the authoritative content; this is the locating index the
-    reviewer needs to name a field in a correction. Fields the report format does
-    not print are the exception: their current text is included here, because the
-    reviewer cannot check a claim that is nowhere in the payload.
+    Generated from the shared citation traversal, so review coverage is the same
+    set the binding and the correction applier use — and it does not depend on
+    which report format the user selected. Every field is shown once, with the
+    same locator the correction contract uses to select it; the payload does not
+    carry a second copy of prose that is already here.
     """
-    def _entry(label: str, container: dict, field: str) -> str:
-        locator = f"{label}: {field}"
-        if field in _UNRENDERED_CORRECTABLE_FIELDS:
-            text = " ".join(str(container.get(field) or "").split())
-            return f"{locator} (not printed by this report format) — {text}"
-        return locator
-
     lines: list[str] = []
-    for field in _CORRECTABLE_TOP_FIELDS:
-        if recommendation.get(field):
-            lines.append(_entry("top-level", recommendation, field))
-    for option in recommendation.get("ranked_options") or []:
-        if not isinstance(option, dict):
-            continue
-        for field in _CORRECTABLE_OPTION_FIELDS:
-            if option.get(field):
-                lines.append(_entry(f"option={option.get('name', '?')}",
-                                    option, field))
-    for trade_off in recommendation.get("trade_offs") or []:
-        if not isinstance(trade_off, dict):
-            continue
-        for field in _CORRECTABLE_TRADEOFF_FIELDS:
-            if trade_off.get(field):
-                lines.append(_entry(f"trade-off={trade_off.get('dimension', '?')}",
-                                    trade_off, field))
-    return "\n".join(lines) if lines else "No correctable fields are present."
+    for locator, container, field in citation_field_locations(recommendation):
+        lines.append(f"### {locator}")
+        lines.append(str(container.get(field) or ""))
+        lines.append("")
+    return "\n".join(lines) if lines else "No reviewable fields are present."
 
 
 class SelfReviewerAgent:
@@ -354,7 +375,7 @@ class SelfReviewerAgent:
         recommendation = research_state.get("final_recommendation") or {}
 
         source_register_text = _source_register_text(registry)
-        revision_targets = _revision_targets_text(recommendation)
+        review_fields = _review_fields_text(recommendation)
         cite_stats = _citation_coverage(recommendation, registry=registry)
         uncited_text = ("\n".join(f"- {locator}" for locator in cite_stats["uncited_locations"])
                         or "none")
@@ -365,12 +386,43 @@ class SelfReviewerAgent:
         recorded_text = ("\n".join(f"- {question}" for question in recorded_questions)
                          or "none recorded")
 
-        user_content = f"""## Report To Review
-The report body below is the served content; the later sections add the source
-material and a locating index. Check the claims in the report against the source
-bodies, not against the citation markers.
+        task = research_state.get("task") or {}
+        query_text = str(task.get("query") or "(not recorded)")
+        scene_text = str(task.get("scene_context") or "(not recorded)")
+        conflicts = research_state.get("conflicts") or []
+        if conflicts:
+            conflict_lines = []
+            for conflict in conflicts:
+                if not isinstance(conflict, dict):
+                    continue
+                conflict_lines.append(
+                    f"- resolution: {conflict.get('resolution', 'unresolved')}; "
+                    f"reasoning: {conflict.get('reasoning', '')}; "
+                    f"key factor: {conflict.get('key_factor', '')}")
+            conflicts_text = "\n".join(conflict_lines) or "none recorded"
+        else:
+            check = research_state.get("conflict_check")
+            check = check if isinstance(check, dict) else {}
+            outcomes = check.get("scan_outcomes") or {}
+            conflicts_text = (
+                "No conflicts recorded. Conflict check: "
+                f"pairs scanned {check.get('pairs_scanned', 0)}, "
+                f"unscanned {outcomes.get('unscanned', 0)}, "
+                f"reason {check.get('reason', 'unrecorded')}")
 
-{research_state.get("report", "")}
+        user_content = f"""## Original Query
+{query_text}
+
+## Scene Context
+{scene_text}
+
+## Fields To Review
+Every correctable served field the result carries is below, once, under the same
+locator the correction contract uses to select it. This body does not depend on
+the report format the user chose. Check each claim against the source bodies, not
+against the citation markers.
+
+{review_fields}
 
 ## Citation Completeness (deterministic; a citation is not proof of support)
 Total claim fields: {cite_stats["total_fields"]}
@@ -384,14 +436,14 @@ Field locations with an unresolved citation:
 ## Source Register (numbered; same numbering as synthesis)
 {source_register_text}
 
+## Recorded Conflicts
+{conflicts_text}
+
 ## Original Sub-Questions
 {research_state.get("sub_questions", [])}
 
 ## Open Questions Recorded By Synthesis
 {recorded_text}
-
-## Revision Targets (locations only; content is in the report above)
-{revision_targets}
 
 ## Pipeline Quality Signals
 {signals_text}

@@ -50,6 +50,55 @@ def _seed_snapshot(monkeypatch):
     yield
 
 
+def _identity_snapshot() -> dict:
+    """Two sources with the same title and different URLs, citation identity map."""
+    from deepchoice.agents.conclusion_synthesizer import apply_citation_rules
+
+    title = "Shared Documentation Title"
+    chains = [{"conclusion": "c", "evidence_strength": "strong",
+               "disputed": False, "sources": [
+                   {"title": title, "url": "https://a.example/doc",
+                    "snippet": "body of A", "score": 8},
+                   {"title": title, "url": "https://b.example/doc",
+                    "snippet": "body of B", "score": 7},
+               ]}]
+    recommendation = {
+        "winner": "FastAPI",
+        "recommendation": "Only the second supports this [[2]].",
+    }
+    apply_citation_rules(recommendation, chains)
+    return {
+        "task": {"query": "identity test", "report_format": "what_why_how"},
+        "evidence_chains": chains,
+        "conflicts": [],
+        "confidence": "medium",
+        "final_recommendation": recommendation,
+    }
+
+
+class TestAnnotatedExportKeepSourceIdentity:
+    def test_annotated_citations_point_to_the_registered_urls(self, monkeypatch):
+        monkeypatch.setattr(app_module, "load_snapshot",
+                            lambda _: _identity_snapshot())
+        resp = client.get(f"/research/{TASK_ID}/annotated")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert {c["url"] for c in data["citations"]} == {
+            "https://a.example/doc", "https://b.example/doc"}
+        # Only B was cited, so only B's link is annotated.
+        assert 'href="#ev-2"' in data["report"]
+        assert "https://a.example/doc" not in data["report"]
+
+    def test_md_export_lists_the_registered_url_not_a_same_titled_sibling(
+            self, monkeypatch):
+        monkeypatch.setattr(app_module, "load_snapshot",
+                            lambda _: _identity_snapshot())
+        resp = client.get(f"/research/{TASK_ID}/export", params={"format": "md"})
+        assert resp.status_code == 200
+        assert "https://b.example/doc" in resp.text
+        assert "https://a.example/doc" not in resp.text
+
+
 class TestAnnotatedEndpoint:
     def test_returns_annotated_report_toc_and_citations(self):
         resp = client.get(f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"})

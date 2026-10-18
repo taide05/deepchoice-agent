@@ -12,25 +12,48 @@ def _link(text: str, src: dict) -> str:
     return f"[{text}]({url})" if url else text
 
 
-def _cited_sources(text: str, chain_sources: dict[str, list[str]]) -> list[str]:
-    """Sources the text itself cites, in the order it cites them.
+def _field_source_links(rec: dict, locator: str, text: str,
+                        chains: list[dict]) -> list[str]:
+    """Sources the field cites, in citation order, as title+URL links.
 
-    The synthesizer already binds each claim to its real source and writes
-    '[Source: <title>]'. The renderer therefore reports the citation that exists
-    instead of guessing one: matching the text against source titles by shared
-    words attached unrelated sources to a claim.
+    Current runs carry the registered identity of each resolved citation, so the
+    link is read from that map and a title shared by two sources still links to
+    the right one. Historical material without the map falls back to a full-title
+    lookup that resolves only a title naming exactly one source; an unknown or
+    ambiguous title is left unlinked rather than guessed.
     """
     import re
 
-    listed: list[str] = []
+    from ..agents.conclusion_synthesizer import CITATION_SOURCES_KEY
+
+    identity_map = (rec or {}).get(CITATION_SOURCES_KEY)
+    links: list[str] = []
+    if isinstance(identity_map, dict) and locator in identity_map:
+        for binding in identity_map.get(locator) or []:
+            if not isinstance(binding, dict):
+                continue
+            title = str(binding.get("title") or "")
+            url = str(binding.get("url") or "")
+            link = f"[{title}]({url})" if url else title
+            if link and link not in links:
+                links.append(link)
+        return links[:3]
+    from .basis import unique_sources_for_title
+
+    # No identity for this field: either a historical record, or a partial map
+    # covering a field that was revised. Resolve full titles only when they name
+    # exactly one source; never guess.
     for title in re.findall(r"\[Source:\s*([^\]]+)\]", text or ""):
-        title = title.strip()
-        for srcs in chain_sources.values():
-            for link in srcs:
-                if link.startswith(f"[{title}]"):
-                    if link not in listed:
-                        listed.append(link)
-    return listed[:3]
+        for part in re.split(r",\s*Source:\s*", title):
+            sources = unique_sources_for_title(chains, part.strip())
+            if len(sources) != 1:
+                continue
+            src = sources[0]
+            url = str(src.get("url") or "")
+            link = f"[{part.strip()}]({url})" if url else part.strip()
+            if link not in links:
+                links.append(link)
+    return links[:3]
 
 
 def _one_line(value) -> str:
@@ -308,25 +331,16 @@ def render(state: dict) -> str:
         lines.append(f"**{T['recommendation'][lang]}:** {rec['recommendation']}")
         lines.append("")
 
-    # Build source citation lookup from evidence chains. Only fact-bearing
-    # sources are listed: a navigation link is not a reference for any claim.
-    chain_sources: dict[str, list[str]] = {}
-    for c in chains:
-        conclusion = c.get("conclusion", "").lower()
-        for src in c.get("sources", []):
-            if not _has_body(src):
-                continue
-            title = src.get("title", "")
-            url = src.get("url", "")
-            if title and url:
-                chain_sources.setdefault(conclusion, []).append(f"[{title}]({url})")
-
+    # A field's Sources line reads the identity map the citation pass recorded.
+    # Only fact-bearing sources are registered, so a navigation link was never
+    # bound and can never appear here.
     if rec.get("ranked_options"):
         lines.append(T["ranked_options"][lang])
         for opt in rec["ranked_options"]:
             rationale = opt.get('rationale', '')
             lines.append(f"- **#{opt.get('rank', '?')} {opt.get('name', '')}**: {rationale}")
-            linked = _cited_sources(rationale, chain_sources)
+            locator = f"option={opt.get('name') or '?'}/rationale"
+            linked = _field_source_links(rec, locator, rationale, chains)
             if linked:
                 lines.append(f"  *Sources: {'; '.join(linked)}*")
         lines.append("")
@@ -339,7 +353,8 @@ def render(state: dict) -> str:
             # cleaned here with the same helper the synthesis and the self-review
             # locating use — one identity for display and for locating.
             lines.append(f"- **{clean_label(t.get('dimension', ''))}**: {finding}")
-            linked = _cited_sources(finding, chain_sources)
+            locator = f"trade-off={t.get('dimension') or '?'}/finding"
+            linked = _field_source_links(rec, locator, finding, chains)
             if linked:
                 lines.append(f"  *Sources: {'; '.join(linked)}*")
         lines.append("")

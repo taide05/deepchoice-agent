@@ -162,13 +162,14 @@ class TestReviewSeesTheDecisionClaims:
     justification and an unsupported dismissal all lived there."""
 
     def test_the_payload_has_one_content_block_and_a_locating_index(self):
-        """The report body carries the claims; the locator list must not repeat
-        the same prose, and the source register is included for checking."""
+        """The located fields carry the claims once; the source register is
+        included for checking and the report body is not repeated."""
         source = inspect.getsource(sr.SelfReviewerAgent.run)
-        assert "## Report To Review" in source
-        assert "{research_state.get(\"report\", \"\")}" in source
-        assert "revision_targets" in source and "{revision_targets}" in source
+        assert "## Fields To Review" in source
+        assert "{review_fields}" in source
         assert "source_register_text" in source and "{source_register_text}" in source
+        assert "## Report To Review" not in source
+        assert "revision_targets" not in source
         assert "{claims_text}" not in source, "the duplicated claims block is gone"
 
     def test_the_reviewer_payload_carries_the_source_text(self):
@@ -809,9 +810,12 @@ class TestTheReviewedResultReachesEveryArtefact:
 
     def test_the_reviewer_still_receives_the_draft(self):
         _out, state, captured = self._run(self.REVIEW)
-        assert "## Report" in captured["user"]
-        assert state["report"][:80] in captured["user"], \
-            "the reviewer must be able to read the draft it is reviewing"
+        assert "## Fields To Review" in captured["user"]
+        # The reviewer receives every served field with its locator, not the
+        # rendered report (which would duplicate the same prose).
+        assert state["final_recommendation"]["recommendation"][:80] in \
+            captured["user"], "the reviewer must receive the text it reviews"
+        assert "## Report" not in captured["user"]
 
     def test_the_returned_report_is_the_reviewed_body(self):
         out, _state, _cap = self._run(self.REVIEW)

@@ -19,7 +19,7 @@ import pathlib
 import pytest
 
 from deepchoice.agents.conclusion_synthesizer import _summarize_chains
-from deepchoice.formats.what_why_how import _cited_sources, render
+from deepchoice.formats.what_why_how import _field_source_links, render
 from deepchoice.retrievers.official import TECH_DOCS, OfficialSearch
 from deepchoice.utils.candidate_identity import (
     bounded_content_summary,
@@ -682,47 +682,62 @@ class TestBodyLessSourcesAcrossEveryRoute:
         trade-offs, so the fixture must populate them; otherwise the assertion
         passes on any implementation.
         """
-        from deepchoice.formats.what_why_how import _cited_sources, render
-
         nav = self.NAV
         real = self.REAL
+        chains = [{"conclusion": "c", "evidence_strength": "strong",
+                   "disputed": False, "sources": [nav, real]}]
+        rec = {
+            "winner": "PostgreSQL",
+            "recommendation": "Use it.",
+            "ranked_options": [{
+                "rank": 1, "name": "PostgreSQL",
+                "rationale": ("Measured at scale [Source: PostgreSQL — Official "
+                              "Documentation] and again [Source: PostgreSQL 17 "
+                              "release notes]."),
+            }],
+            "trade_offs": [{
+                "dimension": "ops",
+                "finding": ("Cheaper [Source: PostgreSQL — Official "
+                            "Documentation]."),
+            }],
+        }
         state = {
             "task": {"query": "pgvector", "candidate_techs": ["PostgreSQL"]},
-            "evidence_chains": [{"conclusion": "c", "evidence_strength": "strong",
-                                 "disputed": False, "sources": [nav, real]}],
+            "evidence_chains": chains,
             "conflicts": [], "knowledge_gaps": [], "confidence": "medium",
-            "final_recommendation": {
-                "winner": "PostgreSQL",
-                "recommendation": "Use it.",
-                "ranked_options": [{
-                    "rank": 1, "name": "PostgreSQL",
-                    "rationale": ("Measured at scale [Source: PostgreSQL — Official "
-                                  "Documentation] and again [Source: PostgreSQL 17 "
-                                  "release notes]."),
-                }],
-                "trade_offs": [{
-                    "dimension": "ops",
-                    "finding": ("Cheaper [Source: PostgreSQL — Official "
-                                "Documentation]."),
-                }],
-            },
+            "final_recommendation": rec,
         }
         out = render(state)
-        assert "ranked_options" or True
         assert "*Sources: [PostgreSQL — Official Documentation]" not in out, out
         assert "[PostgreSQL 17 release notes" in out
 
-        # And directly: no lookup entry for a body-less source.
-        assert _cited_sources(
-            "x [Source: PostgreSQL — Official Documentation].",
-            {"c": [f"[{real['title']}]({real['url']})"]}) == []
+        # Historical text without an identity map: the body-less title resolves
+        # to nothing, the fact-bearing one resolves to its URL.
+        links = _field_source_links(
+            rec, "option=PostgreSQL/rationale",
+            rec["ranked_options"][0]["rationale"], chains)
+        assert links == [f"[PostgreSQL 17 release notes]({real['url']})"], links
 
 
 class TestRendererDoesNotGuessCitations:
     def test_uncited_text_attaches_nothing(self):
-        assert _cited_sources("prose with no citation", {}) == []
+        chains = [{"sources": [{"title": "Real Source", "url": "https://real",
+                                "snippet": "body"}]}]
+        assert _field_source_links({}, "recommendation",
+                                   "prose with no citation", chains) == []
 
     def test_only_the_cited_source_is_attached(self):
-        chain_sources = {"c": ["[Real Source](https://real)"]}
-        got = _cited_sources("A claim [Source: Real Source].", chain_sources)
+        chains = [{"sources": [{"title": "Real Source", "url": "https://real",
+                                "snippet": "body"}]}]
+        got = _field_source_links({}, "recommendation",
+                                  "A claim [Source: Real Source].", chains)
         assert got == ["[Real Source](https://real)"]
+
+    def test_an_ambiguous_legacy_title_attaches_nothing(self):
+        chains = [{"sources": [
+            {"title": "Same Title", "url": "https://a", "snippet": "body"},
+            {"title": "Same Title", "url": "https://b", "snippet": "body"},
+        ]}]
+        got = _field_source_links({}, "recommendation",
+                                  "A claim [Source: Same Title].", chains)
+        assert got == []
