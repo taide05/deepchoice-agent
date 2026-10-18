@@ -335,21 +335,117 @@ def _source_register_text(registry: dict, limit: int = 900) -> str:
     return "\n".join(lines)
 
 
+def _bound_sources_line(recommendation: dict, locator: str, text: str) -> str:
+    """The registered identities bound to one reviewed field, if recorded.
+
+    Reads the citation identity map the synthesizer/revision wrote; it never
+    re-derives a source from a displayed title. A historical record has no map at
+    all; a partial map (an older record revised later) has no entry for the
+    untouched field, which is stated as unrecorded rather than guessed — even
+    though completeness may title-inspect such a field for its historical count.
+    """
+    identity_map = recommendation.get(CITATION_SOURCES_KEY)
+    if not isinstance(identity_map, dict):
+        return ("Bound sources: not recorded (historical material; "
+                "not re-derived from titles)")
+    bindings = identity_map.get(locator) or []
+    if not bindings:
+        if "[Source:" in (text or ""):
+            return ("Bound sources: not recorded for this field "
+                    "(markers present; title-inspected for completeness only, "
+                    "not re-derived as an identity)")
+        return "Bound sources: none recorded for this field"
+    parts: list[str] = []
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            continue
+        number = binding.get("number")
+        title = str(binding.get("title") or "")
+        url = str(binding.get("url") or "")
+        label = f"[[{number}]] {title}" if number is not None else title
+        if url:
+            label += f" — {url}"
+        if label and label not in parts:
+            parts.append(label)
+    return "Bound sources: " + ("; ".join(parts) if parts else "none recorded")
+
+
 def _review_fields_text(recommendation: dict) -> str:
     """The complete, located body of every correctable field to review.
 
     Generated from the shared citation traversal, so review coverage is the same
     set the binding and the correction applier use — and it does not depend on
     which report format the user selected. Every field is shown once, with the
-    same locator the correction contract uses to select it; the payload does not
-    carry a second copy of prose that is already here.
+    same locator the correction contract uses to select it, followed by the
+    registered identities actually bound to that field (numbers/URLs, not a
+    re-guess from the title). Source bodies appear only in the Source Register.
     """
     lines: list[str] = []
     for locator, container, field in citation_field_locations(recommendation):
+        text = str(container.get(field) or "")
         lines.append(f"### {locator}")
-        lines.append(str(container.get(field) or ""))
+        lines.append(text)
+        lines.append(_bound_sources_line(recommendation, locator, text))
         lines.append("")
     return "\n".join(lines) if lines else "No reviewable fields are present."
+
+
+def _conflict_source_identity(source, registry: dict) -> str:
+    """Locate one conflict side by registered identity (URL), never by title."""
+    if not isinstance(source, dict):
+        return "source not recorded"
+    url = str(source.get("url") or "")
+    title = str(source.get("title") or "")
+    entry = None
+    if url:
+        entry = next((candidate for candidate in registry.get("entries") or []
+                      if candidate.get("url") == url), None)
+    if entry is not None:
+        identity = f"[[{entry['number']}]] {entry['title']} — {url}"
+    elif url:
+        identity = f"{title + ' — ' if title else ''}{url} (not in numbered source register)"
+    elif title:
+        identity = f"{title} (not in numbered source register; no URL)"
+    else:
+        identity = "source recorded without identity"
+    if source.get("has_body") is False:
+        identity += " (no body collected; not citable)"
+    return identity
+
+
+def _conflicts_text(research_state: dict, registry: dict) -> str:
+    """The recorded conflicts with both claims and their locatable sources.
+
+    The reviewer needs to see which side a resolution names (`A_correct` /
+    `B_correct`) and where each claim's source sits in the numbered register;
+    counts alone cannot be checked. The conflict set is a small part of the
+    review input, so this does not re-feed the rendered report.
+    """
+    conflicts = research_state.get("conflicts") or []
+    lines: list[str] = []
+    for index, conflict in enumerate(conflicts, 1):
+        if not isinstance(conflict, dict):
+            continue
+        resolution = conflict.get("resolution", "unresolved")
+        confidence = conflict.get("confidence", "unknown")
+        lines.append(f"### Conflict {index} — resolution: {resolution}; "
+                     f"confidence: {confidence}")
+        lines.append(f"- Claim A: {conflict.get('claim_a', '')}")
+        lines.append(f"  Source A: {_conflict_source_identity(conflict.get('source_a'), registry)}")
+        lines.append(f"- Claim B: {conflict.get('claim_b', '')}")
+        lines.append(f"  Source B: {_conflict_source_identity(conflict.get('source_b'), registry)}")
+        lines.append(f"- Reasoning: {conflict.get('reasoning', '')}")
+        lines.append(f"- Key factor: {conflict.get('key_factor', '')}")
+        lines.append("")
+    if lines:
+        return "\n".join(lines).rstrip()
+    check = research_state.get("conflict_check")
+    check = check if isinstance(check, dict) else {}
+    outcomes = check.get("scan_outcomes") or {}
+    return ("No conflicts recorded. Conflict check: "
+            f"pairs scanned {check.get('pairs_scanned', 0)}, "
+            f"unscanned {outcomes.get('unscanned', 0)}, "
+            f"reason {check.get('reason', 'unrecorded')}")
 
 
 class SelfReviewerAgent:
@@ -389,26 +485,7 @@ class SelfReviewerAgent:
         task = research_state.get("task") or {}
         query_text = str(task.get("query") or "(not recorded)")
         scene_text = str(task.get("scene_context") or "(not recorded)")
-        conflicts = research_state.get("conflicts") or []
-        if conflicts:
-            conflict_lines = []
-            for conflict in conflicts:
-                if not isinstance(conflict, dict):
-                    continue
-                conflict_lines.append(
-                    f"- resolution: {conflict.get('resolution', 'unresolved')}; "
-                    f"reasoning: {conflict.get('reasoning', '')}; "
-                    f"key factor: {conflict.get('key_factor', '')}")
-            conflicts_text = "\n".join(conflict_lines) or "none recorded"
-        else:
-            check = research_state.get("conflict_check")
-            check = check if isinstance(check, dict) else {}
-            outcomes = check.get("scan_outcomes") or {}
-            conflicts_text = (
-                "No conflicts recorded. Conflict check: "
-                f"pairs scanned {check.get('pairs_scanned', 0)}, "
-                f"unscanned {outcomes.get('unscanned', 0)}, "
-                f"reason {check.get('reason', 'unrecorded')}")
+        conflicts_text = _conflicts_text(research_state, registry)
 
         user_content = f"""## Original Query
 {query_text}

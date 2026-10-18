@@ -88,6 +88,21 @@ def _run_review(monkeypatch, state: dict, review: dict):
     return asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
 
 
+def _field_section(payload: str, locator: str) -> str:
+    """The review-body section for one field locator."""
+    marker = f"### {locator}\n"
+    start = payload.index(marker) + len(marker)
+    rest = payload[start:]
+    ends = [pos for pos in (rest.find("\n### "), rest.find("\n## ")) if pos != -1]
+    return rest[:min(ends)] if ends else rest
+
+
+def _conflicts_section(payload: str) -> str:
+    rest = payload.split("## Recorded Conflicts", 1)[1]
+    end = rest.find("\n## ")
+    return rest if end == -1 else rest[:end]
+
+
 class TestRegisteredIdentity:
     """A resolved citation keeps the registered source identity, independent of
     the display title, through the report, its source list, field Sources lines,
@@ -366,6 +381,117 @@ class TestSelfReviewInput:
         assert "## Original Query" in payload
         assert "## Scene Context" in payload
         assert "## Recorded Conflicts" in payload
+
+    def test_bound_sources_distinguish_same_titled_citations(self, monkeypatch):
+        """Two fields cite the same display title but different registered
+        sources; the review input must show each field's actual bound identity,
+        not one title guessed into a source."""
+        chains = _duplicate_title_chains()
+        rec = {"recommendation": "first [[1]]", "winner_rationale": "second [[2]]"}
+        cs.apply_citation_rules(rec, chains)
+        payload = _capture_review(monkeypatch, _state(rec, chains))
+        recommendation = _field_section(payload, "recommendation")
+        rationale = _field_section(payload, "winner_rationale")
+        assert "[[1]]" in recommendation
+        assert "https://a.example/doc" in recommendation
+        assert "https://b.example/doc" not in recommendation
+        assert "[[2]]" in rationale
+        assert "https://b.example/doc" in rationale
+        assert "https://a.example/doc" not in rationale
+        # Field bodies are supplied once; source bodies once (in the register).
+        assert payload.count("body of A") == 1
+        assert payload.count("body of B") == 1
+
+    def _conflict_state(self, resolution: str, claim_a: str, claim_b: str) -> dict:
+        chains = _duplicate_title_chains()
+        state = _state({"recommendation": "R"}, chains)
+        state["conflicts"] = [{
+            "claim_a": claim_a,
+            "claim_b": claim_b,
+            "source_a": {"url": "https://a.example/doc"},
+            "source_b": {"url": "https://unregistered.example/x"},
+            "resolution": resolution,
+            "confidence": "high",
+            "reasoning": f"REASON-{resolution}",
+            "key_factor": f"FACTOR-{resolution}",
+        }]
+        return state
+
+    def test_conflict_claims_and_sides_are_locatable(self, monkeypatch):
+        payload = _capture_review(
+            monkeypatch,
+            self._conflict_state("A_correct", "CLAIM-A-ONE", "CLAIM-B-ONE"))
+        section = _conflicts_section(payload)
+        assert "Claim A: CLAIM-A-ONE" in section
+        assert "Claim B: CLAIM-B-ONE" in section
+        assert "resolution: A_correct" in section
+        # Both sides keep a locatable identity: a registered number for the
+        # known source, an explicit unregistered URL for the other.
+        assert "[[1]] Shared Documentation Title — https://a.example/doc" in section
+        assert "https://unregistered.example/x (not in numbered source register)" \
+            in section
+        assert "REASON-A_correct" in section
+        assert "FACTOR-A_correct" in section
+
+    def test_a_changed_conflict_side_changes_the_review_input(self, monkeypatch):
+        first = _capture_review(
+            monkeypatch,
+            self._conflict_state("A_correct", "CLAIM-A-ONE", "CLAIM-B-ONE"))
+        second = _capture_review(
+            monkeypatch,
+            self._conflict_state("B_correct", "CLAIM-A-TWO", "CLAIM-B-TWO"))
+        first_section = _conflicts_section(first)
+        second_section = _conflicts_section(second)
+        assert "resolution: A_correct" in first_section
+        assert "resolution: B_correct" in second_section
+        assert "CLAIM-A-ONE" in first_section and "CLAIM-A-ONE" not in second_section
+        assert "CLAIM-B-TWO" in second_section and "CLAIM-B-TWO" not in first_section
+        assert "REASON-A_correct" in first_section
+        assert "REASON-B_correct" in second_section
+
+    def test_self_review_still_uses_one_model_call(self, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_call_model(prompt, **kwargs):
+            calls["n"] += 1
+            return {"confidence": "medium", "knowledge_gaps": [], "corrections": []}
+
+        monkeypatch.setattr(sr, "call_model", fake_call_model)
+        asyncio.run(sr.SelfReviewerAgent().run(dict(self._full_state())))
+        assert calls["n"] == 1
+
+    def test_bound_source_wording_handles_historical_and_partial_maps(self):
+        chains = _duplicate_title_chains()
+        historical = sr._review_fields_text(
+            {"recommendation": f"claim [Source: {PLAIN_TITLE}]"})
+        assert "historical material" in historical
+        partial = {"recommendation": "first [[2]]"}
+        cs.apply_citation_rules(partial, chains)
+        partial["winner_rationale"] = f"legacy [Source: {PLAIN_TITLE}]"
+        fields = sr._review_fields_text(partial)
+        assert "title-inspected for completeness only" in fields
+        uncited = {"recommendation": "claim without markers"}
+        cs.apply_citation_rules(uncited, chains)
+        assert "none recorded for this field" in sr._review_fields_text(uncited)
+
+    def test_conflict_source_identity_uses_url_not_title(self):
+        registry = cs.build_source_registry(_duplicate_title_chains())
+        identity = sr._conflict_source_identity
+        # A registered URL wins even when the recorded title differs.
+        assert identity({"title": "Different Title",
+                         "url": "https://a.example/doc"}, registry) == \
+            "[[1]] Shared Documentation Title — https://a.example/doc"
+        # An unregistered URL is explicit, never forced onto a same-titled page.
+        assert identity({"title": "Unknown", "url": "https://nope.example/x"},
+                        registry) == \
+            "Unknown — https://nope.example/x (not in numbered source register)"
+        assert identity({"url": "https://nope.example/x", "has_body": False},
+                        registry) == \
+            ("https://nope.example/x (not in numbered source register) "
+             "(no body collected; not citable)")
+        assert identity({"title": "Only Title"}, registry) == \
+            "Only Title (not in numbered source register; no URL)"
+        assert identity(None, registry) == "source not recorded"
 
     def test_completeness_lists_the_same_field_locations(self, monkeypatch):
         state = self._full_state()

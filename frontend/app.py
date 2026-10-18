@@ -937,8 +937,13 @@ def _render_research_progress():
         st.rerun()
 
     try:
+        # SSE must not time out while waiting for the next event, so the read
+        # timeout is disabled explicitly. HTTPX's Timeout requires a default
+        # when only some fields are set (connect-only kwargs raise ValueError on
+        # 0.28); the default covers connect/write/pool and `read=None` keeps the
+        # long-lived stream open.
         with httpx.stream("GET", f"{API_BASE}/research/{task_id}/stream",
-                          timeout=httpx.Timeout(connect=15.0, read=None)) as resp:
+                          timeout=httpx.Timeout(15.0, read=None)) as resp:
             got_done = False
             for line in resp.iter_lines():
                 if not line.startswith("data:"):
