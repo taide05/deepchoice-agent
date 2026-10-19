@@ -1,16 +1,17 @@
 # 当前质量状态
 
 更新：2026-10-19。最终目标已明确为代表性数据集上的可信项目指标及完整使用链路；
-一份合格报告只作阶段门槛。本轮用户已委托第七次失败后的有限**离线**代码修复与代表性评测准备，
-真实外呼额度为零：不启动新研究、不调用真实 LLM/Tavily/外部裁判、不运行付费基准。
+一份合格报告只作阶段门槛。第七次失败后的离线修复与评测准备已完成；随后按新授权执行了
+第八次真实单例（1 case、1 run，14/40 LLM、7/24 Tavily、研究墙钟 217.6 s），内容未通过。
+本次外部调用仅限该授权内的真实研究；未执行基线/基准批次，未调用外部模型裁判。
 目标见[路线](current-roadmap.md)，指标与冻结要求见[评估协议](product-effectiveness-optimization.md)。
 
 ## 当前工作树与证据范围（2026-10-19核对）
 
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
-| `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`（本轮文档修改前；最终文档头以 Git 历史为准） | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批候选 `f07f87b`，本轮收尾候选 `6b96a567dd309ef071c5ecd2bd310fcb171e1bb3` | 当前恢复实验，仍走旧 `/research` 接口；修复候选 tracked 干净，17项既有未跟踪材料保留 |
+| `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批候选 `f07f87b`，收尾候选 `6b96a567dd309ef071c5ecd2bd310fcb171e1bb3`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 干净，17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -73,17 +74,60 @@
   正式运行器或整批预算；下一份真实单例必须先获得新的明确授权，冻结此前未作本轮内容评审
   的全新题、必答项、候选身份、来源政策、额度与停止线，只运行一份完整报告。
 
+## 第八次真实单例（2026-10-19）
+
+- 授权：1 case、1 次研究；LLM≤40（含重试）、Tavily≤24（含探测/重试）、研究墙钟 ≤900 s；
+  未补跑、未换题、未加额、未执行基线/基准批次、未调用外部模型裁判。代码冻结在
+  `6b96a567dd309ef071c5ecd2bd310fcb171e1bb3`，运行期间 tracked clean、既有 17 项未跟踪材料保留。
+- 独立准备的新题：`v8-pg-ha-cnpg-vs-patroni`（EKS 自建 PostgreSQL 高可用：CloudNativePG vs
+  Patroni）；proposal file sha256 `a2fcb059…96f15e` / canonical `5bb1c2a8…41d4`；冻结 payload
+  `.scratch/run_payload_v8.json` 11,879 bytes / sha256 `f6707c33…16a3bc`；query 2,416 chars
+  / sha256 `66f6f2a7…e72806`。独立准备者扫描基准 case、历史 payload/run_record、KB、现代冻结
+  开发集及全树候选名，候选未作为任何 case 出现；参考依据/评分规则只供验收，未注入研究输入。
+- task_id **`e339d065-7a61-4993-9819-1405b23bb7cd`**；仅 1 次 `POST /research` 200
+  （18:43:35，epoch 1792406615.7665）；研究 18:43:36（1792406616.4442）→18:47:14
+  （1792406834.0090），**墙钟 217.6 s / 900 s**；终态 `complete`，`stop_reason=null`；
+  LLM **14/40**、Tavily **7/24**，rejected 均 0。
+- 服务：实际 pid 17088（`D:\Anaconda\python.exe`，端口 owner）；预加载 **72.42 s**（单列、
+  不计研究墙钟）；启动器日志 imported source/paths 全 OK。停止：18:49:12 请求停止精确绑定
+  pid 17088，约 6 s 后无 8100 监听、无服务 Python 残留、launcher 已退出；**但 launcher/guard
+  日志未出现 guard record，无 guard_stop.json，实际退出时刻不可证**，只能记录“请求停止→
+  端口/进程消失”的观察窗口。该缺口使 A 不能判为完全通过。
+- token：已知 4 个 agent / 12 次调用，prompt 40,700 + completion 40,270 = **80,970**；
+  实际 LLM 14 次，其中 2 次 `official_fallback` 无 token 记录，完整 token 总量与费用均
+  **unknown**。来源：22 scored sources，tavily 7 / github 7 / arxiv 7 / official 1 /
+  community 0；8 个来源无正文（`has_body=False`）。
+- 产物（`outputs/e339d065-…/`）：`report.md` 26,723 bytes sha256 `d9e0c91f…536e9dab`；
+  `research_snapshot.json` 173,981 bytes sha256 `7dff1be0…4340bb30`；
+  `run_limits_counts.json` `94841eb4…e2c23c9b`；`run_state.json` `342a22fd…eb773fc`。
+  `/report` 内层、`/export`（仅 CRLF 104 vs LF 104）、`/snapshot` 解析对象、`/annotated`
+  归一化均与保存材料一致；25 locator / 66 绑定 / 7 个被引来源；55 个 `[Source:]` 标记，
+  无 unresolved/raw 标记；1 个 GKE 标题在 identity map 用 NBSP 双空格、正文 marker 用单空格，
+  同 URL，属显示空白规范化而非来源身份错配。
+- **A. 运行/预算/产出一致性：主要检查通过，停止守卫记录缺失 1 项不可证，故不能判完全通过。**
+  未做完整 UI 验收；不追加 UI 工程。
+- **B. 内容：不通过（`not_usable`，assistant-only 独立复核，未参与实现）**。六项必答：
+  职责边界=partial、故障检测/同步复制=partial、执行链/安全=partial、维护升级=missing、
+  失败模式/可观察性=missing、版本/适用条件=unknown_meaningful（不算已回答）；0 项
+  answered_supported。主推荐 CloudNativePG 方向在冻结允许区间，但决定性事实只由第三方博客/
+  对比文章支撑，两个候选官方文档正文为 0，违反冻结来源政策；备份/PITR 硬约束未答，反转条件
+  空泛；无伪造数字/危险操作/致命因果反转（按严重性锚点未发现 critical 错误），但存在重要缺口。
+  失败分类：来源不足、模型遗漏/判断、代码/渲染信息损失（正文窗口截断、trade-off impact 与
+  evidence_summary 未渲染、检索式进入“尚未可知”、低置信自相矛盾）、引用/适用范围问题；
+  原始模型输出未保留，部分归因不可证。复核文件 `.scratch/v8_review/v8_content_review.md`；
+  单例分母 N=1/S=1/R=1/E=1，不形成项目通过率。
+- 边界：失败保留，未手修报告、未补跑、未自动继续修代码。该题已经暴露，不能作为未见题、
+  保留集或成功分母；小规模校准/正式评测均未获授权。下一动作必须另行授权诊断/修复或新题运行。
+
 ## 当前授权与下一阶段
 
-第七次单例授权 **1/1 已使用**，不继承剩余调用上限为新研究额度；第八次研究、小规模校准
-和正式百例以上评测均未获得执行授权。下方旧现代分支累计240及10/10账本保持原口径，
-恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
+第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；均不继承剩余调用上限
+为新研究额度，不自动补跑。小规模校准和正式百例以上评测均未获得执行授权。下方旧现代分支
+累计240及10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
 
-本轮完成离线修复候选与评测准备，未新增任何真实外呼；`f07f87b`/`6b96a56` 的工程通过
-不等于内容通过。
-路线已允许在单例验证期间离线设计代表性数据、基线、语义评审和指标；具体数据制作、下一份
-真实单例、校准及正式测量仍需后续明确授权。尚无新冻结正式题集、达标阈值、可用的完整
-语义评测实现或整批预算，不声称项目已可投递。下一动作只能停在真实派发之前，等待新授权。
+第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。不得据本次失败自动继续修代码、
+换题重跑或开展校准；下一步须先由用户另行决定诊断/修复范围与新的运行授权。尚无新冻结
+正式题集、达标阈值、可用的完整语义评测实现或整批预算，不声称项目已可投递。
 
 ### 下一次真实单例的冻结清单（建议，待授权审阅）
 
