@@ -16,7 +16,15 @@ for terms that a declared candidate actually names.
 """
 from __future__ import annotations
 
+import os
 import re
+
+# One bounded evidence window for every downstream consumer. Synthesis and
+# self-review previously used 600 and 900 characters independently, so the two
+# stages could see different parts of the same saved body with no record of the
+# cut. The window is a display/input bound, not a token budget; the actual visible
+# range is reported by bounded_evidence_record().
+EVIDENCE_WINDOW_CHARS = int(os.environ.get("EVIDENCE_WINDOW_CHARS", "1600"))
 
 # Words that carry no identity in a product name. A token from here never makes
 # a mapping entry count as "named by this candidate". This list predates the
@@ -145,25 +153,51 @@ def source_content(source: dict) -> str:
     return ""
 
 
-def bounded_content_summary(source: dict, limit: int = 600) -> str:
-    """The factual content of a source, or an explicit gap.
+def bounded_evidence_record(source: dict, limit: int | None = None) -> dict:
+    """The shared bounded view of a source body for synthesis and self-review.
 
-    Uses whatever body was stored with the source. When there is none, says so
-    rather than substituting the title or an official-looking label.
+    Returns the visible excerpt plus the actual source length and cut metadata.
+    Both stages must read a source's saved body through this one function; a
+    caller that shows a source without this record is hiding how much of it was
+    visible. The stored source is never mutated.
     """
+    window = EVIDENCE_WINDOW_CHARS if limit is None else int(limit)
     content = source_content(source)
     if not content:
         title = source.get("title", "") or "this source"
         _content, navigation_only = split_navigation_label(source.get("snippet", ""))
         if navigation_only:
-            return (f"NO CONTENT RETRIEVED — {title} is a documentation link only; "
-                    f"its page body was not collected, so it states nothing about "
-                    f"this question.")
-        return f"NO CONTENT RETRIEVED — {title} was indexed without a body."
-    content = " ".join(content.split())
-    if len(content) > limit:
-        content = content[:limit].rstrip() + "…"
-    return content
+            gap = (f"NO CONTENT RETRIEVED — {title} is a documentation link only; "
+                   f"its page body was not collected, so it states nothing about "
+                   f"this question.")
+        else:
+            gap = f"NO CONTENT RETRIEVED — {title} was indexed without a body."
+        return {
+            "text": gap,
+            "source_chars": 0,
+            "visible_chars": 0,
+            "truncated": False,
+            "has_body": False,
+        }
+    content = " ".join(str(content).split())
+    total = len(content)
+    visible = content if total <= window else content[:window].rstrip()
+    return {
+        "text": visible,
+        "source_chars": total,
+        "visible_chars": len(visible),
+        "truncated": len(visible) < total,
+        "has_body": True,
+    }
+
+
+def bounded_content_summary(source: dict, limit: int | None = None) -> str:
+    """The shared bounded factual content of a source, or an explicit gap.
+
+    Uses whatever body was stored with the source. When there is none, says so
+    rather than substituting the title or an official-looking label.
+    """
+    return bounded_evidence_record(source, limit=limit)["text"]
 
 
 def has_factual_content(source: dict) -> bool:

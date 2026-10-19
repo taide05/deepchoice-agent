@@ -50,35 +50,30 @@ the source is wrong or that the two sources contradict.
 3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong content in a source for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it.
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale. If the highest constraint-fit is TIED, set "winner" to "context_dependent" (rule 7).
 5. If evidence is insufficient for a definitive answer, say so honestly. Also state, explicitly, which constraint or evidence finding would change the recommendation (its reversal conditions) — put this in the recommendation or scene_fit_note when the answer is conditional.
-6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Retrieved sources above — NEVER invent a number that is not listed.
+6. CITE FACTUAL CLAIMS, NOT EVERY SENTENCE. Every factual claim that affects the choice, exclusion, risk boundary or a conditional conclusion must carry the source number(s) that actually state it, copied VERBATIM from the Retrieved sources (e.g. "Gitleaks scans git history [[3]]"). A statement that the evidence is missing, an explicit unknown, a qualifier, a label, or an inference that no source states must NOT be given an unrelated citation: write it as an explicit gap/inference instead. Do not invent numbers. The source list includes content ranges; do not treat material beyond the visible/truncated range as if you read it.
 7. Winner selection: name a winner ONLY when evidence clearly favors one option for the scene. If balanced — both have meaningful evidence and neither clearly wins — set "winner" to "context_dependent" and give a conditional recommendation ("choose X if ..., choose Y if ..."). If your own rationale says "depends on"/"hinges on"/"context-dependent", the winner MUST be "context_dependent".
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
 9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
-
-## Output Length Limits (CRITICAL — exceed and output will be rejected)
-- recommendation: max 200 words
-- each ranked_option rationale: max 80 words
-- each trade_off finding: max 60 words
-- evidence_summary: max 150 words
-- scene_fit_note: max 80 words
+10. Make the analysis usable, not just short: each trade-off's `impact` must say who/which constraint it matters for; `evidence_summary` must note the evidence limits (missing official/primary sources, dates/versions absent, unmeasured claims); `confidence_rationale` must be consistent with `confidence`. Do not repeat the recommendation as the winner_rationale: state the decisive evidence basis there, and put actions/conditions in `recommendation`.
+11. Distinguish documented fact, conditional inference and unknown. If the saved source list shows only a navigation link or a body-truncated range, do not present the missing text as established. If you answer a required item from general reasoning rather than a source, mark it as an inference; if it cannot be answered, record it in `unresolved_questions` with the decision impact instead of filling it with a citation.
 
 ## Output Structure
 Return ONLY a JSON object:
 {{
   "winner": "Single technology name (REQUIRED)",
-  "winner_rationale": "One sentence citing strongest evidence (max 40 words)",
-  "recommendation": "Actionable recommendation paragraph (max 200 words)",
+  "winner_rationale": "The decisive evidence basis for the winner; do not repeat the recommendation paragraph",
+  "recommendation": "Actionable recommendation, conditional branches and what would change it",
   "ranked_options": [
-    {{"name": "Option A", "rank": 1, "constraint_fit": "high|medium|low", "constraint_fit_reason": "why this fit (max 30 words)", "rationale": "Why this rank (max 80 words)", "key_strength": "strongest evidence point (max 30 words)", "key_weakness": "notable limitation (max 30 words)"}}
+    {{"name": "Option A", "rank": 1, "constraint_fit": "high|medium|low", "constraint_fit_reason": "why this fit", "rationale": "Why this rank, including the decisive evidence and applicability limits", "key_strength": "strongest evidence point", "key_weakness": "notable limitation"}}
   ],
   "trade_offs": [
-    {{"dimension": "Performance vs DX etc.", "finding": "what evidence shows (max 60 words)", "impact": "who this matters for (max 40 words)"}}
+    {{"dimension": "Performance vs DX etc.", "finding": "what evidence shows and its limits", "impact": "who/which constraint this matters for"}}
   ],
-  "evidence_summary": "Concise summary of evidence landscape (max 150 words)",
+  "evidence_summary": "Evidence landscape, including what is missing, version/date limits and unmeasured claims",
   "confidence": "high|medium|low",
-  "confidence_rationale": "Why this confidence (max 50 words)",
-  "unresolved_questions": ["question evidence couldn't answer"],
-  "scene_fit_note": "Fit to scene context (max 80 words)"
+  "confidence_rationale": "Why this confidence; must agree with the confidence value",
+  "unresolved_questions": ["question evidence couldn't answer, with its decision impact"],
+  "scene_fit_note": "Fit to scene context"
 }}"""
 
 
@@ -147,24 +142,27 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
 
 
 def _summarize_chains(evidence_chains: list[dict],
-                      candidate_techs: list[str] | None = None) -> tuple[str, dict[int, str]]:
+                      candidate_techs: list[str] | None = None,
+                      with_audit: bool = False):
     """Format evidence chains for the prompt, assigning each source a stable
     number ([[N]]) that the model cites instead of a verbatim title. Returns
     the rendered text plus the number -> title mapping used to bind citations
     back to [Source: title] after synthesis.
 
-    Each source carries its URL and its bounded body text, not just a title and
-    a score. The numbers come from `build_source_registry`, the same registry the
-    citation engine and the self-review use, so prompt numbering and binding
-    cannot drift apart. A source whose body was never collected is a navigation
-    link: it gets no number and is listed separately.
+    Each source carries its URL and the **same bounded body view** the
+    self-review uses, with its visible/total character range recorded. The
+    numbers come from `build_source_registry`, the same registry the citation
+    engine and the self-review use, so prompt numbering and binding cannot drift
+    apart. A source whose body was never collected is a navigation link: it gets
+    no number and is listed separately.
     """
     from ..utils.candidate_identity import (
-        bounded_content_summary,
+        bounded_evidence_record,
         candidate_proper_nouns,
     )
 
     registry = build_source_registry(evidence_chains)
+    audit: list[dict] = []
     header: list[str] = []
     names = candidate_proper_nouns(candidate_techs or [])
     if names:
@@ -180,7 +178,8 @@ def _summarize_chains(evidence_chains: list[dict],
         header.append("")
 
     if not evidence_chains:
-        return "\n".join(header + ["No evidence chains available."]), {}
+        result = "\n".join(header + ["No evidence chains available."])
+        return (result, {}, audit) if with_audit else (result, {})
 
     lines: list[str] = list(header)
     lines += [
@@ -213,11 +212,20 @@ def _summarize_chains(evidence_chains: list[dict],
                 # Publication/update date travels with the body so version and
                 # applicability statements can be checked against the source.
                 lines.append(f"       date: {entry['date']}")
-            source_stub = {
+            source_view = bounded_evidence_record(entry)
+            lines.append(f"       content: {source_view['text']}")
+            lines.append(
+                f"       content_visible: {source_view['visible_chars']}/"
+                f"{source_view['source_chars']} chars"
+                + (" (truncated)" if source_view["truncated"] else "")
+            )
+            audit.append({
+                "number": entry["number"],
                 "title": entry["title"],
-                "content": entry["body"],
-            }
-            lines.append(f"       content: {bounded_content_summary(source_stub)}")
+                "source_chars": source_view["source_chars"],
+                "visible_chars": source_view["visible_chars"],
+                "truncated": source_view["truncated"],
+            })
             lines.append("")
 
     if registry["navigation"]:
@@ -233,7 +241,9 @@ def _summarize_chains(evidence_chains: list[dict],
         lines += [f"- {link}" for link in registry["navigation"][:10]]
         lines.append("")
 
-    return "\n".join(lines), dict(registry["mapping"])
+    text = "\n".join(lines)
+    return (text, dict(registry["mapping"]), audit) if with_audit else (
+        text, dict(registry["mapping"]))
 
 
 def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = None) -> str:
@@ -1008,8 +1018,8 @@ class ConclusionSynthesizerAgent:
         # the per-conflict resolution is what distinguishes them.
         flagged_source_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
-        evidence_text, cite_map = _summarize_chains(
-            evidence_chains, task.get("candidate_techs") or [])
+        evidence_text, cite_map, evidence_audit = _summarize_chains(
+            evidence_chains, task.get("candidate_techs") or [], with_audit=True)
         # The same sub-questions the self-review is given. Synthesis used to
         # receive only the original query, so the questions the pipeline had
         # already decomposed could be silently dropped from the answer.
@@ -1049,6 +1059,8 @@ class ConclusionSynthesizerAgent:
                 "scene_fit_note": "",
             }
 
+        from ..utils.candidate_identity import EVIDENCE_WINDOW_CHARS
+
         quality_signals = [{
             "agent": "conclusion_synthesizer",
             "evidence_chain_count": len(evidence_chains),
@@ -1056,6 +1068,11 @@ class ConclusionSynthesizerAgent:
             "flagged_sources": flagged_source_count,
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
+            "evidence_window_chars": EVIDENCE_WINDOW_CHARS,
+            "evidence_sources_visible": len(evidence_audit),
+            "evidence_sources_truncated": sum(1 for a in evidence_audit if a["truncated"]),
+            "evidence_visible_chars": sum(a["visible_chars"] for a in evidence_audit),
+            "evidence_source_chars": sum(a["source_chars"] for a in evidence_audit),
         }]
 
         _validate_winner(result)

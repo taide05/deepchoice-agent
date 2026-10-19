@@ -36,7 +36,10 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
         }]
         # Provenance travels with the source so it can never be silently
         # relabelled as published material downstream.
-        for key in ("provenance", "channel", "source_type", "date"):
+        for key in ("provenance", "channel", "source_type", "date",
+                    "body_url", "body_chars", "body_stored_chars",
+                    "body_truncated", "body_content_type", "body_error",
+                    "fetch_status"):
             if key in s:
                 evidence_sources[0][key] = s[key]
         if evidence_sources[0]["has_body"] is None:

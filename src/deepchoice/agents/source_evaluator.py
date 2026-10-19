@@ -161,6 +161,14 @@ class SourceEvaluatorAgent:
             # tell navigation from evidence without re-deriving it from text.
             if "has_body" in result:
                 entry["has_body"] = result["has_body"]
+            # Bounded page-fetch provenance travels with the source: which URL
+            # supplied the body, how much was stored/truncated, and why a fetch
+            # failed. These are diagnostics, not evidence.
+            for key in ("body_url", "body_chars", "body_stored_chars",
+                        "body_truncated", "body_content_type", "body_error",
+                        "fetch_status"):
+                if key in result:
+                    entry[key] = result[key]
             source_scores.append(entry)
 
         # Support between sources is not established by this node. Deriving it
@@ -176,9 +184,10 @@ class SourceEvaluatorAgent:
             s["scores"]["consistency"] = score_consistency([])
             s["total_score"] = compute_total_score(s["scores"])
 
+        # Order is the only priority representation downstream uses; a separate
+        # per-row rank field had no consumer (evidence chains preserve this order,
+        # conflict preselection gates on the score itself), so it is not rebuilt.
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)
-        for i, s in enumerate(source_scores):
-            s["rank"] = i + 1
 
         avg_score = round(sum(s["total_score"] for s in source_scores) / len(source_scores), 1) if source_scores else 0
 

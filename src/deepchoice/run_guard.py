@@ -301,6 +301,29 @@ def _write_stop_record(run: dict, record: dict) -> str | None:
         return None
 
 
+def _write_guard_record(outputs_dir, record: dict) -> str | None:
+    """Persist the normal-exit guard record next to the run outputs.
+
+    The guard used to report this record only through the launcher's stdout. A
+    normal service exit therefore had no durable evidence when the launcher's
+    redirected stdout was lost (as in the eighth run), even though no stop
+    mechanism failed. This file is a collection record, not a stop signal: it does
+    not alter the process binding, deadline or guard_stop.json path.
+    """
+    try:
+        outputs = pathlib.Path(outputs_dir)
+        outputs.mkdir(parents=True, exist_ok=True)
+        path = outputs / "guard_record.json"
+        tmp = path.with_name(path.name + ".tmp")
+        record = dict(record)
+        record["record_path"] = str(path)
+        tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(path)
+        return str(path)
+    except Exception:
+        return None
+
+
 def _residual_identity(binding: dict, child) -> dict:
     """Who is still alive, so an unconfirmed stop names what remains."""
     residual = []
@@ -489,17 +512,20 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
     return quickly — a failure or timeout here does not prevent the final step.
     """
     armed: dict | None = None
+    last_run: dict | None = None
     while child.poll() is None:
         run = find_active_run(outputs_dir, service_started_epoch,
                               service_token=service_token)
         if run is not None:
             armed = run
+            last_run = run
         if armed is not None:
             state_record = _read_json(armed["state_path"])
             task_state = state_record.get("state")
             if task_state == "complete":
                 # The run finished on its own; the service may keep serving, so
                 # its deadline no longer governs this process.
+                last_run = armed
                 armed = None
             else:
                 # running, or terminal-but-maybe-still-executing (failed /
@@ -581,7 +607,7 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
             return record
         _wait_for_death(binding_probe.get("bound_pid"), kill_grace_s, poll_s)
 
-    return {
+    record = {
         "forced": False,
         "reason": "service_exited",
         "exit_code": child.returncode,
@@ -590,3 +616,16 @@ def guard_service(child, outputs_dir, wall_clock_max_s: float,
         "exited_at_iso": _iso(clock()),
         "final_consumption": "recorded_by_run",
     }
+    if last_run is not None:
+        state_record = _read_json(last_run["state_path"])
+        record.update({
+            "task_id": last_run.get("task_id"),
+            "run_started_at_epoch": last_run.get("started_at_epoch"),
+            "run_started_at_iso": _iso(last_run.get("started_at_epoch")),
+            "run_state": state_record.get("state"),
+            "run_ended_at_epoch": state_record.get("ended_at_epoch"),
+            "run_ended_at_iso": state_record.get("ended_at_iso"),
+            "service_pid": last_run.get("record", {}).get("pid"),
+        })
+    record["record_path"] = _write_guard_record(outputs_dir, record)
+    return record

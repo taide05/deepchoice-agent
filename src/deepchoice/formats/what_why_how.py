@@ -150,6 +150,9 @@ def render(state: dict) -> str:
         "no_single_winner": {"en": "No single winner — the choice depends on your constraints", "zh": "无唯一胜者——选择取决于你的约束条件"},
         "ranked_options": {"en": "### Ranked Options", "zh": "### 方案排名"},
         "trade_offs": {"en": "### Trade-offs", "zh": "### 权衡"},
+        "impact": {"en": "Impact", "zh": "影响"},
+        "constraint_fit_reason": {"en": "Constraint-fit basis", "zh": "约束适配依据"},
+        "evidence_summary": {"en": "### Evidence Summary", "zh": "### 证据摘要"},
         "scene_fit": {"en": "Scene Fit", "zh": "场景适配"},
         "starting_point": {"en": "### Starting Point", "zh": "### 起点"},
         "starting_hint": {"en": "Based on the evidence above, start with the highest-scored option that matches your scene context.", "zh": "基于以上证据，从匹配你场景上下文的最高分方案开始。"},
@@ -191,6 +194,9 @@ def render(state: dict) -> str:
                 # and silently truncate the candidate's explanation.
                 if opt.get("constraint_fit"):
                     lines.append(f"- {T['scene_fit'][lang]}: {opt['constraint_fit']}")
+                fit_reason = _one_line(opt.get("constraint_fit_reason"))
+                if fit_reason:
+                    lines.append(f"- {T['constraint_fit_reason'][lang]}: {fit_reason}")
                 for field, label in (("rationale", "理由" if lang == "zh" else "Rationale"),
                                      ("key_strength", "优势" if lang == "zh" else "Advantage"),
                                      ("key_weakness", "局限" if lang == "zh" else "Limit")):
@@ -364,8 +370,13 @@ def render(state: dict) -> str:
             lines.append(f"**Winner:** {T['no_single_winner'][lang]}")
         else:
             lines.append(f"**Winner: {winner}**")
-        if rec.get("winner_rationale"):
-            lines.append(f"*{rec['winner_rationale']}*")
+        winner_basis = _one_line(rec.get("winner_rationale"))
+        recommendation_text = _one_line(rec.get("recommendation"))
+        # Do not print the same recommendation twice. The synthesis prompt asks
+        # winner_rationale for the decisive basis and recommendation for the
+        # action; a suffix/duplicate is display noise, not a second finding.
+        if winner_basis and winner_basis not in recommendation_text:
+            lines.append(f"*{winner_basis}*")
         lines.append("")
         lines.append(f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}")
         if rec.get("confidence_rationale"):
@@ -402,6 +413,21 @@ def render(state: dict) -> str:
             linked = _field_source_links(rec, locator, finding, chains)
             if linked:
                 lines.append(f"  *Sources: {'; '.join(linked)}*")
+            impact = _one_line(t.get("impact"))
+            if impact:
+                impact_locator = f"trade-off={t.get('dimension') or '?'}/impact"
+                impact_links = _field_source_links(rec, impact_locator, impact, chains)
+                lines.append(f"  - {T['impact'][lang]}: {impact}")
+                if impact_links:
+                    lines.append(f"    *Sources: {'; '.join(impact_links)}*")
+        lines.append("")
+    if rec.get("evidence_summary"):
+        summary = _one_line(rec.get("evidence_summary"))
+        lines.append(T["evidence_summary"][lang])
+        lines.append(summary)
+        summary_links = _field_source_links(rec, "evidence_summary", summary, chains)
+        if summary_links:
+            lines.append(f"*Sources: {'; '.join(summary_links)}*")
         lines.append("")
     if rec.get("scene_fit_note"):
         lines.append(f"**{T['scene_fit'][lang]}:** {rec['scene_fit_note']}")

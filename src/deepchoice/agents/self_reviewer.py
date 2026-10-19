@@ -308,33 +308,47 @@ def _citation_coverage(fr: dict, evidence_chains: list[dict] | None = None,
     }
 
 
-def _source_register_text(registry: dict, limit: int = 900) -> str:
-    """The numbered sources, with full title, URL and body, for the reviewer.
+def _source_register_text(registry: dict, with_audit: bool = False):
+    """The numbered sources, with title, URL and the shared bounded body view.
 
-    Rendered from the same registry the synthesizer numbered its prompt with, so
-    the reviewer can cite a number back into a revision and the number means the
-    same source in both paths. The body is the same extraction the report uses,
-    not a separate snippet-only summary.
+    Rendered from the same registry and the same bounded-evidence function the
+    synthesizer used, so the reviewer sees exactly the same body range and the
+    same cut points. A visible/total character line makes the truncation explicit
+    instead of silently showing a shorter body.
     """
+    from ..utils.candidate_identity import bounded_evidence_record
+
     entries = registry.get("entries") or []
     if not entries:
-        return "No citable sources were registered."
+        text = "No citable sources were registered."
+        return (text, []) if with_audit else text
     lines: list[str] = []
+    audit: list[dict] = []
     for entry in entries:
         lines.append(f"[[{entry['number']}]] {entry['title']}")
         if entry.get("url"):
             lines.append(f"    url: {entry['url']}")
         if entry.get("date"):
             lines.append(f"    date: {entry['date']}")
-        body = " ".join(str(entry.get("body") or "").split())
-        if len(body) > limit:
-            body = body[:limit].rstrip() + "…"
-        lines.append(f"    body: {body or '(no body text stored)'}")
+        view = bounded_evidence_record(entry)
+        lines.append(f"    body: {view['text']}")
+        lines.append(
+            f"    visible: {view['visible_chars']}/{view['source_chars']} chars"
+            + (" (truncated)" if view["truncated"] else "")
+        )
+        audit.append({
+            "number": entry["number"],
+            "title": entry["title"],
+            "source_chars": view["source_chars"],
+            "visible_chars": view["visible_chars"],
+            "truncated": view["truncated"],
+        })
     if registry.get("navigation"):
         lines.append("")
         lines.append("Navigation links (no body collected; NOT citable):")
         lines += [f"- {link}" for link in registry["navigation"][:10]]
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    return (text, audit) if with_audit else text
 
 
 def _bound_sources_line(recommendation: dict, locator: str, text: str) -> str:
@@ -472,7 +486,8 @@ class SelfReviewerAgent:
         registry = build_source_registry(research_state.get("evidence_chains") or [])
         recommendation = research_state.get("final_recommendation") or {}
 
-        source_register_text = _source_register_text(registry)
+        source_register_text, evidence_audit = _source_register_text(
+            registry, with_audit=True)
         review_fields = _review_fields_text(recommendation)
         cite_stats = _citation_coverage(recommendation, registry=registry)
         uncited_text = ("\n".join(f"- {locator}" for locator in cite_stats["uncited_locations"])
@@ -591,6 +606,51 @@ Field locations with an unresolved citation:
         confidence = min(candidates, key=lambda c: _LEVELS[c]) if candidates else "low"
         recommendation["confidence"] = confidence
 
+        # The confidence value and its stated reason are one verdict. The synthesis
+        # rationale can describe a different level (the eighth run served low
+        # confidence with a rationale saying medium), and the reviewer may lower
+        # confidence without correcting that field. Replace the reason only when a
+        # review actually ran and returned a usable result; on a call/parse failure
+        # or malformed count, leave the prior rationale in place rather than
+        # inventing a "0/6" review that never happened.
+        from ..utils.candidate_identity import EVIDENCE_WINDOW_CHARS
+
+        def _as_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        checks = result.get("checks")
+        raw_passed_count = result.get("passed_count")
+        passed_count = _as_int(raw_passed_count)
+        malformed_count = raw_passed_count is not None and passed_count is None
+        if passed_count is None and not malformed_count and isinstance(checks, list):
+            passed_count = sum(
+                1 for check in checks
+                if isinstance(check, dict) and check.get("passed") is True)
+        review_completed = (
+            passed_count is not None and not malformed_count
+            and isinstance(checks, list) and len(checks) > 0
+        )
+        if review_completed:
+            gaps = result.get("knowledge_gaps")
+            gap_count = len(gaps) if isinstance(gaps, list) else 0
+            zh = any("\u4e00" <= ch <= "\u9fff" for ch in str(query_text))
+            if zh:
+                recommendation["confidence_rationale"] = (
+                    f"自审复核 {passed_count}/6 项通过，记录 {gap_count} 个知识缺口；"
+                    f"综合这些结果，最终置信度为 {confidence}。")
+            else:
+                recommendation["confidence_rationale"] = (
+                    f"The self-review passed {passed_count}/6 checks and recorded "
+                    f"{gap_count} knowledge gap(s); final confidence is {confidence}.")
+            # The old rationale's citation bindings no longer describe the served
+            # text; drop the stale field-local binding instead of linking it.
+            cite_map = recommendation.get(CITATION_SOURCES_KEY)
+            if isinstance(cite_map, dict):
+                cite_map.pop("confidence_rationale", None)
+
         # The report body is re-rendered from the **complete** reviewed state, so
         # the saved report.md, the snapshot's `report`, the report endpoint, the
         # reading view and every export all show the same post-review result.
@@ -622,6 +682,12 @@ Field locations with an unresolved citation:
                 "corrections_rejected": len(rejected),
                 "corrected_fields": [f"{c['option']}/{c['field']}" for c in applied],
                 "report_rerendered": True,
+                "evidence_window_chars": EVIDENCE_WINDOW_CHARS,
+                "evidence_sources_visible": len(evidence_audit),
+                "evidence_sources_truncated": sum(
+                    1 for a in evidence_audit if a["truncated"]),
+                "evidence_visible_chars": sum(a["visible_chars"] for a in evidence_audit),
+                "evidence_source_chars": sum(a["source_chars"] for a in evidence_audit),
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],
