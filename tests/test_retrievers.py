@@ -462,3 +462,131 @@ def test_tech_aliases_target_existing_keys():
     from deepchoice.retrievers.official import _TECH_ALIASES, TECH_DOCS
     for alias, target in _TECH_ALIASES.items():
         assert target in TECH_DOCS, f"alias {alias!r} -> missing target {target!r}"
+
+class TestTavilyQueryCoverage:
+    """Every adapted query must reach the downstream result cap.
+
+    Seventh run (49cf0eee...): six adapted queries each returned up to three
+    results, but flatten-by-query then truncate to seven let queries 1-3 consume
+    the whole cap, so the baseline/exit-code/version queries never contributed.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _tavily_env(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("TAVILY_API_KEYS", "tvly-dev-test")
+        monkeypatch.setenv("TAVILY_KEY_STATE_PATH", str(tmp_path / "state.json"))
+        from deepchoice.retrievers import tavily_keypool
+        tavily_keypool._reset_for_tests()
+        # The production token bucket intentionally spaces free-tier calls; this
+        # offline merge test does not need to spend 12 s per query to test order.
+        monkeypatch.setattr(tavily_keypool, "_acquire_token", AsyncMock())
+        yield
+
+    @staticmethod
+    def _response(url: str, title: str):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"results": [{
+            "url": url, "title": title, "content": "body text",
+            "published_date": "2026-01-01",
+        }]}
+        return resp
+
+    @pytest.mark.asyncio
+    async def test_later_queries_survive_the_result_cap(self):
+        queries = [f"query-{i}" for i in range(6)]
+        async def fake_post(url, json=None, **kw):
+            query = json["query"]
+            if query not in queries:
+                return self._response("https://sim.example/probe", "probe")
+            i = queries.index(query)
+            # Three distinct results per query is the real shape that made the
+            # old flatten-then-truncate lose queries 3-5 under a cap of seven.
+            results = [{
+                "url": f"https://example.com/{i}/{j}",
+                "title": f"result {i}/{j}", "content": "body text",
+                "published_date": "2026-01-01",
+            } for j in range(3)]
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = {"results": results}
+            return resp
+
+        from deepchoice.retrievers.tavily_search import TavilySearch
+        with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=fake_post)):
+            result = await TavilySearch().search(
+                "main query", [], max_results=7, adapted_queries=queries)
+        assert result["status"] == "success", result.get("error")
+        urls = [r["url"] for r in result["results"]]
+        assert len(urls) == 7
+        # All six queries are represented; the old flatten+truncate returned only
+        # queries 0, 1 and 2 here, so this assertion is discriminating.
+        assert {url.split("/")[3] for url in urls} == set("012345"), urls
+        # Fairness: query 0 does not occupy three slots before later queries.
+        assert sum(1 for url in urls if "/0/" in url) <= 2, urls
+
+    def test_interleave_dedupes_and_keeps_the_cap(self):
+        from deepchoice.retrievers.tavily_search import interleave_batches
+        batches = [
+            [{"url": "https://a"}, {"url": "https://b"}],
+            [{"url": "https://b"}, {"url": "https://c"}],
+            [{"url": "https://d"}],
+        ]
+        merged = interleave_batches(batches, 7)
+        assert [r["url"] for r in merged] == [
+            "https://a", "https://b", "https://d", "https://c"], merged
+        assert len(interleave_batches(batches, 2)) == 2
+        assert [r["url"] for r in interleave_batches([], 7)] == []
+
+class TestGitHubMetadataIsNotEvidence:
+    @pytest.mark.asyncio
+    async def test_repository_metadata_rows_are_marked_body_less(self, monkeypatch):
+        """GitHub repo search returns stars/forks/description, not README text.
+        The seventh run's `gitleaks/gitleaks` 99-character metadata row was
+        numbered as a citable source; it must stay an identifying link only."""
+        from deepchoice.retrievers import github_rate
+        from deepchoice.retrievers.github_api import GitHubSearch
+
+        github_rate._reset_for_tests()
+        monkeypatch.setattr(github_rate, "_pace", AsyncMock())
+        monkeypatch.setattr(github_rate, "retry_delay", lambda headers: 0.0)
+
+        payload = {"items": [{
+            "full_name": "gitleaks/gitleaks",
+            "html_url": "https://github.com/gitleaks/gitleaks",
+            "stargazers_count": 20000,
+            "forks_count": 1500,
+            "updated_at": "2026-01-01T00:00:00Z",
+            "description": "Protect and discover secrets",
+        }]}
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = payload
+        client = _FakeClient(get_return=resp)
+        with _patch_outbound(client):
+            result = await GitHubSearch().search("gitleaks vs trufflehog", [])
+        assert result["status"] == "success"
+        assert result["results"]
+        for row in result["results"]:
+            assert row["has_body"] is False, row
+
+class TestCommunityMetadataIsNotEvidence:
+    @pytest.mark.asyncio
+    async def test_stackexchange_metadata_rows_are_marked_body_less(self, monkeypatch):
+        """Same defect class as GitHub metadata: score/tags identify a thread but
+        state no citable claim."""
+        from deepchoice.retrievers.community import CommunitySearch
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"items": [{
+            "link": "https://stackoverflow.com/q/1",
+            "title": "How do I scan git history?",
+            "score": 42, "tags": ["git", "secrets"],
+            "creation_date": 1700000000,
+        }]}
+        with _patch_outbound(_FakeClient(get_return=resp)):
+            result = await CommunitySearch().search("git secrets", [])
+        assert result["status"] == "success", result
+        assert result["results"]
+        assert all(row["has_body"] is False for row in result["results"]), result

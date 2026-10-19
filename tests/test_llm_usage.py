@@ -304,9 +304,11 @@ class TestAgentTokenUsageWiring:
         with patch("deepchoice.utils.llm._get_client", return_value=client):
             pairs = await cd_module.find_contradictions(
                 [
-                    {"url": "https://a", "title": "A vs B", "snippet": "s",
+                    {"url": "https://a", "title": "A vs B",
+         "snippet": "A reports lower latency on the benchmark.",
                      "total_score": 7.5, "scores": {"authority": 7}},
-                    {"url": "https://b", "title": "B vs A", "snippet": "s",
+                    {"url": "https://b", "title": "B vs A",
+         "snippet": "B reports higher throughput at scale.",
                      "total_score": 8.0, "scores": {"authority": 8}},
                 ],
                 query_topic="A vs B",

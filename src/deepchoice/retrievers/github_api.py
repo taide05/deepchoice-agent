@@ -104,12 +104,17 @@ class GitHubSearch(BaseRetriever):
                         results.append({
                             "url": item.get("html_url", ""),
                             "title": full_name,
+                            # Repository search returns metadata (stars, forks,
+                            # description), not README/CLI/config/version text.
+                            # It identifies a project but states nothing citable
+                            # about it, so it must not enter the fact-bearing set.
                             "snippet": (
                                 f"Stars: {item.get('stargazers_count', 0)}, "
                                 f"Forks: {item.get('forks_count', 0)}, "
                                 f"Updated: {item.get('updated_at', '')}, "
                                 f"Description: {item.get('description', '') or 'N/A'}"
                             ),
+                            "has_body": False,
                             "date": item.get("updated_at", ""),
                         })
                 except httpx.HTTPError as exc:

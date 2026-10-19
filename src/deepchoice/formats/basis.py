@@ -155,6 +155,31 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
     return list(used.values())
 
 
+def escape_markdown_label(text: str) -> str:
+    """Escape brackets/backslashes in a Markdown link label.
+
+    A source title is registered data, not report prose; it may contain `[2026]`.
+    Escaping keeps the label one identity while preserving the displayed title.
+    """
+    return (str(text or "")
+            .replace("\\", "\\\\")
+            .replace("[", "\\[")
+            .replace("]", "\\]"))
+
+
+def escape_display_text(text: str) -> str:
+    """Escape brackets in a plain-text claim excerpt shown next to its source.
+
+    Scraped body text can contain `](http…)`; left unescaped it would turn a
+    quoted excerpt into a live link. This is presentation escaping only: the
+    stored claim and source identity are unchanged.
+    """
+    return (str(text or "")
+            .replace("\\", "\\\\")
+            .replace("[", "\\[")
+            .replace("]", "\\]"))
+
+
 def source_provenance_note(src: dict, lang: str) -> str:
     """Describe a source's origin honestly, without calling local material public.
 

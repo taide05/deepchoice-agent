@@ -1,4 +1,11 @@
-from .basis import source_provenance_note, used_sources
+import re
+
+from .basis import (
+    escape_display_text,
+    escape_markdown_label,
+    source_provenance_note,
+    used_sources,
+)
 from .coverage import derive_data_source_note
 from ..agents.conclusion_synthesizer import clean_label
 
@@ -22,8 +29,6 @@ def _field_source_links(rec: dict, locator: str, text: str,
     lookup that resolves only a title naming exactly one source; an unknown or
     ambiguous title is left unlinked rather than guessed.
     """
-    import re
-
     from ..agents.conclusion_synthesizer import CITATION_SOURCES_KEY
 
     identity_map = (rec or {}).get(CITATION_SOURCES_KEY)
@@ -37,7 +42,10 @@ def _field_source_links(rec: dict, locator: str, text: str,
             link = f"[{title}]({url})" if url else title
             if link and link not in links:
                 links.append(link)
-        return links[:3]
+        # Show every registered identity bound to the field. The previous cap of
+        # three hid the rest of a field's citation set while the binding map knew
+        # about them, so the report claimed fewer sources than the answer used.
+        return links
     from .basis import unique_sources_for_title
 
     # No identity for this field: either a historical record, or a partial map
@@ -53,7 +61,21 @@ def _field_source_links(rec: dict, locator: str, text: str,
             link = f"[{part.strip()}]({url})" if url else part.strip()
             if link not in links:
                 links.append(link)
-    return links[:3]
+    return links
+
+
+_DANGLING_PUNCT_RE = re.compile(r"\s+([。，、；：！？])")
+
+
+def _display_text(text: str) -> str:
+    """Clean a display-only fragment without deleting any factual content.
+
+    Citation markers may be stripped from a label for readability; removing a
+    marker can leave a space before sentence punctuation. That is a presentational
+    leftover, not a reason to remove the surrounding statement.
+    """
+    cleaned = clean_label(text)
+    return _DANGLING_PUNCT_RE.sub(r"\1", cleaned)
 
 
 def _one_line(value) -> str:
@@ -74,20 +96,33 @@ def _has_body(src: dict) -> bool:
 def _claim_source(conflict: dict, key: str, lang: str) -> str:
     """A dispute claim's source, or a stated gap when it has no body.
 
-    A body-less navigation link may be shown as a plain link — the reader must be
-    able to reach the page — but it is labelled as carrying no content and is
-    never numbered as a citable source.
+    New conflict rows carry the source title and a body excerpt separately: the
+    link label is the source title (identity), and the excerpt is shown as plain
+    text. A body-less navigation link may be shown as a plain link — the reader
+    must be able to reach the page — but it is labelled as carrying no content and
+    is never numbered as a citable source. Historical rows without a title keep
+    the old claim-as-label fallback.
     """
     src = conflict.get(key, {}) or {}
-    claim = conflict.get("claim_a" if key == "source_a" else "claim_b", "")
+    title = _one_line(src.get("title") or "")
+    claim = _one_line(conflict.get("claim_a" if key == "source_a" else "claim_b", ""))
+    if len(claim) > 240:
+        claim = claim[:240].rstrip() + "…"
+    label = title or claim or "N/A"
     url = src.get("url", "")
+    if url:
+        link = f"[{escape_markdown_label(label)}]({url})"
+    else:
+        link = escape_display_text(label)
+    excerpt = ""
+    if title and claim and claim != title:
+        excerpt = f" — {escape_display_text(claim)}"
     score = src.get("score", "N/A")
     if _has_body(src):
-        return f"{_link(claim, src)} (score: {score})"
-    link = f"[{claim}]({url})" if url else claim
+        return f"{link}{excerpt} (score: {score})"
     note = "无正文（仅导航链接），不能作为依据。" if lang == "zh" else \
         "no body collected (navigation link only); not usable as a basis."
-    return f"{link} — {note}"
+    return f"{link}{excerpt} — {note}"
 
 
 def render(state: dict) -> str:
@@ -125,7 +160,11 @@ def render(state: dict) -> str:
         "references": {"en": "### References", "zh": "### 参考来源"},
     }
 
-    lines = [f"# {query}{T['title_suffix'][lang]}", ""]
+    # A request can contain newlines (the query is preserved verbatim); a
+    # Markdown heading must stay on one line, so the title is a display-only
+    # one-line form of the request. The report body still carries the full text.
+    title_query = _one_line(query)
+    lines = [f"# {title_query}{T['title_suffix'][lang]}", ""]
 
     data_note = derive_data_source_note(state)
     if data_note:
@@ -256,6 +295,16 @@ def render(state: dict) -> str:
     scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
     arb_failed = (int(check.get("pairs_arbitration_failed") or 0)
                   if isinstance(check, dict) else 0)
+    excluded_no_body = (int(check.get("sources_without_comparable_claim") or 0)
+                        if isinstance(check, dict) else 0)
+    if excluded_no_body:
+        if lang == "zh":
+            lines.extend([f"> 另有 {excluded_no_body} 个高相关来源没有取得正文，未参与冲突比较；"
+                          f"这不代表它们之间没有分歧。", ""])
+        else:
+            lines.extend([f"> {excluded_no_body} high-scoring source(s) had no collected "
+                          f"body and were not compared for conflicts; this does not "
+                          f"establish that they agree.", ""])
     if not conflicts:
         if not check or unscanned or arb_failed or scanned == 0:
             if lang == "zh":
@@ -303,9 +352,9 @@ def render(state: dict) -> str:
         lines.extend([T["unknown"][lang], ""])
         for item in unknown_items:
             # Display-only text: a raw source number the model left in a gap is
-            # not a followable citation, so it is cleaned with the same helper
-            # used for other labels.
-            lines.append(f"- {clean_label(item)}")
+            # not a followable citation, and stripping it may leave a dangling
+            # space before punctuation. Neither justifies deleting the gap text.
+            lines.append(f"- {_display_text(item)}")
         lines.append("")
 
     lines.extend([T["how"][lang], ""])

@@ -1,4 +1,9 @@
-from .basis import source_provenance_note, used_sources
+from .basis import (
+    escape_display_text,
+    escape_markdown_label,
+    source_provenance_note,
+    used_sources,
+)
 from .coverage import derive_data_source_note
 
 
@@ -20,23 +25,35 @@ def _has_body(src: dict) -> bool:
 def _claim_source(conflict: dict, key: str, lang: str) -> str:
     """A dispute claim's source, or a stated gap when it carries no body.
 
-    The link stays visible so the reader can reach the page, but it is labelled
-    as carrying no content and is never presented as a usable basis.
+    The source title labels the link; the body excerpt follows as plain, escaped
+    text. Historical rows without a stored title keep the claim-as-label fallback.
+    The link stays visible so the reader can reach the page, but a source that
+    carries no body is labelled as such and never presented as a usable basis.
     """
     src = conflict.get(key, {}) or {}
+    title = " ".join(str(src.get("title") or "").split())
     claim = conflict.get("claim_a" if key == "source_a" else "claim_b", "")
-    if _has_body(src):
-        return _link(claim, src)
+    claim = " ".join(str(claim or "").split())
+    if len(claim) > 240:
+        claim = claim[:240].rstrip() + "…"
+    label = title or claim or "N/A"
     url = src.get("url", "")
-    link = f"[{claim}]({url})" if url else claim
+    link = (f"[{escape_markdown_label(label)}]({url})" if url
+            else escape_display_text(label))
+    excerpt = ""
+    if title and claim and claim != title:
+        excerpt = f" — {escape_display_text(claim)}"
+    if _has_body(src):
+        return f"{link}{excerpt}"
     note = "无正文（仅导航链接）" if lang == "zh" else \
         "no body collected (navigation link only)"
-    return f"{link} — {note}"
+    return f"{link}{excerpt} — {note}"
 
 
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
+    title_query = " ".join(str(query).split())
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
     lang = _lang(query)
@@ -77,7 +94,7 @@ def render(state: dict) -> str:
         winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
 
     lines = [
-        f"# {query}{T['title_suffix'][lang]}",
+        f"# {title_query}{T['title_suffix'][lang]}",
         "",
     ]
     data_note = derive_data_source_note(state)
@@ -135,6 +152,14 @@ def render(state: dict) -> str:
         lines.append("")
 
     lines.extend(["", T["disputes"][lang], ""])
+    check = state.get("conflict_check") or {}
+    outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
+    unscanned = int(outcomes.get("unscanned") or 0)
+    scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
+    arb_failed = (int(check.get("pairs_arbitration_failed") or 0)
+                  if isinstance(check, dict) else 0)
+    excluded_no_body = (int(check.get("sources_without_comparable_claim") or 0)
+                        if isinstance(check, dict) else 0)
     if conflicts:
         for c in conflicts:
             lines.append(f"- {c.get('resolution', 'unresolved')}: {c.get('reasoning', '')[:200]}")
@@ -144,12 +169,6 @@ def render(state: dict) -> str:
     else:
         # As in the other renderers: absence of a dispute is a finding only when
         # the conflict check actually completed.
-        check = state.get("conflict_check") or {}
-        outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
-        unscanned = int(outcomes.get("unscanned") or 0)
-        scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
-        arb_failed = (int(check.get("pairs_arbitration_failed") or 0)
-                      if isinstance(check, dict) else 0)
         if not check or unscanned or arb_failed or scanned == 0:
             if arb_failed:
                 lines.append(
@@ -165,6 +184,13 @@ def render(state: dict) -> str:
                 )
         else:
             lines.append(T["no_disputes"][lang])
+    if excluded_no_body:
+        lines.append(
+            f"另有 {excluded_no_body} 个高相关来源没有取得正文，未参与冲突比较；"
+            f"这不代表它们之间没有分歧。" if lang == "zh" else
+            f"{excluded_no_body} high-scoring source(s) had no collected body and "
+            f"were not compared for conflicts; this does not establish that they agree."
+        )
 
     lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}"])
     for g in state.get("knowledge_gaps", []):

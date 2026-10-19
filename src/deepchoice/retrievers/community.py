@@ -76,7 +76,12 @@ class CommunitySearch(BaseRetriever):
                     results.append({
                         "url": item.get("link", ""),
                         "title": item.get("title", ""),
+                        # StackExchange search returns score/tags metadata, not
+                        # the question/answer body. It identifies a thread but
+                        # states no citable claim, so it must not be numbered as
+                        # evidence (same boundary as GitHub repository metadata).
                         "snippet": f"Score: {item.get('score', 0)}, Tags: {', '.join(item.get('tags', []))}",
+                        "has_body": False,
                         "date": date_str,
                     })
             else:

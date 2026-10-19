@@ -545,11 +545,14 @@ class TestBodyLessSourcesAcrossEveryRoute:
         ordinary = {"url": "https://blog.example/a", "title": "Benchmark A",
                     "snippet": "Benchmark A measured p95 at 20ms on 1M vectors.",
                     "total_score": 9.5, "scores": {"authority": 9}}
+        second = {"url": "https://blog.example/b", "title": "Benchmark B",
+                  "snippet": "Benchmark B measured p95 at 40ms on 1M vectors.",
+                  "total_score": 5.0, "scores": {"authority": 5}}
         nav = {"url": self.NAV["url"], "title": self.NAV["title"], "snippet": "",
                "has_body": False, "total_score": 5.0, "scores": {"authority": 5}}
 
         result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
-            "source_scores": [ordinary, nav],
+            "source_scores": [ordinary, second, nav],
             "task": {"query": "t", "candidate_techs": ["PostgreSQL"]},
             "token_usage": [],
         })
@@ -563,9 +566,11 @@ class TestBodyLessSourcesAcrossEveryRoute:
         # The snippet must survive, or the renderer judges it body-less.
         assert ordinary_row.get("snippet") == ordinary["snippet"], ordinary_row
         assert has_factual_content(ordinary_row) is True, ordinary_row
-        nav_row = by_url.get(nav["url"])
-        assert nav_row is not None and nav_row.get("has_body") is False, by_url
-        assert has_factual_content(nav_row) is False, nav_row
+        # A body-less navigation source has no comparable claim, so it must not
+        # become one side of a conflict; the count is reported instead.
+        assert self.NAV["url"] not in by_url, by_url
+        assert result["conflict_check"]["sources_without_comparable_claim"] == 1, \
+            result["conflict_check"]
 
     def test_a_fact_bearing_claim_source_is_not_mislabelled(self):
         """The shape every non-official retriever produces: a real snippet and NO

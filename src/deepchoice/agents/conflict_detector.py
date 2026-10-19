@@ -8,6 +8,7 @@ import numpy as np
 
 from .. import outbound as _outbound
 from ..retrievers.tavily_keypool import post_with_failover
+from ..utils.candidate_identity import has_factual_content, source_content
 from ..utils.embedding import get_embedding_model
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
@@ -51,6 +52,28 @@ A "difference" does NOT require factual contradiction. Different recommendations
 # call. Only close-score pairs need semantic arbitration (evidence-type nuance).
 SCORE_GAP_DECIDE = 2.5
 SCORE_GAP_HIGH_CONF = 5.0
+
+# A conflict is a disagreement between claims, not between article titles. A
+# source can only supply a comparable claim when a body was actually collected;
+# repository metadata and official navigation links identify a source but state
+# no claim. The excerpt is taken from the stored body, never reconstructed from
+# the title.
+_CLAIM_EXCERPT_LIMIT = 400
+
+
+def comparable_claim(source: dict, limit: int = _CLAIM_EXCERPT_LIMIT) -> str:
+    """The bounded body excerpt that a conflict scan/arbitration may compare.
+
+    Returns "" when the source has no collected body (navigation, repository
+    metadata). Callers must not fall back to the title: a title is source identity,
+    not an assertion to arbitrate.
+    """
+    if not has_factual_content(source):
+        return ""
+    text = " ".join(str(source_content(source)).split())
+    if not text:
+        return ""
+    return text[:limit].rstrip()
 
 
 def _deterministic_arbitration(a: dict, b: dict) -> dict | None:
@@ -310,16 +333,20 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str,
                                    usage: list | None = None) -> dict | None:
     """Ask flash model whether two sources present meaningfully different perspectives.
 
-    Returns a dict with contradiction info if detected, None otherwise.
+    The comparison uses the stored body excerpts, not the titles: two article
+    titles can point at the same topic without asserting anything comparable.
+    Titles are kept only as the source identity in the prompt.
     """
-    snippet_a = src_a.get("snippet", "")[:400]
-    snippet_b = src_b.get("snippet", "")[:400]
+    claim_a = comparable_claim(src_a)
+    claim_b = comparable_claim(src_b)
+    if not claim_a or not claim_b:
+        return None
     prompt = [
         {"role": "system", "content": CONTRADICTION_SCAN_SYSTEM},
         {"role": "user", "content": (
             f"Query: {query}\n\n"
-            f"Source A: {src_a.get('title', '')}\nDescription: {snippet_a if snippet_a else '(no description)'}\n\n"
-            f"Source B: {src_b.get('title', '')}\nDescription: {snippet_b if snippet_b else '(no description)'}\n\n"
+            f"Source A: {src_a.get('title', '')}\nExcerpt: {claim_a}\n\n"
+            f"Source B: {src_b.get('title', '')}\nExcerpt: {claim_b}\n\n"
             f"Do these two sources present meaningfully different perspectives? Return JSON."
             """
 
@@ -410,6 +437,13 @@ def conflict_check_incomplete() -> bool:
     outcomes = getattr(find_contradictions, "last_outcomes", None) or {}
     if outcomes.get(SCAN_UNSCANNED):
         return True
+    # A check that never reached a candidate pair (too few sources, too few
+    # comparable claims, or no similar pair) cannot be reported as a completed
+    # "no conflict" result either.
+    early_reason = conflict_detector_coverage.get("reason")
+    if early_reason in ("too_few_comparable_sources", "too_few_high_score_sources",
+                        "no_candidate_pairs"):
+        return True
     return bool(conflict_detector_coverage.get("pairs_arbitration_failed"))
 
 
@@ -426,15 +460,29 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     find_contradictions.last_outcomes = {
         "difference": 0, "no_difference": 0, "unscanned": 0}
     find_contradictions.last_rejected = {}
+    find_contradictions.last_insufficient_claim = 0
+    # A completed scan with no differences records no coverage of its own; clear
+    # the previous run's diagnostic so a later node cannot read a stale reason.
+    conflict_detector_coverage.clear()
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
+    # Only sources that actually carry a body can supply a comparable claim.
+    # A navigation link or repository-metadata row identifies a source but
+    # asserts nothing, and arbitrating on its title would manufacture a
+    # disagreement between article names. Keep the count visible instead of
+    # silently dropping the ineligible sources.
+    eligible_sources = [s for s in high_score_sources if comparable_claim(s)]
+    find_contradictions.last_insufficient_claim = (
+        len(high_score_sources) - len(eligible_sources))
+    high_score_sources = eligible_sources
     if len(high_score_sources) < 2:
         _record_coverage(
             pairs_scanned=0,
             pairs_arbitrated=0,
             pairs_evidence=0,
             scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
-            reason="too_few_high_score_sources",
+            sources_without_comparable_claim=find_contradictions.last_insufficient_claim,
+            reason="too_few_comparable_sources",
         )
         return []
 
@@ -469,6 +517,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
             pairs_arbitrated=0,
             pairs_evidence=0,
             scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
+            sources_without_comparable_claim=find_contradictions.last_insufficient_claim,
             reason="no_candidate_pairs",
         )
         return []
@@ -544,6 +593,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
 
 find_contradictions.last_outcomes = {}
 find_contradictions.last_rejected = {}
+find_contradictions.last_insufficient_claim = 0
 
 
 # ---------------------------------------------------------------------------
@@ -571,7 +621,11 @@ class ConflictDetectorAgent:
         pairs = await find_contradictions(source_scores, query_topic=query, usage=local_usage)
         if not pairs:
             outcomes = dict(getattr(find_contradictions, "last_outcomes", {}))
-            incomplete = bool(outcomes.get(SCAN_UNSCANNED))
+            # Keep the diagnostic recorded by an early return (too few sources /
+            # too few comparable claims / no candidate pairs); a completed scan
+            # with no differences has no earlier reason.
+            diagnostic_reason = (
+                dict(conflict_detector_coverage).get("reason") or "no_pairs_confirmed")
             check = _record_coverage(
                 # The scan did run; the count comes from what it classified.
                 # Reporting 0 here would say no pair was ever examined.
@@ -581,8 +635,11 @@ class ConflictDetectorAgent:
                 pairs_arbitrated=0,
                 pairs_evidence=0,
                 scan_outcomes=outcomes,
-                reason="no_pairs_confirmed",
+                sources_without_comparable_claim=(
+                    getattr(find_contradictions, "last_insufficient_claim", 0)),
+                reason=diagnostic_reason,
             )
+            incomplete = conflict_check_incomplete()
             print_agent_output(
                 f"No confirmed contradictory pairs "
                 f"(scan {outcomes}, incomplete={incomplete})",
@@ -609,12 +666,20 @@ class ConflictDetectorAgent:
         )
 
         def _make_prompt(a: dict, b: dict) -> list[dict]:
+            claim_a = comparable_claim(a)
+            claim_b = comparable_claim(b)
             return [
                 {"role": "system", "content": ARBITRATION_SYSTEM},
                 {"role": "user", "content": (
                     f"## Topic\n{query}\n\n"
-                    f"## Source A (score: {a['total_score']}/10, authority: {a['scores']['authority']}, evidence: {a.get('evidence_type', 'citation')})\nClaim: {a.get('title', '')}\n\n"
-                    f"## Source B (score: {b['total_score']}/10, authority: {b['scores']['authority']}, evidence: {b.get('evidence_type', 'citation')})\nClaim: {b.get('title', '')}"
+                    f"## Source A\nTitle: {a.get('title', '')}\n"
+                    f"Score: {a['total_score']}/10, authority: {a['scores']['authority']}, "
+                    f"evidence: {a.get('evidence_type', 'citation')}\n"
+                    f"Claim excerpt: {claim_a}\n\n"
+                    f"## Source B\nTitle: {b.get('title', '')}\n"
+                    f"Score: {b['total_score']}/10, authority: {b['scores']['authority']}, "
+                    f"evidence: {b.get('evidence_type', 'citation')}\n"
+                    f"Claim excerpt: {claim_b}"
                 )},
             ]
 
@@ -625,7 +690,8 @@ class ConflictDetectorAgent:
             Dropping either one made has_factual_content fall back to an empty
             string and brand an ordinary evidence source as carrying no body.
             """
-            entry = {"url": src["url"], "score": src["total_score"]}
+            entry = {"url": src["url"], "title": src.get("title", ""),
+                     "score": src["total_score"]}
             if "has_body" in src:
                 entry["has_body"] = src["has_body"]
             snippet = src.get("snippet")
@@ -635,8 +701,11 @@ class ConflictDetectorAgent:
 
         def _build_conflict(pair: dict, result: dict, model: str = "flash") -> dict:
             return {
-                "claim_a": pair["source_a"].get("title", ""),
-                "claim_b": pair["source_b"].get("title", ""),
+                # The stored claim is the comparable body excerpt, not the
+                # source title. The source identity travels separately below,
+                # so a report can show what was compared and where it came from.
+                "claim_a": comparable_claim(pair["source_a"]),
+                "claim_b": comparable_claim(pair["source_b"]),
                 "source_a": _cited_source(pair["source_a"]),
                 "source_b": _cited_source(pair["source_b"]),
                 "similarity": pair["similarity"],
@@ -715,8 +784,8 @@ class ConflictDetectorAgent:
             try:
                 evidence = await _gather_evidence(
                     topic=query,
-                    claim_a=pair["source_a"].get("title", ""),
-                    claim_b=pair["source_b"].get("title", ""),
+                    claim_a=comparable_claim(pair["source_a"]),
+                    claim_b=comparable_claim(pair["source_b"]),
                     usage=local_usage,
                 )
             except Exception as e:
@@ -747,6 +816,10 @@ class ConflictDetectorAgent:
             # scan never found anything.
             "pairs_arbitration_failed": failed_arbitrations,
             "scan_outcomes": dict(getattr(find_contradictions, "last_outcomes", {})),
+            # Sources that could not supply a comparable claim (navigation or
+            # repository metadata). They are not silently treated as agreeing.
+            "sources_without_comparable_claim": (
+                getattr(find_contradictions, "last_insufficient_claim", 0)),
             # Where this node's time went, so a slow run reads as scan vs
             # arbitration vs evidence vs re-arbitration.
             "stage_timing_s": dict(conflict_stage_timing),
@@ -772,6 +845,8 @@ class ConflictDetectorAgent:
                 # visible instead of looking like a clean empty result.
                 "scan_unscanned": coverage["scan_outcomes"].get(SCAN_UNSCANNED, 0),
                 "scan_no_difference": coverage["scan_outcomes"].get(SCAN_NO_DIFFERENCE, 0),
+                "sources_without_comparable_claim": coverage.get(
+                    "sources_without_comparable_claim", 0),
                 "conflict_check_incomplete": conflict_check_incomplete(),
                 "pairs_arbitrated": len(conflicts),
             }],

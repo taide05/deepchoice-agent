@@ -6,6 +6,36 @@ from .base import BaseRetriever
 from .tavily_keypool import post_with_failover
 
 
+def interleave_batches(batches: list[list[dict]], max_results: int) -> list[dict]:
+    """Merge per-query result batches with fair query coverage.
+
+    Each query's results are taken one at a time, round-robin, before any query
+    contributes a second result. The previous flatten-by-query-then-truncate
+    merge let the first queries consume the whole cap, so later adapted queries
+    (for example a baseline/exit-code/version sub-question) never reached the
+    downstream stages even though their results were fetched. Deduplicate by URL
+    and keep the caller's result cap and ordering semantics.
+    """
+    merged: list[dict] = []
+    seen_urls: set[str] = set()
+    index = 0
+    while len(merged) < max_results and any(index < len(batch) for batch in batches):
+        for batch in batches:
+            if len(merged) >= max_results:
+                break
+            if index >= len(batch):
+                continue
+            item = batch[index]
+            url = item.get("url", "")
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
+            merged.append(item)
+        index += 1
+    return merged
+
+
 class TavilySearch(BaseRetriever):
     source = "tavily"
 
@@ -40,12 +70,4 @@ class TavilySearch(BaseRetriever):
             # key pool (24 keys) and each key's token bucket spaces 5/min, so
             # concurrent queries do not burst a single key into 429.
             batches = await asyncio.gather(*[_one(q) for q in queries])
-            all_results = []
-            seen_urls = set()
-            for b in batches:
-                for r in b:
-                    url = r.get("url", "")
-                    if url and url not in seen_urls:
-                        seen_urls.add(url)
-                        all_results.append(r)
-            return all_results[:max_results]
+            return interleave_batches(batches, max_results)

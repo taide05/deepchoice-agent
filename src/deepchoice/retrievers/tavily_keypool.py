@@ -74,11 +74,14 @@ def _is_fresh(ts: float) -> bool:
 
 
 def _reset_for_tests() -> None:
-    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last, _bucket_lock
+    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last, _bucket_lock, _lock
     _pool, _exhausted, _probed = [], {}, False
     _rr_idx = -1
     _bucket_tokens, _bucket_last = {}, {}
     _bucket_lock = asyncio.Lock()
+    # The probe lock is module-global; a later test's event loop cannot use a
+    # lock first bound to an earlier test's (now closed) loop.
+    _lock = asyncio.Lock()
 
 
 async def _probe_one(post, key: str) -> bool:

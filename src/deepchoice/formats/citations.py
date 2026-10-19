@@ -2,8 +2,58 @@
 import html
 import re
 
-MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
+# Inline Markdown link scanner. A real source title may contain `[...]`, and a
+# report may contain an unmatched `[` in body text; both must be handled without
+# losing the annotations of later links.
 HEADING_RE = re.compile(r"^(#{1,3})[ \t]+(.*)$", re.MULTILINE)
+
+
+def _iter_markdown_links(text: str):
+    """Yield (start, end, label, url) for inline Markdown links.
+
+    Link labels may contain balanced square brackets — a real source title like
+    `Stop Leaked Secrets in Git With Gitleaks [2026]` is a valid Markdown label.
+    A flat `[^]]*` regex stopped at the inner bracket and silently skipped the
+    link, so its citation badge was never injected even though the rendered
+    Markdown itself was valid. The scanner tracks bracket depth and then reads
+    the `(url)` destination.
+    """
+    i = 0
+    length = len(text)
+    while i < length:
+        if text[i] != "[":
+            i += 1
+            continue
+        depth = 0
+        label_end = -1
+        j = i
+        while j < length:
+            char = text[j]
+            if char == "\\":
+                j += 2
+                continue
+            if char == "[":
+                depth += 1
+            elif char == "]":
+                depth -= 1
+                if depth == 0:
+                    label_end = j
+                    break
+            j += 1
+        if label_end == -1:
+            # An unmatched `[` in body text is not a reason to abandon the rest
+            # of the report; advance past it and keep looking for real links.
+            i += 1
+            continue
+        if label_end + 1 < length and text[label_end + 1] == "(":
+            url_end = text.find(")", label_end + 2)
+            if url_end != -1:
+                url = text[label_end + 2:url_end].strip()
+                if url.startswith(("http://", "https://")) and " " not in url:
+                    yield i, url_end + 1, text[i + 1:label_end], url
+                    i = url_end + 1
+                    continue
+        i += 1
 
 
 def number_sources(chains: list[dict]) -> list[dict]:
@@ -42,18 +92,23 @@ def number_sources(chains: list[dict]) -> list[dict]:
 def inject_citations(md: str, registry: list[dict]) -> str:
     """Replace [title](url) links with title + superscript [N] anchor to #ev-N.
 
-    Links whose URL is not in the registry are left untouched.
+    Links whose URL is not in the registry are left untouched. Link labels with
+    balanced brackets are handled by the shared scanner, so a legitimate title
+    containing `[...]` still gets its annotation.
     """
     by_url = {r["url"]: r["n"] for r in registry}
-
-    def _sub(match: re.Match) -> str:
-        title, url = match.group(1), match.group(2)
+    pieces: list[str] = []
+    last = 0
+    for start, end, title, url in _iter_markdown_links(md):
         n = by_url.get(url)
         if n is None:
-            return match.group(0)
-        return f'{html.escape(title)}<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>'
-
-    return MD_LINK_RE.sub(_sub, md)
+            continue
+        pieces.append(md[last:start])
+        pieces.append(f'{html.escape(title)}'
+                      f'<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>')
+        last = end
+    pieces.append(md[last:])
+    return "".join(pieces)
 
 
 def build_toc(md: str) -> tuple[list[dict], str]:

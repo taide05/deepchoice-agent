@@ -6,7 +6,6 @@ none of them contacts a service.
 """
 from __future__ import annotations
 
-import asyncio
 import types
 
 import numpy as np
@@ -19,7 +18,8 @@ from deepchoice.agents import source_evaluator as se
 def _sources(count: int) -> list[dict]:
     return [
         {"url": f"https://example.invalid/{i}", "title": f"Source {i} comparison",
-         "snippet": "s", "total_score": 7.0, "scores": {"authority": 7}}
+         "snippet": f"Source {i} reports a distinct throughput and latency trade-off.",
+         "total_score": 7.0, "scores": {"authority": 7}}
         for i in range(count)
     ]
 
@@ -127,9 +127,11 @@ class TestScanWorkBound:
         # Both sources must clear the >= 5.0 high-score gate, or the node exits
         # before reaching any arbitration and the rule path is never exercised.
         # The 4.5 gap is decisive, so the rule decides without an LLM call.
-        strong = [{"url": "https://a", "title": "A comparison", "snippet": "s",
+        strong = [{"url": "https://a", "title": "A comparison",
+           "snippet": "A reports lower latency on the benchmark.",
                    "total_score": 9.5, "scores": {"authority": 10}},
-                  {"url": "https://b", "title": "A comparison too", "snippet": "s",
+                  {"url": "https://b", "title": "A comparison too",
+           "snippet": "B reports higher throughput at scale.",
                    "total_score": 5.0, "scores": {"authority": 5}}]
         # Guard the fixture itself: if these stop reaching arbitration, the
         # assertions below would pass without testing anything.
@@ -327,10 +329,11 @@ class TestIncompleteIsNotNoDifference:
 
         # Run 1: too few high-score sources, which records a specific reason.
         await cd.find_contradictions(
-            [{"url": "https://only", "title": "Only source", "snippet": "s",
+            [{"url": "https://only", "title": "Only source",
+          "snippet": "A single source with a comparable body claim.",
               "total_score": 7.0, "scores": {"authority": 7}}], "t", usage=[])
         first = dict(cd.conflict_detector_coverage)
-        assert first.get("reason") == "too_few_high_score_sources", first
+        assert first.get("reason") == "too_few_comparable_sources", first
 
         # Run 2: a different outcome that takes the conflict path and sets its own
         # fields, without the "reason" key run 1 recorded.
@@ -462,3 +465,119 @@ class TestSourceEvaluation:
         chains = build_evidence_chain(rows, [])
         assert all(c["evidence_strength"] != "strong" for c in chains), \
             "matching titles alone produced a strong chain"
+
+class TestClaimsComeFromBodies:
+    """Seventh run: conflict detection used article titles as Claim A/B and
+    persisted them, so a comparison of two titles was arbitrated as if it were
+    a factual disagreement. Claims must come from collected bodies, and a source
+    without a body must not supply one."""
+
+    def test_a_bodyless_or_metadata_source_has_no_comparable_claim(self):
+        assert cd.comparable_claim({
+            "title": "Stop Leaked Secrets in Git [2026]",
+            "snippet": "body text long enough to be comparable",
+        }).startswith("body text")
+        assert cd.comparable_claim({
+            "title": "gitleaks/gitleaks",
+            "snippet": "Stars: 20000, Forks: 1500, Description: secrets",
+            "has_body": False,
+        }) == ""
+        assert cd.comparable_claim({
+            "title": "Gitleaks — Official Documentation",
+            "snippet": "",
+            "has_body": False,
+        }) == ""
+
+    @pytest.mark.asyncio
+    async def test_conflict_claims_are_body_excerpts_not_titles(self, monkeypatch):
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+        sources = [
+            {"url": "https://a", "title": "Comparison article A",
+             "snippet": "Alpha measured lower latency than Beta on the test set.",
+             "total_score": 8.0, "scores": {"authority": 8}},
+            {"url": "https://b", "title": "Comparison article B",
+             "snippet": "Beta measured higher throughput than Alpha in production.",
+             "total_score": 7.0, "scores": {"authority": 7}},
+        ]
+        arbitration_prompts: list[str] = []
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "latency vs throughput"}
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            payload = "\n".join(str(m.get("content", "")) for m in prompt)
+            arbitration_prompts.append(payload)
+            return {"resolution": "both_partial", "confidence": "high", "reasoning": "r"}
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+        result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": sources, "task": {"query": "topic"}, "token_usage": [],
+        })
+        assert len(result["conflicts"]) == 1
+        conflict = result["conflicts"][0]
+        assert conflict["claim_a"] == sources[0]["snippet"], conflict
+        assert conflict["claim_b"] == sources[1]["snippet"], conflict
+        assert conflict["claim_a"] != sources[0]["title"]
+        # The source identity still travels separately.
+        assert conflict["source_a"]["url"] == "https://a"
+        assert "Title: Comparison article A" in arbitration_prompts[0]
+        assert "Claim excerpt: Alpha measured lower latency" in arbitration_prompts[0]
+
+    @pytest.mark.asyncio
+    async def test_bodyless_source_is_not_arbitrated_against_a_body(self, monkeypatch):
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def forbidden_scan(src_a, src_b, query, usage=None):
+            raise AssertionError("a body-less source must not be scanned as a claim")
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", forbidden_scan)
+        result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": [
+                {"url": "https://body", "title": "Body source",
+                 "snippet": "The report states a concrete supported claim.",
+                 "total_score": 8.0, "scores": {"authority": 8}},
+                {"url": "https://nav", "title": "Docs page",
+                 "snippet": "", "has_body": False,
+                 "total_score": 6.0, "scores": {"authority": 6}},
+            ],
+            "task": {"query": "topic"}, "token_usage": [],
+        })
+        assert result["conflicts"] == []
+        assert result["conflict_check"]["sources_without_comparable_claim"] == 1
+        assert result["conflict_check"]["reason"] == "too_few_comparable_sources"
+
+class TestBodylessCoverageIsVisible:
+    @pytest.mark.asyncio
+    async def test_early_bodyless_check_is_reported_incomplete(self, monkeypatch):
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def forbidden_scan(src_a, src_b, query, usage=None):
+            raise AssertionError("body-less sources must not be scanned")
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", forbidden_scan)
+        result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": [
+                {"url": "https://body", "title": "Body source",
+                 "snippet": "A concrete supported claim.", "total_score": 8.0,
+                 "scores": {"authority": 8}},
+                {"url": "https://nav", "title": "Docs page", "snippet": "",
+                 "has_body": False, "total_score": 6.0, "scores": {"authority": 6}},
+            ],
+            "task": {"query": "topic"}, "token_usage": [],
+        })
+        assert result["conflicts"] == []
+        assert result["conflict_check"]["sources_without_comparable_claim"] == 1
+        assert result["quality_signals"][0]["conflict_check_incomplete"] is True
+
+    def test_excluded_sources_are_told_to_the_synthesizer(self):
+        from deepchoice.agents.conclusion_synthesizer import _summarize_conflicts
+
+        text = _summarize_conflicts(
+            [], {"pairs_scanned": 2,
+                 "scan_outcomes": {"difference": 0, "no_difference": 2,
+                                   "unscanned": 0},
+                 "sources_without_comparable_claim": 2})
+        assert "2 high-scoring source(s) carried no collected body" in text, text
+        assert "not establish" in text, text

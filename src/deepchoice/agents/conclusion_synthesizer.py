@@ -15,6 +15,11 @@ SYNTHESIS_PROMPT = """You are a senior technology advisor. Synthesize all eviden
 ## Scene Context
 {scene_context}
 
+## Declared Constraints
+These are frozen constraints from the request. Every recommendation must respect
+them or state which one it cannot satisfy; do not silently drop one.
+{constraints}
+
 ## Original Sub-Questions
 The user's question was broken into these sub-questions. Answer each one in the
 recommendation or in `unresolved_questions`; do not drop one silently.
@@ -44,7 +49,7 @@ the source is wrong or that the two sources contradict.
 2. Acknowledge disputed findings — don't pretend they don't exist
 3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong content in a source for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it.
 4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale. If the highest constraint-fit is TIED, set "winner" to "context_dependent" (rule 7).
-5. If evidence is insufficient for a definitive answer, say so honestly
+5. If evidence is insufficient for a definitive answer, say so honestly. Also state, explicitly, which constraint or evidence finding would change the recommendation (its reversal conditions) — put this in the recommendation or scene_fit_note when the answer is conditional.
 6. INLINE CITATIONS REQUIRED — EVERY sentence and EVERY field MUST end with a source number in double brackets, e.g. "Use FastAPI [[1]]." — no sentence or field may be left uncited, no matter how short. Short fields are factual assertions, NOT labels: key_strength, key_weakness, and impact must EACH carry a [[N]] (e.g. "key_strength": "Mature role-based abstraction [[1]]"). recommendation: EVERY sentence, INCLUDING the opening "Adopt X ..." sentence and any closing summary sentence, must carry its own [[N]]. winner_rationale, rationale, finding, scene_fit_note, and every evidence_summary sentence: same rule. CRITICAL: copy the number VERBATIM from the Retrieved sources above — NEVER invent a number that is not listed.
 7. Winner selection: name a winner ONLY when evidence clearly favors one option for the scene. If balanced — both have meaningful evidence and neither clearly wins — set "winner" to "context_dependent" and give a conditional recommendation ("choose X if ..., choose Y if ..."). If your own rationale says "depends on"/"hinges on"/"context-dependent", the winner MUST be "context_dependent".
 8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
@@ -116,6 +121,7 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
                 "body": source_content(source),
                 "provenance": source.get("provenance") or "",
                 "channel": source.get("channel") or "",
+                "date": str(source.get("date") or ""),
                 "disputed": bool(chain.get("disputed")),
             }
             chain_entries.append(entry)
@@ -203,6 +209,10 @@ def _summarize_chains(evidence_chains: list[dict],
             if entry["provenance"] or entry["channel"]:
                 lines.append(f"       provenance: {entry['provenance'] or 'unknown'}; "
                              f"channel: {entry['channel'] or 'unknown'}")
+            if entry.get("date"):
+                # Publication/update date travels with the body so version and
+                # applicability statements can be checked against the source.
+                lines.append(f"       date: {entry['date']}")
             source_stub = {
                 "title": entry["title"],
                 "content": entry["body"],
@@ -240,6 +250,15 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
     unscanned = int(outcomes.get("unscanned") or 0)
     scanned = int(check.get("pairs_scanned") or 0)
     arbitration_failed = int(check.get("pairs_arbitration_failed") or 0)
+    # High-scoring sources without a collected body cannot supply a comparable
+    # claim and are not scanned. When the check does complete, saying it found no
+    # contradiction without this qualifier would hide that those sources were
+    # never compared at all.
+    excluded_no_body = int(check.get("sources_without_comparable_claim") or 0)
+    no_body_note = (
+        f" NOTE: {excluded_no_body} high-scoring source(s) carried no collected "
+        f"body and were not compared; this does not establish that they contain "
+        f"no disagreement." if excluded_no_body else "")
     if not conflicts:
         if not check:
             return ("No confirmed conflicts, but this run recorded no conflict "
@@ -258,13 +277,23 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
         if scanned == 0:
             return ("No candidate pairs qualified for the conflict check "
                     f"({check.get('reason', 'no candidates')}); absence of "
-                    "conflicts was never tested.")
+                    "conflicts was never tested." + no_body_note)
         return (f"Conflict check completed over {scanned} candidate pair(s) and "
-                f"found no confirmed contradiction.")
+                f"found no confirmed contradiction." + no_body_note)
     lines = []
     for i, c in enumerate(conflicts):
+        def _side_label(key: str) -> str:
+            src = c.get(f"source_{key}") or {}
+            title = str(src.get("title") or "").strip()
+            url = str(src.get("url") or "").strip()
+            return title or url
+        label_a = _side_label("a")
+        label_b = _side_label("b")
+        prefix_a = f"[{label_a}] " if label_a else ""
+        prefix_b = f"[{label_b}] " if label_b else ""
         lines.append(
-            f"{i+1}. {c.get('claim_a', '')} vs {c.get('claim_b', '')} "
+            f"{i+1}. {prefix_a}{c.get('claim_a', '')} vs "
+            f"{prefix_b}{c.get('claim_b', '')} "
             f"— resolution: {c.get('resolution', 'unknown')} "
             f"(confidence: {c.get('confidence', 'N/A')})"
         )
@@ -279,6 +308,8 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
             f"disagreement that was not adjudicated; present them as unresolved "
             f"potential disagreements rather than omitting them."
         )
+    if excluded_no_body:
+        lines.append(no_body_note.strip())
     return "\n".join(lines)
 
 
@@ -989,6 +1020,8 @@ class ConclusionSynthesizerAgent:
             "content": SYNTHESIS_PROMPT.format(
                 query=task["query"],
                 scene_context=task.get("scene_context", "team"),
+                constraints=("\n".join(f"- {c}" for c in (task.get("constraints") or []))
+                             if task.get("constraints") else "(none recorded)"),
                 sub_questions=("\n".join(f"{i}. {q}" for i, q in enumerate(sub_questions, 1))
                                if sub_questions else "(none recorded)"),
                 evidence_chains=evidence_text,

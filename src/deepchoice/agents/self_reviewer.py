@@ -58,9 +58,9 @@ REVIEW_SYSTEM = f"""You are a rigorous quality reviewer. Evaluate research repor
 Answer YES or NO for each, with a brief note:
 1. Source support: the pipeline only verifies that a citation names a registered source; a citation marker is NOT proof that the source supports the specific claim. For each decisive claim you check, compare the claim against the source body in the Source Register.
 2. Citation completeness: the "Citation Completeness" section is computed from the same field list that binding uses. It lists fields with no citation and fields whose citation could not be resolved. Treat both as things to check, not as automatic truth verdicts: an uncited claim may still be a recorded gap, and an unresolved citation is not evidence that the claim is false.
-3. Does the recommendation cover all 5 comparison dimensions? (Functionality, Performance, Ecosystem, Developer Experience, Scenario Fit)
+3. Does the recommendation cover all 5 comparison dimensions? (Functionality, Performance, Ecosystem, Developer Experience, Scenario Fit) Does it respect the "Declared Constraints", and does it state what constraint or evidence would change the recommendation when the answer is conditional?
 4. Are there unlabeled information conflicts? The recorded conflicts, if any, are under "Recorded Conflicts"; compare their resolutions with the claims in the fields.
-5. Are any user sub-questions unanswered? Check each original sub-question against the fields below, and say which ones have no substantive answer rather than only a marker or a gap note.
+5. Are any user sub-questions unanswered? Check each original sub-question and every declared constraint against the fields below, and say which ones have no substantive answer rather than only a marker or a gap note. A knowledge gap list entry does not answer a required item by itself.
 6. Are there counter-examples or negative findings not flagged?
 
 Confidence Assessment:
@@ -324,6 +324,8 @@ def _source_register_text(registry: dict, limit: int = 900) -> str:
         lines.append(f"[[{entry['number']}]] {entry['title']}")
         if entry.get("url"):
             lines.append(f"    url: {entry['url']}")
+        if entry.get("date"):
+            lines.append(f"    date: {entry['date']}")
         body = " ".join(str(entry.get("body") or "").split())
         if len(body) > limit:
             body = body[:limit].rstrip() + "…"
@@ -485,6 +487,9 @@ class SelfReviewerAgent:
         task = research_state.get("task") or {}
         query_text = str(task.get("query") or "(not recorded)")
         scene_text = str(task.get("scene_context") or "(not recorded)")
+        constraints = [str(c) for c in (task.get("constraints") or []) if str(c).strip()]
+        constraints_text = ("\n".join(f"- {c}" for c in constraints)
+                            or "(none recorded)")
         conflicts_text = _conflicts_text(research_state, registry)
 
         user_content = f"""## Original Query
@@ -492,6 +497,12 @@ class SelfReviewerAgent:
 
 ## Scene Context
 {scene_text}
+
+## Declared Constraints
+Every frozen constraint from the request is listed here. A claim, exclusion or
+recommendation violates the request when it ignores one; a recommendation with no
+statement of what would change it is incomplete.
+{constraints_text}
 
 ## Fields To Review
 Every correctable served field the result carries is below, once, under the same
