@@ -1,8 +1,7 @@
 import re
 
 from .basis import (
-    escape_display_text,
-    escape_markdown_label,
+    escape_markdown_text,
     source_provenance_note,
     used_sources,
 )
@@ -12,11 +11,6 @@ from ..agents.conclusion_synthesizer import clean_label
 
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
-
-
-def _link(text: str, src: dict) -> str:
-    url = (src or {}).get("url", "")
-    return f"[{text}]({url})" if url else text
 
 
 def _field_source_links(rec: dict, locator: str, text: str,
@@ -39,7 +33,8 @@ def _field_source_links(rec: dict, locator: str, text: str,
                 continue
             title = str(binding.get("title") or "")
             url = str(binding.get("url") or "")
-            link = f"[{title}]({url})" if url else title
+            label = escape_markdown_text(title)
+            link = f"[{label}]({url})" if url else label
             if link and link not in links:
                 links.append(link)
         # Show every registered identity bound to the field. The previous cap of
@@ -58,7 +53,8 @@ def _field_source_links(rec: dict, locator: str, text: str,
                 continue
             src = sources[0]
             url = str(src.get("url") or "")
-            link = f"[{part.strip()}]({url})" if url else part.strip()
+            label = escape_markdown_text(part.strip())
+            link = f"[{label}]({url})" if url else label
             if link not in links:
                 links.append(link)
     return links
@@ -108,15 +104,15 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
     claim = _one_line(conflict.get("claim_a" if key == "source_a" else "claim_b", ""))
     if len(claim) > 240:
         claim = claim[:240].rstrip() + "…"
-    label = title or claim or "N/A"
+    label = escape_markdown_text(title or claim or "N/A")
     url = src.get("url", "")
     if url:
-        link = f"[{escape_markdown_label(label)}]({url})"
+        link = f"[{label}]({url})"
     else:
-        link = escape_display_text(label)
+        link = label
     excerpt = ""
     if title and claim and claim != title:
-        excerpt = f" — {escape_display_text(claim)}"
+        excerpt = f" — {escape_markdown_text(claim)}"
     score = src.get("score", "N/A")
     if _has_body(src):
         return f"{link}{excerpt} (score: {score})"
@@ -230,7 +226,7 @@ def render(state: dict) -> str:
                          else "**Navigation links (no body collected; not usable as a basis)**")
             lines.append("")
             for title, url in nav_links[:10]:
-                lines.append(f"- [{title}]({url})")
+                lines.append(f"- [{escape_markdown_text(title)}]({url})")
             lines.append("")
 
     lines.extend([T["why"][lang], ""])
@@ -253,7 +249,7 @@ def render(state: dict) -> str:
         lines.append("")
         for src in used[:12]:
             note = source_provenance_note(src, lang)
-            lines.append(f"- [{src['title']}]({src['url']}) ×{src['citations']}{note}")
+            lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")
     else:
         lines.extend([
@@ -427,7 +423,7 @@ def render(state: dict) -> str:
     refs = used_sources(rec, chains)
     for src in refs[:12]:
         note = source_provenance_note(src, lang)
-        lines.append(f"- [{src['title']}]({src['url']}){note}")
+        lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}){note}")
     if len(refs) > 12:
         lines.append(f"*(+{len(refs) - 12} more sources used)")
     if not refs:

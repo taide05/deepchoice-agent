@@ -281,7 +281,10 @@ class TestRetrievalHitsAreNotJudgments:
         assert "[strong]" not in payload
 
     def test_the_report_basis_is_the_sources_synthesis_actually_used(self):
+        import html
         import re
+
+        import markdown
 
         from deepchoice.formats.basis import used_sources
 
@@ -291,10 +294,10 @@ class TestRetrievalHitsAreNotJudgments:
         assert why, "the Why section is present"
         used = used_sources(state["final_recommendation"], state["evidence_chains"])
         assert used, "fixture: the synthesis cites sources"
-        # The Why section must name exactly the sources production derives as
-        # used — not every retrieved hit. It is compared against the production
-        # helper rather than re-deriving the set here.
-        listed = set(re.findall(r"^- \[(.+?)\]\(.+?\) ×\d+", why, re.MULTILINE))
+        # Titles are Markdown-escaped for literal display; compare the rendered
+        # visible text with the production helper rather than raw source strings.
+        why_html = html.unescape(markdown.markdown(why))
+        listed = set(re.findall(r"<a href=\"[^\"]+\">(.+?)</a> ×\d+", why_html))
         assert listed, "the Why section lists no sources at all"
         assert listed == {u["title"] for u in used}, (
             f"presented but not used: {sorted(listed - {u['title'] for u in used})}; "
@@ -303,10 +306,11 @@ class TestRetrievalHitsAreNotJudgments:
         unused = {s.get("title") for c in state["evidence_chains"]
                   for s in (c.get("sources") or [])} - {u["title"] for u in used}
         references = report.split("### References")[-1].split("### 参考来源")[-1]
+        references_html = html.unescape(markdown.markdown(references))
         for title in unused:
             if not title:
                 continue
-            assert f"[{title}]" not in references, \
+            assert f"[{title}]" not in references_html, \
                 f"unused retrieval hit listed as a reference: {title}"
 
 
@@ -504,13 +508,19 @@ class TestTheOtherReportFormatsShareTheBasis:
                 f"the matrix lost {opt['name']}'s own rationale"
 
     def test_every_format_lists_the_same_used_sources(self):
+        import html
+
+        import markdown
+
         from deepchoice.formats.basis import used_sources
 
         state, evidence, matrix = self._renders()
         names = [s["title"] for s in used_sources(state["final_recommendation"],
                                                   state["evidence_chains"])]
         assert names, "fixture: the synthesis cites sources"
+        evidence_text = html.unescape(markdown.markdown(evidence))
+        matrix_text = html.unescape(markdown.markdown(matrix))
         for title in names:
-            assert title in evidence, f"evidence_first lost {title}"
-            assert title in matrix, f"comparison_matrix lost {title}"
+            assert title in evidence_text, f"evidence_first lost {title}"
+            assert title in matrix_text, f"comparison_matrix lost {title}"
 

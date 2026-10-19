@@ -1,8 +1,9 @@
-"""Round-11 display repairs: bracket titles, full field sources, titles, punctuation.
+"""Display repairs: bracket titles, full field sources, titles, punctuation.
 
-These are presentation/identity defects observed in the seventh run (task
-49cf0eee-ad7d-48c3-aa39-1b51731fb1c5) and fixed on the shared paths, not by
-per-title exceptions.
+The saved seventh report/annotated material shows these presentation and
+identity defects directly (multi-line heading, dangling punctuation, missing
+bracket-title badge, capped Sources). Fixes are on the shared paths, not
+per-title exceptions; no single rendering defect is assumed proven by simulation.
 """
 from deepchoice.formats.citations import inject_citations
 from deepchoice.formats.comparison_matrix import render as render_cm
@@ -166,3 +167,129 @@ class TestBodylessSourceRegistry:
         assert registry["entries"] == []
         assert registry["navigation"] == [url]
         assert number_sources(chains) == []
+
+class TestActualMarkdownRendering:
+    """Check rendered HTML, not just escaped source strings.
+
+    A conflict excerpt is scraped body text. Raw HTML, autolinks and Markdown
+    control characters must all appear as literal text; the source link must
+    remain a real link; the stored source/claim must remain untouched. The same
+    assertion runs against all three report renderers and against the annotated
+    reading view.
+    """
+
+    MALICIOUS = ("<img src=x onerror=alert(1)> *bold* `code` "
+                 "[x](https://evil.example/x) <https://evil.example/auto>")
+    SOURCE_URL = "https://source.example/doc"
+
+    def _state(self):
+        return _state(conflicts=[{
+            "claim_a": self.MALICIOUS,
+            "claim_b": "A normal competing excerpt",
+            "source_a": {"url": self.SOURCE_URL,
+                         "title": "<b>Source A</b> [2026]",
+                         "snippet": self.MALICIOUS, "score": 8},
+            "source_b": {"url": "https://source.example/b",
+                         "title": "Source B", "snippet": "A normal competing excerpt",
+                         "score": 7},
+            "resolution": "insufficient_data", "confidence": "low",
+            "reasoning": "r", "key_factor": "k",
+        }])
+
+    def test_all_renderers_keep_untrusted_text_literal_and_links_intact(self):
+        import copy
+
+        import markdown
+
+        registry = [{"n": 1, "url": self.SOURCE_URL,
+                     "title": "<b>Source A</b> [2026]"}]
+        renderers = (("what_why_how", render_www),
+                     ("comparison_matrix", render_cm),
+                     ("evidence_first", render_ef))
+        for name, renderer in renderers:
+            state = self._state()
+            before = copy.deepcopy(state)
+            md = renderer(state)
+            rendered = markdown.markdown(md)
+            # Raw HTML/script/autolink are not active.
+            assert "<img" not in rendered.lower(), (name, rendered)
+            assert "<script" not in rendered.lower(), (name, rendered)
+            assert 'href="https://evil.example' not in rendered, (name, rendered)
+            # The text is still visible as literal content.
+            assert "&lt;img" in rendered, (name, rendered)
+            assert "*bold*" in rendered or "\\*bold\\*" in rendered, (name, rendered)
+            # The real source link survives as a link.
+            assert f'href="{self.SOURCE_URL}"' in rendered, (name, rendered)
+            # Stored claim/body/source are not mutated by display.
+            assert state == before, name
+
+            annotated = inject_citations(md, registry)
+            assert 'href="#ev-1"' in annotated, (name, annotated)
+            assert 'href="https://evil.example' not in annotated, (name, annotated)
+            # Annotated HTML shows the literal title, not double-escaped entities.
+            assert "&lt;b&gt;Source A&lt;/b&gt;" in annotated, (name, annotated)
+            assert "&amp;lt;b&amp;gt;" not in annotated, (name, annotated)
+
+
+class TestAnnotatedRendering:
+    """The annotated artifact is Markdown for the PDF/reading-view consumers.
+
+    It must render the same literal label text after the second Markdown pass;
+    the per-title escaping cannot be dropped just because annotation converts
+    the link into labeled text.
+    """
+
+    TITLE = ("Docs [click](https://evil.example/x) *fast* "
+             "![logo](https://evil.example/img.png)")
+    SOURCE_URL = "https://source.example/doc"
+
+    def test_all_renderers_annotated_markdown_is_literal_and_badge_present(self):
+        import copy
+
+        import markdown
+
+        renderers = (("what_why_how", render_www),
+                     ("comparison_matrix", render_cm),
+                     ("evidence_first", render_ef))
+        registry = [{"n": 1, "url": self.SOURCE_URL, "title": self.TITLE}]
+        chains = [{"sources": [{
+            "title": self.TITLE, "url": self.SOURCE_URL,
+            "snippet": "excerpt A", "date": "2026-01-01",
+        }]}]
+        for name, renderer in renderers:
+            state = _state(
+                conflicts=[{
+                    "claim_a": "excerpt A",
+                    "claim_b": "excerpt B",
+                    "source_a": {"url": self.SOURCE_URL, "title": self.TITLE,
+                                 "snippet": "excerpt A", "score": 8},
+                    "source_b": {"url": "https://source.example/b",
+                                 "title": "Source B", "snippet": "excerpt B",
+                                 "score": 7},
+                    "resolution": "insufficient_data", "confidence": "low",
+                    "reasoning": "r", "key_factor": "k",
+                }],
+                evidence_chains=chains,
+                final_recommendation={
+                    "recommendation": "Use it [[1]]",
+                    "citation_sources": {"recommendation": [{
+                        "source_id": self.SOURCE_URL, "number": 1,
+                        "title": self.TITLE, "url": self.SOURCE_URL,
+                    }]},
+                },
+            )
+            before = copy.deepcopy(state)
+            annotated = inject_citations(renderer(state), registry)
+            # Production PDF/reading-view path parses the annotated Markdown again.
+            rendered = markdown.markdown(annotated, extensions=["tables"])
+            assert "<img" not in rendered.lower(), (name, rendered)
+            assert 'href="https://evil.example' not in rendered, (name, rendered)
+            # The badge points at the evidence card; the annotated reading view
+            # intentionally replaces inline source links with that badge.
+            assert 'href="#ev-1"' in rendered, (name, rendered)
+            literal = "Docs [click](https://evil.example/x) *fast* ![logo](https://evil.example/img.png)"
+            # The title can appear in the conflict row and in the used-source /
+            # reference sections; every occurrence must be literal.
+            assert literal in rendered, (name, rendered)
+            assert rendered.count(literal) >= 1, (name, rendered)
+            assert state == before, name

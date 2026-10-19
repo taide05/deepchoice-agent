@@ -1,6 +1,6 @@
-"""Round-11 evidence-input repairs: constraints, source dates, change conditions.
+"""Evidence-input repairs: constraints, source dates, change conditions.
 
-The seventh report omitted required constraints/version conditions and had no
+The saved seventh report records unanswered version/constraint items and no
 explicit recommendation-reversal conditions. These tests prove the frozen
 request fields and source dates reach the actual synthesis and self-review
 payloads; they do not claim the model will use them correctly.

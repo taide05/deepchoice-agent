@@ -7,6 +7,20 @@ import re
 # losing the annotations of later links.
 HEADING_RE = re.compile(r"^(#{1,3})[ \t]+(.*)$", re.MULTILINE)
 
+# The display renderers HTML-escape and Markdown-escape untrusted labels/text.
+# The annotated artifact is still Markdown (the PDF path and the reading view
+# parse it again), so only the HTML layer is undone before the label is re-
+# inserted; Markdown escapes must stay so the second Markdown pass cannot
+# re-interpret a source title as a link/image/emphasis.
+def _plain_label(label: str) -> str:
+    """Undo the HTML entity layer of a display label, keeping Markdown escapes.
+
+    The caller re-escapes the result for the final HTML/Markdown: one HTML escape
+    for the annotated page, while the retained Markdown backslashes stay literal
+    on the second Markdown parse.
+    """
+    return html.unescape(label)
+
 
 def _iter_markdown_links(text: str):
     """Yield (start, end, label, url) for inline Markdown links.
@@ -104,7 +118,7 @@ def inject_citations(md: str, registry: list[dict]) -> str:
         if n is None:
             continue
         pieces.append(md[last:start])
-        pieces.append(f'{html.escape(title)}'
+        pieces.append(f'{html.escape(_plain_label(title))}'
                       f'<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>')
         last = end
     pieces.append(md[last:])

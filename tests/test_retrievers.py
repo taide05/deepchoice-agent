@@ -466,9 +466,12 @@ def test_tech_aliases_target_existing_keys():
 class TestTavilyQueryCoverage:
     """Every adapted query must reach the downstream result cap.
 
-    Seventh run (49cf0eee...): six adapted queries each returned up to three
-    results, but flatten-by-query then truncate to seven let queries 1-3 consume
-    the whole cap, so the baseline/exit-code/version queries never contributed.
+    Saved seventh material shows six adapted queries and only seven merged
+    Tavily rows, with no per-query raw responses stored. The old merge order is
+    therefore reproduced as a mechanism fixture here (three results per query,
+    cap seven): a flatten-by-query merge covers only queries 0-2, while the
+    round-robin merge covers 0-5. This proves the merge mechanism, not the
+    historical cause of that run's specific missing material.
     """
 
     @pytest.fixture(autouse=True)
@@ -500,8 +503,9 @@ class TestTavilyQueryCoverage:
             if query not in queries:
                 return self._response("https://sim.example/probe", "probe")
             i = queries.index(query)
-            # Three distinct results per query is the real shape that made the
-            # old flatten-then-truncate lose queries 3-5 under a cap of seven.
+            # Three distinct results per query is the documented merge shape used
+            # to demonstrate where a flatten-then-truncate merge loses queries 3-5
+            # under a cap of seven; it does not assert the saved run's raw shape.
             results = [{
                 "url": f"https://example.com/{i}/{j}",
                 "title": f"result {i}/{j}", "content": "body text",
@@ -519,8 +523,9 @@ class TestTavilyQueryCoverage:
         assert result["status"] == "success", result.get("error")
         urls = [r["url"] for r in result["results"]]
         assert len(urls) == 7
-        # All six queries are represented; the old flatten+truncate returned only
-        # queries 0, 1 and 2 here, so this assertion is discriminating.
+        # All six queries are represented; the old flatten+truncate algorithm
+        # yields only queries 0, 1 and 2 for this simulated fixture, so the
+        # assertion discriminates the merge implementations (not the saved run).
         assert {url.split("/")[3] for url in urls} == set("012345"), urls
         # Fairness: query 0 does not occupy three slots before later queries.
         assert sum(1 for url in urls if "/0/" in url) <= 2, urls
@@ -538,12 +543,28 @@ class TestTavilyQueryCoverage:
         assert len(interleave_batches(batches, 2)) == 2
         assert [r["url"] for r in interleave_batches([], 7)] == []
 
+    def test_empty_or_missing_urls_do_not_consume_the_cap(self):
+        """The pre-interleave merge skipped a result with no URL; losing that
+        boundary let an empty-URL row occupy a slot and push a usable result out."""
+        from deepchoice.retrievers.tavily_search import interleave_batches
+        batches = [
+            [{"url": ""}, {"url": "https://a"}, {"url": "https://b"}],
+            [{"url": ""}, {"url": "https://c"}],
+            [{}, {"url": "https://d"}],
+        ]
+        merged = interleave_batches(batches, 2)
+        assert [r.get("url") for r in merged] == ["https://a", "https://c"], merged
+        assert all(r.get("url") for r in merged), merged
+        # A batch that is entirely empty/missing URLs still terminates.
+        assert interleave_batches([[{"url": ""}, {}]], 5) == []
+
 class TestGitHubMetadataIsNotEvidence:
     @pytest.mark.asyncio
     async def test_repository_metadata_rows_are_marked_body_less(self, monkeypatch):
         """GitHub repo search returns stars/forks/description, not README text.
-        The seventh run's `gitleaks/gitleaks` 99-character metadata row was
-        numbered as a citable source; it must stay an identifying link only."""
+        The saved seventh snapshot contains a 99-character `gitleaks/gitleaks`
+        metadata body in the citable material; this retriever now marks such a
+        row body-less, so it stays an identifying navigation link only."""
         from deepchoice.retrievers import github_rate
         from deepchoice.retrievers.github_api import GitHubSearch
 

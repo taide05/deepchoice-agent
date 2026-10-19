@@ -1,7 +1,6 @@
 from ..agents.conclusion_synthesizer import clean_label
 from .basis import (
-    escape_display_text,
-    escape_markdown_label,
+    escape_markdown_text,
     source_provenance_note,
     used_sources,
 )
@@ -15,11 +14,6 @@ def _lang(query: str) -> str:
 def _cell(value) -> str:
     """A markdown table cell: one line, and no cell separator inside it."""
     return " ".join(str(value or "").split()).replace("|", "\\|") or "—"
-
-
-def _link(text: str, src: dict) -> str:
-    url = (src or {}).get("url", "")
-    return f"[{text}]({url})" if url else text
 
 
 def _has_body(src: dict) -> bool:
@@ -42,13 +36,12 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
     claim = " ".join(str(claim).split())
     if len(claim) > 240:
         claim = claim[:240].rstrip() + "…"
-    label = title or claim or "N/A"
+    label = escape_markdown_text(title or claim or "N/A")
     url = src.get("url", "")
-    link = (f"[{escape_markdown_label(label)}]({url})" if url
-            else escape_display_text(label))
+    link = f"[{label}]({url})" if url else label
     excerpt = ""
     if title and claim and claim != title:
-        excerpt = f" — {escape_display_text(claim)}"
+        excerpt = f" — {escape_markdown_text(claim)}"
     if _has_body(src):
         return f"{link}{excerpt}"
     note = "无正文（仅导航链接）" if lang == "zh" else \
@@ -221,7 +214,7 @@ def render(state: dict) -> str:
     if used:
         for src in used[:12]:
             note = source_provenance_note(src, lang)
-            lines.append(f"- [{src['title']}]({src['url']}){note}")
+            lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}){note}")
     else:
         lines.append(L["no_used_source"][lang])
 

@@ -10,11 +10,12 @@ def interleave_batches(batches: list[list[dict]], max_results: int) -> list[dict
     """Merge per-query result batches with fair query coverage.
 
     Each query's results are taken one at a time, round-robin, before any query
-    contributes a second result. The previous flatten-by-query-then-truncate
-    merge let the first queries consume the whole cap, so later adapted queries
-    (for example a baseline/exit-code/version sub-question) never reached the
-    downstream stages even though their results were fetched. Deduplicate by URL
-    and keep the caller's result cap and ordering semantics.
+    contributes a second result. A flatten-by-query-then-truncate merge lets the
+    first queries consume the whole cap, so later adapted queries (for example a
+    baseline/exit-code/version sub-question) may not reach the downstream stages.
+    Deduplicate by URL and keep the caller's result cap and ordering semantics.
+    A result without a URL has no usable identity; it is skipped rather than
+    allowed to consume a cap slot and push a valid result out.
     """
     merged: list[dict] = []
     seen_urls: set[str] = set()
@@ -27,10 +28,11 @@ def interleave_batches(batches: list[list[dict]], max_results: int) -> list[dict
                 continue
             item = batch[index]
             url = item.get("url", "")
-            if url and url in seen_urls:
+            if not url:
                 continue
-            if url:
-                seen_urls.add(url)
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
             merged.append(item)
         index += 1
     return merged

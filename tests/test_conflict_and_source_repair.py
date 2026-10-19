@@ -467,10 +467,10 @@ class TestSourceEvaluation:
             "matching titles alone produced a strong chain"
 
 class TestClaimsComeFromBodies:
-    """Seventh run: conflict detection used article titles as Claim A/B and
-    persisted them, so a comparison of two titles was arbitrated as if it were
-    a factual disagreement. Claims must come from collected bodies, and a source
-    without a body must not supply one."""
+    """The saved seventh snapshot records conflict claim_a/claim_b as article
+    titles (observed output). The current contract requires claims to come from
+    collected bodies, and a source without a body must not supply one; this is a
+    mechanism contract, not proof that every old conflict had that cause."""
 
     def test_a_bodyless_or_metadata_source_has_no_comparable_claim(self):
         assert cd.comparable_claim({

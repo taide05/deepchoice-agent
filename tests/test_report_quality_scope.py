@@ -1,9 +1,9 @@
 """The A/B/C/D checklist is structural only; it must not be described as quality.
 
-Seventh-run diagnosis and the updated content protocol both reject treating the
-five deterministic keyword/structure checks as a deliverable or production-ready
-grade. Historical benchmark numbers stay historical; this test pins the active
-code's labels and output scope.
+The seventh-run quality review and the updated content protocol both reject
+treating the five deterministic keyword/structure checks as a deliverable or
+production-ready grade. Historical benchmark numbers stay historical; this test
+pins the active code's labels and output scope.
 """
 import inspect
 

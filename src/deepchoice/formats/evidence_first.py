@@ -1,6 +1,5 @@
 from .basis import (
-    escape_display_text,
-    escape_markdown_label,
+    escape_markdown_text,
     source_provenance_note,
     used_sources,
 )
@@ -9,11 +8,6 @@ from .coverage import derive_data_source_note
 
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
-
-
-def _link(text: str, src: dict) -> str:
-    url = (src or {}).get("url", "")
-    return f"[{text}]({url})" if url else text
 
 
 def _has_body(src: dict) -> bool:
@@ -36,13 +30,12 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
     claim = " ".join(str(claim or "").split())
     if len(claim) > 240:
         claim = claim[:240].rstrip() + "…"
-    label = title or claim or "N/A"
+    label = escape_markdown_text(title or claim or "N/A")
     url = src.get("url", "")
-    link = (f"[{escape_markdown_label(label)}]({url})" if url
-            else escape_display_text(label))
+    link = f"[{label}]({url})" if url else label
     excerpt = ""
     if title and claim and claim != title:
-        excerpt = f" — {escape_display_text(claim)}"
+        excerpt = f" — {escape_markdown_text(claim)}"
     if _has_body(src):
         return f"{link}{excerpt}"
     note = "无正文（仅导航链接）" if lang == "zh" else \
@@ -125,7 +118,7 @@ def render(state: dict) -> str:
         lines.append("")
         for src in used[:12]:
             note = source_provenance_note(src, lang)
-            lines.append(f"- [{src['title']}]({src['url']}) ×{src['citations']}{note}")
+            lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")
     else:
         lines.append(T["no_used_source"][lang])
@@ -143,7 +136,7 @@ def render(state: dict) -> str:
             note = ("导航链接，无正文，不能作为依据。" if lang == "zh"
                     else "navigation link only, no body collected; not usable "
                          "as a basis.")
-            lines.append(f"- [{src.get('title', '')}]({url}) — {note}")
+            lines.append(f"- [{escape_markdown_text(src.get('title', ''))}]({url}) — {note}")
         lines.append("")
 
     retrieved = sum(len(c.get("sources") or []) for c in chains)

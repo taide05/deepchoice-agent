@@ -16,7 +16,30 @@ manufacture a judgement the pipeline never made.
 """
 from __future__ import annotations
 
+import html
 import re
+
+# Markdown punctuation that can start inline formatting/links/headings. Python-
+# Markdown unescapes a backslash before these, so a backslash makes the character
+# display as literal text. `<`, `>` and `&` are HTML-escaped first, which also
+# neutralizes raw HTML and autolinks; escaping them with a backslash would leave
+# the backslash visible in some renderers.
+_MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_\[\]()#+.!-])")
+
+
+def escape_markdown_text(text: str) -> str:
+    """Render untrusted stored text as literal Markdown text.
+
+    Source titles, claim excerpts and metadata are display data, not authored
+    report prose. A scraped body can contain raw HTML (`<img>`), an autolink
+    (`<https://…>`) or Markdown formatting (`*bold*`, backticks, tags). This
+    helper keeps all of them literal while preserving the stored value itself;
+    it is display-only and never mutates the source record. The same helper is
+    used for link labels and plain text so the report has one escaping rule.
+    """
+    normalized = " ".join(str(text or "").split())
+    escaped = html.escape(normalized, quote=False)
+    return _MARKDOWN_ESCAPE_RE.sub(r"\\\1", escaped)
 
 
 def _registered_citation_bindings(rec: dict) -> dict | None:
@@ -153,31 +176,6 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
         if existing is not entry:
             existing["citations"] += entry["citations"]
     return list(used.values())
-
-
-def escape_markdown_label(text: str) -> str:
-    """Escape brackets/backslashes in a Markdown link label.
-
-    A source title is registered data, not report prose; it may contain `[2026]`.
-    Escaping keeps the label one identity while preserving the displayed title.
-    """
-    return (str(text or "")
-            .replace("\\", "\\\\")
-            .replace("[", "\\[")
-            .replace("]", "\\]"))
-
-
-def escape_display_text(text: str) -> str:
-    """Escape brackets in a plain-text claim excerpt shown next to its source.
-
-    Scraped body text can contain `](http…)`; left unescaped it would turn a
-    quoted excerpt into a live link. This is presentation escaping only: the
-    stored claim and source identity are unchanged.
-    """
-    return (str(text or "")
-            .replace("\\", "\\\\")
-            .replace("[", "\\[")
-            .replace("]", "\\]"))
 
 
 def source_provenance_note(src: dict, lang: str) -> str:
