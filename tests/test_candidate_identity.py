@@ -71,8 +71,11 @@ class TestOrdinaryWordsDoNotIntroduceProducts:
         assert "postgresql" in keys, "a candidate's own name must still resolve"
 
     @pytest.mark.asyncio
-    async def test_adapted_query_words_cannot_add_official_sources(self):
+    async def test_adapted_query_words_cannot_add_official_sources(self, monkeypatch):
         """Ordinary search words must not become research targets."""
+        async def fake_fetch(self, url):
+            return {"ok": False, "url": url, "error": "offline_test"}
+        monkeypatch.setattr(OfficialSearch, "_fetch_official_body", fake_fetch)
         search = OfficialSearch()
         out = await search._do_search(
             "which vector store", [], 7,
@@ -247,14 +250,19 @@ class TestNavigationLinksAreNotCitable:
                         "collected, so it states nothing about this question.")})
 
     @pytest.mark.asyncio
-    async def test_official_retriever_marks_its_entries_as_body_less(self):
-        """Drive the real retriever: its entries must be non-citable."""
+    async def test_official_retriever_fetches_body_for_its_entries(self, monkeypatch):
+        """A mapped official page now supplies a bounded body, not just a link."""
+        async def fake_fetch(self, url):
+            return {"ok": True, "url": url, "body_url": url, "title": "Official docs",
+                    "body": "PostgreSQL documents the mechanism.", "source_chars": 38,
+                    "stored_chars": 38, "truncated": False, "bytes": 30,
+                    "content_type": "text/html"}
+        monkeypatch.setattr(OfficialSearch, "_fetch_official_body", fake_fetch)
         search = OfficialSearch()
         out = await search._do_search(
             "pgvector on RDS", [], 10, [], ["PostgreSQL"])
         assert out, "the candidate should resolve a curated docs entry"
-        for entry in out:
-            assert has_factual_content(entry) is False, entry
+        assert all(has_factual_content(entry) for entry in out), out
 
     def test_official_placeholder_never_enters_the_citation_registry(self):
         """The renderer's numbered citation path must exclude it too."""

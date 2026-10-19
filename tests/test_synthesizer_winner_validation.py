@@ -38,9 +38,15 @@ class TestPromptGuards:
     def test_synthesis_prompt_requires_verbatim_titles(self):
         assert "VERBATIM" in cs_mod.SYNTHESIS_PROMPT
 
-    def test_synthesis_prompt_requires_every_sentence_cited(self):
-        assert "EVERY sentence" in cs_mod.SYNTHESIS_PROMPT
-        assert "no sentence or field may be left uncited" in cs_mod.SYNTHESIS_PROMPT
+    def test_synthesis_prompt_requires_cited_factual_claims_not_every_sentence(self):
+        prompt = cs_mod.SYNTHESIS_PROMPT
+        assert "CITE FACTUAL CLAIMS, NOT EVERY SENTENCE" in prompt
+        assert "must NOT be given an unrelated citation" in prompt
+        assert "EVERY sentence" not in prompt
+        assert "no sentence or field may be left uncited" not in prompt
+        # Explicit gaps/inferences are allowed without a fabricated citation.
+        assert "explicit gap/inference" in prompt
+        assert "confidence_rationale" in prompt and "consistent with `confidence`" in prompt
 
     def test_summarize_chains_includes_up_to_four_titles(self):
         # Each source carries a body, since a source without one is a navigation

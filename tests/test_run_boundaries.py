@@ -661,6 +661,13 @@ class TestNormalPathIsNotKilled:
         assert record["forced"] is False, f"a normal run was killed: {record}"
         assert record["reason"] == "service_exited"
         assert child.returncode == 0
+        # A normal exit must leave durable evidence even when the launcher's
+        # redirected stdout is lost; otherwise the exit is unprovable later.
+        persisted = json.loads((tmp_path / "guard_record.json").read_text(encoding="utf-8"))
+        assert persisted["reason"] == "service_exited"
+        assert persisted["task_id"] == "normal-task"
+        assert persisted["run_state"] == "complete"
+        assert persisted["record_path"].endswith("guard_record.json")
 
     def test_a_finished_older_run_never_supplies_the_deadline(self, tmp_path):
         outputs = tmp_path / ("outputs")

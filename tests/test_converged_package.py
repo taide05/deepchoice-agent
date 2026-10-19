@@ -337,6 +337,9 @@ class TestReviewCorrectionsReachTheReport:
         assert out["confidence"] == out["final_recommendation"]["confidence"]
         levels = {"low": 0, "medium": 1, "high": 2}
         assert levels[out["confidence"]] <= levels[state["final_recommendation"]["confidence"]]
+        rationale = out["final_recommendation"]["confidence_rationale"]
+        assert f"最终置信度为 {out['confidence']}" in rationale, rationale
+        assert "5/6" in rationale and "1 个知识缺口" in rationale, rationale
 
     def test_the_served_report_reflects_the_correction(self):
         state = _failed_run_state()
@@ -345,6 +348,33 @@ class TestReviewCorrectionsReachTheReport:
         assert "500 亿" in report
         assert "5 万亿" not in report
         assert "撤回" in report
+
+    def test_review_failure_does_not_invent_a_zero_of_six_rationale(self):
+        state = _failed_run_state()
+        prior = state["final_recommendation"]["confidence_rationale"]
+
+        async def fail_call_model(prompt, **kwargs):
+            raise RuntimeError("review call failed")
+
+        real = sr.call_model
+        sr.call_model = fail_call_model
+        try:
+            out = asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
+        finally:
+            sr.call_model = real
+        served = out["final_recommendation"]["confidence_rationale"]
+        assert served == prior, (prior, served)
+        assert "0/6" not in served, served
+
+    def test_a_malformed_passed_count_does_not_fail_the_review(self):
+        state = _failed_run_state()
+        prior = state["final_recommendation"]["confidence_rationale"]
+        review = {"checks": [{"item": 1, "passed": True}],
+                  "passed_count": "not-a-number", "confidence": "low",
+                  "knowledge_gaps": [], "corrections": []}
+        out = self._run_with(review, state)
+        served = out["final_recommendation"]["confidence_rationale"]
+        assert served == prior, (prior, served)
 
     def test_a_top_level_field_the_report_prints_is_correctable(self):
         """The recommendation, winner rationale and confidence rationale are

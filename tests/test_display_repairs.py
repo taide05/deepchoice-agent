@@ -231,6 +231,42 @@ class TestActualMarkdownRendering:
             assert "&amp;lt;b&amp;gt;" not in annotated, (name, annotated)
 
 
+class TestEvidenceLimitsAndTradeoffImpact:
+    def test_tradeoff_impact_and_evidence_summary_reach_the_default_report(self):
+        rec = {
+            "winner": "Gitleaks",
+            "winner_rationale": "Only one saved body states the scan mechanism.",
+            "recommendation": "Use Gitleaks for the frozen GitLab scene.",
+            "trade_offs": [{
+                "dimension": "Detection vs false positives",
+                "finding": "The saved body reports a trade-off but no accuracy measurement.",
+                "impact": "A team with no dedicated security reviewer must budget triage time.",
+            }],
+            "evidence_summary": ("Only third-party blogs were saved; the official page was "
+                                 "a navigation link and the scan time is unmeasured."),
+            "confidence": "low",
+            "confidence_rationale": "The self-review recorded missing official evidence.",
+            "ranked_options": [],
+        }
+        md = render_www(_state(final_recommendation=rec))
+        assert "A team with no dedicated security reviewer must budget triage time." in md, md
+        assert "Only third-party blogs were saved" in md, md
+        assert "### Evidence Summary" in md, md
+
+    def test_duplicate_winner_rationale_is_not_printed_twice(self):
+        repeated = "Use Gitleaks for the frozen GitLab scene."
+        rec = {
+            "winner": "Gitleaks",
+            "winner_rationale": repeated,
+            "recommendation": repeated,
+            "trade_offs": [],
+            "evidence_summary": "",
+            "confidence": "low",
+            "ranked_options": [],
+        }
+        md = render_www(_state(final_recommendation=rec))
+        assert md.count(repeated) == 1, md
+
 class TestAnnotatedRendering:
     """The annotated artifact is Markdown for the PDF/reading-view consumers.
 

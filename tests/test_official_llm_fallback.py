@@ -9,44 +9,31 @@ from deepchoice.retrievers import official as official_mod
 from deepchoice.retrievers.learned_docs import load_learned
 
 
-class _FakeResp:
-    status_code = 200
-    headers = {"content-type": "text/html"}
+class _FakeFetch:
+    """A bounded page-fetch seam: success returns a body, failure a nav row."""
 
-    def json(self):
-        return {"info": {"version": "1.0", "summary": "s", "package_url": "https://pypi.org/project/x/"}}
-
-    def raise_for_status(self):
-        pass
-
-
-class _FakeClient:
-    def __init__(self, fail_urls=()):
+    def __init__(self, fail_urls=(), body="Official page body with the documented mechanism."):
         self.fail_urls = fail_urls
+        self.body = body
         self.called_urls = []
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def get(self, url):
+    async def __call__(self, url):
         self.called_urls.append(url)
         if url in self.fail_urls:
-            return type("R", (), {"status_code": 404, "headers": {}})()
-        if "pypi.org" in url:
-            return _FakeResp()
-        return type("R", (), {"status_code": 200, "headers": {"content-type": "text/html"}})()
+            return {"ok": False, "url": url, "error": "http:404"}
+        return {
+            "ok": True, "url": url, "body_url": url, "title": "Official docs",
+            "body": self.body, "source_chars": len(self.body),
+            "stored_chars": len(self.body), "truncated": False,
+            "bytes": len(self.body), "content_type": "text/html",
+        }
 
 
 def _patch_outbound(monkeypatch, fail_urls=()):
-    """official.py now routes through the outbound channel layer instead of a
-    raw httpx.AsyncClient; patch make_client to return the fake client."""
-    async def make_client(source):
-        return _FakeClient(fail_urls)
-
-    monkeypatch.setattr(official_mod._outbound, "make_client", make_client)
+    """Patch the single seam that supplies a bounded official page body."""
+    fake = _FakeFetch(fail_urls)
+    monkeypatch.setattr(official_mod, "_fetch_official_page", fake)
+    return fake
 
 
 @pytest.fixture(autouse=True)
@@ -85,11 +72,14 @@ class TestFallbackConcurrency:
                 await asyncio.wait_for(release.wait(), timeout=3)
             return f"https://{term}.dev/docs"
 
-        async def fake_verify(self, url):
-            return True
+        async def fake_fetch(self, url):
+            return {"ok": True, "url": url, "body_url": url, "title": "docs",
+                    "body": "documented body", "source_chars": 15,
+                    "stored_chars": 15, "truncated": False,
+                    "bytes": 15, "content_type": "text/html"}
 
         monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
-        monkeypatch.setattr(official_mod.OfficialSearch, "_verify_reachable", fake_verify)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
 
         async def drive():
             retriever = official_mod.OfficialSearch()
@@ -119,7 +109,7 @@ class TestLLMFallback:
         out = asyncio.run(_run_search(monkeypatch, {"url": "https://supabase.com/docs"}))
         urls = [r["url"] for r in out]
         assert "https://supabase.com/docs" in urls
-        assert load_learned()["supabase"]["via"] == "llm"
+        assert load_learned()["supabase"]["via"] == "body_fetch"
 
     def test_url_not_matching_term_domain_is_rejected(self, monkeypatch):
         import asyncio
@@ -128,13 +118,16 @@ class TestLLMFallback:
         assert "https://evil.example.com/docs" not in urls
         assert "supabase" not in load_learned()
 
-    def test_unreachable_url_is_rejected(self, monkeypatch):
+    def test_unreachable_url_is_kept_only_as_navigation(self, monkeypatch):
         import asyncio
         out = asyncio.run(_run_search(
             monkeypatch, {"url": "https://supabase.com/docs"},
             fail_urls=("https://supabase.com/docs",),
         ))
-        assert all("supabase.com" not in r["url"] for r in out)
+        nav = [r for r in out if "supabase.com" in r["url"]]
+        assert nav, out
+        assert all(r["has_body"] is False for r in nav), nav
+        assert all(r.get("body_error") for r in nav), nav
 
     def test_llm_unsure_returns_null(self, monkeypatch):
         import asyncio
@@ -237,13 +230,7 @@ class TestPyPIPassRestriction:
     (e.g. the 'flag' PyPI package) and the synthesizer recommended them."""
 
     def _client_with_recorder(self, monkeypatch):
-        client = _FakeClient()
-
-        async def _make_client(source):
-            return client
-
-        monkeypatch.setattr(official_mod._outbound, "make_client", _make_client)
-        return client
+        return _patch_outbound(monkeypatch)
 
     async def _search(self, query, monkeypatch, llm_result=None, candidate_techs=None):
         async def fake_call_model(prompt, model=None, response_format=None, timeout=None, **kw):

@@ -173,11 +173,26 @@ class TestSourceEvaluatorAgent:
 
         scores = result["source_scores"]
         assert len(scores) == 2
-        assert scores[0]["rank"] == 1
-        assert scores[1]["rank"] == 2
         assert scores[0]["total_score"] > scores[1]["total_score"]
+        assert "rank" not in scores[0]  # order is the signal; no unused row field
         assert all("authority" in s["scores"] for s in scores)
         assert all("timeliness" in s["scores"] for s in scores)
+
+    @pytest.mark.asyncio
+    async def test_official_fetch_provenance_is_preserved(self):
+        state = {"search_results": [{"source": "official", "results": [{
+            "url": "https://docs.example.com/page",
+            "title": "Docs",
+            "snippet": "bounded body",
+            "has_body": True,
+            "body_url": "https://docs.example.com/canonical",
+            "body_truncated": True,
+            "fetch_status": "body",
+        }]}]}
+        row = (await SourceEvaluatorAgent().run(state))["source_scores"][0]
+        assert row["body_url"] == "https://docs.example.com/canonical"
+        assert row["body_truncated"] is True
+        assert row["fetch_status"] == "body"
 
     @pytest.mark.asyncio
     async def test_empty_results(self):

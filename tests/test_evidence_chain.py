@@ -24,6 +24,19 @@ class TestBuildEvidenceChain:
         assert chains[0]["retrieval_score"] == 8.5
         assert chains[0]["disputed"] is False
 
+    def test_page_fetch_provenance_travels_with_the_source(self):
+        scores = [{
+            "url": "https://docs.example.com", "title": "Docs",
+            "snippet": "bounded body", "total_score": 8.5,
+            "has_body": True, "body_url": "https://docs.example.com/canonical",
+            "body_chars": 120, "body_stored_chars": 100, "body_truncated": True,
+            "fetch_status": "body",
+        }]
+        source = build_evidence_chain(scores, [])[0]["sources"][0]
+        assert source["body_url"] == "https://docs.example.com/canonical"
+        assert source["body_truncated"] is True
+        assert source["fetch_status"] == "body"
+
     def test_mid_score_does_not_become_moderate_evidence(self):
         scores = [{
             "url": "https://blog.example.com",
