@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from deepchoice import outbound
+from deepchoice.outbound import safe_fetch as safe_fetch_mod
 from deepchoice.retrievers import official as official_mod
 from deepchoice.retrievers import official_fetch
 from deepchoice.retrievers.official_fetch import (
@@ -29,9 +31,18 @@ class _PublicPolicy:
         return ResolvedUrl(url, "docs.example.com", 443, ("93.184.216.34",))
 
 
+@pytest.fixture(autouse=True)
+def _reset_official_fetch_budgets():
+    official_fetch.reset_research_budgets()
+    outbound.reset_for_tests()
+    yield
+    official_fetch.reset_research_budgets()
+    outbound.reset_for_tests()
+
+
 def _patch_transport(monkeypatch, handler):
     monkeypatch.setattr(
-        official_fetch, "_transport_factory",
+        safe_fetch_mod, "_transport_factory",
         lambda pinned_ip: httpx.MockTransport(handler),
     )
 
@@ -46,7 +57,7 @@ def test_transport_construction_failure_does_not_consume_http_budget(monkeypatch
     def fail_factory(pinned_ip):
         raise RuntimeError("transport setup failed")
 
-    monkeypatch.setattr(official_fetch, "_transport_factory", fail_factory)
+    monkeypatch.setattr(safe_fetch_mod, "_transport_factory", fail_factory)
     budget = OfficialFetchBudget()
     result = asyncio.run(fetch_official_page(
         "https://docs.example.com/page", policy=_PublicPolicy(), budget=budget,
@@ -55,6 +66,37 @@ def test_transport_construction_failure_does_not_consume_http_budget(monkeypatch
     ))
     assert result["ok"] is False
     assert budget.http_requests == 0
+
+
+def test_gzip_is_rejected_before_decompression(monkeypatch):
+    import gzip
+
+    compressed = gzip.compress(DOCS_HTML.encode())
+    _patch_transport(monkeypatch, lambda request: httpx.Response(
+        200, headers={"content-type": "text/html", "content-encoding": "gzip"},
+        content=compressed))
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/page", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(), deadline_s=1.0,
+        max_response_bytes=100_000, max_redirects=2, store_chars=1000,
+    ))
+    assert result["ok"] is False
+    assert result["failure"].startswith("content_encoding:")
+    assert result["budget"]["bytes_read"] == 0
+    assert result["budget"]["bytes_retained"] == 0
+
+
+def test_identity_encoding_is_accepted(monkeypatch):
+    _patch_transport(monkeypatch, lambda request: httpx.Response(
+        200, headers={"content-type": "text/html", "content-encoding": "identity"},
+        content=DOCS_HTML.encode()))
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/page", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(), deadline_s=1.0,
+        max_response_bytes=100_000, max_redirects=2, store_chars=1000,
+    ))
+    assert result["ok"] is True
+    assert result["budget"]["bytes_read"] > 0
 
 
 def test_fetched_page_is_citable_and_records_page_storage_split(monkeypatch):
@@ -244,82 +286,75 @@ def test_pinned_backend_connects_to_validated_ip_not_hostname(monkeypatch):
             records.append((host, port))
             return object()
 
-    monkeypatch.setattr(official_fetch.httpcore, "AnyIOBackend", FakeBackend)
-    backend = official_fetch._PinnedNetworkBackend("93.184.216.34")
+    monkeypatch.setattr(safe_fetch_mod.httpcore, "AnyIOBackend", FakeBackend)
+    backend = safe_fetch_mod._PinnedNetworkBackend("93.184.216.34")
     asyncio.run(backend.connect_tcp("docs.example.com", 443))
     assert records == [("93.184.216.34", 443)]
 
 
+def _resolver(order, channels):
+    cfg = SimpleNamespace(order_for=lambda source: order)
+    return outbound.ChannelResolver(cfg=cfg, channels=channels)
+
+
 def test_proxy_or_forward_route_is_rejected_without_fetch(monkeypatch):
-    class Cfg:
-        def order_for(self, source):
-            return ("local-proxy",)
-
-    class FakeResolver:
-        audit = []
-        cfg = Cfg()
-        channels = [SimpleNamespace(name="local-proxy", kind="local-proxy",
-                                    proxy_url="http://127.0.0.1:8080")]
-
-    monkeypatch.setattr(official_mod._outbound, "get_resolver", lambda: FakeResolver())
+    resolver = _resolver(
+        ("local-proxy",),
+        [SimpleNamespace(name="local-proxy", kind="local-proxy",
+                         proxy_url="http://127.0.0.1:8080")],
+    )
+    outbound.set_resolver(resolver)
     budget = OfficialFetchBudget()
-    channel, error = official_mod._resolve_direct_route()
-    assert channel is None
-    assert error == "route_unsupported"
-
     search = official_mod.OfficialSearch()
     search._fetch_budget = budget
     result = asyncio.run(search._fetch_official_body("https://docs.example.com/page"))
     assert result["ok"] is False
     assert result["failure"] == "route_unsupported"
     assert budget.http_requests == 0
-    assert budget.probe_requests == 0
+    assert [entry.kind for entry in resolver.audit] == ["safe_fetch"]
+    assert resolver.audit[0].channel is None
 
 
 def test_configured_proxy_is_rejected_before_probe(monkeypatch):
-    calls = []
-
-    class Cfg:
-        def order_for(self, source):
-            return ("local-proxy", "direct")
-
-    class FakeResolver:
-        audit = []
-        cfg = Cfg()
-        channels = [
-            SimpleNamespace(name="local-proxy", kind="local-proxy",
-                            proxy_url="http://127.0.0.1:8080"),
-            SimpleNamespace(name="direct", kind="direct"),
-        ]
-
-        async def resolve(self, source):
-            calls.append(source)
-            return SimpleNamespace(kind="direct")
-
-    monkeypatch.setattr(official_mod._outbound, "get_resolver", lambda: FakeResolver())
+    resolver = _resolver(
+        ("local-proxy", "direct"),
+        [SimpleNamespace(name="local-proxy", kind="local-proxy",
+                         proxy_url="http://127.0.0.1:8080"),
+         SimpleNamespace(name="direct", kind="direct")],
+    )
+    outbound.set_resolver(resolver)
     budget = OfficialFetchBudget()
-    channel, error = official_mod._resolve_direct_route()
-    assert channel is None
-    assert error == "route_unsupported"
-    assert calls == []
-    assert budget.probe_requests == 0
+    search = official_mod.OfficialSearch()
+    search._fetch_budget = budget
+    result = asyncio.run(search._fetch_official_body("https://docs.example.com/page"))
+    assert result["failure"] == "route_unsupported"
+    assert [entry.kind for entry in resolver.audit] == ["safe_fetch"]
+    assert budget.http_requests == 0
 
 
 def test_direct_route_selection_makes_no_network_probe(monkeypatch):
-    class Cfg:
-        def order_for(self, source):
-            return ("direct",)
-
-    class FakeResolver:
-        cfg = Cfg()
-        channels = [SimpleNamespace(name="direct", kind="direct")]
-
-    monkeypatch.setattr(official_mod._outbound, "get_resolver", lambda: FakeResolver())
-    budget = OfficialFetchBudget()
-    channel, error = official_mod._resolve_direct_route()
+    resolver = _resolver(("direct",),
+                         [SimpleNamespace(name="direct", kind="direct")])
+    channel, error = safe_fetch_mod.select_direct_channel(
+        resolver.cfg, resolver.channels)
     assert channel is not None and error is None
-    assert budget.probe_requests == 0
-    assert budget.http_requests == 0
+    assert resolver.audit == []
+
+
+def test_outbound_safe_entry_owns_route_and_audit(monkeypatch):
+    _patch_transport(monkeypatch, lambda request: _response(DOCS_HTML))
+    budget = OfficialFetchBudget()
+    resolver = outbound.get_resolver()
+    result = asyncio.run(outbound.safe_fetch_page(
+        "official", "https://docs.example.com/page",
+        request_budget=budget, policy=_PublicPolicy(),
+        deadline_s=1.0, max_response_bytes=100_000, max_redirects=2,
+    ))
+    assert result["ok"] is True
+    assert budget.http_requests == 1
+    assert [entry.kind for entry in resolver.audit] == ["safe_fetch"]
+    assert resolver.audit[0].channel == "direct"
+    assert resolver.audit[0].ok is True
 
 
 def test_fetch_connects_pinned_ip_but_keeps_original_host_in_url(monkeypatch):
@@ -334,7 +369,7 @@ def test_fetch_connects_pinned_ip_but_keeps_original_host_in_url(monkeypatch):
 
         return httpx.MockTransport(handler)
 
-    monkeypatch.setattr(official_fetch, "_transport_factory", factory)
+    monkeypatch.setattr(safe_fetch_mod, "_transport_factory", factory)
     result = asyncio.run(fetch_official_page(
         "https://docs.example.com/page", policy=_PublicPolicy(),
         budget=OfficialFetchBudget(), deadline_s=1.0,
@@ -372,7 +407,61 @@ def test_read_time_byte_cap_and_page_truncation_are_distinct(monkeypatch):
         assert result["stored_truncated"] is False
     else:
         assert result["failure"].startswith("not_prose:")
-    assert budget.bytes_read <= 300
+    assert budget.bytes_retained == 300
+    assert budget.bytes_read == len(payload)
+    assert budget.bytes_read > budget.bytes_retained
+    if result["ok"]:
+        assert result["bytes_read"] == budget.bytes_read
+        assert result["bytes_retained"] == budget.bytes_retained
+
+
+def test_client_construction_failure_does_not_consume_http_budget(monkeypatch):
+    _patch_transport(monkeypatch, lambda request: _response(DOCS_HTML))
+
+    class BadClient:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("client setup failed")
+
+    monkeypatch.setattr(safe_fetch_mod.httpx, "AsyncClient", BadClient)
+    budget = OfficialFetchBudget()
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/page", policy=_PublicPolicy(), budget=budget,
+        deadline_s=1.0, max_response_bytes=100_000, max_redirects=2,
+        store_chars=1000,
+    ))
+    assert result["ok"] is False
+    assert budget.http_requests == 0
+
+
+def test_research_budget_accumulates_on_reentry_and_is_isolated_by_identity(monkeypatch):
+    monkeypatch.setattr(official_fetch, "_research_identity", lambda: "run-A")
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", 2)
+    monkeypatch.setattr("deepchoice.outbound.resolver.SafeUrlPolicy",
+                        lambda: _PublicPolicy())
+    _patch_transport(monkeypatch, lambda request: _response(DOCS_HTML))
+    official_fetch.reset_research_budgets()
+
+    first = official_mod.OfficialSearch()
+    first_rows = asyncio.run(first._do_search(
+        "FastAPI vs Flask", [], 10, None, ["FastAPI", "Flask"]))
+    assert first._last_fetch_stats["page_attempts"] == 2
+    assert first._last_fetch_stats["http_requests"] == 2
+    assert all(r.get("has_body") for r in first_rows)
+
+    second = official_mod.OfficialSearch()
+    second_rows = asyncio.run(second._do_search(
+        "FastAPI vs Flask", [], 10, None, ["FastAPI", "Flask"]))
+    assert second._last_fetch_stats["page_attempts"] == 2
+    assert second._last_fetch_stats["http_requests"] == 2
+    assert all(r.get("body_error") == "page_attempt_budget_exhausted"
+               for r in second_rows), second_rows
+
+    monkeypatch.setattr(official_fetch, "_research_identity", lambda: "run-B")
+    third = official_mod.OfficialSearch()
+    third_rows = asyncio.run(third._do_search(
+        "FastAPI vs Flask", [], 10, None, ["FastAPI", "Flask"]))
+    assert third._last_fetch_stats["page_attempts"] == 2
+    assert all(r.get("has_body") for r in third_rows)
 
 
 def test_safe_url_policy_rejects_special_and_nat64_addresses():

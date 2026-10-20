@@ -429,6 +429,29 @@ class TestReviewCorrectionsReachTheReport:
         assert signal["corrections_applied"] == 0
         assert signal["corrections_rejected"] == 0
 
+    def test_duplicate_item_review_is_unavailable_through_the_agent(self):
+        state = _failed_run_state()
+        prior = state["final_recommendation"]["confidence_rationale"]
+        review = {
+            "checks": [
+                {"item": 1, "passed": True}, {"item": 1, "passed": True},
+                {"item": 2, "passed": True}, {"item": 3, "passed": True},
+                {"item": 4, "passed": True}, {"item": 5, "passed": True},
+            ],
+            "passed_count": 6, "confidence": "low", "knowledge_gaps": [],
+            "corrections": [{
+                "option": "ClickHouse", "field": "rationale", "action": "revise",
+                "corrected": "不能被不可用 review 应用。", "reason": "bad item set",
+            }],
+        }
+        out = self._run_with(review, state)
+        assert out["final_recommendation"]["confidence_rationale"] == prior
+        signal = out["quality_signals"][0]
+        assert signal["review_status"] == "unavailable"
+        assert signal["review_validation_error"] == "item_coverage_invalid"
+        assert signal["passed_count"] is None
+        assert signal["corrections_applied"] == 0
+
     def test_reviewer_payload_includes_synthesis_confidence(self):
         payload = _reviewer_payload(_failed_run_state())
         assert "Synthesis confidence to check:" in payload
@@ -514,6 +537,15 @@ class TestStrictReviewAccounting:
          "malformed_check"),
         ([{"item": index, "passed": index <= 3} for index in range(1, 7)], 5,
          "passed_count_mismatch"),
+        ([{"item": 1, "passed": True}, {"item": 1, "passed": True},
+          {"item": 2, "passed": True}, {"item": 3, "passed": True},
+          {"item": 4, "passed": True}, {"item": 5, "passed": True}], 6,
+         "item_coverage_invalid"),
+        ([{"item": index, "passed": True} for index in [1, 2, 3, 4, 5, 7]], 6,
+         "item_coverage_invalid"),
+        ([{"item": "1", "passed": True}] + [
+            {"item": index, "passed": True} for index in range(2, 7)], 6,
+         "invalid_item"),
     ])
     def test_invalid_accounting_is_unusable(self, checks, passed, error):
         count, got_error = sr._validate_review_counts(checks, passed)
