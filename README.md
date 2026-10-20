@@ -65,11 +65,11 @@ streamlit run frontend/app.py
 
 ### 官方来源正文抓取限制（实验分支，2026-10-19）
 
-实验分支的 official 来源现在按以下边界抓取正文；它只接受可固定 IP 的 direct 路由，代理和转发通道路由会明确拒绝：
+实验分支的 official 来源现在通过 `outbound.safe_fetch_page` 统一安全入口抓取正文；retriever 不再自行构造 HTTP client。它只接受可固定 IP 的 direct 路由，代理和转发通道路由会明确拒绝：
 
-- 页面尝试数与实际 HTTP 请求数分开计数；每次研究默认最多 2 次页面尝试、6 次 HTTP 请求（含重定向；official 路由选择只读配置，不再发网络探测请求），重定向都计入后者。
-- 单页共享总 deadline 15 s（覆盖配置路由选择、DNS、连接、重定向和读取）；响应读取上限 200,000 bytes，存储正文上限 8,000 字符，最多 3 跳重定向。
-- 只接受 `text/html`、`application/xhtml+xml`、`text/plain`；缺失或不允许的 content-type 明确失败，不因正文非空就当成可引用正文。
+- 页面尝试数与实际 HTTP 请求数分开计数；每次研究默认最多 2 次页面尝试、6 次 HTTP 请求（含重定向；official 路由选择只读配置，不再发网络探测请求），重定向都计入后者。预算按现有 `run_limits` 研究执行身份归属：同一研究重入检索累计，不同研究独立；当前默认图只检索一次，不把重入缺口写成已发生的真实超额。
+- 单页共享总 deadline 15 s（覆盖配置路由选择、DNS、连接、重定向和读取）；响应读取上限 200,000 bytes，存储正文上限 8,000 字符，最多 3 跳重定向。`bytes_read` 记录从流实际消费的字节（可能因块边界略超 cap），`bytes_retained` 记录截断后保留的字节；截断后的长度不会被称作全部读取量。
+- 只接受 `Content-Encoding: identity`；gzip 等编码在 `aiter_bytes` 之前明确拒绝，避免 HTTPX 先完整解压大块数据。缺失或不允许的 content-type 也明确失败，不因正文非空就当成可引用正文。
 - 结构性 prose 准入会拒绝检测到的纯菜单、导航、表单/登录页；非常规页面仍可能被误判，不声称覆盖所有站点。正文按“原页面提取 / 存储片段 / 模型可见窗口”三段分别记录 `body_page_chars`、`body_stored_chars`、`visible_chars` 与各自截断标志；没有官方页面元数据的非 official snippet 的整页范围为 unknown，不冒充整页。
 - 相关环境变量及默认值：`OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN=2`、`OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN=6`、`OFFICIAL_FETCH_TOTAL_DEADLINE_S=15`、`OFFICIAL_FETCH_MAX_BYTES=200000`、`OFFICIAL_BODY_STORE_CHARS=8000`、`EVIDENCE_WINDOW_CHARS=1600`。`EVIDENCE_WINDOW_CHARS` 是综合与自审共享的每源可见窗口，不等于整页完整性。
 
