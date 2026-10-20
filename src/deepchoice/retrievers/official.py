@@ -1,11 +1,8 @@
 import asyncio
-import ipaddress
 import os
-import socket
-from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
 
 from .. import outbound as _outbound
+from ..security.urls import SafeUrlPolicy
 from ..utils.llm import call_model
 from .base import BaseRetriever
 from .learned_docs import (
@@ -15,18 +12,22 @@ from .learned_docs import (
     learn,
     load_learned,
 )
+from .official_fetch import OfficialFetchBudget, fetch_official_page
 
-# A discovered official link is not a body. These bounds make the source layer
-# collect a bounded, traceable excerpt through the same routed outbound client
-# used for the rest of the retriever. They are deliberately small constants, not
-# a crawler: at most a few pages per run, one page per candidate, no link
-# following beyond safe HTTP redirects.
-OFFICIAL_FETCH_MAX_PER_RUN = int(os.environ.get("OFFICIAL_FETCH_MAX_PER_RUN", "2"))
+# A discovered official link is not a body. These are cumulative bounds for one
+# research run: page attempts and actual HTTP requests are counted separately.
+# Redirects consume the HTTP-request count; a proxy/forward route is rejected
+# rather than being allowed to bypass IP pinning. Route selection is
+# configuration-only and makes no network probe.
+OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN = int(
+    os.environ.get("OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", "2"))
+OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN = int(
+    os.environ.get("OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", "6"))
+OFFICIAL_FETCH_TOTAL_DEADLINE_S = float(
+    os.environ.get("OFFICIAL_FETCH_TOTAL_DEADLINE_S", "15"))
 OFFICIAL_FETCH_MAX_BYTES = int(os.environ.get("OFFICIAL_FETCH_MAX_BYTES", "200000"))
-OFFICIAL_FETCH_TIMEOUT_S = float(os.environ.get("OFFICIAL_FETCH_TIMEOUT_S", "10"))
 OFFICIAL_FETCH_MAX_REDIRECTS = 3
 OFFICIAL_BODY_STORE_CHARS = int(os.environ.get("OFFICIAL_BODY_STORE_CHARS", "8000"))
-_HTML_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.
@@ -167,195 +168,52 @@ TECH_DOCS: dict[str, dict[str, str]] = {
 }
 
 
-def _url_shape_ok(url: str) -> tuple[bool, str]:
-    """Cheap URL shape check before DNS/network work."""
-    try:
-        parsed = urlparse(url)
-    except ValueError:
-        return False, "invalid_url"
-    if parsed.scheme not in ("http", "https"):
-        return False, "scheme_not_http"
-    if not parsed.hostname or parsed.username or parsed.password:
-        return False, "host_or_userinfo"
-    try:
-        port = parsed.port
-    except ValueError:
-        return False, "invalid_port"
-    if port not in (None, 80, 443):
-        return False, "port_not_allowed"
-    return True, ""
+def _resolve_direct_route():
+    """Select a direct channel from configuration without a network probe.
 
-
-def _public_ip(host: str) -> bool:
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    # is_global rejects loopback, private, link-local, reserved, multicast,
-    # unspecified and RFC 6598 carrier-grade NAT (100.64.0.0/10), which the
-    # individual flags would otherwise miss.
-    return address.is_global
-
-
-def _resolve_host_ips(host: str, port: int) -> list[str]:
-    """Resolve a host for the safety check. Tests replace this seam."""
-    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    return sorted({info[4][0] for info in infos})
-
-
-async def _url_is_safe(url: str) -> tuple[bool, str]:
-    shape_ok, reason = _url_shape_ok(url)
-    if not shape_ok:
-        return False, reason
-    parsed = urlparse(url)
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    try:
-        ips = await asyncio.wait_for(
-            asyncio.to_thread(_resolve_host_ips, parsed.hostname, port), timeout=5)
-    except Exception:
-        return False, "dns_unavailable"
-    if not ips or not all(_public_ip(ip) for ip in ips):
-        return False, "non_public_ip"
-    return True, ""
-
-
-class _BodyTextExtractor(HTMLParser):
-    """Small bounded HTML-to-text extractor for official documentation pages."""
-
-    _SKIP = {"script", "style", "noscript", "template", "svg", "canvas"}
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
-        self.title_parts: list[str] = []
-        self._skip_depth = 0
-        self._in_title = False
-
-    def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag in self._SKIP:
-            self._skip_depth += 1
-        elif tag == "title":
-            self._in_title = True
-
-    def handle_endtag(self, tag):
-        tag = tag.lower()
-        if tag in self._SKIP and self._skip_depth:
-            self._skip_depth -= 1
-        elif tag == "title":
-            self._in_title = False
-
-    def handle_data(self, data):
-        if self._skip_depth:
-            return
-        text = " ".join(data.split())
-        if not text:
-            return
-        if self._in_title:
-            self.title_parts.append(text)
-        else:
-            self.parts.append(text)
-
-
-def _extract_official_text(raw: str) -> tuple[str, str]:
-    parser = _BodyTextExtractor()
-    try:
-        parser.feed(raw)
-    except Exception:
-        # HTMLParser can accept partial documents, but never turn a parser error
-        # into an unbounded exception path.
-        return "", ""
-    title = " ".join(" ".join(parser.title_parts).split())
-    text = " ".join(" ".join(parser.parts).split())
-    return title, text
-
-
-async def _fetch_official_page(url: str) -> dict:
-    """Fetch one official page with bounded size, timeout, redirects and safety.
-
-    Returns a plain result record; never raises for remote failures. The caller
-    must keep a failed fetch as a navigation link (has_body=False), not as
-    evidence, and must not synthesize body text. ``url`` remains the registered
-    identity even if a safe redirect supplied the body.
+    A validated DNS answer can only be enforced when the actual TCP peer is
+    pinned. A proxy or forwarding channel terminates/forwards the connection
+    somewhere else, so it cannot inherit that proof and is rejected before any
+    probe. The direct channel is selected from configuration; the pinned content
+    request itself is the connectivity check. No probe request is made, so there
+    is no uncounted probe to exclude from the request budget.
     """
-    current = url
-    visited: set[str] = set()
-    for redirect_count in range(OFFICIAL_FETCH_MAX_REDIRECTS + 1):
-        if current in visited:
-            return {"ok": False, "url": current, "error": "redirect_loop"}
-        visited.add(current)
-        safe, reason = await _url_is_safe(current)
-        if not safe:
-            return {"ok": False, "url": current, "error": f"unsafe_url:{reason}"}
-        try:
-            async with await _outbound.make_client("official") as client:
-                async with client.stream(
-                        "GET", current, timeout=OFFICIAL_FETCH_TIMEOUT_S,
-                        follow_redirects=False) as response:
-                    status = response.status_code
-                    if status in (301, 302, 303, 307, 308):
-                        location = response.headers.get("location", "")
-                        if not location or redirect_count >= OFFICIAL_FETCH_MAX_REDIRECTS:
-                            return {"ok": False, "url": current,
-                                    "error": "redirect_limit"}
-                        current = urljoin(current, location)
-                        continue
-                    if status != 200:
-                        return {"ok": False, "url": current, "error": f"http:{status}"}
-                    content_type = (response.headers.get("content-type", "")
-                                    .split(";")[0].strip().lower())
-                    if content_type and content_type not in _HTML_CONTENT_TYPES:
-                        return {"ok": False, "url": current,
-                                "error": f"content_type:{content_type}"}
-                    declared = response.headers.get("content-length")
-                    if declared:
-                        try:
-                            too_big = int(declared) > OFFICIAL_FETCH_MAX_BYTES
-                        except ValueError:
-                            too_big = False
-                        if too_big:
-                            return {"ok": False, "url": current,
-                                    "error": "content_too_large"}
-                    chunks: list[bytes] = []
-                    total = 0
-                    truncated = False
-                    async for chunk in response.aiter_bytes():
-                        if not chunk:
-                            continue
-                        remaining = OFFICIAL_FETCH_MAX_BYTES - total
-                        if len(chunk) > remaining:
-                            chunks.append(chunk[:remaining])
-                            total += remaining
-                            truncated = True
-                            break
-                        chunks.append(chunk)
-                        total += len(chunk)
-                    raw = b"".join(chunks).decode("utf-8", "replace")
-                    title, text = _extract_official_text(raw)
-                    if not text:
-                        return {"ok": False, "url": current,
-                                "error": "empty_body"}
-                    stored = text[:OFFICIAL_BODY_STORE_CHARS].rstrip()
-                    return {
-                        "ok": True,
-                        "url": url,
-                        "body_url": current,
-                        "title": title,
-                        "body": stored,
-                        "source_chars": len(text),
-                        "stored_chars": len(stored),
-                        "truncated": (truncated or len(text) > len(stored)),
-                        "bytes": total,
-                        "content_type": content_type,
-                    }
-        except Exception as exc:
-            return {"ok": False, "url": current,
-                    "error": f"{type(exc).__name__}"}
-    return {"ok": False, "url": current, "error": "redirect_limit"}
+    resolver = _outbound.get_resolver()
+    cfg = getattr(resolver, "cfg", None)
+    channels = getattr(resolver, "channels", None)
+    if cfg is None or not isinstance(channels, list):
+        return None, "route_unavailable"
+    by_name = {getattr(channel, "name", ""): channel for channel in channels}
+    for name in cfg.order_for("official"):
+        channel = by_name.get(name)
+        if channel is None:
+            continue
+        if name == "local-proxy" and not getattr(channel, "proxy_url", None):
+            continue
+        if name == "self-forward" and not getattr(channel, "base", None):
+            continue
+        if getattr(channel, "kind", "") != "direct":
+            return None, "route_unsupported"
+        return channel, None
+    return None, "route_unavailable"
 
 
 class OfficialSearch(BaseRetriever):
     source = "official"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self._fetch_policy = None
+        self._fetch_budget = None
+        self._last_fetch_stats: dict = {}
+
+    async def search(self, *args, **kwargs) -> dict:
+        # Keep the base envelope; add the cumulative count record for this run's
+        # official source. The counters cover page attempts, dispatched HTTP
+        # requests (including redirects), bytes and failure codes.
+        result = await super().search(*args, **kwargs)
+        result["fetch_stats"] = dict(self._last_fetch_stats)
+        return result
 
     async def _propose_official_url(self, term: str) -> str | None:
         """LLM fallback: propose an official docs URL for an unmapped term."""
@@ -379,7 +237,44 @@ class OfficialSearch(BaseRetriever):
         return None
 
     async def _fetch_official_body(self, url: str) -> dict:
-        return await _fetch_official_page(url)
+        budget = self._fetch_budget
+        if budget is None:
+            budget = OfficialFetchBudget(
+                max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+            )
+            self._fetch_budget = budget
+        if budget.http_requests >= budget.max_http_requests:
+            budget.record_failure("http_budget_exhausted")
+            return {"ok": False, "url": url, "failure": "http_budget_exhausted",
+                    "budget": budget.snapshot()}
+        policy = self._fetch_policy or SafeUrlPolicy()
+        self._fetch_policy = policy
+        try:
+            # The total deadline covers configuration route selection, DNS,
+            # connect, redirects and reading. The page fetcher has its own copy
+            # for direct callers; this outer guard also bounds the selection.
+            async with asyncio.timeout(OFFICIAL_FETCH_TOTAL_DEADLINE_S):
+                _channel, route_error = _resolve_direct_route()
+                if route_error:
+                    budget.record_failure(route_error)
+                    return {"ok": False, "url": url, "failure": route_error,
+                            "budget": budget.snapshot()}
+                return await fetch_official_page(
+                    url, policy=policy, budget=budget,
+                    deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                    max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                    max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                    store_chars=OFFICIAL_BODY_STORE_CHARS,
+                )
+        except TimeoutError:
+            budget.record_failure("timeout")
+            return {"ok": False, "url": url, "failure": "timeout",
+                    "budget": budget.snapshot()}
+        except Exception as exc:
+            budget.record_failure(type(exc).__name__)
+            return {"ok": False, "url": url,
+                    "failure": type(exc).__name__, "budget": budget.snapshot()}
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None,
@@ -400,6 +295,11 @@ class OfficialSearch(BaseRetriever):
         # overrode docs.python.org with python.langchain.com).
         lookup = {**learned, **TECH_DOCS}
         results = []
+        self._fetch_budget = OfficialFetchBudget(
+            max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+            max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+        )
+        self._last_fetch_stats = self._fetch_budget.snapshot()
 
         if not candidates:
             # No declared identity, so nothing may be promoted to "official".
@@ -471,34 +371,47 @@ class OfficialSearch(BaseRetriever):
                 results.append(entry)
 
         # Fetch bounded bodies only after candidates/URLs are de-duplicated, so a
-        # failed or seeded link cannot trigger duplicate network work. The budget
-        # is per official-source search, and every attempt is visible on the saved
-        # source row as body_error/fetch_status; an exhausted budget is navigation,
-        # not evidence.
-        remaining = max(0, OFFICIAL_FETCH_MAX_PER_RUN)
+        # failed or seeded link cannot trigger duplicate network work. Page
+        # attempts and dispatched HTTP requests are separate cumulative bounds;
+        # redirects consume the HTTP count. Every attempt remains visible on the
+        # saved source row; an exhausted budget is navigation.
+        budget = self._fetch_budget
         for entry in results:
-            if remaining <= 0:
-                entry["body_error"] = "fetch_budget_exhausted"
+            if not budget.begin_page():
+                entry["body_error"] = "page_attempt_budget_exhausted"
+                entry["fetch_status"] = "navigation"
                 continue
-            remaining -= 1
             fetched = await self._fetch_official_body(entry["url"])
             if not fetched.get("ok"):
                 entry["has_body"] = False
                 entry["snippet"] = ""
-                entry["body_error"] = str(fetched.get("error") or "fetch_failed")
-                entry["fetch_status"] = "failed"
+                entry["body_error"] = str(
+                    fetched.get("failure") or fetched.get("error") or "fetch_failed")
+                entry["fetch_status"] = "navigation"
+                if fetched.get("page_chars") is not None:
+                    entry["body_page_chars"] = fetched.get("page_chars")
+                if fetched.get("prose_chars") is not None:
+                    entry["body_prose_chars"] = fetched.get("prose_chars")
                 continue
             entry["snippet"] = fetched["body"]
             entry["has_body"] = True
             entry["fetch_status"] = "body"
             entry["body_url"] = fetched.get("body_url") or entry["url"]
-            entry["body_chars"] = fetched.get("source_chars", len(fetched["body"]))
+            entry["body_page_chars"] = fetched.get("page_chars", fetched.get(
+                "source_chars", len(fetched["body"])))
+            entry["body_chars"] = entry["body_page_chars"]
             entry["body_stored_chars"] = fetched.get(
                 "stored_chars", len(fetched["body"]))
-            entry["body_truncated"] = bool(fetched.get("truncated"))
+            entry["body_page_truncated"] = bool(fetched.get("page_truncated"))
+            entry["body_stored_truncated"] = bool(fetched.get(
+                "stored_truncated", len(entry["snippet"]) < entry["body_stored_chars"]))
+            entry["body_truncated"] = bool(
+                fetched.get("truncated")
+                or entry["body_page_truncated"]
+                or entry["body_stored_truncated"])
+            entry["body_prose_chars"] = fetched.get("prose_chars", len(entry["snippet"]))
+            entry["body_admission"] = fetched.get("admission", "prose_ok")
             entry["body_content_type"] = fetched.get("content_type", "")
-            if fetched.get("title") and entry["title"].endswith("Official Documentation"):
-                entry["title"] = fetched["title"] or entry["title"]
             # Learn only a URL whose body was actually collected, and only when
             # the URL came from the LLM fallback. Re-learning a curated mapping on
             # every run would rewrite the user's learned_docs cache for no gain.
@@ -510,4 +423,5 @@ class OfficialSearch(BaseRetriever):
                               f"{candidate} — Official Documentation", via="body_fetch")
                         break
 
+        self._last_fetch_stats = budget.snapshot()
         return results[:max_results]

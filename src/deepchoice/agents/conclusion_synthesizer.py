@@ -119,6 +119,12 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
                 "date": str(source.get("date") or ""),
                 "disputed": bool(chain.get("disputed")),
             }
+            for key in ("body_url", "body_page_chars", "body_prose_chars",
+                        "body_stored_chars", "body_page_truncated",
+                        "body_stored_truncated", "body_truncated",
+                        "body_admission"):
+                if key in source:
+                    entry[key] = source[key]
             chain_entries.append(entry)
             entries.append(entry)
         chains.append(chain_entries)
@@ -212,18 +218,32 @@ def _summarize_chains(evidence_chains: list[dict],
                 # Publication/update date travels with the body so version and
                 # applicability statements can be checked against the source.
                 lines.append(f"       date: {entry['date']}")
+            if entry.get("body_url") and entry["body_url"] != entry["url"]:
+                lines.append(f"       body_url: {entry['body_url']}")
             source_view = bounded_evidence_record(entry)
             lines.append(f"       content: {source_view['text']}")
+            page_extracted = (source_view["page_chars"] if source_view["page_chars_known"]
+                              else "unknown")
+            page_truncated = (source_view["page_truncated"]
+                              if source_view["page_chars_known"] else "unknown")
             lines.append(
                 f"       content_visible: {source_view['visible_chars']}/"
-                f"{source_view['source_chars']} chars"
-                + (" (truncated)" if source_view["truncated"] else "")
+                f"{source_view['stored_chars']} stored-body chars; "
+                f"page_extracted={page_extracted}; "
+                f"page_truncated={page_truncated}; "
+                f"stored_truncated={source_view['stored_truncated']}"
             )
             audit.append({
                 "number": entry["number"],
                 "title": entry["title"],
+                "body_url": source_view.get("body_url", ""),
+                "page_chars": source_view["page_chars"],
+                "page_chars_known": source_view["page_chars_known"],
+                "stored_chars": source_view["stored_chars"],
                 "source_chars": source_view["source_chars"],
                 "visible_chars": source_view["visible_chars"],
+                "page_truncated": source_view["page_truncated"],
+                "stored_truncated": source_view["stored_truncated"],
                 "truncated": source_view["truncated"],
             })
             lines.append("")
@@ -1073,6 +1093,17 @@ class ConclusionSynthesizerAgent:
             "evidence_sources_truncated": sum(1 for a in evidence_audit if a["truncated"]),
             "evidence_visible_chars": sum(a["visible_chars"] for a in evidence_audit),
             "evidence_source_chars": sum(a["source_chars"] for a in evidence_audit),
+            "evidence_page_chars": sum(
+                a["page_chars"] for a in evidence_audit if a["page_chars_known"]),
+            "evidence_page_chars_known_sources": sum(
+                1 for a in evidence_audit if a["page_chars_known"]),
+            "evidence_stored_chars": sum(a["stored_chars"] for a in evidence_audit),
+            "evidence_page_truncated_sources": sum(
+                1 for a in evidence_audit if a["page_truncated"] is True),
+            "evidence_page_truncated_unknown_sources": sum(
+                1 for a in evidence_audit if a["page_truncated"] is None),
+            "evidence_stored_truncated_sources": sum(
+                1 for a in evidence_audit if a["stored_truncated"]),
         }]
 
         _validate_winner(result)

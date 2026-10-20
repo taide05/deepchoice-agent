@@ -162,10 +162,12 @@ class SourceEvaluatorAgent:
             if "has_body" in result:
                 entry["has_body"] = result["has_body"]
             # Bounded page-fetch provenance travels with the source: which URL
-            # supplied the body, how much was stored/truncated, and why a fetch
-            # failed. These are diagnostics, not evidence.
-            for key in ("body_url", "body_chars", "body_stored_chars",
-                        "body_truncated", "body_content_type", "body_error",
+            # supplied the body, page/storage/window sizes, truncation and why a
+            # fetch or prose admission failed. These are diagnostics, not evidence.
+            for key in ("body_url", "body_chars", "body_page_chars", "body_prose_chars",
+                        "body_stored_chars", "body_page_truncated",
+                        "body_stored_truncated", "body_truncated",
+                        "body_content_type", "body_admission", "body_error",
                         "fetch_status"):
                 if key in result:
                     entry[key] = result[key]

@@ -68,10 +68,20 @@ Confidence Assessment:
 - medium: 3-4 items passed, no critical gaps
 - low: 0-2 items passed OR critical information missing
 
+If your final confidence differs from the synthesis confidence provided in the
+review body, revise the `confidence_rationale` field through the normal correction
+mechanism so it states the final level and keeps the substantive reason. Do not
+replace the reason with a checklist count; the checklist count is process data,
+reported separately. If you cannot make the reason agree with the level, leave the
+field unchanged and record the inconsistency as a gap.
+
 If confidence is not "high", list specific information gaps as search queries.
 
-Return ONLY a JSON object (numbers are examples; give your own real values):
-{{"checks": [{{"item": 1, "passed": true, "note": "..."}}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw>", "reason": "<what was wrong and which source contradicts it>"}}]}}
+Return ONLY a JSON object. `checks` MUST contain exactly six objects, one per
+numbered item above, each with a boolean `passed`; `passed_count` MUST be an
+integer from 0 to 6 and equal the number of true checks. A partial or inconsistent
+result is unusable and will not be applied. Numbers are examples; give real values:
+{{"checks": [{{"item": 1, "passed": true, "note": "..."}}, {{"item": 2, "passed": true, "note": "..."}}, {{"item": 3, "passed": true, "note": "..."}}, {{"item": 4, "passed": true, "note": "..."}}, {{"item": 5, "passed": true, "note": "..."}}, {{"item": 6, "passed": false, "note": "..."}}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw>", "reason": "<what was wrong and which source contradicts it>"}}]}}
 
 "corrections" is how a decisive error is fixed, not merely noted. A decisive
 error is a figure, unit or scale the cited source does not state (or states
@@ -116,6 +126,30 @@ def _normalize_confidence(value) -> str | None:
         return None
     level = value.strip().lower()
     return level if level in _LEVELS else None
+
+
+def _validate_review_counts(checks, passed_count) -> tuple[int | None, str | None]:
+    """Strictly validate the 6/6 checklist accounting.
+
+    A malformed, partial or internally inconsistent count makes the review
+    unusable rather than being coerced to 0/6 or 7/6. The denominator is fixed by
+    the review contract; counts are reported separately from the substantive
+    confidence reason.
+    """
+    if not isinstance(checks, list) or len(checks) != 6:
+        return None, "checks_not_six"
+    passed_values = []
+    for check in checks:
+        if not isinstance(check, dict) or not isinstance(check.get("passed"), bool):
+            return None, "malformed_check"
+        passed_values.append(check["passed"])
+    if isinstance(passed_count, bool) or not isinstance(passed_count, int):
+        return None, "passed_count_not_int"
+    if not 0 <= passed_count <= 6:
+        return None, "passed_count_out_of_range"
+    if passed_count != sum(1 for value in passed_values if value):
+        return None, "passed_count_mismatch"
+    return passed_count, None
 
 
 def _set_field_bindings(recommendation: dict, locator: str,
@@ -330,17 +364,31 @@ def _source_register_text(registry: dict, with_audit: bool = False):
             lines.append(f"    url: {entry['url']}")
         if entry.get("date"):
             lines.append(f"    date: {entry['date']}")
+        if entry.get("body_url") and entry["body_url"] != entry.get("url"):
+            lines.append(f"    body_url: {entry['body_url']}")
         view = bounded_evidence_record(entry)
         lines.append(f"    body: {view['text']}")
+        page_extracted = (view["page_chars"] if view["page_chars_known"]
+                          else "unknown")
+        page_truncated = (view["page_truncated"]
+                          if view["page_chars_known"] else "unknown")
         lines.append(
-            f"    visible: {view['visible_chars']}/{view['source_chars']} chars"
-            + (" (truncated)" if view["truncated"] else "")
+            f"    visible: {view['visible_chars']}/{view['stored_chars']} stored-body chars; "
+            f"page_extracted={page_extracted}; "
+            f"page_truncated={page_truncated}; "
+            f"stored_truncated={view['stored_truncated']}"
         )
         audit.append({
             "number": entry["number"],
             "title": entry["title"],
+            "body_url": view.get("body_url", ""),
+            "page_chars": view["page_chars"],
+            "page_chars_known": view["page_chars_known"],
+            "stored_chars": view["stored_chars"],
             "source_chars": view["source_chars"],
             "visible_chars": view["visible_chars"],
+            "page_truncated": view["page_truncated"],
+            "stored_truncated": view["stored_truncated"],
             "truncated": view["truncated"],
         })
     if registry.get("navigation"):
@@ -525,6 +573,8 @@ locator the correction contract uses to select it. This body does not depend on
 the report format the user chose. Check each claim against the source bodies, not
 against the citation markers.
 
+Synthesis confidence to check: {recommendation.get("confidence", "unknown")}
+
 {review_fields}
 
 ## Citation Completeness (deterministic; a citation is not proof of support)
@@ -564,11 +614,22 @@ Field locations with an unresolved citation:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="self_reviewer",
                                       usage=local_usage)
         except Exception as e:
-            print_agent_output(f"Self-review failed: {e}, falling back to medium", agent="SELF_REVIEWER")
+            print_agent_output(f"Self-review unavailable: {type(e).__name__}; prior result retained",
+                               agent="SELF_REVIEWER")
             result = {}
 
         if not isinstance(result, dict):
             result = {}
+
+        # Strict accounting before trusting anything from the review. A partial,
+        # malformed or internally inconsistent checklist is unavailable, not a
+        # 0/6 or 7/6 result; its corrections and confidence are not applied.
+        passed_count, review_error = _validate_review_counts(
+            result.get("checks"), result.get("passed_count"))
+        reviewed = _normalize_confidence(result.get("confidence"))
+        if review_error is None and reviewed is None:
+            review_error = "confidence_invalid"
+        review_usable = review_error is None
 
         # A decisive error must change the served result, not only its
         # confidence. The reviewer names the field and what the source supports;
@@ -581,75 +642,58 @@ Field locations with an unresolved citation:
         import copy
 
         recommendation = copy.deepcopy(recommendation)
-        # Revisions are resolved with the same numbered source registry the
-        # reviewer read, so a number the reviewer cites means the source it saw,
-        # and a title is matched by full identity rather than truncated.
-        applied, rejected = _apply_corrections(
-            recommendation, result.get("corrections"),
-            evidence_chains=research_state.get("evidence_chains") or [],
-            cite_map=dict(registry["mapping"]),
-            registry=registry,
-        )
+        prior = _normalize_confidence(recommendation.get("confidence"))
+        prior_rationale = str(recommendation.get("confidence_rationale") or "").strip()
+        if review_usable:
+            # Revisions are resolved with the same numbered source registry the
+            # reviewer read, so a number the reviewer cites means the source it saw,
+            # and a title is matched by full identity rather than truncated.
+            applied, rejected = _apply_corrections(
+                recommendation, result.get("corrections"),
+                evidence_chains=research_state.get("evidence_chains") or [],
+                cite_map=dict(registry["mapping"]),
+                registry=registry,
+            )
+        else:
+            applied, rejected = [], []
+        corrected_confidence_reason = any(
+            isinstance(item, dict) and item.get("field") == "confidence_rationale"
+            for item in applied)
 
         # The top-level confidence and the recommendation's own confidence are one
-        # verdict, not two: the review is the later judgement, so both report it
-        # and neither can contradict the other.
-        #
-        # Normalized first. Requiring the exact lowercase triple meant any other
-        # spelling skipped the cap entirely, so a reviewer answering "HIGH" raised
-        # a low-confidence result and an invalid value reached the report. An
-        # unusable answer now falls back to the weaker of the two priors rather
-        # than passing through.
-        prior = _normalize_confidence(recommendation.get("confidence"))
-        reviewed = _normalize_confidence(result.get("confidence"))
-        candidates = [c for c in (reviewed, prior) if c is not None]
+        # verdict, not two. Use the reviewer's level only when the review itself is
+        # usable; otherwise retain the prior level rather than trusting a fragment.
+        candidates = [c for c in ((reviewed if review_usable else None), prior)
+                      if c is not None]
         confidence = min(candidates, key=lambda c: _LEVELS[c]) if candidates else "low"
         recommendation["confidence"] = confidence
 
-        # The confidence value and its stated reason are one verdict. The synthesis
-        # rationale can describe a different level (the eighth run served low
-        # confidence with a rationale saying medium), and the reviewer may lower
-        # confidence without correcting that field. Replace the reason only when a
-        # review actually ran and returned a usable result; on a call/parse failure
-        # or malformed count, leave the prior rationale in place rather than
-        # inventing a "0/6" review that never happened.
-        from ..utils.candidate_identity import EVIDENCE_WINDOW_CHARS
-
-        def _as_int(value):
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return None
-
-        checks = result.get("checks")
-        raw_passed_count = result.get("passed_count")
-        passed_count = _as_int(raw_passed_count)
-        malformed_count = raw_passed_count is not None and passed_count is None
-        if passed_count is None and not malformed_count and isinstance(checks, list):
-            passed_count = sum(
-                1 for check in checks
-                if isinstance(check, dict) and check.get("passed") is True)
-        review_completed = (
-            passed_count is not None and not malformed_count
-            and isinstance(checks, list) and len(checks) > 0
-        )
-        if review_completed:
-            gaps = result.get("knowledge_gaps")
-            gap_count = len(gaps) if isinstance(gaps, list) else 0
+        # Preserve the substantive synthesis reason. Never replace it with a
+        # pass-count summary. If the usable review changes the level or supplied no
+        # replacement reason, append a clearly separated adjustment note so the
+        # served text names the final level while the checklist count stays in the
+        # quality signal.
+        if review_usable and not corrected_confidence_reason and prior_rationale:
             zh = any("\u4e00" <= ch <= "\u9fff" for ch in str(query_text))
-            if zh:
-                recommendation["confidence_rationale"] = (
-                    f"自审复核 {passed_count}/6 项通过，记录 {gap_count} 个知识缺口；"
-                    f"综合这些结果，最终置信度为 {confidence}。")
+            if confidence != prior:
+                note = (
+                    f"（自审调整：最终置信度由 {prior or '未知'} 调整为 {confidence}；"
+                    f"上述为综合判断，检查项计数与知识缺口单列，不替代上述理由。）"
+                    if zh else
+                    f" (Self-review adjustment: final confidence changed from "
+                    f"{prior or 'unknown'} to {confidence}; the synthesis reason above "
+                    f"is retained and checklist counts are reported separately.)"
+                )
             else:
-                recommendation["confidence_rationale"] = (
-                    f"The self-review passed {passed_count}/6 checks and recorded "
-                    f"{gap_count} knowledge gap(s); final confidence is {confidence}.")
-            # The old rationale's citation bindings no longer describe the served
-            # text; drop the stale field-local binding instead of linking it.
-            cite_map = recommendation.get(CITATION_SOURCES_KEY)
-            if isinstance(cite_map, dict):
-                cite_map.pop("confidence_rationale", None)
+                note = (
+                    f"（自审调整：最终置信度为 {confidence}；上述为综合判断，"
+                    f"检查项计数与知识缺口单列，不替代上述理由。）"
+                    if zh else
+                    f" (Self-review adjustment: final confidence is {confidence}; "
+                    f"the synthesis reason above is retained and checklist counts are "
+                    f"reported separately.)"
+                )
+            recommendation["confidence_rationale"] = prior_rationale + note
 
         # The report body is re-rendered from the **complete** reviewed state, so
         # the saved report.md, the snapshot's `report`, the report endpoint, the
@@ -659,24 +703,33 @@ Field locations with an unresolved citation:
         # confidence and knowledge_gaps were returned but never part of the state
         # it rendered from, so the saved file omitted the "what we don't know yet"
         # section that the endpoint (rendering from the final snapshot) showed.
+        from ..utils.candidate_identity import EVIDENCE_WINDOW_CHARS
+
+        reported_gaps = (
+            list(result.get("knowledge_gaps") or [])
+            if review_usable and isinstance(result.get("knowledge_gaps"), list)
+            else list(research_state.get("knowledge_gaps") or [])
+        )
         reviewed_state = dict(research_state)
         reviewed_state["final_recommendation"] = recommendation
         reviewed_state["confidence"] = confidence
-        reviewed_state["knowledge_gaps"] = list(result.get("knowledge_gaps") or [])
+        reviewed_state["knowledge_gaps"] = reported_gaps
         final_report, _ = render_report(reviewed_state)
 
         return {
             "report": final_report,
             "final_recommendation": recommendation,
             "confidence": confidence,
-            "knowledge_gaps": result.get("knowledge_gaps", []),
+            "knowledge_gaps": reported_gaps,
             "retry_count": research_state.get("retry_count", 0) + 1,
             "quality_signals": [{
                 "agent": "self_reviewer",
-                "passed_count": result.get("passed_count", 0),
+                "review_status": "completed" if review_usable else "unavailable",
+                "review_validation_error": review_error,
+                "passed_count": passed_count if review_usable else None,
                 "total_checks": 6,
                 "confidence": confidence,
-                "gaps_found": len(result.get("knowledge_gaps", [])),
+                "gaps_found": len(reported_gaps),
                 # Counts and fixed categories only; never model prose.
                 "corrections_applied": len(applied),
                 "corrections_rejected": len(rejected),
@@ -688,6 +741,17 @@ Field locations with an unresolved citation:
                     1 for a in evidence_audit if a["truncated"]),
                 "evidence_visible_chars": sum(a["visible_chars"] for a in evidence_audit),
                 "evidence_source_chars": sum(a["source_chars"] for a in evidence_audit),
+                "evidence_page_chars": sum(
+                    a["page_chars"] for a in evidence_audit if a["page_chars_known"]),
+                "evidence_page_chars_known_sources": sum(
+                    1 for a in evidence_audit if a["page_chars_known"]),
+                "evidence_stored_chars": sum(a["stored_chars"] for a in evidence_audit),
+                "evidence_page_truncated_sources": sum(
+                    1 for a in evidence_audit if a["page_truncated"] is True),
+                "evidence_page_truncated_unknown_sources": sum(
+                    1 for a in evidence_audit if a["page_truncated"] is None),
+                "evidence_stored_truncated_sources": sum(
+                    1 for a in evidence_audit if a["stored_truncated"]),
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],

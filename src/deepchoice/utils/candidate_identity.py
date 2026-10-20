@@ -156,10 +156,11 @@ def source_content(source: dict) -> str:
 def bounded_evidence_record(source: dict, limit: int | None = None) -> dict:
     """The shared bounded view of a source body for synthesis and self-review.
 
-    Returns the visible excerpt plus the actual source length and cut metadata.
-    Both stages must read a source's saved body through this one function; a
-    caller that shows a source without this record is hiding how much of it was
-    visible. The stored source is never mutated.
+    Returns the visible excerpt plus three distinct length concepts: the original
+    page's extracted text, the stored body fragment, and the model-visible window.
+    Both stages must read a source through this one function; a caller that shows
+    only the window without these flags can misreport a saved fragment as a whole
+    page. The stored source is never mutated.
     """
     window = EVIDENCE_WINDOW_CHARS if limit is None else int(limit)
     content = source_content(source)
@@ -174,19 +175,46 @@ def bounded_evidence_record(source: dict, limit: int | None = None) -> dict:
             gap = f"NO CONTENT RETRIEVED — {title} was indexed without a body."
         return {
             "text": gap,
+            "page_chars": 0,
+            "page_chars_known": False,
+            "stored_chars": 0,
             "source_chars": 0,
             "visible_chars": 0,
+            "page_truncated": False,
+            "stored_truncated": False,
             "truncated": False,
             "has_body": False,
         }
     content = " ".join(str(content).split())
-    total = len(content)
-    visible = content if total <= window else content[:window].rstrip()
+    stored_chars = len(content)
+    page_known = "body_page_chars" in source or "body_chars" in source
+    if page_known:
+        page_chars = int(source.get("body_page_chars") or source.get("body_chars")
+                         or stored_chars)
+        page_chars = max(page_chars, stored_chars)
+        page_truncated = bool(source.get("body_page_truncated", False))
+    else:
+        # A Tavily/GitHub/arXiv snippet is a saved fragment, not a known full
+        # page. Do not manufacture page_extracted=<snippet length> or claim the
+        # page was not truncated; mark the page range unknown.
+        page_chars = None
+        page_truncated = None
+    visible = content if stored_chars <= window else content[:window].rstrip()
+    stored_truncated = bool(source.get("body_stored_truncated")) or (
+        page_known and page_chars > stored_chars)
     return {
         "text": visible,
-        "source_chars": total,
+        "body_url": str(source.get("body_url") or source.get("url") or ""),
+        "page_chars": page_chars,
+        "page_chars_known": page_known,
+        "stored_chars": stored_chars,
+        "source_chars": page_chars if page_known else stored_chars,
         "visible_chars": len(visible),
-        "truncated": len(visible) < total,
+        "page_truncated": page_truncated,
+        "stored_truncated": stored_truncated,
+        "visible_truncated": len(visible) < stored_chars,
+        "truncated": bool(stored_truncated or len(visible) < stored_chars
+                          or page_truncated is True),
         "has_body": True,
     }
 
