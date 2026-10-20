@@ -40,11 +40,51 @@ def test_a_detail_beyond_the_old_600_900_windows_is_visible():
     assert detail in at_default
 
 
+def test_page_stored_and_model_window_are_distinct():
+    record = bounded_evidence_record({
+        "title": "T", "snippet": "S" * 100,
+        "body_page_chars": 500, "body_stored_truncated": True,
+        "body_page_truncated": False, "body_url": "https://docs.example/canonical",
+    }, limit=50)
+    assert record["page_chars"] == 500
+    assert record["stored_chars"] == 100
+    assert record["visible_chars"] == 50
+    assert record["page_truncated"] is False
+    assert record["stored_truncated"] is True
+    assert record["truncated"] is True
+    assert record["body_url"].endswith("/canonical")
+
+
+def test_page_storage_window_provenance_reaches_both_prompts():
+    chains = [{"sources": [{
+        "title": "Docs", "url": "https://docs.example/page",
+        "snippet": "B" * 200, "body_url": "https://docs.example/canonical",
+        "body_page_chars": 900, "body_stored_chars": 200,
+        "body_page_truncated": True, "body_stored_truncated": True,
+    }]}]
+    text, _mapping, audit = cs._summarize_chains(chains, with_audit=True)
+    assert "body_url: https://docs.example/canonical" in text
+    assert "page_extracted=900" in text
+    assert "page_truncated=True" in text
+    assert "stored_truncated=True" in text
+    assert audit[0]["page_chars"] == 900
+    assert audit[0]["stored_chars"] == 200
+
+    registry = build_source_registry(chains)
+    review_text, review_audit = sr._source_register_text(registry, with_audit=True)
+    assert "body_url: https://docs.example/canonical" in review_text
+    assert "page_extracted=900" in review_text
+    assert review_audit[0]["stored_chars"] == 200
+
+
 def test_synthesis_reports_the_visible_range_in_prompt_and_audit():
     text, _mapping, audit = cs._summarize_chains(_chains(), with_audit=True)
     assert f"content_visible: {EVIDENCE_WINDOW_CHARS}/" in text, text
-    assert "(truncated)" in text, text
+    assert "stored-body chars" in text
+    assert "page_extracted=unknown" in text and "page_truncated=unknown" in text
     assert audit and audit[0]["visible_chars"] == EVIDENCE_WINDOW_CHARS
+    assert audit[0]["stored_chars"] > audit[0]["visible_chars"]
+    assert audit[0]["page_chars_known"] is False
     assert audit[0]["truncated"] is True
 
 
@@ -52,6 +92,9 @@ def test_self_review_register_uses_same_window_and_audit():
     registry = build_source_registry(_chains())
     text, audit = sr._source_register_text(registry, with_audit=True)
     assert f"visible: {EVIDENCE_WINDOW_CHARS}/" in text, text
-    assert "(truncated)" in text, text
+    assert "stored-body chars" in text
+    assert "page_extracted=unknown" in text and "page_truncated=unknown" in text
     assert audit[0]["visible_chars"] == EVIDENCE_WINDOW_CHARS
+    assert audit[0]["stored_chars"] > audit[0]["visible_chars"]
+    assert audit[0]["page_chars_known"] is False
     assert audit[0]["truncated"] is True

@@ -67,13 +67,31 @@ def _state(rec: dict, chains: list[dict], query: str = "测试问题",
     }
 
 
+def _valid_review(review: dict) -> dict:
+    """Attach strict 6/6 accounting to ordinary test reviews."""
+    if not isinstance(review, dict) or "checks" in review:
+        return review
+    review = dict(review)
+    passed = review.get("passed_count", 5)
+    try:
+        passed = min(max(int(passed), 0), 6)
+    except (TypeError, ValueError):
+        passed = 5
+    review["checks"] = [
+        {"item": index, "passed": index <= passed, "note": "test"}
+        for index in range(1, 7)
+    ]
+    review["passed_count"] = passed
+    return review
+
+
 def _capture_review(monkeypatch, state: dict, review: dict | None = None) -> str:
     captured = {}
 
     async def fake_call_model(prompt, **kwargs):
         captured["prompt"] = prompt
-        return review or {"confidence": "medium", "knowledge_gaps": [],
-                          "corrections": []}
+        return _valid_review(review or {"confidence": "medium", "knowledge_gaps": [],
+                                        "corrections": []})
 
     monkeypatch.setattr(sr, "call_model", fake_call_model)
     asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
@@ -82,7 +100,7 @@ def _capture_review(monkeypatch, state: dict, review: dict | None = None) -> str
 
 def _run_review(monkeypatch, state: dict, review: dict):
     async def fake_call_model(prompt, **kwargs):
-        return review
+        return _valid_review(review)
 
     monkeypatch.setattr(sr, "call_model", fake_call_model)
     return asyncio.run(sr.SelfReviewerAgent().run(dict(state)))

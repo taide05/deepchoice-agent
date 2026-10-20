@@ -32,7 +32,11 @@ class _FakeFetch:
 def _patch_outbound(monkeypatch, fail_urls=()):
     """Patch the single seam that supplies a bounded official page body."""
     fake = _FakeFetch(fail_urls)
-    monkeypatch.setattr(official_mod, "_fetch_official_page", fake)
+
+    async def fake_fetch(self, url):
+        return await fake(url)
+
+    monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
     return fake
 
 

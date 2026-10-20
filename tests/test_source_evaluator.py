@@ -186,11 +186,21 @@ class TestSourceEvaluatorAgent:
             "snippet": "bounded body",
             "has_body": True,
             "body_url": "https://docs.example.com/canonical",
+            "body_page_chars": 500,
+            "body_stored_chars": 200,
+            "body_page_truncated": False,
+            "body_stored_truncated": True,
             "body_truncated": True,
+            "body_admission": "prose_ok",
             "fetch_status": "body",
         }]}]}
         row = (await SourceEvaluatorAgent().run(state))["source_scores"][0]
         assert row["body_url"] == "https://docs.example.com/canonical"
+        assert row["body_page_chars"] == 500
+        assert row["body_stored_chars"] == 200
+        assert row["body_page_truncated"] is False
+        assert row["body_stored_truncated"] is True
+        assert row["body_admission"] == "prose_ok"
         assert row["body_truncated"] is True
         assert row["fetch_status"] == "body"
 

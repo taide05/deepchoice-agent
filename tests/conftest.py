@@ -76,3 +76,73 @@ def mock_call_model():
     mock = AsyncMock()
     mock.return_value = {"result": "mocked"}
     return mock
+
+
+def _install_network_block():
+    """Install a process-level external DNS/TCP block; return originals.
+
+    Loopback remains available for tests that explicitly start a local service.
+    Called at session start and re-applied per test so a test's own monkeypatch
+    cannot leave the process able to reach the internet.
+    """
+    import ipaddress
+    import socket
+
+    original_connect = socket.socket.connect
+    original_create_connection = socket.create_connection
+    original_getaddrinfo = socket.getaddrinfo
+
+    def is_loopback_host(host):
+        if host is None:
+            return True
+        if isinstance(host, bytes):
+            host = host.decode("ascii", "replace")
+        text = str(host).strip("[]").lower()
+        if text in {"localhost", "localhost.localdomain", "0.0.0.0", "::"}:
+            return True
+        try:
+            address = ipaddress.ip_address(text)
+        except ValueError:
+            return False
+        return address.is_loopback
+
+    def guarded_connect(sock, address):
+        host = address[0] if isinstance(address, tuple) else None
+        if host is not None and not is_loopback_host(host):
+            raise OSError("external network blocked in tests")
+        return original_connect(sock, address)
+
+    def guarded_create_connection(address, *args, **kwargs):
+        host = address[0] if isinstance(address, tuple) else None
+        if host is not None and not is_loopback_host(host):
+            raise OSError("external network blocked in tests")
+        return original_create_connection(address, *args, **kwargs)
+
+    def guarded_getaddrinfo(host, *args, **kwargs):
+        if not is_loopback_host(host):
+            raise socket.gaierror("external DNS blocked in tests")
+        return original_getaddrinfo(host, *args, **kwargs)
+
+    socket.socket.connect = guarded_connect
+    socket.create_connection = guarded_create_connection
+    socket.getaddrinfo = guarded_getaddrinfo
+    return original_connect, original_create_connection, original_getaddrinfo
+
+
+def _restore_network_block(originals):
+    import socket
+
+    (socket.socket.connect, socket.create_connection,
+     socket.getaddrinfo) = originals
+
+
+def pytest_sessionstart(session):
+    """External DNS/TCP are blocked from test-session start, not only per test."""
+    _install_network_block()
+
+
+@pytest.fixture(autouse=True)
+def _block_external_network():
+    originals = _install_network_block()
+    yield
+    _restore_network_block(originals)

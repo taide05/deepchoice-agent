@@ -40,6 +40,26 @@ def _failed_run_state() -> dict:
     return json.loads(FAILED_RUN.read_text(encoding="utf-8"))
 
 
+def _with_valid_checks(review):
+    """Give ordinary test reviews the strict 6/6 accounting unless the test is
+    explicitly probing malformed checks/counts."""
+    if not isinstance(review, dict) or "checks" in review:
+        return review
+    review = dict(review)
+    passed = review.get("passed_count", 5)
+    try:
+        passed = int(passed)
+    except (TypeError, ValueError):
+        passed = 5
+    passed = min(max(passed, 0), 6)
+    review["checks"] = [
+        {"item": index, "passed": index <= passed, "note": "test"}
+        for index in range(1, 7)
+    ]
+    review["passed_count"] = passed
+    return review
+
+
 def _reviewer_payload(state: dict) -> str:
     """The complete text the self-review node sends to the model.
 
@@ -257,7 +277,6 @@ class TestReviewCorrectionsReachTheReport:
     """
 
     REVIEW = {
-        "checks": [{"item": 1, "passed": True, "note": "ok"}],
         "passed_count": 5,
         "confidence": "low",
         "knowledge_gaps": ["independent benchmark"],
@@ -279,6 +298,7 @@ class TestReviewCorrectionsReachTheReport:
 
     def _run_with(self, review, state=None):
         state = state or _failed_run_state()
+        review = _with_valid_checks(review)
 
         async def fake_call_model(prompt, **kwargs):
             return review
@@ -338,8 +358,16 @@ class TestReviewCorrectionsReachTheReport:
         levels = {"low": 0, "medium": 1, "high": 2}
         assert levels[out["confidence"]] <= levels[state["final_recommendation"]["confidence"]]
         rationale = out["final_recommendation"]["confidence_rationale"]
+        assert "自审调整" in rationale, rationale
         assert f"最终置信度为 {out['confidence']}" in rationale, rationale
-        assert "5/6" in rationale and "1 个知识缺口" in rationale, rationale
+        # The substantive synthesis reason remains; process counts are separate.
+        prior = state["final_recommendation"]["confidence_rationale"]
+        assert rationale.startswith(prior), rationale
+        assert "5/6" not in rationale, rationale
+        signal = out["quality_signals"][0]
+        assert signal["review_status"] == "completed"
+        assert signal["passed_count"] == 5
+        assert signal["total_checks"] == 6
 
     def test_the_served_report_reflects_the_correction(self):
         state = _failed_run_state()
@@ -375,6 +403,49 @@ class TestReviewCorrectionsReachTheReport:
         out = self._run_with(review, state)
         served = out["final_recommendation"]["confidence_rationale"]
         assert served == prior, (prior, served)
+        signal = out["quality_signals"][0]
+        assert signal["review_status"] == "unavailable"
+        assert signal["passed_count"] is None
+        assert signal["review_validation_error"] == "checks_not_six"
+        assert signal["corrections_rejected"] == 0
+
+    def test_unusable_review_applies_no_corrections_and_keeps_bindings(self):
+        import copy
+
+        state = _failed_run_state()
+        before = copy.deepcopy(state["final_recommendation"])
+        review = {
+            "checks": [], "passed_count": 0, "confidence": "low",
+            "knowledge_gaps": [],
+            "corrections": [{
+                "option": "ClickHouse", "field": "rationale", "action": "revise",
+                "corrected": "不能被不可用 review 应用。", "reason": "bad shape",
+            }],
+        }
+        out = self._run_with(review, state)
+        assert out["final_recommendation"] == before
+        signal = out["quality_signals"][0]
+        assert signal["review_status"] == "unavailable"
+        assert signal["corrections_applied"] == 0
+        assert signal["corrections_rejected"] == 0
+
+    def test_reviewer_payload_includes_synthesis_confidence(self):
+        payload = _reviewer_payload(_failed_run_state())
+        assert "Synthesis confidence to check:" in payload
+
+    def test_reviewer_confidence_reason_correction_takes_precedence(self):
+        review = {"confidence": "low", "knowledge_gaps": [],
+                  "corrections": [{
+                      "option": "", "field": "confidence_rationale",
+                      "action": "revise",
+                      "corrected": "自审确认：证据仅覆盖职责边界，版本与切换未验证；最终置信度为 low。",
+                      "reason": "原综合理由与最终等级不一致。"}]}
+        out = self._run_with(review)
+        rationale = out["final_recommendation"]["confidence_rationale"]
+        assert rationale == ("自审确认：证据仅覆盖职责边界，版本与切换未验证；"
+                             "最终置信度为 low。"), rationale
+        assert "自审调整" not in rationale
+        assert out["quality_signals"][0]["review_status"] == "completed"
 
     def test_a_top_level_field_the_report_prints_is_correctable(self):
         """The recommendation, winner rationale and confidence rationale are
@@ -418,6 +489,36 @@ class TestReviewCorrectionsReachTheReport:
             assert {"low": 0, "medium": 1, "high": 2}[confidence] <= prior_level, \
                 f"reviewer value {value!r} raised confidence to {confidence!r}"
             assert out["final_recommendation"]["confidence"] == confidence
+            if sr._normalize_confidence(value) is None:
+                assert out["quality_signals"][0]["review_status"] == "unavailable"
+            else:
+                assert out["quality_signals"][0]["review_status"] == "completed"
+
+
+class TestStrictReviewAccounting:
+    def test_six_booleans_with_matching_count_are_valid(self):
+        checks = [{"item": index, "passed": index <= 4} for index in range(1, 7)]
+        assert sr._validate_review_counts(checks, 4) == (4, None)
+
+    @pytest.mark.parametrize("checks,passed,error", [
+        ([], 0, "checks_not_six"),
+        ([{"item": index, "passed": True} for index in range(1, 8)], 7,
+         "checks_not_six"),
+        ([{"item": index, "passed": True} for index in range(1, 6)], 5,
+         "checks_not_six"),
+        ([{"item": index, "passed": True} for index in range(1, 7)], 7,
+         "passed_count_out_of_range"),
+        ([{"item": index, "passed": True} for index in range(1, 7)], True,
+         "passed_count_not_int"),
+        ([{"item": index, "passed": "yes"} for index in range(1, 7)], 6,
+         "malformed_check"),
+        ([{"item": index, "passed": index <= 3} for index in range(1, 7)], 5,
+         "passed_count_mismatch"),
+    ])
+    def test_invalid_accounting_is_unusable(self, checks, passed, error):
+        count, got_error = sr._validate_review_counts(checks, passed)
+        assert count is None
+        assert got_error == error
 
 
 class TestRevisedCitationsFollowTheSynthesisRules:
@@ -825,6 +926,7 @@ class TestTheReviewedResultReachesEveryArtefact:
 
     def _run(self, review, state=None):
         state = state if state is not None else self._state_with_draft()
+        review = _with_valid_checks(review)
         captured = {}
 
         async def fake_call_model(prompt, **kwargs):

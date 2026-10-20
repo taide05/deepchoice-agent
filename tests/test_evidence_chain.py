@@ -29,11 +29,18 @@ class TestBuildEvidenceChain:
             "url": "https://docs.example.com", "title": "Docs",
             "snippet": "bounded body", "total_score": 8.5,
             "has_body": True, "body_url": "https://docs.example.com/canonical",
-            "body_chars": 120, "body_stored_chars": 100, "body_truncated": True,
+            "body_page_chars": 400, "body_stored_chars": 100,
+            "body_page_truncated": False, "body_stored_truncated": True,
+            "body_truncated": True, "body_admission": "prose_ok",
             "fetch_status": "body",
         }]
         source = build_evidence_chain(scores, [])[0]["sources"][0]
         assert source["body_url"] == "https://docs.example.com/canonical"
+        assert source["body_page_chars"] == 400
+        assert source["body_stored_chars"] == 100
+        assert source["body_page_truncated"] is False
+        assert source["body_stored_truncated"] is True
+        assert source["body_admission"] == "prose_ok"
         assert source["body_truncated"] is True
         assert source["fetch_status"] == "body"
 

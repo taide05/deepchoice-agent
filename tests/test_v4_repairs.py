@@ -334,7 +334,13 @@ class TestFinalArtefactsAgree:
         state["report"] = render(state)
 
         async def fake(prompt, **kwargs):
-            return self.REVIEW
+            review = dict(self.REVIEW)
+            review["checks"] = [
+                {"item": index, "passed": index <= 4, "note": "test"}
+                for index in range(1, 7)
+            ]
+            review["passed_count"] = 4
+            return review
 
         real = sr.call_model
         sr.call_model = fake
