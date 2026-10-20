@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] - 2026-10-19
+
+### Added
+- Bounded official-page body fetch using the existing outbound route configuration, with a pinned-IP transport that preserves URL Host/TLS semantics. Page attempts and dispatched HTTP requests (including redirects; official route selection is configuration-only and makes no network probe) have separate cumulative caps and a recorded `fetch_stats` envelope.
+- Structural page-text extraction and prose admission for official pages; detected pure navigation/menu/login pages are navigation-only, while unusual low-link prose pages may still be misclassified (documented limitation). Source provenance now carries `body_url`, page/stored/window character counts and separate page/stored/window truncation flags into the source registry, synthesis and self-review.
+- Strict six-item review accounting (`checks` must be six booleans; `passed_count` must match, 0-6) with an explicit `review_status`/validation error and `passed_count=None` when the review is unavailable.
+
+### Changed
+- The confidence rationale is no longer overwritten with a pass-count summary. The substantive synthesis reason is retained; a usable review that changes the level appends a clearly separated adjustment note, and reviewer corrections to `confidence_rationale` take precedence. Failed, malformed or incomplete reviews cannot apply corrections or fabricate counts.
+- The synthesis and self-review evidence window is one shared 1,600-character view, with page-extracted, stored-body and model-visible ranges kept distinct instead of treating a fully visible saved fragment as a whole page.
+
+### Security
+- Dynamic official fetches reject proxy/forward routes, private/multicast/reserved/NAT64/IPv4-mapped/Teredo/6to4 addresses, mixed DNS answers, unsafe redirects, missing/unsupported content types, and over-limit bodies at read time. Each redirect is re-resolved and re-pinned to a validated address.
+
+### Tests
+- Test session blocks external DNS/TCP from session start (loopback services remain available); added negative coverage for pinning, redirect revalidation, total deadline, budgets/counts, navigation/login pages, truncation propagation, and strict confidence accounting.
+
 ## [0.2.0] - 2026-07-19
 
 ### Added
