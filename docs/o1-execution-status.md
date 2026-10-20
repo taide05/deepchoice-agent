@@ -1,11 +1,12 @@
 # 当前质量状态
 
-更新：2026-10-19。最终目标已明确为代表性数据集上的可信项目指标及完整使用链路；
+更新：2026-10-20。最终目标已明确为代表性数据集上的可信项目指标及完整使用链路；
 一份合格报告只作阶段门槛。第七次失败后的离线修复与评测准备已完成；随后按新授权执行了
 第八次真实单例（1 case、1 run，14/40 LLM、7/24 Tavily、研究墙钟 217.6 s），内容未通过。
-之后完成第八次后的有限**离线**修复批次（代码 `53a09ed`、测试 `06017e6`；
-研究/LLM/Tavily/外部裁判调用 0，但修复前一次既有回归测试曾触发少量真实 official 页面 GET，
-见下），只证明机制与测试改善。本次外部调用仅限第八次授权内的真实研究；未执行基线/基准批次，
+之后完成两轮第八次后**离线**修复批次：首轮代码 `53a09ed`、测试 `06017e6`（修复前既有回归
+测试曾触发少量真实 official GET，见下）；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档
+`0e3397e`（真实外呼 0，601 passed）。两轮都只证明机制与测试改善。本次外部调用仅限第八次
+授权内的真实研究；未执行基线/基准批次，
 未调用外部模型裁判。目标见[路线](current-roadmap.md)，指标与冻结要求见[评估协议](product-effectiveness-optimization.md)。
 
 ## 当前工作树与证据范围（2026-10-19核对）
@@ -13,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批候选 `f07f87b`；第八次后修复代码 `53a09ed`、测试/收尾 `06017e6`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 干净，17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档 `0e3397e`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 干净，17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -179,13 +180,52 @@
     不证明模型会正确使用完整正文或改正历史错误。
 - 未 push、未改写历史、未合并两分支、未启动第九次研究；实验树既有 17 项未跟踪材料保留。
 
+## 第八次后第二轮离线修复（2026-10-19→20，已提交）
+
+- 范围：关闭上一轮复核的四组问题：官方抓取安全、总deadline/大小/请求预算、正文准入与截断
+  贯穿、置信理由与自审计数。真实研究/LLM/Tavily/在线探测/外部裁判调用 **0**；未启动第九次
+  研究、未手改历史报告、未 push/改写历史/合并分支。实验树代码 **`63cc2ca`**，测试
+  **`758e7ee`**，直接文档 **`0e3397e`**；维护文档起点 `49bcae6`。
+- 实现：
+  1. **固定 IP 与安全抓取**：新增 `security/urls.py`、`retrievers/official_fetch.py`；解析后
+     拒绝 private/loopback/link-local/reserved/multicast、mixed DNS、IPv4-mapped、NAT64、
+     Teredo/6to4；每个请求的 httpcore backend 只连已验证 IP，同时 httpx 保留原 URL 主机名给
+     Host/TLS SNI；每跳重定向重新解析/验证/pinning。official 路由只读配置，配置了代理/转发
+     就在任何网络探测前拒绝。未运行时跨工作树导入。
+  2. **总 deadline/大小/计数**：页面级 `asyncio.timeout` 覆盖配置路由选择、DNS、连接、
+     redirect、读取；`aiter_bytes` 实际读取处限制字节，content-type 缺失/不允许明确失败。
+     `OfficialFetchBudget` 分开 page_attempts 与 dispatched HTTP requests（默认 2/6），
+     redirect 在派发处计数，`fetch_stats` 随 official search envelope 记录；LLM/Tavily 上限不变。
+  3. **正文准入与三段范围**：`utils/page_text.py` 结构提取，跳过 nav/form/hidden/aside/footer/
+     header，保留 prose/heading/control/link/non-heading 结构并拒绝纯菜单、登录、heading-only
+     TOC、按钮/链接菜单；`body_url`、page/stored/window 字符数与独立截断标志经 source evaluator、
+     evidence chain、registry、综合与自审。非 official snippet 的整页范围标为 unknown，不再
+     冒充整页；共享窗口保持 1600，但不把“容纳第八材料”当通用有效证明。
+  4. **置信理由**：删除用 passed count 覆盖实质 rationale；review 必须 6 个布尔 checks 且
+     passed_count 为 0–6 且等于 true 数；失败/畸形/不完整为 unavailable，不应用 corrections、
+     不伪造 0/6 或 7/6、保留原 rationale/引用绑定；可用 review 改变等级时追加独立“自审调整”
+     说明，reviewer 对 confidence_rationale 的修订优先，流程计数单列 quality signal。
+- 验证：相关测试后冻结，单次完整套件 **601 passed**；`tests/conftest.py` 从 session 启动起
+  阻断外部 DNS/TCP，仅允许回环。独立复核首轮 **blocked**：请求计数用 resolver audit-entry
+  delta（一个真实探测可记 4–5 次）且非 official snippet 冒充整页；改为配置-only 路由选择、
+  派发处计数、snippet page unknown 后，聚焦复评 **closed**；后续 admission/confidence 增量
+  再次聚焦复核 **closed**。复核文件 `.scratch/v10_fix_review/review*.md`。
+- **未完成/未验证（明确不当作已放行）**：真实站点可达性、正文可引用率、模型是否使用完整窗口、
+  真实内容收益未验证；pinned 只使用首个已验证地址，无多地址 fallback；配置代理/转发时 official
+  正文 fail-closed；纯文本 div/li 导航、长登录/法律文本等低链接页面仍可能误判，未实站校准；
+  HTTP 请求在 transport 构造后、实际派发前预留，极端 client 构造失败可能多计 1（只会保守，
+  不超 cap，不漏已派发请求）；official GET 不进既有 outbound channel 健康/审计记录；无真实
+  页面/模型内容证明。
+- 保留上一轮真实 DNS/GET 越界记录（`49bcae6`）；本轮的 offline 状态以测试进程阻断与复核
+  报告为准，不能把上一轮偏差算作本轮验证。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；均不继承剩余调用上限
 为新研究额度，不自动补跑。小规模校准和正式百例以上评测均未获得执行授权。下方旧现代分支
 累计240及10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
 
-第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的离线修复批次只证明机制与
+第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的两轮离线修复批次只证明机制与
 测试，不证明真实报告内容改善；不得据此自动补跑、换题或开展校准。下一步须先由用户另行决定
 诊断/修复范围与新的运行授权。尚无新冻结正式题集、达标阈值、可用的完整语义评测实现或整批预算，
 不声称项目已可投递。
@@ -195,8 +235,9 @@
 1. **题目**：由独立准备者新建、与 Codex 时期所有题及近义改写查重后的未见题；冻结原始请求、
    约束、影响选择的必答项、允许的条件性结论、严重性锚点、来源政策、参考依据及日期/版本、
    可答性、曝光状态和数据集 hash。实现者不据题定向修代码；运行后不换题、不改 rubric。
-2. **候选身份**：本轮收尾候选 `06017e6`（修复代码 `53a09ed`、测试 `06017e6`；第一批 `f07f87b`；
-   如再有改动，以新提交重新冻结并说明差异）；
+2. **候选身份**：本轮收尾候选 `0e3397e`（第二轮代码 `63cc2ca`、测试 `758e7ee`、文档
+   `0e3397e`；首轮 `53a09ed`/`06017e6`；第一批 `f07f87b`；如再有改动，以新提交重新冻结并
+   说明差异）；
    冻结模型/参数、依赖、检索与缓存策略、启动器与 payload hash；运行前后核对 two trees 与
    原始产物身份。
 3. **额度与停止线**：授权时明确 1 个 case、1 次研究运行（不自动补跑）、LLM/Tavily 请求上限
