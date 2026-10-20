@@ -138,11 +138,18 @@ def _validate_review_counts(checks, passed_count) -> tuple[int | None, str | Non
     """
     if not isinstance(checks, list) or len(checks) != 6:
         return None, "checks_not_six"
+    items: list[int] = []
     passed_values = []
     for check in checks:
         if not isinstance(check, dict) or not isinstance(check.get("passed"), bool):
             return None, "malformed_check"
+        item = check.get("item")
+        if isinstance(item, bool) or not isinstance(item, int):
+            return None, "invalid_item"
+        items.append(item)
         passed_values.append(check["passed"])
+    if sorted(items) != [1, 2, 3, 4, 5, 6]:
+        return None, "item_coverage_invalid"
     if isinstance(passed_count, bool) or not isinstance(passed_count, int):
         return None, "passed_count_not_int"
     if not 0 <= passed_count <= 6:

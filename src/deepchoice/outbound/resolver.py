@@ -16,12 +16,14 @@ from typing import Any
 
 import httpx
 
+from ..security.urls import SafeUrlPolicy
 from .channels import (
     BaseChannel,
     OutboundConfig,
     build_channels,
 )
 from .probe import PROBES, probe_source
+from .safe_fetch import fetch_pinned_bytes, select_direct_channel
 
 BACKOFF_S = (30.0, 120.0, 300.0)
 
@@ -144,6 +146,36 @@ class ChannelResolver:
         if channel is None:
             raise RuntimeError(f"no outbound channel available for source: {source}")
         return self._make_client(channel)
+
+    async def safe_fetch_page(self, source: str, url: str, *,
+                              request_budget,
+                              policy: SafeUrlPolicy | None = None,
+                              deadline_s: float = 15.0,
+                              max_response_bytes: int = 200_000,
+                              max_redirects: int = 3,
+                              allowed_content_types=None) -> dict:
+        """The one safe content entry: configuration-only direct route + pinned IP.
+
+        No probe is made. Proxy/forward routes are rejected before any network
+        request. This method records an audit/health entry for the attempt, but
+        request counts come only from the request_budget reservations made at
+        dispatch; audit entry counts are never used as HTTP counts.
+        """
+        channel, error = select_direct_channel(self.cfg, self.channels, source)
+        if error:
+            request_budget.record_failure(error)
+            self._record(source, None, False, "safe_fetch", error)
+            return {"ok": False, "url": url, "failure": error}
+        result = await fetch_pinned_bytes(
+            url, policy=policy or SafeUrlPolicy(), request_budget=request_budget,
+            deadline_s=deadline_s, max_response_bytes=max_response_bytes,
+            max_redirects=max_redirects,
+            allowed_content_types=allowed_content_types
+            or ("text/html", "application/xhtml+xml", "text/plain"),
+        )
+        self._record(source, getattr(channel, "name", None), bool(result.get("ok")),
+                     "safe_fetch", str(result.get("failure") or "")[:120])
+        return result
 
     async def invalidate(self, source: str) -> None:
         """Drop the current route for `source` (call after a channel failure).

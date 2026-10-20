@@ -1,8 +1,6 @@
 import asyncio
 import os
 
-from .. import outbound as _outbound
-from ..security.urls import SafeUrlPolicy
 from ..utils.llm import call_model
 from .base import BaseRetriever
 from .learned_docs import (
@@ -12,7 +10,11 @@ from .learned_docs import (
     learn,
     load_learned,
 )
-from .official_fetch import OfficialFetchBudget, fetch_official_page
+from .official_fetch import (
+    OfficialFetchBudget,
+    budget_for_research,
+    fetch_official_page,
+)
 
 # A discovered official link is not a body. These are cumulative bounds for one
 # research run: page attempts and actual HTTP requests are counted separately.
@@ -168,42 +170,11 @@ TECH_DOCS: dict[str, dict[str, str]] = {
 }
 
 
-def _resolve_direct_route():
-    """Select a direct channel from configuration without a network probe.
-
-    A validated DNS answer can only be enforced when the actual TCP peer is
-    pinned. A proxy or forwarding channel terminates/forwards the connection
-    somewhere else, so it cannot inherit that proof and is rejected before any
-    probe. The direct channel is selected from configuration; the pinned content
-    request itself is the connectivity check. No probe request is made, so there
-    is no uncounted probe to exclude from the request budget.
-    """
-    resolver = _outbound.get_resolver()
-    cfg = getattr(resolver, "cfg", None)
-    channels = getattr(resolver, "channels", None)
-    if cfg is None or not isinstance(channels, list):
-        return None, "route_unavailable"
-    by_name = {getattr(channel, "name", ""): channel for channel in channels}
-    for name in cfg.order_for("official"):
-        channel = by_name.get(name)
-        if channel is None:
-            continue
-        if name == "local-proxy" and not getattr(channel, "proxy_url", None):
-            continue
-        if name == "self-forward" and not getattr(channel, "base", None):
-            continue
-        if getattr(channel, "kind", "") != "direct":
-            return None, "route_unsupported"
-        return channel, None
-    return None, "route_unavailable"
-
-
 class OfficialSearch(BaseRetriever):
     source = "official"
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        self._fetch_policy = None
         self._fetch_budget = None
         self._last_fetch_stats: dict = {}
 
@@ -248,29 +219,14 @@ class OfficialSearch(BaseRetriever):
             budget.record_failure("http_budget_exhausted")
             return {"ok": False, "url": url, "failure": "http_budget_exhausted",
                     "budget": budget.snapshot()}
-        policy = self._fetch_policy or SafeUrlPolicy()
-        self._fetch_policy = policy
         try:
-            # The total deadline covers configuration route selection, DNS,
-            # connect, redirects and reading. The page fetcher has its own copy
-            # for direct callers; this outer guard also bounds the selection.
-            async with asyncio.timeout(OFFICIAL_FETCH_TOTAL_DEADLINE_S):
-                _channel, route_error = _resolve_direct_route()
-                if route_error:
-                    budget.record_failure(route_error)
-                    return {"ok": False, "url": url, "failure": route_error,
-                            "budget": budget.snapshot()}
-                return await fetch_official_page(
-                    url, policy=policy, budget=budget,
-                    deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
-                    max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
-                    max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
-                    store_chars=OFFICIAL_BODY_STORE_CHARS,
-                )
-        except TimeoutError:
-            budget.record_failure("timeout")
-            return {"ok": False, "url": url, "failure": "timeout",
-                    "budget": budget.snapshot()}
+            return await fetch_official_page(
+                url, budget=budget,
+                deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                store_chars=OFFICIAL_BODY_STORE_CHARS,
+            )
         except Exception as exc:
             budget.record_failure(type(exc).__name__)
             return {"ok": False, "url": url,
@@ -295,10 +251,19 @@ class OfficialSearch(BaseRetriever):
         # overrode docs.python.org with python.langchain.com).
         lookup = {**learned, **TECH_DOCS}
         results = []
-        self._fetch_budget = OfficialFetchBudget(
-            max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
-            max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
-        )
+        if self._fetch_budget is None:
+            try:
+                self._fetch_budget = budget_for_research(
+                    max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                    max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                )
+            except LookupError:
+                # No durable research identity (tests/direct callers): keep the
+                # budget on this retriever instance rather than inventing one.
+                self._fetch_budget = OfficialFetchBudget(
+                    max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                    max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                )
         self._last_fetch_stats = self._fetch_budget.snapshot()
 
         if not candidates:
