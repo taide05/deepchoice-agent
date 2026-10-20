@@ -3,9 +3,10 @@
 更新：2026-10-20。最终目标已明确为代表性数据集上的可信项目指标及完整使用链路；
 一份合格报告只作阶段门槛。第七次失败后的离线修复与评测准备已完成；随后按新授权执行了
 第八次真实单例（1 case、1 run，14/40 LLM、7/24 Tavily、研究墙钟 217.6 s），内容未通过。
-之后完成两轮第八次后**离线**修复批次：首轮代码 `53a09ed`、测试 `06017e6`（修复前既有回归
+之后完成三轮第八次后**离线**修复批次：首轮代码 `53a09ed`、测试 `06017e6`（修复前既有回归
 测试曾触发少量真实 official GET，见下）；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档
-`0e3397e`（真实外呼 0，601 passed）。两轮都只证明机制与测试改善。本次外部调用仅限第八次
+`0e3397e`；第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档 `a5cca17`（真实外呼 0，
+610 passed）。各轮都只证明机制与测试改善。本次外部调用仅限第八次
 授权内的真实研究；未执行基线/基准批次，
 未调用外部模型裁判。目标见[路线](current-roadmap.md)，指标与冻结要求见[评估协议](product-effectiveness-optimization.md)。
 
@@ -14,7 +15,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档 `0e3397e`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 干净，17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档 `0e3397e`；第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档 `a5cca17`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 干净，17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -219,6 +220,37 @@
 - 保留上一轮真实 DNS/GET 越界记录（`49bcae6`）；本轮的 offline 状态以测试进程阻断与复核
   报告为准，不能把上一轮偏差算作本轮验证。
 
+## 第四项收口批次（2026-10-20，已提交）
+
+- 范围：只关闭四项已确认问题：压缩/大小边界、研究级预算与派发计数、统一 outbound 安全入口、
+  自审 item 身份。真实研究/LLM/Tavily/在线探测/外部裁判调用 **0**；未启动第九次研究，未
+  push/改写历史/合并分支。实验树代码 **`e9acb9c`**、测试 **`58d7fb0`**、文档 **`a5cca17`**；
+  维护文档起点 `8d83a0f`。
+- 实现：
+  1. **压缩/大小**：请求 `Accept-Encoding: identity`；任何非 identity Content-Encoding 在
+     `aiter_bytes` 前拒绝，避免 HTTPX 先完整解压大块数据。`bytes_read` 记录从流实际消费
+     字节（含越过 cap 的最后 chunk），`bytes_retained` 记录保留字节；截断长度不冒充全部读取量。
+  2. **预算/派发**：删除每次 `_do_search` 重建预算；按现有 `run_limits` 研究身份
+     (`task_id:run_started_at_epoch`) 归属，同一研究重入累计、不同研究独立；无身份时仅回退
+     实例预算。transport/client 构造成功后才在 dispatch 前预留；重定向逐请求计数；不从
+     audit entry 数量推算 HTTP。默认图只检索一次，未声称真实重入超额。
+  3. **统一入口**：新增 `outbound.safe_fetch_page` / `ChannelResolver.safe_fetch_page` /
+     `outbound/safe_fetch.py`，统一负责配置-only direct 路由、proxy/forward 预拒绝、pinned
+     IP + Host/TLS SNI、每跳重验、总 deadline、identity 编码、读取 cap、content-type 与
+     `safe_fetch` audit/health 记录；retriever 不再自行构造 HTTP client。
+  4. **自审 item 身份**：在 6 布尔 + passed_count 一致性之外，要求 item 为整数且恰好覆盖
+     1–6 各一次；缺项/重复/非法编号 → `item_coverage_invalid`/`invalid_item`，review
+     unavailable，保留原 rationale/引用、不应用 corrections、不伪造 0/6 或 7/6。
+- 验证：相关测试后冻结；单次完整套件 **610 passed**（测试进程 session 起阻断外部 DNS/TCP）。
+  独立复核实际调用链（SelfReviewerAgent、Retriever → official_fetch → outbound safe entry →
+  resolver → pinned fetch），结论 **PASS 四项、无 blocker**；复核文件
+  `.scratch/v11_fix_review/review.md`。
+- **未完成/未验证（不得当作已放行）**：不支持 gzip/br/deflate 压缩正文；仅首个已验证 IP，
+  无多地址 fallback；safe fetch 不进既有 outbound route probe/health，只记 safe_fetch audit；
+  非常规低链接正文仍可能误判；真实站点可达性、正文可引用率、模型窗口使用与内容收益未验证；
+  预算身份按执行 attempt 变化，resume 会开新预算；无真实内容证明。离线 610 passed 只是机制证据。
+- 保留此前真实 DNS/GET 越界记录；本轮以测试进程阻断和独立复核为准，不混算历史偏差。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；均不继承剩余调用上限
@@ -235,9 +267,9 @@
 1. **题目**：由独立准备者新建、与 Codex 时期所有题及近义改写查重后的未见题；冻结原始请求、
    约束、影响选择的必答项、允许的条件性结论、严重性锚点、来源政策、参考依据及日期/版本、
    可答性、曝光状态和数据集 hash。实现者不据题定向修代码；运行后不换题、不改 rubric。
-2. **候选身份**：本轮收尾候选 `0e3397e`（第二轮代码 `63cc2ca`、测试 `758e7ee`、文档
-   `0e3397e`；首轮 `53a09ed`/`06017e6`；第一批 `f07f87b`；如再有改动，以新提交重新冻结并
-   说明差异）；
+2. **候选身份**：本轮收尾候选 `a5cca17`（第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档
+   `a5cca17`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；首轮 `53a09ed`/`06017e6`；第一批
+   `f07f87b`；如再有改动，以新提交重新冻结并说明差异）；
    冻结模型/参数、依赖、检索与缓存策略、启动器与 payload hash；运行前后核对 two trees 与
    原始产物身份。
 3. **额度与停止线**：授权时明确 1 个 case、1 次研究运行（不自动补跑）、LLM/Tavily 请求上限
