@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档 `0e3397e`；第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档 `a5cca17`；第1轮代码 `33eb704`/`8ff13db`、测试 `e4152ab`/`ad13b95`、文档 `b42c2c6`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档 `0e3397e`；第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档 `a5cca17`；第1轮代码 `33eb704`/`8ff13db`、测试 `e4152ab`/`ad13b95`、文档 `b42c2c6`/`5626c7b`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -290,7 +290,7 @@
 ### 第 1 轮离线收口（2026-10-21）
 
 - 提交：代码 **`33eb704`**（随后身份/seal 修复 **`8ff13db`**）、测试 **`e4152ab`**
-  （随后 `ad13b95`）、实验文档 **`b42c2c6`**；最终完整套件 **632 passed**（Python 3.12.4，
+  （随后 `ad13b95`）、实验文档 **`b42c2c6`**/`5626c7b`；最终完整套件 **632 passed**（Python 3.12.4，
   session 启动起阻断外部 DNS/TCP），真实研究/LLM/Tavily/在线探测/外部裁判均 **0**。
 - 内容：候选与平台约束统一来源发现/归属；多词产品可用拼接 host label 或自有 vendor
   host+path，但**非 curated** 的 learned/prior/fallback 来源在安全抓取后正文必须命名
