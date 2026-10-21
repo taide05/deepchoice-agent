@@ -468,6 +468,24 @@ def _identity_tokens(term: str) -> list[str]:
             if len(normalize_term(t)) >= 2]
 
 
+_PUBLIC_HOSTING_SUFFIXES = (
+    # Shared hosting where the product-like label belongs to a user, not to the
+    # product owner. This is a source-identity safety list, not a product alias
+    # table; curated mappings still cover legitimate official pages elsewhere.
+    "github.io", "gitlab.io", "pages.dev", "netlify.app", "vercel.app",
+    "herokuapp.com", "web.app", "firebaseapp.com", "azurewebsites.net",
+    "cloudfront.net", "blogspot.com", "wordpress.com", "medium.com",
+    "substack.com", "notion.site", "readthedocs.io", "s3.amazonaws.com",
+    "storage.googleapis.com",
+)
+
+
+def _is_public_hosting(host: str) -> bool:
+    host = host.lower().strip(".")
+    return any(host == suffix or host.endswith("." + suffix)
+               for suffix in _PUBLIC_HOSTING_SUFFIXES)
+
+
 def source_url_identity_match(term: str, url: str) -> bool:
     """Whether a URL's *identity-bearing host/path* names this declared term.
 
@@ -491,6 +509,10 @@ def source_url_identity_match(term: str, url: str) -> bool:
     tokens = _identity_tokens(term)
     joined = normalize_term(term)
     if not joined or not tokens or len(labels) < 2:
+        return False
+    # Public hosts such as someuser.github.io share a registrable-looking label
+    # with the product but are user subdomains, not official ownership.
+    if _is_public_hosting(host):
         return False
     # A canonical product label immediately before the TLD. Subdomains are fine;
     # a label deeper inside someone else's domain is not an identity proof.

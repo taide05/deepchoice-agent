@@ -67,7 +67,7 @@ streamlit run frontend/app.py
 
 实验分支的 official 来源现在通过 `outbound.safe_fetch_page` 统一安全入口抓取正文；retriever 不再自行构造 HTTP client。它只接受可固定 IP 的 direct 路由，代理和转发通道路由会明确拒绝：
 
-- 来源发现统一覆盖声明的候选和约束中的决定性平台名称：先复用已有普通检索结果和种子映射，再对未解析目标调用现有 LLM fallback；不额外发探测或第二次检索。URL 身份不再要求“产品全名等于域名标签”：多词名称可以匹配拼接的官方 host label，也可以匹配“自有 vendor host + 路径”，但必须再经安全抓取确认页面正文确实命名该候选/约束，否则只保留为 navigation，不能成为证据，也不能仅凭相似域名认定为官方。fallback 的 token 用量进入既有 `token_usage` 记录。
+- 来源发现统一覆盖声明的候选和约束中的决定性平台名称：先复用已有普通检索结果和种子映射，再对未解析目标调用现有 LLM fallback；不额外发探测或第二次检索。URL 身份不再要求“产品全名等于域名标签”：多词名称可以匹配拼接的官方 host label，也可以匹配“自有 vendor host + 路径”；**非 curated 的 learned/prior/fallback 来源**必须再经安全抓取确认页面正文确实命名该候选/约束，否则只保留为 navigation，不能成为证据，也不能仅凭相似域名或公共托管子域认定为官方；curated 种子仍按人工核验处理。fallback 的 token 用量进入既有 `token_usage` 记录。
 - 页面尝试数与实际 HTTP 请求数分开计数；每次研究默认最多 2 次页面尝试、6 次 HTTP 请求（含重定向；official 路由选择只读配置，不再发网络探测请求），重定向都计入后者。来源结果行数不等于 HTTP 请求数；两者分别记录，未知值保持 unknown。预算按现有 `run_limits` 研究执行身份归属：同一研究重入检索累计，不同研究独立；当前默认图只检索一次，不把重入缺口写成已发生的真实超额。
 - 单页共享总 deadline 15 s（覆盖配置路由选择、DNS、连接、重定向和读取）；响应读取上限 200,000 bytes，存储正文上限 8,000 字符，最多 3 跳重定向。`bytes_read` 记录从流实际消费的字节（可能因块边界略超 cap），`bytes_retained` 记录截断后保留的字节；截断后的长度不会被称作全部读取量。
 - 只接受 `Content-Encoding: identity`；gzip 等编码在 `aiter_bytes` 之前明确拒绝，避免 HTTPX 先完整解压大块数据。缺失或不允许的 content-type 也明确失败，不因正文非空就当成可引用正文。
