@@ -6,9 +6,11 @@ request fields and source dates reach the actual synthesis and self-review
 payloads; they do not claim the model will use them correctly.
 """
 import asyncio
+import re
 
 from deepchoice.agents import conclusion_synthesizer as cs
 from deepchoice.agents import self_reviewer as sr
+from deepchoice.utils import candidate_identity as cid
 
 
 def _state():
@@ -87,3 +89,50 @@ class TestSelfReviewInputs:
         }], "navigation": []}
         text = sr._source_register_text(registry)
         assert "date: 2026-01-02" in text, text
+
+
+def test_synthesis_and_review_agents_share_over_budget_selection(monkeypatch):
+    monkeypatch.setattr(cid, "EVIDENCE_INPUT_BUDGET_CHARS", 2000)
+    marker = "SUBQ-ONLY-MARKER"
+    body = ("A" * 3000) + f" {marker} " + ("B" * 3000)
+    state = _state()
+    state["sub_questions"] = [f"What does {marker} require?"]
+    state["evidence_chains"] = [{"sources": [{
+        "title": "Official docs", "url": "https://example.com/docs",
+        "snippet": body,
+    }]}]
+    captured = {}
+
+    async def synthesis_model(prompt, **kwargs):
+        captured["synthesis"] = "\n".join(
+            str(m.get("content", "")) for m in prompt if isinstance(m, dict))
+        return {"winner": "Gitleaks", "recommendation": "Use Gitleaks.",
+                "ranked_options": [], "trade_offs": [], "evidence_summary": "",
+                "confidence": "low", "confidence_rationale": "",
+                "unresolved_questions": [], "scene_fit_note": ""}
+
+    monkeypatch.setattr(cs, "call_model", synthesis_model)
+    asyncio.run(cs.ConclusionSynthesizerAgent().run(dict(state)))
+
+    review_state = dict(state)
+    review_state["final_recommendation"] = {"recommendation": "Use Gitleaks [[1]]"}
+
+    async def review_model(prompt, **kwargs):
+        captured["review"] = "\n".join(
+            str(m.get("content", "")) for m in prompt if isinstance(m, dict))
+        return {"checks": [], "passed_count": 0, "confidence": "low",
+                "knowledge_gaps": [], "corrections": []}
+
+    monkeypatch.setattr(sr, "call_model", review_model)
+    asyncio.run(sr.SelfReviewerAgent().run(review_state))
+
+    synthesis = captured["synthesis"]
+    review = captured["review"]
+    assert marker in synthesis and marker in review
+    syn_body = re.search(r"^\s+content: (.*)$", synthesis, re.MULTILINE).group(1)
+    rev_body = re.search(r"^\s+body: (.*)$", review, re.MULTILINE).group(1)
+    assert syn_body == rev_body
+    syn_ranges = re.search(r"source_ranges=([^;]+);", synthesis).group(1)
+    rev_ranges = re.search(r"source_ranges=([^;]+);", review).group(1)
+    assert syn_ranges == rev_ranges
+    assert len(syn_body) <= 2000

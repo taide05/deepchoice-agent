@@ -5,6 +5,7 @@ from deepchoice.agents.conclusion_synthesizer import build_source_registry
 from deepchoice.utils.candidate_identity import (
     EVIDENCE_INPUT_BUDGET_CHARS,
     bounded_evidence_record,
+    evidence_focus_terms_for_state,
     shared_evidence_package,
 )
 
@@ -119,6 +120,31 @@ def test_synthesis_and_review_use_the_same_package_and_budget():
     assert review_audit[0]["selection_ranges"] == package["views"][1]["selection_ranges"]
 
 
+def test_marker_heavy_over_budget_never_exceeds_serialized_budget():
+    entries = [
+        {"number": index, "title": f"Source {index}",
+         "snippet": ("HEAD " + ("A" * 1200) + " FOCUS-MARKER " + ("B" * 6600))}
+        for index in range(10)
+    ]
+    package = shared_evidence_package(
+        entries, focus_terms=["FOCUS-MARKER"], budget_chars=24000)
+    assert package["full_included"] is False
+    assert package["visible_chars"] <= package["budget_chars"]
+    assert sum(len(view["text"]) for view in package["views"].values()) <= \
+        package["budget_chars"]
+    for view in package["views"].values():
+        assert view["visible_chars"] == len(view["text"])
+        assert view["selection_ranges"]
+
+
+def test_tiny_budget_hard_ceiling_with_many_sources():
+    entries = [{"number": index, "title": str(index), "snippet": "A" * 500}
+               for index in range(7)]
+    package = shared_evidence_package(entries, budget_chars=500)
+    assert package["visible_chars"] <= package["budget_chars"]
+    assert sum(len(view["text"]) for view in package["views"].values()) <= 500
+
+
 def test_over_budget_water_fill_reuses_budget_for_large_bodies():
     entries = [
         {"number": index, "title": f"Source {index}",
@@ -131,6 +157,39 @@ def test_over_budget_water_fill_reuses_budget_for_large_bodies():
     # the old equal-cut allocation would have left substantial headroom unused.
     assert package["visible_chars"] > 20000
     assert package["views"][0]["full_included"] is True
+    assert package["visible_chars"] <= package["budget_chars"]
+    assert sum(len(v["text"]) for v in package["views"].values()) <= package["budget_chars"]
+
+
+def test_synthesis_and_review_share_state_subquestion_selection(monkeypatch):
+    from deepchoice.utils import candidate_identity as cid
+
+    # Force an over-budget package through both actual rendering helpers while
+    # keeping the state-derived focus input identical.
+    monkeypatch.setattr(cid, "EVIDENCE_INPUT_BUDGET_CHARS", 2000)
+    marker = "UNIQUE-SUBQ-MARKER"
+    body = ("A" * 3000) + f" {marker} " + ("B" * 3000)
+    chains = [{"sources": [{
+        "title": "Official docs", "url": "https://docs.example/page",
+        "snippet": body,
+    }]}]
+    state = {
+        "task": {"query": "q", "candidate_techs": ["Candidate"],
+                 "constraints": []},
+        "sub_questions": [f"What does {marker} require?"],
+    }
+    terms = evidence_focus_terms_for_state(state)
+    assert marker in terms
+    text, _mapping, synthesis_audit = cs._summarize_chains(
+        chains, ["Candidate"], with_audit=True, focus_terms=terms)
+    registry = build_source_registry(chains)
+    review_text, review_audit = sr._source_register_text(
+        registry, with_audit=True, focus_terms=terms)
+    assert marker in text and marker in review_text
+    assert synthesis_audit[0]["visible_chars"] <= 2000
+    assert review_audit[0]["visible_chars"] <= 2000
+    assert synthesis_audit[0]["selection_ranges"] == review_audit[0]["selection_ranges"]
+    assert synthesis_audit[0]["visible_chars"] == review_audit[0]["visible_chars"]
 
 
 def test_focus_terms_do_not_change_which_sources_are_admitted():
