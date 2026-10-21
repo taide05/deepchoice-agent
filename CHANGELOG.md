@@ -14,7 +14,7 @@
 ### Changed
 - The confidence rationale is no longer overwritten with a pass-count summary. The substantive synthesis reason is retained; a usable review that changes the level appends a clearly separated adjustment note, and reviewer corrections to `confidence_rationale` take precedence. Failed, malformed or incomplete reviews cannot apply corrections or fabricate counts.
 - Synthesis and self-review now share one evidence package and one total input budget (`EVIDENCE_INPUT_BUDGET_CHARS`, default 24,000 chars). Complete saved bodies are passed when the total fits; only an over-budget package selects bounded excerpts with recorded source ranges, omission markers and context/qualifier windows. The old per-source 1,600-character cut is removed.
-- The run launcher explicitly freezes `LEARNED_DOCS_READONLY=1` and `RETRIEVAL_CACHE_ENABLED=0` so evaluation does not silently learn new mappings or read a mutable retrieval cache.
+- The run launcher explicitly sets `LEARNED_DOCS_READONLY=1` and `RETRIEVAL_CACHE_ENABLED=0` before imports so evaluation does not silently learn new mappings; the experimental tree currently has no additional retrieval-cache consumer, so the cache flag is a recorded freeze policy rather than measured cache behavior.
 
 ### Security
 - Dynamic official fetches reject proxy/forward routes, private/multicast/reserved/NAT64/IPv4-mapped/Teredo/6to4 addresses, mixed DNS answers, unsafe redirects, missing/unsupported content types, non-identity compression, and over-limit bodies at read time. Each redirect is re-resolved and re-pinned to a validated address. `bytes_read` records bytes consumed from the stream (including the block that crosses the cap), while `bytes_retained` records the truncated bytes kept.
