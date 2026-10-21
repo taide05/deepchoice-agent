@@ -73,6 +73,8 @@ streamlit run frontend/app.py
 - 只接受 `Content-Encoding: identity`；gzip 等编码在 `aiter_bytes` 之前明确拒绝，避免 HTTPX 先完整解压大块数据。缺失或不允许的 content-type 也明确失败，不因正文非空就当成可引用正文。
 - 结构性 prose 准入会拒绝检测到的纯菜单、导航、表单/登录页；非常规页面仍可能被误判，不声称覆盖所有站点。正文按“原页面提取 / 存储片段 / 输入可见范围”分别记录 `body_page_chars`、`body_stored_chars`、`visible_chars` 与各自截断标志；没有官方页面元数据的非 official snippet 的整页范围为 unknown，不冒充整页。
 - 综合与自审共用一个证据包和同一个由 research state 派生的选段输入（task、constraints、sub_questions 都一致）：先核算总输入预算 `EVIDENCE_INPUT_BUDGET_CHARS`，所有已保存正文总量在预算内时传递全文；确实超限时才按源有界选段，序列化后的正文和省略说明合计不超过预算，并在两处提示中记录来源范围、省略字符和上下文限定；小正文优先完整保留，剩余预算再分配给大正文，不做末尾盲截断。相关 official 默认值：`OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN=2`、`OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN=6`、`OFFICIAL_FETCH_TOTAL_DEADLINE_S=15`、`OFFICIAL_FETCH_MAX_BYTES=200000`、`OFFICIAL_BODY_STORE_CHARS=8000`。
+- 采集先使用检索实际返回的相关文档 URL，再考虑 curated 根页面，模型生成 URL 只作为最后候选；页面展示标题（如 “Overview - Sigstore”）不再因不等于完整候选名而被丢弃，候选身份、页面讨论对象和来源权威性分别核验。比较式题目的 Tavily adapted queries 会确保一个同时命名所有候选的覆盖查询；同一候选/平台组内，实际检索文档优先于平台首页或根入口，候选正文尝试先于平台约束页，避免平台首页先耗尽正文额度。
+- **简单基线/配对入口**（实验树，离线默认）：`src/deepchoice/evaluation/simple_baseline.py` 在检索完成和来源评分之后冻结同一份共享证据（同原请求、模型、正文和证据预算）。基线只做确定性证据序列化→一次综合→现有引用绑定/报告渲染；候选臂保留冲突/证据链/综合/自审尾段。基线不运行冲突、自审或自动重试。`scripts/run_pair.py` 默认离线，未获得外部预算授权时拒绝外部调用；两臂的增量 LLM 成本/质量信号和共享检索请求分开记录。该入口是实验树旧接口的能力，不代表现代 durable/API 产品接口已通过。
 
 ### Docker 部署
 
