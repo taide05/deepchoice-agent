@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档 `0e3397e`；第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档 `a5cca17`；第1轮代码 `33eb704`/`8ff13db`、测试 `e4152ab`/`ad13b95`、文档 `b42c2c6`/`5626c7b`；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮两处修正 `cc9e533`/`a315e88`，**第十次候选 HEAD `a315e88`**；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -310,19 +310,37 @@
 - learned_docs：保留第九次运行产生的 `gVisor`/`gvisor` 学习条目；调试/测试误写
   `Kata Containers` 条目已移除。该文件仍为 tracked 修改，不提交；第十次运行按
   `LEARNED_DOCS_READONLY=1` 冻结并记录 hash。历史第六至九次产物未改。
-- **第十次单例预算建议（待新授权冻结）**：1 case / 1 run，不补跑；LLM ≤40（含重试/探测）、
-  Tavily POST ≤24；official **4 page attempts / 12 actual HTTP**（2 候选 + 至多 2 个决定性
-  平台来源，保留 redirect 余量）；单页 deadline 15 s、retained ≤200,000 bytes；研究墙钟
-  ≤900 s；外部模型裁判/付费基准 0；费用未知记 unknown；`LEARNED_DOCS_READONLY=1`、
-  `RETRIEVAL_CACHE_ENABLED=0` 并在 seal 中记录 hash。该实验树当前没有额外检索缓存消费者，
-  该变量作为冻结策略记录，不能据此声称缓存行为已被真实测量。
+- **第十次单例冻结预算（用户已授权）**：1 case / 1 run，不补跑、不换题；LLM ≤40（含
+  fallback、重试/探测）；Tavily POST ≤24（含探测/重试）；official **4 page attempts /
+  12 actual HTTP**（redirect 计数）；单页 deadline 15 s、retained ≤200,000 bytes；研究开始
+  后墙钟 ≤900 s，预加载与停止清理单列；外部模型裁判/付费基准 0；费用未知记 unknown；
+  `LEARNED_DOCS_READONLY=1`、`RETRIEVAL_CACHE_ENABLED=0` 并在 seal 中记录 hash。该实验树
+  当前没有额外检索缓存消费者，该变量作为冻结策略记录，不能据此声称缓存行为已被真实测量。
+
+### 第 2 轮前两处修正（2026-10-21）
+
+- 代码 `cc9e533`、测试 `a315e88`，候选 HEAD 冻结为 **`a315e88`**。完整套件 **636 passed**
+  （单次；session 启动阻断外部 DNS/TCP），相关 focused 通过；真实研究/LLM/Tavily/在线探测/
+  外部裁判均 **0**。
+- 修正 1：`EVIDENCE_INPUT_BUDGET_CHARS` 现在是序列化证据正文 + 省略说明的硬上限；选段先
+  预留 marker 空间并在超限时重建 ranges，不用末尾盲截断；tiny/many-source 预算也由
+  water-fill 后削减到上限。旧复现 24,000 预算可输出 24,380，新回归用 marker-heavy 材料
+  断言总序列化文本 ≤24,000。
+- 修正 2：综合与自审都调用 `evidence_focus_terms_for_state`，同一 state 的 task/constraints/
+  sub_questions 产生同一 focus；新回归用真实 `ConclusionSynthesizerAgent` 与
+  `SelfReviewerAgent` 的 payload 断言正文与 `source_ranges` 一致，且 sub-question-only
+  marker 同时进入两阶段。
+- 独立窄复核 `D:\deepchoice-dsh\r2_fix_review\review.md`：两项 **PASS**；复核后补了旧预算
+  形状/实际 agent 回归，未再扩展来源启发式。测试通过仍只证明机制，不证明内容。
+- learned_docs：保留第九次 `gVisor`/`gvisor` 条目，未提交；第十次 seal 前记录实际路径/hash。
 
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权
 **1/1 已使用**（封存失效、内容 not_usable，见上）；均不继承剩余调用上限为新研究额度，
-不自动补跑。第十次单例、小规模校准和正式百例以上评测均须新的明确授权。下方旧现代分支
-累计240及10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
+不自动补跑。第十次单例已获本轮 1 case/1 run 授权但尚未派发；小规模校准和正式百例以上
+评测仍须新的明确授权。下方旧现代分支累计240及10/10账本保持原口径，恢复实验单列，
+不未经逐笔对账就相加；最终24继续封存。
 
 第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的两轮离线修复批次只证明机制与
 测试，不证明真实报告内容改善；不得据此自动补跑、换题或开展校准。下一步须先由用户另行决定
@@ -334,11 +352,10 @@
 1. **题目**：由独立准备者新建、与 Codex 时期所有题及近义改写查重后的未见题；冻结原始请求、
    约束、影响选择的必答项、允许的条件性结论、严重性锚点、来源政策、参考依据及日期/版本、
    可答性、曝光状态和数据集 hash。实现者不据题定向修代码；运行后不换题、不改 rubric。
-2. **候选身份**：本轮收尾候选 `a5cca17`（第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档
-   `a5cca17`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；首轮 `53a09ed`/`06017e6`；第一批
-   `f07f87b`；如再有改动，以新提交重新冻结并说明差异）；
-   冻结模型/参数、依赖、检索与缓存策略、启动器与 payload hash；运行前后核对 two trees 与
-   原始产物身份。
+2. **候选身份**：第十次候选 **`a315e88`**（第2轮两处修正代码 `cc9e533`、测试 `a315e88`
+   在 `5626c7b` 之上；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；
+   如再有改动，以新提交重新冻结并说明差异）；冻结模型/参数、依赖、检索与缓存策略、启动器
+   与 payload hash；运行前后核对 two trees 与原始产物身份。
 3. **额度与停止线**：授权时明确 1 个 case、1 次研究运行（不自动补跑）、LLM/Tavily 请求上限
    （建议沿用本轮授权口径，例如 LLM ≤40 含重试、Tavily POST ≤24 含探测、研究墙钟 ≤900 s，
    最终以新授权冻结值为准）、是否允许独立评审外呼、费用未知记 `unknown`。不调用外部模型裁判。
