@@ -3,13 +3,19 @@ import json
 
 from deepchoice.retrievers import learned_docs
 from deepchoice.retrievers.learned_docs import (
-    domain_label_match,
     extract_terms,
     harvest,
     is_plausible_term,
     learn,
     load_learned,
 )
+from deepchoice.utils.candidate_identity import (
+    constraint_discovery_terms,
+    source_identity_verified,
+    source_text_identity_match,
+    source_url_identity_match,
+)
+from deepchoice.retrievers.official import TECH_DOCS
 
 
 class TestIsPlausibleTerm:
@@ -38,15 +44,58 @@ class TestExtractTerms:
         assert "next.js" in extract_terms("next.js vs nuxt")
 
 
-class TestDomainLabelMatch:
-    def test_full_label_match(self):
-        assert domain_label_match("supabase", "https://supabase.com/docs")
+class TestSourceIdentity:
+    def test_multiword_name_can_be_a_concatenated_host_label(self):
+        assert source_url_identity_match("Kata Containers", "https://katacontainers.io/docs/")
+        assert not source_url_identity_match("Kata Containers",
+                                             "https://katacontainers-blog.example/docs")
 
-    def test_substring_not_a_label_is_rejected(self):
-        assert not domain_label_match("react", "https://myreactblog.com/post")
+    def test_platform_name_can_split_across_vendor_host_and_path(self):
+        assert source_url_identity_match("Amazon EKS", "https://docs.aws.amazon.com/eks/latest/userguide/")
 
-    def test_empty_url_rejected(self):
-        assert not domain_label_match("react", "")
+    def test_unrelated_domain_and_path_do_not_establish_identity(self):
+        assert not source_url_identity_match("Kata Containers",
+                                             "https://evil.example/katacontainers/docs")
+        assert not source_url_identity_match("react", "https://myreactblog.com/post")
+        assert not source_url_identity_match("react", "")
+
+    def test_domain_match_is_not_enough_without_page_support(self):
+        assert not source_text_identity_match("Kata Containers", "Unrelated blog", "nothing here")
+        assert not source_identity_verified("Kata Containers", "https://katacontainers.io/docs",
+                                             "Unrelated blog", "nothing here")
+        assert source_identity_verified("Kata Containers", "https://katacontainers.io/docs",
+                                        "Kata Containers Documentation",
+                                        "Kata Containers runs each Pod in a VM.")
+
+    def test_lookalike_host_and_path_do_not_pass(self):
+        assert not source_url_identity_match(
+            "Kata Containers", "https://kata.example.com/containers")
+        assert not source_url_identity_match(
+            "Kata Containers", "https://docs.katacontainers.io.evil.example/docs")
+        assert source_url_identity_match(
+            "Kata Containers", "https://docs.katacontainers.io/docs")
+
+
+class TestConstraintDiscoveryTerms:
+    def test_ordinary_sentence_capitals_are_not_platform_targets(self):
+        terms = constraint_discovery_terms(
+            ["Deploy the service. Support existing users. Need to ensure uptime."],
+            ["gVisor", "Kata Containers"], TECH_DOCS)
+        assert terms == []
+
+    def test_explicit_platform_names_are_discovered_generically(self):
+        terms = constraint_discovery_terms(
+            ["生产必须运行在 Amazon EKS 和 Kubernetes 上"],
+            ["gVisor", "Kata Containers"], TECH_DOCS)
+        assert any("Amazon EKS" in term for term in terms), terms
+        assert any(term == "Kubernetes" for term in terms), terms
+        assert not any(term in terms for term in ("Deploy", "Support", "Existing"))
+
+    def test_declared_candidates_are_not_platform_targets(self):
+        terms = constraint_discovery_terms(
+            ["必须在 Kata Containers 和 gVisor 之间选择"],
+            ["gVisor", "Kata Containers"], TECH_DOCS)
+        assert not any(term == "Kata Containers" or term == "gVisor" for term in terms)
 
 
 class TestHarvest:
@@ -92,7 +141,7 @@ class TestHarvest:
         self._patch_path(monkeypatch, tmp_path)
         results = [
             {"source": "tavily", "status": "success",
-             "results": [{"url": "https://supabase.com/docs", "title": "Docs"}]},
+             "results": [{"url": "https://supabase.com/docs", "title": "Supabase Docs"}]},
         ]
         harvest(["supabase"], results)
         loaded = json.loads((tmp_path / "learned.json").read_text(encoding="utf-8"))

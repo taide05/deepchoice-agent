@@ -12,7 +12,7 @@ from deepchoice.retrievers.learned_docs import load_learned
 class _FakeFetch:
     """A bounded page-fetch seam: success returns a body, failure a nav row."""
 
-    def __init__(self, fail_urls=(), body="Official page body with the documented mechanism."):
+    def __init__(self, fail_urls=(), body=None):
         self.fail_urls = fail_urls
         self.body = body
         self.called_urls = []
@@ -21,11 +21,12 @@ class _FakeFetch:
         self.called_urls.append(url)
         if url in self.fail_urls:
             return {"ok": False, "url": url, "error": "http:404"}
+        body = self.body or f"Official page for {url} documenting the product."
         return {
             "ok": True, "url": url, "body_url": url, "title": "Official docs",
-            "body": self.body, "source_chars": len(self.body),
-            "stored_chars": len(self.body), "truncated": False,
-            "bytes": len(self.body), "content_type": "text/html",
+            "body": body, "source_chars": len(body),
+            "stored_chars": len(body), "truncated": False,
+            "bytes": len(body), "content_type": "text/html",
         }
 
 
@@ -68,7 +69,7 @@ class TestFallbackConcurrency:
         release = asyncio.Event()
         lock = asyncio.Lock()
 
-        async def fake_propose(self, term):
+        async def fake_propose(self, term, usage=None):
             nonlocal entered
             async with lock:
                 entered += 1
@@ -77,10 +78,11 @@ class TestFallbackConcurrency:
             return f"https://{term}.dev/docs"
 
         async def fake_fetch(self, url):
+            body = f"{url} documented body"
             return {"ok": True, "url": url, "body_url": url, "title": "docs",
-                    "body": "documented body", "source_chars": 15,
-                    "stored_chars": 15, "truncated": False,
-                    "bytes": 15, "content_type": "text/html"}
+                    "body": body, "source_chars": len(body),
+                    "stored_chars": len(body), "truncated": False,
+                    "bytes": len(body), "content_type": "text/html"}
 
         monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
         monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
@@ -137,6 +139,174 @@ class TestLLMFallback:
         import asyncio
         out = asyncio.run(_run_search(monkeypatch, {"url": None}))
         assert all(r["url"] != "" and "supabase" not in r["url"] for r in out)
+
+
+class TestUnifiedSourceDiscovery:
+    """Candidate and platform-constraint discovery share one identity gate."""
+
+    def test_multiword_candidate_is_not_rejected_by_full_label_equality(self, monkeypatch):
+        _patch_outbound(monkeypatch)
+
+        async def fake_propose(self, term, usage=None):
+            assert term == "Kata Containers"
+            return "https://katacontainers.io/docs/"
+
+        async def fake_fetch(self, url):
+            body = "Kata Containers documentation: each Pod runs in a virtual machine."
+            return {"ok": True, "url": url, "body_url": url, "title": "Kata Containers",
+                    "body": body, "source_chars": len(body), "stored_chars": len(body),
+                    "truncated": False, "bytes": len(body), "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
+            "choose a sandbox", [], 10, None, ["Kata Containers"]))
+        kata = [r for r in out if "katacontainers.io" in r["url"]]
+        assert kata, out
+        assert kata[0]["has_body"] is True
+        assert kata[0]["body_identity_verified"] is True
+        assert kata[0]["source_owner"] == "Kata Containers"
+        assert load_learned()["Kata Containers"]["via"] == "body_fetch"
+
+    def test_similar_lookalike_domain_is_not_official_identity(self, monkeypatch):
+        _patch_outbound(monkeypatch)
+        fetched = []
+
+        async def fake_propose(self, term, usage=None):
+            return "https://katacontainers-blog.example/docs"
+
+        async def fake_fetch(self, url):
+            fetched.append(url)
+            return {"ok": True, "url": url, "body_url": url, "title": "Kata Containers",
+                    "body": "Kata Containers blog body", "source_chars": 25,
+                    "stored_chars": 25, "truncated": False, "bytes": 25,
+                    "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
+            "choose a sandbox", [], 10, None, ["Kata Containers"]))
+        assert out == []
+        assert fetched == []
+        assert "Kata Containers" not in load_learned()
+
+    def test_url_identity_alone_is_not_enough(self, monkeypatch):
+        _patch_outbound(monkeypatch)
+
+        async def fake_propose(self, term, usage=None):
+            return "https://katacontainers.io/docs"
+
+        async def fake_fetch(self, url):
+            return {"ok": True, "url": url, "body_url": url, "title": "Unrelated",
+                    "body": "An unrelated page about something else.", "source_chars": 39,
+                    "stored_chars": 39, "truncated": False, "bytes": 39,
+                    "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
+            "choose a sandbox", [], 10, None, ["Kata Containers"]))
+        assert out and out[0]["has_body"] is False
+        assert out[0]["body_error"] == "source_identity_unverified"
+        assert "Kata Containers" not in load_learned()
+
+    def test_learned_fragment_cannot_own_a_multiword_target(self, monkeypatch):
+        """A learned one-token key is a hint, not ownership proof for EKS."""
+        async def fake_fetch(self, url):
+            return {"ok": True, "url": url, "body_url": url, "title": "Amazon SES",
+                    "body": "Amazon SES is an email service.", "source_chars": 32,
+                    "stored_chars": 32, "truncated": False, "bytes": 32,
+                    "content_type": "text/html"}
+
+        async def fake_propose(self, term, usage=None):
+            return None
+
+        monkeypatch.setattr(official_mod, "load_learned", lambda: {
+            "amazon": {"url": "https://docs.aws.amazon.com/ses/email.html",
+                       "title": "Amazon SES — Official Documentation",
+                       "via": "harvest"}})
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
+            "choose a sandbox", [], 10, None, ["Amazon EKS"]))
+        assert not [r for r in out if r.get("has_body")], out
+        assert all("ses" not in r["url"] for r in out), out
+
+    def test_lookalike_path_cannot_supply_a_prior_result(self, monkeypatch):
+        async def fake_propose(self, term, usage=None):
+            return None
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://kata.example.com/containers",
+            "title": "Kata Containers",
+            "snippet": "Kata Containers documentation.",
+        }]}]
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "choose a sandbox", [], 10, None, ["Kata Containers"],
+            prior_results=prior))
+        assert not [r for r in out["results"] if "kata.example.com" in r["url"]]
+
+    def test_platform_constraint_reuses_prior_result_and_verifies_body(self, monkeypatch):
+        _patch_outbound(monkeypatch)
+
+        async def fake_call_model(prompt, model=None, response_format=None,
+                                  timeout=None, usage=None, **kw):
+            if usage is not None:
+                usage.append({"model": "deepseek-flash", "prompt_tokens": 10,
+                              "completion_tokens": 5, "total_tokens": 15})
+            return {"url": None}
+
+        async def fake_fetch(self, url):
+            body = "Amazon EKS managed node groups manage the Kubernetes data plane."
+            return {"ok": True, "url": url, "body_url": url,
+                    "title": "Amazon EKS User Guide", "body": body,
+                    "source_chars": len(body), "stored_chars": len(body),
+                    "truncated": False, "bytes": len(body), "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod, "call_model", fake_call_model)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html",
+            "title": "Amazon EKS User Guide",
+            "snippet": "Amazon EKS is a managed Kubernetes service.",
+        }]}]
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "choose a sandbox", [], 10, None, ["gVisor", "Kata Containers"],
+            constraints=["生产必须运行在 Amazon EKS 上"],
+            prior_results=prior))
+        eks = [r for r in out["results"] if "docs.aws.amazon.com/eks" in r["url"]]
+        assert eks, out
+        assert eks[0]["source_owner"] == "Amazon EKS"
+        assert eks[0]["source_kind"] == "platform_constraint"
+        assert eks[0]["has_body"] is True
+        assert eks[0]["body_identity_verified"] is True
+        # One source row and a mocked fetch seam are reported separately; this
+        # unit fixture does not dispatch real HTTP, so the HTTP counter is 0, not
+        # the number of source rows.
+        assert len(out["results"]) >= 1
+        assert out["fetch_stats"]["http_requests"] == 0
+
+
+class TestFallbackTokenAccounting:
+    def test_official_fallback_usage_enters_the_search_envelope(self, monkeypatch):
+        _patch_outbound(monkeypatch)
+
+        async def fake_call_model(prompt, model=None, response_format=None,
+                                  timeout=None, usage=None, **kw):
+            if usage is not None:
+                usage.append({"model": "deepseek-flash", "prompt_tokens": 17,
+                              "completion_tokens": 3, "total_tokens": 20})
+            return {"url": "https://supabase.com/docs"}
+
+        monkeypatch.setattr(official_mod, "call_model", fake_call_model)
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "supabase vs firebase", [], 10, None, ["supabase", "firebase"]))
+        rows = out.get("token_usage") or []
+        assert rows and rows[0]["agent"] == "official_fallback"
+        assert rows[0]["calls"] == 2
+        assert rows[0]["total_tokens"] == 40
+        assert len(out["results"]) >= 1
 
 
 class TestSeedPrecedence:

@@ -435,6 +435,44 @@ class TestMultiRetriever:
         assert result["partial_failures"] == []
 
     @pytest.mark.asyncio
+    async def test_merges_retriever_token_usage_and_keeps_counts_separate(self):
+        state = {
+            "task": {"query": "test", "scene_context": "solo",
+                     "constraints": [], "candidate_techs": [],
+                     "report_format": "what_why_how"},
+            "sub_questions": [],
+            "token_usage": [{"agent": "query_adapter", "model": "deepseek-flash",
+                             "calls": 1, "prompt_tokens": 10,
+                             "completion_tokens": 5, "total_tokens": 15}],
+        }
+
+        class TokenRetriever:
+            source = "mock"
+            async def search(self, query, sub_questions, max_results=7,
+                             adapted_queries=None, candidate_techs=None):
+                return {"source": self.source, "status": "success",
+                        "results": [{"url": "https://x", "title": "T"}],
+                        "error": None, "latency_ms": 1,
+                        "token_usage": [{"agent": "official_fallback",
+                                         "model": "deepseek-flash", "calls": 2,
+                                         "prompt_tokens": 20,
+                                         "completion_tokens": 10,
+                                         "total_tokens": 30}]}
+
+        agent = MultiRetrieverAgent()
+        with patch.dict(
+            "deepchoice.agents.multi_retriever.RETRIEVER_REGISTRY",
+            {"mock1": TokenRetriever}, clear=True,
+        ):
+            result = await agent.run(state)
+        assert [row["agent"] for row in result["token_usage"]] == [
+            "query_adapter", "official_fallback"]
+        signal = result["quality_signals"][0]
+        assert signal["source_result_rows"] == 1
+        assert signal["official_http_requests"] is None
+        assert signal["official_page_attempts"] is None
+
+    @pytest.mark.asyncio
     async def test_tracks_partial_failures(self):
         state = {
             "task": {"query": "test", "scene_context": "solo", "constraints": [], "report_format": "what_why_how"},
