@@ -239,6 +239,13 @@ A/B 高、C/D 中、E/F 中），同时报告未加权类别结果和加权汇�
 - 正式采集前冻结支持范围、manifest、去重/分组记录、评分与复核规则、基线和候选身份、类别
   权重、不确定区间方法、内容/关键错误/资源阈值、重复性计划、运行器和总额度。实现者在候选
   锁定前不接触未见题；正式执行中不因反馈改代码、提示、参考答案或评分规则。
+- **封存交接（简单流程）**：准备者完成 proposal/payload/run record 后明确停止写入；执行者用
+  `D:\\deepchoice-precodex\\scripts\\seal_case.py`（或同等的只读复制）把完整文件复制到**新的
+  独立目录**，写入 file/canonical/payload/query hash 与冻结评估环境，拒绝覆盖已有 seal；
+  执行者核对 `verify_seal` 后才能派发。运行后的报告、快照、addendum 与复核记录写在 seal 外，
+  **绝不修改 seal 内文件**。每次真实/校准运行显式冻结 `LEARNED_DOCS_READONLY=1` 与
+  `RETRIEVAL_CACHE_ENABLED=0`，并记录 learned-docs/cache 的实际 hash/状态；没有这些记录时
+  不能把运行当作可复用身份。
 
 ### 6.2 评审设计
 
