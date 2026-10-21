@@ -188,6 +188,17 @@ def evidence_focus_terms(task: dict | None = None, *,
     return terms[:40]
 
 
+def evidence_focus_terms_for_state(research_state: dict) -> list[str]:
+    """One state-derived selection input for synthesis and self-review.
+
+    Both stages must make the same excerpt decision from the same research state;
+    in particular sub_questions cannot enter only one stage's focus set.
+    """
+    state = research_state or {}
+    task = state.get("task") or {}
+    return evidence_focus_terms(task, sub_questions=state.get("sub_questions"))
+
+
 def _merge_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
     merged: list[tuple[int, int]] = []
     for start, end in sorted(spans):
@@ -198,27 +209,10 @@ def _merge_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return merged
 
 
-def _select_excerpt(content: str, limit: int,
-                    focus_terms: list[str] | None = None
-                    ) -> tuple[str, list[tuple[int, int]], int, bool]:
-    """Bounded excerpt with context and explicit omitted spans.
-
-    Full text is returned whenever it fits. Otherwise focus-anchored windows
-    (including nearby qualifier terms), plus head/tail context, are selected and
-    the original character ranges are retained. The caller records those ranges;
-    this function never presents an omitted span as visible text.
-    """
-    content = _compact_text(content)
-    if limit <= 0:
-        return "", [], len(content), False
-    if len(content) <= limit:
-        return content, [(0, len(content))], 0, True
-    if limit < 200:
-        # Too small for meaningful context markers; keep the bound honest rather
-        # than emitting a marker that consumes the whole allowance.
-        return content[:limit].rstrip(), [(0, min(limit, len(content)))], \
-            len(content) - min(limit, len(content)), False
-    focus_terms = [t for t in (focus_terms or []) if len(_compact_text(t)) >= 3]
+def _excerpt_spans(content: str, raw_budget: int,
+                    focus_terms: list[str]) -> list[tuple[int, int]]:
+    """Select original-character spans within a raw-text allowance."""
+    raw_budget = max(40, int(raw_budget))
     spans: list[tuple[int, int]] = []
     qualifiers = ("however", "but ", "only", "not ", "cannot", "requires",
                   "must ", "limitation", "depends", "unknown", "caveat",
@@ -240,18 +234,14 @@ def _select_excerpt(content: str, limit: int,
                     spans.append((max(0, qpos - 160), min(len(content), qpos + 240)))
             start = pos + len(needle)
             hits += 1
-    head = max(180, min(len(content), limit // 2))
-    tail = max(120, min(len(content), limit - head - 100))
+    head = max(180, min(len(content), raw_budget // 2))
+    tail = max(120, min(len(content), raw_budget - head - 100))
     spans.append((0, head))
     spans.append((max(0, len(content) - tail), len(content)))
-    merged = _merge_spans(spans)
-    # Select spans in document order until the text budget is reached. The
-    # focus windows are already interleaved with head/tail; if a span is too
-    # large, trim its end and record the smaller range.
     selected: list[tuple[int, int]] = []
     used = 0
-    for start, end in merged:
-        room = limit - used
+    for start, end in _merge_spans(spans):
+        room = raw_budget - used
         if room <= 40:
             break
         end = min(end, start + room)
@@ -260,19 +250,65 @@ def _select_excerpt(content: str, limit: int,
         selected.append((start, end))
         used += end - start
     if not selected:
-        selected = [(0, min(len(content), limit))]
+        selected = [(0, min(len(content), raw_budget))]
+    return selected
+
+
+def _render_excerpt(content: str,
+                    selected: list[tuple[int, int]]) -> tuple[str, int]:
     pieces: list[str] = []
     cursor = 0
     for start, end in selected:
         if start > cursor:
-            pieces.append(f"…[{start - cursor} chars omitted; source offsets {cursor}-{start}]…")
+            pieces.append(
+                f"…[{start - cursor} chars omitted; source offsets {cursor}-{start}]…")
         pieces.append(content[start:end])
         cursor = end
     if cursor < len(content):
-        pieces.append(f"…[{len(content) - cursor} chars omitted; source offsets {cursor}-{len(content)}]…")
-    text = " ".join(pieces)
-    omitted = max(0, len(content) - sum(e - s for s, e in selected))
-    return text, selected, omitted, False
+        pieces.append(
+            f"…[{len(content) - cursor} chars omitted; source offsets {cursor}-{len(content)}]…")
+    omitted = max(0, len(content) - sum(end - start for start, end in selected))
+    return " ".join(pieces), omitted
+
+
+def _select_excerpt(content: str, limit: int,
+                    focus_terms: list[str] | None = None
+                    ) -> tuple[str, list[tuple[int, int]], int, bool]:
+    """Bounded excerpt whose *complete serialized text* fits `limit`.
+
+    Focus-anchored windows (with nearby qualifiers) plus head/tail context are
+    selected from original source offsets. Omission markers are part of the
+    limit; if they would overflow, the raw span allowance is reduced and the
+    excerpt is rebuilt. The final fallback is an explicit bounded prefix with its
+    range and omitted count, never a blind chop of a fully built string.
+    """
+    content = _compact_text(content)
+    if limit <= 0:
+        return "", [], len(content), False
+    if len(content) <= limit:
+        return content, [(0, len(content))], 0, True
+    if limit < 200:
+        kept = min(limit, len(content))
+        return content[:kept], [(0, kept)], len(content) - kept, False
+    focus_terms = [t for t in (focus_terms or []) if len(_compact_text(t)) >= 3]
+    raw_budget = limit
+    selected: list[tuple[int, int]] = []
+    text = ""
+    omitted = len(content)
+    for _ in range(16):
+        selected = _excerpt_spans(content, raw_budget, focus_terms)
+        text, omitted = _render_excerpt(content, selected)
+        if len(text) <= limit:
+            return text, selected, omitted, False
+        overflow = len(text) - limit
+        raw_budget = max(40, raw_budget - overflow)
+        if raw_budget <= 40:
+            break
+    # Very small limits cannot carry meaningful multi-span omission markers.
+    # Retain a contiguous, explicitly recorded prefix rather than truncating a
+    # selected string or emitting a marker that exceeds the budget.
+    kept = min(limit, len(content))
+    return content[:kept], [(0, kept)], len(content) - kept, False
 
 
 def _evidence_limits(contents: list[str], budget: int) -> list[int]:
@@ -292,6 +328,17 @@ def _evidence_limits(contents: list[str], budget: int) -> list[int]:
             limits[index] = len(contents[index])
             remaining -= len(contents[index])
             active.remove(index)
+    # Hard ceiling: tiny configured budgets or very many sources can otherwise
+    # make the minimum per-source floors exceed the declared total. Trim the
+    # largest limits first; zero-limit sources become explicit empty excerpts.
+    excess = sum(limits) - budget
+    if excess > 0:
+        for index in sorted(range(len(limits)), key=lambda i: limits[i], reverse=True):
+            take = min(excess, limits[index])
+            limits[index] -= take
+            excess -= take
+            if excess <= 0:
+                break
     return limits
 
 
@@ -320,7 +367,7 @@ def shared_evidence_package(entries: list[dict], *,
             visible, ranges, omitted, included = content, [(0, len(content))], 0, True
         else:
             visible, ranges, omitted, included = _select_excerpt(
-                content, max(120, limits[index] if limits else budget), focus_terms)
+                content, max(1, limits[index] if limits else budget), focus_terms)
         view = _evidence_view(entry, content, visible, ranges, omitted,
                               included)
         views[key] = view

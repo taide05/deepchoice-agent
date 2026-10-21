@@ -13,7 +13,7 @@
 
 ### Changed
 - The confidence rationale is no longer overwritten with a pass-count summary. The substantive synthesis reason is retained; a usable review that changes the level appends a clearly separated adjustment note, and reviewer corrections to `confidence_rationale` take precedence. Failed, malformed or incomplete reviews cannot apply corrections or fabricate counts.
-- Synthesis and self-review now share one evidence package and one total input budget (`EVIDENCE_INPUT_BUDGET_CHARS`, default 24,000 chars). Complete saved bodies are passed when the total fits; only an over-budget package selects bounded excerpts with recorded source ranges, omission markers and context/qualifier windows. The old per-source 1,600-character cut is removed.
+- Synthesis and self-review now share one evidence package, one total input budget (`EVIDENCE_INPUT_BUDGET_CHARS`, default 24,000 chars) and one state-derived selection input including sub_questions. Complete saved bodies are passed when the total fits; only an over-budget package selects bounded excerpts and the serialized text plus omission markers stays within the budget, with recorded source ranges, omission markers and context/qualifier windows. The old per-source 1,600-character cut and the split selection input are removed, and no blind end-truncation is used.
 - The run launcher explicitly sets `LEARNED_DOCS_READONLY=1` and `RETRIEVAL_CACHE_ENABLED=0` before imports so evaluation does not silently learn new mappings; the experimental tree currently has no additional retrieval-cache consumer, so the cache flag is a recorded freeze policy rather than measured cache behavior.
 
 ### Security

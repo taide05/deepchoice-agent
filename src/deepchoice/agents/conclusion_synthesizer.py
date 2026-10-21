@@ -1056,10 +1056,10 @@ class ConclusionSynthesizerAgent:
 
         from ..utils.candidate_identity import (
             EVIDENCE_INPUT_BUDGET_CHARS,
-            evidence_focus_terms,
+            evidence_focus_terms_for_state,
         )
 
-        focus_terms = evidence_focus_terms(task)
+        focus_terms = evidence_focus_terms_for_state(research_state)
         evidence_text, cite_map, evidence_audit = _summarize_chains(
             evidence_chains, task.get("candidate_techs") or [], with_audit=True,
             focus_terms=focus_terms)

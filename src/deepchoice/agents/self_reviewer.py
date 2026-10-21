@@ -553,10 +553,9 @@ class SelfReviewerAgent:
         # a number means the same source in both paths.
         registry = build_source_registry(research_state.get("evidence_chains") or [])
         recommendation = research_state.get("final_recommendation") or {}
-        from ..utils.candidate_identity import evidence_focus_terms
+        from ..utils.candidate_identity import evidence_focus_terms_for_state
 
-        focus_terms = evidence_focus_terms(research_state.get("task") or {},
-                                           sub_questions=research_state.get("sub_questions"))
+        focus_terms = evidence_focus_terms_for_state(research_state)
 
         source_register_text, evidence_audit = _source_register_text(
             registry, with_audit=True, focus_terms=focus_terms)
