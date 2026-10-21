@@ -149,7 +149,8 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
 
 def _summarize_chains(evidence_chains: list[dict],
                       candidate_techs: list[str] | None = None,
-                      with_audit: bool = False):
+                      with_audit: bool = False,
+                      focus_terms: list[str] | None = None):
     """Format evidence chains for the prompt, assigning each source a stable
     number ([[N]]) that the model cites instead of a verbatim title. Returns
     the rendered text plus the number -> title mapping used to bind citations
@@ -163,11 +164,13 @@ def _summarize_chains(evidence_chains: list[dict],
     no number and is listed separately.
     """
     from ..utils.candidate_identity import (
-        bounded_evidence_record,
+        shared_evidence_package,
         candidate_proper_nouns,
     )
 
     registry = build_source_registry(evidence_chains)
+    evidence_package = shared_evidence_package(
+        registry["entries"], focus_terms=focus_terms or [])
     audit: list[dict] = []
     header: list[str] = []
     names = candidate_proper_nouns(candidate_techs or [])
@@ -220,15 +223,25 @@ def _summarize_chains(evidence_chains: list[dict],
                 lines.append(f"       date: {entry['date']}")
             if entry.get("body_url") and entry["body_url"] != entry["url"]:
                 lines.append(f"       body_url: {entry['body_url']}")
-            source_view = bounded_evidence_record(entry)
+            source_view = evidence_package["views"].get(entry["number"])
+            if source_view is None:
+                # Registry entries always have numbers; this is a defensive
+                # fallback for historical callers that hand-build one.
+                from ..utils.candidate_identity import bounded_evidence_record
+                source_view = bounded_evidence_record(entry)
             lines.append(f"       content: {source_view['text']}")
             page_extracted = (source_view["page_chars"] if source_view["page_chars_known"]
                               else "unknown")
             page_truncated = (source_view["page_truncated"]
                               if source_view["page_chars_known"] else "unknown")
+            ranges = ", ".join(f"{start}-{end}" for start, end in
+                               source_view.get("selection_ranges") or [])
             lines.append(
                 f"       content_visible: {source_view['visible_chars']}/"
                 f"{source_view['stored_chars']} stored-body chars; "
+                f"full_text_included={source_view.get('full_included', False)}; "
+                f"source_ranges={ranges or 'none'}; "
+                f"omitted_chars={source_view.get('omitted_chars', 0)}; "
                 f"page_extracted={page_extracted}; "
                 f"page_truncated={page_truncated}; "
                 f"stored_truncated={source_view['stored_truncated']}"
@@ -242,6 +255,9 @@ def _summarize_chains(evidence_chains: list[dict],
                 "stored_chars": source_view["stored_chars"],
                 "source_chars": source_view["source_chars"],
                 "visible_chars": source_view["visible_chars"],
+                "omitted_chars": source_view.get("omitted_chars", 0),
+                "selection_ranges": source_view.get("selection_ranges") or [],
+                "full_included": source_view.get("full_included", False),
                 "page_truncated": source_view["page_truncated"],
                 "stored_truncated": source_view["stored_truncated"],
                 "truncated": source_view["truncated"],
@@ -1038,8 +1054,15 @@ class ConclusionSynthesizerAgent:
         # the per-conflict resolution is what distinguishes them.
         flagged_source_count = sum(1 for c in evidence_chains if c.get("disputed"))
 
+        from ..utils.candidate_identity import (
+            EVIDENCE_INPUT_BUDGET_CHARS,
+            evidence_focus_terms,
+        )
+
+        focus_terms = evidence_focus_terms(task)
         evidence_text, cite_map, evidence_audit = _summarize_chains(
-            evidence_chains, task.get("candidate_techs") or [], with_audit=True)
+            evidence_chains, task.get("candidate_techs") or [], with_audit=True,
+            focus_terms=focus_terms)
         # The same sub-questions the self-review is given. Synthesis used to
         # receive only the original query, so the questions the pipeline had
         # already decomposed could be silently dropped from the answer.
@@ -1079,8 +1102,6 @@ class ConclusionSynthesizerAgent:
                 "scene_fit_note": "",
             }
 
-        from ..utils.candidate_identity import EVIDENCE_WINDOW_CHARS
-
         quality_signals = [{
             "agent": "conclusion_synthesizer",
             "evidence_chain_count": len(evidence_chains),
@@ -1088,10 +1109,15 @@ class ConclusionSynthesizerAgent:
             "flagged_sources": flagged_source_count,
             "options_ranked": len(result.get("ranked_options", [])),
             "synthesis_confidence": result.get("confidence", "low"),
-            "evidence_window_chars": EVIDENCE_WINDOW_CHARS,
+            "evidence_input_budget_chars": EVIDENCE_INPUT_BUDGET_CHARS,
+            "evidence_full_included": bool(evidence_audit) and all(
+                a.get("full_included") for a in evidence_audit),
             "evidence_sources_visible": len(evidence_audit),
-            "evidence_sources_truncated": sum(1 for a in evidence_audit if a["truncated"]),
+            "evidence_sources_excerpted": sum(
+                1 for a in evidence_audit if not a.get("full_included", False)),
             "evidence_visible_chars": sum(a["visible_chars"] for a in evidence_audit),
+            "evidence_omitted_chars": sum(
+                a.get("omitted_chars", 0) for a in evidence_audit),
             "evidence_source_chars": sum(a["source_chars"] for a in evidence_audit),
             "evidence_page_chars": sum(
                 a["page_chars"] for a in evidence_audit if a["page_chars_known"]),

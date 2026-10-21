@@ -349,20 +349,22 @@ def _citation_coverage(fr: dict, evidence_chains: list[dict] | None = None,
     }
 
 
-def _source_register_text(registry: dict, with_audit: bool = False):
-    """The numbered sources, with title, URL and the shared bounded body view.
+def _source_register_text(registry: dict, with_audit: bool = False,
+                          focus_terms: list[str] | None = None):
+    """The numbered sources, with title, URL and the shared evidence package.
 
-    Rendered from the same registry and the same bounded-evidence function the
-    synthesizer used, so the reviewer sees exactly the same body range and the
-    same cut points. A visible/total character line makes the truncation explicit
-    instead of silently showing a shorter body.
+    Rendered from the same package builder the synthesizer used: complete saved
+    bodies when they fit the total input budget, otherwise the same recorded
+    source ranges. A visible/total character line and omitted-span line make the
+    selection explicit instead of silently showing a shorter body.
     """
-    from ..utils.candidate_identity import bounded_evidence_record
+    from ..utils.candidate_identity import shared_evidence_package
 
     entries = registry.get("entries") or []
     if not entries:
         text = "No citable sources were registered."
         return (text, []) if with_audit else text
+    package = shared_evidence_package(entries, focus_terms=focus_terms or [])
     lines: list[str] = []
     audit: list[dict] = []
     for entry in entries:
@@ -373,14 +375,22 @@ def _source_register_text(registry: dict, with_audit: bool = False):
             lines.append(f"    date: {entry['date']}")
         if entry.get("body_url") and entry["body_url"] != entry.get("url"):
             lines.append(f"    body_url: {entry['body_url']}")
-        view = bounded_evidence_record(entry)
+        view = package["views"].get(entry["number"])
+        if view is None:
+            from ..utils.candidate_identity import bounded_evidence_record
+            view = bounded_evidence_record(entry)
         lines.append(f"    body: {view['text']}")
         page_extracted = (view["page_chars"] if view["page_chars_known"]
                           else "unknown")
         page_truncated = (view["page_truncated"]
                           if view["page_chars_known"] else "unknown")
+        ranges = ", ".join(f"{start}-{end}" for start, end in
+                           view.get("selection_ranges") or [])
         lines.append(
             f"    visible: {view['visible_chars']}/{view['stored_chars']} stored-body chars; "
+            f"full_text_included={view.get('full_included', False)}; "
+            f"source_ranges={ranges or 'none'}; "
+            f"omitted_chars={view.get('omitted_chars', 0)}; "
             f"page_extracted={page_extracted}; "
             f"page_truncated={page_truncated}; "
             f"stored_truncated={view['stored_truncated']}"
@@ -394,6 +404,9 @@ def _source_register_text(registry: dict, with_audit: bool = False):
             "stored_chars": view["stored_chars"],
             "source_chars": view["source_chars"],
             "visible_chars": view["visible_chars"],
+            "omitted_chars": view.get("omitted_chars", 0),
+            "selection_ranges": view.get("selection_ranges") or [],
+            "full_included": view.get("full_included", False),
             "page_truncated": view["page_truncated"],
             "stored_truncated": view["stored_truncated"],
             "truncated": view["truncated"],
@@ -540,9 +553,13 @@ class SelfReviewerAgent:
         # a number means the same source in both paths.
         registry = build_source_registry(research_state.get("evidence_chains") or [])
         recommendation = research_state.get("final_recommendation") or {}
+        from ..utils.candidate_identity import evidence_focus_terms
+
+        focus_terms = evidence_focus_terms(research_state.get("task") or {},
+                                           sub_questions=research_state.get("sub_questions"))
 
         source_register_text, evidence_audit = _source_register_text(
-            registry, with_audit=True)
+            registry, with_audit=True, focus_terms=focus_terms)
         review_fields = _review_fields_text(recommendation)
         cite_stats = _citation_coverage(recommendation, registry=registry)
         uncited_text = ("\n".join(f"- {locator}" for locator in cite_stats["uncited_locations"])
@@ -710,7 +727,7 @@ Field locations with an unresolved citation:
         # confidence and knowledge_gaps were returned but never part of the state
         # it rendered from, so the saved file omitted the "what we don't know yet"
         # section that the endpoint (rendering from the final snapshot) showed.
-        from ..utils.candidate_identity import EVIDENCE_WINDOW_CHARS
+        from ..utils.candidate_identity import EVIDENCE_INPUT_BUDGET_CHARS
 
         reported_gaps = (
             list(result.get("knowledge_gaps") or [])
@@ -742,11 +759,15 @@ Field locations with an unresolved citation:
                 "corrections_rejected": len(rejected),
                 "corrected_fields": [f"{c['option']}/{c['field']}" for c in applied],
                 "report_rerendered": True,
-                "evidence_window_chars": EVIDENCE_WINDOW_CHARS,
+                "evidence_input_budget_chars": EVIDENCE_INPUT_BUDGET_CHARS,
+                "evidence_full_included": bool(evidence_audit) and all(
+                    a.get("full_included") for a in evidence_audit),
                 "evidence_sources_visible": len(evidence_audit),
-                "evidence_sources_truncated": sum(
-                    1 for a in evidence_audit if a["truncated"]),
+                "evidence_sources_excerpted": sum(
+                    1 for a in evidence_audit if not a.get("full_included", False)),
                 "evidence_visible_chars": sum(a["visible_chars"] for a in evidence_audit),
+                "evidence_omitted_chars": sum(
+                    a.get("omitted_chars", 0) for a in evidence_audit),
                 "evidence_source_chars": sum(a["source_chars"] for a in evidence_audit),
                 "evidence_page_chars": sum(
                     a["page_chars"] for a in evidence_audit if a["page_chars_known"]),

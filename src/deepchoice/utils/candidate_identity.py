@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import os
 import re
+from urllib.parse import unquote, urlparse
 
-# One bounded evidence window for every downstream consumer. Synthesis and
-# self-review previously used 600 and 900 characters independently, so the two
-# stages could see different parts of the same saved body with no record of the
-# cut. The window is a display/input bound, not a token budget; the actual visible
-# range is reported by bounded_evidence_record().
-EVIDENCE_WINDOW_CHARS = int(os.environ.get("EVIDENCE_WINDOW_CHARS", "1600"))
+# Shared evidence input budget. The old per-source 1,600-character cut is gone:
+# when all saved bodies fit the budget, both synthesis and self-review receive
+# the complete saved text. Only a genuinely over-budget package is excerpted,
+# and the ranges/omitted spans are recorded for both consumers.
+EVIDENCE_INPUT_BUDGET_CHARS = int(
+    os.environ.get("EVIDENCE_INPUT_BUDGET_CHARS", "24000"))
 
 # Words that carry no identity in a product name. A token from here never makes
 # a mapping entry count as "named by this candidate". This list predates the
@@ -153,17 +154,234 @@ def source_content(source: dict) -> str:
     return ""
 
 
-def bounded_evidence_record(source: dict, limit: int | None = None) -> dict:
-    """The shared bounded view of a source body for synthesis and self-review.
+def _compact_text(text: str) -> str:
+    return " ".join(str(text or "").split())
 
-    Returns the visible excerpt plus three distinct length concepts: the original
-    page's extracted text, the stored body fragment, and the model-visible window.
-    Both stages must read a source through this one function; a caller that shows
-    only the window without these flags can misreport a saved fragment as a whole
-    page. The stored source is never mutated.
+
+def evidence_focus_terms(task: dict | None = None, *,
+                         candidate_techs=None, constraints=None,
+                         sub_questions=None) -> list[str]:
+    """Terms used only when a package is too large to pass in full.
+
+    Candidate names are always retained. Constraint/sub-question vocabulary is
+    included only as generic words from the request; this is not a per-case
+    keyword list and it never changes which sources are admitted.
     """
-    window = EVIDENCE_WINDOW_CHARS if limit is None else int(limit)
-    content = source_content(source)
+    task = task or {}
+    candidates = candidate_techs if candidate_techs is not None else task.get("candidate_techs")
+    constraint_text = constraints if constraints is not None else task.get("constraints")
+    questions = sub_questions if sub_questions is not None else task.get("sub_questions")
+    terms: list[str] = []
+    for value in list(candidates or []):
+        value = _compact_text(value)
+        if value and value not in terms:
+            terms.append(value)
+    text = " ".join([str(x) for x in (constraint_text or [])]
+                    + [str(x) for x in (questions or [])]
+                    + [str(task.get("query") or "")])
+    for raw in re.findall(r"[A-Za-z][A-Za-z0-9.+#-]{2,}", text):
+        low = raw.lower()
+        if (len(low) < 4 or low in _GENERIC or low in terms
+                or low in {t.lower() for t in terms}):
+            continue
+        terms.append(raw)
+    return terms[:40]
+
+
+def _merge_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if not merged or start > merged[-1][1]:
+            merged.append((start, end))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+    return merged
+
+
+def _select_excerpt(content: str, limit: int,
+                    focus_terms: list[str] | None = None
+                    ) -> tuple[str, list[tuple[int, int]], int, bool]:
+    """Bounded excerpt with context and explicit omitted spans.
+
+    Full text is returned whenever it fits. Otherwise focus-anchored windows
+    (including nearby qualifier terms), plus head/tail context, are selected and
+    the original character ranges are retained. The caller records those ranges;
+    this function never presents an omitted span as visible text.
+    """
+    content = _compact_text(content)
+    if limit <= 0:
+        return "", [], len(content), False
+    if len(content) <= limit:
+        return content, [(0, len(content))], 0, True
+    if limit < 200:
+        # Too small for meaningful context markers; keep the bound honest rather
+        # than emitting a marker that consumes the whole allowance.
+        return content[:limit].rstrip(), [(0, min(limit, len(content)))], \
+            len(content) - min(limit, len(content)), False
+    focus_terms = [t for t in (focus_terms or []) if len(_compact_text(t)) >= 3]
+    spans: list[tuple[int, int]] = []
+    qualifiers = ("however", "but ", "only", "not ", "cannot", "requires",
+                  "must ", "limitation", "depends", "unknown", "caveat",
+                  "except", "restrict", "不支持", "仅", "限制", "必须", "未知")
+    haystack = content.lower()
+    for term in focus_terms:
+        needle = _compact_text(term).lower()
+        start = 0
+        hits = 0
+        while hits < 3:
+            pos = haystack.find(needle, start)
+            if pos < 0:
+                break
+            spans.append((max(0, pos - 220), min(len(content), pos + len(needle) + 260)))
+            for qualifier in qualifiers:
+                qpos = haystack.find(qualifier, max(0, pos - 420),
+                                     min(len(content), pos + len(needle) + 420))
+                if qpos >= 0:
+                    spans.append((max(0, qpos - 160), min(len(content), qpos + 240)))
+            start = pos + len(needle)
+            hits += 1
+    head = max(180, min(len(content), limit // 2))
+    tail = max(120, min(len(content), limit - head - 100))
+    spans.append((0, head))
+    spans.append((max(0, len(content) - tail), len(content)))
+    merged = _merge_spans(spans)
+    # Select spans in document order until the text budget is reached. The
+    # focus windows are already interleaved with head/tail; if a span is too
+    # large, trim its end and record the smaller range.
+    selected: list[tuple[int, int]] = []
+    used = 0
+    for start, end in merged:
+        room = limit - used
+        if room <= 40:
+            break
+        end = min(end, start + room)
+        if end - start < 80:
+            continue
+        selected.append((start, end))
+        used += end - start
+    if not selected:
+        selected = [(0, min(len(content), limit))]
+    pieces: list[str] = []
+    cursor = 0
+    for start, end in selected:
+        if start > cursor:
+            pieces.append(f"…[{start - cursor} chars omitted; source offsets {cursor}-{start}]…")
+        pieces.append(content[start:end])
+        cursor = end
+    if cursor < len(content):
+        pieces.append(f"…[{len(content) - cursor} chars omitted; source offsets {cursor}-{len(content)}]…")
+    text = " ".join(pieces)
+    omitted = max(0, len(content) - sum(e - s for s, e in selected))
+    return text, selected, omitted, False
+
+
+def _evidence_limits(contents: list[str], budget: int) -> list[int]:
+    """Water-fill limits: small bodies stay complete, remaining budget goes to large ones."""
+    limits = [0] * len(contents)
+    active = list(range(len(contents)))
+    remaining = budget
+    while active:
+        share = remaining // len(active)
+        cap = max(80, share - min(160, share // 5))
+        small = [index for index in active if len(contents[index]) <= cap]
+        if not small:
+            for index in active:
+                limits[index] = cap
+            break
+        for index in small:
+            limits[index] = len(contents[index])
+            remaining -= len(contents[index])
+            active.remove(index)
+    return limits
+
+
+def shared_evidence_package(entries: list[dict], *,
+                            focus_terms: list[str] | None = None,
+                            budget_chars: int | None = None) -> dict:
+    """Build the one evidence package used by synthesis and self-review.
+
+    The package includes complete saved bodies whenever their total fits the
+    configured input budget. Only when the total is larger does it select bounded
+    excerpts, and every view records its original ranges and omitted characters.
+    """
+    entries = list(entries or [])
+    budget = max(500, int(EVIDENCE_INPUT_BUDGET_CHARS if budget_chars is None
+                          else budget_chars))
+    contents = [_compact_text(source_content(entry)) for entry in entries]
+    total_stored = sum(len(c) for c in contents)
+    full_included = total_stored <= budget
+    limits = None if full_included else _evidence_limits(contents, budget)
+    views: dict[int, dict] = {}
+    visible_total = 0
+    omitted_total = 0
+    for index, (entry, content) in enumerate(zip(entries, contents)):
+        key = entry.get("number", index)
+        if full_included:
+            visible, ranges, omitted, included = content, [(0, len(content))], 0, True
+        else:
+            visible, ranges, omitted, included = _select_excerpt(
+                content, max(120, limits[index] if limits else budget), focus_terms)
+        view = _evidence_view(entry, content, visible, ranges, omitted,
+                              included)
+        views[key] = view
+        visible_total += view["visible_chars"]
+        omitted_total += view["omitted_chars"]
+    return {
+        "budget_chars": budget,
+        "total_stored_chars": total_stored,
+        "visible_chars": visible_total,
+        "omitted_chars": omitted_total,
+        "full_included": full_included,
+        "sources": len(entries),
+        "views": views,
+        "focus_terms": list(focus_terms or []),
+    }
+
+
+def _evidence_view(source: dict, content: str, visible: str,
+                   ranges: list[tuple[int, int]], omitted: int,
+                   full_included: bool) -> dict:
+    stored_chars = len(content)
+    page_known = "body_page_chars" in source or "body_chars" in source
+    if page_known:
+        page_chars = int(source.get("body_page_chars") or source.get("body_chars")
+                         or stored_chars)
+        page_chars = max(page_chars, stored_chars)
+        page_truncated = bool(source.get("body_page_truncated", False))
+    else:
+        page_chars = None
+        page_truncated = None
+    stored_truncated = bool(source.get("body_stored_truncated")) or (
+        page_known and page_chars is not None and page_chars > stored_chars)
+    return {
+        "text": visible,
+        "body_url": str(source.get("body_url") or source.get("url") or ""),
+        "page_chars": page_chars,
+        "page_chars_known": page_known,
+        "stored_chars": stored_chars,
+        "source_chars": page_chars if page_known else stored_chars,
+        "visible_chars": len(visible),
+        "omitted_chars": omitted,
+        "selection_ranges": list(ranges),
+        "full_included": full_included,
+        "page_truncated": page_truncated,
+        "stored_truncated": stored_truncated,
+        "visible_truncated": len(visible) < stored_chars,
+        "truncated": bool(stored_truncated or len(visible) < stored_chars
+                          or page_truncated is True),
+        "has_body": True,
+    }
+
+
+def bounded_evidence_record(source: dict, limit: int | None = None) -> dict:
+    """Legacy single-source view; no hidden per-source cut.
+
+    With no limit the complete stored body is returned. A caller that passes a
+    limit asks for an explicit excerpt and receives its source ranges. The
+    synthesis and self-review consumers use `shared_evidence_package` instead,
+    so they share one total input budget.
+    """
+    content = _compact_text(source_content(source))
     if not content:
         title = source.get("title", "") or "this source"
         _content, navigation_only = split_navigation_label(source.get("snippet", ""))
@@ -174,49 +392,16 @@ def bounded_evidence_record(source: dict, limit: int | None = None) -> dict:
         else:
             gap = f"NO CONTENT RETRIEVED — {title} was indexed without a body."
         return {
-            "text": gap,
-            "page_chars": 0,
-            "page_chars_known": False,
-            "stored_chars": 0,
-            "source_chars": 0,
-            "visible_chars": 0,
-            "page_truncated": False,
-            "stored_truncated": False,
-            "truncated": False,
-            "has_body": False,
+            "text": gap, "page_chars": 0, "page_chars_known": False,
+            "stored_chars": 0, "source_chars": 0, "visible_chars": 0,
+            "omitted_chars": 0, "selection_ranges": [], "full_included": False,
+            "page_truncated": False, "stored_truncated": False,
+            "truncated": False, "has_body": False,
         }
-    content = " ".join(str(content).split())
-    stored_chars = len(content)
-    page_known = "body_page_chars" in source or "body_chars" in source
-    if page_known:
-        page_chars = int(source.get("body_page_chars") or source.get("body_chars")
-                         or stored_chars)
-        page_chars = max(page_chars, stored_chars)
-        page_truncated = bool(source.get("body_page_truncated", False))
-    else:
-        # A Tavily/GitHub/arXiv snippet is a saved fragment, not a known full
-        # page. Do not manufacture page_extracted=<snippet length> or claim the
-        # page was not truncated; mark the page range unknown.
-        page_chars = None
-        page_truncated = None
-    visible = content if stored_chars <= window else content[:window].rstrip()
-    stored_truncated = bool(source.get("body_stored_truncated")) or (
-        page_known and page_chars > stored_chars)
-    return {
-        "text": visible,
-        "body_url": str(source.get("body_url") or source.get("url") or ""),
-        "page_chars": page_chars,
-        "page_chars_known": page_known,
-        "stored_chars": stored_chars,
-        "source_chars": page_chars if page_known else stored_chars,
-        "visible_chars": len(visible),
-        "page_truncated": page_truncated,
-        "stored_truncated": stored_truncated,
-        "visible_truncated": len(visible) < stored_chars,
-        "truncated": bool(stored_truncated or len(visible) < stored_chars
-                          or page_truncated is True),
-        "has_body": True,
-    }
+    if limit is None:
+        return _evidence_view(source, content, content, [(0, len(content))], 0, True)
+    visible, ranges, omitted, included = _select_excerpt(content, int(limit), [])
+    return _evidence_view(source, content, visible, ranges, omitted, included)
 
 
 def bounded_content_summary(source: dict, limit: int | None = None) -> str:
@@ -276,3 +461,162 @@ def names_candidate(text: str, candidate: str) -> bool:
 # one. `names_candidate` above remains in use for the official-source mapping
 # lookup, which is a different question (which curated docs entry does this
 # declared candidate name).
+
+
+def _identity_tokens(term: str) -> list[str]:
+    return [normalize_term(t) for t in _name_tokens(term)
+            if len(normalize_term(t)) >= 2]
+
+
+def source_url_identity_match(term: str, url: str) -> bool:
+    """Whether a URL's *identity-bearing host/path* names this declared term.
+
+    This replaces the old 'the complete product name must equal a host label'
+    test. A multi-word name may be concatenated into one host label
+    (`Kata Containers` -> katacontainers.io) or split across an owned vendor host
+    and path (`Amazon EKS` -> docs.aws.amazon.com/eks). It is still a bounded
+    identity test, not a similarity score: an unrelated host such as
+    `katacontainers-blog.example` or `example.com/katacontainers` does not pass.
+    """
+    term = str(term or "").strip()
+    url = str(url or "").strip()
+    if not term or not url:
+        return False
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower().strip(".")
+    if not host:
+        return False
+    labels = [normalize_term(part) for part in host.split(".") if part]
+    path = normalize_term(unquote(parsed.path or ""))
+    tokens = _identity_tokens(term)
+    joined = normalize_term(term)
+    if not joined or not tokens or len(labels) < 2:
+        return False
+    # A canonical product label immediately before the TLD. Subdomains are fine;
+    # a label deeper inside someone else's domain is not an identity proof.
+    if len(labels) >= 2 and labels[-2] == joined and len(joined) >= 3:
+        return True
+    if len(tokens) == 1:
+        return tokens[0] == labels[-2] and len(tokens[0]) >= 3
+    # Multi-word platform/product names may split across an owned vendor host and
+    # path (aws.amazon.com/eks, docs.github.com/actions). The first token must be
+    # the registrable host label; the remaining tokens must be in the path.
+    if tokens[0] == labels[-2] and all(token in path or token in labels
+                                       for token in tokens[1:]):
+        return True
+    return False
+
+
+def source_text_identity_match(term: str, title: str = "",
+                               content: str = "") -> bool:
+    """Whether a page's title/body actually names the declared term.
+
+    URL similarity alone is not enough to treat a page as the product's official
+    source; the fetched page must name the product. The same function is used for
+    candidate products and declared platform constraints.
+    """
+    term = str(term or "").strip()
+    if not term:
+        return False
+    title = str(title or "")
+    content = str(content or "")
+    if names_candidate(title, term) or names_candidate(content, term):
+        return True
+    joined = normalize_term(term)
+    if len(joined) < 3:
+        return False
+    for value in (title, content):
+        normalized = re.sub(r"[^a-z0-9]+", " ", value.lower())
+        if re.search(rf"(?<![a-z0-9]){re.escape(joined)}(?![a-z0-9])",
+                     normalized):
+            return True
+    return False
+
+
+def source_identity_verified(term: str, url: str, title: str = "",
+                             content: str = "") -> bool:
+    """A safe-fetched source is attributable only if URL and page agree."""
+    return (source_url_identity_match(term, url)
+            and source_text_identity_match(term, title, content))
+
+
+_CONSTRAINT_STOP_STARTS = {
+    "our", "the", "current", "first", "second", "third", "this", "that",
+    "we", "if", "when", "only", "must", "should", "can", "cannot", "future",
+    "platform", "production", "customer", "customers", "team", "they", "it",
+    "all", "any", "other", "this", "these", "those",
+}
+
+
+def _platform_like_phrase(raw: str, lookup) -> bool:
+    words = [w for w in re.split(r"\s+", raw.strip()) if w]
+    if not words:
+        return False
+    if lookup and mapping_key_for([raw], lookup):
+        return True
+    if len(words) == 1:
+        word = words[0]
+        # All-caps acronyms or internal-caps product names (RuntimeClass) are
+        # platform-like; an ordinary sentence-start capitalization (Deploy,
+        # Support, Existing) is not.
+        return ((word.isupper() and len(word) >= 2)
+                or any(ch.isupper() for ch in word[1:]))
+    # Multi-word name: require a distinctive later acronym/digit or a known
+    # mapping match, so "Deploy the service" cannot become a discovery target.
+    return (any(w.isupper() and len(w) >= 2 for w in words[1:])
+            or any(any(ch.isdigit() for ch in w) for w in words[1:]))
+
+
+def constraint_discovery_terms(constraints, candidate_techs=None,
+                               lookup=None, limit: int = 3) -> list[str]:
+    """Generic platform/constraint names worth official-source discovery.
+
+    This is deliberately not a product alias table. It extracts explicit
+    capitalized/acronym phrases from the frozen constraints, filters ordinary
+    words, and prioritises names already present in the curated mapping. The
+    declared candidates are excluded because they are handled separately.
+    """
+    candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
+    candidate_keys = {normalize_term(c) for c in candidates}
+    terms: list[str] = []
+    seen: set[str] = set()
+    for constraint in constraints or []:
+        text = str(constraint or "")
+        for match in re.finditer(
+                r"(?<![A-Za-z0-9])"
+                r"([A-Z][A-Za-z0-9.+#-]*(?:\s+[A-Z0-9][A-Za-z0-9.+#-]*){0,2})",
+                text):
+            raw = match.group(1).strip()
+            raw = raw.strip(".,;:()[]")
+            if not raw:
+                continue
+            words = [w for w in re.split(r"\s+", raw) if w]
+            if not words or words[0].lower() in _CONSTRAINT_STOP_STARTS:
+                continue
+            low = normalize_term(raw)
+            if len(low) < 3 or low in candidate_keys or low in seen:
+                continue
+            if low in _GENERIC:
+                continue
+            if any(normalize_term(c) == low for c in candidates):
+                continue
+            if not _platform_like_phrase(raw, lookup):
+                continue
+            seen.add(low)
+            terms.append(raw)
+        for acronym in re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9]{1,7}(?![A-Za-z0-9])",
+                                  text):
+            low = normalize_term(acronym)
+            if len(low) < 3 or low in seen or low in _GENERIC:
+                continue
+            if any(normalize_term(c).startswith(low) for c in candidates):
+                continue
+            seen.add(low)
+            terms.append(acronym)
+    preferred = []
+    if lookup:
+        for term in terms:
+            if mapping_key_for([term], lookup):
+                preferred.append(term)
+    ordered = preferred + [t for t in terms if t not in preferred]
+    return ordered[:max(0, limit)]

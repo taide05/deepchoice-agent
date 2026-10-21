@@ -1,12 +1,15 @@
 import asyncio
 import os
 
-from ..utils.llm import call_model
+from ..utils.candidate_identity import (
+    constraint_discovery_terms,
+    source_identity_verified,
+    source_text_identity_match,
+    source_url_identity_match,
+)
+from ..utils.llm import call_model, summarize_usage
 from .base import BaseRetriever
 from .learned_docs import (
-    _looks_official,
-    domain_label_match,
-    is_plausible_term,
     learn,
     load_learned,
 )
@@ -36,7 +39,7 @@ OFFICIAL_BODY_STORE_CHARS = int(os.environ.get("OFFICIAL_BODY_STORE_CHARS", "800
 # Self-updates at runtime: learned pairs (harvest + LLM fallback) persist
 # to learned_docs.json and are consulted before this seed dict.
 
-_LLM_FALLBACK_MAX = 3
+_LLM_FALLBACK_MAX = 4
 
 _VS_MARKERS = (" vs ", " versus ", " 对比 ", " 比较 ")
 
@@ -177,16 +180,37 @@ class OfficialSearch(BaseRetriever):
         super().__init__()
         self._fetch_budget = None
         self._last_fetch_stats: dict = {}
+        self._fallback_usage: list[dict] = []
+        self._discovery_context: dict = {}
 
-    async def search(self, *args, **kwargs) -> dict:
+    async def search(self, query: str, sub_questions: list[str],
+                     max_results: int = 7,
+                     adapted_queries: list[str] | None = None,
+                     candidate_techs: list[str] | None = None,
+                     constraints: list[str] | None = None,
+                     prior_results: list[dict] | None = None) -> dict:
+        # The official source runs after the ordinary retrievers and may reuse
+        # their already-paid result rows for source discovery. It never issues a
+        # second search. The context is not a second source of truth; the safe
+        # fetch below still verifies the page identity.
+        self._discovery_context = {
+            "constraints": list(constraints or []),
+            "prior_results": list(prior_results or []),
+        }
+        result = await super().search(
+            query, sub_questions, max_results,
+            adapted_queries=adapted_queries, candidate_techs=candidate_techs)
         # Keep the base envelope; add the cumulative count record for this run's
-        # official source. The counters cover page attempts, dispatched HTTP
-        # requests (including redirects), bytes and failure codes.
-        result = await super().search(*args, **kwargs)
+        # official source. Source result rows and dispatched HTTP requests are
+        # different counters and both remain explicit.
         result["fetch_stats"] = dict(self._last_fetch_stats)
+        if self._fallback_usage:
+            result["token_usage"] = [
+                summarize_usage("official_fallback", self._fallback_usage)]
         return result
 
-    async def _propose_official_url(self, term: str) -> str | None:
+    async def _propose_official_url(self, term: str,
+                                    usage: list | None = None) -> str | None:
         """LLM fallback: propose an official docs URL for an unmapped term."""
         result = await call_model(
             [
@@ -201,7 +225,7 @@ class OfficialSearch(BaseRetriever):
                 {"role": "user", "content": f"Official documentation URL for: {term}"},
             ],
             model="deepseek-flash", tag="official_fallback",
-            response_format="json",
+            response_format="json", usage=usage,
         )
         if isinstance(result, dict):
             return result.get("url")
@@ -238,13 +262,10 @@ class OfficialSearch(BaseRetriever):
         # Only declared candidates may introduce an official source. The adapted
         # queries are search aids: an ordinary word in them is not a research
         # target, and a learned-cache hit is not proof of candidacy either.
-        from ..utils.candidate_identity import (
-            candidate_names_key,
-            mapping_key_for,
-            normalize_term,
-        )
+        from ..utils.candidate_identity import candidate_names_key, normalize_term
 
         candidates = [c for c in (candidate_techs or []) if str(c).strip()]
+        self._fallback_usage = []
         learned = load_learned()
         # Curated seed always wins: a learned entry must never shadow a
         # hand-verified mapping (e.g. a harvested 'python' entry once
@@ -271,69 +292,130 @@ class OfficialSearch(BaseRetriever):
             # Better an explicit gap than an unowned official-looking source.
             return []
 
-        # Mapping entries that a declared candidate actually names. This is the
-        # whole bound: an unmapped candidate yields no official source rather
-        # than matching on a shared ordinary word.
-        named_keys = set(mapping_key_for(candidates, lookup))
+        context = getattr(self, "_discovery_context", {}) or {}
+        constraint_terms = constraint_discovery_terms(
+            context.get("constraints") or [], candidates, lookup)
+        targets: list[tuple[str, str]] = [(c, "candidate") for c in candidates]
+        seen_targets = {c.strip().lower() for c in candidates}
+        for term in constraint_terms:
+            if term.strip().lower() in seen_targets:
+                continue
+            seen_targets.add(term.strip().lower())
+            targets.append((term, "platform_constraint"))
 
-        # Match whole declared candidate names against the mapping, so
-        # 'PostgreSQL' inside 'pgvector on Amazon RDS for PostgreSQL' resolves to
-        # the PostgreSQL docs, while 'vector' inside 'pgvector' cannot resolve to
-        # an unrelated product that merely shares that word.
-        for candidate in candidates:
-            named = [k for k in named_keys if candidate_names_key(candidate, k)]
+        # Mapping entries that a declared target actually names. Longest match
+        # wins, so a candidate naming both 'postgresql' and a more specific key
+        # resolves to the more specific one. The mapping is the only source list
+        # that carries hand-verified ownership; it is not inferred from a
+        # lookalike domain.
+        for owner, kind in targets:
+            named = [k for k in lookup if candidate_names_key(owner, k)]
             if not named:
                 continue
-            # Longest match wins, so a candidate naming both 'postgresql' and a
-            # more specific key resolves to the more specific one.
             key = max(named, key=lambda k: len(_normalize(k)))
             if key not in lookup:
                 continue
+            curated = key in TECH_DOCS
+            if not curated:
+                # A learned cache entry is a hint, not ownership proof. It may
+                # resolve only the same full identity (e.g. learned "gVisor" for
+                # gVisor), never a one-token fragment like "amazon" for a
+                # multi-word target. Its page body is verified before admission.
+                if normalize_term(key) != normalize_term(owner):
+                    continue
             doc = lookup[key]
             entry = {
                 "url": doc["url"],
                 "title": doc["title"],
-                # A mapping entry is a discovered link until the bounded page
-                # fetch below succeeds; if it fails it stays navigation.
                 "snippet": "",
                 "has_body": False,
                 "date": "",
-                "_from_mapping": True,
+                "_from_mapping": curated,
+                "_from_learned": not curated,
+                "_from_prior_search": False,
+                "source_owner": owner,
+                "source_kind": kind,
             }
             if entry["url"] not in {r["url"] for r in results}:
                 results.append(entry)
 
-        # LLM fallback stays available, but only for a declared candidate that the
-        # mapping does not name — never for an ordinary word from the query.
-        unmapped_candidates = [
-            c for c in candidates
-            if not any(normalize_term(k) in normalize_term(c) for k in named_keys)
-        ]
+        # Reuse already-paid ordinary-search rows. A row becomes an official
+        # target only when its URL and visible snippet both name the declared
+        # product/constraint; the safe-fetched page must confirm the same identity
+        # before the body is admitted. No new search is issued for this.
+        for owner, kind in targets:
+            for channel in context.get("prior_results") or []:
+                for item in channel.get("results") or []:
+                    url = str(item.get("url") or "")
+                    title = str(item.get("title") or "")
+                    snippet = str(item.get("snippet") or item.get("content") or "")
+                    if not url.startswith(("http://", "https://")):
+                        continue
+                    if not source_url_identity_match(owner, url):
+                        continue
+                    if not source_text_identity_match(owner, title, snippet):
+                        continue
+                    if url in {r["url"] for r in results}:
+                        continue
+                    results.append({
+                        "url": url,
+                        "title": title or f"{owner} — discovered documentation",
+                        "snippet": "",
+                        "has_body": False,
+                        "date": str(item.get("date") or ""),
+                        "_from_mapping": False,
+                        "_from_prior_search": True,
+                        "source_owner": owner,
+                        "source_kind": kind,
+                    })
+                    break
+                if any(r.get("source_owner") == owner for r in results):
+                    break
 
-        async def _resolve_fallback(candidate):
-            url = await self._propose_official_url(candidate)
-            if not url or not domain_label_match(candidate, url):
-                return None
-            if not _looks_official(url):
-                return None
-            return candidate, url
+        # LLM fallback stays available for declared candidates and explicit
+        # platform constraints that neither the mapping nor an existing search
+        # row resolved. The URL must still pass the bounded identity gate, and
+        # the fetched body must name the same owner.
+        resolved_owners = {r.get("source_owner") for r in results}
+        unresolved = [(owner, kind) for owner, kind in targets
+                      if owner not in resolved_owners]
 
-        pending = unmapped_candidates[:_LLM_FALLBACK_MAX]
-        resolved = await asyncio.gather(*[_resolve_fallback(c) for c in pending])
+        async def _resolve_fallback(owner):
+            url = await self._propose_official_url(
+                owner, usage=self._fallback_usage)
+            if not url or not source_url_identity_match(owner, url):
+                return None
+            return owner, url
+
+        pending = unresolved[:_LLM_FALLBACK_MAX]
+        resolved = await asyncio.gather(
+            *[_resolve_fallback(owner) for owner, _kind in pending],
+            return_exceptions=True)
+        kind_by_owner = dict(targets)
         for item in resolved:
-            if item is None:
+            if isinstance(item, Exception) or item is None:
+                # One fallback failure is a source gap, not a reason to discard
+                # successful candidate/platform rows from other targets.
                 continue
-            candidate, url = item
+            owner, url = item
             entry = {
                 "url": url,
-                "title": f"{candidate} — Official Documentation",
+                "title": f"{owner} — Official Documentation",
                 "snippet": "",
                 "has_body": False,
                 "date": "",
                 "_from_mapping": False,
+                "_from_prior_search": False,
+                "source_owner": owner,
+                "source_kind": kind_by_owner.get(owner, "candidate"),
             }
             if entry["url"] not in {r["url"] for r in results}:
                 results.append(entry)
+
+        # Candidate pages are always attempted before platform-constraint pages:
+        # a page budget must not let a general platform document crowd out the
+        # declared products being compared.
+        results.sort(key=lambda entry: 0 if entry.get("source_kind") == "candidate" else 1)
 
         # Fetch bounded bodies only after candidates/URLs are de-duplicated, so a
         # failed or seeded link cannot trigger duplicate network work. Page
@@ -350,6 +432,7 @@ class OfficialSearch(BaseRetriever):
             if not fetched.get("ok"):
                 entry["has_body"] = False
                 entry["snippet"] = ""
+                entry["body_identity_verified"] = False
                 entry["body_error"] = str(
                     fetched.get("failure") or fetched.get("error") or "fetch_failed")
                 entry["fetch_status"] = "navigation"
@@ -358,15 +441,36 @@ class OfficialSearch(BaseRetriever):
                 if fetched.get("prose_chars") is not None:
                     entry["body_prose_chars"] = fetched.get("prose_chars")
                 continue
-            entry["snippet"] = fetched["body"]
+            body = fetched["body"]
+            owner = entry.get("source_owner") or entry.get("title") or ""
+            if not entry.get("_from_mapping"):
+                # The fallback entry's title is generated by us, so only the
+                # fetched body may establish identity. A prior-search title is
+                # real search metadata and may be used alongside the body.
+                identity_title = (entry.get("title", "")
+                                  if entry.get("_from_prior_search") else "")
+                if not source_identity_verified(owner, entry["url"],
+                                                identity_title, body):
+                    # A safe-fetched page that does not name the declared
+                    # product/constraint is not that product's evidence. Keep the
+                    # attempt visible as navigation, never as a citable body.
+                    entry["has_body"] = False
+                    entry["snippet"] = ""
+                    entry["body_identity_verified"] = False
+                    entry["fetch_status"] = "navigation"
+                    entry["body_url"] = fetched.get("body_url") or entry["url"]
+                    entry["body_error"] = "source_identity_unverified"
+                    continue
+            entry["snippet"] = body
             entry["has_body"] = True
+            entry["body_identity_verified"] = True
             entry["fetch_status"] = "body"
             entry["body_url"] = fetched.get("body_url") or entry["url"]
             entry["body_page_chars"] = fetched.get("page_chars", fetched.get(
-                "source_chars", len(fetched["body"])))
+                "source_chars", len(body)))
             entry["body_chars"] = entry["body_page_chars"]
             entry["body_stored_chars"] = fetched.get(
-                "stored_chars", len(fetched["body"]))
+                "stored_chars", len(body))
             entry["body_page_truncated"] = bool(fetched.get("page_truncated"))
             entry["body_stored_truncated"] = bool(fetched.get(
                 "stored_truncated", len(entry["snippet"]) < entry["body_stored_chars"]))
@@ -377,16 +481,11 @@ class OfficialSearch(BaseRetriever):
             entry["body_prose_chars"] = fetched.get("prose_chars", len(entry["snippet"]))
             entry["body_admission"] = fetched.get("admission", "prose_ok")
             entry["body_content_type"] = fetched.get("content_type", "")
-            # Learn only a URL whose body was actually collected, and only when
-            # the URL came from the LLM fallback. Re-learning a curated mapping on
-            # every run would rewrite the user's learned_docs cache for no gain.
-            if not entry.get("_from_mapping"):
-                for candidate in candidates:
-                    if entry["url"].startswith(("http://", "https://")) and \
-                            domain_label_match(candidate, entry["url"]):
-                        learn(candidate, entry["url"],
-                              f"{candidate} — Official Documentation", via="body_fetch")
-                        break
+            # Learn only a verified identity whose body was actually collected,
+            # and only when it came from discovery rather than the curated map.
+            if not entry.get("_from_mapping") and entry.get("body_identity_verified"):
+                learn(owner, entry["url"],
+                      f"{owner} — Official Documentation", via="body_fetch")
 
         self._last_fetch_stats = budget.snapshot()
         return results[:max_results]

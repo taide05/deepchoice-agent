@@ -115,6 +115,13 @@ def main() -> int:
     os.chdir(WORKTREE)
     sys.path.insert(0, str(SRC))
 
+    # Evaluation identity: the learned-docs file and retrieval cache are frozen
+    # for the whole run. These are set before the child imports the modules that
+    # read them, and before verify_identity imports learned_docs in this process.
+    os.environ["LEARNED_DOCS_READONLY"] = "1"
+    os.environ["RETRIEVAL_CACHE_ENABLED"] = "0"
+    print("evaluation freeze: LEARNED_DOCS_READONLY=1 RETRIEVAL_CACHE_ENABLED=0")
+
     loaded = load_credentials()
     print("credentials loaded (values not shown):")
     for name, state in sorted(loaded.items()):

@@ -53,21 +53,52 @@ class MultiRetrieverAgent:
             sub_questions = _supplement_sub_questions(sub_questions, query)
 
         tasks = []
+        ordinary_names = []
+        official_class = None
         candidate_techs = list(research_state.get("task", {}).get("candidate_techs") or [])
+        constraints = list(research_state.get("task", {}).get("constraints") or [])
         for name, cls in RETRIEVER_REGISTRY.items():
+            if name == "official":
+                official_class = cls
+                continue
             retriever = cls()
             adapted = adapted_queries.get(name, []) if adapted_queries else []
             # Candidates travel with the retrieval so the official source can
             # select by declared identity instead of by ordinary query words.
+            ordinary_names.append(name)
             tasks.append(retriever.search(query, sub_questions, adapted_queries=adapted,
                                           candidate_techs=candidate_techs))
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        results_by_name = dict(zip(ordinary_names, raw_results))
+
+        # The official source runs after the ordinary sources so it can reuse
+        # their already-paid result rows for discovery instead of issuing a
+        # second search. A safe fetch still verifies every page identity.
+        if official_class is not None:
+            prior_results = [
+                result for name, result in results_by_name.items()
+                if not isinstance(result, Exception)
+            ]
+            try:
+                results_by_name["official"] = await official_class().search(
+                    query, sub_questions,
+                    adapted_queries=(adapted_queries.get("official", [])
+                                     if adapted_queries else []),
+                    candidate_techs=candidate_techs,
+                    constraints=constraints,
+                    prior_results=prior_results,
+                )
+            except Exception as exc:
+                results_by_name["official"] = exc
 
         search_results = []
         partial_failures = []
         empty_sources = []
-        for name, result in zip(RETRIEVER_REGISTRY.keys(), raw_results):
+        for name, _cls in RETRIEVER_REGISTRY.items():
+            result = results_by_name.get(name)
+            if result is None:
+                result = RuntimeError("source result missing")
             if isinstance(result, Exception):
                 search_results.append({
                     "source": name, "status": "failed",
@@ -100,16 +131,37 @@ class MultiRetrieverAgent:
                 agent="MULTI_RETRIEVER",
             )
 
+        # Retriever-internal LLM calls (currently the official URL fallback) must
+        # use the same token ledger as the graph agents. Source result rows and
+        # actual HTTP requests remain separate counters in `fetch_stats`.
+        retriever_token_usage = []
+        for result in search_results:
+            retriever_token_usage.extend(result.get("token_usage") or [])
+        token_usage = list(research_state.get("token_usage") or [])
+        token_usage.extend(retriever_token_usage)
+
+        official_stats = next(
+            (r.get("fetch_stats") for r in search_results
+             if r.get("source") == "official" and isinstance(r.get("fetch_stats"), dict)),
+            None)
+        source_rows = sum(len(r.get("results", [])) for r in search_results)
+        quality_signal = {
+            "agent": "multi_retriever",
+            "retrievers_used": len(RETRIEVER_REGISTRY),
+            "retrievers_failed": len(partial_failures),
+            "retrievers_empty": len(empty_sources),
+            "total_results": source_rows,
+            "had_adapted_queries": bool(adapted_queries),
+            # A source row is a result, never an HTTP dispatch. The official
+            # fetch counters stay separate and absent when unknown.
+            "source_result_rows": source_rows,
+            "official_page_attempts": (official_stats or {}).get("page_attempts"),
+            "official_http_requests": (official_stats or {}).get("http_requests"),
+        }
         return {
             "search_results": search_results,
             "partial_failures": partial_failures,
             "empty_sources": empty_sources,
-            "quality_signals": [{
-                "agent": "multi_retriever",
-                "retrievers_used": len(RETRIEVER_REGISTRY),
-                "retrievers_failed": len(partial_failures),
-                "retrievers_empty": len(empty_sources),
-                "total_results": sum(len(r.get("results", [])) for r in search_results),
-                "had_adapted_queries": bool(adapted_queries),
-            }],
+            "token_usage": token_usage,
+            "quality_signals": [quality_signal],
         }
