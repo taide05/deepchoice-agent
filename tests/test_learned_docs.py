@@ -74,6 +74,16 @@ class TestSourceIdentity:
             "Kata Containers", "https://docs.katacontainers.io.evil.example/docs")
         assert source_url_identity_match(
             "Kata Containers", "https://docs.katacontainers.io/docs")
+        assert not source_url_identity_match("GitHub", "https://someuser.github.io")
+        assert not source_url_identity_match("GitHub Actions", "https://someuser.github.io/actions")
+        assert not source_url_identity_match("GitHub", "https://docs.github.io/post")
+        assert source_url_identity_match("GitHub", "https://docs.github.com")
+        assert source_url_identity_match("GitHub Actions", "https://docs.github.com/actions")
+        assert source_url_identity_match("Amazon EKS", "https://aws.amazon.com/eks")
+        assert source_url_identity_match("Docker", "https://hub.docker.com")
+        assert source_url_identity_match("Terraform", "https://registry.terraform.io")
+        assert source_url_identity_match("Kubernetes", "https://v1-30.docs.kubernetes.io")
+        assert source_url_identity_match("Kubernetes", "https://blog.kubernetes.io")
 
 
 class TestConstraintDiscoveryTerms:

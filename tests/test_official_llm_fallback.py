@@ -247,6 +247,52 @@ class TestUnifiedSourceDiscovery:
             prior_results=prior))
         assert not [r for r in out["results"] if "kata.example.com" in r["url"]]
 
+    def test_prior_canonical_url_still_needs_fetched_body_identity(self, monkeypatch):
+        async def fake_fetch(self, url):
+            return {"ok": True, "url": url, "body_url": url, "title": "Unrelated",
+                    "body": "This page does not name the declared product.",
+                    "source_chars": 45, "stored_chars": 45, "truncated": False,
+                    "bytes": 45, "content_type": "text/html"}
+
+        async def fake_propose(self, term, usage=None):
+            return None
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://katacontainers.io/docs",
+            "title": "Kata Containers Documentation",
+            "snippet": "Kata Containers documentation.",
+        }]}]
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "choose a sandbox", [], 10, None, ["Kata Containers"],
+            prior_results=prior))
+        rows = [r for r in out["results"] if "katacontainers.io" in r["url"]]
+        assert rows, out
+        assert rows[0]["has_body"] is False
+        assert rows[0]["body_error"] == "source_identity_unverified"
+
+    def test_one_fallback_failure_does_not_discard_other_targets(self, monkeypatch):
+        _patch_outbound(monkeypatch)
+
+        async def fake_propose(self, term, usage=None):
+            if term == "Broken":
+                raise RuntimeError("proposal failed")
+            return f"https://{term.lower()}.dev/docs"
+
+        async def fake_fetch(self, url):
+            body = f"{url} documents the product."
+            return {"ok": True, "url": url, "body_url": url, "title": "docs",
+                    "body": body, "source_chars": len(body), "stored_chars": len(body),
+                    "truncated": False, "bytes": len(body), "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        out = asyncio.run(official_mod.OfficialSearch()._do_search(
+            "choose", [], 10, None, ["Broken", "Working"]))
+        assert [r["url"] for r in out if r.get("has_body")] == [
+            "https://working.dev/docs"]
+
     def test_platform_constraint_reuses_prior_result_and_verifies_body(self, monkeypatch):
         _patch_outbound(monkeypatch)
 

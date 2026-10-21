@@ -64,3 +64,15 @@ def test_tampered_sealed_file_is_detected(tmp_path):
     assert result["ok"] is False
     assert any("hash mismatch" in error for error in result["errors"]) or \
         any("query hash" in error for error in result["errors"])
+
+
+def test_unexpected_file_inside_seal_is_detected(tmp_path):
+    source = tmp_path / "case"
+    source.mkdir()
+    payload = _payload(source / "run_payload_v9.json")
+    seal_dir = tmp_path / "seal"
+    seal_case([payload], seal_dir, payload_path=payload)
+    (seal_dir / "post_run_edit.md").write_text("must live outside", encoding="utf-8")
+    result = verify_seal(seal_dir)
+    assert result["ok"] is False
+    assert any("unexpected file" in error for error in result["errors"])
