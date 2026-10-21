@@ -67,11 +67,12 @@ streamlit run frontend/app.py
 
 实验分支的 official 来源现在通过 `outbound.safe_fetch_page` 统一安全入口抓取正文；retriever 不再自行构造 HTTP client。它只接受可固定 IP 的 direct 路由，代理和转发通道路由会明确拒绝：
 
-- 页面尝试数与实际 HTTP 请求数分开计数；每次研究默认最多 2 次页面尝试、6 次 HTTP 请求（含重定向；official 路由选择只读配置，不再发网络探测请求），重定向都计入后者。预算按现有 `run_limits` 研究执行身份归属：同一研究重入检索累计，不同研究独立；当前默认图只检索一次，不把重入缺口写成已发生的真实超额。
+- 来源发现统一覆盖声明的候选和约束中的决定性平台名称：先复用已有普通检索结果和种子映射，再对未解析目标调用现有 LLM fallback；不额外发探测或第二次检索。URL 身份不再要求“产品全名等于域名标签”：多词名称可以匹配拼接的官方 host label，也可以匹配“自有 vendor host + 路径”，但必须再经安全抓取确认页面正文确实命名该候选/约束，否则只保留为 navigation，不能成为证据，也不能仅凭相似域名认定为官方。fallback 的 token 用量进入既有 `token_usage` 记录。
+- 页面尝试数与实际 HTTP 请求数分开计数；每次研究默认最多 2 次页面尝试、6 次 HTTP 请求（含重定向；official 路由选择只读配置，不再发网络探测请求），重定向都计入后者。来源结果行数不等于 HTTP 请求数；两者分别记录，未知值保持 unknown。预算按现有 `run_limits` 研究执行身份归属：同一研究重入检索累计，不同研究独立；当前默认图只检索一次，不把重入缺口写成已发生的真实超额。
 - 单页共享总 deadline 15 s（覆盖配置路由选择、DNS、连接、重定向和读取）；响应读取上限 200,000 bytes，存储正文上限 8,000 字符，最多 3 跳重定向。`bytes_read` 记录从流实际消费的字节（可能因块边界略超 cap），`bytes_retained` 记录截断后保留的字节；截断后的长度不会被称作全部读取量。
 - 只接受 `Content-Encoding: identity`；gzip 等编码在 `aiter_bytes` 之前明确拒绝，避免 HTTPX 先完整解压大块数据。缺失或不允许的 content-type 也明确失败，不因正文非空就当成可引用正文。
-- 结构性 prose 准入会拒绝检测到的纯菜单、导航、表单/登录页；非常规页面仍可能被误判，不声称覆盖所有站点。正文按“原页面提取 / 存储片段 / 模型可见窗口”三段分别记录 `body_page_chars`、`body_stored_chars`、`visible_chars` 与各自截断标志；没有官方页面元数据的非 official snippet 的整页范围为 unknown，不冒充整页。
-- 相关环境变量及默认值：`OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN=2`、`OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN=6`、`OFFICIAL_FETCH_TOTAL_DEADLINE_S=15`、`OFFICIAL_FETCH_MAX_BYTES=200000`、`OFFICIAL_BODY_STORE_CHARS=8000`、`EVIDENCE_WINDOW_CHARS=1600`。`EVIDENCE_WINDOW_CHARS` 是综合与自审共享的每源可见窗口，不等于整页完整性。
+- 结构性 prose 准入会拒绝检测到的纯菜单、导航、表单/登录页；非常规页面仍可能被误判，不声称覆盖所有站点。正文按“原页面提取 / 存储片段 / 输入可见范围”分别记录 `body_page_chars`、`body_stored_chars`、`visible_chars` 与各自截断标志；没有官方页面元数据的非 official snippet 的整页范围为 unknown，不冒充整页。
+- 综合与自审共用一个证据包：先核算总输入预算 `EVIDENCE_INPUT_BUDGET_CHARS`，所有已保存正文总量在预算内时传递全文；确实超限时才按源有界选段，并在两处提示中记录来源范围、省略字符和上下文限定；小正文优先完整保留，剩余预算再分配给大正文。相关 official 默认值：`OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN=2`、`OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN=6`、`OFFICIAL_FETCH_TOTAL_DEADLINE_S=15`、`OFFICIAL_FETCH_MAX_BYTES=200000`、`OFFICIAL_BODY_STORE_CHARS=8000`。
 
 ### Docker 部署
 
