@@ -1,3 +1,5 @@
+import re
+
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -23,6 +25,33 @@ Return ONLY a JSON object:
 {"adapted": [{"sub_question_index": 0, "sub_question": "...", "tavily": "...", "arxiv": "...", "github": "...", "chroma": "...", "community": "...", "official": "..."}]}"""
 
 RETRIEVER_KEYS = ["tavily", "arxiv", "github", "chroma", "community", "official"]
+
+
+def ensure_candidate_query_coverage(adapted_queries: dict[str, list[str]],
+                                    candidate_techs: list[str]) -> bool:
+    """Guarantee one comparison query that names every declared candidate.
+
+    The LLM adapter can emit queries for sub-questions that mention only one
+    side (or neither); retrieval then has no deterministic coverage of the other
+    candidate. This adds one combined Tavily query only when a candidate is
+    absent from the whole adapted set. It is not a source alias or an answer.
+    """
+    candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
+    if not candidates:
+        return False
+    existing = " ".join(adapted_queries.get("tavily", [])).lower()
+
+    def _covered(candidate: str) -> bool:
+        tokens = [t for t in re.split(r"[^a-z0-9.+#-]+", candidate.lower())
+                  if len(t) >= 3]
+        return bool(tokens) and all(token in existing for token in tokens)
+
+    if all(_covered(candidate) for candidate in candidates):
+        return False
+    addition = (" vs ".join(candidates)
+                + " official documentation architecture deployment constraints limitations")
+    adapted_queries.setdefault("tavily", []).append(addition)
+    return True
 
 
 class QueryAdapterAgent:
@@ -85,11 +114,15 @@ class QueryAdapterAgent:
             if not adapted_queries[key]:
                 adapted_queries[key] = sub_questions
 
+        candidate_coverage_added = ensure_candidate_query_coverage(
+            adapted_queries, task.get("candidate_techs") or [])
+
         quality_signals = [{
             "agent": "query_adapter",
             "adapted_count": len(adapted_items),
             "covered_retrievers": [k for k in RETRIEVER_KEYS if adapted_queries.get(k)],
             "fallback_retrievers": [k for k in RETRIEVER_KEYS if not adapted_queries.get(k)],
+            "candidate_coverage_query_added": candidate_coverage_added,
         }]
 
         return {

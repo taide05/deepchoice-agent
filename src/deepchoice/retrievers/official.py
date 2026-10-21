@@ -4,7 +4,7 @@ import os
 from ..utils.candidate_identity import (
     constraint_discovery_terms,
     source_identity_verified,
-    source_text_identity_match,
+    source_text_discusses_candidate,
     source_url_identity_match,
 )
 from ..utils.llm import call_model, summarize_usage
@@ -353,7 +353,7 @@ class OfficialSearch(BaseRetriever):
                         continue
                     if not source_url_identity_match(owner, url):
                         continue
-                    if not source_text_identity_match(owner, title, snippet):
+                    if not source_text_discusses_candidate(owner, title, snippet):
                         continue
                     if url in {r["url"] for r in results}:
                         continue
@@ -412,10 +412,21 @@ class OfficialSearch(BaseRetriever):
             if entry["url"] not in {r["url"] for r in results}:
                 results.append(entry)
 
-        # Candidate pages are always attempted before platform-constraint pages:
-        # a page budget must not let a general platform document crowd out the
-        # declared products being compared.
-        results.sort(key=lambda entry: 0 if entry.get("source_kind") == "candidate" else 1)
+        # Candidate pages are attempted before platform-constraint pages. Within
+        # each group, an actual retrieved document outranks a curated root and a
+        # model-proposed URL: the search result is a discovered page, the model
+        # proposal is not.
+        def _priority(entry: dict) -> tuple[int, int, str]:
+            kind_rank = 0 if entry.get("source_kind") == "candidate" else 1
+            if entry.get("_from_prior_search"):
+                origin_rank = 0
+            elif entry.get("_from_mapping"):
+                origin_rank = 1
+            else:
+                origin_rank = 2
+            return kind_rank, origin_rank, entry.get("url", "")
+
+        results.sort(key=_priority)
 
         # Fetch bounded bodies only after candidates/URLs are de-duplicated, so a
         # failed or seeded link cannot trigger duplicate network work. Page
@@ -423,7 +434,19 @@ class OfficialSearch(BaseRetriever):
         # redirects consume the HTTP count. Every attempt remains visible on the
         # saved source row; an exhausted budget is navigation.
         budget = self._fetch_budget
+        found_candidate_owners = {r.get("source_owner") for r in results
+                                  if r.get("source_kind") == "candidate"}
+        missing_candidate_coverage = [
+            candidate for candidate in candidates
+            if candidate not in found_candidate_owners
+        ]
         for entry in results:
+            if missing_candidate_coverage and entry.get("source_kind") != "candidate":
+                # Do not spend the remaining page budget on a platform homepage
+                # when a declared candidate still has no discovered source.
+                entry["body_error"] = "candidate_coverage_incomplete"
+                entry["fetch_status"] = "navigation"
+                continue
             if not budget.begin_page():
                 entry["body_error"] = "page_attempt_budget_exhausted"
                 entry["fetch_status"] = "navigation"

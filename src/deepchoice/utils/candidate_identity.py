@@ -476,6 +476,26 @@ def has_factual_content(source: dict) -> bool:
     return bool(source_content(source))
 
 
+def source_text_discusses_candidate(term: str, title: str = "",
+                                     content: str = "") -> bool:
+    """Whether a page visibly discusses the declared candidate/constraint.
+
+    This is the *page-subject* check, separate from domain ownership and from
+    source authority. It accepts a display title such as "Cosign Overview" for
+    "Sigstore (Cosign)" because the distinctive alias token is present; it does
+    not by itself make the page official.
+    """
+    variants = _candidate_name_variants(term)
+    text = f"{title or ''} {content or ''}".lower()
+    if not variants or not text.strip():
+        return False
+    for tokens in variants:
+        for token in tokens:
+            if len(token) >= 3 and _word_present(token, text):
+                return True
+    return False
+
+
 def _word_present(token: str, haystack: str) -> bool:
     return re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", haystack) is not None
 
@@ -533,6 +553,22 @@ def _is_public_hosting(host: str) -> bool:
                for suffix in _PUBLIC_HOSTING_SUFFIXES)
 
 
+def _candidate_name_variants(term: str) -> list[list[str]]:
+    """Token variants for one declared name; parenthesized text is an alias.
+
+    "Sigstore (Cosign)" can be owned by sigstore.dev and "Notary Project
+    (Notation)" by notaryproject.dev; neither requires the alias in the host.
+    The full token sequence remains a variant as well.
+    """
+    raw = str(term or "").strip()
+    base_text = re.sub(r"\([^)]*\)", " ", raw).strip() or raw
+    variants: list[list[str]] = []
+    for tokens in (_identity_tokens(base_text), _identity_tokens(raw)):
+        if tokens and tokens not in variants:
+            variants.append(tokens)
+    return variants
+
+
 def source_url_identity_match(term: str, url: str) -> bool:
     """Whether a URL's *identity-bearing host/path* names this declared term.
 
@@ -553,26 +589,28 @@ def source_url_identity_match(term: str, url: str) -> bool:
         return False
     labels = [normalize_term(part) for part in host.split(".") if part]
     path = normalize_term(unquote(parsed.path or ""))
-    tokens = _identity_tokens(term)
-    joined = normalize_term(term)
-    if not joined or not tokens or len(labels) < 2:
+    variants = _candidate_name_variants(term)
+    if not variants or len(labels) < 2:
         return False
     # Public hosts such as someuser.github.io share a registrable-looking label
     # with the product but are user subdomains, not official ownership.
     if _is_public_hosting(host):
         return False
-    # A canonical product label immediately before the TLD. Subdomains are fine;
-    # a label deeper inside someone else's domain is not an identity proof.
-    if len(labels) >= 2 and labels[-2] == joined and len(joined) >= 3:
-        return True
-    if len(tokens) == 1:
-        return tokens[0] == labels[-2] and len(tokens[0]) >= 3
-    # Multi-word platform/product names may split across an owned vendor host and
-    # path (aws.amazon.com/eks, docs.github.com/actions). The first token must be
-    # the registrable host label; the remaining tokens must be in the path.
-    if tokens[0] == labels[-2] and all(token in path or token in labels
-                                       for token in tokens[1:]):
-        return True
+    for tokens in variants:
+        joined = "".join(tokens)
+        # A canonical product label immediately before the TLD. Subdomains are
+        # fine; a label inside someone else's domain is not identity proof.
+        if len(labels) >= 2 and labels[-2] == joined and len(joined) >= 3:
+            return True
+        if len(tokens) == 1:
+            if tokens[0] == labels[-2] and len(tokens[0]) >= 3:
+                return True
+            continue
+        # Multi-word names may split across an owned host and path
+        # (aws.amazon.com/eks, docs.github.com/actions).
+        if tokens[0] == labels[-2] and all(
+                token in path or token in labels for token in tokens[1:]):
+            return True
     return False
 
 
@@ -606,7 +644,7 @@ def source_identity_verified(term: str, url: str, title: str = "",
                              content: str = "") -> bool:
     """A safe-fetched source is attributable only if URL and page agree."""
     return (source_url_identity_match(term, url)
-            and source_text_identity_match(term, title, content))
+            and source_text_discusses_candidate(term, title, content))
 
 
 _CONSTRAINT_STOP_STARTS = {
