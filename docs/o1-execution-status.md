@@ -6,15 +6,15 @@
 之后完成三轮第八次后**离线**修复批次：首轮代码 `53a09ed`、测试 `06017e6`（修复前既有回归
 测试曾触发少量真实 official GET，见下）；第二轮代码 `63cc2ca`、测试 `758e7ee`、文档
 `0e3397e`；第四项收口代码 `e9acb9c`、测试 `58d7fb0`、文档 `a5cca17`（真实外呼 0，
-610 passed）。第九次真实单例后账本修正见下文；本次外部调用仅限既有授权，未执行基线/基准批次，
-未调用外部模型裁判。目标见[路线](current-roadmap.md)，指标与冻结要求见[评估协议](product-effectiveness-optimization.md)。
+610 passed）。第九次真实单例后账本修正、第十次单例失败及第2轮停止均见下文；本次外部调用仅限既有授权，
+未执行基线/基准批次，未调用外部模型裁判。目标见[路线](current-roadmap.md)，指标与冻结要求见[评估协议](product-effectiveness-optimization.md)。
 
 ## 当前工作树与证据范围（2026-10-19核对）
 
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮两处修正 `cc9e533`/`a315e88`，**第十次候选 HEAD `a315e88`**；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮两处修正 `cc9e533`/`a315e88`，**第十次候选 HEAD `a315e88`**；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd`、第十次 task `600af92f-f65e-41c0-aa6f-2811f943c124` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -334,13 +334,46 @@
   形状/实际 agent 回归，未再扩展来源启发式。测试通过仍只证明机制，不证明内容。
 - learned_docs：保留第九次 `gVisor`/`gvisor` 条目，未提交；第十次 seal 前记录实际路径/hash。
 
+### 第十次开发单例（2026-10-21，已执行，失败）
+
+- 身份：候选 HEAD **`a315e88`**；seal `D:\deepchoice-precodex\.scratch\v10_seal`，manifest
+  sha256 `bebb6f298ce3472c0238dbee13ba954f0003b6c0c602b3abe0637cfa84ca0435`；payload
+  sha256 `84e6a7ead6c758a18575a48471fa6074547cc987fe2188bb249462f921ec9240`，query sha256
+  `cbdbcf3afc65d593db49bc4c81ccdb3c65c385284deb979f0316783ce6a67330`。派发前及运行后
+  `verify_seal` 均 ok，seal 内文件未改写；learned_docs 运行前后 sha256
+  `da065234f9262f16ac4cdc312df31c3da59826ebf6ac5e5e48c430ae5e756f19` 未变。
+- 实际运行：task `600af92f-f65e-41c0-aa6f-2811f943c124`，1 case/1 run；研究
+  `14:14:46–14:19:10`，墙钟 **263.8 s / 900 s**；LLM **10/40**、Tavily POST **6/24**；
+  official **4/4 page attempts、6/12 actual HTTP、2 redirects、0 body pages、0 bytes**，
+  失败 `http:404`、`content_too_large`×2、`timeout`。guard `service_exited`、
+  `exit_confirmed=true`、`forced=false`，服务退出已确认，无残留监听。
+- A：**机制性通过**——单次派发、预算未超、报告/快照/端点/导出归一后一致（92 个
+  `[Source:]`、0 未解析标记）、guard/退出记录完整、seal 前后不变；但 official 正文
+  获取为 0，这是来源/内容失败事实，不是预算超限。
+- B：**`not_usable`**。独立内容评审
+  `D:\deepchoice-dsh\v10_review\review.md` 将 5 个必答项全部评 `partial`（0
+  answered_supported）；没有 Sigstore 或 Notation 的官方正文，决策性来源仅来自 snippets
+  与第三方；另有 C1 无依据的“迁移而非重新签名”断言。报告在 24k 证据预算内全量可见
+  （10,406/10,406，无下游截断），损失在上游 official 获取。
+- 运行账本：已知 token **74,243**（10 次 LLM 全部有记录；query_adapter 6,901、official_fallback
+  475、conflict_detector 10,051、conclusion_synthesizer 20,379、self_reviewer 36,437），
+  费用 **unknown**；无外部裁判、付费基准、补跑或手修。
+- **失败原因分类**：official 官方正文 0（404/正文过大/超时）与候选覆盖不足属于来源/
+  获取阻断；B 另有模型迁移断言无依据。不是 A 预算或封存问题。
+- **按第2轮停止条件暂停当前技术路线**：第十次单例失败，不补跑、不换题、不自动改代码，
+  不进入校准/正式评测。替代路线判断：(a) 先单独解决 official 官方正文可达性与内容大小/
+  404 获取问题，再重新授权新单例，不能靠测试或别名表宣称内容；或 (b) 若产品路线继续，
+  需重新冻结一个不依赖当前 official 抓取形态的新题及独立新授权；不在现有失败的第十次
+  上追加修补重跑。历史产物、seal 和 learned_docs 原样保留。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权
-**1/1 已使用**（封存失效、内容 not_usable，见上）；均不继承剩余调用上限为新研究额度，
-不自动补跑。第十次单例已获本轮 1 case/1 run 授权但尚未派发；小规模校准和正式百例以上
-评测仍须新的明确授权。下方旧现代分支累计240及10/10账本保持原口径，恢复实验单列，
-不未经逐笔对账就相加；最终24继续封存。
+**1/1 已使用**（封存失效、内容 not_usable）；第十次单例授权 **1/1 已使用**（A 机制通过、
+B not_usable，已按第2轮停止条件暂停当前技术路线）；均不继承剩余调用上限为新研究额度，
+不自动补跑。小规模校准和正式百例以上评测须新的明确授权；第十次失败后不得自动启动修复或
+换题。下方旧现代分支累计240及10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；
+最终24继续封存。
 
 第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的两轮离线修复批次只证明机制与
 测试，不证明真实报告内容改善；不得据此自动补跑、换题或开展校准。下一步须先由用户另行决定
