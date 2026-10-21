@@ -12,6 +12,7 @@ from deepchoice.retrievers.learned_docs import (
 from deepchoice.utils.candidate_identity import (
     constraint_discovery_terms,
     source_identity_verified,
+    source_text_discusses_candidate,
     source_text_identity_match,
     source_url_identity_match,
 )
@@ -66,6 +67,16 @@ class TestSourceIdentity:
         assert source_identity_verified("Kata Containers", "https://katacontainers.io/docs",
                                         "Kata Containers Documentation",
                                         "Kata Containers runs each Pod in a VM.")
+
+    def test_aliases_can_own_a_brand_domain_without_the_parenthetical(self):
+        assert source_url_identity_match(
+            "Sigstore (Cosign)", "https://docs.sigstore.dev/cosign/signing/overview")
+        assert source_url_identity_match(
+            "Notary Project (Notation)", "https://notaryproject.dev/docs/")
+        assert source_text_discusses_candidate(
+            "Sigstore (Cosign)", "Overview - Sigstore", "")
+        assert source_text_discusses_candidate(
+            "Notary Project (Notation)", "Notation CLI", "")
 
     def test_lookalike_host_and_path_do_not_pass(self):
         assert not source_url_identity_match(

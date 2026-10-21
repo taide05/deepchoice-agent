@@ -141,6 +141,98 @@ class TestLLMFallback:
         assert all(r["url"] != "" and "supabase" not in r["url"] for r in out)
 
 
+class TestRetrievedDocumentFirst:
+    def test_display_title_alias_still_finds_the_retrieved_document(self, monkeypatch):
+        calls = []
+
+        async def fake_propose(self, term, usage=None):
+            calls.append(term)
+            return None
+
+        async def fake_fetch(self, url):
+            body = "Cosign signs OCI images and stores signatures in the registry."
+            return {"ok": True, "url": url, "body_url": url,
+                    "title": "Cosign signing", "body": body,
+                    "source_chars": len(body), "stored_chars": len(body),
+                    "truncated": False, "bytes": len(body),
+                    "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://docs.sigstore.dev/cosign/signing/overview",
+            "title": "Overview - Sigstore",
+            "snippet": "Cosign signing and verification overview.",
+        }]}]
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "choose signing", [], 10, None, ["Sigstore (Cosign)"],
+            prior_results=prior))
+        rows = [r for r in out["results"] if "docs.sigstore.dev" in r["url"]]
+        assert rows, out
+        assert rows[0]["has_body"] is True
+        assert rows[0]["body_identity_verified"] is True
+        assert calls == [], "a retrieved page must not be replaced by a guessed URL"
+
+    def test_candidate_page_is_fetched_before_platform_homepage(self, monkeypatch):
+        fetched = []
+
+        async def fake_propose(self, term, usage=None):
+            return None
+
+        async def fake_fetch(self, url):
+            fetched.append(url)
+            body = "Sigstore Cosign documentation."
+            return {"ok": True, "url": url, "body_url": url,
+                    "title": "Docs", "body": body,
+                    "source_chars": len(body), "stored_chars": len(body),
+                    "truncated": False, "bytes": len(body),
+                    "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://docs.sigstore.dev/cosign/signing/overview",
+            "title": "Overview - Sigstore",
+            "snippet": "Cosign signing.",
+        }]}]
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "choose signing", [], 10, None, ["Sigstore (Cosign)"],
+            constraints=["生产必须使用 Kubernetes"], prior_results=prior))
+        assert fetched, out
+        assert "sigstore" in fetched[0], fetched
+
+    def test_platform_page_is_not_fetched_when_another_candidate_is_missing(self, monkeypatch):
+        fetched = []
+
+        async def fake_propose(self, term, usage=None):
+            return None
+
+        async def fake_fetch(self, url):
+            fetched.append(url)
+            body = "Sigstore Cosign documentation."
+            return {"ok": True, "url": url, "body_url": url,
+                    "title": "Docs", "body": body,
+                    "source_chars": len(body), "stored_chars": len(body),
+                    "truncated": False, "bytes": len(body),
+                    "content_type": "text/html"}
+
+        monkeypatch.setattr(official_mod.OfficialSearch, "_propose_official_url", fake_propose)
+        monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
+        prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://docs.sigstore.dev/cosign/signing/overview",
+            "title": "Overview - Sigstore",
+            "snippet": "Cosign signing.",
+        }]}]
+        out = asyncio.run(official_mod.OfficialSearch().search(
+            "choose signing", [], 10, None,
+            ["Sigstore (Cosign)", "Notary Project (Notation)"],
+            constraints=["生产必须使用 Kubernetes"], prior_results=prior))
+        assert fetched and "sigstore" in fetched[0], fetched
+        assert not any("kubernetes.io" in url for url in fetched), fetched
+        assert any(r.get("body_error") == "candidate_coverage_incomplete"
+                   for r in out["results"] if "kubernetes.io" in r["url"])
+
+
 class TestUnifiedSourceDiscovery:
     """Candidate and platform-constraint discovery share one identity gate."""
 
@@ -313,12 +405,16 @@ class TestUnifiedSourceDiscovery:
         monkeypatch.setattr(official_mod, "call_model", fake_call_model)
         monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
         prior = [{"source": "tavily", "status": "success", "results": [{
+            "url": "https://docs.gvisor.dev/docs/",
+            "title": "gVisor documentation",
+            "snippet": "gVisor isolates pods.",
+        }, {
             "url": "https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html",
             "title": "Amazon EKS User Guide",
             "snippet": "Amazon EKS is a managed Kubernetes service.",
         }]}]
         out = asyncio.run(official_mod.OfficialSearch().search(
-            "choose a sandbox", [], 10, None, ["gVisor", "Kata Containers"],
+            "choose a sandbox", [], 10, None, ["gVisor"],
             constraints=["生产必须运行在 Amazon EKS 上"],
             prior_results=prior))
         eks = [r for r in out["results"] if "docs.aws.amazon.com/eks" in r["url"]]
