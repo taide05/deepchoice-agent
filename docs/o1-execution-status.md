@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮两处修正 `cc9e533`/`a315e88`；第3轮离线 `447f1a8`/`ff71fc0`/`2b42836`；第4轮接入 **`41c9314`**，**当前实验 HEAD `41c9314`**；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd`、第十次 task `600af92f-f65e-41c0-aa6f-2811f943c124`、第十一次 task `v11pair-a42b7594fa47` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮接入 `41c9314`；第5轮证据收口 **`2138be9`**，**当前实验 HEAD `2138be9`**；第8/10/11次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -453,16 +453,62 @@
   `D:\deepchoice-dsh\v11_run\final_audit.json` 记录 seal 前后、guard、哈希与内容结论；
   `raw_reports/` 仅复制交付，原文件未改。无 push/改写历史/合并。
 
+### 第 5 轮证据采集与来源表示收口（2026-10-22，离线+一次有界页面验证）
+
+- 基点实验 `41c9314`；维护树 `330b174`。本轮代码提交 **`2138be9`**（采集/提取/来源身份/
+  页面证据验证入口），完整套件 **669 passed, 1 warning**；聚焦代码复核
+  `D:\deepchoice-dsh\r5_review\review.md` **PASS 无阻断**。第11次结论仍是两臂未通过；未改旧
+  报告、seal 或 rubric，不宣布 baseline 胜出。真实研究/LLM/Tavily/外部裁判/付费基准 **0**；
+  仅执行一次页面级证据探测。
+- 共同原因删并：
+  - 统一有界读取：声明 `Content-Length` 超限与未知长度走同一 cap/stream，截断显式记录
+    `page_truncated`、`response_size_cap`、declared length/exceeded；安全连接、重定向、类型/
+    编码、大小、期限、请求预算保留。
+  - 正文提取：正文由主段落 + 最近标题上下文组成；目录/链接主导/导航页判 navigation，不再把
+    全量 blocks 当正文；无关键词评分/专属例外。
+  - 来源身份：行级 `source_owner/source_kind/body_identity_verified/has_body/fetch_status`
+    贯穿 source scoring→evidence chain→shared package→synthesis/self-review→coverage；
+    `docs.`/readthedocs 等 URL 词不再单独判 official；同一 URL 的 snippet、导航/失败、
+    完整正文行各自保留，不覆盖。
+  - 页面探测入口 `scripts/page_probe.py` 只在代码冻结后单独运行；pytest 仍阻断外网。
+- 一次有界页面实测（8 个预先冻结 URL/检查；诊断材料，不是产品专属规则）：
+  - 8 page attempts、**12/24 HTTP**（8 请求 + 4 redirects）、**19.578 s / 300 s**、无额外探测/
+    重试/失败补批；5 body、2 navigation、1 `ConnectError`；每页 retained ≤ **1 MiB**
+    （RFC 页 1,048,576；总 retained 2,458,147）。
+  - OTel resiliency **正文 2,186 chars、40 main blocks/32 prose/8 headings**；OTel scaling
+    **4,675 chars、46/37/9**；两页 identity verified、无截断；queue/retry/WAL/disk loss、
+    60–70% 阈值、最小 3 副本、queue-full reject、memory_limiter 等决定性段落实际取得。
+  - Vector 文档首页、Kubernetes docs 首页判 `not_prose:navigation_like`（不再作为能力正文）；
+    Python asyncio、MDN HTTP Overview 正文；RFC 9110 大页显式 `response_size_cap` 截断
+    （61,834→20,000 chars）；Docker docs `ConnectError` 原样记录失败。无版本号；日期只记录
+    存在性。
+  - 消费者前后：v11 旧 official 行 OTel 为 `has_body=false/content_too_large`、只有 Vector
+    目录正文；新消费者路径把 OTel 两页作为 `official_doc`+verified body 放入 shared package，
+    目录页只进 navigation，MDN 无 owner 验证时保持 `official_unverified`，不冒充 official。
+    证据文件 `D:\deepchoice-dsh\v11_page_probe\page_probe_result.json`、
+    `consumer_before_after.json`；独立证据复核
+    `D:\deepchoice-dsh\r5_evidence_review\review.md` **PASS 无阻断**。
+- 残余（非阻断，但限制下一轮）：OTel resilience 的 `<li>` 列表项仍未抽取，因此“队列满丢弃
+  新数据/重试超时丢最早/默认约1000批”等仍只在旧 Tavily snippet tier，不能当正文；页面探测
+  使用诊断 cap（1 MiB/20k chars），与正式运行默认（200KB/8k、4/12）不同，下一轮须先冻结
+  兼容 cap；探测是合成 8 URL 消费者回放，不等于真实发现覆盖。页面探测只证明采集表现，不证明
+  报告通过、未见评测或 baseline 胜出。
+- **路线判断**：决定性 OTel 正文已取得且身份无误报，采集路线**可以进入研究**；但按用户
+  要求仍停在**第12次派发前**，不自动启动新研究/校准/百例评测。下一轮需新授权并先决定列表项
+  提取与正式 cap 对齐；不得把本轮 probe 当报告通过。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权
 **1/1 已使用**（封存失效、内容 not_usable）；第十次单例授权 **1/1 已使用**（A 机制通过、
 B not_usable）；第十一次开发配对授权 **1 case/1 shared collection/baseline 1/candidate 1
-已使用**（内容两臂均不可用，按 R4 保留失败、停止自动研究与修复，不选路线）；均不继承剩余
-调用上限为新研究额度，不自动补跑。第3轮离线替代路线/简单基线未派发研究、未消耗单例授权；
-第4轮接入完成并通过机制复核，但内容失败。后续第12次、小规模校准和正式百例以上评测须新的
-明确授权；第十次/第十一次失败后不得自动启动修复、换题或补跑。下方旧现代分支累计240及
-10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
+已使用**（内容两臂均不可用，按 R4 保留失败、停止自动研究与修复，不选路线）；第5轮仅授权
+代码收口与一次 8 页/24 HTTP/300 s 页面级证据验证，未授权第12次研究、LLM/Tavily/外部裁判/
+付费基准，已执行且停在派发前；均不继承剩余调用上限为新研究额度，不自动补跑。第3轮离线
+替代路线/简单基线未派发研究、未消耗单例授权；第4轮接入完成并通过机制复核，但内容失败。
+后续第12次、小规模校准和正式百例以上评测须新的明确授权；第10/11次失败及第5轮 probe
+之后不得自动启动修复、换题或补跑。下方旧现代分支累计240及10/10账本保持原口径，恢复实验
+单列，不未经逐笔对账就相加；最终24继续封存。
 
 第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的两轮离线修复批次只证明机制与
 测试，不证明真实报告内容改善；不得据此自动补跑、换题或开展校准。下一步须先由用户另行决定
