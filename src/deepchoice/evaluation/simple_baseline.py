@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import contextlib
+import contextvars
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -31,6 +32,22 @@ from ..utils.candidate_identity import (
 
 class OfflineGateError(RuntimeError):
     """Raised when a pair run would call an external model without authorization."""
+
+
+class EvidenceMismatchError(RuntimeError):
+    """Raised before a model dispatch when a consumer's evidence differs from the freeze."""
+
+
+_CONSUMER = contextvars.ContextVar("pair_evidence_consumer", default="")
+
+
+@contextlib.contextmanager
+def _consumer(name: str):
+    token = _CONSUMER.set(name)
+    try:
+        yield
+    finally:
+        _CONSUMER.reset(token)
 
 
 def _canonical_sha256(value) -> str:
@@ -173,12 +190,21 @@ def _freeze_evidence_package(shared: SharedEvidence, observed: list[dict]):
     original = cid.shared_evidence_package
 
     def frozen_package(entries, **kwargs):
-        observed.append({
+        signature = _entries_signature(entries)
+        record = {
             "package": copy.deepcopy(shared.package),
             "package_sha256": _canonical_sha256(shared.package),
-            "entries_signature": _entries_signature(entries),
-            "entries_match": _entries_signature(entries) == shared.entries_signature,
-        })
+            "entries_signature": signature,
+            "entries_match": signature == shared.entries_signature,
+            "consumer": _CONSUMER.get(),
+        }
+        observed.append(record)
+        if not record["entries_match"]:
+            # Do not let a mismatched source set/order/body reach the model with
+            # the frozen package. The arm fails before its model dispatch.
+            raise EvidenceMismatchError(
+                "source entries differ from the frozen evidence package: "
+                f"observed {signature[:16]} frozen {shared.entries_signature[:16]}")
         return copy.deepcopy(shared.package)
 
     cid.shared_evidence_package = frozen_package
@@ -210,14 +236,24 @@ def _incremental_token_usage(state: dict, shared_prefix_len: int,
     return [dict(row, arm=arm) for row in rows]
 
 
+def _model_allowed(call_model_fn, allow_external: bool,
+                   allow_model: bool | None) -> bool:
+    if call_model_fn is not None:
+        return True
+    if allow_model is not None:
+        return bool(allow_model)
+    return bool(allow_external)
+
+
 async def run_baseline(state: dict, *, call_model_fn=None,
                        budget_chars: int | None = None,
                        allow_external: bool = False,
+                       allow_model: bool | None = None,
                        shared_evidence: SharedEvidence | None = None) -> dict:
-    """Run only the simple baseline arm. Offline unless an injected model or flag."""
-    if call_model_fn is None and not allow_external:
+    """Run only the simple baseline arm. Offline unless a model is authorized."""
+    if not _model_allowed(call_model_fn, allow_external, allow_model):
         raise OfflineGateError(
-            "baseline requires an injected call_model_fn or allow_external=True")
+            "baseline requires an injected call_model_fn or allow_model=True")
     shared = shared_evidence or build_shared_evidence(
         state, budget_chars=budget_chars)
     baseline = _baseline_state(state, shared)
@@ -225,9 +261,11 @@ async def run_baseline(state: dict, *, call_model_fn=None,
     shared_prefix_len = len(state.get("token_usage") or [])
     actual_packages: list[dict] = []
     with _evidence_budget(budget_chars), _injected_model(call_model_fn), \
-            _freeze_evidence_package(shared, actual_packages):
+            _freeze_evidence_package(shared, actual_packages), \
+            _consumer("baseline_synthesis"):
         synth = await cs.ConclusionSynthesizerAgent().run(baseline)
         baseline.update(synth)
+    with _consumer("baseline_report"):
         report = await rg.ReportGeneratorAgent().run(baseline)
         baseline.update(report)
     baseline["quality_signals"] = [shared_signal] + list(
@@ -250,11 +288,13 @@ async def run_baseline(state: dict, *, call_model_fn=None,
 async def run_candidate(state: dict, *, call_model_fn=None,
                         budget_chars: int | None = None,
                         allow_external: bool = False,
+                        allow_model: bool | None = None,
+                        allow_supplementary_search: bool = False,
                         shared_evidence: SharedEvidence | None = None) -> dict:
-    """Run the existing candidate tail from the same post-scoring cutoff."""
-    if call_model_fn is None and not allow_external:
+    """Run the existing candidate tail; no supplementary search after the freeze."""
+    if not _model_allowed(call_model_fn, allow_external, allow_model):
         raise OfflineGateError(
-            "candidate arm requires an injected call_model_fn or allow_external=True")
+            "candidate arm requires an injected call_model_fn or allow_model=True")
     shared = shared_evidence or build_shared_evidence(
         state, budget_chars=budget_chars)
     candidate = _candidate_state(state)
@@ -263,16 +303,22 @@ async def run_candidate(state: dict, *, call_model_fn=None,
     with _evidence_budget(budget_chars), _injected_model(call_model_fn), \
             _freeze_evidence_package(shared, actual_packages):
         conflicts = await cd.ConflictDetectorAgent(
-            gather_evidence=allow_external).run(candidate)
+            # The pair freezes evidence before this arm. Conflict judgment may
+            # use the saved material; it may never add retrieval unless an
+            # operator explicitly combines it with supplementary-search budget.
+            gather_evidence=bool(allow_supplementary_search)).run(candidate)
         candidate.update(conflicts)
         chains = await EvidenceChainAgent().run(candidate)
         candidate.update(chains)
-        synth = await cs.ConclusionSynthesizerAgent().run(candidate)
-        candidate.update(synth)
-        report = await rg.ReportGeneratorAgent().run(candidate)
-        candidate.update(report)
-        review = await sr.SelfReviewerAgent().run(candidate)
-        candidate.update(review)
+        with _consumer("candidate_synthesis"):
+            synth = await cs.ConclusionSynthesizerAgent().run(candidate)
+            candidate.update(synth)
+        with _consumer("candidate_report"):
+            report = await rg.ReportGeneratorAgent().run(candidate)
+            candidate.update(report)
+        with _consumer("candidate_self_review"):
+            review = await sr.SelfReviewerAgent().run(candidate)
+            candidate.update(review)
     return {
         "arm": "candidate",
         "state": candidate,
@@ -289,15 +335,25 @@ async def run_candidate(state: dict, *, call_model_fn=None,
 
 async def run_pair(state: dict, *, call_model_fn=None,
                    budget_chars: int | None = None,
-                   allow_external: bool = False) -> dict:
-    """Run both arms from one fixed post-scoring state."""
+                   allow_external: bool = False,
+                   allow_model: bool | None = None,
+                   allow_supplementary_search: bool = False,
+                   shared_retrieval_counts: dict | None = None) -> dict:
+    """Run both arms from one fixed post-scoring state.
+
+    `shared_retrieval_counts` carries dispatch counters from the one shared
+    collection. It is optional and is never inferred from the result-row count.
+    """
     shared = build_shared_evidence(state, budget_chars=budget_chars)
     baseline = await run_baseline(
         state, call_model_fn=call_model_fn, budget_chars=budget_chars,
-        allow_external=allow_external, shared_evidence=shared)
+        allow_external=allow_external, allow_model=allow_model,
+        shared_evidence=shared)
     candidate = await run_candidate(
         state, call_model_fn=call_model_fn, budget_chars=budget_chars,
-        allow_external=allow_external, shared_evidence=shared)
+        allow_external=allow_external, allow_model=allow_model,
+        allow_supplementary_search=allow_supplementary_search,
+        shared_evidence=shared)
     baseline_records = baseline["actual_evidence_records"]
     candidate_records = candidate["actual_evidence_records"]
     records = baseline_records + candidate_records
@@ -307,25 +363,45 @@ async def run_pair(state: dict, *, call_model_fn=None,
                 and record.get("entries_signature") == shared.entries_signature
                 and record.get("entries_match") is True)
 
+    by_consumer = {}
+    for record in records:
+        by_consumer.setdefault(record.get("consumer") or "", []).append(record)
+    required_consumers = ("baseline_synthesis", "candidate_synthesis",
+                          "candidate_self_review")
+    consumer_checks = {
+        consumer: bool(by_consumer.get(consumer))
+        and all(_record_matches(record) for record in by_consumer.get(consumer, []))
+        for consumer in required_consumers
+    }
+    counts = shared_retrieval_counts or {}
     return {
         "shared_evidence": shared,
         "baseline": baseline,
         "candidate": candidate,
         # Materialize the frozen package at the actual consumer boundary. Both
-        # arms must have consumed it; comparing recomputations is not enough.
-        "evidence_equal": (bool(baseline_records) and bool(candidate_records)
-                           and all(_record_matches(record) for record in records)),
+        # arms and each required consumer must have consumed it.
+        "evidence_equal": bool(baseline_records) and bool(candidate_records)
+        and all(_record_matches(record) for record in records)
+        and all(consumer_checks.values()),
         "actual_evidence_package_count": len(records),
         "baseline_actual_package_count": len(baseline_records),
         "candidate_actual_package_count": len(candidate_records),
+        "consumer_evidence_checks": consumer_checks,
         "actual_evidence_entries_mismatch": any(
             record.get("entries_signature") != shared.entries_signature
             for record in records),
+        "shared_retrieval_source_envelopes": len(state.get("search_results") or []),
+        "shared_retrieval_http_requests": counts.get("http_requests"),
+        "shared_retrieval_http_requests_known": counts.get("http_requests") is not None,
+        "shared_retrieval_http_requests_complete": bool(counts.get("http_requests_complete")),
+        "shared_retrieval_tavily_posts": counts.get("tavily_posts"),
+        "shared_retrieval_official_http_requests": counts.get("official_http_requests"),
+        "shared_retrieval_llm_requests": counts.get("llm_requests"),
         "baseline_incremental_calls": sum(
             row.get("calls", 0) for row in baseline["token_usage"]),
         "candidate_incremental_calls": sum(
             row.get("calls", 0) for row in candidate["token_usage"]),
-        "shared_retrieval_requests": len(state.get("search_results") or []),
+        "allow_supplementary_search": bool(allow_supplementary_search),
     }
 
 

@@ -8,6 +8,7 @@ import pytest
 
 from deepchoice.evaluation import simple_baseline as sb
 from deepchoice.evaluation.simple_baseline import (
+    EvidenceMismatchError,
     OfflineGateError,
     build_shared_evidence,
     run_baseline,
@@ -185,17 +186,15 @@ def test_missing_baseline_consumer_is_not_evidence_equal(monkeypatch):
     assert out["evidence_equal"] is False
 
 
-def test_divergent_candidate_entries_are_not_evidence_equal(monkeypatch):
+def test_divergent_candidate_entries_are_rejected_before_synthesis(monkeypatch):
     from deepchoice.agents import evidence_chain as ec
     monkeypatch.setattr(
         ec.EvidenceChainAgent, "run",
         lambda self, state: _async_value({"evidence_chains": [],
                                            "quality_signals": []}),
     )
-    out = asyncio.run(run_pair(_state(), call_model_fn=_fake_model()))
-    assert out["candidate_actual_package_count"] >= 1
-    assert out["actual_evidence_entries_mismatch"] is True
-    assert out["evidence_equal"] is False
+    with pytest.raises(EvidenceMismatchError):
+        asyncio.run(run_pair(_state(), call_model_fn=_fake_model()))
 
 
 async def _async_value(value):
@@ -215,6 +214,18 @@ def test_offline_candidate_disables_conflict_evidence_gathering(monkeypatch):
     monkeypatch.setattr(sb.cd, "ConflictDetectorAgent", FakeConflict)
     asyncio.run(run_candidate(_state(), call_model_fn=_fake_model()))
     assert captured.get("gather_evidence") is False
+    asyncio.run(run_candidate(_state(), call_model_fn=_fake_model(),
+                              allow_model=True))
+    assert captured.get("gather_evidence") is False
+
+
+def test_source_envelope_count_is_not_called_request_count():
+    out = asyncio.run(run_pair(
+        _state(), call_model_fn=_fake_model(),
+        shared_retrieval_counts=None))
+    assert out["shared_retrieval_source_envelopes"] == 1
+    assert out["shared_retrieval_http_requests"] is None
+    assert out["shared_retrieval_http_requests_known"] is False
 
 
 def test_saved_tenth_material_keeps_candidate_coverage_gaps_visible():

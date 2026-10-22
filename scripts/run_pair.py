@@ -24,14 +24,17 @@ def main(argv=None) -> int:
                         help="JSON state snapshot after retrieval + source scoring")
     parser.add_argument("--out", required=True)
     parser.add_argument("--allow-external", action="store_true",
-                        help="allow real LLM calls; requires external budget authorization")
+                        help="allow real model calls; supplementary search stays disabled")
+    parser.add_argument("--allow-supplementary-search", action="store_true",
+                        help="explicitly allow the candidate conflict tail to search; off by default")
     parser.add_argument("--budget-chars", type=int, default=default_evidence_budget())
     args = parser.parse_args(argv)
     state = json.loads(pathlib.Path(args.state).read_text(encoding="utf-8"))
     try:
         result = asyncio.run(run_pair(
             state, budget_chars=args.budget_chars,
-            allow_external=args.allow_external))
+            allow_model=args.allow_external,
+            allow_supplementary_search=args.allow_supplementary_search))
     except OfflineGateError as exc:
         print(f"OFFLINE_BLOCKED: {exc}", file=sys.stderr)
         return 2
@@ -60,7 +63,15 @@ def main(argv=None) -> int:
         "baseline_actual_package_count": result["baseline_actual_package_count"],
         "candidate_actual_package_count": result["candidate_actual_package_count"],
         "actual_evidence_entries_mismatch": result["actual_evidence_entries_mismatch"],
-        "shared_retrieval_requests": result["shared_retrieval_requests"],
+        "consumer_evidence_checks": result["consumer_evidence_checks"],
+        "allow_supplementary_search": result["allow_supplementary_search"],
+        "shared_retrieval_source_envelopes": result["shared_retrieval_source_envelopes"],
+        "shared_retrieval_http_requests": result["shared_retrieval_http_requests"],
+        "shared_retrieval_http_requests_known": result["shared_retrieval_http_requests_known"],
+        "shared_retrieval_http_requests_complete": result["shared_retrieval_http_requests_complete"],
+        "shared_retrieval_tavily_posts": result["shared_retrieval_tavily_posts"],
+        "shared_retrieval_official_http_requests": result["shared_retrieval_official_http_requests"],
+        "shared_retrieval_llm_requests": result["shared_retrieval_llm_requests"],
         "shared_evidence": {
             "budget_chars": result["shared_evidence"].package["budget_chars"],
             "full_included": result["shared_evidence"].package["full_included"],
