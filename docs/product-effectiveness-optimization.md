@@ -319,6 +319,17 @@ bytes）；LLM 总 ≤48（基线单次综合 + 候选增量，含 fallback/重�
 ≤900 s，预加载/停止清理单列）；外部模型裁判/付费基准 0，费用 unknown。任何一臂失败按失败
 保留，不补跑、不择优换题。
 
+**第十一次真实配对的实际结果（2026-10-22，开发诊断）**：一次共享采集后 baseline→candidate，
+模型/参数、来源正文和证据预算相同，baseline 只综合一次，candidate 走既有冲突/证据链/综合/自审；
+接入和预算均未越线（LLM 5/48、Tavily 7/24、official 4 次页面尝试/7 次 HTTP、总墙钟 232.735 s/1800 s），
+但独立盲评显示两臂都未通过内容证据门：决定性 claim 依赖 snippet-only/第三方材料，OpenTelemetry
+官方正文因 `content_too_large` 未取得；candidate 为 `not_usable`，baseline 为 `needs_review/
+not accepted`（不是可用通过）。因此按预定 R4 保留失败、停止自动研究与修复，不选下一阶段路线，
+也不启动校准/百例评测或第 12 次。N=1 只说明该次配对诊断失败，不形成正式通过率或统计性结论；
+若继续，须先由用户另行授权解决来源获取或准备新题/新 seal，不能在失败运行上补跑/手修报告。
+基线成本更低（1 call/17,769 tok/46.2 s）而 candidate 为 3 calls/47,175 tok/134.8 s，只是成本
+事实，不构成内容胜出；费用仍 unknown。该实测不改写前述输入截取点、基线定义或共享证据规则。
+
 ### 6.4 工具缺口与正式运行器最小能力
 
 现有可复用能力（离线核对）：`benchmarks/run_baseline.py` 能按 JSON case 调研究管线、保存

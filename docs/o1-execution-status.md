@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮两处修正 `cc9e533`/`a315e88`，第十次候选 HEAD `a315e88`；第3轮离线 `447f1a8`/`ff71fc0`/`2b42836`，**当前实验 HEAD/下一轮候选 `2b42836`**；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd`、第十次 task `600af92f-f65e-41c0-aa6f-2811f943c124` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮两处修正 `cc9e533`/`a315e88`；第3轮离线 `447f1a8`/`ff71fc0`/`2b42836`；第4轮接入 **`41c9314`**，**当前实验 HEAD `41c9314`**；第八次 task `e339d065-7a61-4993-9819-1405b23bb7cd`、第十次 task `600af92f-f65e-41c0-aa6f-2811f943c124`、第十一次 task `v11pair-a42b7594fa47` 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -402,15 +402,67 @@
 - 本轮暂停/恢复：20:28 暂停、20:54 恢复；暂停不计主动工作时间，代码/测试/文档已提交，
   learned_docs 修改与 17 项既有未跟踪材料未提交、保持原样。
 
+### 第 4 轮第十一次开发配对（2026-10-22，已执行，失败）
+
+- 代码接入提交 **`41c9314`**（以第3轮 `2b42836` 为基点）。接入只验证：模型外呼与补搜分离
+  （冻结证据后候选冲突不新增检索/正文抓取）、`shared_retrieval_source_envelopes` 与派发请求数
+  分离（无法核实的检索 HTTP 总数保持 unknown）、同一 `run_limits`/进程守卫/总时钟下共享采集→
+  baseline→candidate、每臂 ≤900 s 和剩余总时、共享快照先于两臂、每臂结果完成即保存、冻结来源
+  编号/正文不一致时模型派发前拒绝、baseline synthesis/candidate synthesis/self-review 分别消费
+  校验。代码冻结后完整套件 **661 passed**；离线 preflight/PairWindow 验证 48/24/1800 与 official
+  4/12/15/200000；聚焦独立复核首轮 BLOCKED（守卫发现路径、预算停止误报、launcher 异常清理）后
+  修复，复核 `D:\deepchoice-dsh\r4_access_review2\review.md` **PASS**；无评测平台或选型提示改动。
+- 独立准备者创建并停止写入后，执行者将 5 个案例文件、run config、依赖 freeze 复制进
+  `D:\deepchoice-precodex\.scratch\v11_seal`；manifest sha256
+  `9b241f759d3500d2883b70cc1fda262f050264696a53a8d6e1e36044ddc2ff14`，外部锚点
+  `D:\deepchoice-dsh\v11_run\seal_manifest.sha256.json`；payload sha256
+  `131b54d4b66d098d62a1668ce03149bdc55d48c109f93fff153355dcd74f90c7`，canonical payload
+  `e1e76d4f0edd3d49c90f355ef8e2ecdedc5074c4a7a60d8ba25bde39636ebd0f`，query sha256
+  `97dc4da44954d47840d40842e24e0fafa4b122bff016012cc61bb00e8e79c399`；运行前后
+  `verify_seal` ok，learned_docs 前后 sha256
+  `da065234f9262f16ac4cdc312df31c3da59826ebf6ac5e5e48c430ae5e756f19` 未变。
+- 实际运行 task `v11pair-a42b7594fa47`：1 case、共享采集 1 次、baseline/candidate 各 1 次；
+  共享后先保存快照，再 baseline（09:39）→ candidate（09:40–09:41）；两臂均完成、无补跑/换题。
+  总墙钟 **232.735 s / 1800 s**（baseline 46.203 s、candidate 134.765 s，均 ≤900 s），预加载
+  **24.28 s** 单列；LLM **5/48**（共享 1 + baseline 1 + candidate 3），Tavily **7/24**，official
+  **4/4 page attempts、7/12 HTTP、3 redirects、1 body page、0 stop**；总已知 token **69,932**
+  （shared 4,988 + baseline 17,769 + candidate 47,175），费用 unknown；guard `service_exited`、
+  `exit_confirmed=true`、`forced=false`，exit 0。
+- 共享采集：6 个来源信封（actual HTTP 总体 unknown，不拿行数替代请求数），`source_scores=26`；
+  official 只有 **Vector 文档首页 3,320 字正文**，OpenTelemetry resiliency/scaling 等决定性页因
+  `content_too_large` 只有 snippet，无任何版本/日期；3 个失败页均 `content_too_large`。该来源
+  缺口原样进入比较，未人工补正文。
+- 证据消费/配对完整性：共享包 `c5d23e...`；baseline 只消费 `baseline_synthesis`，candidate
+  消费 `candidate_synthesis` + `candidate_self_review`，全部 `entries_match=true`、包 hash/
+  source-entry 签名一致；`evidence_consistent=true`。无配对/封存/证据身份不一致，故可作路线
+  比较输入。
+- 独立盲评：报告匿名 A/B，先锁定内容结论，再揭示映射与成本。content review
+  `D:\deepchoice-dsh\v11_blind\content_review.md`：匿名 A（揭示后=candidate）**not_usable**，
+  匿名 B（揭示后=baseline）**needs_review/not accepted**；两臂均未过 D2 证据门（决定性 claim
+  依赖 snippet-only/第三方，OTel 官方正文未取得），出现自相矛盾/错误 provenance/未标推断的
+  具体拓扑等；无版本/日期。最终比较 `D:\deepchoice-dsh\v11_blind\final_comparison.md`：baseline
+  成本更低（1 call/17,769 tok/46.2 s vs candidate 3 calls/47,175 tok/134.8 s）但内容仍不通过；
+  按预定规则 **R4 两臂均不可用 → 保留失败、停止自动研究与修复，不选下一阶段路线**。
+- 本轮结论：**配对诊断失败（内容门），不是接入/预算/封存失败**；N=1 开发诊断，不形成正式
+  通过率/统计性增益，不自动启动校准/百例评测或第12次。失败原因指向 official 正文获取
+  （content_too_large/未取得决定性页）与两臂共同的 snippet-only 证据支撑，而非 baseline/
+  candidate 差异；后续若继续须用户另行授权，先解决来源获取或重新准备新题/新 seal，不在本失败
+  运行上补跑或手修报告。
+- 原始产物：`D:\deepchoice-precodex\outputs\v11pair-a42b7594fa47\`（report SHA baseline
+  `f8a99456...688b`、candidate `10064264...c0c7`；shared/pair/run 状态与计数完整）；
+  `D:\deepchoice-dsh\v11_run\final_audit.json` 记录 seal 前后、guard、哈希与内容结论；
+  `raw_reports/` 仅复制交付，原文件未改。无 push/改写历史/合并。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权
 **1/1 已使用**（封存失效、内容 not_usable）；第十次单例授权 **1/1 已使用**（A 机制通过、
-B not_usable，已按第2轮停止条件暂停当前技术路线）；均不继承剩余调用上限为新研究额度，
-不自动补跑。第3轮只做离线替代路线/简单基线与固定输入验证，未派发研究、未消耗新单例授权；
-第十一次及真实双程比较尚未授权，下一轮须另行冻结 case/预算/身份。小规模校准和正式百例以上
-评测须新的明确授权；第十次失败后不得自动启动修复或换题。下方旧现代分支累计240及10/10账本
-保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
+B not_usable）；第十一次开发配对授权 **1 case/1 shared collection/baseline 1/candidate 1
+已使用**（内容两臂均不可用，按 R4 保留失败、停止自动研究与修复，不选路线）；均不继承剩余
+调用上限为新研究额度，不自动补跑。第3轮离线替代路线/简单基线未派发研究、未消耗单例授权；
+第4轮接入完成并通过机制复核，但内容失败。后续第12次、小规模校准和正式百例以上评测须新的
+明确授权；第十次/第十一次失败后不得自动启动修复、换题或补跑。下方旧现代分支累计240及
+10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
 
 第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的两轮离线修复批次只证明机制与
 测试，不证明真实报告内容改善；不得据此自动补跑、换题或开展校准。下一步须先由用户另行决定
@@ -422,8 +474,8 @@ B not_usable，已按第2轮停止条件暂停当前技术路线）；均不继�
 1. **题目**：由独立准备者新建、与 Codex 时期所有题及近义改写查重后的未见题；冻结原始请求、
    约束、影响选择的必答项、允许的条件性结论、严重性锚点、来源政策、参考依据及日期/版本、
    可答性、曝光状态和数据集 hash。实现者不据题定向修代码；运行后不换题、不改 rubric。
-2. **候选身份**：第十次候选 **`a315e88`**（第2轮两处修正代码 `cc9e533`、测试 `a315e88`
-   在 `5626c7b` 之上；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；
+2. **候选身份**：当前实验 HEAD **`41c9314`**（第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第2轮
+   `cc9e533`/`a315e88`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；
    如再有改动，以新提交重新冻结并说明差异）；冻结模型/参数、依赖、检索与缓存策略、启动器
    与 payload hash；运行前后核对 two trees 与原始产物身份。
 3. **额度与停止线**：授权时明确 1 个 case、1 次研究运行（不自动补跑）、LLM/Tavily 请求上限
