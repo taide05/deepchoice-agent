@@ -1,258 +1,263 @@
-"""Winner validation: reject repo paths and generic words, fall back to ranked options.
+"""Unified decision contract: recommended / conditional / insufficient / invalid."""
+import asyncio
+import copy
 
-Regression: open-scenario cases exposed two winner-quality failures —
-(a) a GitHub sample repo path returned as winner (OS-0016),
-(b) a junk PyPI package name returned as winner (OS-0050).
-"""
-from deepchoice.agents import conclusion_synthesizer as cs_mod
+from deepchoice.agents import self_reviewer
+from deepchoice.agents.conclusion_synthesizer import normalize_decision
+from deepchoice.formats import comparison_matrix, evidence_first, what_why_how
+from deepchoice.utils.decision import (
+    CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED,
+    decision_view,
+)
 
-STATE = {
-    "task": {"query": "Our team wants feature flags with gradual rollout", "scene_context": "team"},
-    "evidence_chains": [],
-    "conflicts": [],
-    "source_scores": [],
-    "token_usage": [],
-}
-
-
-def _fake_call_model(result):
-    async def fake(prompt, model=None, response_format=None, timeout=None, **kw):
-        return result
-    return fake
+SOURCE = "https://source.example/doc"
+CHAINS = [{"sources": [{"title": "Source", "url": SOURCE,
+                        "snippet": "bounded source body", "has_body": True}]}]
 
 
-class TestPromptGuards:
-    def test_synthesis_prompt_forbids_research_paper_winners(self):
-        """Regression (OS-0035 FedMon): the prompt must forbid research papers
-        and prototypes as winners — the code-side validator cannot detect them."""
-        assert "NEVER recommend a research paper" in cs_mod.SYNTHESIS_PROMPT
-
-    def test_synthesis_prompt_has_three_step_anti_bias(self):
-        assert "three-step" in cs_mod.SYNTHESIS_PROMPT
-        assert "constraint-fit" in cs_mod.SYNTHESIS_PROMPT
-
-    def test_synthesis_prompt_clarifies_established_not_mainstream(self):
-        assert "established, adoptable" in cs_mod.SYNTHESIS_PROMPT
-        assert "mainstream" in cs_mod.SYNTHESIS_PROMPT
-
-    def test_synthesis_prompt_requires_verbatim_titles(self):
-        assert "VERBATIM" in cs_mod.SYNTHESIS_PROMPT
-
-    def test_synthesis_prompt_requires_cited_factual_claims_not_every_sentence(self):
-        prompt = cs_mod.SYNTHESIS_PROMPT
-        assert "CITE FACTUAL CLAIMS, NOT EVERY SENTENCE" in prompt
-        assert "must NOT be given an unrelated citation" in prompt
-        assert "EVERY sentence" not in prompt
-        assert "no sentence or field may be left uncited" not in prompt
-        # Explicit gaps/inferences are allowed without a fabricated citation.
-        assert "explicit gap/inference" in prompt
-        assert "confidence_rationale" in prompt and "consistent with `confidence`" in prompt
-
-    def test_summarize_chains_includes_up_to_four_titles(self):
-        # Each source carries a body, since a source without one is a navigation
-        # link and is deliberately excluded from the citable set.
-        chains = [{"evidence_strength": "strong", "conclusion": "c",
-                   "sources": [{"title": f"T{i}", "snippet": f"body {i}"} for i in range(5)]}]
-        text, mapping = cs_mod._summarize_chains(chains)
-        assert "T0" in text and "T3" in text  # up to the 4th source title
-        assert "T4" not in text  # 5th source excluded
-        assert mapping == {1: "T0", 2: "T1", 3: "T2", 4: "T3"}
-        assert "[[1]]" in text and "[[4]]" in text
-
-    def test_synthesis_prompt_covers_all_claim_fields(self):
-        assert "winner_rationale" in cs_mod.SYNTHESIS_PROMPT
-        assert "key_strength" in cs_mod.SYNTHESIS_PROMPT
-        assert "scene_fit_note" in cs_mod.SYNTHESIS_PROMPT
+def _state(rec):
+    return {"task": {"query": "choose a tool", "report_format": "what_why_how"},
+            "evidence_chains": CHAINS, "conflicts": [], "quality_signals": [],
+            "knowledge_gaps": [], "final_recommendation": rec,
+            "confidence": rec.get("confidence", "medium")}
 
 
-class TestWinnerValidation:
-    def test_repo_path_winner_falls_back_to_ranked_option(self, monkeypatch):
-        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
-            "winner": "aws-samples/serverless-ticket-sentiment",
-            "winner_rationale": "pre-built sample",
-            "ranked_options": [
-                {"rank": 1, "name": "n8n", "rationale": "visual workflows"},
-                {"rank": 2, "name": "Windmill", "rationale": "code-first"},
-            ],
-        }))
-        import asyncio
-        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "n8n"
-
-    def test_generic_word_winner_falls_back(self, monkeypatch):
-        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
-            "winner": "flag",
-            "winner_rationale": "flag (PyPI) for feature flags",
-            "ranked_options": [
-                {"rank": 1, "name": "Unleash", "rationale": "open-source flags"},
-            ],
-        }))
-        import asyncio
-        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "Unleash"
-
-    def test_valid_winner_untouched(self, monkeypatch):
-        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
-            "winner": "Unleash",
-            "winner_rationale": "open-source feature flags",
-            "ranked_options": [{"rank": 1, "name": "Unleash", "rationale": "x"}],
-        }))
-        import asyncio
-        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "Unleash"
-
-    def test_all_ranked_invalid_keeps_winner(self, monkeypatch):
-        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
-            "winner": "org/repo",
-            "winner_rationale": "x",
-            "ranked_options": [{"rank": 1, "name": "another/repo", "rationale": "x"}],
-        }))
-        import asyncio
-        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "org/repo"
-
-    def test_context_dependent_winner_not_fallback(self):
-        result = {"winner": "context_dependent",
-                  "ranked_options": [{"rank": 1, "name": "LangGraph", "rationale": "x"}]}
-        cs_mod._validate_winner(result)
-        assert result["winner"] == "context_dependent"
+def _render_all(rec):
+    state = _state(rec)
+    return {
+        "what_why_how": what_why_how.render(state),
+        "evidence_first": evidence_first.render(state),
+        "comparison_matrix": comparison_matrix.render(state),
+    }
 
 
-class TestConstraintFitValidation:
-    def test_lower_fit_winner_falls_back_to_highest_fit(self):
-        result = {
-            "winner": "Elasticsearch",
-            "ranked_options": [
-                {"name": "Meilisearch", "rank": 1, "constraint_fit": "high", "rationale": "x"},
-                {"name": "Elasticsearch", "rank": 2, "constraint_fit": "low", "rationale": "x"},
-            ],
+def test_supported_explicit_recommendation_is_unchanged():
+    rec = normalize_decision({
+        "decision_status": "recommended", "winner": "Alpha",
+        "winner_rationale": "The source states Alpha fits the constraint.",
+        "recommendation": "Adopt Alpha after the stated prerequisite.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "confidence": "high", "unresolved_questions": [],
+    })
+    assert rec["decision_status"] == RECOMMENDED
+    assert rec["winner"] == "Alpha"
+    assert decision_view(rec)["status"] == RECOMMENDED
+
+
+def test_genuine_conditional_is_not_forced_to_a_winner():
+    rec = normalize_decision({
+        "decision_status": "conditional", "winner": "context_dependent",
+        "winner_rationale": "Evidence branches on deployment mode.",
+        "recommendation": "Choose Alpha for cloud; choose Beta for offline.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "unresolved_questions": [],
+    })
+    assert rec["decision_status"] == CONDITIONAL
+    assert rec["winner"] == ""
+    outputs = _render_all(rec)
+    assert all("Winner:" not in output for output in outputs.values())
+
+
+def test_explicit_hold_is_not_filled_by_ranking_or_rendering():
+    rec = normalize_decision({
+        "decision_status": "insufficient_evidence", "winner": "",
+        "winner_rationale": "No versioned official evidence for the decisive item.",
+        "recommendation": "Hold until versioned official evidence is obtained.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "unresolved_questions": ["Need versioned official audit evidence."],
+    })
+    assert rec["decision_status"] == INSUFFICIENT
+    assert rec["winner"] == ""
+    outputs = _render_all(rec)
+    for output in outputs.values():
+        assert "Winner:" not in output
+        assert "hold" in output.lower() or "暂缓" in output
+
+
+def test_invalid_model_output_is_not_a_valid_hold():
+    rec = normalize_decision({
+        "decision_status": "insufficient_evidence", "winner": "",
+        "recommendation": "hold", "unresolved_questions": [],
+        "ranked_options": [{"name": "Alpha", "rank": 1}],
+    })
+    assert rec["decision_status"] == INVALID
+    outputs = _render_all(rec)
+    assert all("Decision unavailable" in output or "决策未生成" in output
+               for output in outputs.values())
+    assert not any("Winner:" in output for output in outputs.values())
+
+
+def test_self_review_withdrawal_enters_final_report(monkeypatch):
+    rec = {
+        "decision_status": "recommended", "winner": "Alpha",
+        "winner_rationale": "Unsupported decisive basis.",
+        "recommendation": "Adopt Alpha.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "unresolved_questions": [],
+        "confidence": "medium",
+    }
+    state = _state(rec)
+    state["task"]["language"] = "zh"
+
+    async def fake_call_model(prompt, **kwargs):
+        return {
+            "checks": [{"item": i, "passed": i != 1} for i in range(1, 7)],
+            "passed_count": 5, "confidence": "low", "knowledge_gaps": [],
+            "critical_gaps": ["versioned official evidence is missing"],
+            "corrections": [{
+                "option": "", "field": "decision_status",
+                "action": "withdraw_decision",
+                "reason": "No cited source supports the recommendation.",
+            }],
         }
-        cs_mod._validate_constraint_fit(result)
-        assert result["winner"] == "Meilisearch"
+    monkeypatch.setattr(self_reviewer, "call_model", fake_call_model)
+    out = asyncio.run(self_reviewer.SelfReviewerAgent().run(state))
+    final = out["final_recommendation"]
+    assert final["decision_status"] == INSUFFICIENT
+    assert final["winner"] == ""
+    assert "推荐已撤回" in final["winner_rationale"]
+    assert "暂缓选型" in final["recommendation"]
+    assert "Winner:" not in out["report"]
+    assert "暂缓" in out["report"]
 
-    def test_best_fit_winner_kept(self):
-        result = {
-            "winner": "Meilisearch",
-            "ranked_options": [
-                {"name": "Meilisearch", "rank": 1, "constraint_fit": "high", "rationale": "x"},
-                {"name": "Elasticsearch", "rank": 2, "constraint_fit": "low", "rationale": "x"},
-            ],
+
+def test_failed_review_does_not_apply_withdrawal(monkeypatch):
+    rec = {
+        "decision_status": "recommended", "winner": "Alpha",
+        "winner_rationale": "basis", "recommendation": "Adopt Alpha.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "unresolved_questions": [], "confidence": "medium",
+    }
+    state = _state(rec)
+
+    async def failing_call_model(prompt, **kwargs):
+        raise RuntimeError("reviewer unavailable")
+    monkeypatch.setattr(self_reviewer, "call_model", failing_call_model)
+    out = asyncio.run(self_reviewer.SelfReviewerAgent().run(state))
+    assert out["final_recommendation"]["decision_status"] == RECOMMENDED
+    assert out["final_recommendation"]["winner"] == "Alpha"
+
+
+def test_historical_record_is_displayed_without_deriving_a_winner():
+    old_with_winner = {"winner": "Alpha", "recommendation": "Legacy recommendation."}
+    before = copy.deepcopy(old_with_winner)
+    outputs = _render_all(old_with_winner)
+    assert any("Winner: Alpha" in output for output in outputs.values())
+    assert old_with_winner == before
+
+    old_without_winner = {"recommendation": "No winner was saved.",
+                          "ranked_options": [{"name": "Alpha", "rank": 1}]}
+    before = copy.deepcopy(old_without_winner)
+    outputs = _render_all(old_without_winner)
+    assert all("Winner:" not in output for output in outputs.values())
+    assert old_without_winner == before
+
+
+def test_constraint_fit_never_overrides_evidence_winner():
+    rec = normalize_decision({
+        "decision_status": "recommended", "winner": "Alpha",
+        "winner_rationale": "The cited source supports Alpha for this constraint.",
+        "recommendation": "Adopt Alpha with the stated prerequisite.",
+        "ranked_options": [
+            {"name": "Alpha", "rank": 1, "constraint_fit": "low"},
+            {"name": "Beta", "rank": 2, "constraint_fit": "high"},
+        ],
+        "confidence": "medium", "unresolved_questions": [],
+    })
+    assert rec["winner"] == "Alpha"
+    assert rec["decision_status"] == RECOMMENDED
+
+
+def test_self_review_withdrawal_is_consistent_in_all_three_renderers(monkeypatch):
+    rec = {
+        "decision_status": "recommended", "winner": "Alpha",
+        "winner_rationale": "Unsupported basis.", "recommendation": "Adopt Alpha.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "unresolved_questions": [], "confidence": "medium",
+    }
+    state = _state(rec)
+    state["task"]["language"] = "zh"
+
+    async def fake_call_model(prompt, **kwargs):
+        return {
+            "checks": [{"item": i, "passed": True} for i in range(1, 7)],
+            "passed_count": 6, "confidence": "low", "knowledge_gaps": [],
+            "corrections": [{
+                "option": "", "field": "decision_status",
+                "action": "withdraw_decision",
+                "reason": "No cited source supports the recommendation.",
+            }],
         }
-        cs_mod._validate_constraint_fit(result)
-        assert result["winner"] == "Meilisearch"
+    monkeypatch.setattr(self_reviewer, "call_model", fake_call_model)
+    out = asyncio.run(self_reviewer.SelfReviewerAgent().run(state))
+    final = out["final_recommendation"]
+    assert final["decision_status"] == INSUFFICIENT
+    outputs = _render_all(final)
+    for output in outputs.values():
+        assert "Winner:" not in output
+        assert "暂缓" in output or "hold" in output.lower()
 
-    def test_missing_constraint_fit_skips(self):
-        result = {
-            "winner": "Elasticsearch",
-            "ranked_options": [
-                {"name": "Meilisearch", "rank": 1, "rationale": "x"},
-                {"name": "Elasticsearch", "rank": 2, "rationale": "x"},
-            ],
+
+def test_self_review_cannot_replace_a_winner_with_another_product(monkeypatch):
+    rec = {
+        "decision_status": "recommended", "winner": "Alpha",
+        "winner_rationale": "basis", "recommendation": "Adopt Alpha.",
+        "ranked_options": [{"name": "Alpha", "rank": 1},
+                           {"name": "Beta", "rank": 2}],
+        "unresolved_questions": [], "confidence": "medium",
+    }
+    applied, rejected = self_reviewer._apply_corrections(
+        rec,
+        [{"option": "", "field": "winner", "action": "revise",
+          "corrected": "Beta", "reason": "unsupported"}],
+        language="zh",
+    )
+    assert applied == []
+    assert rejected
+    assert rec["winner"] == "Alpha"
+
+
+def test_parse_failure_is_invalid_not_a_hold():
+    rec = normalize_decision(["not", "an", "object"])
+    assert rec["decision_status"] == INVALID
+    assert rec["winner"] == ""
+    outputs = _render_all(rec)
+    assert all("Decision unavailable" in output or "决策未生成" in output
+               for output in outputs.values())
+
+
+def test_self_review_cannot_turn_invalid_output_into_a_hold(monkeypatch):
+    rec = normalize_decision({
+        "decision_status": "insufficient_evidence", "winner": "",
+        "recommendation": "hold", "unresolved_questions": [],
+    })
+    assert rec["decision_status"] == INVALID
+    state = _state(rec)
+
+    async def fake_call_model(prompt, **kwargs):
+        return {
+            "checks": [{"item": i, "passed": True} for i in range(1, 7)],
+            "passed_count": 6, "confidence": "low", "knowledge_gaps": [],
+            "corrections": [{
+                "option": "", "field": "decision_status",
+                "action": "withdraw_decision",
+                "reason": "try to turn invalid into hold",
+            }],
         }
-        cs_mod._validate_constraint_fit(result)
-        assert result["winner"] == "Elasticsearch"
-
-    def test_tied_highest_fit_keeps_winner_if_among_tied(self):
-        result = {
-            "winner": "Meilisearch",
-            "ranked_options": [
-                {"name": "Meilisearch", "rank": 1, "constraint_fit": "high", "rationale": "x"},
-                {"name": "Typesense", "rank": 2, "constraint_fit": "high", "rationale": "x"},
-            ],
-        }
-        cs_mod._validate_constraint_fit(result)
-        assert result["winner"] == "Meilisearch"
-
-    def test_run_falls_back_to_highest_fit(self, monkeypatch):
-        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
-            "winner": "Elasticsearch",
-            "winner_rationale": "x",
-            "ranked_options": [
-                {"rank": 1, "name": "Meilisearch", "constraint_fit": "high", "rationale": "x"},
-                {"rank": 2, "name": "Elasticsearch", "constraint_fit": "low", "rationale": "x"},
-            ],
-        }))
-        import asyncio
-        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        assert out["final_recommendation"]["winner"] == "Meilisearch"
+    monkeypatch.setattr(self_reviewer, "call_model", fake_call_model)
+    out = asyncio.run(self_reviewer.SelfReviewerAgent().run(state))
+    assert out["final_recommendation"]["decision_status"] == INVALID
+    assert out["final_recommendation"]["winner"] == ""
 
 
-class TestCitationSanitization:
-    def _chains(self, titles):
-        # A body is required for a source to be citable at all; a source without
-        # one is a navigation link, which is covered separately.
-        return [{"sources": [{"title": t, "snippet": f"body of {t}"} for t in titles]}]
-
-    def test_removes_fabricated_citation(self):
-        """A fabricated title is no longer silently deleted: it becomes a
-        locatable unresolved-citation gap, so the claim does not look supported."""
-        result = {"recommendation": "Use X [Source: Fake Docs]."}
-        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
-        assert "[Source: Fake Docs]" not in result["recommendation"]
-        assert "Fake Docs" in result["recommendation"], "the gap must locate the title"
-        assert "引用未解析" in result["recommendation"] or \
-            "citation-unresolved" in result["recommendation"]
-
-    def test_keeps_real_citation(self):
-        result = {"recommendation": "Use X [Source: Real Docs]."}
-        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
-        assert "[Source: Real Docs]" in result["recommendation"]
-
-    def test_mixed_keeps_real_removes_fake(self):
-        result = {"recommendation": "Use X [Source: Real Docs, Source: Fake Docs]."}
-        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
-        assert "[Source: Real Docs]" in result["recommendation"]
-        assert "[Source: Fake Docs]" not in result["recommendation"]
-        assert "Fake Docs" in result["recommendation"], "the unresolved one is located"
-
-    def test_all_fabricated_removes_bracket(self):
-        result = {"recommendation": "Use X [Source: Fake Docs]."}
-        cs_mod.apply_citation_rules(result, self._chains(["Real Docs"]))
-        assert "[Source:" not in result["recommendation"]
-
-    def test_run_sanitizes_citations(self, monkeypatch):
-        monkeypatch.setattr(cs_mod, "call_model", _fake_call_model({
-            "winner": "Unleash",
-            "winner_rationale": "x",
-            "recommendation": "Use Unleash [Source: Made Up Docs].",
-            "ranked_options": [{"rank": 1, "name": "Unleash", "rationale": "x",
-                                "key_strength": "x", "key_weakness": "x"}],
-        }))
-        import asyncio
-        out = asyncio.run(cs_mod.ConclusionSynthesizerAgent().run(STATE))
-        recommendation = out["final_recommendation"]["recommendation"]
-        assert "[Source: Made Up Docs]" not in recommendation
-        assert "Made Up Docs" in recommendation
-        assert "引用未解析" in recommendation or "citation-unresolved" in recommendation
-
-
-class TestBindCitations:
-    def test_binds_number_to_real_title(self):
-        result = {"recommendation": "Use X [[1]] and Y [[2]]."}
-        cs_mod.apply_citation_rules(result, [], {1: "FastAPI Docs", 2: "Flask Docs"})
-        assert result["recommendation"] == "Use X [Source: FastAPI Docs] and Y [Source: Flask Docs]."
-
-    def test_drops_unknown_number(self):
-        """An unknown number is not printed as a citation, but it is not dropped
-        silently either: it stays as a locatable unresolved-citation gap."""
-        result = {"recommendation": "Use X [[99]]."}
-        cs_mod.apply_citation_rules(result, [], {1: "FastAPI Docs"})
-        assert "[Source:" not in result["recommendation"]
-        assert "[[99]]" not in result["recommendation"]
-        assert "99" in result["recommendation"]
-        assert "citation-unresolved" in result["recommendation"].lower() or \
-            "引用未解析" in result["recommendation"]
-
-    def test_binds_all_fields(self):
-        result = {
-            "recommendation": "Use X [[1]].",
-            "winner_rationale": "X wins [[1]].",
-            "ranked_options": [{"rationale": "r [[2]]", "key_strength": "s [[1]]",
-                                "key_weakness": "w [[2]]"}],
-            "trade_offs": [{"finding": "f [[1]]", "impact": "i [[2]]"}],
-        }
-        cs_mod.apply_citation_rules(result, [], {1: "A", 2: "B"})
-        assert result["recommendation"] == "Use X [Source: A]."
-        assert result["winner_rationale"] == "X wins [Source: A]."
-        assert result["ranked_options"][0]["key_strength"] == "s [Source: A]"
-        assert result["trade_offs"][0]["impact"] == "i [Source: B]"
+def test_prompt_has_no_forced_winner_or_constraint_fit_override():
+    from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+    assert "decision_status" in SYNTHESIS_PROMPT
+    assert "winner MUST be the highest constraint-fit" not in SYNTHESIS_PROMPT
+    assert "context_dependent" not in SYNTHESIS_PROMPT

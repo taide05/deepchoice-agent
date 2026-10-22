@@ -879,9 +879,12 @@ class TestTheContractSentToTheModel:
         one side only, which a copied list of names cannot catch."""
         system, _user = self._system_prompt()
         listed = set(self._contract_fields(system))
-        assert listed == set(sr._CORRECTABLE_FIELDS), (
+        # decision_status is the one whole-decision action, not a field-level
+        # correction; it is deliberately outside _CORRECTABLE_FIELDS.
+        assert listed == set(sr._CORRECTABLE_FIELDS) | {"decision_status"}, (
             f"contract only: {sorted(listed - set(sr._CORRECTABLE_FIELDS))}; "
             f"applier only: {sorted(set(sr._CORRECTABLE_FIELDS) - listed)}")
+        assert "withdraw_decision" in system
 
     @staticmethod
     def _contract_fields(system: str) -> list[str]:

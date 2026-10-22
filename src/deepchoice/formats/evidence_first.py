@@ -4,6 +4,9 @@ from .basis import (
     used_sources,
 )
 from .coverage import derive_data_source_note
+from ..utils.decision import (
+    CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
+)
 
 
 def _lang(query: str) -> str:
@@ -82,9 +85,9 @@ def render(state: dict) -> str:
     }
 
     rec = state.get("final_recommendation", {})
-    winner = rec.get("winner", "")
-    if not winner and rec.get("ranked_options"):
-        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
+    decision = decision_view(rec)
+    status = decision["status"]
+    winner = decision["winner"]
 
     lines = [
         f"# {title_query}{T['title_suffix'][lang]}",
@@ -94,18 +97,32 @@ def render(state: dict) -> str:
     if data_note:
         lines.extend([f"> {data_note}", ""])
     lines.append(T["conclusion"][lang])
-    if winner:
+    if status == RECOMMENDED and winner:
         lines.append(f"**Winner: {winner}**")
         if rec.get("winner_rationale"):
             lines.append(f"*{rec['winner_rationale']}*")
         lines.append("")
-    if rec.get("recommendation"):
+    elif status == CONDITIONAL:
+        lines.append(("**Conditional decision — no single winner; choose by the "
+                      "conditions below**" if lang == "en" else
+                      "**条件选择——无唯一胜者，按下列条件选择**"))
+        lines.append("")
+    elif status == INSUFFICIENT:
+        lines.append(T["insufficient"][lang])
+        lines.append("")
+    else:
+        lines.append(("**Decision unavailable — model output invalid or execution "
+                      "failed**" if lang == "en" else
+                      "**决策未生成——模型输出无效或执行失败**"))
+        lines.append("")
+    if rec.get("recommendation") and status != "invalid":
         lines.append(rec["recommendation"])
         if rec.get("confidence_rationale"):
             lines.append("")
             lines.append(f"*{rec['confidence_rationale']}*")
-    else:
-        lines.append(T["insufficient"][lang])
+    elif status == INVALID:
+        lines.append(("No valid hold or recommendation was generated."
+                      if lang == "en" else "未生成有效的暂缓或推荐。"))
     lines.extend(["", T["trust"][lang], ""])
 
     # The basis is what the synthesis result cites, derived the same way as in

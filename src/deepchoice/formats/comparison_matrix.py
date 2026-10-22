@@ -5,6 +5,9 @@ from .basis import (
     used_sources,
 )
 from .coverage import derive_data_source_note
+from ..utils.decision import (
+    CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
+)
 
 
 def _lang(query: str) -> str:
@@ -172,21 +175,32 @@ def render(state: dict) -> str:
             f"were not compared for conflicts; this does not establish that they agree."
         )
 
-    winner = rec.get("winner", "")
-    if not winner and rec.get("ranked_options"):
-        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
+    decision = decision_view(rec)
+    status = decision["status"]
+    winner = decision["winner"]
 
     lines.extend(["", L["recommendation_title"][lang], ""])
     scene = task.get("scene_context", "team")
     scene_map = {"solo": L["scene_solo"][lang], "team": L["scene_team"][lang], "enterprise": L["scene_enterprise"][lang]}
     lines.append(f"{L['scene'][lang]}: **{scene_map.get(scene, scene)}**")
 
-    if winner:
+    if status == RECOMMENDED and winner:
         lines.append(f"\n**Winner: {winner}**")
         if rec.get("winner_rationale"):
             lines.append(f"*{rec['winner_rationale']}*")
+    elif status == CONDITIONAL:
+        lines.append("\n**" + ("Conditional decision — no single winner; choose by the "
+                                "conditions below" if lang == "en" else
+                                "条件选择——无唯一胜者，按下列条件选择") + "**")
+    elif status == INSUFFICIENT:
+        lines.append("\n**" + ("Insufficient evidence — hold the selection"
+                                if lang == "en" else "证据不足——暂缓选型") + "**")
+    else:
+        lines.append("\n**" + ("Decision unavailable — model output invalid or "
+                                "execution failed" if lang == "en" else
+                                "决策未生成——模型输出无效或执行失败") + "**")
 
-    if rec.get("recommendation"):
+    if rec.get("recommendation") and status != INVALID:
         lines.append("")
         lines.append(f"**{L['recommend'][lang]}:** {rec['recommendation']}")
         if rec.get("ranked_options"):

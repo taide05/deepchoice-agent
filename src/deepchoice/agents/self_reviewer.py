@@ -1,3 +1,4 @@
+from ..utils.decision import decision_view, withdraw_decision
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import (
@@ -49,7 +50,9 @@ def _field_map() -> str:
         "* top-level (option = \"\"): "
         + ", ".join(_CORRECTABLE_TOP_FIELDS) + "\n"
         "* trade-off (option = dimension): "
-        + ", ".join(_CORRECTABLE_TRADEOFF_FIELDS)
+        + ", ".join(_CORRECTABLE_TRADEOFF_FIELDS) + "\n"
+        "* whole-decision withdrawal only (option = \"\", action = withdraw_decision): "
+        "decision_status"
     )
 
 
@@ -81,7 +84,7 @@ Return ONLY a JSON object. `checks` MUST contain exactly six objects, one per
 numbered item above, each with a boolean `passed`; `passed_count` MUST be an
 integer from 0 to 6 and equal the number of true checks. A partial or inconsistent
 result is unusable and will not be applied. Numbers are examples; give real values:
-{{"checks": [{{"item": 1, "passed": true, "note": "..."}}, {{"item": 2, "passed": true, "note": "..."}}, {{"item": 3, "passed": true, "note": "..."}}, {{"item": 4, "passed": true, "note": "..."}}, {{"item": 5, "passed": true, "note": "..."}}, {{"item": 6, "passed": false, "note": "..."}}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw>", "reason": "<what was wrong and which source contradicts it>"}}]}}
+{{"checks": [{{"item": 1, "passed": true, "note": "..."}}, {{"item": 2, "passed": true, "note": "..."}}, {{"item": 3, "passed": true, "note": "..."}}, {{"item": 4, "passed": true, "note": "..."}}, {{"item": 5, "passed": true, "note": "..."}}, {{"item": 6, "passed": false, "note": "..."}}], "passed_count": 5, "confidence": "high|medium|low", "knowledge_gaps": ["gap query"], "critical_gaps": ["critical gap"], "corrections": [{{"option": "<selector, see below>", "field": "<field name, see below>", "action": "revise|withdraw|withdraw_decision", "corrected": "<field text with the error fixed, using only what a cited source supports; omit for withdraw/withdraw_decision>", "reason": "<what was wrong and which source contradicts it>"}}]}}
 
 "corrections" is how a decisive error is fixed, not merely noted. A decisive
 error is a figure, unit or scale the cited source does not state (or states
@@ -102,6 +105,12 @@ every one, return a correction entry that names WHERE it is stated:
   change only what is wrong, and do not blank the field; "withdraw" when no cited
   source supports the claim at all, in which case that one field is replaced with
   a note that it was withdrawn.
+- To withdraw an unsupported recommendation entirely and turn it into an
+  evidence-insufficient hold, use field "decision_status", option "", action
+  "withdraw_decision", and a reason; omit "corrected". This clears the winner,
+  replaces the recommendation/rationale with a hold, and preserves candidate
+  analysis and citations. Do NOT use this for a recommendation you merely
+  dislike, and never revise the winner to a different product.
 
 You are not asked to invent a better answer. If the material does not support a
 corrected version, withdraw the claim or leave the field out of "corrections"
@@ -175,7 +184,8 @@ def _set_field_bindings(recommendation: dict, locator: str,
 def _apply_corrections(recommendation: dict, corrections,
                        evidence_chains: list[dict] | None = None,
                        cite_map: dict[int, str] | None = None,
-                       registry: dict | None = None) -> tuple[list[dict], list[str]]:
+                       registry: dict | None = None,
+                       language: str = "zh") -> tuple[list[dict], list[str]]:
     """Apply the reviewer's field-level corrections to the recommendation.
 
     Deterministic: the reviewer says which field is wrong and what the source
@@ -212,6 +222,25 @@ def _apply_corrections(recommendation: dict, corrections,
         field = str(item.get("field") or "").strip()
         action = str(item.get("action") or "").strip().lower()
         reason = str(item.get("reason") or "").strip()
+        if field == "decision_status" and action == "withdraw_decision":
+            if not reason:
+                rejected.append("no reason given for decision withdrawal")
+                continue
+            if not recommendation.get("winner") and \
+                    recommendation.get("decision_status") == "insufficient_evidence":
+                rejected.append("recommendation is already an insufficient-evidence hold")
+                continue
+            if decision_view(recommendation)["invalid"]:
+                rejected.append("cannot convert an invalid decision into a valid hold")
+                continue
+            before_decision = dict(recommendation)
+            withdraw_decision(recommendation, reason, language=language)
+            applied.append({
+                "option": "", "field": "decision_status",
+                "action": "withdraw_decision", "reason": reason[:200],
+                "changed": before_decision != recommendation,
+            })
+            continue
         if field not in _CORRECTABLE_FIELDS:
             rejected.append(f"field not correctable: {field!r}")
             continue
@@ -474,6 +503,14 @@ def _review_fields_text(recommendation: dict) -> str:
     re-guess from the title). Source bodies appear only in the Source Register.
     """
     lines: list[str] = []
+    view = decision_view(recommendation)
+    lines.extend([
+        "### decision_status",
+        view["status"],
+        "### winner",
+        view["winner"] or "(no winner)",
+        "",
+    ])
     for locator, container, field in citation_field_locations(recommendation):
         text = str(container.get(field) or "")
         lines.append(f"### {locator}")
@@ -685,6 +722,8 @@ Field locations with an unresolved citation:
                 evidence_chains=research_state.get("evidence_chains") or [],
                 cite_map=dict(registry["mapping"]),
                 registry=registry,
+                language=str(((research_state.get("task") or {}).get("language"))
+                             or "zh"),
             )
         else:
             applied, rejected = [], []

@@ -1,5 +1,6 @@
 import re
 
+from ..utils.decision import normalize_decision
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -48,21 +49,22 @@ the source is wrong or that the two sources contradict.
 1. The retrieved sources are ranked by retrieval priority, NOT by how strongly they support anything. Read each source's content; cite it only for what it states, and do not treat the retrieval score or a source's popularity as evidence.
 2. Acknowledge disputed findings — don't pretend they don't exist
 3. Scene context is a TILT, not a decree — solo devs often lean simplicity/speed, enterprises reliability/scale, but strong content in a source for a different dimension (control, durability) can still win. Scene narrows the choice; it never forces it.
-4. ANTI-BIAS (MANDATORY three-step): Step 1 — list the constraints from Scene Context that affect this choice. Step 2 — rate each candidate's constraint-fit (high/medium/low). Step 3 — the winner MUST be the highest constraint-fit candidate, even if it is less popular or newer than a competitor with more GitHub stars or search results. Only override with a lower-fit candidate if there is overwhelming counter-evidence, and state it in winner_rationale. If the highest constraint-fit is TIED, set "winner" to "context_dependent" (rule 7).
+4. DECISION STATUS (choose exactly one): "recommended" when evidence clearly supports one candidate; "conditional" when the right choice depends on stated conditions and there is no single winner; "insufficient_evidence" when decisive evidence is missing and no candidate should be selected. Constraint-fit ratings are analysis only and never replace evidence or force a winner.
 5. If evidence is insufficient for a definitive answer, say so honestly. Also state, explicitly, which constraint or evidence finding would change the recommendation (its reversal conditions) — put this in the recommendation or scene_fit_note when the answer is conditional.
 6. CITE FACTUAL CLAIMS, NOT EVERY SENTENCE. Every factual claim that affects the choice, exclusion, risk boundary or a conditional conclusion must carry the source number(s) that actually state it, copied VERBATIM from the Retrieved sources (e.g. "Gitleaks scans git history [[3]]"). A statement that the evidence is missing, an explicit unknown, a qualifier, a label, or an inference that no source states must NOT be given an unrelated citation: write it as an explicit gap/inference instead. Do not invent numbers. The source list includes content ranges; do not treat material beyond the visible/truncated range as if you read it.
-7. Winner selection: name a winner ONLY when evidence clearly favors one option for the scene. If balanced — both have meaningful evidence and neither clearly wins — set "winner" to "context_dependent" and give a conditional recommendation ("choose X if ..., choose Y if ..."). If your own rationale says "depends on"/"hinges on"/"context-dependent", the winner MUST be "context_dependent".
-8. The "winner" value MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL"), or "context_dependent" for a genuine tie (rule 7) — never a sentence.
-9. CRITICAL: The winner MUST be an established, adoptable product, tool, or framework that the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project (e.g. "FedMon", "aws-samples/..."). NOTE: "established" does NOT mean "mainstream / most popular" — a mature but smaller product (e.g. Meilisearch, Prefect, Tiktoken) is a valid winner if it best fits the constraints. If the strongest evidence only supports a non-product, pick the closest adoptable alternative and note it in winner_rationale.
+7. "winner" is a candidate name ONLY for decision_status="recommended", with a decisive evidence basis and applicability prerequisites in winner_rationale. For "conditional", there is no winner: provide at least two ranked_options and put the branching conditions in recommendation. For "insufficient_evidence", there is no winner: unresolved_questions must name the decisive gaps and the evidence that would change the conclusion, and recommendation states the hold. Never use ranked_options, constraint_fit, source counts or a generic default to fill a winner. If the required fields for the selected status are absent, the output is invalid rather than a valid hold.
+8. The "winner" value, when present, MUST be a technology/framework name (e.g., "LangGraph", "FastAPI", "PostgreSQL") — never a sentence and never a sentinel for a hold.
+9. For recommended/conditional, the winner or named branches must be established, adoptable products the user could actually adopt today. NEVER recommend a research paper, academic prototype, sample repository, or obscure experimental project as a product. This does not require the most popular option.
 10. Make the analysis usable, not just short: each trade-off's `impact` must say who/which constraint it matters for; `evidence_summary` must note the evidence limits (missing official/primary sources, dates/versions absent, unmeasured claims); `confidence_rationale` must be consistent with `confidence`. Do not repeat the recommendation as the winner_rationale: state the decisive evidence basis there, and put actions/conditions in `recommendation`.
 11. Distinguish documented fact, conditional inference and unknown. If the saved source list shows only a navigation link or a body-truncated range, do not present the missing text as established. If you answer a required item from general reasoning rather than a source, mark it as an inference; if it cannot be answered, record it in `unresolved_questions` with the decision impact instead of filling it with a citation.
 
 ## Output Structure
 Return ONLY a JSON object:
 {{
-  "winner": "Single technology name (REQUIRED)",
-  "winner_rationale": "The decisive evidence basis for the winner; do not repeat the recommendation paragraph",
-  "recommendation": "Actionable recommendation, conditional branches and what would change it",
+  "decision_status": "recommended|conditional|insufficient_evidence",
+  "winner": "candidate name only when decision_status=recommended; empty for conditional/insufficient_evidence",
+  "winner_rationale": "Decisive evidence basis for a recommended winner, or the decisive gap for insufficient_evidence",
+  "recommendation": "Actionable recommendation; for conditional, the explicit branches and what would change them; for insufficient_evidence, the hold and the evidence that would change it",
   "ranked_options": [
     {{"name": "Option A", "rank": 1, "constraint_fit": "high|medium|low", "constraint_fit_reason": "why this fit", "rationale": "Why this rank, including the decisive evidence and applicability limits", "key_strength": "strongest evidence point", "key_weakness": "notable limitation"}}
   ],
@@ -368,60 +370,6 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
     if excluded_no_body:
         lines.append(no_body_note.strip())
     return "\n".join(lines)
-
-
-_GENERIC_WINNER_WORDS = {
-    "flag", "gradual", "feature", "api", "app", "tool", "platform",
-    "service", "system", "framework", "solution", "library", "package",
-}
-
-
-def _validate_winner(result: dict) -> dict:
-    """Reject non-technology winners (repo paths, generic words) and fall back
-    to the first valid ranked option. "context_dependent" is a valid winner for
-    a genuine tie (rule 7) — never fall back, since no option should be forced."""
-    winner = (result.get("winner") or "").strip()
-    if winner.lower() == "context_dependent":
-        return result
-    if not winner or "/" in winner or winner.lower() in _GENERIC_WINNER_WORDS:
-        for opt in result.get("ranked_options", []):
-            name = (opt.get("name") or "").strip()
-            if name and "/" not in name and name.lower() not in _GENERIC_WINNER_WORDS:
-                result["winner"] = name
-                break
-    return result
-
-
-_FIT_ORDER = {"high": 0, "medium": 1, "low": 2}
-
-
-def _validate_constraint_fit(result: dict) -> dict:
-    """Enforce ANTI-BIAS rule 4: if the winner is not among the highest
-    constraint-fit ranked options, fall back to the highest-fit option.
-
-    No-op when constraint_fit is absent (older/malformed outputs) — the
-    validator must not corrupt a report that predates the field.
-    """
-    if (result.get("winner") or "").strip().lower() == "context_dependent":
-        return result
-    ranked = result.get("ranked_options", [])
-    if not ranked:
-        return result
-    scored = []
-    for opt in ranked:
-        name = (opt.get("name") or "").strip()
-        fit = (opt.get("constraint_fit") or "").strip().lower()
-        if name and fit in _FIT_ORDER:
-            scored.append((name, fit))
-    if not scored:
-        return result
-    best_level = min(_FIT_ORDER[fit] for _, fit in scored)
-    best_names = [name for name, fit in scored if _FIT_ORDER[fit] == best_level]
-    winner = (result.get("winner") or "").strip()
-    if winner.lower() in {n.lower() for n in best_names}:
-        return result
-    result["winner"] = best_names[0]
-    return result
 
 
 def _norm_title(s: str) -> str:
@@ -1112,6 +1060,17 @@ class ConclusionSynthesizerAgent:
                 "unresolved_questions": [],
                 "scene_fit_note": "",
             }
+        if not isinstance(result, dict):
+            result = {
+                "recommendation": "",
+                "ranked_options": [],
+                "trade_offs": [],
+                "evidence_summary": "Model returned a non-object decision output.",
+                "confidence": "low",
+                "confidence_rationale": "invalid_model_output",
+                "unresolved_questions": [],
+                "scene_fit_note": "",
+            }
 
         quality_signals = [{
             "agent": "conclusion_synthesizer",
@@ -1143,8 +1102,10 @@ class ConclusionSynthesizerAgent:
                 1 for a in evidence_audit if a["stored_truncated"]),
         }]
 
-        _validate_winner(result)
-        _validate_constraint_fit(result)
+        normalize_decision(result)
+        quality_signals[0]["decision_status"] = result.get("decision_status")
+        quality_signals[0]["decision_winner_present"] = bool(
+            (result.get("winner") or "").strip())
         # Labels are display/locator identity, so they are normalised before the
         # citation pass records its locators; otherwise a marker in a dimension
         # would make the bindings and the renderer address the same field by two

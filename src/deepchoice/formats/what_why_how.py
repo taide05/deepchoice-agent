@@ -7,6 +7,9 @@ from .basis import (
 )
 from .coverage import derive_data_source_note
 from ..agents.conclusion_synthesizer import clean_label
+from ..utils.decision import (
+    CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
+)
 
 
 def _lang(query: str) -> str:
@@ -148,6 +151,9 @@ def render(state: dict) -> str:
         "how": {"en": "## How: Action Path", "zh": "## How: 行动路径"},
         "recommendation": {"en": "Recommendation", "zh": "建议"},
         "no_single_winner": {"en": "No single winner — the choice depends on your constraints", "zh": "无唯一胜者——选择取决于你的约束条件"},
+        "conditional_decision": {"en": "Conditional decision — no single winner; choose by the conditions below", "zh": "条件选择——无唯一胜者，按下列条件选择"},
+        "insufficient_decision": {"en": "Insufficient evidence — hold the selection", "zh": "证据不足——暂缓选型"},
+        "invalid_decision": {"en": "Decision unavailable — model output invalid or execution failed", "zh": "决策未生成——模型输出无效或执行失败"},
         "ranked_options": {"en": "### Ranked Options", "zh": "### 方案排名"},
         "trade_offs": {"en": "### Trade-offs", "zh": "### 权衡"},
         "impact": {"en": "Impact", "zh": "影响"},
@@ -361,15 +367,18 @@ def render(state: dict) -> str:
 
     lines.extend([T["how"][lang], ""])
 
-    winner = rec.get("winner", "")
-    if not winner and rec.get("ranked_options"):
-        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
-
-    if winner:
-        if winner.lower() == "context_dependent":
-            lines.append(f"**Winner:** {T['no_single_winner'][lang]}")
-        else:
-            lines.append(f"**Winner: {winner}**")
+    decision = decision_view(rec)
+    status = decision["status"]
+    winner = decision["winner"]
+    if status == RECOMMENDED and winner:
+        lines.append(f"**Winner: {winner}**")
+    elif status == CONDITIONAL:
+        lines.append(f"**{T['conditional_decision'][lang]}**")
+    elif status == INSUFFICIENT:
+        lines.append(f"**{T['insufficient_decision'][lang]}**")
+    else:
+        lines.append(f"**{T['invalid_decision'][lang]}**")
+    if status != INVALID:
         winner_basis = _one_line(rec.get("winner_rationale"))
         recommendation_text = _one_line(rec.get("recommendation"))
         # Do not print the same recommendation twice. The synthesis prompt asks
@@ -383,7 +392,7 @@ def render(state: dict) -> str:
             lines.append(f"*{rec['confidence_rationale']}*")
         lines.append("")
 
-    if rec.get("recommendation"):
+    if rec.get("recommendation") and status != INVALID:
         lines.append(f"**{T['recommendation'][lang]}:** {rec['recommendation']}")
         lines.append("")
 
@@ -433,7 +442,7 @@ def render(state: dict) -> str:
         lines.append(f"**{T['scene_fit'][lang]}:** {rec['scene_fit_note']}")
         lines.append("")
 
-    if not winner and not rec.get("recommendation"):
+    if status == INVALID:
         lines.extend([
             f"**{T['confidence'][lang]}:** {state.get('confidence', 'unknown')}",
             "",
