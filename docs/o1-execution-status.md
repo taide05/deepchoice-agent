@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第一批 `f07f87b`；第八次后首轮 `53a09ed`/`06017e6`；第二轮 `63cc2ca`/`758e7ee`/`0e3397e`；第四项 `e9acb9c`/`58d7fb0`/`a5cca17`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮接入 `41c9314`；第5轮证据收口 **`2138be9`**，**当前实验 HEAD `2138be9`**；第8/10/11次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮 `41c9314`；第5轮 `2138be9`；第6轮 **`f151361`**，**当前实验 HEAD `f151361`**；第8/10/11/12次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -497,18 +497,59 @@
   要求仍停在**第12次派发前**，不自动启动新研究/校准/百例评测。下一轮需新授权并先决定列表项
   提取与正式 cap 对齐；不得把本轮 probe 当报告通过。
 
+### 第 6 轮第12次开发配对（2026-10-22，已执行，内容门失败）
+
+- 前置收口提交 **`f151361`**（以第5轮 `2138be9` 为基点）：主内容保留段落、列表、代码/配置块、
+  表格及标题/限定说明，导航排除；探测身份只用 URL+保存正文（无人工 label/generated title），
+  原探测记录保留并追加离线 identity correction；成功、prose 拒绝和传输失败都保留已知
+  bytes/declared/truncation，未知不填 0；正式 caps 实际加载并核对为 1 MiB retained、20,000
+  存储 chars、24,000 证据 chars、official 4 page/12 HTTP。完整套件 **672 passed**；聚焦复核
+  首轮 BLOCKED（prose 拒绝路径 metadata 丢失）后修复，`r6_preflight_review2` **PASS**。
+- 独立准备 V12 后停止写入，执行者将 5 个案例文件 + run config + 依赖 freeze 封存：
+  `D:\deepchoice-precodex\.scratch\v12_seal`，manifest sha256
+  `230ef5f3c97d8941b4c48885696471c688cab4ff1a5ff93d5949462a5d9755fc`；payload sha256
+  `9519cad0f55e18f69c14af49c33c27fe18a4e41fbe6751db70c5cedbc92a47c2`，query sha256
+  `d4a4877ab8b683b412269f5a37b5bda18d7eabbd44935f3f9d91b434849d04b5`；运行前后 verify_seal
+  ok，learned_docs sha256 前后 `da065234...756f19` 未变。
+- 实际运行 task `v12pair-f3166ac23bcc`：1 case、共享采集 1 次、baseline 1 次、candidate 1 次，
+  无补跑/换题；共享后先保存快照。总墙钟 **263.203 s / 1800 s**（baseline 70.282 s、
+  candidate 152.969 s，均 ≤900 s），预加载 **77.85 s** 单列；LLM **7/48**（shared 1 +
+  baseline 1 + candidate 5），Tavily **6/24**，official **4/4 page attempts、5/12 HTTP、
+  1 redirect、3 body pages、1 个 403**；总已知 token **85,916**（shared 2,520 + baseline
+  23,535 + candidate 59,861），费用 unknown；guard `service_exited`、`forced=false`、exit 0。
+- 共享采集 6 envelopes/28 source scores；两臂共享 16-source 证据包（24,000 预算，
+  visible 23,469/full_included=false）；`evidence_consistent=true`，baseline_synthesis 与
+  candidate_synthesis+self_review 消费记录一致；无补搜。来源局限：仅 3 个 unique full-body
+  official 页面（Tasklist 产品营销页、早期 Temporal forum、Schedules SDK），23 个 snippet-only
+  行，1 个 403；无版本化 Camunda 8 生命周期/许可或 Temporal 人工任务/审计官方材料。
+- 盲评：先匿名为 A/B，锁定内容后揭示映射 **A=baseline，B=candidate**。content review
+  `D:\deepchoice-dsh\v12_blind\content_review.md`：baseline **needs_review**（5 项全 partial；
+  决定性 human-task/audit fit 依赖版本缺失的营销页 + snippet-only 平台页，社区-only Temporal
+  证据）；candidate **usable (conditional, lower band)**（5 项全 partial，低 confidence，
+  决定性支持主要 full-body，但仍把版本缺失营销页误称官方，RabbitMQ/审计保留未知）。
+  最终比较 `D:\deepchoice-dsh\v12_blind\final_comparison.md`：两臂都推荐 Camunda，但正式
+  rubric 要求 ≥2 项 score 3，实际 0 项；C1 版本化官方证据也不满足，故**两臂在正式门槛下均
+  不可用**；不把 needs_review 或 lower-band 升级为正式通过。
+- **路线结论：两臂均不可用 → 停止这条自动研究路线**；不启动第13次、同类补丁、校准或百例
+  评测。N=1 只支持该 case 的门槛判断，不构成统计性优势/正式通过率；原始失败和来源缺口保留。
+  本轮不 push/不改写历史/不合并；两树 learned_docs 修改、17项既有未跟踪材料与历史产物保留。
+- 原始报告：`D:\deepchoice-precodex\outputs\v12pair-f3166ac23bcc\baseline_report.md`
+  SHA `d0e8a3a9...c5b1d4e`、`candidate_report.md` SHA `23f4dcd3...f3a230f`；
+  `D:\deepchoice-dsh\v12_run\final_audit.json` 记录 seal/guard/usage/content 结论，
+  `raw_reports/` 为副本，原文件未改。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权
 **1/1 已使用**（封存失效、内容 not_usable）；第十次单例授权 **1/1 已使用**（A 机制通过、
 B not_usable）；第十一次开发配对授权 **1 case/1 shared collection/baseline 1/candidate 1
 已使用**（内容两臂均不可用，按 R4 保留失败、停止自动研究与修复，不选路线）；第5轮仅授权
-代码收口与一次 8 页/24 HTTP/300 s 页面级证据验证，未授权第12次研究、LLM/Tavily/外部裁判/
-付费基准，已执行且停在派发前；均不继承剩余调用上限为新研究额度，不自动补跑。第3轮离线
-替代路线/简单基线未派发研究、未消耗单例授权；第4轮接入完成并通过机制复核，但内容失败。
-后续第12次、小规模校准和正式百例以上评测须新的明确授权；第10/11次失败及第5轮 probe
-之后不得自动启动修复、换题或补跑。下方旧现代分支累计240及10/10账本保持原口径，恢复实验
-单列，不未经逐笔对账就相加；最终24继续封存。
+代码收口与一次 8 页/24 HTTP/300 s 页面级证据验证；第6轮授权 1 case/共享采集1/baseline 1/
+candidate 1 **已使用**（task `v12pair-f3166ac23bcc`），两臂在正式门槛下均不可用，按本轮
+规则停止自动研究路线；均不继承剩余调用上限为新研究额度，不自动补跑。第3轮离线替代路线/
+简单基线未派发研究；第4轮接入完成但内容失败。后续第13次、小规模校准和正式百例以上评测须
+新的明确授权；第10/11/12次失败及第5轮 probe 之后不得自动启动修复、换题或补跑。下方旧现代
+分支累计240及10/10账本保持原口径，恢复实验单列，不未经逐笔对账就相加；最终24继续封存。
 
 第八次内容不通过，`6b96a56` 的工程通过不等于内容通过。随后完成的两轮离线修复批次只证明机制与
 测试，不证明真实报告内容改善；不得据此自动补跑、换题或开展校准。下一步须先由用户另行决定
@@ -520,10 +561,10 @@ B not_usable）；第十一次开发配对授权 **1 case/1 shared collection/ba
 1. **题目**：由独立准备者新建、与 Codex 时期所有题及近义改写查重后的未见题；冻结原始请求、
    约束、影响选择的必答项、允许的条件性结论、严重性锚点、来源政策、参考依据及日期/版本、
    可答性、曝光状态和数据集 hash。实现者不据题定向修代码；运行后不换题、不改 rubric。
-2. **候选身份**：当前实验 HEAD **`41c9314`**（第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第2轮
-   `cc9e533`/`a315e88`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；
-   如再有改动，以新提交重新冻结并说明差异）；冻结模型/参数、依赖、检索与缓存策略、启动器
-   与 payload hash；运行前后核对 two trees 与原始产物身份。
+2. **候选身份**：当前实验 HEAD **`f151361`**（第5轮 `2138be9`；第4轮 `41c9314`；第3轮
+   `447f1a8`/`ff71fc0`/`2b42836`；第2轮 `cc9e533`/`a315e88`；如再有改动，以新提交重新冻结
+   并说明差异）；冻结模型/参数、依赖、检索与缓存策略、启动器与 payload hash；运行前后核对
+   two trees 与原始产物身份。
 3. **额度与停止线**：授权时明确 1 个 case、1 次研究运行（不自动补跑）、LLM/Tavily 请求上限
    （建议沿用本轮授权口径，例如 LLM ≤40 含重试、Tavily POST ≤24 含探测、研究墙钟 ≤900 s，
    最终以新授权冻结值为准）、是否允许独立评审外呼、费用未知记 `unknown`。不调用外部模型裁判。

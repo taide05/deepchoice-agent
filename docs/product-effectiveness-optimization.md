@@ -338,6 +338,17 @@ unknown。页面级采集验证只证明采集表现，不是报告通过率、�
 前必须把页面探测使用的诊断 cap 与正式运行 cap 对齐，并显式说明未抽取的列表项等结构限制。
 本轮不改变第11次的内容标准或结论。
 
+**第12次开发配对结果（2026-10-22，N=1）**：独立准备 Temporal vs Camunda 新题，封存后执行
+一次共享采集 + baseline（1 次综合）+ candidate（冲突/证据链/综合/自审）；共享包 16 sources、
+24,000 字符硬上限（visible 23,469），LLM 7/48、Tavily 6/24、official 4/4 页面尝试、5/12 HTTP、
+1×403，总墙钟 263.203/1800 s，已知 token 85,916，费用 unknown，guard 正常。盲评锁定后揭示
+A=baseline、B=candidate：baseline `needs_review`，candidate `usable (conditional lower band)`，
+但两臂 5 个必答项均只 partial、0 项达到 rubric score 3，且版本化官方 human-task/audit 证据
+不足；按冻结的正式门槛两臂均不可用，故停止自动研究路线，不安排第13次、同类补丁、校准或
+百例评测。N=1 不构成统计性优势或正式通过率；来源局限（仅3个 unique full-body、无版本化
+官方生命周期/审计材料）保留为不可由同路径补丁修复的阻断。若未来继续，须用户另行授权新的
+证据获取/新题与预算，不得把本轮 lower-band 或 needs_review 升级为正式通过。
+
 ### 6.4 工具缺口与正式运行器最小能力
 
 现有可复用能力（离线核对）：`benchmarks/run_baseline.py` 能按 JSON case 调研究管线、保存
