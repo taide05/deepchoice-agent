@@ -465,6 +465,88 @@ def test_main_paragraphs_keep_heading_context_but_not_navigation(monkeypatch):
     assert result["page_role"] in {"prose_document", "mixed_document"}
 
 
+def test_main_content_keeps_lists_code_and_tables_but_not_navigation(monkeypatch):
+    html = (
+        "<html><body><nav><a>Home</a><a>Pricing</a></nav><main>"
+        "<h1>Configuration</h1>"
+        "<p>The exporter uses a bounded queue and explicit retry behavior.</p>"
+        "<h2>Drop policy</h2>"
+        "<ul><li>Queue full drops the newest item.</li>"
+        "<li>Retry timeout drops the oldest item.</li></ul>"
+        "<pre><code>queue:\n  size: 1000\nretry: 5m</code></pre>"
+        "<table><tr><th>Signal</th><th>Limit</th></tr>"
+        "<tr><td>logs</td><td>bounded</td></tr></table>"
+        "<p>These settings require a PoC before production use.</p>"
+        "</main></body></html>"
+    )
+    _patch_transport(monkeypatch, lambda request: _response(html))
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/config", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(), deadline_s=1.0,
+        max_response_bytes=100_000, max_redirects=2, store_chars=4000,
+    ))
+    assert result["ok"] is True, result
+    body = result["body"]
+    assert "Drop policy" in body
+    assert "Queue full drops the newest item" in body
+    assert "queue:" in body and "retry: 5m" in body
+    assert "Signal" in body and "logs" in body
+    assert "Pricing" not in body
+    assert result["page_role"] in {"prose_document", "content_document"}
+
+
+def test_declared_oversize_read_path_succeeds_with_explicit_truncation(monkeypatch):
+    from deepchoice.outbound.safe_fetch import fetch_pinned_bytes
+    payload = b"<html><body>" + b"X" * 900 + b"</body></html>"
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-type": "text/html",
+                          "content-length": str(len(payload) + 10_000)},
+            content=payload)
+
+    _patch_transport(monkeypatch, handler)
+    budget = OfficialFetchBudget()
+    result = asyncio.run(fetch_pinned_bytes(
+        "https://docs.example.com/page", policy=_PublicPolicy(),
+        request_budget=budget, deadline_s=1.0, max_response_bytes=300,
+        max_redirects=2,
+    ))
+    assert result["ok"] is True
+    assert result["page_truncated"] is True
+    assert result["truncation_reason"] == "response_size_cap"
+    assert result["declared_content_length"] == len(payload) + 10_000
+    assert result["content_length_exceeded"] is True
+    assert result["bytes_retained"] <= 300
+
+
+def test_truncated_then_rejected_page_keeps_known_read_metadata(monkeypatch):
+    payload = ("<html><body><nav>"
+               + "<a>menu</a>" * 200
+               + "</nav></body></html>").encode()
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-type": "text/html",
+                          "content-length": str(len(payload) + 5000)},
+            content=payload)
+
+    _patch_transport(monkeypatch, handler)
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/menu", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(), deadline_s=1.0,
+        max_response_bytes=300, max_redirects=2, store_chars=1000,
+    ))
+    assert result["ok"] is False
+    assert result["failure"].startswith("not_prose:")
+    assert result["bytes_read"] is not None
+    assert result["bytes_retained"] == 300
+    assert result["declared_content_length"] == len(payload) + 5000
+    assert result["content_length_exceeded"] is True
+    assert result["page_truncated"] is True
+    assert result["truncation_reason"] == "response_size_cap"
+
+
 def test_client_construction_failure_does_not_consume_http_budget(monkeypatch):
     _patch_transport(monkeypatch, lambda request: _response(DOCS_HTML))
 

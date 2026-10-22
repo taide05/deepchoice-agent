@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from ..outbound import safe_fetch_page
 from ..security.urls import SafeUrlPolicy
-from ..utils.page_text import SourceDocument, extract_page_document
+from ..utils.page_text import SourceDocument, extract_html_title, extract_page_document
 
 DEFAULT_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 NAVIGATION_MIN_PROSE_CHARS = 120
@@ -127,6 +127,10 @@ def _admission_failure(document: SourceDocument) -> str | None:
     prose_ratio = (prose_chars / total_chars) if total_chars else 0.0
     if document.page_role == "navigation":
         return "navigation_like"
+    if document.page_role == "content_document":
+        if link_ratio <= 0.25 and control_ratio <= 0.20:
+            return None
+        return "content_link_dominated"
     if document.page_role == "structured_document":
         if (total_chars >= 400 and link_ratio <= 0.15
                 and control_ratio <= 0.20 and document.non_heading_chars >= 300):
@@ -168,10 +172,17 @@ async def fetch_official_page(
             "ok": False,
             "url": url,
             "failure": str(fetched.get("failure") or "fetch_failed"),
+            "bytes_read": fetched.get("bytes_read"),
+            "bytes_retained": fetched.get("bytes_retained"),
+            "declared_content_length": fetched.get("declared_content_length"),
+            "content_length_exceeded": fetched.get("content_length_exceeded"),
+            "page_truncated": fetched.get("page_truncated"),
+            "truncation_reason": fetched.get("truncation_reason"),
             "budget": budget.snapshot(),
         }
     media_type = fetched.get("content_type", "")
     raw = fetched["body_bytes"].decode("utf-8", "replace")
+    title = extract_html_title(raw)
     document = extract_page_document(
         raw, truncated=bool(fetched.get("page_truncated")),
         plain_text=media_type == "text/plain",
@@ -183,9 +194,16 @@ async def fetch_official_page(
             "ok": False,
             "url": url,
             "failure": f"not_prose:{admission}",
+            "title": title,
             "page_chars": sum(len(block) for block in document.blocks),
             "prose_chars": sum(len(document.blocks[i])
                                for i in document.prose_indices),
+            "bytes_read": fetched.get("bytes_read"),
+            "bytes_retained": fetched.get("bytes_retained"),
+            "declared_content_length": fetched.get("declared_content_length"),
+            "content_length_exceeded": fetched.get("content_length_exceeded"),
+            "page_truncated": fetched.get("page_truncated"),
+            "truncation_reason": fetched.get("truncation_reason"),
             "budget": budget.snapshot(),
         }
     body = " ".join(document.main_blocks)
@@ -197,6 +215,7 @@ async def fetch_official_page(
         "ok": True,
         "url": url,
         "body_url": fetched.get("body_url") or url,
+        "title": title,
         "body": stored,
         "body_blocks": list(document.main_blocks),
         "page_chars": len(body),

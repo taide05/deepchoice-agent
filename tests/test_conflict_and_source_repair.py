@@ -430,7 +430,8 @@ class TestSourceEvaluation:
         assert se.classify_source_type(
             "https://docs.confluent.io/kafka", "official",
             {"source_owner": "Apache Kafka", "has_body": True,
-             "body_identity_verified": True, "fetch_status": "body"}) == "official_doc"
+             "body_identity_verified": True, "fetch_status": "body",
+             "source_kind": "candidate"}) == "official_doc"
 
     @pytest.mark.asyncio
     async def test_same_title_opposite_bodies_cannot_manufacture_strong(self):

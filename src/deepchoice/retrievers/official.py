@@ -463,6 +463,11 @@ class OfficialSearch(BaseRetriever):
                     entry["body_page_chars"] = fetched.get("page_chars")
                 if fetched.get("prose_chars") is not None:
                     entry["body_prose_chars"] = fetched.get("prose_chars")
+                for key in ("bytes_read", "bytes_retained",
+                            "declared_content_length", "content_length_exceeded",
+                            "page_truncated", "truncation_reason"):
+                    if key in fetched:
+                        entry[key] = fetched.get(key)
                 continue
             body = fetched["body"]
             owner = entry.get("source_owner") or entry.get("title") or ""

@@ -8,6 +8,7 @@ the extractor returns block structure, not a keyword/truth score.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import unescape
 from html.parser import HTMLParser
 
 MAX_DOCUMENT_TEXT = 64 * 1024
@@ -69,12 +70,15 @@ class _Blocks(HTMLParser):
         self.pending_control_chars = 0
         self.pending_non_heading_chars = 0
         self.heading_block = False
+        self.block_tag = ""
+        self.main_depth = 0
 
     def flush(self) -> None:
         text = " ".join("".join(self.pending).split())
         self.pending = []
         prose, self.pending_prose = self.pending_prose, False
         heading, self.heading_block = self.heading_block, False
+        tag, self.block_tag = self.block_tag, ""
         if not text or self.exhausted:
             return
         if self.used + len(text) + 1 > MAX_DOCUMENT_TEXT:
@@ -85,6 +89,8 @@ class _Blocks(HTMLParser):
         self.blocks.append(text)
         self.block_meta.append({
             "heading": heading,
+            "tag": tag,
+            "in_main": self.main_depth > 0,
             "link_chars": self.pending_link_chars,
             "control_chars": self.pending_control_chars,
             "non_heading_chars": self.pending_non_heading_chars,
@@ -99,6 +105,8 @@ class _Blocks(HTMLParser):
             if tag == self.omitted_tag:
                 self.omitted_depth += 1
             return
+        role_main = any(key == "role" and "main" in (value or "").casefold().split()
+                        for key, value in attrs)
         if not self.ignored_depth and any(
             (key == "role" and "navigation" in (value or "").casefold().split())
             or key == "hidden"
@@ -125,6 +133,9 @@ class _Blocks(HTMLParser):
                 self.control_depth += 1
             if tag in _BLOCK_TAGS:
                 self.flush()
+                self.block_tag = tag
+            if tag in {"main", "article"} or role_main:
+                self.main_depth += 1
             if tag in _HEADING_TAGS:
                 self.heading_block = True
             if (not self.prose_tracking_exhausted
@@ -160,6 +171,8 @@ class _Blocks(HTMLParser):
                 del self.prose_context[index:]
             if tag in _BLOCK_TAGS or tag == "body":
                 self.flush()
+            if tag in {"main", "article"} and self.main_depth:
+                self.main_depth -= 1
 
     def handle_data(self, data):
         if not self.ignored_depth and not self.omitted_depth and not self.exhausted:
@@ -182,26 +195,71 @@ class _Blocks(HTMLParser):
                 self.pending_prose = True
 
 
+def extract_html_title(value: str) -> str:
+    """The fetched document's own title text, never a generated label."""
+    import re
+    match = re.search(r"<title\b[^>]*>(.*?)</title>", value or "",
+                      flags=re.IGNORECASE | re.DOTALL)
+    return " ".join(unescape(match.group(1)).split()) if match else ""
+
+
 def _select_main_blocks(blocks: list[str], meta: list[dict],
                         prose_indices: tuple[int, ...]) -> tuple[list[str], int]:
-    """Main paragraphs plus the nearest heading context, not a nav dump."""
+    """Select main content blocks, preserving headings, lists, code and tables.
+
+    When a page exposes `<main>/<article>` (or role=main), selection is scoped to
+    that region and keeps content block types, not just `<p>`: list items, code
+    blocks, table cells and block-level explanatory text stay together with the
+    nearest headings. Without a main region, the same structural tags are used
+    only when they are not link/control dominated. Navigation is skipped by the
+    parser; a directory is rejected later by the link/prose admission.
+    """
+    content_tags = {
+        "p", "li", "pre", "dd", "dt", "td", "th", "blockquote", "table",
+        "figure", "figcaption", "code",
+    }
     prose_set = set(prose_indices)
     selected: list[str] = []
     headings: list[str] = []
     heading_count = 0
+    has_main = any(m.get("in_main") for m in meta)
     for index, text in enumerate(blocks):
         info = meta[index] if index < len(meta) else {}
+        tag = str(info.get("tag") or "")
+        visible = len(text)
+        if visible <= 0:
+            continue
+        in_main = bool(info.get("in_main"))
+        if has_main and not in_main:
+            continue
         if info.get("heading"):
             headings.append(text)
             headings = headings[-3:]
             continue
-        if index not in prose_set:
+        links = int(info.get("link_chars") or 0)
+        controls = int(info.get("control_chars") or 0)
+        link_ratio = links / visible if visible else 1.0
+        if controls:
+            continue
+        is_content = tag in content_tags or index in prose_set
+        if not is_content and has_main and tag in {"div", "section"}:
+            # Explanatory block-level text inside the main region, not a wrapper
+            # made only of links.
+            is_content = visible >= 40 and link_ratio <= 0.35
+        if not is_content:
+            continue
+        if not has_main and link_ratio > 0.35:
             continue
         if headings:
             selected.extend(headings)
             heading_count += len(headings)
             headings = []
         selected.append(text)
+    if not selected and not has_main:
+        # Preserve the historical prose fallback only when no main region exists.
+        for index, text in enumerate(blocks):
+            if index in prose_set:
+                selected.append(text)
     return selected, heading_count
 
 
@@ -259,7 +317,14 @@ def extract_page_document(value: str, *, truncated: bool,
     prose_ratio = (prose_chars / total_chars) if total_chars else 0.0
     link_ratio = (parser.link_chars / total_chars) if total_chars else 1.0
     control_ratio = (parser.control_chars / total_chars) if total_chars else 1.0
-    if not parser.prose_indices:
+    main_chars = sum(len(block) for block in selected)
+    content_ratio = (main_chars / total_chars) if total_chars else 0.0
+    if selected and main_chars >= 120 and link_ratio <= 0.25 \
+            and control_ratio <= 0.20:
+        page_role = ("prose_document" if (prose_ratio >= 0.15
+                                          or parser.prose_indices)
+                     else "content_document")
+    elif not parser.prose_indices:
         if (total_chars >= 400 and link_ratio <= 0.15
                 and control_ratio <= 0.20 and parser.non_heading_chars >= 300):
             page_role = "structured_document"
@@ -283,4 +348,5 @@ def extract_page_document(value: str, *, truncated: bool,
     )
 
 
-__all__ = ["SourceDocument", "extract_page_document", "MAX_DOCUMENT_TEXT"]
+__all__ = ["SourceDocument", "extract_page_document", "extract_html_title",
+           "MAX_DOCUMENT_TEXT"]

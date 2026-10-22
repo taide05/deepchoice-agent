@@ -134,7 +134,9 @@ async def run_probe(*, fetch_fn=None, outdir=None) -> dict:
                       "failure": f"{type(exc).__name__}"}
         ok = bool(result.get("ok"))
         body = str(result.get("body") or "")
-        title = str(result.get("title") or item["label"])
+        # The fetched page's own title only. A frozen human label is never used
+        # as page identity; if the fetch has no title, identity uses URL+body.
+        title = str(result.get("title") or "")
         identity_verified = bool(source_identity_verified(
             item["identity"], item["url"], title, body)) if ok else False
         blocks = [str(x) for x in (result.get("body_blocks") or []) if str(x).strip()]
@@ -143,6 +145,7 @@ async def run_probe(*, fetch_fn=None, outdir=None) -> dict:
             "ok": ok,
             "failure": result.get("failure"),
             "body_url": result.get("body_url") or item["url"],
+            "page_title": title,
             "has_body": result.get("has_body", ok),
             "content_length_exceeded": result.get("content_length_exceeded"),
             "declared_content_length": result.get("declared_content_length"),
@@ -189,7 +192,8 @@ async def run_probe(*, fetch_fn=None, outdir=None) -> dict:
         official_results.append({
             "url": r["url"], "title": r.get("label") or r["url"],
             "snippet": r.get("body_excerpt") or "",
-            "source_owner": r["identity"], "source_kind": r["kind"],
+            "source_owner": (r["identity"] if r.get("identity_verified") else ""),
+            "source_kind": r["kind"],
             "has_body": bool(r.get("ok")),
             "body_identity_verified": bool(r.get("identity_verified")),
             "fetch_status": "body" if r.get("ok") else "navigation",

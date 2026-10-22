@@ -122,6 +122,32 @@ async def main_async(args) -> int:
               {"caps": caps, "expected_max": expected})
         print("BLOCKED: budget caps are above the authorized maximum", flush=True)
         return 4
+    # Verify the values actually loaded by the modules, not only the manifest.
+    from deepchoice.retrievers import official as official_mod
+    from deepchoice.utils import candidate_identity as cid
+    loaded = {
+        "OFFICIAL_FETCH_MAX_BYTES": official_mod.OFFICIAL_FETCH_MAX_BYTES,
+        "OFFICIAL_BODY_STORE_CHARS": official_mod.OFFICIAL_BODY_STORE_CHARS,
+        "EVIDENCE_INPUT_BUDGET_CHARS": cid.EVIDENCE_INPUT_BUDGET_CHARS,
+        "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN":
+            official_mod.OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+        "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN":
+            official_mod.OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+    }
+    expected_loaded = {
+        "OFFICIAL_FETCH_MAX_BYTES": 1_048_576,
+        "OFFICIAL_BODY_STORE_CHARS": 20_000,
+        "EVIDENCE_INPUT_BUDGET_CHARS": 24_000,
+        "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN": 4,
+        "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN": 12,
+    }
+    if loaded != expected_loaded:
+        _dump(outdir / "preflight_failure.json",
+              {"caps": caps, "expected_max": expected,
+               "loaded": loaded, "expected_loaded": expected_loaded})
+        print(f"BLOCKED: loaded limits differ from the frozen values: {loaded}",
+              flush=True)
+        return 4
 
     # Run record is a precondition for every dispatch. The launcher's guard
     # watches this record and the same wall-clock deadline.
@@ -132,6 +158,8 @@ async def main_async(args) -> int:
     window = PairWindow(total_s=float(run_limits.WALL_CLOCK_MAX_S), arm_s=900.0)
     _dump(outdir / "caps.json", {"snapshot": run_limits.snapshot(),
                                  "expected_max": expected,
+                                 "loaded": loaded,
+                                 "expected_loaded": expected_loaded,
                                  "preload": preload})
 
     from deepchoice.agents.query_adapter import QueryAdapterAgent
@@ -384,15 +412,21 @@ def main(argv=None) -> int:
                 "OFFICIAL_FETCH_TOTAL_DEADLINE_S", "15")),
             "official_max_bytes": int(os.environ.get(
                 "OFFICIAL_FETCH_MAX_BYTES", "200000")),
+            "official_store_chars": int(os.environ.get(
+                "OFFICIAL_BODY_STORE_CHARS", "8000")),
+            "evidence_budget_chars": int(os.environ.get(
+                "EVIDENCE_INPUT_BUDGET_CHARS", "24000")),
         }
         print(json.dumps({"snapshot": snap, "effective_env": limits,
                           "preflight_only": True}, ensure_ascii=False))
         ok = (snap["llm_requests_max"] <= 48 and snap["tavily_posts_max"] <= 24
               and snap["wall_clock_max_s"] <= 1800
-              and limits["official_page_attempts"] <= 4
-              and limits["official_http_requests"] <= 12
-              and limits["official_page_deadline_s"] <= 15
-              and limits["official_max_bytes"] <= 200000)
+              and limits["official_page_attempts"] == 4
+              and limits["official_http_requests"] == 12
+              and limits["official_page_deadline_s"] == 15
+              and limits["official_max_bytes"] == 1_048_576
+              and limits["official_store_chars"] == 20_000
+              and limits["evidence_budget_chars"] == 24_000)
         return 0 if ok else 4
     return asyncio.run(main_async(args))
 

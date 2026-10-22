@@ -49,8 +49,13 @@ def classify_source_type(url: str, source: str,
     if identity.get("source_owner"):
         verified = (identity.get("has_body") is True
                     and identity.get("body_identity_verified") is True)
+        kind = identity.get("source_kind")
         if verified:
-            return "official_doc"
+            if kind in {"candidate", "platform_constraint"}:
+                return "official_doc"
+            # A verified public documentation page is a web document, not the
+            # declared candidate's official source.
+            return "web_document"
         if identity.get("fetch_status") in {"navigation", "failed", None}:
             return "navigation_link"
         return "official_unverified"

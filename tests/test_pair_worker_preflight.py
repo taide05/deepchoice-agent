@@ -18,7 +18,9 @@ def _run(env_overrides):
         "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN": "4",
         "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN": "12",
         "OFFICIAL_FETCH_TOTAL_DEADLINE_S": "15",
-        "OFFICIAL_FETCH_MAX_BYTES": "200000",
+        "OFFICIAL_FETCH_MAX_BYTES": "1048576",
+        "OFFICIAL_BODY_STORE_CHARS": "20000",
+        "EVIDENCE_INPUT_BUDGET_CHARS": "24000",
     })
     env.update(env_overrides)
     return subprocess.run(

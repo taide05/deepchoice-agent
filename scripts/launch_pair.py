@@ -65,10 +65,11 @@ def main(argv=None) -> int:
     os.environ["OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN"] = "4"
     os.environ["OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN"] = "12"
     os.environ["OFFICIAL_FETCH_TOTAL_DEADLINE_S"] = "15"
-    os.environ["OFFICIAL_FETCH_MAX_BYTES"] = "200000"
-    os.environ["OFFICIAL_BODY_STORE_CHARS"] = "8000"
+    os.environ["OFFICIAL_FETCH_MAX_BYTES"] = "1048576"
+    os.environ["OFFICIAL_BODY_STORE_CHARS"] = "20000"
+    os.environ["EVIDENCE_INPUT_BUDGET_CHARS"] = "24000"
     print("budget: LLM<=48 Tavily<=24 wall<=1800s official pages<=4 HTTP<=12 "
-          "page<=15s bytes<=200000", flush=True)
+          "page<=15s retained<=1MiB stored<=20000 evidence<=24000", flush=True)
 
     if load_credentials() == 0:
         return 2
