@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮 `41c9314`；第5轮 `2138be9`；第6轮 **`f151361`**，**当前实验 HEAD `f151361`**；第8/10/11/12次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮 `41c9314`；第5轮 `2138be9`；第6轮 `f151361`；第7轮 **`e0e4aa1`**，**当前实验 HEAD `e0e4aa1`**；第8/10/11/12次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -550,6 +550,32 @@
   SHA `d0e8a3a9...c5b1d4e`、`candidate_report.md` SHA `23f4dcd3...f3a230f`；
   `D:\deepchoice-dsh\v12_run\final_audit.json` 记录 seal/guard/usage/content 结论，
   `raw_reports/` 为副本，原文件未改。
+
+### 第 7 轮离线决策契约收口（2026-10-23，已完成，未启动研究）
+
+- 实验基线 `f151361`；提交 **`e0e4aa1`**。本轮无 LLM/Tavily/网页抓取/外部裁判/付费基准，
+  未启动第13次；只改实验树决策链，不动采集路线、现代 durable 生命周期或两树合并。
+- 统一 `decision_status`：`recommended`（有候选/决定性依据/适用前提）、`conditional`
+  （无唯一赢家，写明条件分支）、`insufficient_evidence`（无赢家，写明决定性缺口及何种证据
+  会改变结论）；解析/结构/执行失败统一 `invalid`，不伪装成有效暂缓；低置信不自动等于证据
+  不足。
+- 删除：空/无效 winner 回退首个 ranked option；按 constraint-fit 自动改选 winner；
+  三个 renderer 自行补 winner。综合提示、返回契约、校验、三种格式的引用/渲染消费者和保存
+  状态使用同一 `utils/decision.py` 口径。自审新增单一 `withdraw_decision`：可撤回无依据
+  推荐并转为暂缓，清空 winner、写入撤回理由/缺口、保留候选分析与引用并统一 re-render；
+  不可换成另一个赢家、不可自动升级、不可把 invalid 变成有效暂缓；失败/无效自审不应用撤回。
+  历史记录缺 `decision_status` 时只展示已保存 winner，不从 ranked options 推导。
+- 验证：完整套件 **660 passed, 1 warning**；聚焦独立复核 `D:\deepchoice-dsh\r7_review\review.md`
+  PASS（无阻断），差异复核 `D:\deepchoice-dsh\r7_review2\review.md` PASS；六类必需场景回归
+  覆盖。消费者前后证据（模拟，不是历史报告）：
+  `D:\deepchoice-dsh\v12_decision_evidence.json`：recommended 三格式保留 winner；conditional/
+  hold 三格式不补 winner；hold 显示暂缓；invalid 三格式显示决策未生成；legacy 有 winner 保持、
+  无 winner 不从 ranked 填；自审撤回后 winner 为空、正文/理由/三格式一致。
+- 边界：只证明决策能被正确表达/保存，不证明模型会作正确决定；不是内容验收、校准或百例
+  指标；历史报告/seal/rubric 未改，未重跑第12次。非阻断残余：winner 字符串仍缺产品形态
+  校验；自审替换字段的旧 citation bindings 可能残留；legacy 无 winner 显示 invalid；部分
+  测试/文档未覆盖异常分支。均记录，不扩项。
+- 本轮主动工作约 **2 小时 10 分**（00:08–02:18 区间；无用户暂停），低于 3 小时上限。
 
 ## 当前授权与下一阶段
 

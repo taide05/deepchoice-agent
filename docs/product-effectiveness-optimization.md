@@ -354,6 +354,15 @@ snippet-only 行和 1 个 403，不能由同路径补丁修复。决策契约另
 又被覆盖）。若未来继续，须用户另行授权新的证据获取/新题与预算，不得把 lower-band 或
 needs_review 升级为正式通过。
 
+**第7轮决策契约（2026-10-23，离线）**：正式决策使用 `decision_status`：`recommended` /
+`conditional` / `insufficient_evidence`，解析、结构或执行失败为 `invalid`。只有
+`recommended` 允许有 winner；条件选择和证据不足暂缓不得被 ranked options、constraint-fit
+或任何 renderer 补选；invalid 不得伪装成有效暂缓，低 confidence 不等于证据不足。自审可整体
+撤回无依据推荐并转为暂缓，但不能换成另一个赢家、自动升级或把 invalid 转成 hold；失败/无效
+自审不应用撤回。三种报告格式、保存状态和引用消费者必须使用同一决策口径；缺字段的历史记录
+只展示已保存 winner，不得从 ranked options 推导。该契约只证明决策能被正确表达和保存，不是
+模型判断正确、内容验收、校准或正式指标。
+
 ### 6.4 工具缺口与正式运行器最小能力
 
 现有可复用能力（离线核对）：`benchmarks/run_baseline.py` 能按 JSON case 调研究管线、保存
