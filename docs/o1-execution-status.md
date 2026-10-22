@@ -519,20 +519,32 @@
   23,535 + candidate 59,861），费用 unknown；guard `service_exited`、`forced=false`、exit 0。
 - 共享采集 6 envelopes/28 source scores；两臂共享 16-source 证据包（24,000 预算，
   visible 23,469/full_included=false）；`evidence_consistent=true`，baseline_synthesis 与
-  candidate_synthesis+self_review 消费记录一致；无补搜。来源局限：仅 3 个 unique full-body
-  official 页面（Tasklist 产品营销页、早期 Temporal forum、Schedules SDK），23 个 snippet-only
-  行，1 个 403；无版本化 Camunda 8 生命周期/许可或 Temporal 人工任务/审计官方材料。
+  candidate_synthesis+self_review 消费记录一致；无补搜。来源统计更正：**取得正文 ≠ 权威且
+  适用的决定性证据**。3 个 unique full-body 页面分别是 Tasklist 产品营销页、早期 Temporal
+  社区 forum、Schedules SDK 文档，不构成“三份合格官方依据”；另有 23 个 snippet-only 行和
+  1 个 403。仍然没有版本化 Camunda 8 生命周期/许可或 Temporal 人工任务/审计官方材料。
 - 盲评：先匿名为 A/B，锁定内容后揭示映射 **A=baseline，B=candidate**。content review
   `D:\deepchoice-dsh\v12_blind\content_review.md`：baseline **needs_review**（5 项全 partial；
   决定性 human-task/audit fit 依赖版本缺失的营销页 + snippet-only 平台页，社区-only Temporal
   证据）；candidate **usable (conditional, lower band)**（5 项全 partial，低 confidence，
   决定性支持主要 full-body，但仍把版本缺失营销页误称官方，RabbitMQ/审计保留未知）。
-  最终比较 `D:\deepchoice-dsh\v12_blind\final_comparison.md`：两臂都推荐 Camunda，但正式
-  rubric 要求 ≥2 项 score 3，实际 0 项；C1 版本化官方证据也不满足，故**两臂在正式门槛下均
-  不可用**；不把 needs_review 或 lower-band 升级为正式通过。
-- **路线结论：两臂均不可用 → 停止这条自动研究路线**；不启动第13次、同类补丁、校准或百例
-  评测。N=1 只支持该 case 的门槛判断，不构成统计性优势/正式通过率；原始失败和来源缺口保留。
-  本轮不 push/不改写历史/不合并；两树 learned_docs 修改、17项既有未跟踪材料与历史产物保留。
+  **正式验收统一为“两臂均未通过”**：candidate 的 lower-band 只是诊断性评价，不是冻结门槛
+  通过；两臂正式 rubric 均为 0 项 score 3、C1 版本化官方证据不足，均不可用。
+- **决策契约缺口（当前代码机制，非第12次历史因果）**：综合输出主要要求产品 winner 或
+  `context_dependent` 平局；`_validate_winner` 会在空/无效 winner 时回退到首个 ranked option，
+  `_validate_constraint_fit` 会把 winner 改成最高 constraint-fit 选项，三个默认渲染器在空
+  winner 时也会取首个 ranked option；自审可修改 recommendation/选项文本，但 **winner 不在
+  可纠正字段内，无法撤回 winner**。第12次原始模型输出未保存，只有最终 recommendation 保留，
+  因此**不能断言**第12次曾产生 hold/空 winner 又被校验或渲染覆盖；该因果未验证，上述机制
+  只描述当前代码。
+- **工时记录更正**：暂停记录中的“5 h 32 min”是从近似开始到暂停的**墙钟区间，不是经核实的
+  主动工时**，不能据此判定 4 h 超时。可核实：暂停 19:50:08、恢复 21:18:54，暂停
+  **1 h 28 min 46 s**；恢复后至交付约 **59 min**。暂停前主动工时**无法准确重建，记为
+  unknown/estimated**；不基于错误暂停记录判定超时，也不补记或重置任何授权。
+- **路线结论：两臂均未通过正式门槛 → 停止这条自动研究路线**；不启动第13次、同类补丁、
+  校准或百例评测。N=1 只支持该 case 的门槛判断，不构成统计性优势/正式通过率；原始失败、
+  内容评审和来源缺口保留。本轮不 push/不改写历史/不合并；两树 learned_docs 修改、17项既有
+  未跟踪材料与历史产物保留。
 - 原始报告：`D:\deepchoice-precodex\outputs\v12pair-f3166ac23bcc\baseline_report.md`
   SHA `d0e8a3a9...c5b1d4e`、`candidate_report.md` SHA `23f4dcd3...f3a230f`；
   `D:\deepchoice-dsh\v12_run\final_audit.json` 记录 seal/guard/usage/content 结论，
