@@ -415,6 +415,56 @@ def test_read_time_byte_cap_and_page_truncation_are_distinct(monkeypatch):
         assert result["bytes_retained"] == budget.bytes_retained
 
 
+def test_declared_oversize_uses_the_same_bounded_stream_as_unknown_length(monkeypatch):
+    payload = ("<html><body><main><h1>Docs</h1><p>"
+               + LONG_PROSE + "</p></main></body></html>").encode()
+
+    def handler(request):
+        return httpx.Response(
+            200, headers={"content-type": "text/html",
+                          "content-length": str(len(payload) + 10_000)},
+            content=payload)
+
+    _patch_transport(monkeypatch, handler)
+    budget = OfficialFetchBudget()
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/page", policy=_PublicPolicy(), budget=budget,
+        deadline_s=1.0, max_response_bytes=300, max_redirects=2, store_chars=1000,
+    ))
+    if result.get("ok"):
+        assert result["page_truncated"] is True
+        assert result["truncation_reason"] == "response_size_cap"
+        assert result["declared_content_length"] is not None
+        assert result["content_length_exceeded"] is True
+        assert result["bytes_retained"] <= 300
+    else:
+        assert result["failure"].startswith("not_prose:")
+    assert budget.bytes_retained <= 300
+
+
+def test_main_paragraphs_keep_heading_context_but_not_navigation(monkeypatch):
+    html = (
+        "<html><body><nav><a>Home</a><a>Pricing</a><a>Docs</a></nav>"
+        "<main><h1>Collection</h1><h2>Failure behavior</h2>"
+        "<p>Exporter queues are bounded and drop when full; this is the decisive "
+        "documented behavior for the scenario.</p>"
+        "<p>Retry windows and WAL recovery have explicit limits.</p>"
+        "<div><a>Next page</a><a>Previous page</a></div></main></body></html>"
+    )
+    _patch_transport(monkeypatch, lambda request: _response(html))
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/collection", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(), deadline_s=1.0,
+        max_response_bytes=100_000, max_redirects=2, store_chars=4000,
+    ))
+    assert result["ok"] is True, result
+    assert "Failure behavior" in result["body"]
+    assert "Exporter queues are bounded" in result["body"]
+    assert "Pricing" not in result["body"]
+    assert result["main_block_count"] >= 3
+    assert result["page_role"] in {"prose_document", "mixed_document"}
+
+
 def test_client_construction_failure_does_not_consume_http_budget(monkeypatch):
     _patch_transport(monkeypatch, lambda request: _response(DOCS_HTML))
 

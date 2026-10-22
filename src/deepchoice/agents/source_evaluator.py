@@ -13,10 +13,13 @@ AUTHORITY_MAP = {
     "tech_blog": 7,
     "github": 6,
     "stackoverflow": 5,
+    "official_unverified": 5,
     "reddit": 4,
+    "web_document": 4,
     # A document from this machine's own knowledge base has no external
     # authority. It is not a published source and must not be scored like one.
     "local_document": 3,
+    "navigation_link": 2,
     "anonymous": 2,
 }
 
@@ -28,30 +31,42 @@ VERIFIABILITY_MAP = {
 }
 
 
-def classify_source_type(url: str, source: str) -> str:
+def classify_source_type(url: str, source: str,
+                         identity: dict | None = None) -> str:
+    """Classify authority from explicit provenance, not a URL word.
+
+    A URL containing `docs.` or `readthedocs` is not proof of ownership. For the
+    official retriever, `identity` carries the owner/kind and whether the safe
+    fetch verified the page body; only that verified pair is `official_doc`.
+    A navigation/failed official row stays explicitly unverified.
+    """
     url_lower = url.lower()
-    # A local file is this machine's own material. Check it before the generic
-    # URL rules, so a local markdown file cannot inherit a published source's
-    # authority from a word in its path.
+    # A local file is this machine's own material. Check it before generic
+    # URL rules, so a local markdown file cannot inherit published authority.
     if url_lower.startswith("file://"):
         return "local_document"
-    if "arxiv.org" in url_lower:
+    identity = identity or {}
+    if identity.get("source_owner"):
+        verified = (identity.get("has_body") is True
+                    and identity.get("body_identity_verified") is True)
+        if verified:
+            return "official_doc"
+        if identity.get("fetch_status") in {"navigation", "failed", None}:
+            return "navigation_link"
+        return "official_unverified"
+    host = url_lower.split("://", 1)[-1].split("/", 1)[0].split("?", 1)[0]
+    if host == "arxiv.org" or host.endswith(".arxiv.org"):
         return "arxiv_paper"
-    if "github.com" in url_lower:
+    if host == "github.com" or host.endswith(".github.com"):
         return "github"
-    if "stackoverflow.com" in url_lower or "stackexchange.com" in url_lower:
+    if host in {"stackoverflow.com", "stackexchange.com"} or \
+            host.endswith(".stackoverflow.com"):
         return "stackoverflow"
-    if "reddit.com" in url_lower:
+    if host == "reddit.com" or host.endswith(".reddit.com"):
         return "reddit"
-    if source == "official" or "readthedocs" in url_lower or "docs." in url_lower:
-        return "official_doc"
-    # A local knowledge-base hit is a retrieved document, not a vendor document.
-    # Its authority must come from the URL, exactly as for every other source;
-    # treating the retriever name as proof of officialness gave a locally stored
-    # markdown file authority 10.
     if "blog" in url_lower or "medium.com" in url_lower or "dev.to" in url_lower:
         return "tech_blog"
-    return "tech_blog"
+    return "web_document"
 
 
 def classify_evidence_type(snippet: str) -> str:
@@ -129,7 +144,15 @@ class SourceEvaluatorAgent:
         for result in all_results:
             url = result.get("url", "")
             source = result.get("_source", "unknown")
-            source_type = classify_source_type(url, source)
+            identity = {
+                "source_owner": result.get("source_owner"),
+                "source_kind": result.get("source_kind"),
+                "has_body": result.get("has_body"),
+                "body_identity_verified": result.get("body_identity_verified"),
+                "fetch_status": result.get("fetch_status"),
+                "body_error": result.get("body_error"),
+            }
+            source_type = classify_source_type(url, source, identity)
             evidence_type = classify_evidence_type(result.get("snippet", ""))
 
             scores = {
@@ -151,6 +174,12 @@ class SourceEvaluatorAgent:
                 "total_score": total,
                 "supporting_sources": [],
             }
+            # Row-level source identity travels with the score. Several channels
+            # may return the same URL; each row keeps its own fetch/body facts.
+            for key in ("source_owner", "source_kind", "body_identity_verified",
+                        "has_body", "fetch_status", "body_error"):
+                if result.get(key) is not None:
+                    entry[key] = result[key]
             # Where this material came from travels with it. Unknown provenance
             # stays `unknown`; it is never upgraded to a published source.
             if "provenance" in result:

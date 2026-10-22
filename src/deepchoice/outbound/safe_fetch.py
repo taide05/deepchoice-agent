@@ -175,14 +175,18 @@ async def _fetch_inner(url: str, *, policy: SafeUrlPolicy, request_budget,
                     return {"ok": False, "url": current,
                             "failure": f"content_encoding:{','.join(sorted(encodings))}"}
                 declared = response.headers.get("content-length")
+                declared_bytes = None
+                declared_exceeded = False
                 if declared:
                     try:
-                        if int(declared) > max_response_bytes:
-                            request_budget.record_failure("content_too_large")
-                            return {"ok": False, "url": current,
-                                    "failure": "content_too_large"}
+                        declared_bytes = int(declared)
+                        declared_exceeded = declared_bytes > max_response_bytes
                     except ValueError:
-                        pass
+                        declared_bytes = None
+                # A declared oversize body is read through the same bounded
+                # stream as an unknown-length body: do not turn one into a hard
+                # rejection while silently truncating the other. The stream is
+                # stopped at the cap and truncation is explicit.
                 chunks: list[bytes] = []
                 read_bytes = 0
                 retained_bytes = 0
@@ -202,6 +206,7 @@ async def _fetch_inner(url: str, *, policy: SafeUrlPolicy, request_budget,
                         break
                     chunks.append(chunk)
                     retained_bytes += len(chunk)
+                capped = bool(transport_truncated or declared_exceeded)
                 request_budget.bytes_read += read_bytes
                 request_budget.bytes_retained += retained_bytes
                 return {
@@ -212,7 +217,11 @@ async def _fetch_inner(url: str, *, policy: SafeUrlPolicy, request_budget,
                     "content_type": media_type,
                     "bytes_read": read_bytes,
                     "bytes_retained": retained_bytes,
-                    "page_truncated": transport_truncated,
+                    "declared_content_length": declared_bytes,
+                    "content_length_exceeded": declared_exceeded,
+                    "page_truncated": capped,
+                    "truncation_reason": "response_size_cap" if capped else None,
+                    "max_response_bytes": max_response_bytes,
                 }
 
 

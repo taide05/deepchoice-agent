@@ -242,6 +242,22 @@ def test_saved_tenth_material_keeps_candidate_coverage_gaps_visible():
     assert hashlib.sha256(SNAPSHOT.read_bytes()).hexdigest() == before
 
 
+def test_saved_v11_coverage_uses_row_owner_not_retriever_label():
+    path = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
+            / "v11pair-a42b7594fa47" / "shared_snapshot.json")
+    if not path.exists():
+        pytest.skip(f"v11 snapshot not present at {path}")
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    state = json.loads(path.read_text(encoding="utf-8"))["state"]
+    shared = build_shared_evidence(state)
+    candidates = shared.coverage["candidates"]
+    assert candidates["OpenTelemetry Collector"]["official_body_missing"] is True
+    assert candidates["Vector"]["official_body_missing"] is False
+    assert candidates["Vector"]["official_body_urls"] == ["https://vector.dev/docs/"]
+    assert shared.coverage["official_body_total"] == 1
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
+
+
 @pytest.mark.parametrize("path", HISTORICAL_SNAPSHOTS)
 def test_eighth_to_tenth_material_is_read_only_fixed_input(path):
     if not path.exists():

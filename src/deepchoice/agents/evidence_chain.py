@@ -37,6 +37,7 @@ def build_evidence_chain(source_scores: list[dict], conflicts: list[dict]) -> li
         # Provenance travels with the source so it can never be silently
         # relabelled as published material downstream.
         for key in ("provenance", "channel", "source_type", "date",
+                    "source_owner", "source_kind", "body_identity_verified",
                     "body_url", "body_chars", "body_page_chars", "body_prose_chars",
                     "body_stored_chars", "body_page_truncated",
                     "body_stored_truncated", "body_truncated",

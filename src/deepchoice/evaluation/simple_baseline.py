@@ -61,7 +61,8 @@ def _canonical_sha256(value) -> str:
 # look different, while title/body/url/number divergence must.
 _EVIDENCE_ENTRY_FIELDS = (
     "number", "source_id", "title", "url", "body", "provenance", "channel",
-    "date", "body_url", "body_page_chars", "body_prose_chars",
+    "source_owner", "source_kind", "source_type", "body_identity_verified",
+    "fetch_status", "date", "body_url", "body_page_chars", "body_prose_chars",
     "body_stored_chars", "body_page_truncated", "body_stored_truncated",
     "body_truncated", "body_admission",
 )
@@ -85,27 +86,49 @@ class SharedEvidence:
 
 
 def _coverage(state: dict, source_scores: list[dict]) -> dict:
-    """Per-candidate coverage based on actual URLs/content, not retriever names."""
+    """Per-candidate coverage from row identity, not retriever labels."""
     candidates = list((state.get("task") or {}).get("candidate_techs") or [])
+    official_rows = {}
+    for channel in state.get("search_results") or []:
+        if channel.get("source") != "official":
+            continue
+        for row in channel.get("results") or []:
+            if row.get("url"):
+                official_rows[row["url"]] = row
     records = []
     for source in source_scores or []:
+        url = str(source.get("url") or "")
         title = str(source.get("title") or "")
         body = str(source.get("snippet") or source.get("body") or "")
-        url = str(source.get("url") or "")
-        has_body = bool(has_factual_content(source))
-        official_body = bool(
-            has_body and source.get("body_page_chars")
-            and source.get("source_type") == "official_doc"
+        official_row = official_rows.get(url) or {}
+        owner = source.get("source_owner") or official_row.get("source_owner") or ""
+        has_body_marker = (source.get("has_body")
+                           if "has_body" in source else official_row.get("has_body"))
+        has_fetched_body = bool(
+            has_body_marker is True
+            and (source.get("body_identity_verified") is True
+                 or official_row.get("body_identity_verified") is True)
+            and (source.get("body_page_chars") or official_row.get("body_page_chars"))
         )
-        records.append({"url": url, "title": title, "body": body,
-                        "has_body": has_body, "official_body": official_body})
+        records.append({
+            "url": url, "title": title, "body": body, "owner": owner,
+            "has_body": bool(has_factual_content(source)),
+            "official_body": has_fetched_body,
+        })
     result = {}
     for candidate in candidates:
         mentioned = [
             r for r in records
             if _text_discusses(candidate, r["title"], r["body"])
         ]
-        official = [r for r in mentioned if r["official_body"]]
+        official = {}
+        for r in mentioned:
+            if not r["official_body"]:
+                continue
+            if (r["owner"] and _same_source_owner(candidate, r["owner"])) \
+                    or _source_url_matches(candidate, r["url"]):
+                official.setdefault(r["url"], r)
+        official = list(official.values())
         result[candidate] = {
             "mentioned_source_count": len(mentioned),
             "mentioned_urls": [r["url"] for r in mentioned][:20],
@@ -113,14 +136,24 @@ def _coverage(state: dict, source_scores: list[dict]) -> dict:
             "official_body_urls": [r["url"] for r in official][:20],
             "official_body_missing": not official,
         }
+    unique_official = {r["url"] for r in records if r["official_body"]}
     return {"candidates": result,
-            "official_body_total": sum(1 for r in records if r["official_body"]),
+            "official_body_total": len(unique_official),
             "source_count": len(records)}
 
 
 def _text_discusses(candidate: str, title: str, body: str) -> bool:
     from ..utils.candidate_identity import source_text_discusses_candidate
     return source_text_discusses_candidate(candidate, title, body)
+
+
+def _same_source_owner(candidate: str, owner: str) -> bool:
+    return (candidate or "").strip().casefold() == (owner or "").strip().casefold()
+
+
+def _source_url_matches(candidate: str, url: str) -> bool:
+    from ..utils.candidate_identity import source_url_identity_match
+    return source_url_identity_match(candidate, url)
 
 
 def build_shared_evidence(state: dict, *, budget_chars: int | None = None) -> SharedEvidence:

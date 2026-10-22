@@ -15,7 +15,7 @@ from ..utils.page_text import SourceDocument, extract_page_document
 
 DEFAULT_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 NAVIGATION_MIN_PROSE_CHARS = 120
-NAVIGATION_MIN_PROSE_RATIO = 0.15
+NAVIGATION_MIN_PROSE_RATIO = 0.20
 
 
 @dataclass
@@ -108,7 +108,12 @@ def reset_research_budgets() -> None:
 
 
 def _admission_failure(document: SourceDocument) -> str | None:
-    """Reject pure menus/navigation/login pages by structural prose eligibility."""
+    """Reject pure menus/directories by structural prose eligibility.
+
+    A successful fetch, a table of contents, or a few intro sentences is not a
+    decisive body. Pages with a low prose ratio or link-dominated structure are
+    navigation even when their text is long; no topic keywords are scored here.
+    """
     prose = [document.blocks[i] for i in document.prose_indices
              if i < len(document.blocks)]
     prose_chars = sum(len(text) for text in prose)
@@ -120,18 +125,22 @@ def _admission_failure(document: SourceDocument) -> str | None:
     link_ratio = (document.link_chars / total_chars) if total_chars else 1.0
     control_ratio = (document.control_chars / total_chars) if total_chars else 1.0
     prose_ratio = (prose_chars / total_chars) if total_chars else 0.0
-    if prose and prose_chars >= NAVIGATION_MIN_PROSE_CHARS and \
-            prose_ratio >= NAVIGATION_MIN_PROSE_RATIO:
-        return None
-    if (total_chars >= 400 and len(document.blocks) >= 4
-            and link_ratio <= 0.15 and control_ratio <= 0.2
-            and document.non_heading_chars >= 300):
-        return None
+    if document.page_role == "navigation":
+        return "navigation_like"
+    if document.page_role == "structured_document":
+        if (total_chars >= 400 and link_ratio <= 0.15
+                and control_ratio <= 0.20 and document.non_heading_chars >= 300):
+            return None
+        return "structured_low_prose"
     if not prose:
         return "no_prose_blocks"
     if prose_chars < NAVIGATION_MIN_PROSE_CHARS:
         return "short_prose_only"
-    return "navigation_like"
+    if prose_ratio < NAVIGATION_MIN_PROSE_RATIO:
+        return "low_prose_ratio"
+    if link_ratio > 0.25 or control_ratio > 0.20:
+        return "navigation_like"
+    return None
 
 
 async def fetch_official_page(
@@ -179,7 +188,7 @@ async def fetch_official_page(
                                for i in document.prose_indices),
             "budget": budget.snapshot(),
         }
-    body = " ".join(document.blocks)
+    body = " ".join(document.main_blocks)
     stored = body[:store_chars].rstrip()
     page_truncated = bool(fetched.get("page_truncated") or document.incomplete)
     stored_truncated = len(body) > len(stored)
@@ -189,13 +198,22 @@ async def fetch_official_page(
         "url": url,
         "body_url": fetched.get("body_url") or url,
         "body": stored,
+        "body_blocks": list(document.main_blocks),
         "page_chars": len(body),
         "stored_chars": len(stored),
         "page_truncated": page_truncated,
         "stored_truncated": stored_truncated,
         "truncated": bool(page_truncated or stored_truncated),
+        "truncation_reason": fetched.get("truncation_reason"),
+        "declared_content_length": fetched.get("declared_content_length"),
+        "content_length_exceeded": fetched.get("content_length_exceeded", False),
+        "max_response_bytes": fetched.get("max_response_bytes"),
         "prose_chars": sum(len(document.blocks[i])
                            for i in document.prose_indices),
+        "main_block_count": len(document.main_blocks),
+        "prose_block_count": len(document.prose_indices),
+        "heading_context_count": document.heading_context_count,
+        "page_role": document.page_role,
         "admission": "prose_ok",
         "content_type": media_type,
         "bytes": fetched.get("bytes_read", 0),

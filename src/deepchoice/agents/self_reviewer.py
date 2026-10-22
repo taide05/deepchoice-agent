@@ -371,6 +371,15 @@ def _source_register_text(registry: dict, with_audit: bool = False,
         lines.append(f"[[{entry['number']}]] {entry['title']}")
         if entry.get("url"):
             lines.append(f"    url: {entry['url']}")
+        if entry.get("source_owner") or entry.get("source_kind") or \
+                entry.get("source_type"):
+            lines.append(
+                f"    source_identity: owner={entry.get('source_owner') or 'unknown'}; "
+                f"kind={entry.get('source_kind') or 'unknown'}; "
+                f"type={entry.get('source_type') or 'unknown'}; "
+                f"body_identity_verified="
+                f"{entry.get('body_identity_verified') if entry.get('body_identity_verified') is not None else 'unknown'}; "
+                f"fetch_status={entry.get('fetch_status') or 'unknown'}")
         if entry.get("date"):
             lines.append(f"    date: {entry['date']}")
         if entry.get("body_url") and entry["body_url"] != entry.get("url"):

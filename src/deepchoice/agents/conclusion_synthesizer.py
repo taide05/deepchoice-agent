@@ -119,7 +119,9 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
                 "date": str(source.get("date") or ""),
                 "disputed": bool(chain.get("disputed")),
             }
-            for key in ("body_url", "body_page_chars", "body_prose_chars",
+            for key in ("source_owner", "source_kind", "source_type",
+                        "body_identity_verified", "fetch_status", "body_error",
+                        "body_url", "body_page_chars", "body_prose_chars",
                         "body_stored_chars", "body_page_truncated",
                         "body_stored_truncated", "body_truncated",
                         "body_admission"):
@@ -212,6 +214,15 @@ def _summarize_chains(evidence_chains: list[dict],
             lines.append(f"[[{entry['number']}]] {entry['title']}{disputed}")
             if entry["url"]:
                 lines.append(f"       url: {entry['url']}")
+            if entry.get("source_owner") or entry.get("source_kind") or \
+                    entry.get("source_type"):
+                verified = entry.get("body_identity_verified")
+                lines.append(
+                    f"       source_identity: owner={entry.get('source_owner') or 'unknown'}; "
+                    f"kind={entry.get('source_kind') or 'unknown'}; "
+                    f"type={entry.get('source_type') or 'unknown'}; "
+                    f"body_identity_verified={verified if verified is not None else 'unknown'}; "
+                    f"fetch_status={entry.get('fetch_status') or 'unknown'}")
             # Where the material came from, so the model cannot mistake local or
             # evaluation material for a published source.
             if entry["provenance"] or entry["channel"]:
