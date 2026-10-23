@@ -14,7 +14,7 @@
 | 工作树 / 分支 | 本轮核对基点 | 适用边界 |
 |---|---|---|
 | `D:\deepchoice-agent` / `codex/generic-selection` | 文档基点 `4ff0eb3`；本轮协议同步提交 `c8cf0bc`；最终文档头以 Git 历史为准 | 维护路线/协议及现代 durable 产品；既有 `learned_docs.json` 未提交修改保留 |
-| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮 `41c9314`；第5轮 `2138be9`；第6轮 `f151361`；第7轮 **`e0e4aa1`**，**当前实验 HEAD `e0e4aa1`**；第8/10/11/12次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），17项既有未跟踪材料保留 |
+| `D:\deepchoice-precodex` / `precodex/deepseek-adapter` | 修复前 `2aa92ef`；第1轮 `33eb704`/`8ff13db`/`e4152ab`/`ad13b95`/`b42c2c6`/`5626c7b`；第2轮 `cc9e533`/`a315e88`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第4轮 `41c9314`；第5轮 `2138be9`；第6轮 `f151361`；第7轮 `e0e4aa1`；第8轮 **`b080213`**，**当前实验 HEAD `b080213`**；第8/10/11/12次 task 已运行并保留 | 当前恢复实验，仍走旧 `/research` 接口；代码 tracked 仅 `learned_docs.json`（第九次 gVisor 学习，保留未提交），既有未跟踪材料保留 |
 
 以上是身份记录；两工作树共享项目目标，不共享运行契约、工程套件分母或质量结论。
 恢复实验的离线修复未据此声明已集成到现代产品。
@@ -577,6 +577,37 @@
   测试/文档未覆盖异常分支。均记录，不扩项。
 - 本轮主动工作约 **2 小时 10 分**（00:08–02:18 区间；无用户暂停），低于 3 小时上限。
 
+### 第 8 轮决策收尾（2026-10-23，离线完成）
+
+- 基线 `e0e4aa1`；提交 **`b080213`**。仅离线，无 LLM/Tavily/网页探测/外部裁判/第13次。
+- **引用身份同步**：`withdraw_decision` 只撤销被替换字段 `recommendation`/`winner_rationale`
+  的旧 `citation_sources` 绑定；新文本经现有 `resolve_citations_with_sources` +
+  `_set_field_bindings` 重新绑定。候选分析/权衡等未改字段的合法绑定保留。真实自审消费者下，
+  仅被撤回字段引用的来源不再进入 `used_sources`/三格式引用计数/annotated；仍被保留分析引用的
+  来源继续存在。
+- **结构与候选身份**：`normalize_decision` 在 len/遍历/渲染前先验证 `ranked_options`；null、
+  数字、字符串、null/非对象条目、空名或重复候选均返回 invalid，不崩溃、不补赢家、不伪装成
+  insufficient_evidence。显式 `candidate_techs` 下，recommended winner 和 conditional 选项
+  必须精确对应声明身份；身份键为 NFKC+casefold+空白折叠、保留符号，`C++`/`C#`/`F#`/`.NET`
+  不被 `C`/`NET` 子串命中；无显式名单保留开放选型契约。
+- 验证：完整套件 **668 passed, 1 warning**；聚焦独立复核：
+  - `D:\deepchoice-dsh\r8_review\review.md` 首轮 **BLOCKED**（B1：旧身份键剥除符号，
+    `C++`/`C#` 被 `C` 命中）；修复符号保留身份后，
+  - `D:\deepchoice-dsh\r8_review2\review.md` **PASS**，无阻断。
+- 反例修复前后（测试/真实入口）：
+  - 撤回前，旧 citation map 仍保留 recommendation/winner_rationale 的 A 来源，A 进入 basis/
+    annotated；撤回后 A 消失，仅保留候选分析引用的 B；三格式与 annotated 一致。
+  - `ranked_options=null` 旧路径在 `len(None)` 崩溃；现在先返回 invalid（不崩溃、不补选）；
+    `C++`/`C#` 旧键被压成 `c` 导致误接收/误拒绝，现在精确区分。
+- 边界：只证明决策文本/引用绑定和结构校验正确，不证明模型决策正确、内容通过、校准或百例
+  指标；未改历史报告/seal/rubric，未启动第13次，不 push/不改历史/不合并。
+- 非阻断残余：missing vs explicit-null 未单测；非 iterable `trade_offs` 仍由既有路径处理；
+  历史 malformed options 渲染未防御；invalid 原因统一清空 ranked_options；`citation_sources`
+  字面量重复；符号 NFKC 别名（全角等）未 pin；malformed `candidate_techs` 会静默关闭显式
+  身份校验；recommended 只校验 winner、不校验所有 option 名。
+- 计时：本轮从第7轮交付后约 02:24 开始，至约 09:50 完成，墙钟约 **7 h 26 min**，无用户暂停；
+  包含两次独立复核与完整套件，主动秒数未单独埋点，按墙钟口径记录。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权
@@ -600,10 +631,10 @@ candidate 1 **已使用**（task `v12pair-f3166ac23bcc`），两臂在正式门�
 1. **题目**：由独立准备者新建、与 Codex 时期所有题及近义改写查重后的未见题；冻结原始请求、
    约束、影响选择的必答项、允许的条件性结论、严重性锚点、来源政策、参考依据及日期/版本、
    可答性、曝光状态和数据集 hash。实现者不据题定向修代码；运行后不换题、不改 rubric。
-2. **候选身份**：当前实验 HEAD **`f151361`**（第5轮 `2138be9`；第4轮 `41c9314`；第3轮
-   `447f1a8`/`ff71fc0`/`2b42836`；第2轮 `cc9e533`/`a315e88`；如再有改动，以新提交重新冻结
-   并说明差异）；冻结模型/参数、依赖、检索与缓存策略、启动器与 payload hash；运行前后核对
-   two trees 与原始产物身份。
+2. **候选身份**：当前实验 HEAD **`b080213`**（第7轮 `e0e4aa1`；第6轮 `f151361`；第5轮
+   `2138be9`；第4轮 `41c9314`；第3轮 `447f1a8`/`ff71fc0`/`2b42836`；第2轮
+   `cc9e533`/`a315e88`；如再有改动，以新提交重新冻结并说明差异）；冻结模型/参数、依赖、
+   检索与缓存策略、启动器与 payload hash；运行前后核对 two trees 与原始产物身份。
 3. **额度与停止线**：授权时明确 1 个 case、1 次研究运行（不自动补跑）、LLM/Tavily 请求上限
    （建议沿用本轮授权口径，例如 LLM ≤40 含重试、Tavily POST ≤24 含探测、研究墙钟 ≤900 s，
    最终以新授权冻结值为准）、是否允许独立评审外呼、费用未知记 `unknown`。不调用外部模型裁判。

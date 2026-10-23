@@ -363,6 +363,14 @@ needs_review 升级为正式通过。
 只展示已保存 winner，不得从 ranked options 推导。该契约只证明决策能被正确表达和保存，不是
 模型判断正确、内容验收、校准或正式指标。
 
+**第8轮决策收尾（2026-10-23，离线）**：撤回推荐时只移除被替换的 `recommendation`/
+`winner_rationale` 的旧 citation bindings，新文本仍走现有引用解析入口；保留候选分析和
+trade-off 的合法引用。`ranked_options` 结构（null/数字/字符串/非对象/空名/重复）在任何
+len、遍历、渲染前校验，非法即 invalid，不崩溃、不补赢家、不伪装为暂缓。有显式
+`candidate_techs` 时，recommended winner 与 conditional 选项必须精确对应声明身份；身份键
+casefold+空白折叠但保留符号（`C++`/`C#` 不被 `C` 命中），不做子串/关键词/首项回退；无显式
+名单保留开放选型。仅证明表达/保存/结构边界，不证明模型选择正确或内容通过。
+
 ### 6.4 工具缺口与正式运行器最小能力
 
 现有可复用能力（离线核对）：`benchmarks/run_baseline.py` 能按 JSON case 调研究管线、保存
