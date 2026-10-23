@@ -234,7 +234,15 @@ def _apply_corrections(recommendation: dict, corrections,
                 rejected.append("cannot convert an invalid decision into a valid hold")
                 continue
             before_decision = dict(recommendation)
-            withdraw_decision(recommendation, reason, language=language)
+
+            def rebind_top_field(rec: dict, field: str, text: str) -> None:
+                resolved, bindings = resolve_citations_with_sources(
+                    text, evidence_chains, cite_map, registry=registry)
+                rec[field] = resolved
+                _set_field_bindings(rec, field_locator(rec, field), bindings)
+
+            withdraw_decision(recommendation, reason, language=language,
+                              rebind_top_field=rebind_top_field)
             applied.append({
                 "option": "", "field": "decision_status",
                 "action": "withdraw_decision", "reason": reason[:200],

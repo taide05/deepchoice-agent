@@ -1072,6 +1072,9 @@ class ConclusionSynthesizerAgent:
                 "scene_fit_note": "",
             }
 
+        # Validate structure before any len/traversal/rendering consumer.
+        normalize_decision(result, declared_candidates=task.get("candidate_techs") or [])
+
         quality_signals = [{
             "agent": "conclusion_synthesizer",
             "evidence_chain_count": len(evidence_chains),
@@ -1102,7 +1105,6 @@ class ConclusionSynthesizerAgent:
                 1 for a in evidence_audit if a["stored_truncated"]),
         }]
 
-        normalize_decision(result)
         quality_signals[0]["decision_status"] = result.get("decision_status")
         quality_signals[0]["decision_winner_present"] = bool(
             (result.get("winner") or "").strip())
