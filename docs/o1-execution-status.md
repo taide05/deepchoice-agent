@@ -615,7 +615,9 @@
 
 - 维护树基点 `b9ad9c6`；实验树冻结候选 `b080213`。本轮不启动第13次、不调用真实
   LLM/Tavily/网页探测/外部裁判/付费基准；不 push、不改写历史、不合并两树。
-- **唯一交付候选**为维护树 `codex/generic-selection` 的本轮提交；实际用户入口是 durable
+- **唯一交付候选**为维护树 `codex/generic-selection` 的本轮代码/数据提交
+  **`8948c71`**（代码/测试/数据）；最终交付记录若另有文档尾提交，以
+  `git rev-parse HEAD` 与外部 identity 交叉核对。实际用户入口是 durable
   `/api/v1/tasks/*`，不是旧 `/research`。启动/提交/状态/决策/报告/annotated/导出命令与
   端点见 `docs/final-batch-preparation.md` 第 1 节；外部候选 identity 记录在
   `D:\deepchoice-dsh\r9_delivery_identity.json`。
@@ -649,8 +651,9 @@
   `r9_review3\review.md` 均 **PASS（无阻断）**；非阻断项已记录，paid 前必须优先修复
   baseline 适配、reference/expected outcome/评分冻结，以及 reviewer 指出的
   resume identity、arm/review 绑定、authorized 冻结流程和 admitted-unsettled runbook。
-- 实际计时：本轮从 `b9ad9c6` 交接后开始，至本轮交付约 **2 小时**（包含实现、完整套件和
-  复核）；精确主动秒数未单独记录，按墙钟/估计口径；无用户暂停。该数字不延伸授权。
+- 实际计时：本轮从 `b9ad9c6`（2026-10-23 11:40）至交付约 **3 小时 50 分墙钟**
+  （2026-10-23 15:31），无用户暂停；包含两次完整套件（各约 10–11 分钟）、独立复核和
+  实现。精确主动秒数未单独埋点，按墙钟/估计口径；该数字不延伸授权。
 
 ## 当前授权与下一阶段
 

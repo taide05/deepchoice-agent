@@ -6,7 +6,8 @@
 ## 1. 唯一交付候选与实际用户入口
 
 - 交付分支：`codex/generic-selection`（维护树 `D:\deepchoice-agent`），基点 **`b9ad9c6`**；
-  本轮提交的代码/工具/数据/文档作为唯一最终候选。实际候选 commit 和树哈希记录在
+  本轮代码/工具/数据/测试提交 **`8948c71`**（文档尾提交以最终 HEAD 为准）作为唯一最终候选。
+  实际候选 commit、树哈希和数据集 hash 记录在
   `D:\deepchoice-dsh\r9_delivery_identity.json`，以该外部记录和 `git rev-parse HEAD` 交叉核对。
 - 实际用户入口是 **durable 产品 API**，不是实验树旧 `/research`：
   - 启动：`D:\deepchoice-agent\.venv\Scripts\python.exe -m uvicorn deepchoice.server.app:app --host 127.0.0.1 --port 8000`
