@@ -611,6 +611,47 @@
   本轮包含完整套件、两次独立复核与最终修改；精确执行起止和主动秒数未独立记录，保持
   unknown/estimated，不将约 1 小时 40 分表述为精确主动工时。
 
+### 第 9 轮最终交付候选与批量准备（2026-10-23，离线，未达准入）
+
+- 维护树基点 `b9ad9c6`；实验树冻结候选 `b080213`。本轮不启动第13次、不调用真实
+  LLM/Tavily/网页探测/外部裁判/付费基准；不 push、不改写历史、不合并两树。
+- **唯一交付候选**为维护树 `codex/generic-selection` 的本轮提交；实际用户入口是 durable
+  `/api/v1/tasks/*`，不是旧 `/research`。启动/提交/状态/决策/报告/annotated/导出命令与
+  端点见 `docs/final-batch-preparation.md` 第 1 节；外部候选 identity 记录在
+  `D:\deepchoice-dsh\r9_delivery_identity.json`。
+- **实验改动盘点**：第1–6轮的采集/页面/身份修复已被维护树更新实现取代；第7/8轮旧
+  `utils/decision.py` 与维护树当前 decision contract/decision_analysis/evidence gate
+  字段和消费者不兼容，不能整树合并。未发现必须迁入且可安全适配的旧实现；真正的缺口是
+  durable 入口上的共享采集 baseline 适配，已列为阻断。
+- **批量工具**：新增 `benchmarks/final_batch.py`、`benchmarks/prepare_final_batch.py`、
+  `benchmarks/final-batch-v1.json`、`tests/test_final_batch.py`。`final_batch` 校验
+  120 final + 12 calibration、层级 A30/B24/C18/D16/E16/F16、ID/组/候选对唯一、split
+  隔离、request 契约、引用只给评审；未 admitted 数据 fail closed，`collect` 只支持
+  candidate arm 且 baseline arm 明确拒绝；`resume` 不重派 terminal 或 admitted-unsettled
+  case；`summarize` 计算 N/S/R/E、usable、重大错误、P50/P95 墙钟、已知 token、失败保留，
+  cost 保持 unknown。
+- **数据状态**：`final-batch-v1.json` 为 deterministic draft（120 final + 12 calibration；
+  132 个草案组合，未独立查重，少数可能来自历史池）；状态
+  `draft_pending_reference_authoring`、`eval_ready=false`；参考依据/expected outcome/
+  评分/独立查重均待独立准备者，不是已封存或评测就绪。当前 `validate` 通过结构检查，
+  `collect --execute-paid-runs` 在派发前 fail closed；无法用它启动正式两臂。
+- **离线验证**：durable 提交/状态/异常/结果/annotated/export 定向套件 **42 passed**；
+  decision/page/self-review 定向套件通过；本轮最终完整套件 **3849 passed, 0 warnings**
+  （离线/无外呼）；无外部请求。
+- **整批预算申请**：只在 `docs/final-batch-preparation.md` 第 5 节一处提出，覆盖数据核验、
+  12 校准、120×2 正式、重复子集与两轮评审；总 run 上限 312，LLM ≤20,000、Tavily
+  ≤10,000、official 页面尝试 ≤1,300、HTTP ≤4,000、已知 token ≤20,000,000、研究墙钟
+  ≤72 h；成本 unknown，未授权前为 0 外呼。停止线含身份/预算/安全/未知提交/数据冻结异常。
+- **准入结论：未达到批量评测准入**。剩余阻断：durable 共享采集 baseline 未适配；数据
+  参考依据/expected outcome/评分未独立核验；预算未授权。不得启动第13次或正式两臂；
+  本轮没有把草案或合成汇总写成真实结果。
+- 审核：`D:\deepchoice-dsh\r9_review\review.md`、`r9_review2\review.md`、
+  `r9_review3\review.md` 均 **PASS（无阻断）**；非阻断项已记录，paid 前必须优先修复
+  baseline 适配、reference/expected outcome/评分冻结，以及 reviewer 指出的
+  resume identity、arm/review 绑定、authorized 冻结流程和 admitted-unsettled runbook。
+- 实际计时：本轮从 `b9ad9c6` 交接后开始，至本轮交付约 **2 小时**（包含实现、完整套件和
+  复核）；精确主动秒数未单独记录，按墙钟/估计口径；无用户暂停。该数字不延伸授权。
+
 ## 当前授权与下一阶段
 
 第七次单例授权 **1/1 已使用**；第八次本轮单例授权 **1/1 已使用**；第九次单例授权

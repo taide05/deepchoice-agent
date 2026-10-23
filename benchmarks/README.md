@@ -25,6 +25,16 @@
 通过小规模校准后再冻结整批。尚无完整适配新协议的运行命令，不用旧四例锁或历史并发脚本
 代替它。现代产品采集使用 durable API；恢复实验的旧接口记录单列，见[当前状态](../docs/o1-execution-status.md)。
 
+## 第9轮离线批量准备（2026-10-23，未准入）
+
+[final-batch-v1.json](final-batch-v1.json) 是 120 final + 12 calibration 的**草案**，
+`eval_ready=false`、参考依据待独立作者/核验；不能用它启动正式评测。
+`python -m benchmarks.final_batch validate` 会校验层级配额、候选对/组唯一、final/calibration
+隔离和 request 契约；`collect` 对未 admitted 数据 fail closed，且当前只支持 candidate arm。
+`prepare_final_batch.py` 可确定性地重建草案；`summarize` 从 durable collector 的
+`runs.jsonl` 与评审 CSV 计算 N/S/R/E、失败保留、墙钟/token 和未知费用。完整状态、用户入口、
+迁移结论和整批预算申请见[最终交付与批量准备](../docs/final-batch-preparation.md)。
+
 ## 问题与原句引用开发材料（2026-10-07）
 
 [quality-question-basis-development-v1](quality-question-basis-development-v1.json) 1.0.0

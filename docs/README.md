@@ -14,6 +14,7 @@
 | 4 | [评估协议](product-effectiveness-optimization.md) | 内容语义判定、全新题集与广度边界 |
 | 5 | [推进与维修](optimization-execution.md) | 问题批次、验证节奏、失败处理 |
 | 6 | [当前状态](o1-execution-status.md) | 工程与内容事实、研究账本、未达标项 |
+| 按需 | [最终交付与批量准备](final-batch-preparation.md) | 唯一交付候选、用户入口、批量工具、数据草案、预算申请与准入阻断 |
 | 按需 | [运行契约](phase1-runtime-contract.md) | 生命周期、预算、引用、安全、HITL、恢复 |
 | 按需 | [全仓审计与精简地图](codebase-audit.md) | 既有审计证据，须核对当前代码 |
 | 历史 | [归档索引](archive/README.md) | 旧计划、协议和冻结证据 |

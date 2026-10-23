@@ -2,6 +2,9 @@
 
 ## [Unreleased] - 2026-10-14
 
+### Added
+- Offline final-batch preparation: `benchmarks/final_batch.py` validates a 120-final/12-calibration draft and guards candidate-arm durable collection, resume, review import and N/S/R/E/resource aggregation; `benchmarks/prepare_final_batch.py` deterministically rebuilds `benchmarks/final-batch-v1.json`. The draft is explicitly unadmitted (`eval_ready=false`, references pending independent authoring) and `collect` fails closed; no real research or paid calls are added. Durable user-entry evidence remains the product API; the paired-baseline adapter and authorized budget are documented blockers.
+
 ### Publish the answer-slot identity where it is decided
 
 `final_recommendation.answer_delivery` gains a `questions` list: the answer
