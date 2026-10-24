@@ -18,6 +18,26 @@ Codex最后给出的10小时方案、40–80小时估算均不作为你的活动
 
 ## 代码与工作树
 
+### 2026-10-25 目录整理：接手时使用这些位置
+
+| 用途 | 位置与处理 |
+|---|---|
+| 当前产品开发 | `D:\deepchoice-agent`，代码及用户修改保持原位置 |
+| dsh 运行、评审、数据与旧工作树 | `D:\deepchoice-dsh`，未整体搬动；其中有6个未提交源码/测试修改，不当作临时目录删除 |
+| 实验工作树 | `D:\deepchoice-precodex`，保持原路径和Git登记 |
+| 根目录测试/恢复材料集中归档 | `D:\deepchoice-dsh\.scratch\root-folder-archive-20261025`，入口为其中的 `README.md` |
+| dsh 工具本体 | `D:\dsh-1`，保持原位置，不与项目测试缓存混在一起处理 |
+
+已把根目录的 `deepchoice-dsh-acl-recovery`、`dsh-scratch-rr`、`scratch-review-v7`
+原样移动到上述归档下的同名子目录。394个文件移动前后大小和SHA-256一致；完整目录清单、
+旧/新路径与核对状态在归档的 `move-manifest.json`。未删除数据、未修改脚本或权限。
+旧根路径不再存在，也没有留下junction。归档脚本中的旧绝对路径仍作为历史内容保留；
+需要复用时在工作副本里改为当前目录，避免直接运行后又在D盘根目录创建临时材料。
+
+`r10_diag2`、`r10_data`、开发报告、评审、授权账本及数据库仍在交接表原位置。
+PikPak/CloudMusic目录未处理。后续测试/探针材料集中到所属工作树的 `.scratch` 或已有
+指定临时目录；无需为此次接手批量重整所有历史文件。
+
 | 项目 | 核对结果 |
 |---|---|
 | 当前产品目录 | `D:\deepchoice-agent`，`codex/generic-selection` |
