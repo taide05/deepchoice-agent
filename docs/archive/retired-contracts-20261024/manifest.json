@@ -1,0 +1,44 @@
+[
+  {
+    "original_path": "docs/phase1-runtime-contract.md",
+    "snapshot": "docs__phase1-runtime-contract.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "6beb74a0035d70f76fd4dd8e9f38076bd533f7f55b297703d1e6983e988f1262"
+  },
+  {
+    "original_path": "docs/codebase-audit.md",
+    "snapshot": "docs__codebase-audit.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "b72674d8f463bed65e93a7456fa4bba5a1e15926bc6c228cf15f5e170c7c3ec6"
+  },
+  {
+    "original_path": "benchmarks/README.md",
+    "snapshot": "benchmarks__README.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "5f701aa132cfd212afa561245a512b66785e3939955169232ccc0a6b52975463"
+  },
+  {
+    "original_path": "docs/product-optimization-serial-check-v2.md",
+    "snapshot": "docs__product-optimization-serial-check-v2.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "793e84f82e7530a66b3f2931c26e97ad4add7c3fad64129fc0b2febe73939d8d"
+  },
+  {
+    "original_path": "docs/phase1-acceptance-report.md",
+    "snapshot": "docs__phase1-acceptance-report.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "18f40b73358a3b3a285071e55f84a622a967d21688afc39a696a641ccc1d0c94"
+  },
+  {
+    "original_path": "docs/phase5-engineering-acceptance.md",
+    "snapshot": "docs__phase5-engineering-acceptance.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "118a2ccc9767d670057fcae06d123cae31b611c3e262681abb6f1f3f291f75d2"
+  },
+  {
+    "original_path": "docs/o1-reference-audit.md",
+    "snapshot": "docs__o1-reference-audit.md.txt",
+    "source_commit": "611b1b2",
+    "sha256": "68cc87d96332636548e243bd2b5a2004ee548df6b0ff91f9aadd863d8902ce84"
+  }
+]

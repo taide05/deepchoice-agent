@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-24
 
+### Retire lower-level process rules and reopen product design choices
+
+- Replace the accumulated runtime strategy log with a focused durable/data reference and an explicit
+  table of adjustable research policies; remove blanket row-withdrawal and confidence-only-down design mandates.
+- Rewrite the benchmark guide and code navigation; retire serial-check as operating guidance while preserving
+  its hash-bound input bytes. Remove stale release gates from
+  README and historical acceptance documents. Retain their original bytes in a dated archive.
+- Expand the handoff with document coverage, concrete rule replacements and remaining scope boundaries.
+  No product behavior, original evaluation result, CI, test or paid authorization is changed.
+
 ### Direct user/dsh handoff and lighter development workflow
 
 - Replace accumulated Codex round limits, mandatory fresh-case gates and per-package full-suite/

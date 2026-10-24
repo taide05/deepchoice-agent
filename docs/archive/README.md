@@ -7,6 +7,12 @@
 归档日期：2026-09-21。默认不整包读取本目录；只有当前工作需要核对某个历史决定或证据时，才打开对应文件。
 当前规划以 [任务地图](../current-roadmap.md)为准，阅读次序见 [文档索引](../README.md)。
 
+## 2026-10-24 下层规范退出活动阅读
+
+[原文及哈希](retired-contracts-20261024/README.md)保存旧运行契约、长审计、benchmark 指南、
+serial-check-v2 和三份历史验收/参考记录。活动入口已实质重写，不再让读者自行从长篇旧规则中
+猜测哪些已失效。技术运行约定与可改产品策略分开，原始报告和评分不受影响。
+
 ## 2026-10-10 八小时计划结案
 
 [原活动路线原字节快照](delivery-eight-hour-20261010/roadmap-snapshot.md)来自提交
@@ -41,8 +47,8 @@ N1–N4 与旧时间/研究额度已结案，内容未达标；快照中的命�
 | [README交付历史](quality-direction-20260929/readme-delivery-history.md) | 原用户入口中的逐轮优化叙述 |
 | [旧工具指南](quality-direction-20260929/benchmark-guide-history.md) | 冻结历史工具的参数及当时适用条件 |
 
-`docs/product-optimization-serial-check-v2.md`被机器卡按路径/SHA绑定，原地保留；
-其旧计划只供复算。原始数据集、CSV/JSON台账、机器卡、运行库和代码不因文档归档而修改。
+`docs/product-optimization-serial-check-v2.md` 被旧机器卡按路径/SHA绑定，原路径保留原字节，
+2026-10-24归档另存副本。它是历史机器输入，不是当前执行规范。原始数据集、CSV/JSON台账、机器卡、运行库和代码不因文档归档而修改。
 
 ## 2026-09-29 路线调整
 
@@ -76,5 +82,6 @@ N1–N4 与旧时间/研究额度已结案，内容未达标；快照中的命�
 | `docs/technical-design-engineering-enhancement.md` | [technical-design-engineering-enhancement.md](engineering-design-20260909/technical-design-engineering-enhancement.md) | 历史事实/设计；不指导当前执行 |
 
 两份会话交接正文移至本地忽略区 `notes/archive/20260921/`，原路径仅保留失效提示；不重新发布会话上下文。
-维护中的运行契约、数据集、参考审计、评分 CSV/JSON 绑定和原始 outputs 均保留原路径/内容。
+以上归档批次当时保留了运行契约、参考审计等入口；2026-10-24又整理了这些活动文档。
+数据集、评分 CSV/JSON、原始 outputs 和机器卡内容继续保留。
 归档没有删除分支、改写提交或修改停止根；历史已发布内容仍在 Git 历史中，本次不是秘密清除操作。

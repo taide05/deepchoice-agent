@@ -1,0 +1,2 @@
+# Preserve the byte hashes recorded in manifest.json across Git checkouts.
+*.md.txt binary
