@@ -2,6 +2,16 @@
 
 ## [Unreleased] - 2026-10-24
 
+### Direct user/dsh handoff and lighter development workflow
+
+- Replace accumulated Codex round limits, mandatory fresh-case gates and per-package full-suite/
+  multi-review procedures with direct user/dsh planning and risk-based validation.
+- Consolidate active instructions, evaluation guidance and handoff; allow exposed-case development
+  replay and useful conditional reports without treating every supplementary gap as a release blocker.
+- Record the current product identity and two-case diagnosis. Preserve old plans in Git history and
+  mark historical audits as reference; no old result, paid allowance or quality claim is rewritten.
+- Documentation only: no runtime policy, security boundary, product code, test or CI configuration changed.
+
 ### Bound selection report capacity and batch admission
 
 - Separate the active capacity contract: five whole saved sources per response, four distinct

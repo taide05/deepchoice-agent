@@ -1,28 +1,30 @@
-# 项目文档入口与效力
+# 项目文档入口
 
-更新：2026-10-19。用户当前指令优先；当前代码、manifest 构建器、`pyproject.toml`
-和可执行测试描述已实现行为。旧十小时与八小时计划均已结案，后者内容未达标；
-下一轮的工时、外呼额度和题集尚未冻结。旧执行卡、聊天交接和 OPEN 字段
-不授权新运行。[接手复盘](agent-development-lessons.md)已按当前及归档的 18 个项目会话复核，
-并记录前次遗漏的 Codex worktree 会话。
+更新：2026-10-24。用户与 dsh 直接决定后续目标、路线和交付安排。无需 Codex 审批。
 
-| 顺序 | 文档 | 职责 |
-|---|---|---|
-| 1 | [AGENTS.md](../AGENTS.md) | 全仓 Git、工程、安全和减法优先硬约束 |
-| 2 | [接手约束与 Codex 复盘](agent-development-lessons.md) | 跨会话教训、下一轮开场顺序、冲突处理 |
-| 3 | [质量路线](current-roadmap.md) | 产品目标、范围、优先级 |
-| 4 | [评估协议](product-effectiveness-optimization.md) | 内容语义判定、全新题集与广度边界 |
-| 5 | [推进与维修](optimization-execution.md) | 问题批次、验证节奏、失败处理 |
-| 6 | [当前状态](o1-execution-status.md) | 工程与内容事实、研究账本、未达标项 |
-| 按需 | [最终交付与批量准备](final-batch-preparation.md) | 唯一交付候选、用户入口、批量工具、数据草案、预算申请与准入阻断 |
-| 按需 | [运行契约](phase1-runtime-contract.md) | 生命周期、预算、引用、安全、HITL、恢复 |
-| 按需 | [全仓审计与精简地图](codebase-audit.md) | 既有审计证据，须核对当前代码 |
-| 历史 | [归档索引](archive/README.md) | 旧计划、协议和冻结证据 |
+接手只需 [AGENTS](../AGENTS.md) 和 [当前交接](next-session-product-optimization-handoff.md)；
+其余按手头问题查阅。不要把历史阶段、旧轮数、旧停止线读成新的任务。
 
-主产品是一条完整 durable 研究链路；恢复实验分支的旧接口与结果按[状态](o1-execution-status.md)单列。
-最终交付需要代表性评测、可信项目指标、公平基线比较和完整使用链路，单例合格仅作阶段门槛。
-Codex 时期所有题目和报告仅供历史取证；开发修复阶段每包在新额度内用一份全新题检查效果，
-正式评测按冻结整批授权执行。数据与评分设计可提前离线准备，具体定义只维护在评估协议。
-旧工程套件通过不代表报告可用或已完成人工 UI 验收。最终 24 次仍封存。README 负责用户使用说明，
-CHANGELOG 记录交付；原始输出和本地交接留在忽略区，不作为公开文档。
-只针对具体问题查阅归档，不递归加载旧计划或用其“下一步”覆盖当前状态。
+| 文档 | 现在的用途 |
+|---|---|
+| [当前交接](next-session-product-optimization-handoff.md) | 代码身份、已知故障、材料位置及交接决定 |
+| [当前状态](o1-execution-status.md) | 实际成果、运行结果和已用额度 |
+| [路线](current-roadmap.md) | 简短目标说明；下一条路线由用户与 dsh 决定 |
+| [执行方式](optimization-execution.md) | 在已委托范围内连续实施，按风险验证 |
+| [评估说明](product-effectiveness-optimization.md) | 轻量内容判断、指标口径和开发/未见区分 |
+| [评测工具](final-batch-preparation.md) | 可复用入口、尚未完成的工具与数据 |
+| [开发教训](agent-development-lessons.md) | 可选背景，不是接手前置清单 |
+| [运行契约](phase1-runtime-contract.md) | 涉及运行时行为时查阅，不重新开展历史Phase验收 |
+| [历史审计](codebase-audit.md)、[归档](archive/README.md) | 特定问题的旧证据，不是待执行路线 |
+
+## 文档效力
+
+用户最新决定优先。AGENTS 管理当前工作方式；代码、测试及对应版本运行物说明实际行为。
+技术文档中安全、数据一致性和预算的实现说明仍可用于修复；其中旧项目范围、批准步骤、
+固定晋级数值及阶段禁令不自动约束新工作。
+
+2026-10-24前的路线、执行、评估、准备和复盘长文已从活动入口收拢。原文仍在提交
+`fef61b8`，可用 `git show fef61b8:docs/<文件名>` 按需查看。旧评审和原始运行材料未改。
+后续不必读完这些历史文本才能开始修项目。
+
+这次是交接与工作方式调整，不改变程序预算/安全配置，也不把历史失败改成通过。

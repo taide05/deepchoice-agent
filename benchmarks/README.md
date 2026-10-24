@@ -1,39 +1,28 @@
-# 评估工具入口
+# 评测工具
 
-更新：2026-10-19。本页说明已实现工具及其适用范围。目标见[质量路线](../docs/current-roadmap.md)，
-现行开发规则见[评估协议](../docs/product-effectiveness-optimization.md)，实际准入与结果见
-[当前状态](../docs/o1-execution-status.md)。quality-selection-v1采集器及下列运行示例
-仍绑定旧四例和历史授权；历史跨类别开发曾通过单独冻结的本地薄适配执行，不能把新案例
-直接交给旧命令，或用旧晋级锁启动最终24次。历史卡和账本保持原样。
+更新：2026-10-24。开发可使用旧题回归、固定输入和小批量实测；样本量、基线与公开指标由用户
+和dsh安排。旧四例锁、固定晋级、轮数和历史授权不自动约束新工作。使用实际外呼工具时计入当前预算。
 
-## 当前评测准备与工具边界
+## 当前可复用入口
 
-最终目标包含百例以上代表性数据集上的可信质量、效率与可靠性指标及简单基线比较；
-单例通过只作阶段门槛。唯一指标定义、分层/去重/未见集、分母、校准和冻结条件见
-[评估协议](../docs/product-effectiveness-optimization.md)。当前没有获授权的新研究或正式批次。
-以下带历史相位、额度、OPEN 状态的命令只解释旧工具，不提供当前执行许可。
+- `final_batch.py`：数据校验、durable采集、resume、评审汇总和跨run授权账本。
+- `product_baseline.py`：durable采集基础；共享证据单次综合baseline仍需按新方案完成集成。
+- `prepare_final_batch.py`及`final-batch-v1.json`：旧120+12草案，参考未核验；不是现成正式成绩。
+- `run_offline_eval` / smoke-v1：离线代码和fixture验证，不测真实模型语义质量。
+- `report_quality.py`、标题匹配及Top1：各自限定的结构或标签指标，不能替代读报告。
 
-| 工具或材料 | 能证明什么 | 不能证明什么 |
-|---|---|---|
-| smoke-v1 / 固定输入回放 | 确定性代码路径、材料结构及机制边界 | 真实模型内容质量、实时来源健康 |
-| `report_quality.py` A/B/C/D | 五项确定性结构检查 | 报告事实正确、有据可用或可交付；旧 `production-ready` 等标签不构成语义结论 |
-| 既有 Top1 / 标题引用匹配 | 推荐标签命中、引用身份存在等限定指标 | 条件选择合理、来源正文支持具体论断 |
-| 历史 300-case | 2026-08-31 冻结版本和历史合并口径下的结果 | 当前版本未见集质量；补跑合并后的成功率不等于首次执行成功率 |
-| 当前采集器/观测接口 | 经兼容核对后保存运行和用量 | 新语义指标、评审校准或简单基线已经实现 |
+当前final_batch仍有具体配额/身份/授权检查；文档调整不改变其代码。小规模开发可以复用
+合适入口，不必先补完132题。需要改变工具范围时修改实际契约与相关测试，不伪造准入状态。
 
-正式采集前离线核对题集加载、计划/派发/报告/评审分母、原件保留、基线绑定和指标计算，
-通过小规模校准后再冻结整批。尚无完整适配新协议的运行命令，不用旧四例锁或历史并发脚本
-代替它。现代产品采集使用 durable API；恢复实验的旧接口记录单列，见[当前状态](../docs/o1-execution-status.md)。
+内容判断见[评估说明](../docs/product-effectiveness-optimization.md)，工具缺口见
+[准备清单](../docs/final-batch-preparation.md)，代码身份与材料见[交接](../docs/next-session-product-optimization-handoff.md)。
+后续在同一授权内连续执行、复测并累计费用；失败和重复运行照实保留。
 
-## 第9轮离线批量准备（2026-10-23，未准入）
+## 以下是历史数据与工具说明
 
-[final-batch-v1.json](final-batch-v1.json) 是 120 final + 12 calibration 的**草案**，
-`eval_ready=false`、参考依据待独立作者/核验；不能用它启动正式评测。
-`python -m benchmarks.final_batch validate` 会校验层级配额、候选对/组唯一、final/calibration
-隔离和 request 契约；`collect` 对未 admitted 数据 fail closed，且当前只支持 candidate arm。
-`prepare_final_batch.py` 可确定性地重建草案；`summarize` 从 durable collector 的
-`runs.jsonl` 与评审 CSV 计算 N/S/R/E、失败保留、墙钟/token 和未知费用。完整状态、用户入口、
-迁移结论和整批预算申请见[最终交付与批量准备](../docs/final-batch-preparation.md)。
+下文保留原数据集身份、命令和历史条件。其阶段限制、OPEN字段、批准步骤不是当前工作流程；
+按当前代码核对工具可用性后使用，不批量恢复旧计划。历史全量说明也可用
+`git show fef61b8:benchmarks/README.md` 查阅。
 
 ## 问题与原句引用开发材料（2026-10-07）
 
