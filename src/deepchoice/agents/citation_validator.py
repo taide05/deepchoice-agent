@@ -292,6 +292,7 @@ class CitationValidatorAgent:
         self.headers = headers
 
     async def run(self, research_state: dict) -> dict:
+        from ..utils.stage_diagnostics import append_quality_signal
         recommendation = research_state.get("final_recommendation", {})
         raw_analyses = recommendation.get("decision_analysis") if isinstance(recommendation, dict) else None
         analyses_received = len(raw_analyses) if isinstance(raw_analyses, list) else None
@@ -333,7 +334,7 @@ class CitationValidatorAgent:
         output: dict = {
             "citation_verification": verification.model_dump(mode="json"),
             "evidence_chains": projected_chains,
-            "quality_signals": [{
+            "quality_signals": append_quality_signal(research_state, {
                 "agent": "citation_validator",
                 "analyses_received": analyses_received,
                 "analyses_rebound": (len(recommendation["decision_analysis"])
@@ -342,7 +343,7 @@ class CitationValidatorAgent:
                 "unsupported": counts.unsupported,
                 "unreachable": counts.unreachable,
                 "unknown": counts.unknown,
-            }],
+            }),
         }
         if isinstance(recommendation, dict) and recommendation.get("decision_basis_version"):
             output["final_recommendation"] = _calibrate_decision(
@@ -355,11 +356,11 @@ class CitationValidatorAgent:
         # as the same "unknown", so a deterministic routing refusal and a
         # transient network failure are indistinguishable after the run.
         if citation_fetch:
-            output["quality_signals"][0]["citation_fetch"] = dict(sorted(citation_fetch.items()))
+            output["quality_signals"][-1]["citation_fetch"] = dict(sorted(citation_fetch.items()))
         # A row dropped by calibration leaves no other trace, so its fixed
         # categories are the only record of why it disappeared.
         if calibration:
-            output["quality_signals"][0]["analysis_calibration"] = calibration
+            output["quality_signals"][-1]["analysis_calibration"] = calibration
         return output
 
 

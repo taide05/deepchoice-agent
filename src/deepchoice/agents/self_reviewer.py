@@ -271,12 +271,14 @@ def _skip_empty_review(research_state, context):
     # Old gap text can contain private model/checkpoint content. Project only
     # structured uncertainty into a fixed public question, never copy the text.
     gaps = ["What evidence or assumptions still need independent checking? Without that check, treat the analysis as provisional."] if needs_check else []
+    from ..utils.stage_diagnostics import append_quality_signal
     return {"final_recommendation": recommendation, "confidence": confidence,
             "knowledge_gaps": gaps, "retry_count": research_state.get("retry_count", 0) + 1,
-            "quality_signals": [{"agent": "self_reviewer", "review_status": "not_run",
+            "quality_signals": append_quality_signal(research_state, {
+                "agent": "self_reviewer", "review_status": "not_run",
                 "review_reason": "no_reviewable_items", "passed_count": 0, "total_checks": 0,
                 "confidence": confidence, "gaps_found": len(gaps), "analysis_review": summary,
-                "targeted_review_attempts": 0, "targeted_review_rejections": {}}],
+                "targeted_review_attempts": 0, "targeted_review_rejections": {}}),
             "token_usage": research_state.get("token_usage", [])}
 
 
@@ -291,6 +293,7 @@ class SelfReviewerAgent:
             analysis_review_input, apply_analysis_review, prepare_analysis_review,
         )
 
+        from ..utils.stage_diagnostics import append_quality_signal
         print_agent_output("Reviewing decision reasoning before rendering", agent="SELF_REVIEWER")
         context = prepare_analysis_review(research_state)
         if not context.slots and not context.provisional_slots:
@@ -395,11 +398,12 @@ class SelfReviewerAgent:
             "confidence": confidence,
             "knowledge_gaps": gaps,
             "retry_count": research_state.get("retry_count", 0) + 1,
-            "quality_signals": [{"agent": "self_reviewer", "passed_count": passed,
-                                 "total_checks": 6, "confidence": confidence,
-                                 "gaps_found": len(gaps), "analysis_review": summary,
-                                 "targeted_review_attempts": repair_attempts,
-                                 "targeted_review_rejections": repair_rejections}],
+            "quality_signals": append_quality_signal(research_state, {
+                "agent": "self_reviewer", "passed_count": passed,
+                "total_checks": 6, "confidence": confidence,
+                "gaps_found": len(gaps), "analysis_review": summary,
+                "targeted_review_attempts": repair_attempts,
+                "targeted_review_rejections": repair_rejections}),
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("self_reviewer", local_usage)],
         }

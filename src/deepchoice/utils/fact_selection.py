@@ -362,8 +362,19 @@ def bind_selected_views(selected, offered, chains, candidates, requirements):
 def bind_selection_answers(selected, offered, chains, candidates, questions, diagnostics):
     """Bind quotes to the selected specific view, never another overlapping view."""
     from ..citations.verifier import _split_sentences
+    from .evidence_choices import MAX_SOURCE_FACTS
     from .question_packet import bind_question_rows
 
+    values = selected.get("source_view_ids") if isinstance(selected, dict) else None
+    diagnostics["selected_views_received"] = (
+        len(values) if isinstance(values, list) else None
+    )
+    diagnostics["selected_views_rejected_limit"] = 0
+    if isinstance(values, list) and len(values) > MAX_SOURCE_FACTS:
+        # One response may select only the advertised whole-source capacity.
+        # Reject it explicitly; never keep a prefix and report it as complete.
+        diagnostics["selected_views_rejected_limit"] = len(values) - MAX_SOURCE_FACTS
+        return [], []
     facts = _bound_selected_views(selected, offered, chains, candidates)
     quotes = {}
     for view_id, fact in facts.items():

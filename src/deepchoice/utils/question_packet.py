@@ -69,16 +69,17 @@ def _fact_heading(fact, candidates):
 
 
 def basis_reference_packet(facts: list[dict], candidates: list[str], *, evidence_chains=None, require_reviewable=False) -> tuple[str, dict]:
-    """Offer opaque IDs for the exact complete sentence addresses used by binding.
+    """Legacy/test-only reference packet; the durable joint path does not call it.
 
-    Location labels do not join separate page passages. Any sentence-policy
-    disagreement leaves that fact unoffered, rather than changing its addresses.
+    The packet is isolated for compatibility tests. An over-limit input is an
+    explicit refusal, not a silent first-five truncation.
     """
     from ..citations.verifier import _split_sentences
-    from .evidence_choices import whole_source_text
+    from .evidence_choices import MAX_SOURCE_FACTS, whole_source_text
     from .decision_analysis import analysis_fact_reviewable
 
-    facts = facts[:5]
+    if not isinstance(facts, list) or len(facts) > MAX_SOURCE_FACTS:
+        return "No bound source facts.", {}
     identifiers = [fact.get("id") for fact in facts]
     if (any(not isinstance(key, str) or not re.fullmatch(r"F[1-9]\d?", key) for key in identifiers)
             or len(set(identifiers)) != len(identifiers)):
@@ -124,7 +125,8 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
     not assert constraint coverage, source applicability, or permission to act.
     """
     diagnostics.update(rows_received=0, rows_selected=0, rows_rejected_shape=0,
-                       rows_rejected_question=0, rows_dropped_item_limit=0)
+                       rows_rejected_question=0, rows_dropped_item_limit=0,
+                       rows_rejected_fact_limit=0)
     if not isinstance(rows, list):
         return []
     diagnostics["rows_received"] = len(rows)
@@ -161,11 +163,13 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
             basis["sentence_ids"].extend(quote["sentence_ids"])
             basis["source_sentences"].extend(quote["source_sentences"])
         if len(groups) > MAX_ROW_BASIS_FACTS:
-            # Addressing more distinct facts than one row may carry. Dropping the
-            # excess would remove whatever premises those coordinates were the
-            # only support for while the row was still published, so the row is
-            # rejected instead of silently losing support.
-            diagnostics["rows_rejected_shape"] += 1
+            # Addressing more distinct facts than one row may carry. Dropping
+            # the excess would remove whatever premises those coordinates were
+            # the only support for while the row was still published, so the row
+            # is rejected instead of silently losing support. Record the fixed
+            # reason separately from malformed shape so downstream diagnostics
+            # can distinguish "too many premises" from invalid references.
+            diagnostics["rows_rejected_fact_limit"] += 1
             continue
         proposal = {key: row.get(key) for key in ("kind", "option", "reasoning", "assumptions", "change_condition")}
         proposal.update(requirement_ids=[question], basis=list(groups.values()))

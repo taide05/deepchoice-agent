@@ -36,7 +36,82 @@ from benchmarks.product_baseline import (
     CollectionOptions,
     DurableBaselineCollector,
 )
+from benchmarks.batch_authorization import (
+    AuthorizationDuplicate,
+    AuthorizationError,
+    AuthorizationExceeded,
+    AuthorizationUnsettled,
+    BatchAuthorizationLedger,
+)
 from deepchoice.contracts.api import ResearchRequest
+
+
+class AuthorizationGatedCollector(DurableBaselineCollector):
+    """Reserve a durable slot inside the journal event immediately before POST.
+
+    The base collector calls ``_journal("submission_started")`` only after its
+    health check and immediately before the product POST. Reserving here avoids
+    charging a slot for a pre-POST health or validation failure. The task id is
+    marked at ``_journal("admitted")``, before polling, so a crash during polling
+    remains reconcilable.
+    """
+
+    def __init__(self, *args, authorization: BatchAuthorizationLedger, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.authorization = authorization
+        self._authorization_tokens: dict[str, str] = {}
+        self._authorization_errors: dict[str, AuthorizationError] = {}
+
+    async def _journal(self, record: dict, event: str) -> None:
+        case_id = str(record.get("case_id", ""))
+        if event == "submission_started":
+            try:
+                token = await asyncio.to_thread(
+                    self.authorization.reserve, case_id, self.experiment_id,
+                )
+            except AuthorizationError as exc:
+                self._authorization_errors[case_id] = exc
+                raise
+            self._authorization_tokens[case_id] = token
+        await super()._journal(record, event)
+        if event == "admitted":
+            token = self._authorization_tokens.get(case_id)
+            task_id = record.get("task_id")
+            if token is not None and isinstance(task_id, str) and task_id:
+                try:
+                    await asyncio.to_thread(
+                        self.authorization.mark_submitted, token, task_id,
+                    )
+                except AuthorizationError as exc:
+                    self._authorization_errors[case_id] = exc
+                    raise
+
+    async def _finish(self, record: dict, started: float) -> dict:
+        case_id = str(record.get("case_id", ""))
+        error = self._authorization_errors.pop(case_id, None)
+        token = self._authorization_tokens.pop(case_id, None)
+        if error is not None:
+            if isinstance(error, AuthorizationExceeded):
+                record["error_code"] = "AUTHORIZATION_LIMIT_REACHED"
+            elif isinstance(error, AuthorizationUnsettled):
+                record["error_code"] = "AUTHORIZATION_UNRECONCILED"
+            elif isinstance(error, AuthorizationDuplicate):
+                record["error_code"] = "AUTHORIZATION_DUPLICATE_CASE"
+            else:
+                record["error_code"] = "AUTHORIZATION_ERROR"
+        # Write the product record first. If settling then fails, the reservation
+        # stays unresolved and can be reconciled; a settled row without a record
+        # would be the unrecoverable direction.
+        result = await super()._finish(record, started)
+        if error is None and token is not None and record.get("status") in TERMINAL_STATUSES:
+            try:
+                await asyncio.to_thread(
+                    self.authorization.settle, token, str(record["status"]),
+                )
+            except AuthorizationError:
+                record["error_code"] = record.get("error_code") or "AUTHORIZATION_SETTLE_FAILED"
+        # Otherwise the reservation remains unknown for explicit reconciliation.
+        return result
 
 EXPECTED_FINAL = 120
 EXPECTED_CALIBRATION = 12
@@ -383,15 +458,54 @@ def summarize(dataset: dict, output_dir: Path, reviews_path: Path | None = None)
     return summary
 
 
+def validate_authorization_ledger_path(output_dir: Path, ledger_path: Path) -> Path:
+    """The ledger must outlive and sit outside the batch output directory."""
+    resolved_ledger = Path(ledger_path).resolve()
+    resolved_output = Path(output_dir).resolve()
+    if resolved_ledger == resolved_output or resolved_ledger.is_relative_to(resolved_output):
+        raise ValueError("authorization ledger must live outside the batch output directory")
+    return resolved_ledger
+
+
+def validate_resume_authorization(output_dir: Path, args: argparse.Namespace) -> None:
+    """Resume must reuse the recorded authorization identity and ledger path."""
+    if not args.resume:
+        return
+    identity_path = output_dir / "batch-identity.json"
+    runs_path = output_dir / "runs.jsonl"
+    if not runs_path.exists():
+        return
+    if not identity_path.exists():
+        raise ValueError("resume requires the original batch identity with authorization fields")
+    previous = json.loads(identity_path.read_text(encoding="utf-8"))
+    expected = {
+        "authorization_id": args.authorization_id,
+        "authorization_ledger": str(Path(args.authorization_ledger).resolve()),
+        "authorization_cap": args.authorization_cap,
+        "authorization_prior_used": args.authorization_prior_used,
+    }
+    for key, value in expected.items():
+        if previous.get(key) != value:
+            raise ValueError(f"resume authorization identity changed: {key}")
+
+
 def _collect(args: argparse.Namespace) -> int:
     dataset_path = Path(args.dataset)
     dataset, dataset_hash = load_batch_dataset(dataset_path, require_admitted=True)
     if args.arm != "candidate":
         raise ValueError("only the candidate arm is integrated; baseline arm is blocked")
     output_dir = Path(args.output_dir)
+    ledger_path = validate_authorization_ledger_path(output_dir, Path(args.authorization_ledger))
     if (output_dir / "runs.jsonl").exists() and not args.resume:
         raise ValueError("runs already exist; pass --resume to skip terminal cases")
     output_dir.mkdir(parents=True, exist_ok=True)
+    validate_resume_authorization(output_dir, args)
+    authorization = BatchAuthorizationLedger(
+        ledger_path,
+        authorization_id=args.authorization_id,
+        cap=args.authorization_cap,
+        prior_used=args.authorization_prior_used,
+    )
     prior = _read_jsonl(output_dir / "runs.jsonl")
     admissions = _read_jsonl(output_dir / "admissions.jsonl")
     done = terminal_case_ids(prior)
@@ -408,6 +522,11 @@ def _collect(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "nothing_to_do", "resume_plan":
                           resume_plan(dataset, prior, admissions)}, ensure_ascii=False))
         return 0
+    remaining = authorization.status()["remaining"]
+    if remaining < len(cases):
+        raise ValueError(
+            f"authorization has {remaining} remaining slots for {len(cases)} cases"
+        )
     experiment_id = f"final-batch-{uuid.uuid4().hex[:12]}"
     if args.resume and (output_dir / "batch-identity.json").exists():
         previous = json.loads((output_dir / "batch-identity.json").read_text(
@@ -421,6 +540,11 @@ def _collect(args: argparse.Namespace) -> int:
         "arm": args.arm, "api_base": args.api_base, "git_commit": _git_commit(),
         "resume": bool(args.resume), "already_terminal": sorted(done),
         "admitted_unsettled": sorted(uncertain),
+        "authorization_id": args.authorization_id,
+        "authorization_ledger": str(ledger_path),
+        "authorization_cap": args.authorization_cap,
+        "authorization_prior_used": args.authorization_prior_used,
+        "authorization_status": authorization.status(),
         "dispatch_count": len(cases), "max_cases": args.max_cases,
         "batch_wall_max_s": args.max_batch_wall,
     }
@@ -437,7 +561,7 @@ def _collect(args: argparse.Namespace) -> int:
             health = await client.get("/health")
             if health.status_code != 200:
                 raise RuntimeError("durable API health check failed")
-            collector = DurableBaselineCollector(
+            collector = AuthorizationGatedCollector(
                 client, output_dir, experiment_id=experiment_id,
                 dataset_hash=dataset_hash,
                 options=CollectionOptions(
@@ -445,6 +569,7 @@ def _collect(args: argparse.Namespace) -> int:
                     poll_interval_seconds=args.poll_interval,
                     case_timeout_seconds=args.case_timeout,
                 ),
+                authorization=authorization,
             )
             return await asyncio.wait_for(
                 collector.collect(cases), timeout=args.max_batch_wall)
@@ -475,6 +600,10 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--api-base", required=True)
     collect.add_argument("--arm", default="candidate", choices=["candidate", "baseline"])
     collect.add_argument("--execute-paid-runs", action="store_true")
+    collect.add_argument("--authorization-id", required=True)
+    collect.add_argument("--authorization-ledger", required=True)
+    collect.add_argument("--authorization-cap", required=True, type=int)
+    collect.add_argument("--authorization-prior-used", type=int, default=0)
     collect.add_argument("--resume", action="store_true")
     collect.add_argument("--reviews")
     collect.add_argument("--concurrency", type=int, default=1)
@@ -482,12 +611,87 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--case-timeout", type=float, default=1800.0)
     collect.add_argument("--max-batch-wall", type=float, default=12 * 3600.0)
     collect.add_argument("--poll-interval", type=float, default=1.0)
+    for command in ("ledger-status", "reconcile"):
+        ledger_cmd = sub.add_parser(command)
+        ledger_cmd.add_argument("--authorization-ledger", required=True)
+        ledger_cmd.add_argument("--authorization-id", required=True)
+        ledger_cmd.add_argument("--authorization-cap", required=True, type=int)
+        ledger_cmd.add_argument("--authorization-prior-used", type=int, default=0)
+        if command == "reconcile":
+            ledger_cmd.add_argument("--output-dir", required=True)
+            ledger_cmd.add_argument("--token", required=True)
+            ledger_cmd.add_argument("--outcome", required=True,
+                                    choices=sorted(TERMINAL_STATUSES))
+            ledger_cmd.add_argument("--task-id")
     return parser
+
+def _ledger_from_args(args: argparse.Namespace) -> BatchAuthorizationLedger:
+    return BatchAuthorizationLedger(
+        Path(args.authorization_ledger),
+        authorization_id=args.authorization_id,
+        cap=args.authorization_cap,
+        prior_used=args.authorization_prior_used,
+    )
+
+
+def append_reconciliation_record(output_dir: Path, ledger: BatchAuthorizationLedger,
+                                 token: str, outcome: str, task_id: str | None) -> dict:
+    """Persist the observed terminal reconciliation so resume can proceed.
+
+    The ledger row is updated separately by ``reconcile``; this record is the
+    product-side terminal observation. It never invents a report or a task id.
+    """
+    reservation = ledger.reservation(token)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    identity = {}
+    identity_path = output_dir / "batch-identity.json"
+    if identity_path.exists():
+        try:
+            identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            identity = {}
+    record = {
+        "schema_version": 1,
+        "experiment_id": identity.get("experiment_id", "authorization-reconcile"),
+        "dataset_hash": identity.get("dataset_hash"),
+        "profile": "reconciled",
+        "repetition": 0,
+        "case_id": reservation["case_id"],
+        "status": outcome,
+        "task_id": task_id or reservation.get("task_id"),
+        "ended_at": _now(),
+        "reconciled_from_ledger": True,
+        "authorization_id": ledger.authorization_id,
+        "error_code": None,
+        "report_path": None,
+    }
+    with (output_dir / "runs.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        import os as _os
+        _os.fsync(handle.fileno())
+    return record
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "ledger-status":
+            ledger = _ledger_from_args(args)
+            print(json.dumps({"status": ledger.status(), "unresolved": ledger.unresolved()},
+                             ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        if args.command == "reconcile":
+            ledger = _ledger_from_args(args)
+            record = append_reconciliation_record(
+                Path(args.output_dir), ledger, args.token, args.outcome, args.task_id,
+            )
+            ledger.reconcile(args.token, outcome=args.outcome, task_id=args.task_id)
+            print(json.dumps({"status": ledger.status(), "unresolved": ledger.unresolved(),
+                              "record": record},
+                             ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         if args.command == "validate":
             dataset, digest = load_batch_dataset(Path(args.dataset),
                                                  require_admitted=args.require_admitted)
@@ -518,7 +722,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.execute_paid_runs:
             raise ValueError("collect requires --execute-paid-runs")
         return _collect(args)
-    except (OSError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+    except (AuthorizationError, OSError, ValueError, RuntimeError, httpx.HTTPError) as exc:
         print(f"final batch stopped: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
 

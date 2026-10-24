@@ -33,7 +33,9 @@ _PATHS = {
         **{key: ("staged_generation", key) for key in (
             "facts_received", "facts_bound", "facts_reviewable", "questions_planned", "judgment_calls",
             "rows_received", "rows_selected", "rows_rejected_shape",
-            "rows_rejected_question", "rows_dropped_item_limit", "provider_errors",
+            "rows_rejected_question", "rows_rejected_fact_limit",
+            "selected_views_received", "selected_views_rejected_limit",
+            "rows_dropped_item_limit", "provider_errors",
         )},
         "analyses_received": ("analysis_binding", "received"),
         "analyses_bound": ("analysis_binding", "retained"),
@@ -65,6 +67,15 @@ def _safe_counts(node, counts):
     result = {key: counts[key] for key in allowed if key in counts
               and type(counts[key]) is int and 0 <= counts[key] <= 10000}
     return result or None
+
+
+def append_quality_signal(research_state, signal):
+    """Append one bounded signal without erasing earlier node diagnostics."""
+    if not isinstance(signal, dict):
+        return list(research_state.get("quality_signals", [])) if isinstance(
+            research_state.get("quality_signals"), list) else []
+    existing = research_state.get("quality_signals")
+    return (list(existing) if isinstance(existing, list) else []) + [signal]
 
 
 def node_stage_counts(node, result):

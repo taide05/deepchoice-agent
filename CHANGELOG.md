@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased] - 2026-10-24
+
+### Bound selection report capacity and batch admission
+
+- Separate the active capacity contract: five whole saved sources per response, four distinct
+  saved facts per analysis row, and a deduplicated source index keyed only by canonical URL.
+  The joint prompt, correction prompt, question packet and both binders now state the same
+  limits; an oversized row is rejected whole with a fixed `rows_rejected_fact_limit` reason
+  rather than the generic shape bucket. The test-only reference packet refuses an over-cap
+  input rather than truncating it.
+- Preserve bounded stage diagnostics from synthesis, citation calibration and self-review in
+  the same public signal list. Counters distinguish received, retained, rejected and
+  withdrawn rows; no prompt, response, private checkpoint or raw source body is added.
+- Group the report source index by stable canonical URL. One URL is one entry with its saved
+  fragment count and citation-status distribution; same-title different-URL sources stay
+  separate and no saved fact or citation binding is removed.
+- Add a small SQLite authorization ledger to the final-batch entry. It reserves immediately
+  before the product POST, counts prior use, blocks unresolved submissions and refuses new
+  reuse of the same ledger path across directories/experiments; a different ledger path is a
+  separate explicit authorization file and must not be used to resume a batch. `collect` now requires `--authorization-id`,
+  `--authorization-ledger` and `--authorization-cap`; `ledger-status` and `reconcile` expose
+  explicit reconciliation. The 28 already-used development executions remain historical and
+  are not fabricated into reservations or a new allowance.
+- Add offline regressions for capacity rejections, source grouping, stage-signal preservation,
+  last-slot concurrency, crash/unknown reservations, duplicate cases and resume identity.
+  Refresh the deterministic smoke baseline for the new report text. No paid research,
+  calibration or formal run was performed; this does not claim content-quality acceptance.
+
 ## [Unreleased] - 2026-10-14
 
 ### Added

@@ -8,6 +8,10 @@ from copy import deepcopy
 import re
 
 MAX_ANALYSES = 8
+# A single answer row may carry at most four distinct saved facts. This keeps
+# every premise individually inspectable and aligns with the prompt's per-row
+# contract; the report may still use up to MAX_SOURCE_FACTS whole sources across
+# several rows. A row over this limit is rejected whole, never trimmed.
 MAX_ROW_BASIS_FACTS = 4
 MAX_ROW_BASIS_REFS = 12
 KINDS = frozenset({"choice", "answer", "design"})

@@ -32,6 +32,15 @@ def _dict_items(value: Any, limit: int) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)][:limit]
 
 
+def _source_fact_map(recommendation: dict) -> dict[str, dict[str, Any]]:
+    """All bound saved facts, not a display-only first-five projection."""
+    rows = recommendation.get("source_facts")
+    if not isinstance(rows, list):
+        return {}
+    return {item["id"]: item for item in rows
+            if isinstance(item, dict) and isinstance(item.get("id"), str)}
+
+
 def _code(value: str) -> str:
     """Keep untrusted saved-source text literal in the Markdown report."""
     longest = max((len(match.group()) for match in re.finditer(r"`+", value)), default=0)
@@ -85,10 +94,57 @@ def _plain_analysis(value: Any) -> str:
     return re.sub(r"([\\`*_{}\[\]#!|])", r"\\\1", text)
 
 
+def _source_index_lines(facts: Any, zh: bool) -> list[str]:
+    """One display entry per stable source URL, preserving duplicate titles.
+
+    Grouping is by canonical URL only; a title is never used to merge sources.
+    All saved facts remain present and no citation binding is changed. The
+    entry reports how many saved excerpts belong to that source and their
+    citation-status distribution, so extra sources do not silently disappear.
+    """
+    from urllib.parse import quote
+    from ..citations import canonicalize_source_url
+
+    rows = [item for item in facts if isinstance(item, dict)] if isinstance(facts, list) else []
+    if not rows:
+        return []
+    groups: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for index, fact in enumerate(rows):
+        url = canonicalize_source_url(fact.get("canonical_url", ""))
+        key = url or f"fact:{fact.get('id') or index}"
+        if key not in groups:
+            groups[key] = {"url": url, "titles": [], "statuses": []}
+            order.append(key)
+        title = _text(fact.get("source_title"))
+        if title and title not in groups[key]["titles"]:
+            groups[key]["titles"].append(title)
+        groups[key]["statuses"].append(_text(fact.get("status")) or "unknown")
+    lines = ["### 来源索引" if zh else "### Source index", ""]
+    for key in order:
+        group = groups[key]
+        title = group["titles"][0] if group["titles"] else (group["url"] or "source")
+        if group["url"]:
+            prefix = "- [" + _plain_analysis(title) + "](" + quote(
+                group["url"], safe="/:?=&%#-._~+") + ")"
+        else:
+            prefix = "- " + _plain_analysis(title)
+        counts: dict[str, int] = {}
+        for status in group["statuses"]:
+            counts[status] = counts.get(status, 0) + 1
+        detail = ", ".join(f"{status}: {count}" for status, count in sorted(counts.items()))
+        if len(group["statuses"]) > 1:
+            detail = (f"{len(group['statuses'])} 个保存片段（{detail}）"
+                      if zh else
+                      f"{len(group['statuses'])} saved excerpts ({detail})")
+        lines.append(prefix + " — " + _plain_analysis(detail))
+    lines.append("")
+    return lines
+
+
 def _displayable_analyses(recommendation: dict) -> list[dict]:
     from ..utils.decision_analysis import analysis_fact_reviewable, bind_analysis_basis
-    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
-             if isinstance(item.get("id"), str)}
+    facts = _source_fact_map(recommendation)
     accepted = []
     from ..utils.answer_delivery import is_answer_delivery
     if is_answer_delivery(recommendation):
@@ -125,8 +181,7 @@ def _displayable_analyses(recommendation: dict) -> list[dict]:
 def _render_model_analysis(
     recommendation: dict, lang: str, *, visible: list[dict] | None = None,
 ) -> list[str]:
-    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
-             if isinstance(item.get("id"), str)}
+    facts = _source_fact_map(recommendation)
     accepted = _displayable_analyses(recommendation) if visible is None else visible
     zh = lang == "zh"
     review = recommendation.get("analysis_review")
@@ -232,8 +287,7 @@ def render_decision_details(recommendation: Any, lang: str) -> list[str]:
             "",
         ])
 
-    facts = {item["id"]: item for item in _dict_items(recommendation.get("source_facts"), 5)
-             if isinstance(item.get("id"), str)}
+    facts = _source_fact_map(recommendation)
     choices = _dict_items(recommendation.get("conditional_choices"), 4)
     if choices:
         lines.extend(["### 条件选择依据" if lang == "zh" else "### Basis for conditional choices", ""])
@@ -452,8 +506,6 @@ def _render_answer_delivery(
 
 def render_answer_report(state: dict, lang: str, format_name: str = "what_why_how") -> str:
     """One reviewed answer channel with the selected public presentation."""
-    from urllib.parse import quote
-    from ..citations import canonicalize_source_url
     from .citations import citation_verification_section
 
     task = state.get("task", {})
@@ -478,17 +530,9 @@ def render_answer_report(state: dict, lang: str, format_name: str = "what_why_ho
                       if zh else
                       "**Review warning: key evidence or assumptions still need independent checking; treat the analysis as low-confidence and conditional.**", ""])
 
-    facts = _dict_items(rec.get("source_facts"), 5)
-    source_lines: list[str] = []
-    if facts:
-        source_lines = ["### 来源索引" if zh else "### Source index", ""]
-        for fact in facts:
-            url = canonicalize_source_url(fact.get("canonical_url", ""))
-            if url:
-                source_lines.append("- [" + _plain_analysis(fact.get("source_title")) + "](" +
-                                    quote(url, safe="/:?=&%#-._~+") + ") — " +
-                                    _plain_analysis(fact.get("status")))
-        source_lines.append("")
+    facts = [item for item in rec.get("source_facts", []) if isinstance(item, dict)] \
+        if isinstance(rec.get("source_facts"), list) else []
+    source_lines = _source_index_lines(facts, zh)
 
     # This synchronous render owns the checked list. Never read it from state;
     # the same guard result determines prose and both question-coverage views.

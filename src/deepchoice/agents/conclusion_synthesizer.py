@@ -43,7 +43,7 @@ SOURCE_PASSAGE_DISPLAY_POLICY = "separate-source-passages-v1:one-url-one-source"
 SYNTHESIS_CORRECTION_TEMPLATE = """A local binding-contract check rejected part of the previous JSON response.
 Regenerate the COMPLETE response for exactly the original request, candidates, hard constraints and evidence above.
 Only one corrective generation is allowed. Do not invent sources or relax constraints.
-Return answer_contract="question-analysis-v1", source_facts (at most 5) and decision_analysis (at most 8). Do not add duplicate answers or authority fields.
+Return answer_contract="question-analysis-v1", source_facts (at most 5) and decision_analysis (at most 8). Each analysis may carry at most four distinct fact_id premises; use more rows for additional evidence. Do not add duplicate answers or authority fields.
 Empty lists are valid if there is no usable basis. Assign unique F1..F99 IDs to selected eligible source numbers;
 Each analysis needs basis items with fact_id and 1-based sentence_ids from that source's numbered snippet.
 Do not supply copied prose or a second fact_ids list; runtime derives references and copies the sentences.
@@ -144,8 +144,10 @@ at most eight rows total. For R0, kind choice and an exact candidate label requi
 a supported conditional preference; otherwise use kind answer with empty option.
 Subquestions use answer or conceptual design, never a second choice.
 
-Select 1-12 unique advertised basis_refs per row from at most four selected views.
-Each view lists basis_refs in the SAME ORDER as complete
+Select 1-12 unique advertised basis_refs per row. A row may use at most FOUR
+distinct source views (and therefore at most four distinct saved facts); distribute
+additional evidence across separate question rows. The response may select at most
+FIVE source views in total. Each view lists basis_refs in the SAME ORDER as complete
 sentences in its included_sentence_range. Cite only refs belonging to source_view_ids
 selected in this response. Each independent factual premise needs its own applicable
 sentence and qualifications. Copy IDs exactly; runtime supplies the question, original
@@ -1270,7 +1272,8 @@ class ConclusionSynthesizerAgent:
         _sanitize_citations(result, evidence_chains)
         _bind_citations(result, cite_map)
 
-        quality_signals = [{
+        from ..utils.stage_diagnostics import append_quality_signal
+        quality_signals = append_quality_signal(research_state, {
             "agent": "conclusion_synthesizer",
             "evidence_chain_count": len(evidence_chains),
             "strong_chains": strong_count,
@@ -1283,7 +1286,7 @@ class ConclusionSynthesizerAgent:
             "analysis_binding": binding["analysis_binding"],
             "structure_correction": correction,
             **({"staged_generation": staged_diagnostic} if staged_diagnostic is not None else {}),
-        }]
+        })
 
         return {
             "final_recommendation": result,
