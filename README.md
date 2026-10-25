@@ -6,7 +6,8 @@ DeepChoice 基于 Python/LangGraph：输入一个技术选型问题和候选技�
 
 > 当前状态（2026-10-26）：本仓库处于恢复线 `precodex/deepseek-adapter`，产品入口为
 > `POST /research`。最近一次真实配对（2026-10-22）两臂均未通过当时的正式内容门槛；
-> 当前版本还没有新的正式指标。开发与下一步见 [AGENTS](AGENTS.md) 和 [HANDOFF](HANDOFF.md)。
+> 当前版本还没有固定题集/分母/日期/基线齐全的正式指标，因此**不宣称达到投递标准**。
+> 开发与下一步见 [AGENTS](AGENTS.md) 和 [HANDOFF](HANDOFF.md)。
 
 ## 能做什么
 
