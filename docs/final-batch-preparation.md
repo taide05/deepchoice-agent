@@ -1,5 +1,9 @@
 # 评测工具与材料交接
 
+> 2026-10-25 基线纠正：本页下文描述已放弃的 `codex/generic-selection` durable实现，
+> 不是当前恢复线的开发指令或成绩。接续代码是 `D:\deepchoice-precodex` 的 `b080213`，
+> 见[纠偏交接](next-session-product-optimization-handoff.md)。旧“当前/默认/下一步”只适用于本页原版本。
+
 更新：2026-10-24。本页是可复用资源清单，不是必须按序通过的准备流程。
 当前产品代码为 `fef61b8`；后续任务由用户与 dsh 安排。
 

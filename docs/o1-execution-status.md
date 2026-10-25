@@ -1,11 +1,15 @@
-# 当前项目状态
+# 已放弃 durable 路线的历史状态
+
+> 2026-10-25 基线纠正：本页下文描述已放弃的 `codex/generic-selection` durable实现，
+> 不是当前恢复线的开发指令或成绩。接续代码是 `D:\deepchoice-precodex` 的 `b080213`，
+> 见[纠偏交接](next-session-product-optimization-handoff.md)。旧“当前/默认/下一步”只适用于本页原版本。
 
 更新：2026-10-24。后续由用户与dsh直接规划和执行，入口见
 [交接](next-session-product-optimization-handoff.md)。本页只记录事实，不设置下一阶段审批。
 
-## 身份与已完成能力
+## 历史身份与当时能力
 
-- 产品代码：维护树 `D:\deepchoice-agent` / `codex/generic-selection`，`fef61b8`。
+- 历史产品代码：维护树 `D:\deepchoice-agent` / `codex/generic-selection`，`fef61b8`。
   之后的本次提交仅修改文档。用户 `learned_docs.json` 修改保留。
 - 实验树：`D:\deepchoice-precodex` / `precodex/deepseek-adapter` / `b080213`；
   learned_docs修改及17项未跟踪材料保留，没有合并。
@@ -14,7 +18,7 @@
   dsh记录3866测试通过；本次文档调整没有重跑套件。
 - 没有新增push、历史改写、产品修改或付费运行。
 
-## 最新内容与诊断
+## fef61b8 路线的内容与诊断
 
 dev6的12份报告：0/12可用，6份零analysis；该历史结果不改。
 所需事实支持8/44与已写论断支持34/35是不同统计，均不能代替整份报告的可用性。

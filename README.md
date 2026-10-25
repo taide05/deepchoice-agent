@@ -1,8 +1,8 @@
 # DeepChoice — AI驱动的技术选型研究Agent
 
-> 2026-10-24：当前产品代码为 `fef61b8`，后续由用户与 dsh 直接推进。
-> 最新开发诊断显示分析保留和来源覆盖仍需改进；新正式质量指标尚未建立。
-> 使用说明见下，实际结果见[当前状态](docs/o1-execution-status.md)，接手见[交接](docs/next-session-product-optimization-handoff.md)。
+> 2026-10-25：本树是已放弃的durable路线，下面保留其实现说明。
+> 当前接续工作区为 `D:\deepchoice-precodex`，代码基点 `b080213`；
+> 见[纠偏交接](docs/next-session-product-optimization-handoff.md)。不要按下面命令启动成新开发基线。
 
 DeepChoice基于Python/LangGraph，面向单用户可信网络内的技术选型：输入需求与候选后，
 检索多种来源、比较证据并生成可查看和导出的报告。报告区分来源事实、模型推断与未知项。

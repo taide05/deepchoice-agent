@@ -1,5 +1,9 @@
 # 代码定位与可调整设计
 
+> 2026-10-25 基线纠正：本页下文描述已放弃的 `codex/generic-selection` durable实现，
+> 不是当前恢复线的开发指令或成绩。接续代码是 `D:\deepchoice-precodex` 的 `b080213`，
+> 见[纠偏交接](next-session-product-optimization-handoff.md)。旧“当前/默认/下一步”只适用于本页原版本。
+
 更新：2026-10-24。这是按需导航，不是接手前必须完成的审计清单。旧 911 行审计及 R0–R40
 逐轮命令已移至 [原文归档](archive/retired-contracts-20261024/README.md)，其中 OPEN、下一步、
 禁止新增、固定回放与复审要求不再给当前开发设门槛。

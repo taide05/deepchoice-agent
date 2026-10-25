@@ -1,5 +1,9 @@
 # Durable 运行与数据契约
 
+> 2026-10-25 基线纠正：本页下文描述已放弃的 `codex/generic-selection` durable实现，
+> 不是当前恢复线的开发指令或成绩。接续代码是 `D:\deepchoice-precodex` 的 `b080213`，
+> 见[纠偏交接](next-session-product-optimization-handoff.md)。旧“当前/默认/下一步”只适用于本页原版本。
+
 更新：2026-10-24。本文供修改 API、状态、恢复和费用控制时查阅，不再承载逐轮研发计划、
 模型回答规范或项目投递门槛。按本次修改涉及的章节阅读即可。
 
