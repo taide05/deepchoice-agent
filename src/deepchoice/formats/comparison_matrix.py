@@ -1,6 +1,8 @@
 from ..agents.conclusion_synthesizer import clean_label
 from .basis import (
     escape_markdown_text,
+    research_question_line,
+    short_report_title,
     source_provenance_note,
     used_sources,
 )
@@ -55,16 +57,15 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Comparison")
-    # The request may contain newlines; a heading is display-only and stays on
-    # one line while the full request remains preserved in the task/state.
-    title_query = " ".join(str(query).split())
+    rec = state.get("final_recommendation", {}) or {}
+    title_core = short_report_title(task, rec)
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
     lang = _lang(query)
 
     L = {
-        "title": {"en": f"# {title_query} — Candidate Comparison",
-                  "zh": f"# {title_query} — 候选对比"},
+        "title": {"en": f"# {title_core} — Candidate Comparison",
+                  "zh": f"# {title_core} — 候选对比"},
         "col_candidate": {"en": "Candidate", "zh": "候选"},
         "col_fit": {"en": "Constraint fit", "zh": "约束适配"},
         "col_rationale": {"en": "Why", "zh": "理由"},
@@ -100,21 +101,21 @@ def render(state: dict) -> str:
         "step3": {"en": "3. Build a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
     }
 
-    rec = state.get("final_recommendation", {}) or {}
+    # The heading is a short display title; the request itself is one line of
+    # context below it, and stays verbatim in the task and snapshot.
+    lines = [L["title"][lang], ""]
+    question = research_question_line(task, lang)
+    if question:
+        lines.extend([question, ""])
+    data_note = derive_data_source_note(state)
+    if data_note:
+        lines.extend([f"> {data_note}", ""])
 
     # The comparison comes from the synthesis result's own per-candidate
     # explanations. The previous version sorted retrieval hits into five fixed
     # "dimensions" by matching keywords in their titles and snippets and labelled
     # each row with an "evidence strength" taken from its retrieval score — a
     # judgement the pipeline never reached, built from a keyword table.
-    lines = [
-        L["title"][lang],
-        "",
-    ]
-    data_note = derive_data_source_note(state)
-    if data_note:
-        lines.extend([f"> {data_note}", ""])
-
     options = [o for o in (rec.get("ranked_options") or []) if isinstance(o, dict)]
     if options:
         lines.append(f"| {L['col_candidate'][lang]} | {L['col_fit'][lang]} | "

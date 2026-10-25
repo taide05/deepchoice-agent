@@ -42,6 +42,52 @@ def escape_markdown_text(text: str) -> str:
     return _MARKDOWN_ESCAPE_RE.sub(r"\\\1", escaped)
 
 
+def short_report_title(task: dict, recommendation: dict | None = None) -> str:
+    """Display-only short title for a report heading.
+
+    Candidates first, so the heading says what was compared. When the request
+    declared no candidates, the synthesis result's ranked options provide the
+    names. Only when neither exists does a short query prefix stand in. The full
+    request remains in the task and snapshot and is rendered once as context
+    under the heading; it is never the heading itself.
+    """
+    task = task or {}
+    candidates = [" ".join(str(c).split()) for c in (task.get("candidate_techs") or [])
+                  if str(c).strip()]
+    names = candidates
+    if not names:
+        names = []
+        for opt in (recommendation or {}).get("ranked_options") or []:
+            if isinstance(opt, dict):
+                name = " ".join(str(opt.get("name") or "").split())
+                if name and name not in names:
+                    names.append(name)
+    if len(names) == 2:
+        return f"{names[0]} vs {names[1]}"
+    if len(names) > 2:
+        return " / ".join(names[:3])
+    if names:
+        return names[0]
+    query = " ".join(str(task.get("query") or "").split())
+    if not query:
+        return "Technology Selection"
+    if len(query) <= 48:
+        return query
+    cut = query[:48]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip("，,。.;；:：") + "…"
+
+
+def research_question_line(task: dict, lang: str) -> str:
+    """The original request as one line of context below the heading."""
+    query = " ".join(str((task or {}).get("query") or "").split())
+    if not query:
+        return ""
+    prefix = "研究问题：" if lang == "zh" else "Research question: "
+    return f"> {prefix}{query}"
+
+
 def _registered_citation_bindings(rec: dict) -> dict | None:
     from ..agents.conclusion_synthesizer import CITATION_SOURCES_KEY
 

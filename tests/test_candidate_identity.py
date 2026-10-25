@@ -378,6 +378,9 @@ class TestCandidateNameMatching:
                      "snippet": "A measured benchmark body.", "score": 7.0},
                     {"title": "PostgreSQL Docs Link", "url": "https://www.postgresql.org/docs/",
                      "snippet": "", "has_body": False, "score": 6.0},
+                    {"title": "Amazon Athena over S3 — Official Documentation",
+                     "url": "https://docs.aws.amazon.com/athena/",
+                     "snippet": "", "has_body": False, "score": 6.0},
                 ],
             }],
             "conflicts": [], "knowledge_gaps": [], "confidence": "low",
@@ -394,12 +397,14 @@ class TestCandidateNameMatching:
         # What, where the two copies could drift apart.
         references = report.split("### References")[-1]
         assert "https://x/bench" in references, "the cited source should be reachable"
-        # A body-less link is listed only under the navigation heading, never as a
-        # cited source for the recommendation.
+        # A body-less link is never a cited source for the recommendation.
         assert "https://www.postgresql.org/docs/" not in references, \
             "a body-less link must not be listed as a cited source"
-        assert "https://www.postgresql.org/docs/" in what, \
-            "the navigation link should still be reachable"
+        # An unrelated body-less link is retrieval noise: it stays in the raw
+        # retrieval record, not in the user-facing navigation list.
+        assert "https://www.postgresql.org/docs/" not in what
+        # A body-less link that does name a candidate stays reachable, labelled.
+        assert "https://docs.aws.amazon.com/athena/" in what
         for candidate in self.CANDIDATES:
             assert f"### {candidate}" in what
 

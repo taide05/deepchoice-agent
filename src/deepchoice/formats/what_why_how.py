@@ -2,6 +2,8 @@ import re
 
 from .basis import (
     escape_markdown_text,
+    research_question_line,
+    short_report_title,
     source_provenance_note,
     used_sources,
 )
@@ -129,7 +131,8 @@ def render(state: dict) -> str:
     query = task.get("query", "Technology Selection")
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
-    gaps = state.get("knowledge_gaps", [])
+    # `knowledge_gaps` are self-review retry search targets; they stay in the
+    # snapshot and are not user-facing report prose.
     # Read once, before the sections that reuse it, so the candidate
     # explanations, the ranking and the references all come from this one result.
     rec = state.get("final_recommendation", {}) or {}
@@ -165,11 +168,14 @@ def render(state: dict) -> str:
         "references": {"en": "### References", "zh": "### 参考来源"},
     }
 
-    # A request can contain newlines (the query is preserved verbatim); a
-    # Markdown heading must stay on one line, so the title is a display-only
-    # one-line form of the request. The report body still carries the full text.
-    title_query = _one_line(query)
-    lines = [f"# {title_query}{T['title_suffix'][lang]}", ""]
+    # The heading is a short display title, not the request itself: a long query
+    # in the heading buries the report. The original request follows as one line
+    # of context and stays verbatim in the task and snapshot.
+    title_core = short_report_title(task, rec)
+    lines = [f"# {title_core}{T['title_suffix'][lang]}", ""]
+    question = research_question_line(task, lang)
+    if question:
+        lines.extend([question, ""])
 
     data_note = derive_data_source_note(state)
     if data_note:
@@ -225,19 +231,29 @@ def render(state: dict) -> str:
         # Discovered links are listed separately as navigation. They stay
         # reachable, and saying what they are keeps them from reading as a basis:
         # a page may cover several products, so it is not assigned to one.
+        #
+        # Display filter only: a body-less result with no candidate name in its
+        # title or URL is retrieval noise (generic GitHub/arXiv hits), not a page
+        # the reader can follow for this decision. It stays in the raw retrieval
+        # record; only the displayed navigation list omits it.
+        from ..utils.candidate_identity import names_candidate
+
         nav_links: list[tuple[str, str]] = []
         for chain in chains:
             for src in chain.get("sources", []):
                 if not _has_body(src):
                     url = src.get("url", "")
                     title = src.get("title", "")
-                    if url and (title, url) not in nav_links:
+                    if not url or (title, url) in nav_links:
+                        continue
+                    if any(names_candidate(f"{title} {url}", candidate)
+                           for candidate in candidates):
                         nav_links.append((title, url))
         if nav_links:
             lines.append("**导航链接（无正文，不能作为依据）**" if lang == "zh"
                          else "**Navigation links (no body collected; not usable as a basis)**")
             lines.append("")
-            for title, url in nav_links[:10]:
+            for title, url in nav_links[:6]:
                 lines.append(f"- [{escape_markdown_text(title)}]({url})")
             lines.append("")
 
@@ -346,19 +362,18 @@ def render(state: dict) -> str:
                               "A missing conflict does not mean the sources agree; "
                               "it means the judgement was not finished.", ""])
 
-    # Open questions and material gaps are both "what we don't know yet". The
-    # model writes `unresolved_questions` into the recommendation, but nothing
-    # rendered them, so questions the synthesis itself flagged disappeared. They
-    # are shown here, de-duplicated against the gaps the review recorded.
-    unresolved = [str(q).strip() for q in (rec.get("unresolved_questions") or [])
-                  if str(q).strip()]
-    unknown_items: list[str] = []
-    for item in list(unresolved) + [str(g).strip() for g in gaps if str(g).strip()]:
-        if item and item not in unknown_items:
-            unknown_items.append(item)
-    if unknown_items:
+    # Open questions are the synthesis result's `unresolved_questions` (a gap with
+    # its decision impact). `knowledge_gaps` on the state are self-review retry
+    # search targets, not report prose; they stay in the snapshot and are never
+    # rendered. Mixing them here put raw search strings under "what we don't know".
+    unresolved: list[str] = []
+    for question in rec.get("unresolved_questions") or []:
+        item = str(question).strip()
+        if item and item not in unresolved:
+            unresolved.append(item)
+    if unresolved:
         lines.extend([T["unknown"][lang], ""])
-        for item in unknown_items:
+        for item in unresolved:
             # Display-only text: a raw source number the model left in a gap is
             # not a followable citation, and stripping it may leave a dangling
             # space before punctuation. Neither justifies deleting the gap text.

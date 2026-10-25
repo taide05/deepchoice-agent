@@ -95,15 +95,26 @@ class TestDisplayText:
             md = renderer(state)
             first_line = md.splitlines()[0]
             assert first_line.startswith("# ")
-            assert "第一行需求 第二行约束 第三行场景" in first_line, first_line
+            # The heading is a short display title, not the request. The full
+            # request is one line of context in the body.
+            assert "Gitleaks vs TruffleHog" in first_line, first_line
+            assert "第一行需求 第二行约束 第三行场景" in md
 
     def test_dangling_space_before_punctuation_is_display_only(self):
         gap = "需要查官方 CLI 文档 。"
-        md = render_www(_state(knowledge_gaps=[gap]))
+        md = render_www(_state(final_recommendation={"unresolved_questions": [gap]}))
         assert "- 需要查官方 CLI 文档。" in md, md
         assert " 。" not in md
         # Text is not deleted to clean the punctuation.
         assert "需要查官方 CLI 文档" in md
+
+    def test_self_review_retry_queries_are_not_report_gaps(self):
+        # `knowledge_gaps` are retry search targets, not user-facing gaps: they
+        # stay in the snapshot and must not surface as raw search strings.
+        retry_query = "RQ worker throughput benchmark tasks per second Redis Django production"
+        md = render_www(_state(knowledge_gaps=[retry_query]))
+        assert retry_query not in md
+        assert "RQ worker throughput" not in md
 
 class TestScannerRobustness:
     def test_unmatched_bracket_does_not_suppress_later_badges(self):

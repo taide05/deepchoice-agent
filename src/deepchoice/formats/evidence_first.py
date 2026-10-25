@@ -1,5 +1,7 @@
 from .basis import (
     escape_markdown_text,
+    research_question_line,
+    short_report_title,
     source_provenance_note,
     used_sources,
 )
@@ -49,7 +51,6 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Selection")
-    title_query = " ".join(str(query).split())
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
     lang = _lang(query)
@@ -90,9 +91,12 @@ def render(state: dict) -> str:
     winner = decision["winner"]
 
     lines = [
-        f"# {title_query}{T['title_suffix'][lang]}",
+        f"# {short_report_title(task, rec)}{T['title_suffix'][lang]}",
         "",
     ]
+    question = research_question_line(task, lang)
+    if question:
+        lines.extend([question, ""])
     data_note = derive_data_source_note(state)
     if data_note:
         lines.extend([f"> {data_note}", ""])
@@ -141,20 +145,35 @@ def render(state: dict) -> str:
         lines.append(T["no_used_source"][lang])
         lines.append("")
 
-    # Discovered links with no body stay reachable, labelled as navigation.
+    # Discovered links with no body stay reachable, labelled as navigation. The
+    # displayed list keeps only links whose title or URL names a declared
+    # candidate; the rest are generic retrieval hits and stay in the raw record.
+    candidates = [str(c).strip() for c in (task.get("candidate_techs") or [])
+                  if str(c).strip()]
     nav = [s for c in chains for s in c.get("sources", []) if not _has_body(s)]
-    if nav:
+    if nav and candidates:
+        from ..utils.candidate_identity import names_candidate
+
         seen = set()
+        shown = 0
         for src in nav:
             url = src.get("url", "")
             if not url or url in seen:
+                continue
+            title = str(src.get("title", ""))
+            if not any(names_candidate(f"{title} {url}", candidate)
+                       for candidate in candidates):
                 continue
             seen.add(url)
             note = ("导航链接，无正文，不能作为依据。" if lang == "zh"
                     else "navigation link only, no body collected; not usable "
                          "as a basis.")
-            lines.append(f"- [{escape_markdown_text(src.get('title', ''))}]({url}) — {note}")
-        lines.append("")
+            lines.append(f"- [{escape_markdown_text(title)}]({url}) — {note}")
+            shown += 1
+            if shown >= 6:
+                break
+        if shown:
+            lines.append("")
 
     retrieved = sum(len(c.get("sources") or []) for c in chains)
     if retrieved > len(used):
@@ -203,8 +222,14 @@ def render(state: dict) -> str:
         )
 
     lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}"])
-    for g in state.get("knowledge_gaps", []):
-        lines.append(f"- {g}")
+    # User-facing gaps come from the synthesis result. `knowledge_gaps` on the
+    # state are self-review retry search targets and are not report prose.
+    from .what_why_how import _display_text
+
+    for gap in rec.get("unresolved_questions") or []:
+        item = str(gap).strip()
+        if item:
+            lines.append(f"- {_display_text(item)}")
 
     lines.extend([
         "",
