@@ -1,25 +1,17 @@
 # DeepChoice — AI 驱动的技术选型深度研究 Agent
 
-## 当前实验状态与维护入口（2026-10-19）
+## 当前开发入口（2026-10-25纠偏）
 
-本工作树是 `precodex/deepseek-adapter` 恢复实验，文档修改前代码基点为
-`0e6305a3a590e99fccccadd946530594c4d2202b`。第七次真实报告运行完成，内容未通过，
-注释角标定界仍有缺陷；原始报告保留。当前不声称已达到投递水平，新研究或批量评测尚未授权。
-单份合格报告只作阶段门槛；最终需要代表性数据集上的质量、可靠性、效率指标、公平简单基线
-比较和完整使用链路。百例以上为规划规模，实际样本数、阈值与预算在执行前冻结。
+用户选择继续恢复线 `D:\deepchoice-precodex` / `precodex/deepseek-adapter`，现存代码基点
+`b080213`；恢复起点为 `48b32bd`，不重置或删除其后的成果。接手见本树
+[AGENTS](AGENTS.md) 和 [HANDOFF](HANDOFF.md)。
 
-唯一维护入口位于配套的 `deepchoice-agent` 工作树：
-[路线](../deepchoice-agent/docs/current-roadmap.md)、
-[评估协议](../deepchoice-agent/docs/product-effectiveness-optimization.md)、
-[执行规则](../deepchoice-agent/docs/optimization-execution.md)、
-[当前状态](../deepchoice-agent/docs/o1-execution-status.md)。以上相对链接依赖本机两个同级工作树；
-单独检出时需取得相应维护文档，不从旧 README 命令推导运行授权。
+此前指向 `deepchoice-agent` 作为“唯一维护入口”的说明撤回：其 fef61b8/durable 路线已被
+用户放弃，不能因目录名字或更多测试重新作为产品基线。本树仍使用 `/research`，共享解释器
+须显式指定本树源码，避免editable安装导入另一树。目标、路线、预算由用户与dsh直接决定。
 
-共享目标与评测口径不代表运行契约相同：本实验仍使用旧 `/research` 接口，现代分支使用
-`/api/v1/tasks/*`；不得把其 durable 合约、工程测试或质量结论移植成本分支已实现事实，
-本分支成果也未据此声明已集成到现代产品。正式评测前先选定交付分支及实际运行器。
-以下功能、模型和配置说明有历史内容，须以本分支代码与冻结配置核对；历史 300-case 数字
-保留原日期和分母，不能用于当前内容质量声明。
+以下能力、默认配置与历史指标需结合本树实际代码阅读；旧轮数/晋级流程不是当前执行要求。
+既有失败结果保留，测试通过不等于内容普遍达标，也不要求先完成百例才可开发或准备展示。
 
 DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI vs Flask 该选哪个"就能自动搜索 6 路数据源、给每篇信源打分、检测矛盾观点并用两阶段仲裁解决、最终输出有据可查的对比推荐报告。
 
