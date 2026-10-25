@@ -34,6 +34,8 @@ _PATHS = {
             "facts_received", "facts_bound", "facts_reviewable", "questions_planned", "judgment_calls",
             "rows_received", "rows_selected", "rows_rejected_shape",
             "rows_rejected_question", "rows_rejected_fact_limit",
+            "rows_rejected_missing_id", "rows_rejected_basis_refs",
+            "rows_rejected_unknown_refs",
             "selected_views_received", "selected_views_rejected_limit",
             "rows_dropped_item_limit", "provider_errors",
         )},
@@ -49,7 +51,8 @@ _PATHS = {
     },
     "self_reviewer": {
         **{key: ("analysis_review", key) for key in (
-            "submitted", "reviewed", "retained", "revised", "withdrawn", "unaddressed")},
+            "submitted", "reviewed", "retained", "revised", "withdrawn", "unaddressed",
+            "unreviewed_retained")},
         **_fields("targeted_review_attempts"),
     },
 }

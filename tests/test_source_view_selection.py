@@ -383,11 +383,18 @@ async def test_short_omitted_menu_analysis_survives_default_citation_review_and_
     for render in FORMAT_RENDERERS.values():
         assert reasoning in render(state)
     assert state["evidence_chains"][0]["sources"][0]["snippet"] == OMITTED_SHORT_TEXT
-    # A mismatching live page must still withdraw the same bound analysis.
+    # A mismatching live page must still withdraw the same bound analysis from
+    # display; the row itself is retained as an advisory record, never rendered.
     fetch.return_value = httpx.Response(200, text="Alpha is an unrelated language.", headers={"content-type": "text/plain"})
     state.update(await CitationValidatorAgent().run(state))
-    assert state["final_recommendation"]["decision_analysis"] == []
-    assert state["final_recommendation"]["source_facts"][0]["status"] == "unknown"
+    rec = state["final_recommendation"]
+    assert len(rec["decision_analysis"]) == 1
+    assert rec["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
+    assert any(reason.startswith("fact_not_reviewable")
+               for reason in rec["decision_analysis"][0]["advisory_reasons"])
+    assert rec["source_facts"][0]["status"] == "unknown"
+    for render in FORMAT_RENDERERS.values():
+        assert reasoning not in render(state)
 
 
 async def test_whole_and_local_same_source_keep_separate_citation_eligibility(monkeypatch):

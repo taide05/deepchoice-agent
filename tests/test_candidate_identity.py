@@ -132,7 +132,10 @@ async def test_action_choice_uses_own_product_through_binding_review_and_render(
     state.update(await review.SelfReviewerAgent().run(state))
     final = state["final_recommendation"]
     if not supported:
-        assert final["decision_analysis"] == []
+        # The unbound product identity is never accepted by review; the row is
+        # retained only under the fixed advisory status and withheld from render.
+        assert len(final["decision_analysis"]) == 1
+        assert final["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
         for render in FORMAT_RENDERERS.values():
             assert row["reasoning"] not in render(state)
         return

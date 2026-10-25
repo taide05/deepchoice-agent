@@ -65,8 +65,12 @@ async def test_analysis_survives_normal_abstention_without_upgrading_authority(m
     counts = node_stage_counts("citation_validator", state)
     assert counts["analyses_received"] == 1
     assert counts["analyses_rebound"] == 1
-    assert counts["analyses_returned"] == int(source_ok)
-    assert bool(rec["decision_analysis"]) is source_ok
+    # Calibration no longer deletes an unverifiable row; it stays in state under
+    # the advisory status and is only omitted from the rendered report.
+    assert counts["analyses_returned"] == 1
+    assert len(rec["decision_analysis"]) == 1
+    if not source_ok:
+        assert rec["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
     if source_ok:
         item = rec["decision_analysis"][0]
         assert item["review_status"] == "human_review_required"

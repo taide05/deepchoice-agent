@@ -44,10 +44,19 @@ async def test_joint_answer_waits_for_citation_and_never_borrows_other_fact(monk
     state.update(await CitationValidatorAgent().run(state))
     rec = state["final_recommendation"]
     assert [fact["status"] for fact in rec["source_facts"]] == ["unknown", "verified"]
-    assert len(rec["decision_analysis"]) == retained
-    if retained:
-        assert rec["decision_analysis"][0]["basis"][0]["fact_id"] == "F2"
-        assert rec["decision_analysis"][0]["basis"][0]["source_sentences"] == ["Beta retains events."]
+    if reference == "S2B3":
+        # The unknown quote id never binds a row in the first place.
+        assert rec["decision_analysis"] == []
+    else:
+        # An unverifiable row survives citation calibration under the advisory
+        # status but never becomes displayable; a verified row waits for review.
+        assert len(rec["decision_analysis"]) == 1
+        if retained:
+            assert rec["decision_analysis"][0]["basis"][0]["fact_id"] == "F2"
+            assert rec["decision_analysis"][0]["basis"][0]["source_sentences"] == ["Beta retains events."]
+            assert rec["decision_analysis"][0]["review_status"] == "human_review_required"
+        else:
+            assert rec["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
     model.assert_awaited_once()
 
 

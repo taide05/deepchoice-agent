@@ -123,10 +123,14 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
 
     This creates canonical proposals for the unchanged analysis binder. It does
     not assert constraint coverage, source applicability, or permission to act.
+    Rejection categories are split into fixed sub-counts so a lost row can be
+    explained (missing question id vs malformed refs vs refs outside the bound
+    views) without persisting model text.
     """
     diagnostics.update(rows_received=0, rows_selected=0, rows_rejected_shape=0,
                        rows_rejected_question=0, rows_dropped_item_limit=0,
-                       rows_rejected_fact_limit=0)
+                       rows_rejected_fact_limit=0, rows_rejected_missing_id=0,
+                       rows_rejected_basis_refs=0, rows_rejected_unknown_refs=0)
     if not isinstance(rows, list):
         return []
     diagnostics["rows_received"] = len(rows)
@@ -140,6 +144,7 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
     selected, seen = [], set()
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("question_id"), str):
+            diagnostics["rows_rejected_missing_id"] += 1
             diagnostics["rows_rejected_shape"] += 1
             continue
         question = row["question_id"]
@@ -149,8 +154,16 @@ def bind_question_rows(rows, allowed_ids, offered, *, diagnostics):
             continue
         refs = row.get("basis_refs")
         if (not isinstance(refs, list) or not 0 < len(refs) <= MAX_ROW_BASIS_REFS
-                or any(not isinstance(ref, str) or ref not in offered for ref in refs)
+                or any(not isinstance(ref, str) for ref in refs)
                 or len(set(refs)) != len(refs)):
+            diagnostics["rows_rejected_basis_refs"] += 1
+            diagnostics["rows_rejected_shape"] += 1
+            continue
+        if any(ref not in offered for ref in refs):
+            # The row cites view ids that were advertised but not carried into the
+            # bound source set. The row is not repaired by guessing evidence; the
+            # fixed sub-count records that it was an unselected-view reference.
+            diagnostics["rows_rejected_unknown_refs"] += 1
             diagnostics["rows_rejected_shape"] += 1
             continue
         kept_refs = refs

@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 
 from .decision_analysis import (
-    MAX_ANALYSES, bind_decision_analysis,
+    ADVISORY_STATUS, MAX_ANALYSES, bind_decision_analysis,
     calibrate_decision_analysis, reviewable_source_fact, sentence_scoped_source_fact,
 )
 from .evidence import candidate_product_mentions, candidate_search_name
@@ -27,6 +27,10 @@ class AnalysisReviewContext:
     provisional_slots: dict
     provisional_submitted: int
     source_contexts: dict = field(default_factory=dict)
+    # Bound rows that calibration could not make reviewable. They are never sent
+    # to the reviewer and are carried through review unchanged under
+    # ADVISORY_STATUS instead of being deleted.
+    carried: list = field(default_factory=list)
 
 
 def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
@@ -78,14 +82,21 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
         )):
             facts.append(deepcopy(fact))
     slots = {}
+    carried = []
     for index, item in enumerate(raw, 1):
         bound = bind_decision_analysis(
             {"source_facts": facts, "decision_analysis": [item]}, requirements, candidates,
             query, require_basis=True,
         )
         calibrated = calibrate_decision_analysis(bound)["decision_analysis"]
-        if len(calibrated) == 1:
-            slots[f"A{index}"] = calibrated[0]
+        if len(calibrated) != 1:
+            continue
+        if calibrated[0].get("review_status") == ADVISORY_STATUS:
+            # A row whose basis is not reviewable here cannot be reviewed; it is
+            # carried forward under the same fixed status instead of deleted.
+            carried.append(calibrated[0])
+            continue
+        slots[f"A{index}"] = calibrated[0]
     provisional_slots, provisional_submitted = _prepare_provisional(
         recommendation, verification, [fact for fact in facts if reviewable_source_fact(fact)],
         requirements, query, MAX_ANALYSES - len(slots),
@@ -93,7 +104,8 @@ def prepare_analysis_review(state: dict) -> AnalysisReviewContext:
     from .fact_selection import original_fact_contexts
     return AnalysisReviewContext(recommendation, slots, facts, requirements, candidates, query,
                                  submitted, provisional_slots, provisional_submitted,
-                                 source_contexts=original_fact_contexts(facts, state.get("evidence_chains", [])))
+                                 source_contexts=original_fact_contexts(facts, state.get("evidence_chains", [])),
+                                 carried=carried)
 
 
 def analysis_review_input(context: AnalysisReviewContext) -> dict:
@@ -232,13 +244,25 @@ def _indexed_review_rows(rows, facts, slots=None, context=None) -> tuple[dict, C
     return indexed, rejections
 
 
+def _advisory_row(original, reason):
+    """Keep a bound row under the fixed advisory status instead of deleting it."""
+    item = deepcopy(original)
+    item["review_status"] = ADVISORY_STATUS
+    reasons = item.get("advisory_reasons")
+    categories = list(reasons) if isinstance(reasons, list) else []
+    if reason not in categories:
+        categories.append(reason)
+    item["advisory_reasons"] = categories
+    return item
+
+
 def apply_analysis_review(context: AnalysisReviewContext, response: dict | None) -> tuple[dict, dict]:
     result = deepcopy(context.recommendation)
     rows = response.get("analysis_reviews") if isinstance(response, dict) else None
     valid_list = isinstance(rows, list)
     rows = rows if valid_list else []
     indexed, rejections = _indexed_review_rows(rows, context.facts, context.slots, context)
-    kept, revised, reviewed = [], 0, 0
+    kept, revised, reviewed, withdrawn = [], 0, 0, 0
     duplicate_slots = Counter(row["analysis_id"] for row in rows
                               if isinstance(row, dict)
                               and isinstance(row.get("analysis_id"), str))
@@ -248,42 +272,70 @@ def apply_analysis_review(context: AnalysisReviewContext, response: dict | None)
             if duplicate_slots.get(key, 0) > 1:
                 # Two rows for one slot cannot be merged into one adjudication.
                 rejections["duplicate_analysis_id"] += duplicate_slots[key]
+            reason = "review_missing"
+            # Keep the substantive shape category attached to the retained row
+            # so a display guard can still see what the review attempted (for
+            # example an unbound candidate attribution in a revision).
+            for candidate_row in rows:
+                if isinstance(candidate_row, dict) and candidate_row.get("analysis_id") == key:
+                    category = _review_row_shape_category(
+                        candidate_row, context.facts, original=original, context=context)
+                    if category is not None:
+                        reason = category
+                        break
+            kept.append(_advisory_row(original, reason))
             continue
         action = row["action"]
         if action == "withdraw":
             # An explicit withdrawal is a completed adjudication.
             reviewed += 1
+            withdrawn += 1
             continue
         item = deepcopy(original)
+        reason = None
         if action == "revise":
             item.update({field: row[field] for field in ("reasoning", "assumptions", "change_condition")})
         if "additional_basis" in row:
             from .decision_analysis import bind_analysis_basis
             additions = row["additional_basis"]
             if (not isinstance(additions, list) or not additions or item.get("reasoning") == original["reasoning"]):
-                continue
-            challenges = {check[0]: check for check in row["source_checks"]}
-            basis, error = bind_analysis_basis(original["basis"] + additions, {fact["id"]: fact for fact in context.facts})
-            if error or any(
-                part["fact_id"] not in challenges
-                or challenges[part["fact_id"]][1] not in {"qualifies", "conflicts"}
-                or not set(challenges[part["fact_id"]][2]).issubset(part["sentence_ids"])
-                for part in basis[len(original["basis"]):]
-            ):
-                continue
-            item["basis"] = basis
-            item["fact_ids"] = [part["fact_id"] for part in basis]
-        prose = [item.get("option"), item.get("reasoning"), item.get("change_condition")]
-        if isinstance(item.get("assumptions"), list):
-            prose.extend(item["assumptions"])
-        if not _candidate_attribution(" ".join(value for value in prose if isinstance(value, str)), item["fact_ids"], context):
-            continue
-        bound = bind_decision_analysis(
-            {"source_facts": context.facts, "decision_analysis": [item]}, context.requirements,
-            context.candidates, context.query, require_basis=True,
-        )
-        accepted = calibrate_decision_analysis(bound)["decision_analysis"]
-        if len(accepted) != 1:
+                reason = "additional_basis_invalid"
+            else:
+                challenges = {check[0]: check for check in row["source_checks"]}
+                basis, error = bind_analysis_basis(original["basis"] + additions, {fact["id"]: fact for fact in context.facts})
+                if error or any(
+                    part["fact_id"] not in challenges
+                    or challenges[part["fact_id"]][1] not in {"qualifies", "conflicts"}
+                    or not set(challenges[part["fact_id"]][2]).issubset(part["sentence_ids"])
+                    for part in basis[len(original["basis"]):]
+                ):
+                    reason = "additional_basis_invalid"
+                else:
+                    item["basis"] = basis
+                    item["fact_ids"] = [part["fact_id"] for part in basis]
+        if reason is None:
+            prose = [item.get("option"), item.get("reasoning"), item.get("change_condition")]
+            if isinstance(item.get("assumptions"), list):
+                prose.extend(item["assumptions"])
+            if not _candidate_attribution(" ".join(value for value in prose if isinstance(value, str)), item["fact_ids"], context):
+                reason = "candidate_attribution"
+        accepted = []
+        if reason is None:
+            bound = bind_decision_analysis(
+                {"source_facts": context.facts, "decision_analysis": [item]}, context.requirements,
+                context.candidates, context.query, require_basis=True,
+            )
+            accepted = calibrate_decision_analysis(bound)["decision_analysis"]
+            if len(accepted) != 1:
+                reason = "binding_invalid"
+            elif accepted[0].get("review_status") == ADVISORY_STATUS:
+                reason = "reviewed_row_limited"
+        if reason is not None:
+            # A malformed or unusable review never deletes the reviewed row. The
+            # original bound inference stays under advisory status so the loss of
+            # review remains visible and the analysis is not silently destroyed.
+            rejections[reason] += 1
+            kept.append(_advisory_row(original, reason))
             continue
         if accepted[0]["review_status"] == "network_unconfirmed_pending_review":
             accepted[0]["review_status"] = "network_unconfirmed_human_review_required"
@@ -292,14 +344,16 @@ def apply_analysis_review(context: AnalysisReviewContext, response: dict | None)
         kept.append(accepted[0])
         reviewed += 1
         revised += action == "revise"
+    retained = kept + [deepcopy(item) for item in context.carried] if context.submitted else []
     if context.submitted:
-        result["decision_analysis"] = kept
+        result["decision_analysis"] = retained
     status = ("unavailable" if response is None else
               "complete" if valid_list and reviewed == context.submitted else "incomplete")
     summary = {"status": status, "submitted": context.submitted, "reviewed": reviewed,
-               "retained": len(kept), "revised": revised,
-               "withdrawn": reviewed - len(kept),
-               "unaddressed": context.submitted - reviewed}
+               "retained": len(retained), "revised": revised,
+               "withdrawn": withdrawn,
+               "unaddressed": context.submitted - reviewed,
+               "unreviewed_retained": len(retained) - (reviewed - withdrawn)}
     if rejections:
         summary["row_rejections"] = dict(sorted(rejections.items()))
     if context.submitted:

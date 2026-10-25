@@ -419,7 +419,12 @@ async def test_one_sided_overall_answer_still_rejects_unbound_alternative_after_
     monkeypatch.setattr(review, "call_model", reviewer)
     state.update(await review.SelfReviewerAgent().run(state))
     assert reviewer.await_count >= 1
-    assert state["final_recommendation"]["decision_analysis"] == []
+    retained = state["final_recommendation"]["decision_analysis"]
+    # The unbound alternative cannot be accepted by review: the row survives
+    # only under the fixed advisory status and is never rendered.
+    assert len(retained) == 1
+    assert retained[0]["review_status"] == "advisory_unreviewed"
+    assert "candidate_attribution" in retained[0]["advisory_reasons"]
     assert state["final_recommendation"]["winner"] == "context_dependent"
     for render in FORMAT_RENDERERS.values():
         assert row["reasoning"] not in render(state)

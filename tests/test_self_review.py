@@ -102,7 +102,7 @@ async def test_review_sees_whole_basis_and_original_unknown_then_revises_only_ow
     assert rec["decision_analysis"][0]["basis"] == before["final_recommendation"]["decision_analysis"][0]["basis"]
     assert rec["analysis_review"] == {"status": "complete", "submitted": 2, "reviewed": 2,
                                       "retained": 2, "revised": 1, "withdrawn": 0,
-                                      "unaddressed": 0}
+                                      "unaddressed": 0, "unreviewed_retained": 0}
     state.update(update)
     generated = await ReportGeneratorAgent().run(state)
     assert any(row["agent"] == "self_reviewer" for row in generated["quality_signals"])
@@ -136,7 +136,8 @@ async def test_missing_review_slot_gets_one_strict_targeted_repair(monkeypatch):
     assert [row["reasoning"] for row in rec["decision_analysis"]] == [CORRECTED, GOOD]
     assert rec["analysis_review"] == {"status": "complete", "submitted": 2,
                                       "reviewed": 2, "retained": 2, "revised": 1,
-                                      "withdrawn": 0, "unaddressed": 0}
+                                      "withdrawn": 0, "unaddressed": 0,
+                                      "unreviewed_retained": 0}
     assert update["quality_signals"][0]["targeted_review_attempts"] == 1
     assert update["quality_signals"][0]["targeted_review_rejections"] == {}
     assert update["quality_signals"][0]["passed_count"] == 0
@@ -152,11 +153,17 @@ async def test_targeted_review_rejects_incomplete_source_challenge_with_fixed_ca
     monkeypatch.setattr(module, "call_model", AsyncMock(side_effect=replies))
     update = await module.SelfReviewerAgent().run(state)
     rec = update["final_recommendation"]
-    assert len(rec["decision_analysis"]) == 1
+    # The unreviewed row is no longer deleted: it is retained as an advisory
+    # inference, so the malformed review stays visible instead of emptying the
+    # decision. The rejected review row still cannot be accepted.
+    assert len(rec["decision_analysis"]) == 2
     assert rec["decision_analysis"][0]["reasoning"] == CORRECTED
+    assert rec["decision_analysis"][1]["reasoning"] == GOOD
+    assert rec["decision_analysis"][1]["review_status"] == "advisory_unreviewed"
     assert rec["analysis_review"] == {"status": "incomplete", "submitted": 2,
-                                      "reviewed": 1, "retained": 1, "revised": 1,
+                                      "reviewed": 1, "retained": 2, "revised": 1,
                                       "withdrawn": 0, "unaddressed": 1,
+                                      "unreviewed_retained": 1,
                                       "row_rejections": {"source_checks": 1}}
     signal = update["quality_signals"][0]
     assert signal["targeted_review_attempts"] == 1
@@ -174,7 +181,9 @@ async def test_targeted_review_malformed_action_is_fixed_field_rejection(monkeyp
     replies = [reviewed([revision()]), malformed]
     monkeypatch.setattr(module, "call_model", AsyncMock(side_effect=replies))
     update = await module.SelfReviewerAgent().run(state)
-    assert update["final_recommendation"]["analysis_review"]["retained"] == 1
+    rec = update["final_recommendation"]
+    assert rec["analysis_review"]["retained"] == 2
+    assert rec["decision_analysis"][1]["review_status"] == "advisory_unreviewed"
     assert update["quality_signals"][0]["targeted_review_rejections"] == {"fields": 1}
 
 
@@ -215,16 +224,23 @@ async def test_bad_review_cannot_change_identity_or_authority_and_preserves_othe
     monkeypatch.setattr(module, "call_model", AsyncMock(return_value='{"analysis_reviews":' if bad == "truncated" else reviewed(rows)))
     update = await module.SelfReviewerAgent().run(state)
     rec = update["final_recommendation"]
-    assert len(rec["decision_analysis"]) == (0 if bad == "truncated" else 1)
-    if rec["decision_analysis"]:
-        assert rec["decision_analysis"][0]["reasoning"] == GOOD
+    # A bad review can never replace or delete a bound row: the original stays
+    # under the fixed advisory status and the forged revision is not accepted.
+    assert len(rec["decision_analysis"]) == 2
+    assert rec["decision_analysis"][1]["reasoning"] == GOOD
     assert rec["source_facts"] == state["final_recommendation"]["source_facts"]
     assert update["confidence"] == rec["confidence"] == "low"
     assert rec["analysis_review"]["status"] in {"incomplete", "unavailable"}
+    assert all(row["review_status"] in {"human_review_required", "advisory_unreviewed"}
+               for row in rec["decision_analysis"])
     state.update(update)
     for render in FORMAT_RENDERERS.values():
         report = render(state)
-        assert BAD not in report and "withheld" in report and SOURCE in report
+        # Forged authority/option or revision prose never reaches the report; a
+        # retained original is disclosed only with the unreviewed label.
+        assert rec["decision_analysis"][0]["option"] == "Local"
+        assert "x" * 40 not in report and "Source: forged" not in report
+        assert "unreviewed" in report.lower() and "withheld" in report and SOURCE in report
 
 
 @pytest.mark.asyncio
@@ -250,9 +266,14 @@ async def test_review_failures_have_fixed_fallback_or_propagate_authority_errors
             await module.SelfReviewerAgent().run(state)
     else:
         update = await module.SelfReviewerAgent().run(state)
-        assert update["final_recommendation"]["analysis_review"]["status"] == "unavailable"
+        rec = update["final_recommendation"]
+        assert rec["analysis_review"]["status"] == "unavailable"
         assert "private raw payload" not in json.dumps(update)
         assert update["confidence"] == "low"
+        # A provider failure never deletes the bound rows; they stay advisory.
+        assert len(rec["decision_analysis"]) == 2
+        assert all(row["review_status"] == "advisory_unreviewed"
+                   for row in rec["decision_analysis"])
 
 
 @pytest.mark.asyncio

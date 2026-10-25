@@ -159,7 +159,15 @@ async def test_alternative_claim_fails_even_when_model_reports_all_sources_suppo
     answer = response_for(state)
     monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
     update = await review.SelfReviewerAgent().run(state)
-    assert update["final_recommendation"]["decision_analysis"] == []
+    retained = update["final_recommendation"]["decision_analysis"]
+    # The unbound alternative is never acceptably reviewed: the row is retained
+    # only under the fixed advisory status and stays out of the rendered report.
+    assert len(retained) == 1
+    assert retained[0]["review_status"] == "advisory_unreviewed"
+    assert "candidate_attribution" in retained[0]["advisory_reasons"]
+    state.update(update)
+    for render in FORMAT_RENDERERS.values():
+        assert "always loses everything" not in render(state)
     answer["analysis_reviews"][0].update(action="revise", reasoning=f"Evaluate {own_name} only after its persistence settings and required failure scope are confirmed.",
         assumptions=item["assumptions"], change_condition=item["change_condition"])
     monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
@@ -193,7 +201,9 @@ async def test_revision_cannot_move_unbound_alternative_claim_to_another_visible
     answer["analysis_reviews"][0][field] = [claim] if field == "assumptions" else claim
     monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
     update = await review.SelfReviewerAgent().run(state)
-    assert len(update["final_recommendation"]["decision_analysis"]) == 1
+    # The forged revision is rejected; both original rows remain (one advisory
+    # for the unadjudicated slot, one kept), and the revision claim is absent.
+    assert len(update["final_recommendation"]["decision_analysis"]) == 2
     assert claim not in json.dumps(update)
 
 
@@ -205,8 +215,14 @@ async def test_option_heading_cannot_attribute_unnamed_claim_to_an_unbound_candi
     original.update(option="OtherProduct", reasoning="This option loses everything on restart.")
     monkeypatch.setattr(review, "call_model", AsyncMock(return_value=response_for(state)))
     update = await review.SelfReviewerAgent().run(state)
-    assert len(update["final_recommendation"]["decision_analysis"]) == 1
-    assert "This option loses everything" not in json.dumps(update)
+    retained = update["final_recommendation"]["decision_analysis"]
+    assert len(retained) == 2
+    advisory = [row for row in retained if row["review_status"] == "advisory_unreviewed"]
+    assert len(advisory) == 1 and "candidate_attribution" in advisory[0]["advisory_reasons"]
+    # The unbound candidate attribution is retained in state but never rendered.
+    state.update(update)
+    for render in FORMAT_RENDERERS.values():
+        assert "This option loses everything" not in render(state)
 
 
 @pytest.mark.asyncio
@@ -234,11 +250,16 @@ async def test_repair_can_only_append_bound_challenge_sentences_without_authorit
     monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
     update = await review.SelfReviewerAgent().run(state)
     rec = update["final_recommendation"]
-    assert len(rec["decision_analysis"]) == (1 if mode == "valid" else 0)
+    # The original bound row survives every rejected repair attempt under the
+    # advisory status instead of disappearing from the decision.
+    assert len(rec["decision_analysis"]) == 1
     if mode == "valid":
         new = rec["decision_analysis"][0]
         assert new["basis"][:1] == original["basis"]
         assert new["basis"][1]["fact_id"] == "F2" and new["basis"][1]["sentence_ids"] == [2]
+    else:
+        assert rec["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
+        assert rec["decision_analysis"][0]["reasoning"] == original["reasoning"]
     for key in ("winner", "source_facts", "deployment_readiness", "action_plan_mode"):
         assert rec[key] == before[key]
 
@@ -275,7 +296,14 @@ async def test_action_candidate_cannot_borrow_other_slots_product_basis(monkeypa
     assert original["fact_ids"] == ["F1"]
     monkeypatch.setattr(review, "call_model", AsyncMock(return_value=answer))
     update = await review.SelfReviewerAgent().run(state)
-    assert update["final_recommendation"]["decision_analysis"] == []
+    retained = update["final_recommendation"]["decision_analysis"]
+    # Borrowed competing-product basis invalidates the review, never the row's
+    # existence: it is retained as advisory and withheld from the report.
+    assert len(retained) == 1
+    assert retained[0]["review_status"] == "advisory_unreviewed"
+    state.update(update)
+    for render in FORMAT_RENDERERS.values():
+        assert "guarantees durable recovery" not in render(state)
 
 
 @pytest.mark.asyncio

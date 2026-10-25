@@ -77,9 +77,13 @@ async def test_corrected_response_still_requires_citations_and_cannot_gain_autho
     assert state["final_recommendation"]["source_facts"][0]["status"] == "unknown"
     state.update(await CitationValidatorAgent().run(state))
     rec = state["final_recommendation"]
-    assert bool(rec["decision_analysis"]) is source_ok
+    # A row whose only source could not be verified is retained as advisory
+    # instead of being deleted; it is still excluded from the rendered report.
+    assert len(rec["decision_analysis"]) == 1
     if source_ok:
         assert rec["decision_analysis"][0]["review_status"] == "human_review_required"
+    else:
+        assert rec["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
     assert rec["winner"] == "context_dependent"
     assert rec["deployment_readiness"] == "unverified" and rec["action_plan_mode"] == "validation_only"
     assert "decision_analysis" not in restrict_recommendation(rec, TASK["query"])

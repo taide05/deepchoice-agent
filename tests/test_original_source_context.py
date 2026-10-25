@@ -209,7 +209,11 @@ async def test_review_repair_inherits_context_but_never_accepts_context_coordina
     context = prepare_analysis_review(state)
     rejected, _ = apply_analysis_review(context, {"analysis_reviews": [{
         "analysis_id": "A1", "action": "keep", "source_checks": [["F1", "supports", [17]]]}]})
-    assert rejected["decision_analysis"] == []
+    # The invalid review cannot adjudicate the slot; the bound row is retained
+    # under the fixed advisory status instead of being deleted.
+    assert len(rejected["decision_analysis"]) == 1
+    assert rejected["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
+    assert "review_missing" in rejected["decision_analysis"][0]["advisory_reasons"]
     calls = []
 
     async def model(messages, **kwargs):
@@ -252,4 +256,6 @@ def test_additional_basis_cannot_address_original_context_outside_fact_sentences
     assert accepted["decision_analysis"][0]["fact_ids"] == ["F1", "F2"]
     row["additional_basis"][0]["sentence_ids"] = [1, 17]
     rejected, _ = apply_analysis_review(context, {"analysis_reviews": [row]})
-    assert rejected["decision_analysis"] == []
+    assert len(rejected["decision_analysis"]) == 1
+    assert rejected["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
+    assert "additional_basis_invalid" in rejected["decision_analysis"][0]["advisory_reasons"]

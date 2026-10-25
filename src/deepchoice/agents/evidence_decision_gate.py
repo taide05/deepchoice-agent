@@ -86,32 +86,42 @@ def _build_limited_report(state: dict[str, Any]) -> dict[str, Any]:
     # carrying a reviewed answer through the user-selected restricted report.
     if canonical:
         from deepchoice.utils.analysis_review import prepare_analysis_review
+        from deepchoice.utils.decision_analysis import ADVISORY_STATUS
         from deepchoice.formats.decision import _displayable_analyses
 
         context = prepare_analysis_review(state)
         summary = recommendation.get("analysis_review")
         rows = recommendation.get("decision_analysis", [])
+        unreviewed = summary.get("unreviewed_retained", 0) if isinstance(summary, dict) else 0
         review_valid = (
             isinstance(summary, dict) and isinstance(rows, list)
             and summary.get("status") in {"complete", "incomplete"}
             and all(type(summary.get(key)) is int and 0 <= summary[key] <= 9
                     for key in ("submitted", "reviewed", "retained", "revised", "withdrawn"))
+            and type(unreviewed) is int and 0 <= unreviewed <= 9
             and summary["retained"] == len(rows)
-            and summary["revised"] <= summary["retained"] <= summary["reviewed"] <= summary["submitted"]
-            and summary["withdrawn"] == summary["submitted"] - summary["retained"]
+            and summary["retained"] == summary["reviewed"] - summary["withdrawn"] + unreviewed
+            and summary["revised"] <= summary["reviewed"] <= summary["submitted"]
+            and summary["withdrawn"] <= summary["reviewed"]
+            and summary["retained"] <= summary["submitted"]
         )
         visible = _displayable_analyses(recommendation) if review_valid else []
-        retained = [row for row in visible if any(
-            row == {**bound, "review_status": row["review_status"]}
-            for bound in context.slots.values()
-        )]
+        retained = [row for row in visible if row.get("review_status") == ADVISORY_STATUS
+                    or any(row == {**bound, "review_status": row["review_status"]}
+                           for bound in context.slots.values())]
         recommendation = {**recommendation, "source_facts": context.facts,
                           "decision_analysis": retained}
         if review_valid:
             removed = max(0, summary["retained"] - len(retained))
+            displayed_unreviewed = sum(
+                1 for row in retained if row.get("review_status") == ADVISORY_STATUS)
+            # Keep the fixed review-summary identity
+            # retained == reviewed - withdrawn + unreviewed_retained after the
+            # display filter removes rows, without re-labelling any of them.
             recommendation["analysis_review"] = {
                 **summary, "retained": len(retained),
-                "withdrawn": summary.get("withdrawn", 0) + removed,
+                "unreviewed_retained": displayed_unreviewed,
+                "withdrawn": summary["reviewed"] - len(retained) + displayed_unreviewed,
                 "status": "incomplete" if removed else summary.get("status"),
             }
         else:

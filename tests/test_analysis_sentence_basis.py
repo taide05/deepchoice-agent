@@ -87,7 +87,13 @@ def test_prompt_sentence_addresses_match_runtime_and_keep_qualifiers():
 def test_calibration_keeps_source_uncertainty_and_renderer_rejects_forged_quote():
     bound = bind_decision_analysis(proposal(), REQS, [], require_basis=True)
     bound["source_facts"][2]["status"] = "unknown"
-    assert calibrate_decision_analysis(bound)["decision_analysis"] == []
+    calibrated = calibrate_decision_analysis(bound)["decision_analysis"]
+    # A non-reviewable fact no longer deletes its row: the analysis is retained
+    # under the fixed advisory status and stays out of the rendered report.
+    assert len(calibrated) == 1
+    assert calibrated[0]["review_status"] == "advisory_unreviewed"
+    assert any(reason.startswith("fact_not_reviewable")
+               for reason in calibrated[0]["advisory_reasons"])
     bound = calibrate_decision_analysis(bind_decision_analysis(proposal(), REQS, [], require_basis=True))
     bound["decision_analysis"][0]["basis"][0]["source_sentences"] = ["<img src=x onerror=alert(1)>"]
     rendered = "\n".join(render_decision_details(bound, "zh"))

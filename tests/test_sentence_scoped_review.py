@@ -51,7 +51,8 @@ def test_only_addressed_verified_sentence_enters_full_source_review(reason):
         answer, {"analysis_id": "A2", "action": "withdraw"},
     ]))
     assert summary == {"status": "complete", "submitted": 2, "reviewed": 2,
-                       "retained": 1, "revised": 1, "withdrawn": 1, "unaddressed": 0}
+                       "retained": 1, "revised": 1, "withdrawn": 1, "unaddressed": 0,
+                       "unreviewed_retained": 0}
     assert result["source_facts"][0]["status"] == "unknown"
     assert result["winner"] == recommendation["winner"]
     assert result["decision_analysis"][0]["review_status"] == "sentence_scoped_human_review_required"
@@ -64,8 +65,16 @@ def test_only_addressed_verified_sentence_enters_full_source_review(reason):
 
 def test_an_analysis_addressing_the_unverified_sentence_is_withheld():
     state = partial_state(addressed=1)
-    assert state["final_recommendation"]["decision_analysis"] == []
+    recommendation = state["final_recommendation"]
+    # The row is retained instead of deleted, but a never-reviewable basis keeps
+    # it out of the reviewer slots and out of the report.
+    assert len(recommendation["decision_analysis"]) == 2
+    assert all(row["review_status"] == "advisory_unreviewed"
+               and any(reason.startswith("fact_not_reviewable")
+                       for reason in row["advisory_reasons"])
+               for row in recommendation["decision_analysis"])
     assert prepare_analysis_review(state).slots == {}
+    assert "Model judgment" not in "\n".join(render_decision_details(recommendation, "en"))
 
 
 @pytest.mark.parametrize("mutation", ["cross_language", "unsupported", "unreachable",

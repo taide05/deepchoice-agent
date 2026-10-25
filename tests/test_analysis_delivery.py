@@ -60,13 +60,23 @@ async def test_network_unknown_requires_slot_review_and_never_upgrades_authority
     state.update(await review.SelfReviewerAgent().run(state))
     rec = state["final_recommendation"]
     keep = action in {"keep", "revise"}
-    assert len(rec["decision_analysis"]) == int(keep)
+    retained = action != "withdraw"
+    # A missing or failed review no longer deletes the row; it is retained under
+    # the fixed advisory status. An explicit withdrawal still removes it.
+    assert len(rec["decision_analysis"]) == int(retained)
+    if retained and not keep:
+        assert rec["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
     assert rec["confidence"] == "low" and state["knowledge_gaps"]
     for key in ("winner", "requirement_assessments", "action_plan", "source_facts"):
         assert rec[key] == original[key]
     for render in FORMAT_RENDERERS.values():
         report = render(state)
-        assert ("Live source verification was unavailable (unknown)" in report) is keep
+        if keep:
+            assert "Live source verification was unavailable (unknown)" in report
+        elif retained:
+            assert "(unreviewed)" in report
+        else:
+            assert "Live source verification was unavailable (unknown)" not in report
         assert "Source lexical check: verified" not in report
         assert "FORGED" not in report and "DANGEROUS" not in report and "PRIVATE_REVIEW_ERROR" not in report
     assert "decision_analysis" not in restrict_recommendation(rec, TASK["query"])
@@ -93,7 +103,11 @@ async def test_unknown_review_gate_rejects_incomplete_or_non_network_evidence(mo
     rec = deepcopy(state["final_recommendation"])
     if bad != "forged_marker":
         recalibrated = calibrate_decision_analysis(calibrate_evidence_choices(rec, CitationVerification.model_validate_json(json.dumps(v))))
-        assert recalibrated["decision_analysis"] == []
+        rows = recalibrated["decision_analysis"]
+        assert len(rows) == 1
+        assert rows[0]["review_status"] == "advisory_unreviewed"
+        assert any(reason.startswith("fact_not_reviewable")
+                   for reason in rows[0]["advisory_reasons"])
     assert prepare_analysis_review(state).slots == {}
 
 

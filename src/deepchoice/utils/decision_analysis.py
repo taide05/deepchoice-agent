@@ -15,6 +15,11 @@ MAX_ANALYSES = 8
 MAX_ROW_BASIS_FACTS = 4
 MAX_ROW_BASIS_REFS = 12
 KINDS = frozenset({"choice", "answer", "design"})
+# A bound row that could not be fully calibrated or reviewed is never deleted.
+# It is retained with this fixed status and advisory categories so validation
+# losses stay visible and recoverable; display of an advisory row is still
+# gated on its basis facts (see formats.decision._displayable_analyses).
+ADVISORY_STATUS = "advisory_unreviewed"
 
 
 # The original predicate. It matches an unbalanced marker too, because a
@@ -349,20 +354,24 @@ def prefer_corrected_projection(original, corrected, diagnostic, *, require_gain
             and not corrected.get("ranked_options") and no_upgrade)
 
 
-def calibration_rejection_reason(item, facts) -> str | None:
-    """Return one fixed category for a row this calibration pass will drop.
+def calibration_limited_reasons(item, facts) -> list[str]:
+    """Return the fixed categories that make this row evidence-limited.
 
-    This explains a deletion that is otherwise invisible: a row removed here
-    leaves no trace in any public artefact. The categories are fixed strings so
-    they are safe to record where model prose, source text and raw exceptions
-    are not. Returns None when the row is accepted.
+    An empty list means every addressed fact passed this calibration pass.
+    A non-empty list no longer deletes the row: the row is retained under
+    ``ADVISORY_STATUS`` with these categories, because a whole-row deletion
+    silently destroyed a decision-bearing analysis in a real run. Nothing here
+    upgrades a citation status: a limited row is displayed only with its unknown
+    sources labelled, and never as a supported pick.
     """
+    reasons: list[str] = []
     if not item.get("fact_ids"):
-        return "no_fact_reference"
+        return ["no_fact_reference"]
     for key in item["fact_ids"]:
         fact = facts.get(key)
         if fact is None:
-            return "addressed_fact_absent"
+            reasons.append("addressed_fact_absent")
+            continue
         basis = item.get("basis")
         addressed = {row["fact_id"]: row for row in basis} if isinstance(basis, list) else {}
         if not reviewable_source_fact(fact) and not (
@@ -370,14 +379,17 @@ def calibration_rejection_reason(item, facts) -> str | None:
             and isinstance(addressed.get(key), dict)
             and analysis_fact_reviewable(fact, addressed.get(key))
         ):
-            return f"fact_not_reviewable:{fact.get('status', 'unknown')}"
-    return None
+            reasons.append(f"fact_not_reviewable:{fact.get('status', 'unknown')}")
+    return sorted(set(reasons))
 
 
 def calibrate_decision_analysis(recommendation, diagnostics: dict | None = None):
-    """Permit review only against facts calibrated by this citation pass.
+    """Mark evidence-limited rows instead of deleting them.
 
     Network-only uncertainty grants pending review, never display or authority.
+    A row whose addressed facts could not be calibrated loses review eligibility
+    but keeps its full basis and reasoning under ``ADVISORY_STATUS``; downstream
+    display decides whether the labelled row is safe to show.
 
     No inference is assigned a citation status. Even a completely supported
     source does not verify the model's translation, application or design.
@@ -386,12 +398,16 @@ def calibrate_decision_analysis(recommendation, diagnostics: dict | None = None)
         return recommendation
     facts = {row["id"]: row for row in recommendation.get("source_facts", [])}
     accepted = []
-    dropped: Counter = Counter()
+    limited: Counter = Counter()
     for item in recommendation["decision_analysis"]:
-        reason = calibration_rejection_reason(item, facts)
-        if reason is not None:
-            dropped[reason] += 1
+        reasons = calibration_limited_reasons(item, facts)
+        if reasons:
+            item["review_status"] = ADVISORY_STATUS
+            item["advisory_reasons"] = reasons
+            limited.update(reasons)
+            accepted.append(item)
             continue
+        item.pop("advisory_reasons", None)
         item["review_status"] = (
             "sentence_scoped_pending_review" if any(
                 sentence_scoped_source_fact(facts[key]) for key in item["fact_ids"]
@@ -403,6 +419,9 @@ def calibrate_decision_analysis(recommendation, diagnostics: dict | None = None)
     if diagnostics is not None:
         diagnostics["rows_received"] = len(recommendation["decision_analysis"])
         diagnostics["rows_accepted"] = len(accepted)
-        diagnostics["rows_dropped"] = dict(sorted(dropped.items()))
+        # Fixed categories only; the count of limited rows stays visible instead
+        # of the previous silent whole-row drop.
+        diagnostics["rows_limited"] = dict(sorted(limited.items()))
+        diagnostics["rows_dropped"] = {}
     recommendation["decision_analysis"] = accepted
     return recommendation

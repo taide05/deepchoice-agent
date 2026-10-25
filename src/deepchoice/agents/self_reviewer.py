@@ -145,25 +145,28 @@ def _review_rejection(one, response):
 
 
 async def _repair_unreviewed(context, initial, payload, usage):
-    """Retry only unadjudicated A slots; every result passes the original binder."""
+    """Retry only unadjudicated A slots, then re-adjudicate once from merged rows.
+
+    Every targeted result passes the same full binder before it can replace an
+    original row. A slot that still lacks a usable review is not deleted: the
+    merged review carries it under the fixed advisory status, so a failed repair
+    stays visible instead of silently emptying the decision.
+    """
     from ..utils.analysis_review import analysis_review_input, apply_analysis_review
 
-    accepted, adjudicated = {}, set()
-    revised = 0
-    rejections = Counter()
     pending = []
     for key, item in context.slots.items():
         one = replace(context, slots={key: item}, submitted=1,
-                      provisional_slots={}, provisional_submitted=0)
-        candidate, verdict = apply_analysis_review(one, initial)
-        if verdict["reviewed"] == 1:
-            adjudicated.add(key)
-            if verdict["retained"] == 1:
-                accepted[key] = candidate["decision_analysis"][0]
-                revised += verdict["revised"]
-        else:
+                      provisional_slots={}, provisional_submitted=0, carried=[])
+        verdict = apply_analysis_review(one, initial)[1]
+        if verdict["reviewed"] != 1:
             pending.append((key, one))
+    repair_rows = []
+    initial_rows = initial.get("analysis_reviews") if isinstance(initial, dict) else None
+    if isinstance(initial_rows, list):
+        repair_rows.extend(initial_rows)
     attempted = 0
+    rejections = Counter()
     for key, one in pending[:REVIEW_REPAIR_LIMIT]:
         one_payload = {**payload, **analysis_review_input(one)}
         prompt = [{"role": "system", "content": REVIEW_SYSTEM},
@@ -180,15 +183,14 @@ async def _repair_unreviewed(context, initial, payload, usage):
         if not isinstance(response, dict):
             rejections["response_shape"] += 1
             continue
-        candidate, verdict = apply_analysis_review(one, response)
+        verdict = apply_analysis_review(one, response)[1]
         if verdict["reviewed"] != 1:
             rejections[_review_rejection(one, response)] += 1
             continue
-        adjudicated.add(key)
-        if verdict["retained"] == 1:
-            accepted[key] = candidate["decision_analysis"][0]
-            revised += verdict["revised"]
-    return accepted, adjudicated, revised, attempted, dict(sorted(rejections.items()))
+        rows = response.get("analysis_reviews")
+        if isinstance(rows, list):
+            repair_rows.extend(row for row in rows if isinstance(row, dict))
+    return {"analysis_reviews": repair_rows}, attempted, dict(sorted(rejections.items()))
 
 
 _CITATION_FIELDS = ("recommendation", "winner_rationale", "evidence_summary",
@@ -332,21 +334,16 @@ class SelfReviewerAgent:
         repair_attempts = 0
         repair_rejections = {}
         if context.slots and summary["status"] != "complete":
-            accepted, adjudicated, revised, repair_attempts, repair_rejections = await _repair_unreviewed(
+            merged, repair_attempts, repair_rejections = await _repair_unreviewed(
                 context, result, payload, local_usage,
             )
             if repair_attempts:
-                recommendation["decision_analysis"] = [
-                    accepted[key] for key in context.slots if key in accepted
-                ]
-                summary = {
-                    "status": ("complete" if len(adjudicated) == context.submitted else
-                               "unavailable" if result is None and not adjudicated else "incomplete"),
-                    "submitted": context.submitted, "reviewed": len(adjudicated),
-                    "retained": len(accepted), "revised": revised,
-                    "withdrawn": len(adjudicated) - len(accepted),
-                    "unaddressed": context.submitted - len(adjudicated),
-                }
+                recommendation, summary = apply_analysis_review(context, merged)
+                if result is None and summary["reviewed"] == 0:
+                    # The primary review never returned an object and no targeted
+                    # repair adjudicated a row: keep the fixed unavailable status
+                    # while the bound rows stay under advisory status.
+                    summary["status"] = "unavailable"
                 if repair_rejections:
                     summary["row_rejections"] = dict(sorted(repair_rejections.items()))
                 recommendation["analysis_review"] = summary

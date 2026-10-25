@@ -143,7 +143,9 @@ def _source_index_lines(facts: Any, zh: bool) -> list[str]:
 
 
 def _displayable_analyses(recommendation: dict) -> list[dict]:
-    from ..utils.decision_analysis import analysis_fact_reviewable, bind_analysis_basis
+    from ..utils.decision_analysis import (
+        ADVISORY_STATUS, analysis_fact_reviewable, bind_analysis_basis,
+    )
     facts = _source_fact_map(recommendation)
     accepted = []
     from ..utils.answer_delivery import is_answer_delivery
@@ -160,6 +162,36 @@ def _displayable_analyses(recommendation: dict) -> list[dict]:
                             and "basis" in item
                             and isinstance(recommendation.get("analysis_review"), dict)
                             and recommendation["analysis_review"].get("retained", 0) > 0)
+        if item.get("review_status") == ADVISORY_STATUS:
+            # An advisory row keeps a bound inference that did not obtain full
+            # review. Display never widens beyond what calibration allowed: a
+            # row whose basis was never reviewable, or whose own deterministic
+            # attribution check failed, stays withheld from the report while
+            # remaining visible in state. Without a review, the remaining rows
+            # are displayable only with verified/reviewable sources and a clear
+            # unreviewed label.
+            reasons = item.get("advisory_reasons")
+            reasons = [value for value in reasons if isinstance(value, str)] \
+                if isinstance(reasons, list) else []
+            if any(value in {"candidate_attribution", "no_fact_reference", "addressed_fact_absent"}
+                   or value.startswith("fact_not_reviewable") for value in reasons):
+                continue
+            basis_rows = item.get("basis")
+            addressed = {row["fact_id"]: row for row in basis_rows
+                         if isinstance(row, dict) and isinstance(row.get("fact_id"), str)} \
+                if isinstance(basis_rows, list) else {}
+            if (isinstance(ids, list) and 0 < len(ids) <= 4
+                    and all(isinstance(key, str) and key in facts
+                            and (facts[key].get("status") == "verified"
+                                 or analysis_fact_reviewable(facts[key], addressed.get(key)))
+                            for key in ids)):
+                if "basis" in item:
+                    basis, error = bind_analysis_basis(item["basis"], facts)
+                    if error or [row["fact_id"] for row in basis] != ids:
+                        continue
+                    item = {**item, "basis": basis}
+                accepted.append(item)
+            continue
         basis_rows = item.get("basis")
         addressed = {row["fact_id"]: row for row in basis_rows
                      if isinstance(row, dict) and isinstance(row.get("fact_id"), str)} if isinstance(basis_rows, list) else {}
@@ -190,9 +222,12 @@ def _render_model_analysis(
             and all(type(review.get(key)) is int and 0 <= review[key] <= 9
                     for key in ("submitted", "retained", "revised", "withdrawn"))
             and review["submitted"] > 0):
+        unreviewed = review.get("unreviewed_retained", 0)
+        unreviewed = unreviewed if type(unreviewed) is int and 0 <= unreviewed <= 9 else 0
         if review["status"] != "complete":
-            note = ("部分模型分析未获得可用的自审结果，已撤回；保存的来源原文仍可核对。保留或修订的分析仍需人工审阅。"
-                    if zh else "Some model analyses lacked a usable review and were withheld. Saved sources remain available for inspection. Retained or revised analyses still require human review.")
+            note = (f"部分模型分析未获得可用自审结果，其中 {unreviewed} 条已作为未评审推断保留；明确撤回的分析仍不展示。保存的来源原文仍可核对，保留或修订的分析仍需人工审阅。"
+                    if zh else
+                    f"Some model analyses lacked a usable review; {unreviewed} of them are retained as unreviewed inferences while explicitly withdrawn analyses remain withheld. Saved sources remain available for inspection. Retained or revised analyses still require human review.")
         elif review["withdrawn"]:
             note = ("部分模型分析在自审后撤回；保存的来源原文仍可核对。保留或修订的分析仍需人工审阅。"
                     if zh else "Some model analyses were withdrawn after review. Saved sources remain available for inspection. Retained or revised analyses still require human review.")
@@ -214,11 +249,19 @@ def _render_model_analysis(
         lines.extend([note, ""])
     used = {key: fact for key, fact in facts.items() if fact.get("status") == "verified"} if note else {}
     for item in accepted:
+        from ..utils.decision_analysis import ADVISORY_STATUS
+        advisory = item.get("review_status") == ADVISORY_STATUS
         title = labels.get(item.get("kind"), labels["answer"])
+        if advisory:
+            title += "（未评审）" if zh else " (unreviewed)"
         if item.get("option"):
             title += " — " + _plain_analysis(item["option"])
         lines.extend([f"#### {title}", ""])
-        if item.get("review_status") == "network_unconfirmed_human_review_required":
+        if advisory:
+            lines.extend(["未获得完整核验或自审：以下为保留的模型推断，依据的核验状态见下方；不得当作已验证推荐或结论。"
+                          if zh else
+                          "Full calibration or review was unavailable: this retained model inference is advisory only. See the labelled source status below; it is not a verified recommendation.", ""])
+        elif item.get("review_status") == "network_unconfirmed_human_review_required":
             lines.extend(["来源页面本次未能核验（unknown）。以下仅为基于保存片段、待人工审阅的条件分析；未确认来源当前内容与适用性。"
                           if zh else "Live source verification was unavailable (unknown). This is a conditional analysis of saved excerpts for human review; current source content and applicability remain unconfirmed.", ""])
         elif item.get("review_status") == "sentence_scoped_human_review_required":
@@ -477,15 +520,46 @@ def _render_answer_delivery(
 ) -> list[str]:
     """Reuse locally checked analyses; independent callers still run the gate."""
     zh = lang == "zh"
+    from ..utils.decision_analysis import ADVISORY_STATUS
     if visible is None:
         visible = _displayable_analyses(recommendation)
-    lines = _render_model_analysis(recommendation, lang, visible=visible)
+    facts = _source_fact_map(recommendation)
+    choices = [item for item in visible if item.get("kind") == "choice" and _text(item.get("option"))]
+    lines: list[str] = []
+    if choices:
+        lines.extend(["### 条件选择摘要" if zh else "### Conditional choice summary", ""])
+        lines.append(
+            "以下选择与条件偏好是模型推断，逐条标注来源核验状态；不构成已验证推荐，也不代表对应需求已满足。"
+            if zh else
+            "The choices and conditional preferences below are model inferences with per-row source-check status. They are not verified recommendations and do not prove that a stated requirement is satisfied."
+        )
+        lines.append("")
+        for item in choices[:4]:
+            option = _plain_analysis(_text(item.get("option")))
+            fact_ids = [key for key in (item.get("fact_ids") or []) if isinstance(key, str) and key in facts]
+            verified = sum(1 for key in fact_ids if facts[key].get("status") == "verified")
+            unknown = len(fact_ids) - verified
+            state_label = "未评审推断" if item.get("review_status") == ADVISORY_STATUS else "自审后的条件分析"
+            if zh:
+                lines.append(f"- **{option}** — {state_label}；对应问题：" + " / ".join(
+                    _plain_analysis(value) for value in (item.get("requirements") or [])[:3])
+                    + f"；来源核验：verified {verified} / unknown {unknown}")
+            else:
+                lines.append(f"- **{option}** — {('unreviewed inference' if item.get('review_status') == ADVISORY_STATUS else 'reviewed conditional analysis')}; addresses: "
+                             + " / ".join(_plain_analysis(value) for value in (item.get("requirements") or [])[:3])
+                             + f"; source checks: verified {verified} / unknown {unknown}")
+            change = _text(item.get("change_condition"))
+            if change:
+                lines.append(("  - 改变该判断的条件：" if zh else "  - What would change this judgment: ") + _plain_analysis(change))
+        lines.append("")
+    answer_lines = _render_model_analysis(recommendation, lang, visible=visible)
     addressed = {key for item in visible for key in item.get("requirement_ids", [])}
     inventory = recommendation["answer_delivery"]["requirements"]
     keys = answer_delivery_question_keys(recommendation)
     missing = [(key, inventory[key]) for key in keys
                if isinstance(inventory.get(key), str) and key not in addressed
                and (key != "R0" or not any(item.get("kind") == "choice" for item in visible))]
+    lines.extend(answer_lines)
     if missing:
         lines.extend(["### 尚无保留分析的问题" if zh else "### Questions without retained analysis", "",
                       "以下问题尚无来源支持的分析。已触及的问题也可能只得到部分回答，仍须逐项核对原提问；缺口不证明候选不具备能力。"
@@ -494,8 +568,9 @@ def _render_answer_delivery(
             lines.append("- " + _plain_analysis(text))
         lines.append("")
     elif visible:
-        lines.extend(["已触及原问题，但各问题是否完整回答仍需人工核对。" if zh else
-                      "Original questions were addressed; a human must still check whether each answer is complete.", ""])
+        lines.extend(["已对部分原问题给出条件分析；原始约束是否满足、各问题是否完整回答仍需人工核对。缺口不证明候选不具备能力。"
+                      if zh else
+                      "Conditional analyses cover some original questions; whether the original constraints are satisfied and every question is fully answered still requires human checking. A gap does not show that a candidate lacks a capability.", ""])
     # The runtime retains its fixed validation-only plan as structured safety
     # state. The compact report states its boundary without a long procedure.
     lines.extend(["### 下一步" if zh else "### Next step", "",
@@ -512,14 +587,34 @@ def render_answer_report(state: dict, lang: str, format_name: str = "what_why_ho
     rec = state["final_recommendation"]
     zh = lang == "zh"
     title = _plain_analysis(task.get("query", "Technology Selection"))
+    # This synchronous render owns the checked list. Never read it from state;
+    # the same guard result determines prose and both question-coverage views.
+    visible = _displayable_analyses(rec)
+    has_choice = any(item.get("kind") == "choice" for item in visible)
+    if not visible:
+        headline = (
+            "本报告未能保留可展示的来源支持分析，因此没有形成可交付的判断或选择建议；下方来源事实与未答问题仅用于核对。"
+            if zh else
+            "No displayable source-bound analysis was retained, so this report contains no deliverable judgment or choice. The source facts and unanswered questions below are for inspection only."
+        )
+    elif has_choice:
+        headline = (
+            "以下给出条件选择或条件偏好及其依据；来源核验不证明推理正确，也不代表部署已验收。"
+            if zh else
+            "Conditional choices or preferences are summarized below with their basis. Source checks do not prove the reasoning or deployment readiness."
+        )
+    else:
+        headline = (
+            "以下按原问题给出条件分析，但未形成唯一选择；来源核验不证明推理正确，也不代表部署已验收。"
+            if zh else
+            "The analysis below answers the original questions conditionally without forming a single choice. Source checks do not prove the reasoning or deployment readiness."
+        )
     suffix = {
         "what_why_how": " — 技术决策简报" if zh else " — Decision Brief",
         "evidence_first": " — 证据简报" if zh else " — Evidence Brief",
         "comparison_matrix": " — 问题对比矩阵" if zh else " — Question Comparison Matrix",
     }.get(format_name, "")
-    lines = ["# " + title + suffix, "",
-             "以下按原问题给出条件分析；来源核验不证明推理正确，也不代表部署已验收。" if zh else
-             "The analysis below answers the original questions conditionally. Source checks do not prove the reasoning or deployment readiness.", ""]
+    lines = ["# " + title + suffix, "", headline, ""]
     if state.get("data_source_note"):
         lines.extend(["> " + _plain_analysis(state["data_source_note"]), ""])
 
@@ -534,9 +629,6 @@ def render_answer_report(state: dict, lang: str, format_name: str = "what_why_ho
         if isinstance(rec.get("source_facts"), list) else []
     source_lines = _source_index_lines(facts, zh)
 
-    # This synchronous render owns the checked list. Never read it from state;
-    # the same guard result determines prose and both question-coverage views.
-    visible = _displayable_analyses(rec)
     answer_lines = _render_answer_delivery(rec, lang, visible=visible)
     if format_name == "evidence_first":
         lines.extend(source_lines)
