@@ -1,5 +1,8 @@
 name: Benchmark
 
+# 手动触发、会产生真实外部调用与费用的历史批量入口。
+# 不设固定指标下限；当前版本的内容质量以真实报告评审为准（见 HANDOFF.md）。
+
 on:
   workflow_dispatch:
     inputs:
@@ -20,7 +23,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
@@ -28,25 +31,6 @@ jobs:
 
       - name: Run benchmark
         run: python -m benchmarks.run_baseline --cases-file "benchmarks/${{ inputs.cases_file }}"
-
-      - name: Assert metrics lower bound (severe-regression guard)
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          from benchmarks.metrics import compute_all_metrics
-
-          cases = json.loads(Path("benchmarks/${{ inputs.cases_file }}").read_text(encoding="utf-8"))
-          runs = json.loads(Path("benchmarks/runs/runs-full.json").read_text(encoding="utf-8"))
-          latencies = [r.get("elapsed_s", 0) for r in runs]
-          report = compute_all_metrics(runs=runs, annotated_cases=cases, latencies_s=latencies)
-
-          top1 = report["summary"]["top1_accuracy"]
-          success = report["summary"]["success_rate"]
-          assert top1 >= 0.85, f"Top-1 {top1:.3f} below 0.85"
-          assert success == 1.0, f"Success rate {success:.3f} != 1.0"
-          print(f"OK: Top-1 {top1:.3f} >= 0.85, success {success:.3f} == 1.0")
-          PY
 
       - uses: actions/upload-artifact@v4
         with:

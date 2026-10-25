@@ -1,76 +1,76 @@
-# DeepChoice：恢复线接续交接
+# DeepChoice 恢复线：当前状态与接续
 
-更新：2026-10-25。用户已明确放弃约3866测试的 durable 开发线。
-本页纠正此前 Codex 交接把该线重新指定为产品基线的错误；不为用户和 dsh 制定新研发路线。
+更新：2026-10-26。给接手开发的 dsh 看代码身份、真实结果、材料位置与下一步。
+历史过程在 Git、`CHANGELOG.md`、`RETRACTIONS.md` 和本地 run 记录里，不在此重复。
 
-## 使用哪份代码
+## 代码身份
 
-| 角色 | 路径、分支与代码身份 |
+| 项 | 值 |
 |---|---|
-| 恢复线的现存接续位置 | `D:\deepchoice-precodex`，`precodex/deepseek-adapter`，代码提交 `b080213ea2267a1c48b06142b105540c7581c4d6` |
-| 恢复线起点，仅供追溯 | `48b32bdbb46a7c869c61798d30c3bd9cf8da631f`；Git reflog 显示分支于2026-10-14建立，其后包含 DeepSeek 适配和已完成的恢复线修复 |
-| 已放弃的 durable 路线 | `D:\deepchoice-agent`，`codex/generic-selection`；`fef61b8` 是该线旧候选，不是接续基线 |
-| 错误交接后新增的工作 | 同树 `7da3701`、`ae5f3f3` 及 `.scratch/r10_round2/`、测试日志；保留，不默认移植 |
-| 旧工作树和历史材料库 | `D:\deepchoice-dsh`，`dsh/subtraction-repair-20261012`，`50baaba`；不是恢复线工作区 |
+| 工作区 | `D:\deepchoice-precodex` |
+| 分支 | `precodex/deepseek-adapter` |
+| HEAD | 本交接文档提交 |
+| 生产代码基点 | **`b080213`**（恢复线代码；其上仅文档提交） |
+| 历史恢复起点 | `48b32bd`（只追溯，不 reset） |
+| 入口 | `POST /research` + `frontend/app.py`（Streamlit） |
+| 解释器 | `D:\deepchoice-agent\.venv\Scripts\python.exe`（3.12.4）+ 显式本树 PYTHONPATH |
+| 用户修改/未跟踪 | `learned_docs.json` 修改与 17 项既有运行材料保留原位 |
 
-本次核对时恢复线仍为 b080213，仅有 learned_docs.json 用户修改和17项既有未跟踪材料。
-随后本次交接若形成文档提交，HEAD 可以改变；生产代码仍以 b080213 为核对基点。
-48b32bd 是历史恢复起点，不能把“回到恢复线”误解为 reset 到该提交、删除其后成果。
-路径名字里的 agent/precodex、代码新旧、测试数量都不能替用户决定开发版本。
+## 能力现状
 
-## 先解除错误的工作区绑定
+- 6 路检索（Tavily 网页、官方文档、GitHub、ArXiv、社区、本地知识库），统一来源/失败语义，
+  Tavily 多 key 轮换与耗尽池；官方正文经统一安全抓取（大小、期限、重定向、编码有界）。
+- 来源 4 维规则评分、冲突检测 + 两阶段仲裁、证据链组装、结论综合、6 项自审与定向重试。
+- 3 种报告格式（what_why_how / evidence_first / comparison_matrix），引用编号与目录，
+  Markdown/PDF 导出；Streamlit 前端含澄清、进度、观测面板和报告阅读。
+- 配对诊断入口 `scripts/launch_pair.py` / `pair_worker.py` / `run_pair.py`（同一共享采集，
+  基线臂 vs 候选臂）；`scripts/seal_case.py` 冻结案例；`run_service.py` 启动受守卫的单次运行。
+- 模型：DeepSeek Flash（默认 `deepseek-v4-flash`）；旧 Qwen/DashScope 名称只是兼容，不再使用。
 
-停止在已放弃分支上新增修改和派发；已有任务如仍运行，先按其真实状态妥善结束并记录，
-不要批量杀 Python、删除输出或把未知提交当成未执行。未完成改动保留原地并简记。
-切换 dsh 的实际工作区到 `D:\deepchoice-precodex`，在那里读取 AGENTS.md 与本页。
-不只在旧会话里 cd 后继续继承 durable 规则。复核分支、HEAD 与用户修改即可，不重做全仓审计。
+## 最近的真实结果（2026-10-22，v12 配对）
 
-恢复线实际 API 为 `POST /research` 及 `/research/{task_id}/...`，前端在本树 frontend/app.py。
-不再要求它接入 `/api/v1/tasks/*`、恢复 durable 的3866项测试或接入 final_batch 才能继续。
-这些功能如未来有需要，由用户与 dsh 主动选择，不由旧交接自动引入。
+- 任务 `v12pair-f3166ac23bcc`（Temporal vs Camunda），candidate commit `f151361`。
+- **两臂均未通过冻结正式门槛**：baseline `needs_review`（5 项必需内容全 partial）；
+  candidate 仅诊断带 `usable (conditional, lower band)`，5 项同样 partial、0 个 score-3，
+  未过正式 C1“版本化官方证据”。
+- 实际用量：共享采集 1 次；总计 7 LLM、6 Tavily POST、官方 HTTP 5（4 次页面尝试、3 个全文页、
+  1×403）；baseline 23,535 tokens/70 s，candidate 59,861 tokens/153 s；合计 known
+  85,916 tokens、263.8 s，cost unknown；未补跑。seal 在 `.scratch/v12_seal`，报告在
+  `outputs/v12pair-f3166ac23bcc/` 与 `D:\deepchoice-dsh\v12_run/`。
+- v12 之后代码还有两个修复：`e0e4aa1`（决策状态与自审撤回统一）、`b080213`（撤回引用同步、
+  候选校验），**尚无新的真实运行验证**。历史 668 项测试通过是旧记录，本次未重跑。
 
-## 防止换目录后仍导入错误代码
+## 当前判断
 
-共享环境 `D:\deepchoice-agent\.venv` 的 editable 安装指向另一工作树。使用其解释器不等于
-使用其源码；必须显式指定当前树源码，核对导入路径。以下是无需启动服务的本地核对：
+工程链能运行、能出报告、能展示与导出；内容质量还没达到“可展示的正式报告”。
 
-```powershell
-Set-Location D:\deepchoice-precodex
-$env:PYTHONPATH = 'D:\deepchoice-precodex\src;D:\deepchoice-precodex'
-D:\deepchoice-agent\.venv\Scripts\python.exe -c "import deepchoice; print(deepchoice.__file__)"
-```
+来自真实运行材料的主要差距：
 
-打印路径应在 `D:\deepchoice-precodex\src` 内。不要为了切换代码覆盖共享 venv 或全局 Git 配置。
-既有本地 `serve_precodex.py` 已显式设置本树源码、工作目录、8100回环端口，并从另一树的
-.env 读取凭据；它是启动入口参考，不由本交接自动执行。服务启动可能预加载模型或外呼。
-前端单独设置 `API_BASE=http://127.0.0.1:8100`，并从本树运行 frontend/app.py；后端子进程的
-环境不会自动传给另一个前端终端。每次实际运行记录所用版本，避免服务与前端串到其他树。
+- 官方/版本化证据覆盖不足（决定性命中页少，snippet 多，部分官方页抓取失败）。
+- 来源归属与“页面在讲哪个候选”的对应仍可能出错。
+- 报告对问题的承诺可能大于实际内容（例如条件推荐只剩资料描述）。
+- 生成的结论/数值可能超出已保存证据的适用范围。
 
-## 哪些成果可以继承
+## 下一步（用户已确认的方向）
 
-恢复线已有来源采集、共享证据、报告/引用和条件决策等实现；第7/8轮决策修改已包含在 b080213。
-历史交付记载668项测试通过，本次没有重跑，也不据此声称内容达标。
-恢复线第12次配对两臂正式门槛未通过，原报告、评分和 seal 保留。其来源覆盖、回答质量和
-展示体验可供用户与 dsh 判断下一步，但不自动启动旧的轮次、晋级或停止流程。
+1. **重新设计运行/评测案例**：按项目真实输入方式写简短问题 + 必要场景与约束，让澄清、
+   查询分析和检索能消化；不使用 Codex 过度细节化的案例作为新验收，旧案例只作开发回归。
+2. **先跑出一份可展示报告**：记录版本、实际用量和真实输出；按“是否回答原问题、依据是否
+   适用、条件与缺口是否明确”评审，定位问题出在哪一层，做最小修改。
+3. 报告可用后再做链路稳定性与小样本真实指标；正式指标另定样本、日期、分母与限制后发布。
+4. 现有 9 节点阶段划分不简化；问题与修复以真实报告内容为准，不回到工程向的检查堆叠。
 
-以下材料属于另一条已放弃路线，按需参考，不是本树的已证实故障清单：
-- `D:\deepchoice-dsh\r10_diag2\`：fef61b8 的 A-02/E-01 验证链诊断和已用额度。
-- `D:\deepchoice-agent\.scratch\r10_round2\`：错误接续后的记录；用量按实际产物另行对账，不能抹掉。
-- `7da3701`、`ae5f3f3`：可参考思路，不整包 cherry-pick，不把其测试失败拿来修本树。
-- durable 状态机、5/4事实容量、source_checks、final_batch、132题计划：均不能默认成为恢复线要求。
+## 保留材料与边界
 
-各树 learned_docs、.env、数据库、历史报告、stash 和未跟踪材料保持原状。不整体搬动工作树。
-此前D盘根目录三组临时材料已经归档到
-`D:\deepchoice-dsh\.scratch\root-folder-archive-20261025`，不用再次整理。
+- 保留：`outputs/` 历次运行、`.scratch/v*_seal`、根目录 `run_record*`/`run_payload*`、
+  `D:\deepchoice-dsh` 的 v9–v12 材料与 `r10_diag2`、`D:\deepchoice-agent\.scratch\r10_round2`、
+  `7da3701`/`ae5f3f3` 提交、2 个 stash。均不自动移植、不删除。
+- 不做：接入 durable `/api/v1/tasks`、移植 durable 线代码、修复其测试、reset 回 `48b32bd`、
+  push/发布/历史重写。
+- 真实费用与用量照实记录；unknown 不写成 verified，不伪造支持。
 
-## 用户与 dsh 直接决定下一步
+## 文档
 
-尽快让个人项目可用、可展示并形成真实指标。下一目标、路线、预算、样本量和验收由用户与
-dsh 商定；Codex 不再负责审批。已委托范围内连续实现、调试、复测，可复用失败题和现有材料，
-不要求逐例批准、独立准备者、seal、多轮复核或每包全套。验证针对实际改动与用户输出。
-可以调整/删并提示、节点、来源选择、自审及报告结构，不以保留旧架构为目标。
-真实结果、秘密、用户数据和实际预算仍照实保护；unknown 不伪装成 verified。
-
-本次只纠正基线与交接，不增加或重置额度。若用户已经在 dsh 明确授权新工作，保留其有效范围，
-核对已用部分后继续；不因换工作区再把已消耗额度变成余额，也不无故要求重复批准。
-接手后简短说明实际采用的代码和现有能力，再与用户继续产品讨论；不另开交接审计项目。
+活动文档：本页、`AGENTS.md`、`README.md`。历史记录：`CHANGELOG.md`、`RETRACTIONS.md`、
+`fix_pack_*.md`、`run_record*.md`、`template-data/`、`template-outputs/`、
+`local_cleanup_archive/`、`.scratch/`。

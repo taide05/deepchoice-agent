@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased] - 2026-10-26
+
+### Changed
+- 重写活动工作文档为当前 DSH 工作方式：`AGENTS.md`、`HANDOFF.md`、`README.md` 改为恢复线
+  （`precodex/deepseek-adapter`、`/research`）的工作规则、当前能力状态与下一步目标
+  （先产出一份可展示报告，再谈稳定性与小样本指标）。移除 Codex 时期的流程性要求与
+  失效的入口/模型描述。
+- CI 使用受支持的 Python 3.12；benchmark workflow 改为手动触发且不再断言旧指标下限
+  （旧 300-case 数字只作历史归档）。
+- 没有改动产品代码、测试、运行、报告、seal、数据库、learned_docs 或用户数据；历史指标
+  保留原日期与分母，不作为当前版本成绩。
+
 ## [Unreleased] - 2026-10-21
 
 ### Added

@@ -1,209 +1,114 @@
-# DeepChoice — AI 驱动的技术选型深度研究 Agent
+# DeepChoice — AI 驱动的技术选型研究 Agent
 
-## 当前开发入口（2026-10-25纠偏）
+DeepChoice 基于 Python/LangGraph：输入一个技术选型问题和候选技术，它会检索多种来源、
+比较证据并生成可阅读、可导出的报告。报告区分来源事实、模型推断和未知项；没有充分依据时
+保留明确缺口，不编造结论。
 
-用户选择继续恢复线 `D:\deepchoice-precodex` / `precodex/deepseek-adapter`，现存代码基点
-`b080213`；恢复起点为 `48b32bd`，不重置或删除其后的成果。接手见本树
-[AGENTS](AGENTS.md) 和 [HANDOFF](HANDOFF.md)。
+> 当前状态（2026-10-26）：本仓库处于恢复线 `precodex/deepseek-adapter`，产品入口为
+> `POST /research`。最近一次真实配对（2026-10-22）两臂均未通过当时的正式内容门槛；
+> 当前版本还没有新的正式指标。开发与下一步见 [AGENTS](AGENTS.md) 和 [HANDOFF](HANDOFF.md)。
 
-此前指向 `deepchoice-agent` 作为“唯一维护入口”的说明撤回：其 fef61b8/durable 路线已被
-用户放弃，不能因目录名字或更多测试重新作为产品基线。本树仍使用 `/research`，共享解释器
-须显式指定本树源码，避免editable安装导入另一树。目标、路线、预算由用户与dsh直接决定。
+## 能做什么
 
-以下能力、默认配置与历史指标需结合本树实际代码阅读；旧轮数/晋级流程不是当前执行要求。
-既有失败结果保留，测试通过不等于内容普遍达标，也不要求先完成百例才可开发或准备展示。
-
-DeepChoice 是一个基于 LangGraph 的多 Agent 研究系统，输入"FastAPI vs Flask 该选哪个"就能自动搜索 6 路数据源、给每篇信源打分、检测矛盾观点并用两阶段仲裁解决、最终输出有据可查的对比推荐报告。
-
-## 为什么值得关注
-
-技术选型搜索通常靠开发者自己翻博客、刷 GitHub、看文档，几个小时下来还不确定信源质量。DeepChoice 把这个过程自动化了——不只是搜，而是评分、对比、仲裁、自审，每一句推荐都能追溯到具体来源。
-
-与 Perplexity/ChatGPT 的对比：它们给答案但不展示证据链和矛盾处理过程。DeepChoice 的输出是**可审计的**——你会看到每篇文章的信源评分、冲突观点是怎么仲裁的、结论为什么可信。
-
-## 核心特性
-
-- **6 路并行检索**：Tavily 网页搜索 + arXiv 论文 + GitHub 仓库 + ChromaDB 本地知识库 + StackExchange 社区 + 官方文档直连（222 条：91 种子 + 131 运行时自学习入库），`asyncio.gather` 并发跑，单路挂了不炸全局
-- **Tavily 密钥池故障转移**：多 key 轮换，401/432 自动拉黑并持久化到耗尽池（SHA256 哈希状态文件，28 天自动重探），429 限流瞬态退避不误杀，额度耗尽自动切换到仍有额度的 key
-- **4 维信源评分**：Authority（官方文档 > 个人博客）、Timeliness（90 天内 > 2 年以上）、Consistency（多源一致 > 孤立观点）、Verifiability（有代码 > 纯观点），规则引擎打分，不靠 LLM 拍脑袋
-- **两阶段冲突仲裁**：先让 flash 模型仲裁所有矛盾对（快），再挑出最模糊的一对交给 pro 模型深度重裁（准）。只给一对走 pro，费用可控
-- **自审查 + 定向重试**：最后一环用 6 项清单审查报告质量，发现问题自动补搜知识缺口，区分小缺口（重走检索适配）和大缺口（重走全管道）
-- **3 种报告格式**：What/Why/How 标准报告、Evidence-First 先给结论再列证据、5 维对比矩阵表。同一份数据，不同输出形式
-- **统一决策表达**：`decision_status` 明确区分有依据的推荐（`recommended`）、条件选择（`conditional`）和证据不足暂缓（`insufficient_evidence`）；非法/解析失败输出为 `invalid`，不会伪装成暂缓。不会再从空 winner 回退到首个 ranked option，也不会按 constraint-fit 自动改选；渲染器不自行补选。单次自审可整体撤回无依据推荐并转为暂缓，但不能替换赢家或自动升级结论。撤回时只撤销被替换字段的旧引用绑定，保留候选分析/权衡的合法引用；候选结构在遍历/渲染前校验，显式候选名单使用精确身份（`C++`/`C#` 不被 `C` 命中），非法 `ranked_options` 直接为 invalid 而非崩溃。
-- **前置澄清模块**：混合式多轮对话，帮用户把"帮我选个框架"这种模糊需求澄清到"团队 5 人、中等复杂度、后端 REST API、关注性能"再开始研究
-- **可观测性面板**：运行轨迹时间轴（9 节点瀑布）+ 检索明细（每路延迟/失败）+ 冲突仲裁可视化 + Token 统计（按 Agent/模型聚合），研究过程全程可见
-- **报告阅读视图**：目录导航 + 引用角标→证据链卡片联动 + 信源编号，支持 Markdown/PDF 导出
+- 输入研究问题、候选技术、场景与约束；可选前置澄清把模糊需求补成可研究任务。
+- 从网页、官方文档、GitHub、arXiv、社区和本地知识库检索，保留来源失败和证据冲突。
+- 对来源做规则评分，检测并仲裁冲突，组装证据链，生成带来源编号的条件分析并自审。
+- 生成 what/why/how、evidence-first 或对比矩阵三种报告，前端可看进度、检索明细和
+  Token/耗时观测，支持 Markdown/PDF 导出。
+- 提供运行时取消、SSE 进度流、历史记录和快照查询。
 
 ## 快速开始
 
-```bash
-# 1. 克隆
-git clone https://github.com/taide05/deepchoice-agent.git
-cd deepchoice-agent
-pip install -e ".[dev]"
+需要 Python 3.11/3.12 与可用的 DeepSeek、Tavily 凭据（本仓库不提交任何密钥）。
+共享虚拟环境位于 `D:\deepchoice-agent\.venv`，但它默认导入的是另一工作树的 editable 包，
+**必须显式设置本树 PYTHONPATH**：
 
-# 2. 配置 API Key
-# .env 文件中填入：
-#   DEEPSEEK_API_KEY=sk-xxx
-#   TAVILY_API_KEY=tvly-xxx
-#   GITHUB_TOKEN=ghp_xxx（可选，提升 API 限额）
+```powershell
+Set-Location D:\deepchoice-precodex
+$env:PYTHONPATH = 'D:\deepchoice-precodex\src;D:\deepchoice-precodex'
+$python = 'D:\deepchoice-agent\.venv\Scripts\python.exe'
 
-# 3. 启动后端
-uvicorn deepchoice.server.app:app --reload
+# 后端（本树入口，127.0.0.1:8100）
+& $python -m uvicorn deepchoice.server.app:app --host 127.0.0.1 --port 8100
 
-# 4. 开新终端，启动前端
-streamlit run frontend/app.py
-# 浏览器打开 http://localhost:8501
+# 新终端：前端
+$env:API_BASE = 'http://127.0.0.1:8100'
+& $python -m streamlit run frontend/app.py
 ```
 
-### 官方来源正文抓取限制（实验分支，2026-10-19）
+凭据通过环境变量或本地不提交的 env 文件提供（应用启动时会 `load_dotenv()`）；也可使用
+`run_service.py` 启动受停止线和进程守卫管理的单次运行（它按路径加载共享凭据，不打印）。
+健康检查：`GET http://127.0.0.1:8100/health`。
 
-实验分支的 official 来源现在通过 `outbound.safe_fetch_page` 统一安全入口抓取正文；retriever 不再自行构造 HTTP client。它只接受可固定 IP 的 direct 路由，代理和转发通道路由会明确拒绝：
+一次研究的最小请求：
 
-- 来源发现统一覆盖声明的候选和约束中的决定性平台名称：先复用已有普通检索结果和种子映射，再对未解析目标调用现有 LLM fallback；不额外发探测或第二次检索。URL 身份不再要求“产品全名等于域名标签”：多词名称可以匹配拼接的官方 host label，也可以匹配“自有 vendor host + 路径”；**非 curated 的 learned/prior/fallback 来源**必须再经安全抓取确认页面正文确实命名该候选/约束，否则只保留为 navigation，不能成为证据，也不能仅凭相似域名或公共托管子域认定为官方；curated 种子仍按人工核验处理。fallback 的 token 用量进入既有 `token_usage` 记录。
-- 页面尝试数与实际 HTTP 请求数分开计数；每次研究默认最多 2 次页面尝试、6 次 HTTP 请求（含重定向；official 路由选择只读配置，不再发网络探测请求），重定向都计入后者。来源结果行数不等于 HTTP 请求数；两者分别记录，未知值保持 unknown。预算按现有 `run_limits` 研究执行身份归属：同一研究重入检索累计，不同研究独立；当前默认图只检索一次，不把重入缺口写成已发生的真实超额。
-- 单页共享总 deadline 15 s（覆盖配置路由选择、DNS、连接、重定向和读取）；响应读取上限 200,000 bytes，存储正文上限 8,000 字符，最多 3 跳重定向。`bytes_read` 记录从流实际消费的字节（可能因块边界略超 cap），`bytes_retained` 记录截断后保留的字节；声明的 `Content-Length` 超限和未知长度现在走同一条有界流：保留部分正文并显式记录 `page_truncated`、`truncation_reason=response_size_cap`、`declared_content_length` 与 `content_length_exceeded`，不再一边整页拒绝、一边悄悄截取。
-- 只接受 `Content-Encoding: identity`；gzip 等编码在 `aiter_bytes` 之前明确拒绝，避免 HTTPX 先完整解压大块数据。缺失或不允许的 content-type 也明确失败，不因正文非空就当成可引用正文。
-- 结构性 prose 准入会拒绝检测到的纯菜单、目录/链接主导页、表单/登录页；非常规页面仍可能被误判，不声称覆盖所有站点。正文由主内容（段落、列表、代码/配置块、表格单元格）和最近标题上下文组成；`<main>/<article>`/role=main 优先，主内容内的列表/代码/表格与其标题/限定说明一起保留，导航文本不进入正文；页面角色（prose/content/mixed/structured/navigation）随 `main_block_count`、`prose_block_count`、`heading_context_count` 一起记录。正文按“原页面提取 / 存储片段 / 输入可见范围”分别记录 `body_page_chars`、`body_stored_chars`、`visible_chars` 与各自截断标志；没有官方页面元数据的非 official snippet 的整页范围为 unknown，不冒充整页。
-- 来源身份来自行级事实而非 URL/retriever 名称：`source_owner`、`source_kind`、`body_identity_verified`、`has_body`、`fetch_status` 从 official 行贯穿评分、证据链、共享证据包、综合/自审和 coverage。`docs.`/`readthedocs` 等 URL 词不再单独赋予 official 权威；同一 URL 的 Tavily 片段行与抓取失败/导航行保留各自事实，不互相覆盖或冒充正文。
-- 综合与自审共用一个证据包和同一个由 research state 派生的选段输入（task、constraints、sub_questions 都一致）：先核算总输入预算 `EVIDENCE_INPUT_BUDGET_CHARS`，所有已保存正文总量在预算内时传递全文；确实超限时才按源有界选段，序列化后的正文和省略说明合计不超过预算，并在两处提示中记录来源范围、省略字符和上下文限定；小正文优先完整保留，剩余预算再分配给大正文，不做末尾盲截断。相关 official 默认值：`OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN=2`、`OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN=6`、`OFFICIAL_FETCH_TOTAL_DEADLINE_S=15`、`OFFICIAL_FETCH_MAX_BYTES=200000`、`OFFICIAL_BODY_STORE_CHARS=8000`。
-- 配对诊断运行入口显式冻结并在启动时核对实际加载值：`OFFICIAL_FETCH_MAX_BYTES=1048576`（1 MiB retained）、`OFFICIAL_BODY_STORE_CHARS=20000`、`EVIDENCE_INPUT_BUDGET_CHARS=24000`；worker 在 `begin_run` 前比较模块实际值与期望值，不一致即拒绝派发。成功、prose 拒绝和传输失败路径都保留已知 bytes/truncation/declared 字段，unknown 保持 None，不填 0。
-- 采集先使用检索实际返回的相关文档 URL，再考虑 curated 根页面，模型生成 URL 只作为最后候选；页面展示标题（如 “Overview - Sigstore”）不再因不等于完整候选名而被丢弃，候选身份、页面讨论对象和来源权威性分别核验。比较式题目的 Tavily adapted queries 会确保一个同时命名所有候选的覆盖查询；同一候选/平台组内，实际检索文档优先于平台首页或根入口，候选正文尝试先于平台约束页，避免平台首页先耗尽正文额度。
-- **简单基线/配对入口**（实验树，离线默认）：`src/deepchoice/evaluation/simple_baseline.py` 在检索完成和来源评分之后冻结同一份共享证据（同原请求、模型、正文和证据预算）。基线只做确定性证据序列化→一次综合→现有引用绑定/报告渲染；候选臂保留冲突/证据链/综合/自审尾段。基线不运行冲突、自审或自动重试。`scripts/run_pair.py` 默认离线；`--allow-external` 只允许模型调用，候选补搜另需显式的 `--allow-supplementary-search`。真实配对入口 `scripts/pair_worker.py` 由 `scripts/launch_pair.py` 通过现有 `run_limits` 和进程守卫启动：共享采集只做一次并在副臂前保存快照，两臂串行且共用 48/24/1800 总上限、每臂 ≤900 s 和同一时钟；分臂计数只取增量，不重置总额。`shared_retrieval_source_envelopes` 与派发计数的 actual requests 分开，无法核实的检索 HTTP 总数保持 unknown。冻结包与消费者来源编号/正文不一致时，在模型派发前拒绝该臂。该入口是实验树旧 `/research` 接口能力，不代表现代 durable/API 产品接口已通过。
-
-### Docker 部署
-
-```bash
-docker build -t deepchoice .
-docker run -p 8000:8000 --env-file .env deepchoice
+```powershell
+$body = @{
+  query = '我们是一个 5 人团队，做 B2B SaaS，现有 Django + PostgreSQL，想在 Celery 和 RQ 之间选一个后台任务/定时任务方案。需要能可靠重试、能监控任务状态，并尽量少引入新组件。'
+  candidate_techs = @('Celery', 'RQ')
+  constraints = @('团队 5 人', '现有 Django + PostgreSQL', '需要可靠重试与任务监控', '尽量少引入新组件')
+  sub_questions = @('两者的重试与失败处理机制有什么区别？', '监控和运维成本如何？', '什么情况下应选其中一个？')
+  report_format = 'what_why_how'
+  language = 'zh'
+} | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8100/research' -ContentType 'application/json' -Body $body
 ```
 
-镜像构建为纯在线安装（清华镜像源），不依赖本地 wheels 目录。BGE-M3
-嵌入模型在容器首次运行时自动下载（约 2GB，下载到 `/root/.cache/huggingface`），
-建议挂载 volume 持久化模型缓存：
+返回 `task_id` 后，用 `/research/{task_id}/status`、`/stream`、`/report`、`/annotated`、
+`/export` 取结果。
 
-```bash
-docker run -p 8000:8000 --env-file .env \
-  -v deepchoice-hf-cache:/root/.cache/huggingface \
-  -v deepchoice-outputs:/app/outputs \
-  deepchoice
-```
+## 配置
 
-## 架构概览
+| 变量 | 用途与默认 |
+|---|---|
+| `DS_FLASH_API_KEY` | 所有 LLM 调用；兼容 `FLASH_API_KEY` / `DEEPSEEK_API_KEY` |
+| `DS_FLASH_MODEL` / `DS_FLASH_BASE_URL` | 默认 `deepseek-v4-flash` / `https://api.deepseek.com/v1` |
+| `TAVILY_API_KEYS` / `TAVILY_API_KEY` | 网页检索；多 key 用逗号分隔，支持轮换与耗尽池 |
+| `GITHUB_TOKEN` / `STACKEXCHANGE_API_KEY` | 可选，提高对应来源限额 |
+| `LLM_DS_CONCURRENCY` | 冲突扫描并发，默认 80 |
+| `PRECODEX_LLM_MAX` / `PRECODEX_TAVILY_MAX` / `PRECODEX_WALL_MAX_S` | 本地运行的停止线，默认 40 / 24 / 900 |
+| `LEARNED_DOCS_READONLY` / `RETRIEVAL_CACHE_ENABLED` | 评测时冻结知识库写入与检索缓存 |
 
-```
-用户输入 "FastAPI vs Flask"
-        │
-        ▼
-   ┌──────────────┐
-   │  澄清模块      │  多轮对话补齐场景/复杂度/约束（最多 3 轮）
-   │  混合式+软门禁  │  用户不知道该选什么 → 按类别推荐候选技术
-   └──────┬───────┘
-          │ 澄清后的研究任务 + 5 个分解子问题
-          ▼
-   ┌──────────────────────────────────────────────────────┐
-   │              LangGraph 管道（9 Agent）                │
-   │                                                      │
-   │  [1] QueryAnalyzer      查询分解为 5 维子问题         │
-   │         │                                            │
-   │  [2] QueryAdapter       每个子问题 → 6 种检索词       │
-   │         │                                            │
-   │  [3] MultiRetriever     6 路并行搜索                  │
-   │         │                                            │
-   │  [4] SourceEvaluator    4 维加权评分（规则引擎）       │
-   │         │                                            │
-   │  [5] ConflictDetector   BGE-M3 检测矛盾 + 两阶段仲裁  │
-   │         │                                            │
-   │  [6] EvidenceChain      证据链组装 + 强弱标记          │
-   │         │                                            │
-   │  [7] ConclusionSynth    最终推荐 + 排序 + trade-off   │
-   │         │                                            │
-   │  [8] ReportGenerator    3 种格式选一渲染               │
-   │         │                                            │
-   │  [9] SelfReviewer       6 项质量审查                  │
-   │         │              confidence < high → retry ──┐  │
-   │         ▼                                         │  │
-   │       END  ◄──────────────────────────────────────┘  │
-   └──────────────────────────────────────────────────────┘
-          │
-          ▼
-   FastAPI SSE 流式输出 → Streamlit 前端（中/英/日/韩）
-```
+旧的 Qwen/DashScope 变量和 `LLM_*`/`PRO_*` 名称已退役，不作为 DeepSeek 的回退凭据。
 
-**两阶段仲裁细节**：
-```
-所有冲突对 → flash 初裁（~3s/对）
-                     │
-    低置信度对 → 取分数差距最小的 1 对
-                     │
-            重裁（300s timeout，独立并发闸）
-```
+## 已知限制
 
-## 关键技术决策
+- 单用户、可信网络部署：API 未提供认证或任务所有权，运行时为单实例；不要直接暴露公网。
+- 引用 `verified` 表示页面可达且词法/引用检查通过，不表示模型推断或部署验证成立。
+- 官方文档抓取受大小、期限、重定向和路由限制；页面被拒或抓取失败会如实记录为失败。
+- 2026-10-22 的 v12 配对未过正式内容门槛，主要差距在官方/版本化证据覆盖与报告内容；
+  当前没有该版本的正式通过率或质量指标。
 
-**信源评分用规则引擎而非 LLM**。Authority/Timeliness/Consistency/Verifiability 四个维度通过 URL 模式匹配、日期计算、关键词检测来评分，结果是确定性的、可复现的。用 LLM 评分会引入幻觉风险——它可能给一篇 CSDN 博客打 9 分。做量化评估的时候，确定性比灵活性更重要。
+## 历史基准（归档，非当前成绩）
 
-**冲突检测走嵌入相似度 + LLM 语义扫描**。BGE-M3 先算标题余弦相似度（>= 0.6 的才是潜在冲突对），再用 LLM 语义扫描识别推荐差异、权衡分歧和厂商偏见（而非仅判断"直接事实矛盾"），confirmed 对走两阶段仲裁。300 case 终测冲突检测率 28.8%——其中 keyword 预筛部分（确定性）低于 200 case 的 56.4%，主因是新增 case 的 known_contradictions 标注不足（检测靶子少），下一步优化方向是预筛召回而非仲裁质量。
-
-## 量化指标（300 case 混合基准，2026-08-31 终测）
-
-150 对比场景（TC）+ 150 开放场景（OS），覆盖技术选型对比与真实业务需求描述两类输入。300 case 按 TC/OS 交错重排、拆 3 批跑（每批 50 TC + 50 OS），超时/变体补跑后合并。
-
-| 指标 | 值 | 说明 |
-|------|-----|------|
-| Top-1 准确率 | **92.0%**（287 可判定） | 推荐排名第一的技术匹配人工标注正确答案（13 个 TC 为 context_dependent 标注——无单一正确答案，按设计不计入 Top-1） |
-| 任务成功率 | **100%**（300/300） | 零失败——str.get bug 已根除（`llm.py` 兜底）+ 超时补跑 |
-| 声明溯源率 | **93.0%** | 精确口径（claim_citation_rate）：每条事实声明带 `[Source: title]` 且 title 真实存在于证据链；**伪造引用 0**（后置校验剔除幻觉引用） |
-| 信源召回率 | **66.7%** | official_doc 65.6% / github_repo 73.0% / package_registry 50% / academic+community ~100%（300 case，与 200 case 66.2% 持平） |
-| official_doc 召回率 | **65.6%**（346/528） | 官方文档直连 222 条（91 种子 + 131 运行时自学习入库，2026-08-31 种子化） |
-| 端到端延迟 P50 | **342.1s** | 中位数——约 5.7 分钟完成一次技术选型研究 |
-| 端到端延迟 P95 | **445.3s** | 95 分位——480s 预算内 |
-| 报告质量 A 级（历史名称） | **99%**（297/300） | 5 项确定性结构检查（不调 LLM）；不表示事实正确或内容有据可用 |
-
-> **数据来源**：以上数字来自 300 case 混合基准（`benchmarks/cases_eval_300.json` = 150 TC + 150 OS）。采集分 3 批（`--batch 1/2/3 --batch-size 100`），超时/变体集中补跑（`cases_retry_all.json`）后按 case_id 替换合并。评测覆盖经 3 轮审计修正（case 标注缺陷 T1/T2/T3 修正、OS acceptable 补齐托管维度、变体 query 双场景矛盾清除）。**诚实口径**：Top-1 92.0% 是修正评测覆盖后的真实值——剩余 miss 为真·两难（标注无共识，按设计保留）、模型主流偏差、以及模型真错（详见 case 审计记录）。2026-08-31 终测归档；全量测试 **227 passed + 1 skipped**。
-
-结构 A 级、推荐标签命中和引用标题存在不等于语义质量；补跑替换合并后的任务成功率
-不等于首次运行成功率。新正式指标须附数据集版本、日期、分母、基线及限制后另行发布，
-不覆盖历史数字。以下命令仅保留历史采集方法，旧路径和并发参数不作为当前运行指令。
-
-```bash
-# 历史 300 case 采集方法（非当前执行授权，不能保证重现旧结果）
-cd D:\deepchoice-agent
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 1 --batch-size 100 --concurrency 12
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 2 --batch-size 100 --concurrency 12
-python -m benchmarks.run_baseline --cases-file benchmarks/cases_eval_300.json --batch 3 --batch-size 100 --concurrency 12
-# 合并（自写脚本：runs-batch01/02/03 + 补跑 runs-full 按 case_id 替换，不用内置 merge）
-```
-
-**已知局限**：端到端延迟较高（P50 342.1s/P95 445.3s），主要来自矛盾检测、仲裁和证据收集——这是深度研究的代价，480s 预算内。300 case 终测暴露一个信号：**冲突检测率 28.8%**——新增 case 的 known_contradictions 标注不足，预筛召回是杠杆。Tavily 月配额仍是外部约束，但密钥池（多 key 轮换 + 耗尽池持久化 + 28 天自动重探）已把单 key 耗尽从故障降级为吞吐波动。
-
-## 技术栈
-
-LangGraph（9 Agent + checkpoint + 条件路由） · FastAPI + SSE · Streamlit（深色主题 + 4 语言 + 观测面板） · Qwen（DashScope，qwen3.8-flash） · BGE-M3 嵌入 · ChromaDB · Tavily（密钥池） · GitHub/ArXiv/StackExchange API · xhtml2pdf（PDF 导出） · Pydantic v2 · pytest
+早期 300 case 混合基准（`benchmarks/cases_eval_300.json`，2026-08-31 终测，150 对比 +
+150 开放场景）记录过：Top-1 92.0%（287 可判定）、任务成功率 100%（300/300）、
+声明溯源率 93.0%、official_doc 召回 65.6%、端到端 P50 342.1 s / P95 445.3 s、
+结构 A 级 99%（297/300，仅确定性结构检查）。这些数字属于当时代码与数据集，
+**不代表当前版本**；当前版本的指标需重新采集并注明样本、日期、分母与限制。
 
 ## 项目结构
 
 ```
 src/deepchoice/
-├── agents/          # 9 Agent 节点
-├── retrievers/      # 6 路检索器（统一 BaseRetriever 接口）
-├── clarify/         # 前置澄清模块
-├── formats/         # 3 种报告格式
-├── server/          # FastAPI（16 端点：app.py 12 + clarify_routes 4，含 SSE）
-├── state.py         # ResearchState TypedDict
-└── utils/           # LLM 客户端 / BGE-M3 嵌入
-
-benchmarks/
-├── metrics.py             # 7 指标计算（GSM 框架）
-├── run_baseline.py        # 分批 + checkpoint + 趋势对比
-├── merge_checkpoints.py   # 中断跑批的 checkpoint 合并工具
-├── report_quality.py      # 5 项确定性质检（A/B/C/D 评级）
-├── cases_200.json         # 200 对比场景 case（50 标注 + 150 变体）
-├── cases_eval_200.json    # 200 混合基准（100 TC + 100 OS）
-├── run_all_batches.ps1    # 分批运行脚本
-├── locustfile.py          # 基础并发负载测试
-└── annotated_cases.json   # 50 手标注 case
+├── agents/        # 9 个 LangGraph 节点：分析/适配/检索/评分/冲突/证据链/综合/报告/自审
+├── retrievers/    # 6 路检索器与统一来源接口
+├── clarify/       # 前置澄清
+├── formats/       # 3 种报告格式 + 引用与 PDF
+├── server/        # FastAPI（/research 系列 + /clarify + /health），SSE
+├── state.py       # ResearchState
+└── utils/         # LLM 客户端、BGE-M3 嵌入等
+frontend/app.py    # Streamlit 前端
+benchmarks/        # 历史 case 与批量工具（归档）
+scripts/           # 配对诊断、案例冻结等工具
+tests/             # 测试
 ```
+
+## 文档
+
+- [AGENTS.md](AGENTS.md)：工作方式、目标、运行与安全约定
+- [HANDOFF.md](HANDOFF.md)：当前代码身份、真实结果、材料位置与下一步
+- [CHANGELOG.md](CHANGELOG.md) / [RETRACTIONS.md](RETRACTIONS.md)：历史变更与已撤回结论
 
 ## License
 
