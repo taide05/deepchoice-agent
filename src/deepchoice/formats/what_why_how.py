@@ -189,10 +189,30 @@ def render(state: dict) -> str:
     # recommendation could disagree — and that mapping had to guess a page's
     # subject, which a page covering several products cannot answer.
     #
-    # Reusing the synthesis result removes a second, competing judgement rather
-    # than adding a rule. A candidate with no explanation is stated as such.
-    candidates = [str(c).strip() for c in (task.get("candidate_techs") or []) if str(c).strip()]
+    # When the request declared no candidates (an open "which one fits?" question),
+    # the ranked options are the only candidate set this run produced. Show them
+    # with their explanations and say explicitly that they were inferred, instead
+    # of leaving an empty "What" section.
+    candidates = [str(c).strip() for c in (task.get("candidate_techs") or [])
+                  if str(c).strip()]
+    inferred_candidates = False
+    if not candidates and rec:
+        for opt in rec.get("ranked_options") or []:
+            if not isinstance(opt, dict):
+                continue
+            name = str(opt.get("name") or "").strip()
+            if name and name not in candidates:
+                candidates.append(name)
+        inferred_candidates = bool(candidates)
     if candidates:
+        if inferred_candidates:
+            lines.append(
+                "> 原问题未指定候选；以下候选由本次检索与综合结果推断，属于待确认选项。"
+                if lang == "zh" else
+                "> The request declared no candidates; the options below were "
+                "inferred by this run's retrieval and synthesis and remain "
+                "unconfirmed.")
+            lines.append("")
         explained = {}
         for opt in (rec or {}).get("ranked_options") or []:
             if isinstance(opt, dict) and str(opt.get("name", "")).strip():

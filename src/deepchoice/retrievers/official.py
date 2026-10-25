@@ -24,13 +24,20 @@ from .official_fetch import (
 # Redirects consume the HTTP-request count; a proxy/forward route is rejected
 # rather than being allowed to bypass IP pinning. Route selection is
 # configuration-only and makes no network probe.
+#
+# Defaults restored to the caps the frozen paired diagnostics used (4 page
+# attempts / 12 HTTP requests / 1 MiB retained): the earlier 2/6/200 KB values
+# exhausted the page budget on the first candidate and truncated documentation
+# pages mid-body. Each attempt remains bounded by the per-page deadline, size and
+# redirect limits; the four attempts cover two candidates with one discovered page
+# and one curated root each.
 OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN = int(
-    os.environ.get("OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", "2"))
+    os.environ.get("OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", "4"))
 OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN = int(
-    os.environ.get("OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", "6"))
+    os.environ.get("OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", "12"))
 OFFICIAL_FETCH_TOTAL_DEADLINE_S = float(
     os.environ.get("OFFICIAL_FETCH_TOTAL_DEADLINE_S", "15"))
-OFFICIAL_FETCH_MAX_BYTES = int(os.environ.get("OFFICIAL_FETCH_MAX_BYTES", "200000"))
+OFFICIAL_FETCH_MAX_BYTES = int(os.environ.get("OFFICIAL_FETCH_MAX_BYTES", "1048576"))
 OFFICIAL_FETCH_MAX_REDIRECTS = 3
 OFFICIAL_BODY_STORE_CHARS = int(os.environ.get("OFFICIAL_BODY_STORE_CHARS", "8000"))
 

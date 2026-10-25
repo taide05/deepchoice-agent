@@ -631,4 +631,5 @@ def test_official_search_counts_page_attempts_separately(monkeypatch):
     envelope = asyncio.run(search.search(
         "FastAPI vs Flask", [], 10, None, ["FastAPI", "Flask"]))
     assert envelope["fetch_stats"]["page_attempts"] == 1
-    assert envelope["fetch_stats"]["max_http_requests"] == 6
+    assert envelope["fetch_stats"]["max_http_requests"] == \
+        official_mod.OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN

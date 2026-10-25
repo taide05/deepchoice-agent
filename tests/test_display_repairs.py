@@ -116,6 +116,19 @@ class TestDisplayText:
         assert retry_query not in md
         assert "RQ worker throughput" not in md
 
+    def test_open_question_uses_ranked_options_as_candidates(self):
+        # A request with no declared candidates still has the synthesis result's
+        # ranked options; an empty "What" section is not an acceptable report.
+        rec = {"ranked_options": [
+            {"rank": 1, "name": "RabbitMQ", "rationale": "routing"},
+            {"rank": 2, "name": "Kafka", "rationale": "throughput"},
+        ]}
+        state = _state(task={"query": "我们需要一个消息队列，选什么好？"},
+                       final_recommendation=rec)
+        md = render_www(state)
+        assert "### RabbitMQ" in md and "### Kafka" in md
+        assert "推断" in md or "inferred" in md
+
 class TestScannerRobustness:
     def test_unmatched_bracket_does_not_suppress_later_badges(self):
         """Body text can contain an unmatched `[`. The scanner must advance, not
