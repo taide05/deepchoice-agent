@@ -210,10 +210,10 @@ async def test_review_repair_inherits_context_but_never_accepts_context_coordina
     rejected, _ = apply_analysis_review(context, {"analysis_reviews": [{
         "analysis_id": "A1", "action": "keep", "source_checks": [["F1", "supports", [17]]]}]})
     # The invalid review cannot adjudicate the slot; the bound row is retained
-    # under the fixed advisory status instead of being deleted.
+    # under the fixed advisory status with the substantive rejection category.
     assert len(rejected["decision_analysis"]) == 1
     assert rejected["decision_analysis"][0]["review_status"] == "advisory_unreviewed"
-    assert "review_missing" in rejected["decision_analysis"][0]["advisory_reasons"]
+    assert "source_checks" in rejected["decision_analysis"][0]["advisory_reasons"]
     calls = []
 
     async def model(messages, **kwargs):

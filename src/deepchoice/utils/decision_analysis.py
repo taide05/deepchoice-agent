@@ -173,16 +173,25 @@ def bind_decision_analysis(recommendation, requirements, candidates, query="", *
     original = original_analysis_requirements(requirements, query)
     facts = {row["id"]: row for row in result.get("source_facts", [])}
     options = {value for value in candidates if isinstance(value, str)} if isinstance(candidates, list) else set()
+    normalized_options = {" ".join(value.split()).casefold(): value for value in options}
     for item in raw:
         if (not isinstance(item, dict) or not isinstance(item.get("kind"), str)
                 or item["kind"] not in KINDS):
             reject("invalid_kind")
             continue
-        option = item.get("option", "")
-        if (not isinstance(option, str) or (option and option not in options)
-                or (item["kind"] == "choice" and not option)):
-            reject("invalid_option")
-            continue
+        raw_option = item.get("option", "")
+        # Option labels grant decision authority only for kind=choice. They are
+        # matched to a supplied candidate by literal whitespace/case normalization
+        # (never an inferred alias). A non-choice row with an unusable label keeps
+        # its bound reasoning and loses only the label, instead of being dropped
+        # whole; a choice row still needs an exact supplied candidate label.
+        option = ""
+        if isinstance(raw_option, str):
+            option = normalized_options.get(" ".join(raw_option.split()).casefold(), "")
+        if item["kind"] == "choice":
+            if not option:
+                reject("invalid_option")
+                continue
         basis = None
         if require_basis or "basis" in item:
             basis, reason = bind_analysis_basis(item.get("basis"), facts)

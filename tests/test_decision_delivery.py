@@ -14,7 +14,9 @@ from deepchoice.agents import self_reviewer as review
 from deepchoice.agents.report_generator import FORMAT_RENDERERS
 from deepchoice.formats.decision import render_answer_report
 from deepchoice.utils.answer_delivery import finalize_answer_delivery
+from deepchoice.utils.decision_analysis import bind_decision_analysis
 from deepchoice.utils.question_packet import bind_question_rows
+from tests.test_analysis_sentence_basis import REQS, proposal
 from tests.test_self_review import BAD, GOOD, SOURCE, make_state, reviewed
 
 
@@ -138,3 +140,34 @@ def test_normalized_duplicate_question_rows_are_still_counted():
     assert len(selected) == 1
     assert diagnostics["rows_rejected_question"] == 1
     assert diagnostics["rows_selected"] == 1
+
+
+def _proposal_with(kind, option):
+    rec = proposal()
+    rec["decision_analysis"][0].update(kind=kind, option=option)
+    return rec
+
+
+def test_non_choice_row_keeps_bound_reasoning_when_option_label_is_unusable():
+    # An answer row cannot grant a decision through its label. A label outside
+    # the supplied candidates is cleared, not treated as a whole-row failure.
+    bound = bind_decision_analysis(_proposal_with("answer", "Temporal (managed)"),
+                                   REQS, ["Temporal", "Celery"], require_basis=True)
+    assert len(bound["decision_analysis"]) == 1
+    assert bound["decision_analysis"][0]["option"] == ""
+
+
+def test_choice_option_matches_supplied_candidate_by_literal_case_and_space():
+    bound = bind_decision_analysis(_proposal_with("choice", "  temporal "),
+                                   REQS, ["Temporal", "Celery"], require_basis=True)
+    assert len(bound["decision_analysis"]) == 1
+    assert bound["decision_analysis"][0]["option"] == "Temporal"
+
+
+def test_choice_option_still_requires_an_exact_supplied_candidate():
+    diagnostics = {}
+    bound = bind_decision_analysis(_proposal_with("choice", "Temporal managed"),
+                                   REQS, ["Temporal", "Celery"],
+                                   diagnostics=diagnostics, require_basis=True)
+    assert bound["decision_analysis"] == []
+    assert diagnostics["rejected"] == {"invalid_option": 1}
