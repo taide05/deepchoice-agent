@@ -349,10 +349,14 @@ class TestFinalArtefactsAgree:
         finally:
             sr.call_model = real
 
-    def test_the_saved_body_carries_the_review_gaps(self):
+    def test_the_saved_body_does_not_render_internal_retry_gaps(self):
+        # Self-review `knowledge_gaps` are retry search targets, not report prose.
+        # They stay in the final state/snapshot and must not appear as raw search
+        # strings under the report's "what we don't know" section.
         out, _state = self._run()
+        assert out["knowledge_gaps"], "fixture: the review recorded gap targets"
         for gap in self.REVIEW["knowledge_gaps"]:
-            assert gap in out["report"], f"review gap missing from saved body: {gap}"
+            assert gap not in out["report"], f"retry gap leaked into report: {gap}"
 
     def test_the_saved_body_equals_a_render_of_the_final_state(self):
         out, state = self._run()
@@ -442,12 +446,13 @@ class TestUnresolvedQuestionsAreRendered:
         rec = json.loads(json.dumps(state["final_recommendation"]))
         rec["unresolved_questions"] = ["问题甲：容量估算"]
         report = render({**state, "final_recommendation": rec})
+        # The synthesis result's user-facing question is rendered.
+        assert clean_label("问题甲：容量估算") in report
+        # Review retry targets stay in state and are not rendered as user gaps.
         gaps = state.get("knowledge_gaps") or []
         assert gaps, "fixture: the v4 run recorded knowledge gaps"
         for gap in gaps:
-            # Display is cleaned of dangling citation numbers, so compare the
-            # cleaned text: the gap itself must still be present.
-            assert clean_label(gap) in report, f"review gap lost: {gap[:40]}"
+            assert clean_label(gap) not in report, f"retry gap leaked: {gap[:40]}"
 
     def test_a_duplicate_is_shown_once(self):
         from deepchoice.agents.conclusion_synthesizer import clean_label
