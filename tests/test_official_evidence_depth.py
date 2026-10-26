@@ -49,6 +49,7 @@ def test_derived_doc_links_prefers_deeper_docs_same_host():
         "https://docs.example.com/",
         "https://docs.example.com/en/stable/",
         "https://docs.example.com/en/stable/guide/tasks.html",
+        "https://docs.example.com/en/stable/index.html",
         "https://docs.example.com/pricing/",
         "https://other.example.com/en/stable/guide.html",
         "https://docs.example.com/assets/app.js",
@@ -57,6 +58,19 @@ def test_derived_doc_links_prefers_deeper_docs_same_host():
     assert derived, derived
     assert all(url.startswith("https://docs.example.com/") for url in derived)
     assert "https://docs.example.com/en/stable/guide/tasks.html" in derived
+    assert "https://docs.example.com/en/stable/index.html" not in derived
     assert "https://docs.example.com/pricing/" not in derived
     assert "https://other.example.com/en/stable/guide.html" not in derived
     assert "https://docs.example.com/assets/app.js" not in derived
+
+
+def test_formal_case_candidates_resolve_curated_docs_roots():
+    from deepchoice.retrievers.official import TECH_DOCS
+    from deepchoice.utils.candidate_identity import mapping_key_for
+
+    for candidate in ("ASP.NET Core", "SvelteKit", "Vue", "Koa", "dbt", "pgvector",
+                      "React Native", "Text Generation Inference"):
+        keys = mapping_key_for([candidate], TECH_DOCS)
+        assert keys, f"no curated docs root resolves for {candidate}"
+        for key in keys:
+            assert TECH_DOCS[key]["url"].startswith("https://")

@@ -13,6 +13,7 @@ from .learned_docs import (
     learn,
     load_learned,
 )
+from .official_tech_docs_extra import EXTRA_TECH_DOCS
 from .official_fetch import (
     OfficialFetchBudget,
     budget_for_research,
@@ -33,6 +34,10 @@ _SKIP_LINK_HINTS = (
     ".pdf", ".zip", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".css", ".js",
     ".xml", ".json",
 )
+
+# Index pages are link directories, not bodies: a derived index page would be
+# rejected by the same navigation admission and waste a page attempt.
+_INDEX_PATH_SUFFIXES = ("/index.html", "/index.htm", "/index", "/")
 
 
 def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> list[str]:
@@ -60,6 +65,8 @@ def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> li
             continue
         path = parsed.path.lower()
         if not path or path in ("/", "/index.html"):
+            continue
+        if path.endswith(_INDEX_PATH_SUFFIXES):
             continue
         if any(skip in path for skip in _SKIP_LINK_HINTS):
             continue
@@ -235,6 +242,11 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     # Version control / Git
     "gitlab": {"url": "https://about.gitlab.com", "title": "GitLab — Official Documentation"},
 }
+
+# Additional curated roots for the 2026-10 formal case technology set. These are
+# discovery candidates only: the safe fetch, prose admission and body identity
+# check still decide whether a URL becomes evidence.
+TECH_DOCS.update(EXTRA_TECH_DOCS)
 
 
 class OfficialSearch(BaseRetriever):

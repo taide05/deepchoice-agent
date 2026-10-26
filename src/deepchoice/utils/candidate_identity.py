@@ -93,8 +93,13 @@ def candidate_names_key(candidate: str, key: str) -> bool:
         return False
     if len(key_tokens) == 1:
         # A single distinctive key token must match a whole candidate token:
-        # substring containment would let 'vector' match 'pgvector'.
-        return key_tokens[0] in cand_tokens and len(key_tokens[0]) >= 4
+        # substring containment would let 'vector' match 'pgvector'. A short key
+        # ('Vue', 'Koa', 'dbt', 'uv') is accepted only by exact equality, never by
+        # containment, so short product names still resolve their own mapping.
+        token = key_tokens[0]
+        if token in cand_tokens:
+            return len(token) >= 4 or cand_tokens == [token]
+        return False
     width = len(key_tokens)
     return any(cand_tokens[i:i + width] == key_tokens
                for i in range(len(cand_tokens) - width + 1))
