@@ -197,8 +197,8 @@ class TestArxivSearch:
 <feed xmlns="http://www.w3.org/2005/Atom">
   <entry>
     <id>http://arxiv.org/abs/2401.12345</id>
-    <title>A Survey of Multi-Agent Frameworks</title>
-    <summary>We compare frameworks across 12 dimensions...</summary>
+    <title>LangGraph vs AutoGen: A Survey of Multi-Agent Frameworks</title>
+    <summary>We compare LangGraph and AutoGen across 12 dimensions...</summary>
     <published>2026-01-15T00:00:00Z</published>
   </entry>
 </feed>"""
@@ -208,7 +208,8 @@ class TestArxivSearch:
 
         retriever = ArxivSearch()
         with _patch_outbound(_FakeClient(get_return=mock_resp)):
-            result = await retriever.search("multi agent frameworks", [])
+            result = await retriever.search("multi agent frameworks", [],
+                                            candidate_techs=["LangGraph", "AutoGen"])
         assert result["source"] == "arxiv"
         assert result["status"] == "success"
         assert len(result["results"]) == 1
