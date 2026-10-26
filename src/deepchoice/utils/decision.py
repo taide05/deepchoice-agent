@@ -12,6 +12,7 @@ winner field only. Missing winner is not inferred from ranked_options.
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 
 RECOMMENDED = "recommended"
@@ -21,6 +22,95 @@ INVALID = "invalid"
 VALID_MODEL_STATUSES = {RECOMMENDED, CONDITIONAL, INSUFFICIENT}
 _SENTINELS = {"", "context_dependent", "none", "null", "unknown", "insufficient_evidence"}
 _CITATION_KEY = "citation_sources"
+
+# A conditional model answer is sometimes emitted with a malformed ranked_options
+# structure (null/non-list/duplicate/missing name) or with option labels carrying a
+# version/tier suffix ("MySQL 8.0" for declared "MySQL"). Today that whole answer
+# becomes `invalid`, which loses an actionable branch recommendation. This is a
+# narrow recovery: only for a model-declared conditional answer whose recommendation
+# text itself contains explicit branch markers and names at least two declared
+# candidates. The recovered options are exactly the declared candidate names (never
+# invented), and the recovery is flagged so it stays auditable.
+_BRANCH_MARKERS = re.compile(
+    r"(分支|默认|如果|若|当[^。；;\n]{0,24}时|则选|否则|条件式|"
+    r"\bbranch(?:es)?\b|\bdefault\b|\bif\b[^.;\n]{0,40}\bthen\b|"
+    r"\bwhen\b[^.;\n]{0,40}\bchoose\b|\bconditional\b)",
+    re.IGNORECASE,
+)
+
+
+def _term_tokens(value: str) -> list[str]:
+    normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return [part for part in re.split(r"[^0-9a-z\u4e00-\u9fff+#.]+", normalized)
+            if part]
+
+
+def _contains_sequence(tokens: list[str], sequence: list[str]) -> bool:
+    width = len(sequence)
+    if not width:
+        return False
+    return any(tokens[i:i + width] == sequence
+               for i in range(len(tokens) - width + 1))
+
+
+def _declared_mentions(text: str, declared: dict[str, str]) -> list[tuple[int, str]]:
+    """Declared candidates named in `text`, ordered by first token position."""
+    tokens = _term_tokens(text)
+    hits: list[tuple[int, str]] = []
+    for key, display in declared.items():
+        sequence = _term_tokens(display)
+        if not _contains_sequence(tokens, sequence):
+            continue
+        # First position of the sequence in the token stream.
+        position = None
+        for index in range(len(tokens) - len(sequence) + 1):
+            if tokens[index:index + len(sequence)] == sequence:
+                position = index
+                break
+        hits.append((position if position is not None else 10 ** 6, display))
+    hits.sort(key=lambda item: item[0])
+    return hits
+
+
+def _recover_conditional(result: dict, declared_candidates) -> dict | None:
+    """Rebuild a conditional answer from its own branch text when options were malformed.
+
+    Only runs for a model-declared conditional answer. Options are the declared
+    candidate names that the recommendation/rationale itself names; nothing is
+    inferred from fit scores or search counts.
+    """
+    recommendation = result.get("recommendation")
+    rationale = result.get("winner_rationale")
+    if not _nonempty(recommendation):
+        return None
+    if not _BRANCH_MARKERS.search(recommendation):
+        return None
+    declared = _declared_index(declared_candidates)
+    if not declared:
+        return None
+    mentions = _declared_mentions(
+        f"{recommendation} {rationale if isinstance(rationale, str) else ''}", declared)
+    names: list[str] = []
+    for _position, display in mentions:
+        if display not in names:
+            names.append(display)
+    if len(names) < 2:
+        return None
+    options = [{
+        "name": name,
+        "rank": index + 1,
+        "constraint_fit": "",
+        "constraint_fit_reason": "",
+        "rationale": "",
+    } for index, name in enumerate(names)]
+    result["decision_status"] = CONDITIONAL
+    result["winner"] = ""
+    result["ranked_options"] = options
+    result.pop("decision_validation_error", None)
+    result["decision_validation_recovered"] = (
+        "conditional answer recovered: branch text names declared candidates "
+        "while ranked_options was missing/malformed")
+    return result
 
 
 def _nonempty(value) -> bool:
@@ -144,6 +234,10 @@ def normalize_decision(result: dict, declared_candidates=None) -> dict:
 
     structured, options = _valid_ranked_options(result)
     if not structured:
+        if status == CONDITIONAL:
+            recovered = _recover_conditional(result, declared_candidates)
+            if recovered is not None:
+                return recovered
         return _invalid(result, "invalid ranked_options structure")
     option_keys = [_candidate_key(str(o.get("name") or "")) for o in options]
 
@@ -164,6 +258,12 @@ def normalize_decision(result: dict, declared_candidates=None) -> dict:
                  and (_nonempty(rationale) or _nonempty(recommendation)))
 
     if not valid:
+        # A conditional model answer may still carry its full branch text; recover
+        # only its declared options, never a winner. Other statuses stay invalid.
+        if status == CONDITIONAL:
+            recovered = _recover_conditional(result, declared_candidates)
+            if recovered is not None:
+                return recovered
         return _invalid(result, error)
     result.pop("decision_validation_error", None)
     result["decision_status"] = status
