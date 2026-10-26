@@ -8,6 +8,7 @@ structural text extraction/admission, and the stored-body/page/window metadata.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from urllib.parse import urljoin
 
 from ..outbound import safe_fetch_page
 from ..security.urls import SafeUrlPolicy
@@ -147,6 +148,26 @@ def _admission_failure(document: SourceDocument) -> str | None:
     return None
 
 
+def _resolved_links(base: str, hrefs) -> list[str]:
+    """Absolute HTTP(S) links from a fetched page, bounded, in page order."""
+    out: list[str] = []
+    for href in hrefs or ():
+        href = str(href).strip()
+        if not href:
+            continue
+        try:
+            target = urljoin(base, href)
+        except Exception:  # noqa: BLE001 - a malformed href is not a page failure
+            continue
+        if not target.startswith(("http://", "https://")):
+            continue
+        if target not in out:
+            out.append(target)
+        if len(out) >= 60:
+            break
+    return out
+
+
 async def fetch_official_page(
     url: str,
     *,
@@ -195,6 +216,11 @@ async def fetch_official_page(
             "url": url,
             "failure": f"not_prose:{admission}",
             "title": title,
+            # Navigation roots usually link to a prose documentation page one hop
+            # deeper. The caller may spend a bounded extra attempt on one of these
+            # links; the body of that page is still admitted and identity-checked
+            # by the same rules.
+            "links": _resolved_links(fetched.get("body_url") or url, document.links),
             "page_chars": sum(len(block) for block in document.blocks),
             "prose_chars": sum(len(document.blocks[i])
                                for i in document.prose_indices),

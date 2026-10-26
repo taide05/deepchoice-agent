@@ -13,6 +13,7 @@ from html.parser import HTMLParser
 
 MAX_DOCUMENT_TEXT = 64 * 1024
 MAX_PROSE_DEPTH = 64
+_MAX_LINKS = 300
 _BLOCK_TAGS = frozenset({
     "article", "blockquote", "br", "dd", "div", "dt", "h1", "h2", "h3",
     "h4", "h5", "h6", "li", "main", "p", "pre", "section", "td", "th",
@@ -41,6 +42,9 @@ class SourceDocument:
     main_blocks: tuple[str, ...] = ()
     page_role: str = "unknown"
     heading_context_count: int = 0
+    # Absolute-or-relative hrefs seen in the document, for follow-up discovery
+    # only (navigation roots often point at a prose documentation page).
+    links: tuple[str, ...] = ()
 
 
 class _Blocks(HTMLParser):
@@ -66,6 +70,7 @@ class _Blocks(HTMLParser):
         self.non_heading_chars = 0
         self.control_chars = 0
         self.block_meta: list[dict] = []
+        self.links: list[str] = []
         self.pending_link_chars = 0
         self.pending_control_chars = 0
         self.pending_non_heading_chars = 0
@@ -127,6 +132,10 @@ class _Blocks(HTMLParser):
         if not self.ignored_depth:
             if tag == "a":
                 self.link_depth += 1
+                for key, value in attrs:
+                    if key == "href" and value and len(self.links) < _MAX_LINKS:
+                        self.links.append(str(value).strip())
+                        break
             if tag in _HEADING_TAGS:
                 self.heading_depth += 1
             if tag in _CONTROL_TAGS:
@@ -344,7 +353,7 @@ def extract_page_document(value: str, *, truncated: bool,
         tuple(parser.blocks), truncated or parser.exhausted or unfinished,
         tuple(parser.prose_indices), parser.text_chars, parser.link_chars,
         parser.non_heading_chars, parser.control_chars,
-        tuple(selected), page_role, headings,
+        tuple(selected), page_role, headings, tuple(parser.links),
     )
 
 

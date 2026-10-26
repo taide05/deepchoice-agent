@@ -3,7 +3,8 @@ from ..utils.views import print_agent_output
 
 DECOMPOSITION_SYSTEM = """You are a technical research analyst. Decompose the user's technology selection question into 5 analysis dimensions.
 
-For EACH of these 5 dimensions, generate 1-2 specific sub-questions:
+For EACH of these 5 dimensions, generate exactly one specific sub-question
+(sub-question i addresses dimension i). Return exactly 5 sub-questions in total:
 1. Functionality: Feature coverage, API completeness, capability fit
 2. Performance: Throughput, latency, resource consumption
 3. Ecosystem: Community activity, plugins/extensions, documentation quality
@@ -70,6 +71,16 @@ class QueryAnalyzerAgent:
             result = {}
 
         sub_questions = result.get("sub_questions", [])
+        # The decomposition contract is exactly five sub-questions, one per
+        # dimension: retrieval/adaptation budgets and the clarify path are built
+        # for five. A model that emits more is capped deterministically here
+        # rather than inflating per-run Tavily calls and report width.
+        if not isinstance(sub_questions, list):
+            sub_questions = []
+        cleaned = [str(question).strip() for question in sub_questions
+                   if str(question).strip()]
+        capped = len(cleaned) > 5
+        sub_questions = cleaned[:5]
         return {
             "sub_questions": sub_questions,
             "scene_context": scene,
@@ -77,6 +88,8 @@ class QueryAnalyzerAgent:
             "quality_signals": [{
                 "agent": "query_analyzer",
                 "sub_question_count": len(sub_questions),
+                "sub_question_limit": 5,
+                "sub_questions_capped": capped,
                 "dimensions_covered": 5,
                 "scene_context": scene,
                 "has_constraints": bool(task.get("constraints")),

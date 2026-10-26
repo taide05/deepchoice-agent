@@ -19,6 +19,63 @@ from .official_fetch import (
     fetch_official_page,
 )
 
+# Path hints used to pick one deeper documentation page from a navigation root.
+# This runs only after an official page was fetched successfully but rejected as
+# navigation; the derived page is fetched and identity-checked by the same rules,
+# so a guessed path can never become evidence by itself.
+_DOC_PATH_HINTS = (
+    "/docs/", "/doc/", "/documentation/", "/reference/", "/api/", "/guide/",
+    "/guides/", "/en/", "/stable/", "/latest/", "/manual/", "/tutorial",
+)
+_SKIP_LINK_HINTS = (
+    "/login", "/signup", "/pricing", "/careers", "/jobs", "/search",
+    "/download", "/contact", "/privacy", "/terms", "/blog/", "/news/",
+    ".pdf", ".zip", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".css", ".js",
+    ".xml", ".json",
+)
+
+
+def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> list[str]:
+    """Deeper same-site documentation links from a navigation page.
+
+    A documentation root is often a link directory; the prose lives one hop
+    deeper. This only ranks already-fetched links (same host, documentation-like
+    path, no asset/login links); the caller spends a bounded page attempt on one
+    of them, and the derived page must still pass body admission and identity
+    verification before it can be cited.
+    """
+    from urllib.parse import urlparse
+
+    host = urlparse(base_url).netloc.lower()
+    ranked: list[tuple[int, int, int, str]] = []
+    seen: set[str] = set()
+    for href in links or []:
+        try:
+            parsed = urlparse(str(href))
+        except ValueError:
+            continue
+        if parsed.scheme not in ("http", "https"):
+            continue
+        if parsed.netloc.lower() != host:
+            continue
+        path = parsed.path.lower()
+        if not path or path in ("/", "/index.html"):
+            continue
+        if any(skip in path for skip in _SKIP_LINK_HINTS):
+            continue
+        hint_score = sum(1 for hint in _DOC_PATH_HINTS if hint in path)
+        depth = path.count("/")
+        if hint_score == 0 and depth < 2:
+            continue
+        clean = href.split("#", 1)[0].rstrip("/")
+        if not clean or clean == base_url.rstrip("/") or clean in seen:
+            continue
+        seen.add(clean)
+        # Deeper and documentation-like first; shorter path breaks ties.
+        ranked.append((-hint_score, -depth, len(path), clean))
+    ranked.sort()
+    return [item[-1] for item in ranked[:limit]]
+
 # A discovered official link is not a body. These are cumulative bounds for one
 # research run: page attempts and actual HTTP requests are counted separately.
 # Redirects consume the HTTP-request count; a proxy/forward route is rejected
@@ -447,6 +504,8 @@ class OfficialSearch(BaseRetriever):
             candidate for candidate in candidates
             if candidate not in found_candidate_owners
         ]
+        known_urls = {r.get("url") for r in results}
+        derived_added = 0
         for entry in results:
             if missing_candidate_coverage and entry.get("source_kind") != "candidate":
                 # Do not spend the remaining page budget on a platform homepage
@@ -475,6 +534,34 @@ class OfficialSearch(BaseRetriever):
                             "page_truncated", "truncation_reason"):
                     if key in fetched:
                         entry[key] = fetched.get(key)
+                # A successful fetch rejected as a navigation page may still link
+                # to the prose documentation one hop deeper. Spend a bounded extra
+                # attempt on it, never on a page derived from a derived page.
+                body_error = str(entry.get("body_error") or "")
+                owner = entry.get("source_owner") or ""
+                if (owner and not entry.get("_from_derived")
+                        and ("navigation_like" in body_error
+                             or "short_prose_only" in body_error)
+                        and budget.page_attempts < budget.max_page_attempts
+                        and derived_added < 2):
+                    for target in _derived_doc_links(entry["url"],
+                                                     fetched.get("links") or []):
+                        if target in known_urls or derived_added >= 2:
+                            continue
+                        known_urls.add(target)
+                        derived_added += 1
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
                 continue
             body = fetched["body"]
             owner = entry.get("source_owner") or entry.get("title") or ""
