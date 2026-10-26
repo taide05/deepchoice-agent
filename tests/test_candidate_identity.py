@@ -73,7 +73,7 @@ class TestOrdinaryWordsDoNotIntroduceProducts:
     @pytest.mark.asyncio
     async def test_adapted_query_words_cannot_add_official_sources(self, monkeypatch):
         """Ordinary search words must not become research targets."""
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             return {"ok": False, "url": url, "error": "offline_test"}
         monkeypatch.setattr(OfficialSearch, "_fetch_official_body", fake_fetch)
         search = OfficialSearch()
@@ -252,7 +252,7 @@ class TestNavigationLinksAreNotCitable:
     @pytest.mark.asyncio
     async def test_official_retriever_fetches_body_for_its_entries(self, monkeypatch):
         """A mapped official page now supplies a bounded body, not just a link."""
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             return {"ok": True, "url": url, "body_url": url, "title": "Official docs",
                     "body": "PostgreSQL documents the mechanism.", "source_chars": 38,
                     "stored_chars": 38, "truncated": False, "bytes": 30,
@@ -759,3 +759,4 @@ class TestRendererDoesNotGuessCitations:
         got = _field_source_links({}, "recommendation",
                                   "A claim [Source: Same Title].", chains)
         assert got == []
+

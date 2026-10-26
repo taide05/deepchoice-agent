@@ -34,7 +34,7 @@ def _patch_outbound(monkeypatch, fail_urls=()):
     """Patch the single seam that supplies a bounded official page body."""
     fake = _FakeFetch(fail_urls)
 
-    async def fake_fetch(self, url):
+    async def fake_fetch(self, url, **kwargs):
         return await fake(url)
 
     monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body", fake_fetch)
@@ -77,7 +77,7 @@ class TestFallbackConcurrency:
                 await asyncio.wait_for(release.wait(), timeout=3)
             return f"https://{term}.dev/docs"
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             body = f"{url} documented body"
             return {"ok": True, "url": url, "body_url": url, "title": "docs",
                     "body": body, "source_chars": len(body),
@@ -149,7 +149,7 @@ class TestRetrievedDocumentFirst:
             calls.append(term)
             return None
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             body = "Cosign signs OCI images and stores signatures in the registry."
             return {"ok": True, "url": url, "body_url": url,
                     "title": "Cosign signing", "body": body,
@@ -179,7 +179,7 @@ class TestRetrievedDocumentFirst:
         async def fake_propose(self, term, usage=None):
             return None
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             fetched.append(url)
             body = "Sigstore Cosign documentation."
             return {"ok": True, "url": url, "body_url": url,
@@ -207,7 +207,7 @@ class TestRetrievedDocumentFirst:
         async def fake_propose(self, term, usage=None):
             return None
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             fetched.append(url)
             body = "Sigstore Cosign documentation."
             return {"ok": True, "url": url, "body_url": url,
@@ -243,7 +243,7 @@ class TestUnifiedSourceDiscovery:
             assert term == "Kata Containers"
             return "https://katacontainers.io/docs/"
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             body = "Kata Containers documentation: each Pod runs in a virtual machine."
             return {"ok": True, "url": url, "body_url": url, "title": "Kata Containers",
                     "body": body, "source_chars": len(body), "stored_chars": len(body),
@@ -267,7 +267,7 @@ class TestUnifiedSourceDiscovery:
         async def fake_propose(self, term, usage=None):
             return "https://katacontainers-blog.example/docs"
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             fetched.append(url)
             return {"ok": True, "url": url, "body_url": url, "title": "Kata Containers",
                     "body": "Kata Containers blog body", "source_chars": 25,
@@ -288,7 +288,7 @@ class TestUnifiedSourceDiscovery:
         async def fake_propose(self, term, usage=None):
             return "https://katacontainers.io/docs"
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             return {"ok": True, "url": url, "body_url": url, "title": "Unrelated",
                     "body": "An unrelated page about something else.", "source_chars": 39,
                     "stored_chars": 39, "truncated": False, "bytes": 39,
@@ -304,7 +304,7 @@ class TestUnifiedSourceDiscovery:
 
     def test_learned_fragment_cannot_own_a_multiword_target(self, monkeypatch):
         """A learned one-token key is a hint, not ownership proof for EKS."""
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             return {"ok": True, "url": url, "body_url": url, "title": "Amazon SES",
                     "body": "Amazon SES is an email service.", "source_chars": 32,
                     "stored_chars": 32, "truncated": False, "bytes": 32,
@@ -340,7 +340,7 @@ class TestUnifiedSourceDiscovery:
         assert not [r for r in out["results"] if "kata.example.com" in r["url"]]
 
     def test_prior_canonical_url_still_needs_fetched_body_identity(self, monkeypatch):
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             return {"ok": True, "url": url, "body_url": url, "title": "Unrelated",
                     "body": "This page does not name the declared product.",
                     "source_chars": 45, "stored_chars": 45, "truncated": False,
@@ -372,7 +372,7 @@ class TestUnifiedSourceDiscovery:
                 raise RuntimeError("proposal failed")
             return f"https://{term.lower()}.dev/docs"
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             body = f"{url} documents the product."
             return {"ok": True, "url": url, "body_url": url, "title": "docs",
                     "body": body, "source_chars": len(body), "stored_chars": len(body),
@@ -395,7 +395,7 @@ class TestUnifiedSourceDiscovery:
                               "completion_tokens": 5, "total_tokens": 15})
             return {"url": None}
 
-        async def fake_fetch(self, url):
+        async def fake_fetch(self, url, **kwargs):
             body = "Amazon EKS managed node groups manage the Kubernetes data plane."
             return {"ok": True, "url": url, "body_url": url,
                     "title": "Amazon EKS User Guide", "body": body,
@@ -573,3 +573,4 @@ class TestPyPIPassRestriction:
                                  candidate_techs=["FastAPI", "Flask"]))
         assert not any("pypi.org" in u for u in client.called_urls), \
             f"PyPI still resolves candidates from query words: {client.called_urls}"
+

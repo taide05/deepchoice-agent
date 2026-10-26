@@ -307,7 +307,8 @@ class OfficialSearch(BaseRetriever):
             return result.get("url")
         return None
 
-    async def _fetch_official_body(self, url: str) -> dict:
+    async def _fetch_official_body(self, url: str, *,
+                                   allow_navigation_intro: bool = False) -> dict:
         budget = self._fetch_budget
         if budget is None:
             budget = OfficialFetchBudget(
@@ -326,6 +327,7 @@ class OfficialSearch(BaseRetriever):
                 max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
                 max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
                 store_chars=OFFICIAL_BODY_STORE_CHARS,
+                allow_navigation_intro=allow_navigation_intro,
             )
         except Exception as exc:
             budget.record_failure(type(exc).__name__)
@@ -518,6 +520,7 @@ class OfficialSearch(BaseRetriever):
         ]
         known_urls = {r.get("url") for r in results}
         derived_added = 0
+        derived_owners: set[str] = set()
         for entry in results:
             if missing_candidate_coverage and entry.get("source_kind") != "candidate":
                 # Do not spend the remaining page budget on a platform homepage
@@ -529,7 +532,10 @@ class OfficialSearch(BaseRetriever):
                 entry["body_error"] = "page_attempt_budget_exhausted"
                 entry["fetch_status"] = "navigation"
                 continue
-            fetched = await self._fetch_official_body(entry["url"])
+            fetched = await self._fetch_official_body(
+                entry["url"],
+                allow_navigation_intro=bool(entry.get("_from_mapping")),
+            )
             if not fetched.get("ok"):
                 entry["has_body"] = False
                 entry["snippet"] = ""
@@ -552,6 +558,7 @@ class OfficialSearch(BaseRetriever):
                 body_error = str(entry.get("body_error") or "")
                 owner = entry.get("source_owner") or ""
                 if (owner and not entry.get("_from_derived")
+                        and owner not in derived_owners
                         and ("navigation_like" in body_error
                              or "short_prose_only" in body_error)
                         and budget.page_attempts < budget.max_page_attempts
@@ -562,6 +569,7 @@ class OfficialSearch(BaseRetriever):
                             continue
                         known_urls.add(target)
                         derived_added += 1
+                        derived_owners.add(owner)
                         results.append({
                             "url": target,
                             "title": f"{owner} — documentation",
@@ -581,7 +589,8 @@ class OfficialSearch(BaseRetriever):
                 # Search metadata and our generated title are discovery hints, not
                 # page identity. Only the safe-fetched body may establish that the
                 # page names the owner.
-                if not source_identity_verified(owner, entry["url"], "", body):
+                if not source_identity_verified(owner, entry["url"],
+                                                str(fetched.get("title") or ""), body):
                     # A safe-fetched page that does not name the declared
                     # product/constraint is not that product's evidence. Keep the
                     # attempt visible as navigation, never as a citable body.

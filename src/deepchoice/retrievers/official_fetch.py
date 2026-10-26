@@ -178,6 +178,7 @@ async def fetch_official_page(
     max_redirects: int,
     store_chars: int,
     allowed_content_types: tuple[str, ...] = DEFAULT_CONTENT_TYPES,
+    allow_navigation_intro: bool = False,
 ) -> dict:
     """Fetch via outbound's pinned safe entry, then admit/extract bounded text."""
     if deadline_s <= 0 or max_response_bytes <= 0 or max_redirects < 0 or store_chars <= 0:
@@ -209,6 +210,52 @@ async def fetch_official_page(
         plain_text=media_type == "text/plain",
     )
     admission = _admission_failure(document)
+    prose_blocks = [document.blocks[i] for i in document.prose_indices
+                    if i < len(document.blocks)]
+    prose_chars = sum(len(text) for text in prose_blocks)
+    total_chars = document.text_chars or sum(len(block) for block in document.blocks)
+    if (allow_navigation_intro and admission == "navigation_like"
+            and prose_chars >= 300 and total_chars
+            and prose_chars / total_chars >= 0.08):
+        # A hand-verified official landing page can be navigation-dominated yet
+        # carry bounded introductory prose. Only the prose blocks are stored
+        # (menus are excluded), the page role and admission label stay explicit,
+        # and the caller only enables this for curated mapping roots — never for
+        # discovered or derived pages.
+        body = " ".join(prose_blocks)
+        stored = body[:store_chars].rstrip()
+        budget.body_pages += 1
+        page_truncated = bool(fetched.get("page_truncated") or document.incomplete)
+        stored_truncated = len(body) > len(stored)
+        return {
+            "ok": True,
+            "url": url,
+            "body_url": fetched.get("body_url") or url,
+            "title": title,
+            "body": stored,
+            "body_blocks": prose_blocks[:40],
+            "page_chars": len(body),
+            "stored_chars": len(stored),
+            "page_truncated": page_truncated,
+            "stored_truncated": stored_truncated,
+            "truncated": bool(page_truncated or stored_truncated),
+            "truncation_reason": fetched.get("truncation_reason"),
+            "declared_content_length": fetched.get("declared_content_length"),
+            "content_length_exceeded": fetched.get("content_length_exceeded", False),
+            "max_response_bytes": fetched.get("max_response_bytes"),
+            "prose_chars": prose_chars,
+            "main_block_count": len(prose_blocks),
+            "prose_block_count": len(prose_blocks),
+            "heading_context_count": document.heading_context_count,
+            "page_role": document.page_role,
+            "admission": "official_root_intro",
+            "content_type": media_type,
+            "bytes": fetched.get("bytes_read", 0),
+            "bytes_read": fetched.get("bytes_read", 0),
+            "bytes_retained": fetched.get("bytes_retained", 0),
+            "links": _resolved_links(fetched.get("body_url") or url, document.links),
+            "budget": budget.snapshot(),
+        }
     if admission is not None:
         budget.navigation_pages += 1
         return {

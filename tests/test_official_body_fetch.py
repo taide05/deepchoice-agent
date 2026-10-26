@@ -614,7 +614,7 @@ def test_safe_url_policy_rejects_special_and_nat64_addresses():
 def test_official_search_counts_page_attempts_separately(monkeypatch):
     monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", 1)
 
-    async def fake_fetch(self, url):
+    async def fake_fetch(self, url, **kwargs):
         return {"ok": True, "url": url, "body_url": url,
                 "body": LONG_PROSE, "page_chars": len(LONG_PROSE),
                 "stored_chars": len(LONG_PROSE), "page_truncated": False,
@@ -633,3 +633,4 @@ def test_official_search_counts_page_attempts_separately(monkeypatch):
     assert envelope["fetch_stats"]["page_attempts"] == 1
     assert envelope["fetch_stats"]["max_http_requests"] == \
         official_mod.OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN
+
