@@ -38,6 +38,7 @@ def test_navigation_root_tries_static_fallback_and_can_admit_body(monkeypatch):
                          "title": "LangGraph — Official Documentation"})
     monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", 8)
     monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", 32)
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {})
     monkeypatch.setattr(
         official_mod, "budget_for_research",
         lambda **kwargs: OfficialFetchBudget(max_page_attempts=8,
