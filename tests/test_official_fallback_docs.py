@@ -30,6 +30,61 @@ def test_fallback_targets_are_bounded_and_http_only():
     assert _fallback_doc_targets("not-a-url") == []
 
 
+def test_deep_doc_links_rank_question_dimensions_within_scope():
+    from deepchoice.retrievers.official import _deep_doc_links
+
+    root = "https://docs.example.com/docs/overview.md"
+    body = ("[Persistence](https://docs.example.com/docs/persistence.md) "
+            "[Migration](https://docs.example.com/docs/migration.md) "
+            "[Security](https://docs.example.com/docs/security.md) "
+            "[Pricing](https://docs.example.com/pricing) "
+            "[Other host](https://evil.example/docs/migration.md)")
+    terms = ("migration", "rollback", "persistence", "security", "performance")
+    links = _deep_doc_links(root, body, [], terms, root, limit=2)
+    assert all(link.startswith("https://docs.example.com/docs/") for link in links)
+    assert "migration" in links[0] or "persistence" in links[0]
+    assert "pricing" not in " ".join(links)
+
+
+def test_deep_docs_are_fetched_from_curated_root(monkeypatch):
+    from deepchoice.retrievers import official as official_mod
+    from deepchoice.retrievers.official_fetch import OfficialFetchBudget
+
+    monkeypatch.setitem(official_mod.TECH_DOCS, "deepframework",
+                        {"url": "https://docs.example.com/docs/overview.md",
+                         "title": "DeepFramework — Official Documentation"})
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {})
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", 8)
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", 32)
+    monkeypatch.setattr(
+        official_mod, "budget_for_research",
+        lambda **kwargs: OfficialFetchBudget(max_page_attempts=8,
+                                             max_http_requests=32))
+
+    async def fake_fetch(self, url, **kwargs):
+        if url.endswith("/overview.md"):
+            body = ("[Persistence](https://docs.example.com/docs/persistence.md) "
+                    "[Migration](https://docs.example.com/docs/migration.md) "
+                    "DeepFramework overview.")
+        else:
+            body = f"{url} — DeepFramework migration and persistence docs."
+        return {"ok": True, "url": url, "body": body, "title": "DeepFramework",
+                "page_chars": len(body), "stored_chars": len(body),
+                "body_blocks": [body], "body_url": url,
+                "bytes_read": len(body), "bytes_retained": len(body),
+                "content_type": "text/markdown"}
+
+    monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body",
+                        fake_fetch)
+    rows = asyncio.run(official_mod.OfficialSearch()._do_search(
+        "DeepFramework migration rollback and persistence", [], 10,
+        adapted_queries=[], candidate_techs=["DeepFramework"]))
+    deep = [row for row in rows if row.get("_deep_doc")]
+    assert deep, rows
+    assert any(row.get("has_body") for row in deep), rows
+    assert all(row.get("body_identity_verified") for row in deep if row.get("has_body"))
+
+
 def test_mapping_scope_identity_is_limited_to_curated_host_and_path():
     from deepchoice.retrievers.official import _mapping_scope_identity
 

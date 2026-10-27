@@ -1,5 +1,7 @@
 import asyncio
 import os
+import re
+from urllib.parse import urljoin, urlparse
 
 from ..utils.candidate_identity import (
     constraint_discovery_terms,
@@ -40,6 +42,108 @@ _SKIP_LINK_HINTS = (
 _INDEX_PATH_SUFFIXES = ("/index.html", "/index.htm", "/index", "/")
 
 
+# Focused deep documentation pages fetched from a curated mapping root. A root
+# overview page is enough to establish the candidate's identity, but decision-grade
+# claims need the official page about the actual decision dimension (migration,
+# rollback, security, performance, ...). Up to this many same-scope links are
+# ranked by the question's dimensions and fetched within the existing page budget.
+OFFICIAL_DEEP_DOC_PAGES_PER_CANDIDATE = 2
+
+_FOCUS_TERM_GROUPS = {
+    "migration": ("migration", "migrate", "upgrade", "迁移", "升级", "切换"),
+    "rollback": ("rollback", "revert", "failover", "回滚", "回退", "恢复"),
+    "deployment": ("deploy", "deployment", "production", "部署", "上线"),
+    "persistence": ("persistence", "durable", "checkpoint", "持久", "检查点"),
+    "interrupt": ("interrupt", "resume", "human-in-the-loop", "中断", "人工介入"),
+    "security": ("security", "audit", "permission", "rbac", "acl", "安全", "审计", "权限"),
+    "performance": ("performance", "benchmark", "latency", "throughput", "性能", "基准", "延迟"),
+    "maintenance": ("maintenance", "release", "version", "support", "维护", "版本", "发布"),
+}
+_FOCUS_LINK_TERMS = {
+    "migration": ("migration", "migrate", "upgrade", "changelog"),
+    "rollback": ("rollback", "revert", "failover"),
+    "deployment": ("deploy", "deployment", "production", "operations"),
+    "persistence": ("persistence", "durable", "checkpoint", "state"),
+    "interrupt": ("interrupt", "resume", "human-in-the-loop"),
+    "security": ("security", "audit", "permission", "rbac", "acl", "authentication"),
+    "performance": ("performance", "benchmark", "latency", "throughput"),
+    "maintenance": ("maintenance", "release", "version", "support", "changelog"),
+}
+
+
+def _mapping_scope_root_path(mapping_root: str | None) -> str:
+    """Directory scope of a curated mapping root (file mappings use their dir)."""
+    path = urlparse(str(mapping_root or "")).path.rstrip("/")
+    if path and "." in path.rsplit("/", 1)[-1]:
+        path = path.rsplit("/", 1)[0]
+    return path
+
+
+def _url_in_mapping_scope(url: str, mapping_root: str | None) -> bool:
+    if not mapping_root:
+        return False
+    root = urlparse(str(mapping_root))
+    target = urlparse(str(url or ""))
+    if (target.scheme not in ("http", "https")
+            or target.netloc.lower() != root.netloc.lower()):
+        return False
+    root_path = _mapping_scope_root_path(mapping_root)
+    target_path = target.path.rstrip("/")
+    if not root_path:
+        return True
+    return target_path == root_path or target_path.startswith(root_path + "/")
+
+
+def _deep_doc_focus_terms(*texts: str) -> tuple[str, ...]:
+    """Link keywords for the decision dimensions this question actually names."""
+    blob = " ".join(str(text or "") for text in texts).lower()
+    terms: list[str] = []
+    for group, markers in _FOCUS_TERM_GROUPS.items():
+        if any(str(marker).lower() in blob for marker in markers):
+            terms.extend(_FOCUS_LINK_TERMS[group])
+    if not terms:
+        # A general selection question still benefits from production/migration
+        # documentation rather than only the marketing overview.
+        terms = ["migration", "deployment", "production", "persistence",
+                 "security", "performance"]
+    return tuple(dict.fromkeys(terms))
+
+
+def _links_in_text(text: str) -> list[str]:
+    return [match.split("#", 1)[0] for match in re.findall(
+        r"\[[^\]]*\]\((https?://[^)\s]+)\)", str(text or ""))]
+
+
+def _deep_doc_links(base_url: str, body: str, links: list[str],
+                    focus_terms: tuple[str, ...], mapping_root: str | None,
+                    *, limit: int = 2) -> list[str]:
+    """Rank same-scope documentation links by decision-dimension keywords."""
+    base = urlparse(str(base_url or ""))
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+    candidates = list(links or []) + _links_in_text(body)
+    for raw in candidates:
+        target = urljoin(str(base_url), str(raw or ""))
+        target = target.split("#", 1)[0].rstrip("/")
+        if not target.startswith(("http://", "https://")):
+            continue
+        parsed = urlparse(target)
+        if parsed.netloc.lower() != base.netloc.lower():
+            continue
+        if not _url_in_mapping_scope(target, mapping_root or base_url):
+            continue
+        if target in seen or target.rstrip("/") == str(base_url).rstrip("/"):
+            continue
+        lowered = target.lower()
+        score = sum(1 for term in focus_terms if term in lowered)
+        if score <= 0:
+            continue
+        seen.add(target)
+        ranked.append((-score, len(ranked), target))
+    ranked.sort()
+    return [target for _score, _order, target in ranked[:limit]]
+
+
 def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
                             mapping_root: str | None) -> bool:
     """Body identity inside a hand-curated mapping root.
@@ -54,17 +158,7 @@ def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
     """
     if not mapping_root:
         return False
-    from urllib.parse import urlparse
-
-    root = urlparse(str(mapping_root))
-    target = urlparse(str(url))
-    if (target.scheme not in ("http", "https")
-            or target.netloc.lower() != root.netloc.lower()):
-        return False
-    root_path = root.path.rstrip("/")
-    target_path = target.path.rstrip("/")
-    if root_path and not (target_path == root_path
-                          or target_path.startswith(root_path + "/")):
+    if not _url_in_mapping_scope(url, mapping_root):
         return False
     return source_text_discusses_candidate(owner, title, body)
 
@@ -724,6 +818,42 @@ class OfficialSearch(BaseRetriever):
             entry["body_prose_chars"] = fetched.get("prose_chars", len(entry["snippet"]))
             entry["body_admission"] = fetched.get("admission", "prose_ok")
             entry["body_content_type"] = fetched.get("content_type", "")
+            # A curated root is the candidate's identity anchor, but its overview
+            # often does not answer migration/rollback/security/performance. Rank
+            # same-scope documentation links by the question's dimensions and spend
+            # a bounded number of extra page attempts on them. They still need the
+            # body identity check below; the mapping scope only replaces the URL-token
+            # check for a hand-verified root.
+            if (entry.get("_from_mapping") and not entry.get("_from_derived")
+                    and budget.page_attempts < budget.max_page_attempts):
+                constraints = list((getattr(self, "_discovery_context", {}) or {})
+                                   .get("constraints") or [])
+                focus = _deep_doc_focus_terms(
+                    query, " ".join(str(item) for item in sub_questions or []),
+                    " ".join(str(item) for item in constraints))
+                for target in _deep_doc_links(
+                        entry["url"], body, fetched.get("links") or [], focus,
+                        entry.get("_mapping_root") or entry["url"],
+                        limit=OFFICIAL_DEEP_DOC_PAGES_PER_CANDIDATE):
+                    if target in known_urls:
+                        continue
+                    if budget.page_attempts >= budget.max_page_attempts:
+                        break
+                    known_urls.add(target)
+                    results.append({
+                        "url": target,
+                        "title": f"{owner} — deep documentation",
+                        "snippet": "",
+                        "has_body": False,
+                        "date": "",
+                        "_from_mapping": False,
+                        "_from_prior_search": False,
+                        "_from_derived": True,
+                        "_deep_doc": True,
+                        "_mapping_root": entry.get("_mapping_root") or entry["url"],
+                        "source_owner": owner,
+                        "source_kind": entry.get("source_kind"),
+                    })
             # Learn only a verified identity whose body was actually collected,
             # and only when it came from discovery rather than the curated map.
             if not entry.get("_from_mapping") and entry.get("body_identity_verified"):
