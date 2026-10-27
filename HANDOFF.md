@@ -121,13 +121,29 @@
   F200-119 非学术 gate 正常（0 条 arXiv 源）；F200-148/144 的 arXiv 请求 **ReadTimeout**，
   **放宽规则未被实际测试**。
 - 结论：输出约束是唯一明确的省钱候选，但需重复受控实验确认修正质量；evidence budget 12k 收益太小，
-  trigger 不启动；SPA/GitHub Pages 保持已知限制；arXiv 放宽需换窗口重测。
+  trigger 不启动；SPA/GitHub Pages 保持已知限制；arXiv 放宽需换窗口重测（后于当日下午修复，见下）。
 - **21 份实验报告已全量内容复核（不是抽样）**：21/21 usable；仅 A F200-002 一份 decision-grade；
   C2 一手证据是三臂共同短板；输出约束没有系统性降低 C1/C3/C4；空候选段/无关来源等结构问题在
   三臂随机出现，与自评配置无关。逐份表：`.../AB_CONTENT_REVIEW.md`。
 - 阶段汇报：`.../MORNING_REPORT_20261027.md`；详情：
   `.scratch/cases/runs/ab-analysis-20261027/AB_EXPERIMENT_FINDINGS.md`、
   `.../REPLAY_RESULTS.json`。
+
+### 项目链路修复（2026-10-27 下午，提交 `d70129a`）
+
+- **SPA/GitHub Pages 官方正文**：根因是 LangGraph 映射指向 JS 跳转页 + 旧 learned 缓存
+  `langgraph.dev/stable/` shadow curated 映射；AutoGen 根页是短壳、实际文档在 `/stable/`；
+  fetcher 不接受 `text/markdown`。已改 curated 优先级、映射到 LangGraph markdown 文档与
+  AutoGen `/stable/`、支持 markdown 内容类型、同源静态路径 fallback、curated 作用域身份。
+  **免费真实 HTTP 重放 F200-144：官方正文 0 → 2 页（7922/1653 chars）**。
+- **arXiv ReadTimeout**：15s 超时过短，批跑并发下偶发失败；改为 30s + 1 次退避重试。
+  直接调用现返回 4 行候选相关论文（含 AutoGen/LangGraph），单测覆盖重试。
+- **结构缺陷确定性化**：空候选段因 option 对象存在但全部展示字段为空；已加 body-start 检查
+  + gap 文案（B F200-002 复渲染无空段）。无关来源因 `used_sources` 收集隐藏字段引用；
+  已按候选相关性过滤（F200-130 复渲染后财经/比特币/计算器来源全部消失），无法判断内容时保留。
+- 全套测试 **707 passed**；零付费验证。18:00 谷价窗口按已批准子集重测 3 例
+  （F200-144/148/119），结果待复核后更新。
+- 修复详情：`.scratch/cases/runs/ab-analysis-20261027/FIXES_20261027.md`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
 
