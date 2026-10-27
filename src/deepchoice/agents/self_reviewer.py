@@ -410,6 +410,20 @@ def _self_review_mode() -> str:
     return (os.environ.get("SELF_REVIEW_MODE", "full").strip().lower() or "full")
 
 
+def _self_review_output_constraint() -> bool:
+    return os.environ.get("SELF_REVIEW_OUTPUT_CONSTRAINT", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+_OUTPUT_CONSTRAINT_TEXT = """
+
+## Cost Experiment Output Constraint
+Keep the JSON compact: each checklist note at most 20 words; each correction's
+`corrected` value contains only the changed clause/sentence (do not repeat the
+whole field); `reason` at most 30 words; knowledge_gaps at most 5 concise queries.
+Do not omit any correction or required JSON field to save space."""
+
+
 def _should_self_review(recommendation: dict, cite_stats: dict,
                         research_state: dict) -> tuple[bool, str]:
     """Deterministic pre-review trigger used only when SELF_REVIEW_MODE=triggered.
@@ -771,7 +785,7 @@ Field locations with an unresolved citation:
 {signals_text}
 
 ## Retry Count
-{research_state.get("retry_count", 0)}"""
+{research_state.get("retry_count", 0)}{_OUTPUT_CONSTRAINT_TEXT if _self_review_output_constraint() else ""}"""
 
         prompt = [
             {"role": "system", "content": REVIEW_SYSTEM},

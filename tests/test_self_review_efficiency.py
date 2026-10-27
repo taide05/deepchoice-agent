@@ -117,3 +117,23 @@ def test_self_review_only_budget_is_passed_to_package(monkeypatch):
         }])))
     assert captured.get("budget_chars") == 8000
     assert out["quality_signals"][0]["evidence_input_budget_chars"] == 8000
+
+
+def test_output_constraint_is_opt_in_and_appears_in_prompt(monkeypatch):
+    monkeypatch.delenv("SELF_REVIEW_OUTPUT_CONSTRAINT", raising=False)
+    captured = {}
+
+    async def fake_call(prompt, **kwargs):
+        captured.setdefault("prompts", []).append(str(prompt))
+        return _review_json()
+
+    with patch.object(sr, "call_model", fake_call):
+        asyncio.run(sr.SelfReviewerAgent().run(_state()))
+    assert "Cost Experiment Output Constraint" not in captured["prompts"][0]
+
+    monkeypatch.setenv("SELF_REVIEW_OUTPUT_CONSTRAINT", "1")
+    captured.clear()
+    with patch.object(sr, "call_model", fake_call):
+        asyncio.run(sr.SelfReviewerAgent().run(_state()))
+    assert "Cost Experiment Output Constraint" in captured["prompts"][0]
+    assert "at most 20 words" in captured["prompts"][0]
