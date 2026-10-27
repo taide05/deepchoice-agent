@@ -152,49 +152,43 @@
 
 ### 内容 / decision-grade 修复阶段（2026-10-27 晚，用户已同意 #1/#2）
 
-- 根因：usable 但非 decision-grade 的案例都卡在 **C2 决定性事实缺少一手/官方依据**；此前官方
-  抓取只取 curated root 概览，未抓迁移/回滚/安全/性能对应的深层文档。
-- 已实现（提交 `c3493c9` + 本轮）：官方 deep docs 按问题维度抓取（LangGraph persistence/
-  interrupts、Cilium migration 等已验证 4 页正文）；合成 prompt 加一手证据纪律；batch official
-  预算改为 per-case（修共享预算 starvation）；官方抓取 deadline 25s + 单次瞬时重试；arXiv
-  缺通道/超时均可重试。
+- 根因：usable 但非 decision-grade 的案例主要卡在 **C2 决定性事实的可核验性/适用性**；官方深层
+  文档抓取是补证据的手段之一。**用户口径修正（10/27 夜）**：官方来源权威但非唯一正确来源，
+  官方覆盖率不是 DG 门槛；报告目标是解决技术选型问题，不是转述官方文档。
+- 已实现（提交 `c3493c9`、`1b06d29` 等）：官方 deep docs/索引发现/深页准入修复；batch official
+  预算 per-case；官方抓取 deadline 25s + 瞬时重试；arXiv/community 通道重试；batch health gate。
+  这些是证据获取与基础设施修复，不等于“官方覆盖越高越好”。
 - 6 例谷价回归：首轮 363,247 tokens 受基础设施污染；修复后重跑 4 例 229,441 tokens（合计 592,688）。
-  有效重跑指标：官方正文 144 **4 页**、148 **3 页**、119 **2 页**、083 1 页；决定性字段 official
-  引用占比 144 **0.526**、148 **0.556**、119 **0.529**、083 0.0（前值 0.273/0.167/0.389/0.057）。
-- **6 例全量 C1–C4 复核完成**：usable 6/6、C4 关键错误 0、**decision-grade 2/6**
-  （F200-144/F200-148 从非 DG 升为 DG）；其余 4 例的 C2 缺口是官方正文未取得/决定性维度无官方
-  材料，不是合成或格式问题。表：`.../CONTENT_REVIEW_6_20261027.md`。
-- 已实现 **docs 索引发现 + 深页准入修复**：`llms.txt`/`sitemap.xml`（含嵌套）索引发现；
-  ReadTheDocs 尾斜杠/叶页跟踪；mapping 落地页取父 scope；重定向 successor host 的 scope/candidate
-  别名处理；pdf/zip 跳过。免费真实重放：F200-119 **7 个官方正文**（Redpanda audit-logging 13,643
-  + agentic audit-log 25,522 + upgrade + Pulsar TLS）；F200-083 **9 个官方正文**（Calico 策略/迁移
-  4 页 + Cilium policy intro/layer3/http/dns 4 页 + 根页）；F200-139 W&B 官方正文 0→**2 页**
-  （W&B docs 已重定向到 CoreWeave docs，按 successor scope + W&B 路径/别名识别）。
-- **非 C2 的额外问题**（契约/呈现审计）：决策契约 6/6 通过；空 heading 是 heading→subheading
-  的误报；真实问题是来源时效（F200-148 引用 LlamaIndex 0.9 旧 release）与引用解析缺口
-  （F200-148/119 各有 1 个显式“引用未解析”标记）。已加 **来源时效 prompt 规则**（旧版本不能证明
-  当前行为）与 **来源类型/日期显示**（官方文档/来源日期）。
-- **基础设施健康门**：新增 `batch_health.py` 并由 run_batch 自动执行，写 `batch_health.json`：
-  invalid = 必需来源/LLM/报告失败，warn = 页面级 timeout/identity/budget。回放历史批次：
-  contentfix-6/F200-144 **invalid**（arXiv 缺通道，与真实故障一致）；retry 144/148 **ok**；
-  其他 warn 不被当成干净数据。首轮污染的 official 预算共享、15s 超时、arXiv 缺通道
-  均已修复/重试并有单测。
-- W2“决定性字段无官方来源自动降级”暂不实现：144/148 证明 prompt 纪律已能正确使用一手证据；
-  非 DG 案例是没抓到官方材料，强行降级不会产生新证据。决定先补检索缺口。
+  官方正文页数与决定性 official 占比只作诊断：144 4 页/0.526、148 3 页/0.556、119 2 页/0.529、
+  083 1 页/0.0、082 3 页、139 1 页。
+- **6 例按修正后的 decision-usefulness 口径复核**：usable 6/6、C4 0、**DG 5/6**
+  （119/083/144/148/082；F200-139 因 W&B 决定性审计/权限事实缺失保留非 DG）。
+  旧表述“DG 2/6、083 非 DG”是官方来源导向的过严判断，已按 D1–D5 修正；
+  详见 `DECISION_USEFULNESS_RUBRIC.md`。
+- **F200-083 样本是否会在其他例重复**：会重复的是“候选级官方覆盖不对称”，基线
+  45/200 零官方页、**78/200** 一候选有正文另一候选为 0；但旧验证 16 份中 9 份 DG 的
+  决定性 official 占比 <0.30（如 083=0.029、088=0.138、082=0.082），说明这不是自动失败。
+  真正的系统性风险是 D2 决策维度没被比较、报告变成官方文档摘要、二手证据被当事实；
+  不再追“Cilium 官方正文”，改为审计 D1–D5 与转述风险。
+- **非 C2 的额外问题**：决策契约 6/6 通过；空 heading 是正常 heading→subheading 误报；真实问题
+  是来源时效（F200-148 引用 LlamaIndex 0.9 旧 release）与引用解析缺口（F200-148/119 各有 1 个
+  显式“引用未解析”标记）。已加来源时效规则与来源类型/日期显示。
+- **基础设施健康门**：`batch_health.py` + run_batch 自动执行，写 `batch_health.json`；invalid =
+  必需来源/LLM/报告失败，warn = 页面级 timeout/identity/budget/可选来源失败。回放历史批次能
+  识别 contentfix-6/F200-144 的 arXiv 缺通道；retry 144/148 ok；community 可选失败为 warn。
 - **22:06 最小付费复测 2 例（F200-119/F200-083，117,696 tokens，用户已批准）**：
-  - F200-119 官方正文 **7 页**、决定性 official 占比 **0.583**，全量复核 **usable / decision-grade（初判）**；
-  - F200-083 官方正文 4 页、占比 0.500，Calico tier/RBAC 官方证据补齐；但 Cilium Hubble
-    审计字段仍只有二手材料、官方 Cilium 正文本轮只到根页 → usable / 非 DG（C2 partial）；
-  - 两例 community 可选来源出现 no outbound channel（报告已披露 5/6 来源），健康门标 warn；
-    已补 community 通道重试，后续不再误判为 invalid。
-- 下一层问题：F200-083 需定向 Cilium 官方 Hubble/审计文档并修本轮 Cilium deep 页未进证据的
-  预算/排序问题；F200-139 W&B 专属审计页仍不足；FIPS/CIS 等可能确实无公开一手数据。
-- 下一步：若继续推 F200-083 到 DG，需再做约 1 例最小付费复测（另报批）；最终 200 例仍不决定。
+  按修正口径 **usable/DG 2/2 初判**；119 official 7 页/0.583，083 official 4 页/0.500；
+  community 可选失败被报告披露，已补通道重试。F200-139 仍是真实非 DG（W&B 证据缺口）。
+- **合成 prompt 已改为 decision-first + evidence calibration**：官方只是证据之一；允许清楚标注
+  的厂商/社区/实践证据支撑决策；禁止把报告写成文档摘要。该 prompt 改动尚未付费 A/B 验证。
+- 下一步（零成本优先）：按 D1–D5 重审既有报告并量化“转述风险”；诊断候选级证据不对称是否
+  实际破坏决策维度；只有审计证明需要时才改检索分配。**不再计划 1 例 Cilium 复测**；后续若做
+  prompt/A-B 付费实验需另行报批；最终 200 例仍不决定。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
-  `CONTENT_FIX_PLAN_20261027.md`、`CONTENTFIX_REGRESSION_20261027.md`、
-  `CONTENT_REVIEW_6_20261027.md`、`NONDG_ROOT_CAUSE_20261027.md`、
-  `REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、`AUTHORITY_AUDIT.md`、
-  `RETEST_2_CASE_20261027.md`。
+  `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`CONTENT_FIX_PLAN_20261027.md`、
+  `CONTENTFIX_REGRESSION_20261027.md`、`CONTENT_REVIEW_6_20261027.md`、
+  `NONDG_ROOT_CAUSE_20261027.md`、`REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、
+  `AUTHORITY_AUDIT.md`、`RETEST_2_CASE_20261027.md`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
 
