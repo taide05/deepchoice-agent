@@ -161,14 +161,24 @@
 - 6 例谷价回归：首轮 363,247 tokens 受基础设施污染；修复后重跑 4 例 229,441 tokens（合计 592,688）。
   有效重跑指标：官方正文 144 **4 页**、148 **3 页**、119 **2 页**、083 1 页；决定性字段 official
   引用占比 144 **0.526**、148 **0.556**、119 **0.529**、083 0.0（前值 0.273/0.167/0.389/0.057）。
-- 初步内容判定：F200-144/F200-148 可望升为 decision-grade（官方 deep docs 支撑决定性回滚/证据
-  结论，缺口如实保留）；F200-119/F200-083 仍非 DG（审计一手文档未确定性发现 / 官方正文未取得）。
-  4 份重跑报告已完成全量复核；首轮另 2 份（082/139）待复核。
-- 下一层问题：官方文档索引发现仍是运气（Redpanda audit-logging 有时被搜索带出、有时没有），
-  需要 docs llms.txt/sitemap 的确定性索引；部分官方 deep 页是导航页；有的决定性维度可能确实
+- **6 例全量 C1–C4 复核完成**：usable 6/6、C4 关键错误 0、**decision-grade 2/6**
+  （F200-144/F200-148 从非 DG 升为 DG）；其余 4 例的 C2 缺口是官方正文未取得/决定性维度无官方
+  材料，不是合成或格式问题。表：`.../CONTENT_REVIEW_6_20261027.md`。
+- 已实现 **docs 索引发现**：mapping root 无页内文档链接时，抓取其 `llms.txt`/`sitemap.xml`
+  （含一层嵌套 sitemap）并按问题维度选页。免费真实重放 F200-119 可稳定取得 Redpanda
+  `audit-logging`（13,643 chars）、`agentic audit-log.md`（25,522 chars）、`upgrade.md` 正文。
+  Cilium/Calico 仍受限于官方文档结构（Cilium sitemap 只有版本根；Calico 深层页导航/身份失败）。
+- W2“决定性字段无官方来源自动降级”暂不实现：144/148 证明 prompt 纪律已能正确使用一手证据；
+  非 DG 案例是没抓到官方材料，强行降级不会产生新证据。决定先继续补检索缺口。
+- 已实现 **docs 索引发现**：mapping root 无页内文档链接时，抓取其 `llms.txt`/`sitemap.xml`
+  （含一层嵌套 sitemap）并按问题维度选页。免费真实重放 F200-119 可稳定取得 Redpanda
+  `audit-logging`（13,643 chars）、`agentic audit-log.md`（25,522 chars）、`upgrade.md` 正文；
+  Cilium/Calico 仍受限于官方文档结构（Cilium sitemap 只有版本根；Calico 深层页导航/身份失败）。
+- 下一层问题：Cilium/Calico/W&B 的官方文档索引与具体页面仍需定向；部分决定性维度可能确实
   没有公开一手数据，应保持 conditional/insufficient。
 - 计划/回归：`.scratch/cases/runs/ab-analysis-20261027/CONTENT_FIX_PLAN_20261027.md`、
-  `CONTENTFIX_REGRESSION_20261027.md`；权威度审计：`.../AUTHORITY_AUDIT.md`。
+  `CONTENTFIX_REGRESSION_20261027.md`、`CONTENT_REVIEW_6_20261027.md`；
+  权威度审计：`.../AUTHORITY_AUDIT.md`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
 

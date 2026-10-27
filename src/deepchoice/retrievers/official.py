@@ -19,6 +19,7 @@ from .official_tech_docs_extra import EXTRA_TECH_DOCS
 from .official_fetch import (
     OfficialFetchBudget,
     budget_for_research,
+    fetch_official_index,
     fetch_official_page,
 )
 
@@ -142,6 +143,69 @@ def _deep_doc_links(base_url: str, body: str, links: list[str],
         ranked.append((-score, len(ranked), target))
     ranked.sort()
     return [target for _score, _order, target in ranked[:limit]]
+
+
+def _official_index_candidates(mapping_root: str) -> list[str]:
+    """Docs-index URLs likely to list the site's deep documentation pages."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(str(mapping_root or ""))
+    scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
+    host = parsed.netloc.lower()
+    if not host:
+        return []
+    origin = f"{scheme}://{host}"
+    scope = _mapping_scope_root_path(mapping_root)
+    candidates = [f"{origin}/llms.txt", f"{origin}/sitemap.xml"]
+    if scope:
+        candidates += [f"{origin}{scope}/llms.txt",
+                       f"{origin}{scope}/sitemap.xml",
+                       f"{origin}{scope}/sitemap.md"]
+    return list(dict.fromkeys(candidates))
+
+
+def _index_urls(text: str) -> list[str]:
+    urls = re.findall(r"<loc>\s*(https?://[^<\s]+)\s*</loc>", str(text or ""),
+                      re.IGNORECASE)
+    urls += re.findall(r"https?://[^\s)\"'<>`]+", str(text or ""))
+    return list(dict.fromkeys(url.rstrip(".,;") for url in urls if url))
+
+
+def _nested_index_urls(text: str, index_url: str) -> list[str]:
+    """One level of sitemap-index navigation (e.g. llms.txt -> sitemap.md)."""
+    base = urlparse(str(index_url or ""))
+    nested = []
+    for url in _index_urls(text):
+        parsed = urlparse(url)
+        if parsed.netloc.lower() != base.netloc.lower():
+            continue
+        if url.rstrip("/") == str(index_url).rstrip("/"):
+            continue
+        lowered = url.lower()
+        if (("sitemap" in lowered and ".xml" in lowered)
+                or "sitemap-llms" in lowered
+                or "sitemap.md" in lowered
+                or lowered.endswith("/llms.txt")):
+            nested.append(url)
+    return list(dict.fromkeys(nested))[:1]
+
+
+def _index_doc_links(text: str, mapping_root: str,
+                     focus_terms: tuple[str, ...], *, limit: int = 2) -> list[str]:
+    ranked: list[tuple[int, int, str]] = []
+    for url in _index_urls(text):
+        if not _url_in_mapping_scope(url, mapping_root):
+            continue
+        lowered = url.lower()
+        if any(marker in lowered for marker in
+               ("sitemap.xml", "sitemap.md", "sitemap-llms", "/llms.txt")):
+            continue
+        score = sum(1 for term in focus_terms if term in lowered)
+        if score <= 0:
+            continue
+        ranked.append((-score, len(ranked), url))
+    ranked.sort()
+    return [url for _score, _order, url in ranked[:limit]]
 
 
 def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
@@ -500,6 +564,38 @@ class OfficialSearch(BaseRetriever):
             return {"ok": False, "url": url,
                     "failure": type(exc).__name__, "budget": budget.snapshot()}
 
+    async def _discover_index_doc_links(self, mapping_url: str,
+                                        focus: tuple[str, ...],
+                                        budget: OfficialFetchBudget) -> list[str]:
+        """Deterministically find focused docs pages via llms.txt/sitemap."""
+        for index_url in _official_index_candidates(mapping_url):
+            if budget.http_requests >= budget.max_http_requests:
+                return []
+            result = await fetch_official_index(
+                index_url, budget=budget,
+                deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+            )
+            if not result.get("ok"):
+                continue
+            text = str(result.get("text") or "")
+            for nested in _nested_index_urls(text, str(result.get("body_url") or index_url)):
+                if budget.http_requests >= budget.max_http_requests:
+                    break
+                nested_result = await fetch_official_index(
+                    nested, budget=budget,
+                    deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                    max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                    max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                )
+                if nested_result.get("ok"):
+                    text += "\n" + str(nested_result.get("text") or "")
+            links = _index_doc_links(text, mapping_url, focus, limit=2)
+            if links:
+                return links
+        return []
+
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None,
                          candidate_techs: list[str] | None = None) -> list[dict]:
@@ -856,6 +952,7 @@ class OfficialSearch(BaseRetriever):
                 focus = _deep_doc_focus_terms(
                     query, " ".join(str(item) for item in sub_questions or []),
                     " ".join(str(item) for item in constraints))
+                deep_added = 0
                 for target in _deep_doc_links(
                         entry["url"], body, fetched.get("links") or [], focus,
                         entry.get("_mapping_root") or entry["url"],
@@ -865,6 +962,7 @@ class OfficialSearch(BaseRetriever):
                     if budget.page_attempts >= budget.max_page_attempts:
                         break
                     known_urls.add(target)
+                    deep_added += 1
                     results.append({
                         "url": target,
                         "title": f"{owner} — deep documentation",
@@ -879,6 +977,33 @@ class OfficialSearch(BaseRetriever):
                         "source_owner": owner,
                         "source_kind": entry.get("source_kind"),
                     })
+                # JS-shell roots often expose no in-page documentation links. Their
+                # own llms.txt/sitemap is a deterministic index; use it instead of
+                # relying on Tavily having happened to return an official page.
+                if not deep_added and budget.http_requests < budget.max_http_requests:
+                    for target in await self._discover_index_doc_links(
+                            entry.get("_mapping_root") or entry["url"],
+                            focus, budget):
+                        if target in known_urls:
+                            continue
+                        if budget.page_attempts >= budget.max_page_attempts:
+                            break
+                        known_urls.add(target)
+                        deep_added += 1
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — deep documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_deep_doc": True,
+                            "_mapping_root": entry.get("_mapping_root") or entry["url"],
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
             # Learn only a verified identity whose body was actually collected,
             # and only when it came from discovery rather than the curated map.
             if not entry.get("_from_mapping") and entry.get("body_identity_verified"):

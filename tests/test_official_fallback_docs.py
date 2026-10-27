@@ -125,6 +125,69 @@ def test_transient_official_fetch_is_retried_once(monkeypatch):
     assert calls["n"] == 2
 
 
+def test_index_doc_links_pick_decision_dimensions():
+    from deepchoice.retrievers.official import _index_doc_links
+
+    text = ("<loc>https://docs.example.com/docs/audit-logging</loc>"
+            "<loc>https://docs.example.com/docs/permissions</loc>"
+            "<loc>https://docs.example.com/docs/marketing</loc>"
+            "<loc>https://evil.example/docs/audit</loc>")
+    links = _index_doc_links(
+        text, "https://docs.example.com/docs/overview.md",
+        ("security", "audit", "permission", "rbac"), limit=2)
+    assert links and all("docs.example.com/docs/" in link for link in links)
+    assert any("audit" in link for link in links)
+    assert all("marketing" not in link and "evil" not in link for link in links)
+
+
+def test_index_discovery_adds_deep_doc_when_root_has_no_links(monkeypatch):
+    from deepchoice.retrievers import official as official_mod
+    from deepchoice.retrievers.official_fetch import OfficialFetchBudget
+
+    monkeypatch.setitem(official_mod.TECH_DOCS, "indexedframework",
+                        {"url": "https://docs.example.com/docs/overview.md",
+                         "title": "IndexedFramework — Official Documentation"})
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {})
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", 8)
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", 32)
+    monkeypatch.setattr(
+        official_mod, "budget_for_research",
+        lambda **kwargs: OfficialFetchBudget(max_page_attempts=8,
+                                             max_http_requests=32))
+
+    async def fake_index(url, **kwargs):
+        return {"ok": True, "url": url, "body_url": url,
+                "text": ("<loc>https://docs.example.com/docs/audit-logging</loc>"
+                         "<loc>https://docs.example.com/docs/security</loc>"),
+                "content_type": "application/xml"}
+
+    async def fake_fetch(self, url, **kwargs):
+        if url.endswith("/overview.md"):
+            return {"ok": True, "url": url, "body": "IndexedFramework overview.",
+                    "title": "IndexedFramework", "page_chars": 25,
+                    "stored_chars": 25, "body_blocks": ["IndexedFramework overview."],
+                    "body_url": url, "bytes_read": 25, "bytes_retained": 25,
+                    "content_type": "text/markdown"}
+        body = f"IndexedFramework official docs at {url}"
+        return {"ok": True, "url": url, "body": body, "title": "IndexedFramework",
+                "page_chars": len(body), "stored_chars": len(body),
+                "body_blocks": [body], "body_url": url,
+                "bytes_read": len(body), "bytes_retained": len(body),
+                "content_type": "text/html"}
+
+    monkeypatch.setattr(official_mod, "fetch_official_index", fake_index)
+    monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body",
+                        fake_fetch)
+    rows = asyncio.run(official_mod.OfficialSearch()._do_search(
+        "IndexedFramework audit permissions", [], 10,
+        adapted_queries=[], candidate_techs=["IndexedFramework"]))
+    deep = [row for row in rows if row.get("_deep_doc")]
+    assert deep, rows
+    assert any("/audit-logging" in row["url"] or "/security" in row["url"]
+               for row in deep), rows
+    assert any(row.get("has_body") for row in deep), rows
+
+
 def test_mapping_scope_identity_is_limited_to_curated_host_and_path():
     from deepchoice.retrievers.official import _mapping_scope_identity
 

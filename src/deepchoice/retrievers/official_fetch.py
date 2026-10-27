@@ -317,8 +317,52 @@ async def fetch_official_page(
     }
 
 
+INDEX_CONTENT_TYPES = DEFAULT_CONTENT_TYPES + ("application/xml", "text/xml")
+
+
+async def fetch_official_index(
+    url: str,
+    *,
+    budget: OfficialFetchBudget,
+    deadline_s: float,
+    max_response_bytes: int = 524_288,
+    max_redirects: int = 3,
+) -> dict:
+    """Fetch a docs index (llms.txt / sitemap) without prose admission.
+
+    The returned text is *discovery material only*: it is never returned as a
+    citable body. The caller selects same-scope links and fetches/identity-checks
+    each page through the normal admission path. This is how a docs site without
+    in-page navigation links (JS shells, roots with only marketing prose) exposes
+    its deep audit/security/migration pages deterministically.
+    """
+    if deadline_s <= 0 or max_response_bytes <= 0 or max_redirects < 0:
+        raise ValueError("official index fetch bounds are invalid")
+    fetched = await safe_fetch_page(
+        "official", url, request_budget=budget, deadline_s=deadline_s,
+        max_response_bytes=max_response_bytes, max_redirects=max_redirects,
+        allowed_content_types=INDEX_CONTENT_TYPES,
+    )
+    if not fetched.get("ok"):
+        return {"ok": False, "url": url,
+                "failure": str(fetched.get("failure") or "index_fetch_failed"),
+                "budget": budget.snapshot()}
+    raw = fetched["body_bytes"].decode("utf-8", "replace")
+    return {
+        "ok": True,
+        "url": url,
+        "body_url": fetched.get("body_url") or url,
+        "text": raw,
+        "content_type": fetched.get("content_type", ""),
+        "bytes_read": fetched.get("bytes_read", 0),
+        "bytes_retained": fetched.get("bytes_retained", 0),
+        "budget": budget.snapshot(),
+    }
+
+
 __all__ = [
-    "DEFAULT_CONTENT_TYPES", "OfficialFetchBudget", "budget_for_research",
-    "fetch_official_page", "reset_research_budgets",
+    "DEFAULT_CONTENT_TYPES", "INDEX_CONTENT_TYPES", "OfficialFetchBudget",
+    "budget_for_research", "fetch_official_index", "fetch_official_page",
+    "reset_research_budgets",
     "NAVIGATION_MIN_PROSE_CHARS", "NAVIGATION_MIN_PROSE_RATIO",
 ]
