@@ -141,9 +141,14 @@
 - **结构缺陷确定性化**：空候选段因 option 对象存在但全部展示字段为空；已加 body-start 检查
   + gap 文案（B F200-002 复渲染无空段）。无关来源因 `used_sources` 收集隐藏字段引用；
   已按候选相关性过滤（F200-130 复渲染后财经/比特币/计算器来源全部消失），无法判断内容时保留。
-- 全套测试 **707 passed**；零付费验证。18:00 谷价窗口按已批准子集重测 3 例
-  （F200-144/148/119），结果待复核后更新。
-- 修复详情：`.scratch/cases/runs/ab-analysis-20261027/FIXES_20261027.md`。
+- 全套测试 **707 passed**；零付费验证。
+- **18:00 谷价窗口验证（已批准子集，3/3 完成，179,510 tokens）**：
+  F200-144 官方正文 **0→2 页**（LangGraph markdown 7922 chars / AutoGen stable 1653 chars），
+  arXiv failed→success 6 行，报告 recommended→conditional；F200-148 arXiv failed→success 2 行，
+  insufficient→conditional；F200-119 非学术 gate 保持。3 份报告全量内容复核：usable 3/3、
+  C4 关键错误 0、空候选段与无关来源消失；均非 decision-grade（C2 一手量化证据仍缺）。
+- 修复详情：`.scratch/cases/runs/ab-analysis-20261027/FIXES_20261027.md`；
+  验证：`.scratch/cases/runs/fix-validation-20261027/FIX_VALIDATION_REVIEW.md`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
 
