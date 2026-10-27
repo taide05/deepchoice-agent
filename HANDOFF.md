@@ -106,6 +106,25 @@
 - **新运行规则（立即生效）**：任何付费研究运行（无论题集大小）**只在谷价时段**，且必须先报批；
   开发/单测/离线分析/内容复核不受限。最终 200 例仍未决定。
 
+### 谷价 A/B 实验（2026-10-27 12–14 窗口，用户已批准）
+
+- 18 次 A/B 运行（6 例 × 默认/自评预算12k/输出约束）+ 3 例 SPA/arXiv 实测 + 18 次受控
+  review-only 重放；合计约 **1,350,777 tokens**（在批准范围内）。
+- 三臂总 tokens：A 287,416 / B 284,895 / C 247,300；自评 tokens：A 155,457 / B 137,618 /
+  C 112,713。**输出约束**省最多（总 −14%、自评 −27.5%）。
+- 受控重放（同一输入）：default 137,630 tokens / 修正 4；budget12k 134,033（−2.6%）/ 修正 2；
+  output constraint 110,893（−19.4%，completion −43.8%）/ 修正 1。
+- **关键发现：模型输出非确定性**。在 evidence_visible<12k（prompt 完全相同）的案例上，default 与
+  budget12k 仍产出不同修正（如 F200-130 2 vs 1、F200-159 2 vs 0），说明 temperature=0 下 API
+  仍有运行间方差；单次 A/B 的修正差异不能归因配置。因此不能凭本轮默认启用输出约束或预算。
+- SPA/arXiv：GitHub Pages（F200-144）同源 llms.txt 回退被执行但 404，官方正文仍 0；
+  F200-119 非学术 gate 正常（0 条 arXiv 源）；F200-148/144 的 arXiv 请求 **ReadTimeout**，
+  **放宽规则未被实际测试**。
+- 结论：输出约束是唯一明确的省钱候选，但需重复受控实验确认修正质量；evidence budget 12k 收益太小，
+  trigger 不启动；SPA/GitHub Pages 保持已知限制；arXiv 放宽需换窗口重测。
+- 详情：`.scratch/cases/runs/ab-analysis-20261027/AB_EXPERIMENT_FINDINGS.md`、
+  `.../REPLAY_RESULTS.json`。
+
 ## 最近的真实结果（2026-10-22，v12 配对）
 
 - 任务 `v12pair-f3166ac23bcc`（Temporal vs Camunda），candidate commit `f151361`。
@@ -126,7 +145,9 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
 16 份验证报告全量复核 usable 16/16、decision-grade 14/16、关键错误 0。但**还不是“可投递”状态**：
 
 - 自评成本效率是新发现的问题（49.2% tokens、111/200 零修正、completion 占 41%）；
-- arXiv 过滤放宽、SPA/静态回退只有离线/单测证据，尚无谷价实测；
+  谷价 A/B 显示输出约束可省约 14–19% tokens，但模型非确定性使修正质量结论待重复实验；
+- arXiv 过滤放宽只有离线/单测证据，谷价实测遇到 arXiv API ReadTimeout，尚未验证；
+- SPA/静态回退已实现并实测：GitHub Pages 受身份策略限制仍 0 页，属已知限制；
 - C2 一手性仍是内容质量短板（139/144 两例不满足 decision-grade）；
 - 官方正文覆盖未达标（45/200 为 0 页；GitHub Pages 受身份策略限制）；
 - F200-065 空 What 段等结构缺陷待修；
@@ -161,9 +182,10 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
 - 10/27 夜（零 API）：16 份验证报告全量复核；变薄根因；自评成本分析与 opt-in 开关；
   SPA 同源 llms 回退；arXiv 分组放宽（提交 `18e4f12`）。
 - 下一步（需用户批准、谷价时段）：
-  1. A/B-1（最优先）：8 例 × 2 臂（默认自评 vs 自评预算 12k），约 0.85M tokens；
-  2. A/B-2：8–10 例，自评输出 notes/corrections 限长，约 0.45–0.55M tokens；
-  3. SPA/arXiv 实测：3 例（F200-144 等），约 0.2–0.3M tokens；
+  1. **重复受控重放（最优先）**：6 例 × 2 配置（default vs output constraint）× 3 次重复
+     = 36 次 review-only，约 0.7M tokens；用均值/方差判断修正质量是否下降；
+  2. **ML arXiv 重测**：F200-144/148 等 2 例（上一轮 ReadTimeout），约 0.1M tokens；
+  3. 若重复实验通过，再决定是否默认启用输出约束；evidence budget 12k 暂不做；
   4. 全部通过后再决定最终 200 例（未决定）；交付材料在其后。
 - 不设固定轮数；某批修复没有可观察改善时停下来重谈方法（允许整段简化）。
 - 以上为开发计划，不是成绩承诺；正式指标口径与限制见 `FORMAL_200_REPORT.md`。
