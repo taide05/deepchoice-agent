@@ -471,7 +471,7 @@ class OfficialSearch(BaseRetriever):
             return {"ok": False, "url": url, "failure": "http_budget_exhausted",
                     "budget": budget.snapshot()}
         try:
-            return await fetch_official_page(
+            result = await fetch_official_page(
                 url, budget=budget,
                 deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
                 max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
@@ -479,6 +479,22 @@ class OfficialSearch(BaseRetriever):
                 store_chars=OFFICIAL_BODY_STORE_CHARS,
                 allow_navigation_intro=allow_navigation_intro,
             )
+            transient = str(result.get("failure") or "")
+            if (not result.get("ok")
+                    and any(marker in transient for marker in
+                            ("timeout", "Timeout", "Connect", "ReadError",
+                             "RemoteProtocol", "Transport"))
+                    and budget.http_requests < budget.max_http_requests):
+                await asyncio.sleep(0.6)
+                result = await fetch_official_page(
+                    url, budget=budget,
+                    deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                    max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                    max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                    store_chars=OFFICIAL_BODY_STORE_CHARS,
+                    allow_navigation_intro=allow_navigation_intro,
+                )
+            return result
         except Exception as exc:
             budget.record_failure(type(exc).__name__)
             return {"ok": False, "url": url,
@@ -501,18 +517,27 @@ class OfficialSearch(BaseRetriever):
         lookup = {**learned, **TECH_DOCS}
         results = []
         if self._fetch_budget is None:
-            try:
-                self._fetch_budget = budget_for_research(
-                    max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
-                    max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
-                )
-            except LookupError:
-                # No durable research identity (tests/direct callers): keep the
-                # budget on this retriever instance rather than inventing one.
+            if os.environ.get("OFFICIAL_FETCH_BUDGET_PER_CASE", "") == "1":
+                # Batch runners execute several research identities in one
+                # process; the shared run_limits identity would otherwise make all
+                # cases consume one page budget and starve later cases.
                 self._fetch_budget = OfficialFetchBudget(
                     max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
                     max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
                 )
+            else:
+                try:
+                    self._fetch_budget = budget_for_research(
+                        max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                        max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                    )
+                except LookupError:
+                    # No durable research identity (tests/direct callers): keep the
+                    # budget on this retriever instance rather than inventing one.
+                    self._fetch_budget = OfficialFetchBudget(
+                        max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                        max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                    )
         self._last_fetch_stats = self._fetch_budget.snapshot()
 
         if not candidates:

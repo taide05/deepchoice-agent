@@ -174,7 +174,7 @@ class ArxivSearch(BaseRetriever):
                         "https://export.arxiv.org/api/query", params=params)
                     response.raise_for_status()
                 break
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
+            except (httpx.TimeoutException, httpx.TransportError, RuntimeError) as exc:
                 last_error = exc
                 if attempt == 0:
                     await asyncio.sleep(1.5)

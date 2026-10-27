@@ -85,6 +85,46 @@ def test_deep_docs_are_fetched_from_curated_root(monkeypatch):
     assert all(row.get("body_identity_verified") for row in deep if row.get("has_body"))
 
 
+def test_batch_per_case_budget_does_not_use_shared_research_budget(monkeypatch):
+    from deepchoice.retrievers import official as official_mod
+
+    monkeypatch.setenv("OFFICIAL_FETCH_BUDGET_PER_CASE", "1")
+    monkeypatch.setattr(
+        official_mod, "budget_for_research",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("shared budget must not be used in per-case mode")))
+    retriever = official_mod.OfficialSearch()
+    asyncio.run(retriever._do_search("q", [], 5, adapted_queries=[],
+                                     candidate_techs=[]))
+    assert retriever._fetch_budget is not None
+
+
+def test_transient_official_fetch_is_retried_once(monkeypatch):
+    from deepchoice.retrievers import official as official_mod
+    from deepchoice.retrievers.official_fetch import OfficialFetchBudget
+
+    calls = {"n": 0}
+
+    async def fake_fetch(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"ok": False, "failure": "timeout"}
+        return {"ok": True, "body": "Official docs body", "title": "Doc",
+                "url": "https://docs.example.com/page", "page_chars": 20,
+                "stored_chars": 20, "body_blocks": ["Official docs body"],
+                "body_url": "https://docs.example.com/page",
+                "bytes_read": 20, "bytes_retained": 20}
+
+    monkeypatch.setattr(official_mod, "fetch_official_page", fake_fetch)
+    retriever = official_mod.OfficialSearch()
+    retriever._fetch_budget = OfficialFetchBudget(max_page_attempts=4,
+                                                  max_http_requests=8)
+    result = asyncio.run(retriever._fetch_official_body(
+        "https://docs.example.com/page"))
+    assert result["ok"] is True
+    assert calls["n"] == 2
+
+
 def test_mapping_scope_identity_is_limited_to_curated_host_and_path():
     from deepchoice.retrievers.official import _mapping_scope_identity
 

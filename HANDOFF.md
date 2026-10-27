@@ -150,6 +150,26 @@
 - 修复详情：`.scratch/cases/runs/ab-analysis-20261027/FIXES_20261027.md`；
   验证：`.scratch/cases/runs/fix-validation-20261027/FIX_VALIDATION_REVIEW.md`。
 
+### 内容 / decision-grade 修复阶段（2026-10-27 晚，用户已同意 #1/#2）
+
+- 根因：usable 但非 decision-grade 的案例都卡在 **C2 决定性事实缺少一手/官方依据**；此前官方
+  抓取只取 curated root 概览，未抓迁移/回滚/安全/性能对应的深层文档。
+- 已实现（提交 `c3493c9` + 本轮）：官方 deep docs 按问题维度抓取（LangGraph persistence/
+  interrupts、Cilium migration 等已验证 4 页正文）；合成 prompt 加一手证据纪律；batch official
+  预算改为 per-case（修共享预算 starvation）；官方抓取 deadline 25s + 单次瞬时重试；arXiv
+  缺通道/超时均可重试。
+- 6 例谷价回归：首轮 363,247 tokens 受基础设施污染；修复后重跑 4 例 229,441 tokens（合计 592,688）。
+  有效重跑指标：官方正文 144 **4 页**、148 **3 页**、119 **2 页**、083 1 页；决定性字段 official
+  引用占比 144 **0.526**、148 **0.556**、119 **0.529**、083 0.0（前值 0.273/0.167/0.389/0.057）。
+- 初步内容判定：F200-144/F200-148 可望升为 decision-grade（官方 deep docs 支撑决定性回滚/证据
+  结论，缺口如实保留）；F200-119/F200-083 仍非 DG（审计一手文档未确定性发现 / 官方正文未取得）。
+  4 份重跑报告已完成全量复核；首轮另 2 份（082/139）待复核。
+- 下一层问题：官方文档索引发现仍是运气（Redpanda audit-logging 有时被搜索带出、有时没有），
+  需要 docs llms.txt/sitemap 的确定性索引；部分官方 deep 页是导航页；有的决定性维度可能确实
+  没有公开一手数据，应保持 conditional/insufficient。
+- 计划/回归：`.scratch/cases/runs/ab-analysis-20261027/CONTENT_FIX_PLAN_20261027.md`、
+  `CONTENTFIX_REGRESSION_20261027.md`；权威度审计：`.../AUTHORITY_AUDIT.md`。
+
 ## 最近的真实结果（2026-10-22，v12 配对）
 
 - 任务 `v12pair-f3166ac23bcc`（Temporal vs Camunda），candidate commit `f151361`。
