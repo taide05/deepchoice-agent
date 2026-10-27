@@ -122,7 +122,11 @@
   **放宽规则未被实际测试**。
 - 结论：输出约束是唯一明确的省钱候选，但需重复受控实验确认修正质量；evidence budget 12k 收益太小，
   trigger 不启动；SPA/GitHub Pages 保持已知限制；arXiv 放宽需换窗口重测。
-- 详情：`.scratch/cases/runs/ab-analysis-20261027/AB_EXPERIMENT_FINDINGS.md`、
+- **21 份实验报告已全量内容复核（不是抽样）**：21/21 usable；仅 A F200-002 一份 decision-grade；
+  C2 一手证据是三臂共同短板；输出约束没有系统性降低 C1/C3/C4；空候选段/无关来源等结构问题在
+  三臂随机出现，与自评配置无关。逐份表：`.../AB_CONTENT_REVIEW.md`。
+- 阶段汇报：`.../MORNING_REPORT_20261027.md`；详情：
+  `.scratch/cases/runs/ab-analysis-20261027/AB_EXPERIMENT_FINDINGS.md`、
   `.../REPLAY_RESULTS.json`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
