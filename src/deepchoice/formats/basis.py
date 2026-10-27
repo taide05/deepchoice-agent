@@ -123,6 +123,8 @@ def _used_from_identity_map(rec: dict) -> list[dict]:
                 "url": url,
                 "provenance": binding.get("provenance", "unknown"),
                 "channel": binding.get("channel", ""),
+                "date": str(binding.get("date") or ""),
+                "source_type": str(binding.get("source_type") or ""),
                 "citations": 0,
             })
             entry["citations"] += 1
@@ -192,6 +194,8 @@ def _used_from_titles(rec: dict, chains: list[dict],
                     "url": url,
                     "provenance": src.get("provenance", "unknown"),
                     "channel": src.get("channel", ""),
+                    "date": str(src.get("date") or ""),
+                    "source_type": str(src.get("source_type") or ""),
                     "citations": 0,
                 })
                 entry["citations"] += 1
@@ -306,16 +310,28 @@ def source_provenance_note(src: dict, lang: str) -> str:
     """Describe a source's origin honestly, without calling local material public.
 
     Only material whose origin could be mistaken for something else is
-    annotated: locally held documents and evaluation material. A page fetched
-    from the web needs no note — its URL already says where it came from.
+    annotated: locally held documents, evaluation material, and official primary
+    documents (with their saved date when one exists). A page fetched from the
+    web needs no note — its URL already says where it came from — except that the
+    reader of a decision-grade report should be able to see which references are
+    official primary documentation and how old they are.
     """
     provenance = str(src.get("provenance") or "").strip().lower()
     channel = str(src.get("channel") or "").strip().lower()
+    source_type = str(src.get("source_type") or "").strip().lower()
+    date = str(src.get("date") or "").strip()
     url = str(src.get("url", "")).lower()
     if provenance == "benchmark_ground_truth" or channel == "benchmark_ground_truth":
         return "（评测答案材料）" if lang == "zh" else " (benchmark answer material)"
     if channel == "local_kb" or url.startswith("file://"):
         return "（本地知识库文档）" if lang == "zh" else " (local knowledge-base document)"
+    if source_type == "official_doc":
+        note = "（官方文档）" if lang == "zh" else " (official docs)"
+        if date:
+            note += f"（{date}）" if lang == "zh" else f" ({date})"
+        return note
     if url.startswith(("http://", "https://")):
+        if date:
+            return f"（来源日期：{date}）" if lang == "zh" else f" (source date: {date})"
         return ""
     return "（出处未知）" if lang == "zh" else " (provenance unknown)"

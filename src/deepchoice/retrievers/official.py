@@ -72,10 +72,19 @@ _FOCUS_LINK_TERMS = {
 }
 
 
+_MAPPING_LANDING_SEGMENTS = {
+    "about", "overview", "intro", "introduction", "index", "home",
+    "docs", "documentation", "latest", "stable", "current",
+}
+
+
 def _mapping_scope_root_path(mapping_root: str | None) -> str:
-    """Directory scope of a curated mapping root (file mappings use their dir)."""
+    """Directory scope of a curated mapping root (file/landing mappings use parent)."""
     path = urlparse(str(mapping_root or "")).path.rstrip("/")
-    if path and "." in path.rsplit("/", 1)[-1]:
+    if not path:
+        return path
+    last = path.rsplit("/", 1)[-1].lower()
+    if "." in last or last in _MAPPING_LANDING_SEGMENTS:
         path = path.rsplit("/", 1)[0]
     return path
 
@@ -125,7 +134,7 @@ def _deep_doc_links(base_url: str, body: str, links: list[str],
     candidates = list(links or []) + _links_in_text(body)
     for raw in candidates:
         target = urljoin(str(base_url), str(raw or ""))
-        target = target.split("#", 1)[0].rstrip("/")
+        target = target.split("#", 1)[0]
         if not target.startswith(("http://", "https://")):
             continue
         parsed = urlparse(target)
@@ -133,14 +142,21 @@ def _deep_doc_links(base_url: str, body: str, links: list[str],
             continue
         if not _url_in_mapping_scope(target, mapping_root or base_url):
             continue
-        if target in seen or target.rstrip("/") == str(base_url).rstrip("/"):
+        key = target.rstrip("/")
+        if key in seen or key == str(base_url).rstrip("/"):
+            continue
+        if parsed.path.lower().endswith(_SKIP_DOC_SUFFIXES):
             continue
         lowered = target.lower()
         score = sum(1 for term in focus_terms if term in lowered)
         if score <= 0:
             continue
-        seen.add(target)
-        ranked.append((-score, len(ranked), target))
+        # ReadTheDocs-style pages live at ".../policy/" (without the slash the
+        # server serves a navigation shell); leaf document pages should outrank
+        # section roots with the same keyword.
+        leaf_bonus = int(target.endswith(("/", ".html", ".md")))
+        seen.add(key)
+        ranked.append((-(score * 2 + leaf_bonus), len(ranked), target))
     ranked.sort()
     return [target for _score, _order, target in ranked[:limit]]
 
@@ -191,25 +207,74 @@ def _nested_index_urls(text: str, index_url: str) -> list[str]:
 
 
 def _index_doc_links(text: str, mapping_root: str,
-                     focus_terms: tuple[str, ...], *, limit: int = 2) -> list[str]:
-    ranked: list[tuple[int, int, str]] = []
+                     focus_terms: tuple[str, ...], *, limit: int = 2,
+                     required_terms: tuple[str, ...] = ()) -> list[str]:
+    entries: list[tuple[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for label, url in re.findall(
+            r"\[([^\]]*)\]\((https?://[^)\s]+)\)", str(text or "")):
+        pair = (url, label)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            entries.append(pair)
     for url in _index_urls(text):
+        pair = (url, "")
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            entries.append(pair)
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+    for url, label in entries:
         if not _url_in_mapping_scope(url, mapping_root):
             continue
         lowered = url.lower()
         if any(marker in lowered for marker in
                ("sitemap.xml", "sitemap.md", "sitemap-llms", "/llms.txt")):
             continue
-        score = sum(1 for term in focus_terms if term in lowered)
+        haystack = f"{url} {label}".lower()
+        if required_terms and not any(term in haystack for term in required_terms):
+            continue
+        if urlparse(url).path.lower().endswith(_SKIP_DOC_SUFFIXES):
+            continue
+        score = sum(1 for term in focus_terms if term in haystack)
         if score <= 0:
             continue
+        key = url.rstrip("/")
+        if key in seen:
+            continue
+        seen.add(key)
         ranked.append((-score, len(ranked), url))
     ranked.sort()
     return [url for _score, _order, url in ranked[:limit]]
 
 
+_SKIP_DOC_SUFFIXES = (".pdf", ".zip", ".png", ".jpg", ".jpeg", ".svg", ".gif",
+                      ".css", ".js", ".json", ".xml", ".tar", ".gz")
+
+
+def _candidate_alias_terms(owner: str) -> tuple[str, ...]:
+    """Aliases that must appear when a docs index redirects to another host."""
+    lowered = str(owner or "").lower()
+    words = [w for w in re.split(r"[^a-z0-9]+", lowered) if len(w) >= 3]
+    terms = list(words)
+    compact = "".join(words)
+    if compact:
+        terms.append(compact)
+    if "weights" in lowered or "biases" in lowered:
+        terms.append("wandb")
+    return tuple(dict.fromkeys(terms))
+
+
+def _origin_url(url: str) -> str:
+    parsed = urlparse(str(url or ""))
+    if not parsed.netloc:
+        return ""
+    return f"{parsed.scheme or 'https'}://{parsed.netloc}"
+
+
 def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
-                            mapping_root: str | None) -> bool:
+                            mapping_root: str | None,
+                            allow_path_alias: bool = False) -> bool:
     """Body identity inside a hand-curated mapping root.
 
     A curated root is already an explicit statement that the site belongs to the
@@ -217,14 +282,22 @@ def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
     product name is in the path, not the host). A page fetched from under that
     exact host/path scope may therefore pass body identity even though the URL
     token check alone would reject a GitHub Pages host; the page body must still
-    name the declared candidate. This is deliberately narrower than accepting
-    any page on the host and never applies to learned or prior-search roots.
+    name the declared candidate. ``allow_path_alias`` is used only for a curated
+    root that redirected to a successor docs host: there the candidate token in
+    the path (e.g. ``/products/wandb/``) is the remaining identity anchor.
     """
     if not mapping_root:
         return False
     if not _url_in_mapping_scope(url, mapping_root):
         return False
-    return source_text_discusses_candidate(owner, title, body)
+    if source_text_discusses_candidate(owner, title, body):
+        return True
+    if allow_path_alias:
+        path = urlparse(str(url or "")).path.lower()
+        aliases = [alias for alias in _candidate_alias_terms(owner) if len(alias) >= 4]
+        if any(alias in path for alias in aliases):
+            return True
+    return False
 
 
 def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
@@ -566,8 +639,10 @@ class OfficialSearch(BaseRetriever):
 
     async def _discover_index_doc_links(self, mapping_url: str,
                                         focus: tuple[str, ...],
-                                        budget: OfficialFetchBudget) -> list[str]:
+                                        budget: OfficialFetchBudget,
+                                        owner: str = "") -> list[str]:
         """Deterministically find focused docs pages via llms.txt/sitemap."""
+        mapping_host = urlparse(str(mapping_url or "")).netloc.lower()
         for index_url in _official_index_candidates(mapping_url):
             if budget.http_requests >= budget.max_http_requests:
                 return []
@@ -579,8 +654,9 @@ class OfficialSearch(BaseRetriever):
             )
             if not result.get("ok"):
                 continue
+            scope_root = str(result.get("body_url") or index_url)
             text = str(result.get("text") or "")
-            for nested in _nested_index_urls(text, str(result.get("body_url") or index_url)):
+            for nested in _nested_index_urls(text, scope_root):
                 if budget.http_requests >= budget.max_http_requests:
                     break
                 nested_result = await fetch_official_index(
@@ -590,8 +666,17 @@ class OfficialSearch(BaseRetriever):
                     max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
                 )
                 if nested_result.get("ok"):
+                    scope_root = str(nested_result.get("body_url") or nested)
                     text += "\n" + str(nested_result.get("text") or "")
-            links = _index_doc_links(text, mapping_url, focus, limit=2)
+            index_host = urlparse(scope_root).netloc.lower()
+            # A docs URL may redirect to a successor host (e.g. W&B docs to a
+            # platform docs site). There the focused pages must also name the
+            # candidate, or the index would pull unrelated platform docs.
+            required = (_candidate_alias_terms(owner)
+                        if owner and index_host and index_host != mapping_host
+                        else ())
+            links = _index_doc_links(text, scope_root, focus, limit=2,
+                                     required_terms=required)
             if links:
                 return links
         return []
@@ -863,6 +948,49 @@ class OfficialSearch(BaseRetriever):
                             "source_owner": owner,
                             "source_kind": entry.get("source_kind"),
                         })
+                # A navigation/JS root has no readable prose, but the site's own
+                # docs index can still expose the focused documentation pages. Try
+                # the index before spending page attempts on guessed static paths.
+                index_added = 0
+                if (owner and entry.get("_from_mapping")
+                        and not entry.get("_from_derived")
+                        and budget.page_attempts < budget.max_page_attempts
+                        and budget.http_requests < budget.max_http_requests):
+                    constraints = list((getattr(self, "_discovery_context", {}) or {})
+                                       .get("constraints") or [])
+                    focus = _deep_doc_focus_terms(
+                        query, " ".join(str(item) for item in sub_questions or []),
+                        " ".join(str(item) for item in constraints))
+                    for target in await self._discover_index_doc_links(
+                            entry.get("_mapping_root") or entry["url"],
+                            focus, budget, owner):
+                        if target in known_urls:
+                            continue
+                        if budget.page_attempts >= budget.max_page_attempts:
+                            break
+                        known_urls.add(target)
+                        index_added += 1
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — deep documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_deep_doc": True,
+                            "_mapping_root": _origin_url(target) or entry.get("_mapping_root"),
+                            "_redirect_scope": (
+                                _origin_url(target) != _origin_url(
+                                    entry.get("_mapping_root") or entry["url"])),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+                if index_added:
+                    # The index is a better source of focused pages than the
+                    # guessed /stable/, /latest/ paths; don't spend attempts on both.
+                    fallback_owners.add(owner)
                 # A curated root that served only a JS shell/navigation page may
                 # also expose static documentation under common paths, or llms.txt.
                 # Try one static fallback only when the normal derived-page route
@@ -892,6 +1020,42 @@ class OfficialSearch(BaseRetriever):
                             "source_owner": owner,
                             "source_kind": entry.get("source_kind"),
                         })
+                # A focused deep page that is itself a section/navigation page
+                # (common on ReadTheDocs sites) may link one level further to the
+                # actual prose leaf. Follow at most one such level; never recurse
+                # from a leaf or from a non-focused page.
+                if (entry.get("_deep_doc") and not entry.get("_deep_leaf")
+                        and ("navigation_like" in body_error
+                             or "short_prose_only" in body_error)
+                        and budget.page_attempts < budget.max_page_attempts):
+                    constraints = list((getattr(self, "_discovery_context", {}) or {})
+                                       .get("constraints") or [])
+                    focus = _deep_doc_focus_terms(
+                        query, " ".join(str(item) for item in sub_questions or []),
+                        " ".join(str(item) for item in constraints))
+                    for target in _deep_doc_links(
+                            entry["url"], "", fetched.get("links") or [], focus,
+                            entry.get("_mapping_root"), limit=2):
+                        if target in known_urls:
+                            continue
+                        if budget.page_attempts >= budget.max_page_attempts:
+                            break
+                        known_urls.add(target)
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — deep documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_deep_doc": True,
+                            "_deep_leaf": True,
+                            "_mapping_root": entry.get("_mapping_root"),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
                 continue
             body = fetched["body"]
             owner = entry.get("source_owner") or entry.get("title") or ""
@@ -907,7 +1071,8 @@ class OfficialSearch(BaseRetriever):
                 if not verified:
                     verified = _mapping_scope_identity(
                         owner, entry["url"], str(fetched.get("title") or ""), body,
-                        entry.get("_mapping_root"))
+                        entry.get("_mapping_root"),
+                        allow_path_alias=bool(entry.get("_redirect_scope")))
                 if not verified:
                     # A safe-fetched page that does not name the declared
                     # product/constraint is not that product's evidence. Keep the
@@ -983,7 +1148,7 @@ class OfficialSearch(BaseRetriever):
                 if not deep_added and budget.http_requests < budget.max_http_requests:
                     for target in await self._discover_index_doc_links(
                             entry.get("_mapping_root") or entry["url"],
-                            focus, budget):
+                            focus, budget, owner):
                         if target in known_urls:
                             continue
                         if budget.page_attempts >= budget.max_page_attempts:
@@ -1000,7 +1165,10 @@ class OfficialSearch(BaseRetriever):
                             "_from_prior_search": False,
                             "_from_derived": True,
                             "_deep_doc": True,
-                            "_mapping_root": entry.get("_mapping_root") or entry["url"],
+                            "_mapping_root": _origin_url(target) or entry.get("_mapping_root") or entry["url"],
+                            "_redirect_scope": (
+                                _origin_url(target) != _origin_url(
+                                    entry.get("_mapping_root") or entry["url"])),
                             "source_owner": owner,
                             "source_kind": entry.get("source_kind"),
                         })

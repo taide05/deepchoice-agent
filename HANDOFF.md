@@ -164,21 +164,31 @@
 - **6 例全量 C1–C4 复核完成**：usable 6/6、C4 关键错误 0、**decision-grade 2/6**
   （F200-144/F200-148 从非 DG 升为 DG）；其余 4 例的 C2 缺口是官方正文未取得/决定性维度无官方
   材料，不是合成或格式问题。表：`.../CONTENT_REVIEW_6_20261027.md`。
-- 已实现 **docs 索引发现**：mapping root 无页内文档链接时，抓取其 `llms.txt`/`sitemap.xml`
-  （含一层嵌套 sitemap）并按问题维度选页。免费真实重放 F200-119 可稳定取得 Redpanda
-  `audit-logging`（13,643 chars）、`agentic audit-log.md`（25,522 chars）、`upgrade.md` 正文。
-  Cilium/Calico 仍受限于官方文档结构（Cilium sitemap 只有版本根；Calico 深层页导航/身份失败）。
+- 已实现 **docs 索引发现 + 深页准入修复**：`llms.txt`/`sitemap.xml`（含嵌套）索引发现；
+  ReadTheDocs 尾斜杠/叶页跟踪；mapping 落地页取父 scope；重定向 successor host 的 scope/candidate
+  别名处理；pdf/zip 跳过。免费真实重放：F200-119 **7 个官方正文**（Redpanda audit-logging 13,643
+  + agentic audit-log 25,522 + upgrade + Pulsar TLS）；F200-083 **9 个官方正文**（Calico 策略/迁移
+  4 页 + Cilium policy intro/layer3/http/dns 4 页 + 根页）；F200-139 W&B 官方正文 0→**2 页**
+  （W&B docs 已重定向到 CoreWeave docs，按 successor scope + W&B 路径/别名识别）。
+- **非 C2 的额外问题**（契约/呈现审计）：决策契约 6/6 通过；空 heading 是 heading→subheading
+  的误报；真实问题是来源时效（F200-148 引用 LlamaIndex 0.9 旧 release）与引用解析缺口
+  （F200-148/119 各有 1 个显式“引用未解析”标记）。已加 **来源时效 prompt 规则**（旧版本不能证明
+  当前行为）与 **来源类型/日期显示**（官方文档/来源日期）。
+- **基础设施健康门**：新增 `batch_health.py` 并由 run_batch 自动执行，写 `batch_health.json`：
+  invalid = 必需来源/LLM/报告失败，warn = 页面级 timeout/identity/budget。回放历史批次：
+  contentfix-6/F200-144 **invalid**（arXiv 缺通道，与真实故障一致）；retry 144/148 **ok**；
+  其他 warn 不被当成干净数据。首轮污染的 official 预算共享、15s 超时、arXiv 缺通道
+  均已修复/重试并有单测。
 - W2“决定性字段无官方来源自动降级”暂不实现：144/148 证明 prompt 纪律已能正确使用一手证据；
-  非 DG 案例是没抓到官方材料，强行降级不会产生新证据。决定先继续补检索缺口。
-- 已实现 **docs 索引发现**：mapping root 无页内文档链接时，抓取其 `llms.txt`/`sitemap.xml`
-  （含一层嵌套 sitemap）并按问题维度选页。免费真实重放 F200-119 可稳定取得 Redpanda
-  `audit-logging`（13,643 chars）、`agentic audit-log.md`（25,522 chars）、`upgrade.md` 正文；
-  Cilium/Calico 仍受限于官方文档结构（Cilium sitemap 只有版本根；Calico 深层页导航/身份失败）。
-- 下一层问题：Cilium/Calico/W&B 的官方文档索引与具体页面仍需定向；部分决定性维度可能确实
-  没有公开一手数据，应保持 conditional/insufficient。
-- 计划/回归：`.scratch/cases/runs/ab-analysis-20261027/CONTENT_FIX_PLAN_20261027.md`、
-  `CONTENTFIX_REGRESSION_20261027.md`、`CONTENT_REVIEW_6_20261027.md`；
-  权威度审计：`.../AUTHORITY_AUDIT.md`。
+  非 DG 案例是没抓到官方材料，强行降级不会产生新证据。决定先补检索缺口。
+- 下一层问题：F200-119/083 复测可验证是否升 DG；F200-139 的 W&B 专属审计页仍不足；
+  FIPS/CIS 等维度可能确实无公开一手数据，应保持 conditional/insufficient。
+- 下一步（已获方向同意，需报批具体付费）：最小复测 2 例（F200-119、F200-083），约 0.1–0.15M
+  tokens，在下一谷价窗口运行；批准后做全量 C1–C4 复核。
+- 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
+  `CONTENT_FIX_PLAN_20261027.md`、`CONTENTFIX_REGRESSION_20261027.md`、
+  `CONTENT_REVIEW_6_20261027.md`、`NONDG_ROOT_CAUSE_20261027.md`、
+  `REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、`AUTHORITY_AUDIT.md`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
 

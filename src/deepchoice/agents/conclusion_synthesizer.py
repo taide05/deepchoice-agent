@@ -58,6 +58,7 @@ the source is wrong or that the two sources contradict.
 10. Make the analysis usable, not just short: each trade-off's `impact` must say who/which constraint it matters for; `evidence_summary` must note the evidence limits (missing official/primary sources, dates/versions absent, unmeasured claims); `confidence_rationale` must be consistent with `confidence`. Do not repeat the recommendation as the winner_rationale: state the decisive evidence basis there, and put actions/conditions in `recommendation`.
 11. Distinguish documented fact, conditional inference and unknown. If the saved source list shows only a navigation link or a body-truncated range, do not present the missing text as established. If you answer a required item from general reasoning rather than a source, mark it as an inference; if it cannot be answered, record it in `unresolved_questions` with the decision impact instead of filling it with a citation.
 12. PRIMARY-EVIDENCE DISCIPLINE: each source record carries its type (`official_doc`, `vendor`, `community`, `wiki`, `blog`, etc.). For a decision-decisive fact about migration cost, rollback, performance, security/audit, licensing, or long-term maintenance, prefer an official/primary source. If only a vendor or community/blog source states it, say so explicitly and do not use it as the sole basis for a recommended status. If a decisive dimension has no primary or quantified evidence, say so in `evidence_summary`/`confidence_rationale` and use conditional or insufficient_evidence; that is the correct decision-grade outcome, not a failure to choose.
+13. SOURCE FRESHNESS: when a claim relies on a release note, migration guide, issue, or versioned page, state its version/date and whether it reflects the current product. An old release note cannot prove current capability; if only an old version's material is available, record the current-version gap instead of treating the old behavior as current.
 
 ## Output Structure
 Return ONLY a JSON object:
@@ -534,6 +535,8 @@ def source_binding(entry: dict) -> dict:
         "url": entry["url"],
         "provenance": entry["provenance"],
         "channel": entry["channel"],
+        "date": entry.get("date", ""),
+        "source_type": entry.get("source_type", ""),
     }
 
 

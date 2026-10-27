@@ -188,6 +188,96 @@ def test_index_discovery_adds_deep_doc_when_root_has_no_links(monkeypatch):
     assert any(row.get("has_body") for row in deep), rows
 
 
+def test_deep_doc_links_preserve_leaf_trailing_slash():
+    from deepchoice.retrievers.official import _deep_doc_links
+
+    root = "https://docs.example.com/docs/overview.md"
+    body = ("[Policy](https://docs.example.com/docs/security/policy/)\n"
+            "[Policy no slash](https://docs.example.com/docs/security/policy)")
+    links = _deep_doc_links(root, body, [], ("security", "policy"),
+                            root, limit=2)
+    assert "https://docs.example.com/docs/security/policy/" in links
+
+
+def test_mapping_landing_page_uses_parent_scope():
+    from deepchoice.retrievers.official import (
+        _mapping_scope_identity, _mapping_scope_root_path)
+
+    root = "https://docs.tigera.io/calico/latest/about"
+    assert _mapping_scope_root_path(root) == "/calico/latest"
+    assert _mapping_scope_identity(
+        "Calico", "https://docs.tigera.io/calico/latest/network-policy/x",
+        "Calico network policy", "Calico Kubernetes network policy guide", root) is True
+
+
+def test_deep_navigation_page_follows_one_leaf_level(monkeypatch):
+    from deepchoice.retrievers import official as official_mod
+    from deepchoice.retrievers.official_fetch import OfficialFetchBudget
+
+    monkeypatch.setitem(official_mod.TECH_DOCS, "leafyframework",
+                        {"url": "https://docs.example.com/stable/",
+                         "title": "LeafyFramework — Official Documentation"})
+    monkeypatch.setattr(official_mod, "load_learned", lambda: {})
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", 12)
+    monkeypatch.setattr(official_mod, "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", 32)
+    monkeypatch.setattr(
+        official_mod, "budget_for_research",
+        lambda **kwargs: OfficialFetchBudget(max_page_attempts=12,
+                                             max_http_requests=32))
+
+    async def fake_fetch(self, url, **kwargs):
+        if url == "https://docs.example.com/stable/":
+            body = ("[Security](https://docs.example.com/stable/security/) "
+                    "LeafyFramework overview.")
+            return {"ok": True, "url": url, "body": body, "title": "LeafyFramework",
+                    "page_chars": len(body), "stored_chars": len(body),
+                    "body_blocks": [body], "body_url": url,
+                    "bytes_read": len(body), "bytes_retained": len(body),
+                    "content_type": "text/html"}
+        if url == "https://docs.example.com/stable/security/":
+            return {"ok": False, "failure": "not_prose:navigation_like",
+                    "links": ["https://docs.example.com/stable/security/intro/"],
+                    "page_chars": 200, "prose_chars": 0,
+                    "bytes_read": 200, "bytes_retained": 200}
+        body = "LeafyFramework security policy prose. " * 20
+        return {"ok": True, "url": url, "body": body, "title": "LeafyFramework",
+                "page_chars": len(body), "stored_chars": len(body),
+                "body_blocks": [body], "body_url": url,
+                "bytes_read": len(body), "bytes_retained": len(body),
+                "content_type": "text/html"}
+
+    monkeypatch.setattr(official_mod.OfficialSearch, "_fetch_official_body",
+                        fake_fetch)
+    rows = asyncio.run(official_mod.OfficialSearch()._do_search(
+        "LeafyFramework security audit", [], 10,
+        adapted_queries=[], candidate_techs=["LeafyFramework"]))
+    leaves = [row for row in rows if row.get("_deep_leaf")]
+    assert leaves, rows
+    assert any(row.get("has_body") for row in leaves), rows
+
+
+def test_index_discovery_uses_redirect_target_scope(monkeypatch):
+    from deepchoice.retrievers import official as official_mod
+    from deepchoice.retrievers.official_fetch import OfficialFetchBudget
+
+    async def fake_index(url, **kwargs):
+        return {"ok": True, "url": url,
+                "body_url": "https://docs.successor.example/llms.txt",
+                "text": ("- [Audit logging](https://docs.successor.example/audit): "
+                         "audit and permissions"),
+                "content_type": "text/plain"}
+
+    monkeypatch.setattr(official_mod, "fetch_official_index", fake_index)
+    budget = OfficialFetchBudget(max_page_attempts=8, max_http_requests=16)
+
+    async def main():
+        return await official_mod.OfficialSearch()._discover_index_doc_links(
+            "https://docs.example.com/", ("audit", "permission"), budget)
+
+    links = asyncio.run(main())
+    assert links == ["https://docs.successor.example/audit"]
+
+
 def test_mapping_scope_identity_is_limited_to_curated_host_and_path():
     from deepchoice.retrievers.official import _mapping_scope_identity
 
