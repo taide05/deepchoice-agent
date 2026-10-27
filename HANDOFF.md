@@ -184,8 +184,18 @@
 - 下一步（零成本优先）：按 D1–D5 重审既有报告并量化“转述风险”；诊断候选级证据不对称是否
   实际破坏决策维度；只有审计证明需要时才改检索分配。**不再计划 1 例 Cilium 复测**；后续若做
   prompt/A-B 付费实验需另行报批；最终 200 例仍不决定。
+- **审计前 provenance 强制规则（用户 10/27 夜提醒）**：既有报告未必代表当前链路；最新报告批次
+  22:06 早于当前 decision-first prompt（`97378c4`），因此**没有一份报告代表当前 HEAD**。
+  已建 `REPORT_PROVENANCE.md` 与 `D1_D5_AUDIT_PROTOCOL.md`：只有同一 commit/config 的报告算
+  CURRENT；旧报告只能作历史模式（A）、当前可能仍存在（B）、需当前版本复核（C）、数据缺口（D）。
+  `run_batch.py` 现在自动写 `batch_meta.json`（commit/dirty、cases SHA-256、官方/自评配置），
+  以后的审计先读 provenance 再评分；旧报告不得用来证明当前 pipeline 有同样问题。
+- 下一步（零成本优先）：按 D1–D5 规程对既有报告只做“历史模式/候选问题”清单，不据此改当前代码；
+  要判断当前链路质量，需要一次带 batch_meta 的当前 HEAD 小样本（未批准不跑）。prompt 改动如果
+  要验证，应做决策有用性 A/B（不是官方覆盖率 A/B），并先报批。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
-  `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`CONTENT_FIX_PLAN_20261027.md`、
+  `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
+  `D1_D5_AUDIT_PROTOCOL.md`、`CONTENT_FIX_PLAN_20261027.md`、
   `CONTENTFIX_REGRESSION_20261027.md`、`CONTENT_REVIEW_6_20261027.md`、
   `NONDG_ROOT_CAUSE_20261027.md`、`REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、
   `AUTHORITY_AUDIT.md`、`RETEST_2_CASE_20261027.md`。
