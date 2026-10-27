@@ -29,6 +29,20 @@ async def _wait_for_backoff() -> None:
         await asyncio.sleep(_next_allowed - now)
 
 
+async def _community_client():
+    """Outbound community client with one retry for a transient missing channel."""
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            return await _outbound.make_client("community")
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt == 0:
+                await asyncio.sleep(1.5)
+    raise last_error if last_error is not None else RuntimeError(
+        "community outbound client unavailable")
+
+
 class CommunitySearch(BaseRetriever):
     source = "community"
 
@@ -47,7 +61,8 @@ class CommunitySearch(BaseRetriever):
             )
         try:
             await _wait_for_backoff()
-            async with await _outbound.make_client("community") as client:
+            client = await _community_client()
+            async with client as client:
                 so_resp = await client.get(
                     "https://api.stackexchange.com/2.3/search",
                     params={

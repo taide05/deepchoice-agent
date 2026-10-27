@@ -181,14 +181,20 @@
   均已修复/重试并有单测。
 - W2“决定性字段无官方来源自动降级”暂不实现：144/148 证明 prompt 纪律已能正确使用一手证据；
   非 DG 案例是没抓到官方材料，强行降级不会产生新证据。决定先补检索缺口。
-- 下一层问题：F200-119/083 复测可验证是否升 DG；F200-139 的 W&B 专属审计页仍不足；
-  FIPS/CIS 等维度可能确实无公开一手数据，应保持 conditional/insufficient。
-- 下一步（已获方向同意，需报批具体付费）：最小复测 2 例（F200-119、F200-083），约 0.1–0.15M
-  tokens，在下一谷价窗口运行；批准后做全量 C1–C4 复核。
+- **22:06 最小付费复测 2 例（F200-119/F200-083，117,696 tokens，用户已批准）**：
+  - F200-119 官方正文 **7 页**、决定性 official 占比 **0.583**，全量复核 **usable / decision-grade（初判）**；
+  - F200-083 官方正文 4 页、占比 0.500，Calico tier/RBAC 官方证据补齐；但 Cilium Hubble
+    审计字段仍只有二手材料、官方 Cilium 正文本轮只到根页 → usable / 非 DG（C2 partial）；
+  - 两例 community 可选来源出现 no outbound channel（报告已披露 5/6 来源），健康门标 warn；
+    已补 community 通道重试，后续不再误判为 invalid。
+- 下一层问题：F200-083 需定向 Cilium 官方 Hubble/审计文档并修本轮 Cilium deep 页未进证据的
+  预算/排序问题；F200-139 W&B 专属审计页仍不足；FIPS/CIS 等可能确实无公开一手数据。
+- 下一步：若继续推 F200-083 到 DG，需再做约 1 例最小付费复测（另报批）；最终 200 例仍不决定。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `CONTENT_FIX_PLAN_20261027.md`、`CONTENTFIX_REGRESSION_20261027.md`、
   `CONTENT_REVIEW_6_20261027.md`、`NONDG_ROOT_CAUSE_20261027.md`、
-  `REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、`AUTHORITY_AUDIT.md`。
+  `REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、`AUTHORITY_AUDIT.md`、
+  `RETEST_2_CASE_20261027.md`。
 
 ## 最近的真实结果（2026-10-22，v12 配对）
 
