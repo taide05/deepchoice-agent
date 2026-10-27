@@ -1,3 +1,5 @@
+import os
+
 from ..utils.decision import decision_view, withdraw_decision
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
@@ -386,8 +388,86 @@ def _citation_coverage(fr: dict, evidence_chains: list[dict] | None = None,
     }
 
 
+def _self_review_budget_chars() -> int | None:
+    """Optional self-review-only evidence budget for cost experiments.
+
+    Unset (default) keeps the shared 24k package used by synthesis. The A/B
+    experiment sets SELF_REVIEW_EVIDENCE_BUDGET_CHARS and compares review output;
+    the default product behaviour is unchanged.
+    """
+    raw = os.environ.get("SELF_REVIEW_EVIDENCE_BUDGET_CHARS", "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value >= 500 else None
+
+
+def _self_review_mode() -> str:
+    """full (default) or triggered (opt-in cost experiment)."""
+    return (os.environ.get("SELF_REVIEW_MODE", "full").strip().lower() or "full")
+
+
+def _should_self_review(recommendation: dict, cite_stats: dict,
+                        research_state: dict) -> tuple[bool, str]:
+    """Deterministic pre-review trigger used only when SELF_REVIEW_MODE=triggered.
+
+    The rule was derived from the saved 200-case data: review whenever the
+    decision is invalid/insufficient, any conflict was recorded, or the report has
+    fewer than 20 citations. This is an experiment guard, not a claim that the
+    skipped reviews are correction-free; the default mode still reviews every run.
+    """
+    if _self_review_mode() != "triggered":
+        return True, "full"
+    status = str(recommendation.get("decision_status") or "")
+    if status in ("invalid", "insufficient_evidence"):
+        return True, "trigger:decision_status"
+    if research_state.get("conflicts"):
+        return True, "trigger:conflicts"
+    report = str(research_state.get("report") or "")
+    if report.count("[Source:") < 20:
+        return True, "trigger:few_citations"
+    return False, "skip:low_risk"
+
+
+def _skipped_review_result(research_state: dict, reason: str) -> dict:
+    """Return the pre-review result unchanged, with an explicit skip signal."""
+    recommendation = research_state.get("final_recommendation") or {}
+    report = str(research_state.get("report") or "")
+    if not report:
+        final_report, _ = render_report(dict(research_state))
+    else:
+        final_report = report
+    return {
+        "report": final_report,
+        "final_recommendation": recommendation,
+        "confidence": research_state.get("confidence"),
+        "knowledge_gaps": list(research_state.get("knowledge_gaps") or []),
+        "retry_count": research_state.get("retry_count", 0),
+        "quality_signals": [{
+            "agent": "self_reviewer",
+            "review_status": "skipped_by_trigger",
+            "review_mode": _self_review_mode(),
+            "skip_reason": reason,
+            "review_validation_error": None,
+            "passed_count": None,
+            "total_checks": 6,
+            "confidence": research_state.get("confidence"),
+            "gaps_found": len(research_state.get("knowledge_gaps") or []),
+            "corrections_applied": 0,
+            "corrections_rejected": 0,
+            "corrected_fields": [],
+            "report_rerendered": False,
+        }],
+        "token_usage": list(research_state.get("token_usage") or []),
+    }
+
+
 def _source_register_text(registry: dict, with_audit: bool = False,
-                          focus_terms: list[str] | None = None):
+                          focus_terms: list[str] | None = None,
+                          budget_chars: int | None = None):
     """The numbered sources, with title, URL and the shared evidence package.
 
     Rendered from the same package builder the synthesizer used: complete saved
@@ -401,7 +481,8 @@ def _source_register_text(registry: dict, with_audit: bool = False,
     if not entries:
         text = "No citable sources were registered."
         return (text, []) if with_audit else text
-    package = shared_evidence_package(entries, focus_terms=focus_terms or [])
+    package = shared_evidence_package(entries, focus_terms=focus_terms or [],
+                                      budget_chars=budget_chars)
     lines: list[str] = []
     audit: list[dict] = []
     for entry in entries:
@@ -611,10 +692,21 @@ class SelfReviewerAgent:
 
         focus_terms = evidence_focus_terms_for_state(research_state)
 
-        source_register_text, evidence_audit = _source_register_text(
-            registry, with_audit=True, focus_terms=focus_terms)
-        review_fields = _review_fields_text(recommendation)
+        # Cheap pre-review signals first: the opt-in trigger may skip the paid
+        # review entirely and must not build an evidence package for it.
         cite_stats = _citation_coverage(recommendation, registry=registry)
+        review_budget = _self_review_budget_chars()
+        should_review, review_reason = _should_self_review(
+            recommendation, cite_stats, research_state)
+        if not should_review:
+            print_agent_output(
+                f"Self-review skipped by trigger ({review_reason})", agent="SELF_REVIEWER")
+            return _skipped_review_result(research_state, review_reason)
+
+        source_register_text, evidence_audit = _source_register_text(
+            registry, with_audit=True, focus_terms=focus_terms,
+            budget_chars=review_budget)
+        review_fields = _review_fields_text(recommendation)
         uncited_text = ("\n".join(f"- {locator}" for locator in cite_stats["uncited_locations"])
                         or "none")
         unresolved_text = ("\n".join(f"- {locator}" for locator in cite_stats["unresolved_locations"])
@@ -804,6 +896,7 @@ Field locations with an unresolved citation:
             "quality_signals": [{
                 "agent": "self_reviewer",
                 "review_status": "completed" if review_usable else "unavailable",
+                "review_mode": _self_review_mode(),
                 "review_validation_error": review_error,
                 "passed_count": passed_count if review_usable else None,
                 "total_checks": 6,
@@ -814,7 +907,7 @@ Field locations with an unresolved citation:
                 "corrections_rejected": len(rejected),
                 "corrected_fields": [f"{c['option']}/{c['field']}" for c in applied],
                 "report_rerendered": True,
-                "evidence_input_budget_chars": EVIDENCE_INPUT_BUDGET_CHARS,
+                "evidence_input_budget_chars": review_budget or EVIDENCE_INPUT_BUDGET_CHARS,
                 "evidence_full_included": bool(evidence_audit) and all(
                     a.get("full_included") for a in evidence_audit),
                 "evidence_sources_visible": len(evidence_audit),

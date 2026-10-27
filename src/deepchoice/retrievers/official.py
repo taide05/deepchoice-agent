@@ -40,6 +40,30 @@ _SKIP_LINK_HINTS = (
 _INDEX_PATH_SUFFIXES = ("/index.html", "/index.htm", "/index", "/")
 
 
+def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
+    """Same-host static fallbacks for a curated root that only served a JS shell.
+
+    Only same-host llms.txt/markdown-style entry points are tried: the existing
+    safe-fetch and body identity rules reject off-host README mirrors as official
+    evidence (GitHub Pages roots such as *.github.io cannot pass host identity for a
+    product whose name is in the path, so this fallback cannot fix those — that is
+    recorded as a known limitation rather than weakening identity checks).
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(str(base_url or ""))
+    scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
+    host = parsed.netloc.lower()
+    if not host:
+        return []
+    targets = [f"{scheme}://{host}/llms.txt",
+               f"{scheme}://{host}/llms-full.txt"]
+    path = parsed.path.rstrip("/")
+    if path:
+        targets.append(f"{scheme}://{host}{path}/llms.txt")
+    return targets[:limit]
+
+
 def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> list[str]:
     """Deeper same-site documentation links from a navigation page.
 
@@ -521,6 +545,8 @@ class OfficialSearch(BaseRetriever):
         known_urls = {r.get("url") for r in results}
         derived_added = 0
         derived_owners: set[str] = set()
+        fallback_added = 0
+        fallback_owners: set[str] = set()
         for entry in results:
             if missing_candidate_coverage and entry.get("source_kind") != "candidate":
                 # Do not spend the remaining page budget on a platform homepage
@@ -579,6 +605,34 @@ class OfficialSearch(BaseRetriever):
                             "_from_mapping": False,
                             "_from_prior_search": False,
                             "_from_derived": True,
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+                # A curated root that served only a JS shell/navigation page may
+                # also expose a readable README (GitHub Pages) or llms.txt. Try one
+                # static fallback only when the normal derived-page route found
+                # nothing for this owner and the page budget still allows it.
+                if (owner and entry.get("_from_mapping")
+                        and owner not in derived_owners
+                        and owner not in fallback_owners
+                        and budget.page_attempts < budget.max_page_attempts
+                        and fallback_added < 2):
+                    for target in _fallback_doc_targets(entry["url"]):
+                        if target in known_urls or fallback_added >= 2:
+                            continue
+                        known_urls.add(target)
+                        fallback_added += 1
+                        fallback_owners.add(owner)
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — static documentation fallback",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_from_fallback": True,
                             "source_owner": owner,
                             "source_kind": entry.get("source_kind"),
                         })

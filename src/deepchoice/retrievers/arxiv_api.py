@@ -44,6 +44,40 @@ _STOP_WORDS = {
     "between", "which", "what", "how", "than", "not", "no",
 }
 
+# Multi-word topical hints per candidate cluster. A paper without the commercial
+# framework name can still be relevant when it describes the technique the
+# question is about (e.g. "multi-agent" for LangGraph vs AutoGen). These are
+# deliberately specific phrases, not single generic words like "model".
+_TOPIC_HINTS = {
+    "langgraph": ("multi-agent", "agent framework", "agent orchestration",
+                  "agent workflow", "stateful agent", "agentic workflow"),
+    "autogen": ("multi-agent", "agent framework", "agent orchestration",
+                "agent workflow", "agent communication"),
+    "llamaindex": ("retrieval-augmented", "rag pipeline", "document index",
+                   "retrieval pipeline", "vector index"),
+    "haystack": ("retrieval-augmented", "rag pipeline", "document index",
+                 "retrieval pipeline", "question answering pipeline"),
+    "mlflow": ("experiment tracking", "model registry", "mlops", "model lineage"),
+    "weightsbiases": ("experiment tracking", "model registry", "mlops",
+                      "model lineage"),
+    "vllm": ("llm inference", "model serving", "inference serving",
+             "inference throughput", "serving throughput"),
+    "textgenerationinference": ("llm inference", "model serving",
+                                "inference serving", "inference throughput"),
+    "pgvector": ("vector database", "vector search", "nearest neighbor",
+                 "ann index", "embedding index"),
+    "qdrant": ("vector database", "vector search", "nearest neighbor",
+               "ann index", "embedding index"),
+}
+
+# A topic-hint paper is only admitted when it also looks like analysis rather than
+# a tangential use of the same technique (surveys, benchmarks, systems, pipelines).
+_RELEVANCE_META_TERMS = (
+    "framework", "benchmark", "evaluation", "survey", "review", "comparison",
+    "pipeline", "implementation", "dataset", "system", "architecture",
+    "retrieval-augmented", "experiment", "performance",
+)
+
 
 def _compact(value: str) -> str:
     return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
@@ -52,6 +86,16 @@ def _compact(value: str) -> str:
 def _words(value: str) -> list[str]:
     return [word for word in re.split(r"[^a-z0-9+#.]+", str(value or "").lower())
             if len(word) >= 3 and word not in _STOP_WORDS]
+
+
+def _topic_hints(candidate_techs: list[str] | None) -> tuple[str, ...]:
+    hints: list[str] = []
+    for candidate in candidate_techs or []:
+        compact = _compact(candidate)
+        for key, phrases in _TOPIC_HINTS.items():
+            if key in compact:
+                hints.extend(phrase for phrase in phrases if phrase not in hints)
+    return tuple(hints)
 
 
 def is_academic_question(query: str, sub_questions: list[str],
@@ -77,6 +121,14 @@ def _result_is_relevant(title: str, snippet: str, keywords: str,
                 return True
             tokens = _words(candidate)
             if tokens and any(token in compact_text for token in tokens):
+                return True
+        # Relaxed academic rule: the paper names the technique cluster and looks
+        # like analysis of it, even without naming the commercial framework.
+        hints = _topic_hints(candidates)
+        if hints:
+            hint_hits = sum(1 for hint in hints if hint in text)
+            meta_hits = sum(1 for term in _RELEVANCE_META_TERMS if term in text)
+            if hint_hits >= 1 and meta_hits >= 1:
                 return True
         return False
     # Open question (no declared candidates): require two significant words.

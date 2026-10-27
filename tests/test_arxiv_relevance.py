@@ -63,6 +63,32 @@ def test_open_question_requires_two_significant_words():
     assert drop is False
 
 
+def test_relaxed_rule_keeps_topical_paper_without_candidate_name():
+    keep = _result_is_relevant(
+        "Multi-agent framework with stateful workflows",
+        "We study orchestration and recovery in agent systems.",
+        "agent orchestration LangGraph AutoGen", ["LangGraph", "AutoGen"])
+    drop = _result_is_relevant(
+        "Chinese word segmentation with transformers",
+        "A study of tokenizers and segmentation accuracy.",
+        "agent orchestration LangGraph AutoGen", ["LangGraph", "AutoGen"])
+    assert keep is True
+    assert drop is False
+
+
+def test_relaxed_rule_requires_analysis_like_paper():
+    drop = _result_is_relevant(
+        "Multi-agent learning in social settings",
+        "We study emergent behavior in simulated communities.",
+        "MySQL MariaDB indexing", ["LangGraph", "AutoGen"])
+    keep = _result_is_relevant(
+        "A Survey of Retrieval-Augmented Generation Pipelines",
+        "We review RAG architectures and evaluation methods.",
+        "document indexing", ["LlamaIndex", "Haystack"])
+    assert drop is False
+    assert keep is True
+
+
 @pytest.mark.asyncio
 async def test_gated_arxiv_search_makes_no_http_call(monkeypatch):
     called = {"value": False}
