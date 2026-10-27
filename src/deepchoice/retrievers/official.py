@@ -40,14 +40,43 @@ _SKIP_LINK_HINTS = (
 _INDEX_PATH_SUFFIXES = ("/index.html", "/index.htm", "/index", "/")
 
 
+def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
+                            mapping_root: str | None) -> bool:
+    """Body identity inside a hand-curated mapping root.
+
+    A curated root is already an explicit statement that the site belongs to the
+    candidate (e.g. ``microsoft.github.io/autogen/stable/`` for AutoGen, where the
+    product name is in the path, not the host). A page fetched from under that
+    exact host/path scope may therefore pass body identity even though the URL
+    token check alone would reject a GitHub Pages host; the page body must still
+    name the declared candidate. This is deliberately narrower than accepting
+    any page on the host and never applies to learned or prior-search roots.
+    """
+    if not mapping_root:
+        return False
+    from urllib.parse import urlparse
+
+    root = urlparse(str(mapping_root))
+    target = urlparse(str(url))
+    if (target.scheme not in ("http", "https")
+            or target.netloc.lower() != root.netloc.lower()):
+        return False
+    root_path = root.path.rstrip("/")
+    target_path = target.path.rstrip("/")
+    if root_path and not (target_path == root_path
+                          or target_path.startswith(root_path + "/")):
+        return False
+    return source_text_discusses_candidate(owner, title, body)
+
+
 def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     """Same-host static fallbacks for a curated root that only served a JS shell.
 
-    Only same-host llms.txt/markdown-style entry points are tried: the existing
-    safe-fetch and body identity rules reject off-host README mirrors as official
-    evidence (GitHub Pages roots such as *.github.io cannot pass host identity for a
-    product whose name is in the path, so this fallback cannot fix those — that is
-    recorded as a known limitation rather than weakening identity checks).
+    Only same-host entry points are tried: the existing safe-fetch and body identity
+    rules reject off-host README mirrors as official evidence. For a docs root with
+    a path (e.g. a GitHub Pages project site), common static documentation paths are
+    tried first, then llms.txt; the caller still admits only a page whose body names
+    the declared candidate (see the curated-mapping-scope identity check).
     """
     from urllib.parse import urlparse
 
@@ -56,11 +85,14 @@ def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     host = parsed.netloc.lower()
     if not host:
         return []
-    targets = [f"{scheme}://{host}/llms.txt",
-               f"{scheme}://{host}/llms-full.txt"]
     path = parsed.path.rstrip("/")
+    root = f"{scheme}://{host}{path}" if path else f"{scheme}://{host}"
+    targets = [f"{root}/stable/", f"{root}/latest/",
+               f"{scheme}://{host}/llms.txt",
+               f"{scheme}://{host}/llms-full.txt"]
+    targets += [f"{root}/docs/", f"{root}/en/latest/"]
     if path:
-        targets.append(f"{scheme}://{host}{path}/llms.txt")
+        targets.append(f"{root}/llms.txt")
     return targets[:limit]
 
 
@@ -210,10 +242,10 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "sentencepiece": {"url": "https://github.com/google/sentencepiece", "title": "SentencePiece — Official Repository"},
     # Agent frameworks
     "langchain": {"url": "https://python.langchain.com/docs/", "title": "LangChain — Official Documentation"},
-    "langgraph": {"url": "https://langchain-ai.github.io/langgraph/", "title": "LangGraph — Official Documentation"},
+    "langgraph": {"url": "https://docs.langchain.com/oss/python/langgraph/overview.md", "title": "LangGraph — Official Documentation"},
     "llamaindex": {"url": "https://docs.llamaindex.ai", "title": "LlamaIndex — Official Documentation"},
     "crewai": {"url": "https://docs.crewai.com", "title": "CrewAI — Official Documentation"},
-    "autogen": {"url": "https://microsoft.github.io/autogen", "title": "AutoGen — Official Documentation"},
+    "autogen": {"url": "https://microsoft.github.io/autogen/stable/", "title": "AutoGen — Official Documentation"},
     "semantic-kernel": {"url": "https://learn.microsoft.com/semantic-kernel", "title": "Semantic Kernel — Official Documentation"},
     "dify": {"url": "https://dify.ai", "title": "Dify — Official Documentation"},
     "langflow": {"url": "https://docs.langflow.org", "title": "LangFlow — Official Documentation"},
@@ -414,7 +446,13 @@ class OfficialSearch(BaseRetriever):
             named = [k for k in lookup if candidate_names_key(owner, k)]
             if not named:
                 continue
-            key = max(named, key=lambda k: len(_normalize(k)))
+            # A hand-verified mapping outranks a learned cache entry even when the
+            # learned key is a different casing/alias; stale learned URLs (e.g. a
+            # formerly-working langgraph.dev path) must not shadow the curated
+            # canonical docs root. Longest match still wins within each tier.
+            named.sort(key=lambda k: (0 if k in TECH_DOCS else 1,
+                                      -len(_normalize(k))))
+            key = named[0]
             if key not in lookup:
                 continue
             curated = key in TECH_DOCS
@@ -435,6 +473,7 @@ class OfficialSearch(BaseRetriever):
                 "_from_mapping": curated,
                 "_from_learned": not curated,
                 "_from_prior_search": False,
+                "_mapping_root": doc["url"] if curated else None,
                 "source_owner": owner,
                 "source_kind": kind,
             }
@@ -605,13 +644,14 @@ class OfficialSearch(BaseRetriever):
                             "_from_mapping": False,
                             "_from_prior_search": False,
                             "_from_derived": True,
+                            "_mapping_root": entry.get("_mapping_root"),
                             "source_owner": owner,
                             "source_kind": entry.get("source_kind"),
                         })
                 # A curated root that served only a JS shell/navigation page may
-                # also expose a readable README (GitHub Pages) or llms.txt. Try one
-                # static fallback only when the normal derived-page route found
-                # nothing for this owner and the page budget still allows it.
+                # also expose static documentation under common paths, or llms.txt.
+                # Try one static fallback only when the normal derived-page route
+                # found nothing for this owner and the page budget still allows it.
                 if (owner and entry.get("_from_mapping")
                         and owner not in derived_owners
                         and owner not in fallback_owners
@@ -633,6 +673,7 @@ class OfficialSearch(BaseRetriever):
                             "_from_prior_search": False,
                             "_from_derived": True,
                             "_from_fallback": True,
+                            "_mapping_root": entry.get("_mapping_root"),
                             "source_owner": owner,
                             "source_kind": entry.get("source_kind"),
                         })
@@ -642,9 +683,17 @@ class OfficialSearch(BaseRetriever):
             if not entry.get("_from_mapping"):
                 # Search metadata and our generated title are discovery hints, not
                 # page identity. Only the safe-fetched body may establish that the
-                # page names the owner.
-                if not source_identity_verified(owner, entry["url"],
-                                                str(fetched.get("title") or ""), body):
+                # page names the owner. A page derived from a hand-curated mapping
+                # root may still be official when it stays on the same host/path
+                # scope and its body names the product (GitHub Pages project sites
+                # put the product name in the path, not the host).
+                verified = source_identity_verified(
+                    owner, entry["url"], str(fetched.get("title") or ""), body)
+                if not verified:
+                    verified = _mapping_scope_identity(
+                        owner, entry["url"], str(fetched.get("title") or ""), body,
+                        entry.get("_mapping_root"))
+                if not verified:
                     # A safe-fetched page that does not name the declared
                     # product/constraint is not that product's evidence. Keep the
                     # attempt visible as navigation, never as a citable body.

@@ -198,6 +198,83 @@ def _used_from_titles(rec: dict, chains: list[dict],
     return list(used.values())
 
 
+def _meaningful_candidate_name(name: str) -> bool:
+    """Whether a candidate name can support a relevance judgment.
+
+    Test fixtures and hypothetical prompts use placeholders ("A", "Candidate A");
+    filtering real sources by whether they mention such a placeholder would drop
+    legitimate evidence, so those names are ignored by the relevance filter.
+    """
+    text = str(name or "").strip()
+    if len(text) < 2:
+        return False
+    if re.fullmatch(r"[A-Za-z]", text):
+        return False
+    lowered = text.lower()
+    return not (lowered.startswith(("candidate ", "候选")))
+
+
+def _decision_candidates(rec: dict) -> list[str]:
+    """Candidate names the decision actually carries (for source relevance)."""
+    names: list[str] = []
+    for value in (rec.get("winner"),):
+        text = str(value or "").strip()
+        if text and text not in names:
+            names.append(text)
+    for option in rec.get("ranked_options") or []:
+        if not isinstance(option, dict):
+            continue
+        name = str(option.get("name") or "").strip()
+        if name and name not in names:
+            names.append(name)
+    return [name for name in names if _meaningful_candidate_name(name)]
+
+
+def source_entry_relevant(rec: dict, chains: list[dict],
+                          title: str, url: str) -> bool:
+    """Whether one cited source visibly discusses a decision candidate."""
+    candidates = _decision_candidates(rec)
+    if not candidates:
+        return True
+    from ..utils.candidate_identity import (names_candidate, source_content,
+                                            source_text_discusses_candidate)
+
+    content = ""
+    found = False
+    for chain in chains or []:
+        for src in chain.get("sources") or []:
+            if str(src.get("url") or "") == url:
+                content = source_content(src)
+                found = True
+                break
+        if found:
+            break
+    if not found:
+        # No collected body/content to judge: keep the source rather than hide a
+        # citation on incomplete information (the historical fixtures and imported
+        # records can legitimately have title/url only).
+        return True
+    return any(names_candidate(f"{title} {url}", candidate)
+               or source_text_discusses_candidate(candidate, title, content)
+               for candidate in candidates)
+
+
+def _filter_relevant_used(rec: dict, chains: list[dict],
+                          used: list[dict]) -> list[dict]:
+    """Keep only cited sources that visibly discuss a declared candidate.
+
+    A source can enter the citation map because the model cited it in a field
+    that the report never renders (or cited it for an unrelated aside); the
+    2026-10-27 F200-130 report listed finance/crypto articles in "why this was
+    used" even though they discuss no candidate. Dropping those from the basis
+    list is deterministic and does not hide a source that actually names a
+    candidate. With no candidates to test against, nothing is filtered.
+    """
+    return [entry for entry in used
+            if source_entry_relevant(rec, chains, str(entry.get("title") or ""),
+                                     str(entry.get("url") or ""))]
+
+
 def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
     """The registered sources the synthesis result actually cites.
 
@@ -212,7 +289,8 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
     """
     identity_map = _registered_citation_bindings(rec)
     if identity_map is None:
-        return _used_from_titles(rec, chains)
+        return _filter_relevant_used(rec, chains,
+                                     _used_from_titles(rec, chains))
     used = {entry["url"]: entry for entry in _used_from_identity_map(rec)}
     for entry in _used_from_titles(rec, chains,
                                    skip_locators=set(identity_map)):
@@ -221,7 +299,7 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
         existing = used.setdefault(entry["url"], entry)
         if existing is not entry:
             existing["citations"] += entry["citations"]
-    return list(used.values())
+    return _filter_relevant_used(rec, chains, list(used.values()))
 
 
 def source_provenance_note(src: dict, lang: str) -> str:

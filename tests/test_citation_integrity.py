@@ -208,6 +208,31 @@ class TestRegisteredIdentity:
         report = what_why_how.render(_state(rec, chains))
         assert "https://unique.example/x" in report
 
+    def test_basis_drops_cited_source_that_names_no_candidate(self):
+        """A source cited in a hidden/aside field must still discuss a candidate.
+
+        F200-130 listed finance/crypto articles in "why this was used" because the
+        citation map had collected them from fields the report never renders.
+        """
+        relevant = _source("Jaeger Features", "Jaeger tracing backend",
+                           "https://jaeger.example/features")
+        irrelevant = _source("Bitcoin self-custody news", "crypto markets",
+                             "https://news.example/btc")
+        chains = _chains(relevant, irrelevant)
+        rec = {
+            "recommendation": ("Use Jaeger [Source: Jaeger Features]. "
+                               "Context [Source: Bitcoin self-custody news]."),
+            "ranked_options": [{"name": "Jaeger", "rank": 1},
+                               {"name": "Zipkin", "rank": 2}],
+        }
+        cs.apply_citation_rules(rec, chains)
+        used = used_sources(rec, chains)
+        assert [src["url"] for src in used] == ["https://jaeger.example/features"]
+        report = what_why_how.render(_state(rec, chains,
+                                            candidates=["Jaeger", "Zipkin"]))
+        assert "https://jaeger.example/features" in report
+        assert "https://news.example/btc" not in report
+
     def test_a_partial_identity_map_does_not_hide_legacy_fields(self):
         """A record revised later has identities only for revised fields; the
         untouched fields must still contribute their unique cited sources."""

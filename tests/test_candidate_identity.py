@@ -193,6 +193,28 @@ class TestWhatRendersCandidates:
         assert "本次合成未给出该候选的说明" in section_b or \
             "synthesis produced no explanation" in section_b
 
+    def test_empty_option_object_still_renders_the_gap_bullet(self):
+        """An option dict with no displayable fields must not leave an empty heading.
+
+        A real 2026-10-27 report rendered "### Svelte" followed immediately by
+        "### Vue": the option objects existed but every display field was empty.
+        """
+        state = {
+            "task": {"query": "X vs Y", "candidate_techs": ["Candidate A", "Candidate B"]},
+            "evidence_chains": [], "conflicts": [], "knowledge_gaps": [],
+            "confidence": "low",
+            "final_recommendation": {
+                "recommendation": "Pick A.",
+                "ranked_options": [{"rank": 1, "name": "Candidate A"},
+                                   {"rank": 2, "name": "Candidate B"}],
+            },
+        }
+        what = render(state).split("\n## Why")[0]
+        for candidate in ("Candidate A", "Candidate B"):
+            section = what.split(f"### {candidate}")[-1].split("###")[0]
+            assert ("本次合成未给出该候选的说明" in section
+                    or "synthesis produced no explanation" in section), section
+
     def test_a_multiline_explanation_is_not_truncated(self):
         """A newline inside a model field used to break the bullet and drop the
         rest of that candidate's explanation."""
@@ -375,7 +397,7 @@ class TestCandidateNameMatching:
                 "evidence_strength": "moderate",
                 "sources": [
                     {"title": "Real Benchmark", "url": "https://x/bench",
-                     "snippet": "A measured benchmark body.", "score": 7.0},
+                     "snippet": "A measured ClickHouse benchmark body.", "score": 7.0},
                     {"title": "PostgreSQL Docs Link", "url": "https://www.postgresql.org/docs/",
                      "snippet": "", "has_body": False, "score": 6.0},
                     {"title": "Amazon Athena over S3 — Official Documentation",

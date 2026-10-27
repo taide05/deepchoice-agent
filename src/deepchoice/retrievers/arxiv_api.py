@@ -12,8 +12,11 @@ This source now:
 2. keeps only results that actually name a declared candidate (or, for open
    questions, share at least two significant query words).
 """
+import asyncio
 import re
 import xml.etree.ElementTree as ET
+
+import httpx
 
 from .. import outbound as _outbound
 from .base import BaseRetriever, NoRetrievableMaterial
@@ -152,19 +155,41 @@ class ArxivSearch(BaseRetriever):
             )
         keywords = (adapted_queries[0] if adapted_queries else
                     query.replace(" vs ", " ").replace(" versus ", " ")[:200])
-        async with await _outbound.make_client("arxiv") as client:
-            resp = await client.get(
-                "https://export.arxiv.org/api/query",
-                params={
-                    "search_query": f"all:{keywords}",
-                    "max_results": max_results,
-                    "sortBy": "relevance",
-                },
-            )
-            resp.raise_for_status()
+        # export.arxiv.org occasionally resets/read-times-out under batch
+        # concurrency (observed 2026-10-27: ReadTimeout with no result rows). One
+        # bounded retry with a longer read timeout keeps an upstream hiccup from
+        # silently emptying an academic case; no new paid channel is introduced.
+        response = None
+        last_error: Exception | None = None
+        params = {
+            "search_query": f"all:{keywords}",
+            "max_results": max_results,
+            "sortBy": "relevance",
+        }
+        for attempt in range(2):
+            try:
+                async with await _outbound.make_client("arxiv") as client:
+                    client.timeout = httpx.Timeout(30.0, connect=10.0)
+                    response = await client.get(
+                        "https://export.arxiv.org/api/query", params=params)
+                    response.raise_for_status()
+                break
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                last_error = exc
+                if attempt == 0:
+                    await asyncio.sleep(1.5)
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                if exc.response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+                    await asyncio.sleep(1.5)
+                    continue
+                raise
+        if response is None:
+            raise last_error if last_error is not None else RuntimeError(
+                "arxiv request produced no response")
 
         try:
-            root = ET.fromstring(resp.text)
+            root = ET.fromstring(response.text)
         except ET.ParseError as e:
             raise ValueError(f"Arxiv returned non-XML response: {e}") from e
 

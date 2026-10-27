@@ -29,6 +29,7 @@ def _field_source_links(rec: dict, locator: str, text: str,
     ambiguous title is left unlinked rather than guessed.
     """
     from ..agents.conclusion_synthesizer import CITATION_SOURCES_KEY
+    from .basis import source_entry_relevant
 
     identity_map = (rec or {}).get(CITATION_SOURCES_KEY)
     links: list[str] = []
@@ -38,6 +39,8 @@ def _field_source_links(rec: dict, locator: str, text: str,
                 continue
             title = str(binding.get("title") or "")
             url = str(binding.get("url") or "")
+            if not source_entry_relevant(rec, chains, title, url):
+                continue
             label = escape_markdown_text(title)
             link = f"[{label}]({url})" if url else label
             if link and link not in links:
@@ -58,6 +61,8 @@ def _field_source_links(rec: dict, locator: str, text: str,
                 continue
             src = sources[0]
             url = str(src.get("url") or "")
+            if not source_entry_relevant(rec, chains, part.strip(), url):
+                continue
             label = escape_markdown_text(part.strip())
             link = f"[{label}]({url})" if url else label
             if link not in links:
@@ -220,6 +225,7 @@ def render(state: dict) -> str:
 
         for candidate in candidates:
             lines.append(f"### {candidate}")
+            body_start = len(lines)
             opt = explained.get(candidate)
             if opt:
                 # Model text may carry newlines; a raw one would break the bullet
@@ -235,7 +241,10 @@ def render(state: dict) -> str:
                     value = _one_line(opt.get(field))
                     if value:
                         lines.append(f"- {label}: {value}")
-            else:
+            if len(lines) == body_start:
+                # An option object can exist with every display field empty. The
+                # heading must never be followed by nothing, or the report reads as
+                # a broken candidate section; state the gap deterministically.
                 lines.append("- 本次合成未给出该候选的说明；这是本轮的资料缺口，"
                              "不代表该候选不适用。"
                              if lang == "zh" else

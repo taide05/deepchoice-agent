@@ -90,6 +90,50 @@ def test_relaxed_rule_requires_analysis_like_paper():
 
 
 @pytest.mark.asyncio
+async def test_arxiv_read_timeout_is_retried_once(monkeypatch):
+    import httpx
+
+    attempts = {"n": 0}
+    atom = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry><title>LangGraph: stateful agent orchestration</title>
+      <summary>We benchmark LangGraph agent workflows.</summary>
+      <id>https://arxiv.org/abs/1234.5678</id>
+      <published>2026-01-01T00:00:00Z</published></entry>
+    </feed>"""
+
+    class Response:
+        text = atom
+
+        def raise_for_status(self):
+            return None
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise httpx.ReadTimeout("upstream")
+            return Response()
+
+    async def make_client(source):
+        return Client()
+
+    monkeypatch.setattr(arxiv_api._outbound, "make_client", make_client)
+    result = await ArxivSearch().search(
+        "LangGraph vs AutoGen for agent orchestration", [],
+        candidate_techs=["LangGraph", "AutoGen"])
+    assert attempts["n"] == 2
+    assert result["status"] == "success"
+    assert result["results"][0]["title"].startswith("LangGraph")
+
+
+@pytest.mark.asyncio
 async def test_gated_arxiv_search_makes_no_http_call(monkeypatch):
     called = {"value": False}
 

@@ -14,7 +14,8 @@ from ..outbound import safe_fetch_page
 from ..security.urls import SafeUrlPolicy
 from ..utils.page_text import SourceDocument, extract_html_title, extract_page_document
 
-DEFAULT_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
+DEFAULT_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain",
+                         "text/markdown", "text/x-markdown")
 NAVIGATION_MIN_PROSE_CHARS = 120
 NAVIGATION_MIN_PROSE_RATIO = 0.20
 
@@ -203,11 +204,12 @@ async def fetch_official_page(
             "budget": budget.snapshot(),
         }
     media_type = fetched.get("content_type", "")
+    bare_media_type = str(media_type).split(";", 1)[0].strip().lower()
     raw = fetched["body_bytes"].decode("utf-8", "replace")
     title = extract_html_title(raw)
     document = extract_page_document(
         raw, truncated=bool(fetched.get("page_truncated")),
-        plain_text=media_type == "text/plain",
+        plain_text=bare_media_type in ("text/plain", "text/markdown", "text/x-markdown"),
     )
     admission = _admission_failure(document)
     prose_blocks = [document.blocks[i] for i in document.prose_indices

@@ -116,6 +116,22 @@ def test_fetched_page_is_citable_and_records_page_storage_split(monkeypatch):
     assert budget.http_requests == 1
 
 
+def test_markdown_documentation_is_citable(monkeypatch):
+    """Docs sites increasingly expose .md pages; they are plain text, not HTML."""
+    markdown = "# LangGraph\n\n" + LONG_PROSE
+    _patch_transport(monkeypatch, lambda request: _response(
+        markdown, content_type="text/markdown; charset=utf-8"))
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/page.md", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(max_page_attempts=1, max_http_requests=3),
+        deadline_s=1.0, max_response_bytes=100_000, max_redirects=2,
+        store_chars=5000,
+    ))
+    assert result["ok"] is True
+    assert "bounded, traceable fact" in result["body"]
+    assert result["content_type"].startswith("text/markdown")
+
+
 def test_navigation_or_login_page_is_not_citable(monkeypatch):
     _patch_transport(monkeypatch, lambda request: _response(NAV_HTML))
     result = asyncio.run(fetch_official_page(

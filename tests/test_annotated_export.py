@@ -17,7 +17,7 @@ SNAPSHOT = {
             "disputed": False,
             "sources": [
                 {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 8,
-                 "snippet": "Measured async throughput under load."},
+                 "snippet": "Measured FastAPI async throughput under load."},
             ],
         },
         {
@@ -34,6 +34,7 @@ SNAPSHOT = {
     "final_recommendation": {
         "winner": "FastAPI",
         "winner_rationale": "async support [Source: Benchmark Post]",
+        "ranked_options": [{"name": "FastAPI", "rank": 1}, {"name": "Flask", "rank": 2}],
         # The report's basis is the set of sources the synthesis result actually
         # cites, so the fixture cites them. A retrieved chain that is never
         # cited is no longer presented as a reference.
@@ -58,9 +59,9 @@ def _identity_snapshot() -> dict:
     chains = [{"conclusion": "c", "evidence_strength": "strong",
                "disputed": False, "sources": [
                    {"title": title, "url": "https://a.example/doc",
-                    "snippet": "body of A", "score": 8},
+                    "snippet": "FastAPI body of A", "score": 8},
                    {"title": title, "url": "https://b.example/doc",
-                    "snippet": "body of B", "score": 7},
+                    "snippet": "FastAPI body of B", "score": 7},
                ]}]
     recommendation = {
         "winner": "FastAPI",
