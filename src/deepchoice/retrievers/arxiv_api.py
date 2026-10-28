@@ -160,6 +160,7 @@ class ArxivSearch(BaseRetriever):
         # bounded retry with a longer read timeout keeps an upstream hiccup from
         # silently emptying an academic case; no new paid channel is introduced.
         response = None
+        root = None
         last_error: Exception | None = None
         params = {
             "search_query": f"all:{keywords}",
@@ -173,6 +174,18 @@ class ArxivSearch(BaseRetriever):
                     response = await client.get(
                         "https://export.arxiv.org/api/query", params=params)
                     response.raise_for_status()
+                try:
+                    root = ET.fromstring(response.text)
+                except ET.ParseError as exc:
+                    # export.arxiv.org can answer 200 with an HTML/error page
+                    # (observed as "non-XML response"). Retry once before
+                    # marking the whole academic source failed.
+                    last_error = exc
+                    if attempt == 0:
+                        await asyncio.sleep(1.5)
+                        continue
+                    raise ValueError(
+                        f"Arxiv returned non-XML response: {exc}") from exc
                 break
             except (httpx.TimeoutException, httpx.TransportError, RuntimeError) as exc:
                 last_error = exc
@@ -184,14 +197,12 @@ class ArxivSearch(BaseRetriever):
                     await asyncio.sleep(1.5)
                     continue
                 raise
-        if response is None:
+        if root is None:
+            if response is None:
+                raise last_error if last_error is not None else RuntimeError(
+                    "arxiv request produced no response")
             raise last_error if last_error is not None else RuntimeError(
-                "arxiv request produced no response")
-
-        try:
-            root = ET.fromstring(response.text)
-        except ET.ParseError as e:
-            raise ValueError(f"Arxiv returned non-XML response: {e}") from e
+                "arxiv returned no parsable XML")
 
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         results = []
