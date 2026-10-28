@@ -2,10 +2,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from deepchoice.agents.query_analyzer import QueryAnalyzerAgent
+from deepchoice.agents.query_analyzer import DECOMPOSITION_SYSTEM, QueryAnalyzerAgent
 
 
 class TestQueryAnalyzer:
+    def test_decomposition_prompt_forbids_inventing_context(self):
+        assert "CONTEXT IS CLOSED" in DECOMPOSITION_SYSTEM
+        assert "no DAG count" in DECOMPOSITION_SYSTEM
+        assert "do not add facts that were not given" in DECOMPOSITION_SYSTEM.lower()
     @pytest.mark.asyncio
     async def test_decomposes_query_into_sub_questions(self):
         state = {
