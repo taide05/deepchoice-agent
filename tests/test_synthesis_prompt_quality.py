@@ -25,3 +25,8 @@ def test_prompt_forbids_inventing_scenario_context():
 def test_prompt_requires_source_independence():
     assert "SOURCE INDEPENDENCE" in SYNTHESIS_PROMPT
     assert "cannot be two independent corroborating sources" in SYNTHESIS_PROMPT
+
+
+def test_prompt_forbids_inventing_specific_tool_stack():
+    assert "DO NOT SPECIFY GIVEN TOOLS/STACKS" in SYNTHESIS_PROMPT
+    assert "do not write a specific product" in SYNTHESIS_PROMPT.lower()
