@@ -255,9 +255,18 @@
   - `batch_health` 增加 `report_quality:*` 非阻断警告；新增 `tests/test_report_quality.py`；
     全量测试 **729 passed**。
   - 这些只修呈现/标注，不能替代 P0 的 closed-context 行为验证。
-- 下一步：先做 **4–6 例定向验证**（F200-166/F200-176 + 对照，约 0.25–0.4M tokens）确认
-  closed-context 规则生效且无新回归；通过后再单独批准最终 200。最终 200 仍未决定，
-  交付材料不更新正式数字。
+- **10/28 18:10–19:00 P0/P1/P2 定向验证（用户批准“除最终 200 外其他跑例”，谷价窗口）**：
+  - 用户批准后先跑 4 例（166/176/189/107，266,042 tokens），发现只改 synthesis 不够：
+    query analyzer 会把典型栈/来源假设写进子问题，synthesis 再当作用户事实；F200-107 还出现
+    空 What/过度 hold。
+  - 追加修复：analyzer 加 `CONTEXT IS CLOSED`；synthesis 加
+    `DO NOT SPECIFY GIVEN TOOLS/STACKS`、`A HOLD MUST STILL BE USEFUL`；
+  - 重跑后最终采用 4 例：C4 **4/4 = 0**（166/176/189 不再自设前提），raw `[[n]]`/空括号/
+    泛化来源名 **0**；166/176/189 为 conditional；107 为 insufficient_evidence 但 What 有内容
+    （仍属 P4 数据缺口/过度 hold，不是空报告）。
+  - 本验证轮累计 known tokens **638,250**（含被替换的中间迭代），均在谷价窗口内、批准范围内；
+  - 全量测试 **734 passed**；验证记录：`P0_P1_P2_VALIDATION_20261028.md`。
+- 下一步：最终 200 仍未批准/未运行；如继续，需另行批准并安排在谷价窗口。当前无待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
