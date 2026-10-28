@@ -84,7 +84,8 @@
 - **P2 已有 prompt/lint**：
   - 合成 prompt 新增 `SOURCE INDEPENDENCE` 规则：同一 URL/同页/转载/单一厂商对比页不能算
     独立互证；决定性比较只有单一独立来源时必须标明；
-  - `batch_health.py` 增加 `report_quality:*` 非阻断警告（raw 脚注/空括号/泛化来源名）；
+  - `report_quality.source_concentration_flags` + `batch_health` 增加 `report_quality:*`
+    非阻断警告（raw 脚注/空括号/泛化来源名/同发布者来源集中/单发布者却声称“两份独立”）；
     这些属于呈现/标注问题，不改变基础设施判定。
 - **P0 未做**：closed-context 行为验证必须付费样本，仍未批准/未跑。
 - **P3–P5 未做**：按计划依赖下一批/最终 200。

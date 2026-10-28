@@ -3,6 +3,7 @@ from deepchoice.formats.basis import source_display_title
 from deepchoice.formats.report_quality import (
     finalize_report_text,
     report_quality_flags,
+    source_concentration_flags,
 )
 
 
@@ -37,3 +38,24 @@ def test_generic_source_title_uses_url_path_for_display():
 def test_normal_source_title_is_not_rewritten():
     src = {"title": "MLflow Tracking Server | MLflow AI Platform", "url": "https://mlflow.org/docs"}
     assert source_display_title(src) == "MLflow Tracking Server | MLflow AI Platform"
+
+
+def test_source_concentration_is_a_warning_not_an_invalidity():
+    rec = {"citation_sources": {"recommendation": [
+        {"url": "https://docs.example.com/a"},
+        {"url": "https://docs.example.com/b"},
+        {"url": "https://docs.example.com/c"},
+        {"url": "https://independent.example.org/x"},
+    ]}}
+    flags = source_concentration_flags(rec, "claim")
+    assert any(flag.startswith("source_concentration:docs.example.com:3") for flag in flags)
+
+
+def test_independence_claim_with_single_publisher_is_flagged():
+    rec = {"citation_sources": {"recommendation": [
+        {"url": "https://vendor.example.com/a"},
+        {"url": "https://vendor.example.com/b"},
+    ]}}
+    assert "independence_claim_single_publisher" in source_concentration_flags(
+        rec, "这是两份独立来源的结论。")
+

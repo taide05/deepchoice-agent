@@ -40,3 +40,30 @@ def report_quality_flags(report: str) -> list[str]:
                  re.MULTILINE | re.IGNORECASE):
         flags.append("generic_source_label")
     return flags
+
+
+def source_concentration_flags(rec: dict, report: str) -> list[str]:
+    """Non-blocking publisher-concentration flags for source-independence review.
+
+    Multiple pages from one publisher are separate sources but not independent
+    corroboration of each other. This does not invalidate a report (official docs
+    are often several pages on one host); it points the reviewer at a place where
+    an "independent sources" claim needs checking.
+    """
+    from collections import Counter
+    from urllib.parse import urlsplit
+
+    bindings = (rec or {}).get("citation_sources") or {}
+    urls: set[str] = set()
+    if isinstance(bindings, dict):
+        for items in bindings.values():
+            for binding in items or []:
+                if isinstance(binding, dict) and binding.get("url"):
+                    urls.add(str(binding["url"]))
+    hosts = Counter((urlsplit(url).netloc or "").lower() for url in urls)
+    flags = [f"source_concentration:{host}:{count}"
+             for host, count in hosts.most_common() if count >= 3][:3]
+    text = report or ""
+    if ("两份独立" in text or "independent sources" in text.lower()) and len(hosts) <= 1:
+        flags.append("independence_claim_single_publisher")
+    return flags
