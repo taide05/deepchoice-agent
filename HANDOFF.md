@@ -266,6 +266,11 @@
     （仍属 P4 数据缺口/过度 hold，不是空报告）。
   - 本验证轮累计 known tokens **638,250**（含被替换的中间迭代），均在谷价窗口内、批准范围内；
   - 全量测试 **734 passed**；验证记录：`P0_P1_P2_VALIDATION_20261028.md`。
+- **用户 2026-10-28 否决两个方案（不实施）**：
+  1. 不做 30–60 例抽样 + 规则审计来外推修复效果；不能证明 200 行为，且多花一次钱；
+  2. 不新增 `usable_hold` 交付类别；hold 仍按冻结的 C1–C4 评，不另设通过口径。
+  4 例验证只作 smoke test；最终 200 全量评审才是测量。F200-107 按 C1–C4 判为证据缺口/不可用，
+  不靠新分类转正。
 - 下一步：最终 200 仍未批准/未运行；如继续，需另行批准并安排在谷价窗口。当前无待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
