@@ -1,0 +1,200 @@
+# Community（StackExchange）检索方向：目标、地图与路线
+
+> 状态：**设计探索阶段，不实现**。用户已确认方向；先明确目标/路线/地图，再讨论实现。
+> 本文不改变现有链路，不引入新依赖，不发起付费研究运行。
+
+## 1. 目标与非目标
+
+### 目标
+
+把 StackExchange/Stack Overflow 从“实际返回 0 条、不可引用”的源，改造成：
+
+1. 能检索到与候选/场景相关的**问题、回答、评论**；
+2. 能抽取并保存**可引用的正文/评论片段**，带作者、日期、分数、内容类型；
+3. 报告能正确使用社区证据：作为实践者经验/坑点/版本提醒，而不是官方事实；
+4. 在 StackExchange API 配额、单 IP 限流、backoff 下稳定运行；
+5. 对现有六源链路**可回滚、默认不破坏**。
+
+### 非目标
+
+- 不要求每个 case 都强行引用社区源；没有高质量内容时允许“社区无可用证据”；
+- 不把评论/单个回答当权威事实；
+- 不替换 official/primary 证据；
+- 不为了覆盖率抓取低质/无关帖子；
+- 不重写整个检索/报告链路。
+
+### 成功标准（单例验证与后续评估用）
+
+- 单例：能抓到至少一条与候选/场景具体相关的 question/answer/comment 正文；
+- 报告中的社区引用可定位到具体帖子/回答/评论，带作者/日期/分数；
+- 未把社区观点写成官方事实，未把单条评论当共识；
+- API 请求遵守 backoff/配额，单例不出现 429/超时失败；
+- 现有其它源、默认报告格式和测试不回归。
+
+## 2. 当前状态地图
+
+### 2.1 代码入口
+
+- `src/deepchoice/retrievers/community.py`
+  - `CommunitySearch(BaseRetriever)`，source = `community`；
+  - 当前请求：`GET https://api.stackexchange.com/2.3/search`，参数 `intitle=<150字 adapted query>`；
+  - 返回 `has_body=False` 的元数据 `snippet = Score/Tags`；
+  - 已有：进程内 `_SEARCH_SEM=1`、20s 排队超时、`_next_allowed` backoff、缺通道重试；
+  - 读取 `STACKEXCHANGE_API_KEY`（用户已提供）。
+- `src/deepchoice/retrievers/base.py`
+  - `BaseRetriever.search()` 统一包装 status/results/error；
+  - 异常会 invalidate outbound，再返回 `failed`。
+- `src/deepchoice/agents/multi_retriever.py`
+  - `RETRIEVER_REGISTRY` 将 6 个源并行检索；community 只是其中一个 channel；
+  - 保存 `search_results`、`empty_sources`、`partial_failures`。
+- `src/deepchoice/agents/evidence_chain.py`
+  - 把有正文的来源转成 `evidence_chains[].sources[]`，字段包含 url/title/snippet/has_body/provenance/date 等；
+  - 只有 `has_body=True` 的来源可进入综合引用。
+- `conclusion_synthesizer.build_source_registry` / `formats/basis.py` / `what_why_how.py`
+  - 以 URL/source_id 作为身份，生成编号来源与引用；报告按来源类型/日期显示。
+- `batch_health.py` / `report_quality.py`
+  - 健康门可见 source 失败；quality lint 检查 raw citation/泛化标题/来源集中。
+- 测试：`tests/test_community_retry.py` 等；无真实网络测试。
+
+### 2.2 实测现状
+
+- 200 例正式批次：community `success` 200/200，但 **结果行 0、正文 0**；
+- 30 例试点、6 例审计、4 例验证：同样 0 条；
+- 即当前 community 不是“元数据-only 可导航”，而是**基本没有返回结果**；这是检索层问题，不是报告层问题。
+
+### 2.3 StackExchange API 能力（探索性清单）
+
+- `/2.3/search/advanced`：`q`、`title`、`tagged`、`site`、`sort`、`order`、`pagesize`；返回 question 元数据；
+- `/2.3/questions/{ids}`：可带 `filter=withbody` 取问题正文；
+- `/2.3/questions/{ids}/answers`：回答正文/分数/是否 accepted；
+- `/2.3/questions/{ids}/comments` 或 `/answers/{ids}/comments`：评论正文/分数/日期；
+- 响应含 `quota_remaining`、`backoff`；单 IP 同时只能一个请求；
+- 需核实：`filter` 具体字段、评论 URL/anchor、favorite_count 等字段、是否需注册 app/key 权限；
+- 用户已有 API key，但配额上限/日请求数需实测确认。
+
+## 3. 设计空间与选定方向
+
+### 选项
+
+A. **只修查询 + 保持元数据**：成本低，但无法成为可引用证据；不满足目标。
+B. **查询 + 候选筛选 + 抓 question/answer/comment 正文 + 报告标注**：成本较高，但能真正补上社区源；选定。
+C. 换 Reddit/其他社区：用户认为 SE 更可信、通道更好；不选。
+
+### 选定方向
+
+**B：独立、可回滚的 StackExchange 证据包（evidence pack）方案。**
+
+核心决策：**一个 question 生成一个“社区证据包”来源**，而不是让每个回答/评论都变成独立 citation source。
+理由：
+
+- 现有链路以 URL/source_id 为身份，多 answer/comment 独立来源会牵动 registry/引用/去重/报告版式；
+- 一个 pack 保留 question URL 作为身份，不破坏现有引用模型；
+- pack 正文按“问题 / 高价值回答 / 高价值评论”分段，报告引用 pack 时可说明来源类型；
+- 如果后续证明需要逐条 answer/comment 引用，再作为第二阶段扩展，不在第一版引入。
+
+## 4. 目标架构（六层）
+
+### L1 查询规划 Query planner
+
+- 输入：原问题、候选、sub_questions、约束、adapted queries；
+- 生成 2–4 个短查询变体：
+  - `候选A 候选B` + 关键维度词（审计/权限/迁移/性能等）；
+  - Stack Overflow 标签（如 `[llamaindex]`/`[haystack]`，从候选/技术映射得到）；
+  - 限制 `title`/`q` 长度，不再用 150 字自然语言塞 `intitle`；
+- 查询计划写入日志，便于评估命中率。
+
+### L2 API 客户端与限流
+
+- 使用现有 `STACKEXCHANGE_API_KEY`；
+- 全局单并发 `_SEARCH_SEM=1`（保留）；
+- 尊重 `backoff` 和 `quota_remaining`；
+- 429/5xx/timeout 指数退避重试（有限次数）；
+- 配额预算：每 case 最多请求数、每批最多请求数、缓存相同 query；
+- 不与其他源争用同一出口限流。
+
+### L3 候选选择 Selector
+
+输入 question 元数据；输出要抓正文的 question/answer/comment 集合。
+
+评分维度（**相对排序，不做硬阈值**）：
+
+- 相关性：候选/维度词在 title/tags/正文中的匹配 + 语义相似度（可用 embedding/BM25）；
+- 答案质量：accepted answer、回答分数、回答数量、正文长度/具体性；
+- 时效：creation/last_activity 与问题版本敏感性；旧帖对稳定概念可保留；
+- 社区信号：question score、favorite_count、评论中版本/修复信息；
+- 多样性/去重：避免同题转载、同一回答重复；
+- 小众保护：低票但高相关、有 accepted/具体正文的帖子不能被简单票数/日期过滤掉；
+- 选取 top K questions，每问题选 accepted + 最高分 1–2 个 answer、以及相关 comments。
+
+### L4 内容抽取与证据包 Evidence pack
+
+- 抓取 question body、answers body、comments body；
+- 保留：question_id、answer_id/comment_id、title、url、author、score、is_accepted、creation_date、last_activity_date、tags、favorite_count；
+- 截断/清洗 HTML，保留可引用段落；正文长度受预算限制；
+- 组装 pack：
+  - 标题 = question title；
+  - URL = question link；
+  - body = 结构化文本（问题上下文 / 回答 / 评论，含作者/日期/分数标签）；
+  - `source_type=community`、`has_body=True`、`date`=最近活动/发布时间；
+  - 额外字段：`community_question_id`、`answers_count`、`comments_count`、`selected_answer_ids`。
+
+### L5 报告与证据使用策略
+
+- 社区证据等级为 P2（具体、标注作者/日期/分数的实践者经验），不是 P1 官方事实；
+- 用于：真实坑点、版本兼容、运维经验、社区共识/反例；
+- 不用于：单一来源决定高合规/审计结论；与官方冲突时并列；
+- 引用显示：来源类型 community + 日期 + 作者/分数（若版式支持）；
+- 报告明确“社区观点，非官方确认”。
+
+### L6 评估与可观测性
+
+- 单例评估：抓到的 question/answer/comment 数量、正文有效性、报告引用是否正确标注；
+- 批次指标：community 命中率、可用 pack 数、请求数/quota、429/backoff 次数、失败原因；
+- 不把“有 community 引用”当作必须，只统计可用性和质量。
+
+## 5. 非影响现有链路的策略
+
+- 新逻辑放在独立模块（如 `retrievers/community_evidence.py` 或 `community_v2.py`），**不改现有默认行为**；
+- 通过 env/feature flag 切换：`COMMUNITY_RETRIEVAL_MODE=legacy|evidence_pack`，默认 `legacy`；
+- `CommunitySearch` 只做一层适配：flag 为 legacy 时完全走旧路径；flag 为 evidence_pack 时调用新模块；
+- 不改变其它 5 个 retriever、evidence chain 字段语义、综合 prompt、报告默认格式；
+- 新来源仍用同一个 source channel 名称 `community`，但结果行是 evidence pack；health/report 向下兼容；
+- 保留旧测试；新测试只覆盖新模块和 flag 分支；真实单例验证放 scratch，不进单测。
+
+## 6. 测试策略（按新规则）
+
+- 单元：查询规划、评分/相对阈值/小众保护、评论筛选、日期/URL/身份、HTML 清洗；
+- 契约：用保存的 StackExchange JSON fixture（search/questions/answers/comments）验证解析、quota/backoff、429/5xx 重试；不发真实网络；
+- 集成：用 fake HTTP client + feature flag，验证 `CommunitySearch` 在 legacy/evidence_pack 两种模式下输出 shape 与 status；
+- e2e：**只在必要时**做一条 flag-on 的单例真实报告验证，检查内容/引用；不把 200 例批跑当测试；
+- 真实 API 单例验证：单独记录在 `.scratch/`，不属于 pytest。
+
+## 7. 分阶段路线与决策门
+
+| 阶段 | 产出 | 门 |
+|---|---|---|
+| 0 设计（本文件） | 目标/地图/契约 | 用户确认方向与数据契约 |
+| 1 API 探索 | 真实 API 返回样本（question/answers/comments、quota/backoff），只读探测，不改链路 | 确认 endpoint/filter/URL 规则 |
+| 2 独立模块 | query/selector/pack builder + fixtures/unit tests，未接入 | 单测通过，不触网 |
+| 3 flag 集成 | legacy/evidence_pack 双路径；默认 legacy；集成测试 | 旧路径零回归 |
+| 4 单例验证 | 一条真实 case + API key，检查抓取内容与报告引用 | 内容可引用、标注正确、无 429/超时 |
+| 5 评估与决策 | 记录命中/质量/成本；决定是否默认启用/扩展 | 用户决定，不自动进最终 200 |
+
+## 8. 待确认问题（进入实现前必须定）
+
+1. **证据包粒度**：一个 question 一个 pack（推荐，最小影响）还是 answer/comment 独立来源？
+2. **评论是否可独立引用**：作为 pack 内的“评论摘录”还是独立 citation？是否需要作者/分数展示？
+3. **选择标准**：相关性/质量/时效的相对权重；小众保护阈值；每 case 最多抓几个 question/answer/comment。
+4. **配额与预算**：每 case 最大 API 请求数、每批上限、缓存策略；key 的日配额实测。
+5. **内容长度/截断**：question/answer/comment 正文的上限；如何避免报告被社区文本淹没。
+6. **证据等级与报告措辞**：community 固定为 P2/经验证据；是否允许作为 conditional 分支依据。
+7. **URL/归属**：question URL、answer/comment anchor、作者/日期/许可（CC BY-SA 归属）展示。
+8. **适用范围**：所有 case 都尝试 community，还是按类别/技术触发；没有命中时如何披露。
+9. **单例验证案例**：选哪个案例（需 StackOverflow 上有具体讨论），验证标准如何量化。
+10. **回滚**：flag 默认 legacy；何时允许切默认，需要什么证据。
+
+## 9. 当前状态
+
+- 方向已确认；本文只做设计探索，**尚未写实现代码**；
+- 没有新增付费运行；余额预检已加（37 tokens 验证）；arXiv non-XML 重试已加；
+- 下一步：先完成 API 探索/样本与上述待确认问题，再进入隔离实现。
