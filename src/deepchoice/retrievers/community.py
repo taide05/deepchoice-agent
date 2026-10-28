@@ -49,6 +49,16 @@ class CommunitySearch(BaseRetriever):
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
                          adapted_queries: list[str] | None = None,
                          candidate_techs: list[str] | None = None) -> list[dict]:
+        mode = os.getenv("COMMUNITY_RETRIEVAL_MODE", "legacy").strip().lower()
+        if mode == "evidence_pack":
+            # Isolated v1 path; legacy behavior remains the default and is
+            # untouched unless this explicit opt-in flag is set.
+            from .community_evidence import fetch_evidence_packs
+            return await fetch_evidence_packs(
+                query, sub_questions, max_results=max_results,
+                adapted_queries=adapted_queries or [],
+                candidate_techs=candidate_techs or [],
+            )
         keywords = (adapted_queries[0] if adapted_queries else query).replace(" vs ", " ").replace(" versus ", " ")[:150]
         results = []
 
