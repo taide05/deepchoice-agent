@@ -269,8 +269,14 @@
 - **用户 2026-10-28 否决两个方案（不实施）**：
   1. 不做 30–60 例抽样 + 规则审计来外推修复效果；不能证明 200 行为，且多花一次钱；
   2. 不新增 `usable_hold` 交付类别；hold 仍按冻结的 C1–C4 评，不另设通过口径。
-  4 例验证只作 smoke test；最终 200 全量评审才是测量。F200-107 按 C1–C4 判为证据缺口/不可用，
-  不靠新分类转正。
+  4 例验证只作 smoke test；最终 200 全量评审才是测量。F200-107 按 C1–C4 评，不靠新分类转正。
+- **10/28 19:40 F200-107 定向检索/复测（用户单独批准，65,670 tokens）**：
+  - 为 Drone/Tekton 加入 curated official docs root（提交 `6be2fac`：docs.drone.io、tekton.dev/docs）；
+  - 复测从 `insufficient_evidence` 变为 **conditional**，official 正文 5→7 页：
+    Tekton Chains signed provenance、Kubernetes RBAC 扩展、v1.12 LTS 支持窗口与安全修复记录均进入证据；
+  - Drone 的审计日志/RBAC 仍无公开正文；报告明确标为缺口，不编造；C4=0、raw/空括号=0；
+  - 结果：该例由“hold/空报告”升级为有条件分支（Kubernetes 基座→Tekton；单一供应商 SLA→Drone Enterprise 需 PoC），
+    不再需要 usable_hold 分类。
 - 下一步：最终 200 仍未批准/未运行；如继续，需另行批准并安排在谷价窗口。当前无待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
