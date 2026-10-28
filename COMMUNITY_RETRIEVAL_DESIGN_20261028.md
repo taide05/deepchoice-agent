@@ -193,8 +193,59 @@ C. 换 Reddit/其他社区：用户认为 SE 更可信、通道更好；不选�
 9. **单例验证案例**：选哪个案例（需 StackOverflow 上有具体讨论），验证标准如何量化。
 10. **回滚**：flag 默认 legacy；何时允许切默认，需要什么证据。
 
-## 9. 当前状态
+## 9. v1 设计决策（2026-10-28 用户确认后）
+
+### 9.1 证据粒度：question-level evidence pack（选定）
+
+- 一个 question 对应一个来源 pack，identity 仍用 question URL；
+- pack 内部结构：问题正文 / 选中的 answer / 选中的 comment，每条带 author/score/date/type；
+- 不把 answer/comment 各自注册为独立 citation source（v1），避免改动现有 source identity、
+  registry、去重和报告版式；后续若证明需要逐条引用，再在第二阶段扩展；
+- 报告引用 pack 时标 community/P2，并可在正文提及“社区回答/评论”而不冒充官方事实。
+
+### 9.2 评论处理（选定）
+
+- 评论是 pack 内的**结构化摘录**，保留 author/score/date；
+- v1 不将单条评论作为独立 citation/共识；
+- 评论只用于版本提醒、反例、实践坑点；与官方冲突时并列。
+
+### 9.3 选择与请求预算（初始值，可调）
+
+- 查询：最多 2 次搜索（首选短查询/标签；为空时换第二个变体）；
+- 每 case：搜索最多 2 次 + 详情最多 3 次（questions/answers/comments 各 1 次批量请求），
+  总 **≤6 次 API 请求**；
+- 每 case 最多 2 个 question pack；每 pack：accepted/最高分 answers 最多 2 条、
+  相关 comments 最多 6 条；正文截断在 pack 总长度约 12k 字符；
+- 每批最多 **1,200 次** StackExchange 请求；`quota_remaining` 低于 500 时停止 community
+  请求并标记 empty/warn，不硬撑；
+- 缓存：进程内按 normalized query 缓存搜索结果，按 question_id 缓存 pack；同一批不重复请求；
+- 全局单并发（现有 semaphore）+ backoff + 429/5xx/timeout 有限重试；不做并行 StackExchange 请求。
+
+### 9.4 初始排序（相对排序，不做绝对阈值）
+
+- 相关性 0.45 + 回答质量 0.30（accepted、answer score、answer 具体性）+ 时效/版本 0.15 +
+  社区信号 0.10（question score、comments 中版本/修复信息）；Diversity/去重另做调整；
+- 小众保护：高相关但低票、若有 accepted 或具体 answer/comment，仍进入候选，不能被票数/日期硬筛掉；
+- 以上权重是 v1 默认，真实 API 样本与单例验证后再调，不预设为最终参数。
+
+### 9.5 单例验证案例（探索结果）
+
+选择 **F200-083（Cilium vs Calico）** 作为单例验证：
+
+- StackExchange API 实际返回了候选问题，例如
+  [AKS Network Policy Manager vs Azure Cilium Network Policies](https://stackoverflow.com/questions/79187626/aks-network-policy-manager-vs-azure-cilium-network-policies)
+  （tags: cilium/kubernetes-networkpolicy/azure，question body 完整，comments 有 6 条实质技术讨论，
+  其中包含对 Cilium 效率/限制/文档的对比）；
+- 另有
+  [Network Policy not enforced on Minikube Calico cluster](https://stackoverflow.com/questions/76762360/network-policy-not-enforced-on-minikube-calico-cluster)
+  可作为“具体坑点/无答案帖子”的对照；
+- 该案例与 Cilium/Calico 网络策略选型直接相关，且能同时检验 question body、answers（应抓取）、
+  comments 的打包与报告引用；answers 端点在本次网页探测中一次失败，实施阶段用 API key 重试并确认；
+- 备用：F200-144（LangGraph/AutoGen）或 F200-148（LlamaIndex/Haystack）。
+
+## 10. 当前状态
 
 - 方向已确认；本文只做设计探索，**尚未写实现代码**；
 - 没有新增付费运行；余额预检已加（37 tokens 验证）；arXiv non-XML 重试已加；
-- 下一步：先完成 API 探索/样本与上述待确认问题，再进入隔离实现。
+- 下一步：用 API key 做只读 API 样本确认（endpoint/filter/quota/answers/comments），
+  再进入隔离模块实现；在用户确认实现前不动现有默认路径。
