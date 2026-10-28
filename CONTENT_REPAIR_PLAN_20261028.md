@@ -87,7 +87,11 @@
   - `report_quality.source_concentration_flags` + `batch_health` 增加 `report_quality:*`
     非阻断警告（raw 脚注/空括号/泛化来源名/同发布者来源集中/单发布者却声称“两份独立”）；
     这些属于呈现/标注问题，不改变基础设施判定。
-- **P0 未做**：closed-context 行为验证必须付费样本，仍未批准/未跑。
+- **P0 已验证（4 例定向，2026-10-28 谷价窗口）**：根因是双层的——query analyzer 会把典型栈/
+  来源假设写进子问题，synthesis 再当作用户事实。已在 analyzer 加 `CONTEXT IS CLOSED`，
+  synthesis 加 `DO NOT SPECIFY GIVEN TOOLS/STACKS` 与 `A HOLD MUST STILL BE USEFUL`；
+  最终采用 4 例中 C4=0，166/176/189 conditional，107 仍 insufficient_evidence 但不再空 What。
+  该结论只覆盖 4 例，不能外推 200。
 - **P3–P5 未做**：按计划依赖下一批/最终 200。
 
 ## 5. 下一步顺序与成本
