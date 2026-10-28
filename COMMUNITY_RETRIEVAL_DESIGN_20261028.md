@@ -243,9 +243,51 @@ C. 换 Reddit/其他社区：用户认为 SE 更可信、通道更好；不选�
   comments 的打包与报告引用；answers 端点在本次网页探测中一次失败，实施阶段用 API key 重试并确认；
 - 备用：F200-144（LangGraph/AutoGen）或 F200-148（LlamaIndex/Haystack）。
 
-## 10. 当前状态
+## 10. 实现与单例验证结果（2026-10-28 晚）
 
-- 方向已确认；本文只做设计探索，**尚未写实现代码**；
-- 没有新增付费运行；余额预检已加（37 tokens 验证）；arXiv non-XML 重试已加；
-- 下一步：用 API key 做只读 API 样本确认（endpoint/filter/quota/answers/comments），
-  再进入隔离模块实现；在用户确认实现前不动现有默认路径。
+### 10.1 API 探索
+
+- 用现有 `STACKEXCHANGE_API_KEY` + 项目 outbound 实测：
+  - `/search/advanced` 200，quota 9911/10000，返回问题元数据；
+  - `/questions/{ids}?filter=withbody`、`/questions/{ids}/answers`、`/questions/{ids}/comments`
+    均 200，正文/回答/评论 body 可取；
+  - 单例 F200-083 的 question 79187626 有 1 个 accepted answer、6 条实质评论。
+- 未在测试中使用真实网络/真实 key。
+
+### 10.2 实现（隔离、默认 legacy）
+
+- 新增 `src/deepchoice/retrievers/community_evidence.py`：
+  - 短查询规划（候选名优先，维度英文词作 fallback；不再用 150 字 intitle）；
+  - 相对多因素选择（相关性/回答质量/时效/社区信号；无绝对票数/日期硬筛；小众保护）；
+  - question-level evidence pack（question + answers + comments，带 author/score/date/type 标注）；
+  - 批量详情请求（一次 questions + 一次 answers + 一次 comments），每 case 请求 ≤6；
+  - quota floor、单并发、backoff、429/5xx/timeout 重试、进程内 query/pack 缓存。
+- `community.py` 仅加分支：
+  `COMMUNITY_RETRIEVAL_MODE=evidence_pack` 时调用新模块；默认 `legacy`，旧逻辑原样保留。
+- 新增 `tests/test_community_evidence.py`：查询规划、相对选择、pack 内容/标注、fake-client 契约、
+  429 重试、flag 分支；无真实网络。旧 `test_community_retry.py` 继续保护 legacy。
+- 提交：`dc859b8`（模块+flag+测试）。
+
+### 10.3 单例验证（F200-083 Cilium vs Calico）
+
+- 运行：`community-evidence-f083-20261028`，flag=evidence_pack，concurrency=1；
+- 63,240 tokens，226.5s，1/1 complete；health 仅 `docs.tigera.io` 来源集中 warn，无 invalid；
+- community：status success，**2 个 evidence pack**（2402 / 3209 字符），包含 question/answers/comments；
+- API 请求：本次 4 次（1 次搜索 + 3 次批量详情），低于每 case 6 次预算；
+- 报告：引用两个 Stack Overflow 帖（12 次 / 3 次），明确标注“社区讨论/社区主张/社区报告”，
+  未当作官方事实；C4=0、raw citation=0；
+- 结论：**community 源从“0 结果/不可引用”变为真实可引用证据**，且未改变 legacy 默认路径；
+  但这只是单例验证，不能外推到 200；也不等价于最终验收。
+
+### 10.4 当前限制
+
+- 一个单例只覆盖 Cilium/Calico 一种主题；其它主题的命中率/质量未知；
+- pack 选择/权重/预算仍是初始值，需真实表现再调；
+- 未默认启用（仍 `legacy`），未进最终 200；
+- 旧 200 基线社区源仍为 0 结果，不能把本次单例当作全量修复成绩。
+
+## 11. 当前状态
+
+- 方向已实现 + 单例验证完成；**默认仍走 legacy**，未影响原链路；
+- 余额预检已加并验证；arXiv non-XML 重试已加；
+- 下一步：决定是否扩大 community 验证/默认启用范围；最终 200 仍需单独批准。
