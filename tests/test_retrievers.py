@@ -13,6 +13,12 @@ from deepchoice.retrievers.official import OfficialSearch
 from deepchoice.retrievers.tavily_search import TavilySearch
 
 
+@pytest.fixture(autouse=True)
+def _legacy_community_mode(monkeypatch):
+    """These tests exercise the legacy StackExchange contract explicitly."""
+    monkeypatch.setenv("COMMUNITY_RETRIEVAL_MODE", "legacy")
+
+
 class _FakeClient:
     """Async context-manager client standing in for outbound.make_client."""
 

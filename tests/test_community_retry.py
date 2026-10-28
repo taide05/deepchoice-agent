@@ -9,6 +9,7 @@ from deepchoice.retrievers.community import CommunitySearch
 
 @pytest.mark.asyncio
 async def test_community_missing_channel_is_retried_once(monkeypatch):
+    monkeypatch.setenv("COMMUNITY_RETRIEVAL_MODE", "legacy")
     attempts = {"n": 0}
 
     class Response:

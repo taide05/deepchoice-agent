@@ -185,6 +185,25 @@ async def test_community_search_uses_evidence_pack_when_enabled(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_community_search_defaults_to_evidence_pack(monkeypatch):
+    from deepchoice.retrievers.community import CommunitySearch
+
+    called = {}
+
+    async def fake_fetch(*args, **kwargs):
+        called["yes"] = True
+        return [{"url": "https://stackoverflow.com/q/1", "title": "default pack",
+                 "snippet": "body", "has_body": True}]
+
+    monkeypatch.delenv("COMMUNITY_RETRIEVAL_MODE", raising=False)
+    monkeypatch.setattr(ce, "fetch_evidence_packs", fake_fetch)
+    results = await CommunitySearch()._do_search(
+        "Cilium vs Calico", ["audit"], 2, adapted_queries=[], candidate_techs=["Cilium"])
+    assert results[0]["title"] == "default pack"
+    assert called["yes"] is True
+
+
+@pytest.mark.asyncio
 async def test_request_retries_retryable_status(monkeypatch):
     calls = {"n": 0}
 

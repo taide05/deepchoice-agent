@@ -27,8 +27,11 @@ class TestScoreAuthority:
     def test_github_gets_6(self):
         assert score_authority("github") == 6
 
-    def test_stackoverflow_gets_5(self):
-        assert score_authority("stackoverflow") == 5
+    def test_stackoverflow_gets_6(self):
+        # Community packs carry verified question/answer/comment bodies; 6 keeps
+        # them above the evidence-chain 4.0 threshold without making them
+        # equivalent to official docs or GitHub.
+        assert score_authority("stackoverflow") == 6
 
     def test_reddit_gets_4(self):
         assert score_authority("reddit") == 4

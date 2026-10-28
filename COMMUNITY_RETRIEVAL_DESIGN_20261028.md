@@ -254,40 +254,55 @@ C. 换 Reddit/其他社区：用户认为 SE 更可信、通道更好；不选�
   - 单例 F200-083 的 question 79187626 有 1 个 accepted answer、6 条实质评论。
 - 未在测试中使用真实网络/真实 key。
 
-### 10.2 实现（隔离、默认 legacy）
+### 10.2 实现与默认开关
 
 - 新增 `src/deepchoice/retrievers/community_evidence.py`：
-  - 短查询规划（候选名优先，维度英文词作 fallback；不再用 150 字 intitle）；
-  - 相对多因素选择（相关性/回答质量/时效/社区信号；无绝对票数/日期硬筛；小众保护）；
+  - 短查询规划（每个候选单独搜索，维度英文词作 fallback；不再用 150 字 intitle）；
+  - 相对多因素选择（相关性/回答质量/时效/社区信号；无绝对票数/日期硬筛；小众保护；
+    每个候选至少保留一个 pack，避免两边证据只来一边）；
   - question-level evidence pack（question + answers + comments，带 author/score/date/type 标注）；
   - 批量详情请求（一次 questions + 一次 answers + 一次 comments），每 case 请求 ≤6；
   - quota floor、单并发、backoff、429/5xx/timeout 重试、进程内 query/pack 缓存。
-- `community.py` 仅加分支：
-  `COMMUNITY_RETRIEVAL_MODE=evidence_pack` 时调用新模块；默认 `legacy`，旧逻辑原样保留。
-- 新增 `tests/test_community_evidence.py`：查询规划、相对选择、pack 内容/标注、fake-client 契约、
-  429 重试、flag 分支；无真实网络。旧 `test_community_retry.py` 继续保护 legacy。
-- 提交：`dc859b8`（模块+flag+测试）。
+- `community.py` 加入 evidence_pack 分支；经三主题验证后，**默认已切为 `evidence_pack`**，
+  `COMMUNITY_RETRIEVAL_MODE=legacy` 可即时回退旧路径；`run_batch.py` 默认同步为 evidence_pack。
+- `source_evaluator` 将 StackOverflow authority 5→6，使带正文的社区 pack 能跨过
+  evidence-chain 的 4.0 阈值（否则 3.9 分会被静默丢弃）。
+- 新增 `tests/test_community_evidence.py`：查询规划、相对选择/候选均衡、pack 内容/标注、
+  fake-client 契约、429 重试、默认/legacy 分支；无真实网络。
+- 关键提交：`dc859b8`（模块+flag）、`41e8adf`（候选单独搜索/空源）、`7403b2b`（候选均衡）、
+  `9581a70`（先搜完所有候选）、`1801437`（authority 阈值）。
 
-### 10.3 单例验证（F200-083 Cilium vs Calico）
+### 10.3 单例与扩大验证
 
-- 运行：`community-evidence-f083-20261028`，flag=evidence_pack，concurrency=1；
-- 63,240 tokens，226.5s，1/1 complete；health 仅 `docs.tigera.io` 来源集中 warn，无 invalid；
-- community：status success，**2 个 evidence pack**（2402 / 3209 字符），包含 question/answers/comments；
-- API 请求：本次 4 次（1 次搜索 + 3 次批量详情），低于每 case 6 次预算；
-- 报告：引用两个 Stack Overflow 帖（12 次 / 3 次），明确标注“社区讨论/社区主张/社区报告”，
-  未当作官方事实；C4=0、raw citation=0；
-- 结论：**community 源从“0 结果/不可引用”变为真实可引用证据**，且未改变 legacy 默认路径；
-  但这只是单例验证，不能外推到 200；也不等价于最终验收。
+- 单例 F200-083（infra）：2 个 pack（2402/3209 字符），报告引用两个 Stack Overflow 帖，C4=0。
+- 扩大验证共 3 个主题（F200-083 infra、F200-144 AI/ML、F200-107 CI/CD）：
+  - F200-144：balanced packs（LangGraph + AutoGen），报告引用两个候选的社区证据；53,775 tokens；
+  - F200-107：balanced packs（Drone + Tekton），报告引用 Tekton 社区问答并标注 Drone 旧帖局限；
+    68,888 tokens；
+  - 三例报告均无 C4、无 raw citation；健康警告仅来源集中/可选源瞬时失败，无 invalid。
+- 验证过程中实际发现并修复了 3 个实现缺陷：
+  1. 组合查询（如 `LangGraph AutoGen`）返回 0 → 改为每个候选单独查询；
+  2. 只搜第一个候选/先胜者 → 改为搜完所有候选，并至少保留每候选一个 pack；
+  3. 社区 pack 3.9 分低于 evidence-chain 4.0 阈值 → authority 调整后确认进入引用。
+- 没有把单例/三主题结果外推为 200 结论；旧 200 基线 community 仍为 0 结果。
 
-### 10.4 当前限制
+### 10.4 负担与限制
 
-- 一个单例只覆盖 Cilium/Calico 一种主题；其它主题的命中率/质量未知；
-- pack 选择/权重/预算仍是初始值，需真实表现再调；
-- 未默认启用（仍 `legacy`），未进最终 200；
-- 旧 200 基线社区源仍为 0 结果，不能把本次单例当作全量修复成绩。
+- 新增 API 请求：每 case 最多 2 次搜索 + 3 次批量详情（≤5 次）；无新增 LLM 调用。
+- 新增上下文：每例 2 个 pack，约 1.4–3.5k 字符；F200-083 配对显示 prompt/input +1,934 tokens
+  （+5.2%），但总 tokens 因模型输出长度波动并未单向上升（pack 63,240 vs legacy 78,019）。
+  按 200 例粗估，固定上下文增量上限约 0.4M tokens（相对基线 10.6M 约 3–4%），实际取决于命中数。
+- 延迟：pack 单例 155.8–334.1s，基线 185.8–275.9s；没有稳定变慢，网络/LLM 输出波动更大。
+- 可靠性：曾出现一次 `no outbound channel available for source: community`（health 记为
+  optional_source_failed，未 invalid）；重试后恢复。
+- 一次性开发/验证成本：本轮 community 迭代约 **0.78M tokens**（含被替换的中间运行），
+  这是验证成本，不是每例固定负担。
+- 限制：只有 3 个主题、每主题 1 例；评论/回答的实际引用仍取决于综合模型；默认启用不等于
+  全量可用性证明；最终 200 全量评审才是测量。
 
 ## 11. 当前状态
 
-- 方向已实现 + 单例验证完成；**默认仍走 legacy**，未影响原链路；
-- 余额预检已加并验证；arXiv non-XML 重试已加；
-- 下一步：决定是否扩大 community 验证/默认启用范围；最终 200 仍需单独批准。
+- v1 已实现并**默认启用 evidence_pack**，legacy 可回退；3 主题扩大验证通过（有上述限制）；
+- 余额预检已加并验证；arXiv non-XML 重试已加；并发按用户要求为 2；
+- 最终 200 未批准/未运行；社区源质量、token 负担需在最终全量评审中实测，不能把本轮
+  3 主题验证当作最终成绩。

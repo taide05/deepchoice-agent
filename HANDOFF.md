@@ -277,20 +277,25 @@
   - Drone 的审计日志/RBAC 仍无公开正文；报告明确标为缺口，不编造；C4=0、raw/空括号=0；
   - 结果：该例由“hold/空报告”升级为有条件分支（Kubernetes 基座→Tekton；单一供应商 SLA→Drone Enterprise 需 PoC），
     不再需要 usable_hold 分类。
-- **10/28 20:xx–21:xx 运行基础设施与 Community 检索（用户确认方向）**：
+- **10/28 20:xx–10/29 00:xx 运行基础设施与 Community 检索（用户确认方向，扩大验证）**：
   - LLM 余额预检：`run_batch.py` 默认先跑 `.scratch/cases/preflight_llm.py`，失败不启动任何 case；
-    实测 preflight 37–51 tokens；没有加全局 QPS 或自动 case 重跑；
-  - arXiv non-XML 响应：加一次重试（提交 `7b08dc8`），全量测试通过；并发计划按用户要求改为 **2**；
-  - Community/StackExchange：设计/地图 `COMMUNITY_RETRIEVAL_DESIGN_20261028.md`（`432254d`），
-    隔离实现 `src/deepchoice/retrievers/community_evidence.py`（`dc859b8`）；
-    question-level pack（question+answers+comments）、短查询、相对选择、每 case ≤6 次 API、缓存/backoff/重试；
-    `community.py` 仅加 `COMMUNITY_RETRIEVAL_MODE=evidence_pack` 分支，**默认 legacy 不变**；
-  - 单例 F200-083（Cilium vs Calico）flag-on：63,240 tokens、226.5s、2 个 pack（2402/3209 字符），
-    报告引用两个 Stack Overflow 帖（12/3 次）并标注社区观点；community 不再是 0 结果；
-    该单例只作机制验证，不外推 200；旧 200 基线社区源仍是 0；
-  - 全量测试 **743 passed**。
-- 下一步：最终 200 仍未批准/未运行；Community 是否默认启用/扩大验证需用户决定；
-  如继续，需另行批准并安排在谷价窗口。
+    实测 preflight 37–53 tokens；没有加全局 QPS 或自动 case 重跑；
+  - arXiv non-XML 响应：加一次重试（`7b08dc8`）；并发按用户要求改为 **2**；
+  - Community/StackExchange：设计 `COMMUNITY_RETRIEVAL_DESIGN_20261028.md`；
+    实现 `src/deepchoice/retrievers/community_evidence.py`（问题级 pack、短查询、每 case ≤6 次 API、
+    缓存/backoff/重试），`community.py` 加入分支；经三主题验证后**默认 evidence_pack**，
+    `COMMUNITY_RETRIEVAL_MODE=legacy` 可即时回退；
+  - 扩大验证中发现并修复 3 个实现缺陷：组合候选查询 0 结果→逐候选搜索；只保留单侧候选→每候选至少一个 pack；
+    社区 pack 3.9 分低于 evidence-chain 4.0→StackOverflow authority 5→6；
+  - 三主题（F200-083 infra、F200-144 AI/ML、F200-107 CI/CD）最终报告均无 C4/raw，社区证据被正确标注；
+    F200-144 53,775 tokens、F200-107 68,888 tokens；F200-107 有一次 community 瞬时失败（health warn，
+    未 invalid），重试后恢复；
+  - 负担：每 case ≤5 次 StackExchange 请求、无新增 LLM 调用；F200-083 配对 input +1,934 tokens（+5.2%），
+    但总 tokens 因输出长度波动未单向上升（pack 63,240 vs legacy 78,019）；200 例固定上下文增量上限约 0.4M；
+  - 本轮 community 迭代一次性验证成本约 **0.78M tokens**（含被替换运行）；不能把三主题结果当 200 成绩；
+  - 全量测试（默认切换后）**746 passed**；旧 legacy 测试仍保留，新增 9 个 community 单元/契约测试。
+- 下一步：最终 200 仍未批准/未运行；如继续，需另行批准并安排在谷价窗口；社区质量/负担要在最终全量
+  评审中实测。当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
@@ -395,3 +400,4 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
 活动文档：本页、`AGENTS.md`、`README.md`。历史记录：`CHANGELOG.md`、`RETRACTIONS.md`、
 `fix_pack_*.md`、`run_record*.md`、`template-data/`、`template-outputs/`、
 `local_cleanup_archive/`、`.scratch/`。
+
