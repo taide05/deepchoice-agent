@@ -14,3 +14,9 @@ def test_prompt_no_longer_uses_official_primary_monopoly_rule():
     # A secondary source may be decisive when labelled and specific; the prompt must
     # not tell the model to withhold a decision merely because no official page exists.
     assert "do not reject an otherwise answerable decision" in SYNTHESIS_PROMPT.lower()
+
+
+def test_prompt_forbids_inventing_scenario_context():
+    assert "GIVEN CONTEXT IS CLOSED" in SYNTHESIS_PROMPT
+    assert "do not invent scenario facts" in SYNTHESIS_PROMPT.lower()
+    assert "do not assume the team already runs one of the candidates" in SYNTHESIS_PROMPT.lower()
