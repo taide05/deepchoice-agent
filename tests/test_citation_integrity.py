@@ -276,7 +276,10 @@ class TestRegisteredIdentity:
         bindings = out["final_recommendation"][cs.CITATION_SOURCES_KEY][
             "option=A/rationale"]
         assert [binding["url"] for binding in bindings] == ["https://b.example/doc"]
-        assert "[Source: Shared Documentation Title]" in revised
+        registry = cs.build_source_registry(chains)
+        expected_title = next(entry["title"] for entry in registry["entries"]
+                              if entry["url"] == "https://b.example/doc")
+        assert f"[Source: {expected_title}]" in revised
         assert "https://b.example/doc" in out["report"]
 
 
@@ -315,6 +318,21 @@ class TestAdjacentAndRepeatedCitations:
             f"[Source: {PLAIN_TITLE}]"
         assert not cs.unresolved_citations(f"[Source: {PLAIN_TITLE}]",
                                            registry=registry)
+
+    def test_duplicate_titles_are_disambiguated_for_current_sources(self):
+        # Generic titles repeated across pages are common on official doc sites.
+        # The current registry must expose a unique title per identity so a
+        # written citation resolves instead of becoming a visible unresolved gap.
+        chains = _chains(
+            _source(DOC_TITLE, "A", "https://docs.example/a/upgrade"),
+            _source(DOC_TITLE, "B", "https://docs.example/b/performance"),
+        )
+        registry = cs.build_source_registry(chains)
+        titles = [entry["title"] for entry in registry["entries"]]
+        assert len(titles) == len(set(titles))
+        for title in titles:
+            resolved = cs.resolve_text(f"[Source: {title}]", registry=registry)
+            assert "引用未解析" not in resolved, (title, resolved)
 
     def test_arrays_intervals_unknown_and_ambiguous_keep_their_boundary(self):
         registry = _registry(_source(PLAIN_TITLE, "body", "https://x"))
@@ -470,7 +488,10 @@ class TestSelfReviewInput:
         assert "resolution: A_correct" in section
         # Both sides keep a locatable identity: a registered number for the
         # known source, an explicit unregistered URL for the other.
-        assert "[[1]] Shared Documentation Title — https://a.example/doc" in section
+        registry = cs.build_source_registry(_duplicate_title_chains())
+        expected_title = next(entry["title"] for entry in registry["entries"]
+                              if entry["url"] == "https://a.example/doc")
+        assert f"[[1]] {expected_title} — https://a.example/doc" in section
         assert "https://unregistered.example/x (not in numbered source register)" \
             in section
         assert "REASON-A_correct" in section
@@ -519,11 +540,13 @@ class TestSelfReviewInput:
 
     def test_conflict_source_identity_uses_url_not_title(self):
         registry = cs.build_source_registry(_duplicate_title_chains())
+        expected_title = next(entry["title"] for entry in registry["entries"]
+                              if entry["url"] == "https://a.example/doc")
         identity = sr._conflict_source_identity
         # A registered URL wins even when the recorded title differs.
         assert identity({"title": "Different Title",
                          "url": "https://a.example/doc"}, registry) == \
-            "[[1]] Shared Documentation Title — https://a.example/doc"
+            f"[[1]] {expected_title} — https://a.example/doc"
         # An unregistered URL is explicit, never forced onto a same-titled page.
         assert identity({"title": "Unknown", "url": "https://nope.example/x"},
                         registry) == \

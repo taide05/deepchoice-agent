@@ -1,5 +1,7 @@
 import re
 
+from urllib.parse import unquote, urlsplit
+
 from ..utils.decision import normalize_decision
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
@@ -139,6 +141,7 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
     by_norm: dict[str, list[dict]] = {}
     by_number: dict[int, dict] = {}
     by_identity: dict[str, dict] = {}
+    _disambiguate_same_title_entries(entries)
     for entry in entries:
         by_norm.setdefault(_norm_title(entry["title"]), []).append(entry)
         by_number[entry["number"]] = entry
@@ -373,6 +376,51 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
     if excluded_no_body:
         lines.append(no_body_note.strip())
     return "\n".join(lines)
+
+
+def _url_title_suffix(url: str) -> str:
+    """A short, human-readable URL suffix used to disambiguate duplicate titles."""
+    parsed = urlsplit(url or "")
+    path = unquote(parsed.path).strip("/")
+    host = parsed.netloc or ""
+    if not path:
+        return host or "source"
+    parts = path.split("/")
+    tail = "/".join(parts[-2:]) if len(parts) > 1 else parts[0]
+    return f"{host}/{tail}" if host else tail
+
+
+def _disambiguate_same_title_entries(entries: list[dict]) -> None:
+    """Make display/citation titles unique among distinct source identities.
+
+    Official sites routinely give several pages the same generic title
+    ("... — deep documentation"). The model cites by title, and the resolver
+    deliberately refuses to guess between two identities sharing a title, which
+    produced visible `引用未解析` gaps even though the page was collected. Adding
+    a short URL suffix here keeps identity strict (two URLs remain two sources)
+    while giving the model a title it can name unambiguously.
+    """
+    groups: dict[str, list[dict]] = {}
+    for entry in entries:
+        groups.setdefault(_norm_title(str(entry.get("title") or "")), []).append(entry)
+    used = {_norm_title(str(entry.get("title") or "")) for entry in entries}
+    for group in groups.values():
+        identities = {entry["source_id"] for entry in group}
+        if len(identities) < 2:
+            continue
+        for entry in group:
+            url = str(entry.get("url") or "")
+            if not url:
+                continue
+            base = str(entry.get("title") or "Unknown")
+            suffix = _url_title_suffix(url)
+            candidate = f"{base} — {suffix}"
+            counter = 2
+            while _norm_title(candidate) in used:
+                candidate = f"{base} — {suffix} ({counter})"
+                counter += 1
+            entry["title"] = candidate
+            used.add(_norm_title(candidate))
 
 
 def _norm_title(s: str) -> str:

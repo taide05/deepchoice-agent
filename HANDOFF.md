@@ -108,7 +108,8 @@
      由用户逐次明确批准**（批准具体案例、token 估计与用途；不批准下一次）。
   2. 200 例整体重跑仍需单独批准，不能由小样本批准推导。
   3. 开发/单测/离线分析/内容复核不受限；不 push/reset/delete。
-  4. 原定 10/28 12:00 的 CURRENT HEAD 6 例自动运行已取消；样本已准备，等待明确批准。
+  4. 原定 10/28 12:00 的 CURRENT HEAD 6 例自动运行已取消；后经用户 10/28 09:21 明确批准，
+     已于 09:22–09:34 运行（见下）。
   最终 200 例仍未决定。
 
 ### 谷价 A/B 实验（2026-10-27 12–14 窗口，用户已批准）
@@ -195,12 +196,22 @@
   CURRENT；旧报告只能作历史模式（A）、当前可能仍存在（B）、需当前版本复核（C）、数据缺口（D）。
   `run_batch.py` 现在自动写 `batch_meta.json`（commit/dirty、cases SHA-256、官方/自评配置），
   以后的审计先读 provenance 再评分；旧报告不得用来证明当前 pipeline 有同样问题。
-- 下一步（零成本优先）：按 D1–D5 规程对既有报告只做“历史模式/候选问题”清单，不据此改当前代码；
-  要判断当前链路质量，需要一次带 batch_meta 的当前 HEAD 小样本（未批准不跑）。prompt 改动如果
-  要验证，应做决策有用性 A/B（不是官方覆盖率 A/B），并先报批。
+- **10/28 09:22 CURRENT HEAD 6 例审计运行（用户批准，407,418 tokens）**：
+  - HEAD `7688ca0`（相对 `97378c4` 仅 HANDOFF 文档改动；`source_dirty=false`，learned_docs hash 已记录），
+    health **ok 6/6**，tokens 407,418（约 0.4M，实际比基线估计高 1.9%）。
+  - 按 D1–D5 全量阅读 6/6：**usable 6/6、decision-grade 4/6、C4 0、paraphrase_risk 0**；
+    official 占比仅诊断（0.208–0.464），实践维度覆盖 7–9/9，未出现官方文档摘要化。
+  - 两个非 DG（F200-125/F200-138）唯一原因是 1 处 `引用未解析`（D5=4）；根因是官方站多页面
+    共享 generic title（如 `Fluent Bit — deep documentation` 对应两页），模型按标题引用时解析器
+    拒绝在同标题来源间猜测。
+  - 已离线修复：`build_source_registry` 对同标题不同 URL 的来源加 URL suffix 使标题唯一；新增
+    单测，全量测试待确认。该修复**尚未在新付费样本上验证**；不擅自重跑。
+  - 结论：当前 HEAD 的决策质量良好；剩余非 DG 是引用身份/呈现问题，不是 C1/C2/C3/C4 决策缺陷。
+- 下一步（零成本优先）：修复后做单测/全量测试；若要验证修复，建议 2 例小样本（约 0.13M）另行
+  报批，仅验证重复标题 gap 是否消失，不扩样；不再追官方覆盖率。最终 200 例仍不决定。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
-  `D1_D5_AUDIT_PROTOCOL.md`、`CONTENT_FIX_PLAN_20261027.md`、
+  `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
   `CONTENTFIX_REGRESSION_20261027.md`、`CONTENT_REVIEW_6_20261027.md`、
   `NONDG_ROOT_CAUSE_20261027.md`、`REPORT_CONTRACT_AUDIT.md`、`BATCH_HEALTH.md`、
   `AUTHORITY_AUDIT.md`、`RETEST_2_CASE_20261027.md`。
