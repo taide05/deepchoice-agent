@@ -39,7 +39,8 @@ def test_query_variants_are_short_and_english_anchored():
     )
     assert 1 <= len(variants) <= ce.MAX_SEARCH_VARIANTS
     assert all(len(v) <= 160 for v in variants)
-    assert all("Cilium" in v for v in variants)
+    assert any("Cilium" in v for v in variants)
+    assert any("Calico" in v for v in variants)
     assert all(not any("\u4e00" <= ch <= "\u9fff" for ch in v) for v in variants)
 
 
@@ -143,7 +144,7 @@ async def test_fetch_evidence_packs_contract_with_fake_client():
     assert pack["source_owner"] is None
     assert "Stack Overflow" in pack["title"]
     assert "answerer" in pack["snippet"] and "commenter" in pack["snippet"]
-    assert len(client.paths) <= 4  # 1 search + 3 batched detail requests
+    assert len(client.paths) <= 5  # up to 2 searches + 3 batched detail requests
 
 
 @pytest.mark.asyncio

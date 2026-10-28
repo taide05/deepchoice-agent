@@ -4,7 +4,7 @@ import time
 from datetime import UTC, datetime
 
 from .. import outbound as _outbound
-from .base import BaseRetriever
+from .base import BaseRetriever, NoRetrievableMaterial
 
 # Stack Exchange allows exactly ONE request per IP at a time (throttle_violation
 # otherwise). This semaphore serializes community searches within the process —
@@ -54,11 +54,17 @@ class CommunitySearch(BaseRetriever):
             # Isolated v1 path; legacy behavior remains the default and is
             # untouched unless this explicit opt-in flag is set.
             from .community_evidence import fetch_evidence_packs
-            return await fetch_evidence_packs(
+            packs = await fetch_evidence_packs(
                 query, sub_questions, max_results=max_results,
                 adapted_queries=adapted_queries or [],
                 candidate_techs=candidate_techs or [],
             )
+            if not packs:
+                raise NoRetrievableMaterial(
+                    "stackexchange_no_results",
+                    "no usable StackExchange evidence pack for this case",
+                )
+            return packs
         keywords = (adapted_queries[0] if adapted_queries else query).replace(" vs ", " ").replace(" versus ", " ")[:150]
         results = []
 

@@ -198,12 +198,13 @@ def build_query_variants(
     base = " ".join(dict.fromkeys(candidates))
     variants: list[str] = []
     if base:
-        # Start with the candidate names alone: stacking several dimension words
-        # onto an English Q&A title search collapses the result set to zero.
-        # Dimension terms are a fallback variant, not the primary query.
-        variants.append(_truncate(base, 160))
-        if dims:
-            variants.append(_truncate(f"{base} {' '.join(dims[:2])}".strip(), 160))
+        # Search each candidate separately. A combined ``q=LangGraph AutoGen``
+        # search asks Stack Overflow for items containing both names and can
+        # return zero even when each candidate has its own discussions.
+        for candidate in list(dict.fromkeys(candidates))[:MAX_SEARCH_VARIANTS]:
+            variants.append(_truncate(candidate, 160))
+        if dims and len(variants) == 1:
+            variants.append(_truncate(f"{candidates[0]} {' '.join(dims[:2])}".strip(), 160))
     else:
         # No candidate/English anchor: search cannot be made meaningful on an
         # English Q&A site; let the caller report an empty/failed source instead
