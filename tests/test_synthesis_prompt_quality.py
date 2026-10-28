@@ -30,3 +30,8 @@ def test_prompt_requires_source_independence():
 def test_prompt_forbids_inventing_specific_tool_stack():
     assert "DO NOT SPECIFY GIVEN TOOLS/STACKS" in SYNTHESIS_PROMPT
     assert "do not write a specific product" in SYNTHESIS_PROMPT.lower()
+
+
+def test_prompt_requires_useful_hold():
+    assert "A HOLD MUST STILL BE USEFUL" in SYNTHESIS_PROMPT
+    assert "do not leave candidate sections or what empty" in SYNTHESIS_PROMPT.lower()
