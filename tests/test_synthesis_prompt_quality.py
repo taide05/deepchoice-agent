@@ -20,3 +20,8 @@ def test_prompt_forbids_inventing_scenario_context():
     assert "GIVEN CONTEXT IS CLOSED" in SYNTHESIS_PROMPT
     assert "do not invent scenario facts" in SYNTHESIS_PROMPT.lower()
     assert "do not assume the team already runs one of the candidates" in SYNTHESIS_PROMPT.lower()
+
+
+def test_prompt_requires_source_independence():
+    assert "SOURCE INDEPENDENCE" in SYNTHESIS_PROMPT
+    assert "cannot be two independent corroborating sources" in SYNTHESIS_PROMPT

@@ -19,6 +19,35 @@ from __future__ import annotations
 import html
 import re
 
+from urllib.parse import unquote, urlsplit
+
+# Titles that identify a publisher/site rather than the page. They are not
+# locatable enough to show as a source label on their own (F200-178 showed four
+# bare "Medium" references), so the display layer adds a path suffix while the
+# registered identity/title used by the citation engine stays unchanged.
+_GENERIC_SOURCE_TITLES = {
+    "medium", "github", "youtube", "unknown", "documentation",
+}
+
+
+def source_display_title(src: dict) -> str:
+    """A source label a reader can locate; never replaces identity/title matching."""
+    title = str((src or {}).get("title") or "").strip()
+    url = str((src or {}).get("url") or "").strip()
+    normalized = re.sub(r"[\s._-]+", " ", title.lower()).strip()
+    if normalized not in _GENERIC_SOURCE_TITLES and title:
+        return title
+    parsed = urlsplit(url)
+    path = unquote(parsed.path).strip("/")
+    parts = [part for part in path.split("/") if part]
+    tail = "/".join(parts[-2:]) if parts else (parsed.netloc or "")
+    base = title or parsed.netloc or "Unknown source"
+    if tail:
+        if len(tail) > 72:
+            tail = tail[:69] + "..."
+        return f"{base} — {tail}"
+    return base
+
 # Markdown punctuation that can start inline formatting/links/headings. Python-
 # Markdown unescapes a backslash before these, so a backslash makes the character
 # display as literal text. `<`, `>` and `&` are HTML-escaped first, which also

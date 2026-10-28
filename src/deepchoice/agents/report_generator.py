@@ -1,5 +1,6 @@
 from ..formats.comparison_matrix import render as render_comparison_matrix
 from ..formats.evidence_first import render as render_evidence_first
+from ..formats.report_quality import finalize_report_text
 from ..formats.what_why_how import render as render_what_why_how
 from ..utils.views import print_agent_output
 
@@ -20,7 +21,7 @@ def render_report(research_state: dict) -> tuple[str, str]:
     """
     fmt = research_state["task"].get("report_format", "what_why_how")
     renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)
-    return renderer(research_state), fmt
+    return finalize_report_text(renderer(research_state)), fmt
 
 
 class ReportGeneratorAgent:

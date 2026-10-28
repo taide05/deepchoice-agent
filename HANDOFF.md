@@ -247,6 +247,14 @@
   - 其他重点：F200-047 C1 partial（近乎只给取证计划）；F200-148/178/189/192 C2 partial；
     D3 均值 3.90 为最低项，证据校准/来源标注是主要短板；官方覆盖率仍不是门槛；
   - F200-041 的评审 C4 假阳性已纠正（官方页面正文确实包含 TOTP/magic links 等能力，C4=0）。
+- **10/28 零成本 P1/P2 修复（未跑例）**：
+  - 新增 `formats/report_quality.py`：渲染收尾把 raw `[[N]]` 转为显式“引用未解析：编号 N” gap，
+    清除空来源括号 `（）`；三个 renderer 与 report_generator/self_reviewer/server 统一经过 finalizer；
+  - `source_display_title`：泛化来源名（Medium 等）用 URL 路径补全；三个报告格式统一应用；
+  - prompt 新增 `SOURCE INDEPENDENCE`（同一 URL/同页转载/单一厂商页不能算独立互证）；
+  - `batch_health` 增加 `report_quality:*` 非阻断警告；新增 `tests/test_report_quality.py`；
+    全量测试 **729 passed**。
+  - 这些只修呈现/标注，不能替代 P0 的 closed-context 行为验证。
 - 下一步：先做 **4–6 例定向验证**（F200-166/F200-176 + 对照，约 0.25–0.4M tokens）确认
   closed-context 规则生效且无新回归；通过后再单独批准最终 200。最终 200 仍未决定，
   交付材料不更新正式数字。

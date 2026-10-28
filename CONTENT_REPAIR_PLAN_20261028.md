@@ -73,7 +73,23 @@
 - 200 例全量评审尚未进行，任何“还剩多少 %”都会是编造。
 - 可验证的说法是：**已知可修的内容缺陷集中在 P0/P1/P2，P3/P4 部分依赖材料，P5 是正式验收**。
 
-## 4. 下一步顺序与成本
+## 4. 执行状态（2026-10-28，零成本修复）
+
+- **P1 已实现**：
+  - `formats/report_quality.py`：raw `[[N]]` 数字脚注在渲染收尾时转为显式“引用未解析：编号 N” gap；
+    空来源括号 `（）` 清除；新增 `tests/test_report_quality.py`。
+  - `formats/basis.py::source_display_title`：泛化标题（Medium 等）用 URL 路径补全；
+    三个报告渲染器（what_why_how/evidence_first/comparison_matrix）统一应用；
+  - 所有渲染路径（report_generator、self_reviewer、server endpoints、直接 render）现在都过 finalizer。
+- **P2 已有 prompt/lint**：
+  - 合成 prompt 新增 `SOURCE INDEPENDENCE` 规则：同一 URL/同页/转载/单一厂商对比页不能算
+    独立互证；决定性比较只有单一独立来源时必须标明；
+  - `batch_health.py` 增加 `report_quality:*` 非阻断警告（raw 脚注/空括号/泛化来源名）；
+    这些属于呈现/标注问题，不改变基础设施判定。
+- **P0 未做**：closed-context 行为验证必须付费样本，仍未批准/未跑。
+- **P3–P5 未做**：按计划依赖下一批/最终 200。
+
+## 5. 下一步顺序与成本
 
 1. **零成本**：完成 P1（final citation lint/标题回退）与 P2（prompt + 独立性 lint）代码和单测；
 2. **谷价窗口 + 用户批准**：4 例 P0 验证（F200-166、F200-176 + 2 对照，约 0.15–0.25M）；

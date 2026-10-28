@@ -4,10 +4,12 @@ from .basis import (
     escape_markdown_text,
     research_question_line,
     short_report_title,
+    source_display_title,
     source_provenance_note,
     used_sources,
 )
 from .coverage import derive_data_source_note
+from .report_quality import finalize_report_text
 from ..agents.conclusion_synthesizer import clean_label
 from ..utils.decision import (
     CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
@@ -37,7 +39,7 @@ def _field_source_links(rec: dict, locator: str, text: str,
         for binding in identity_map.get(locator) or []:
             if not isinstance(binding, dict):
                 continue
-            title = str(binding.get("title") or "")
+            title = source_display_title(binding)
             url = str(binding.get("url") or "")
             if not source_entry_relevant(rec, chains, title, url):
                 continue
@@ -63,7 +65,7 @@ def _field_source_links(rec: dict, locator: str, text: str,
             url = str(src.get("url") or "")
             if not source_entry_relevant(rec, chains, part.strip(), url):
                 continue
-            label = escape_markdown_text(part.strip())
+            label = escape_markdown_text(source_display_title(src))
             link = f"[{label}]({url})" if url else label
             if link not in links:
                 links.append(link)
@@ -306,7 +308,7 @@ def render(state: dict) -> str:
         lines.append("")
         for src in used[:12]:
             note = source_provenance_note(src, lang)
-            lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}) ×{src['citations']}{note}")
+            lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")
     else:
         lines.extend([
@@ -502,11 +504,11 @@ def render(state: dict) -> str:
     refs = used_sources(rec, chains)
     for src in refs[:12]:
         note = source_provenance_note(src, lang)
-        lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}){note}")
+        lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}){note}")
     if len(refs) > 12:
         lines.append(f"*(+{len(refs) - 12} more sources used)")
     if not refs:
         lines.append("- 本次没有可追溯的引用来源。" if lang == "zh"
                      else "- No traceable source was used in this run.")
 
-    return "\n".join(lines)
+    return finalize_report_text("\n".join(lines))

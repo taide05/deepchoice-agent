@@ -3,10 +3,12 @@ from .basis import (
     escape_markdown_text,
     research_question_line,
     short_report_title,
+    source_display_title,
     source_provenance_note,
     used_sources,
 )
 from .coverage import derive_data_source_note
+from .report_quality import finalize_report_text
 from ..utils.decision import (
     CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
 )
@@ -229,7 +231,7 @@ def render(state: dict) -> str:
     if used:
         for src in used[:12]:
             note = source_provenance_note(src, lang)
-            lines.append(f"- [{escape_markdown_text(src['title'])}]({src['url']}){note}")
+            lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}){note}")
     else:
         lines.append(L["no_used_source"][lang])
 
@@ -243,4 +245,4 @@ def render(state: dict) -> str:
         L["step3"][lang],
     ])
 
-    return "\n".join(lines)
+    return finalize_report_text("\n".join(lines))
