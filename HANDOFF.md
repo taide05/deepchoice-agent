@@ -227,7 +227,24 @@
     **invalid=13, warn=2, ok=15**，本批不得用于 DG/usable 估计，不进行 30/30 正式评审；
   - 需要用户先充值/恢复 API 余额，并决定是否批准重跑 30 例（约 1.9–2.0M tokens，另算）；
     重跑前建议先做一次极小 LLM 余额探针。失败记录：`PILOT_30_FAILURE_20261028.md`。
-- 下一步：等待用户恢复 API 余额并批准试点重跑；最终 200 仍未决定，交付材料不更新数字。
+- **10/28 12:04–12:40 API 余额恢复后试点重跑（用户已批准）+ F200-148 修复替换**：
+  - 30 例重跑 known tokens 1,859,693；F200-148 official `Invalid IPv6 URL` 修复（提交 `a28a941`）
+    后单独重跑 54,775 tokens 并替换；合并批次 **1,846,217 tokens**，health **ok=23/warn=7/invalid=0**；
+  - 试点累计消耗（含首轮失败 1,039,072）= **2,953,540 tokens**；偏差记录在
+    `PILOT_30_PROTOCOL_DEVIATION.md`；
+  - 30/30 全量阅读（C1–C4 正式口径 + D1–D5 诊断）：**usable 27/30、DG 23/30、C4 错误 2/30**；
+  - 2 个 C4 都是**把来源/常识中的场景假设写成用户给定事实**：
+    F200-166 自设“现有 Airflow、数百 DAG”决定 Winner=Airflow；
+    F200-176 自设“2 人/4 周/4C8G”决定默认 Fivetran；
+  - 已加 `GIVEN CONTEXT IS CLOSED` prompt 规则（未给出团队规模/期限/现有产品/机器规格/流量等
+    不得当作已知；影响结论时必须写成分支/PoC 假设），新增单测，全量测试 **724 passed**；
+    该规则尚未在付费样本上验证；
+  - 其他重点：F200-047 C1 partial（近乎只给取证计划）；F200-148/178/189/192 C2 partial；
+    D3 均值 3.90 为最低项，证据校准/来源标注是主要短板；官方覆盖率仍不是门槛；
+  - F200-041 的评审 C4 假阳性已纠正（官方页面正文确实包含 TOTP/magic links 等能力，C4=0）。
+- 下一步：先做 **4–6 例定向验证**（F200-166/F200-176 + 对照，约 0.25–0.4M tokens）确认
+  closed-context 规则生效且无新回归；通过后再单独批准最终 200。最终 200 仍未决定，
+  交付材料不更新正式数字。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
