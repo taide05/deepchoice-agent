@@ -277,7 +277,20 @@
   - Drone 的审计日志/RBAC 仍无公开正文；报告明确标为缺口，不编造；C4=0、raw/空括号=0；
   - 结果：该例由“hold/空报告”升级为有条件分支（Kubernetes 基座→Tekton；单一供应商 SLA→Drone Enterprise 需 PoC），
     不再需要 usable_hold 分类。
-- 下一步：最终 200 仍未批准/未运行；如继续，需另行批准并安排在谷价窗口。当前无待跑的批准批次。
+- **10/28 20:xx–21:xx 运行基础设施与 Community 检索（用户确认方向）**：
+  - LLM 余额预检：`run_batch.py` 默认先跑 `.scratch/cases/preflight_llm.py`，失败不启动任何 case；
+    实测 preflight 37–51 tokens；没有加全局 QPS 或自动 case 重跑；
+  - arXiv non-XML 响应：加一次重试（提交 `7b08dc8`），全量测试通过；并发计划按用户要求改为 **2**；
+  - Community/StackExchange：设计/地图 `COMMUNITY_RETRIEVAL_DESIGN_20261028.md`（`432254d`），
+    隔离实现 `src/deepchoice/retrievers/community_evidence.py`（`dc859b8`）；
+    question-level pack（question+answers+comments）、短查询、相对选择、每 case ≤6 次 API、缓存/backoff/重试；
+    `community.py` 仅加 `COMMUNITY_RETRIEVAL_MODE=evidence_pack` 分支，**默认 legacy 不变**；
+  - 单例 F200-083（Cilium vs Calico）flag-on：63,240 tokens、226.5s、2 个 pack（2402/3209 字符），
+    报告引用两个 Stack Overflow 帖（12/3 次）并标注社区观点；community 不再是 0 结果；
+    该单例只作机制验证，不外推 200；旧 200 基线社区源仍是 0；
+  - 全量测试 **743 passed**。
+- 下一步：最终 200 仍未批准/未运行；Community 是否默认启用/扩大验证需用户决定；
+  如继续，需另行批准并安排在谷价窗口。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
