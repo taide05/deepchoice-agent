@@ -12,7 +12,7 @@ AUTHORITY_MAP = {
     "arxiv_paper": 10,
     "tech_blog": 7,
     "github": 6,
-    "stackoverflow": 5,
+    "stackoverflow": 6,
     "official_unverified": 5,
     "reddit": 4,
     "web_document": 4,

@@ -208,3 +208,8 @@ async def test_request_retries_retryable_status(monkeypatch):
         budget=ce.RequestBudget(), key="")
     assert calls["n"] == 2
     assert body["quota_remaining"] == 9000
+
+def test_stackoverflow_authority_reaches_evidence_chain_threshold():
+    from deepchoice.agents.source_evaluator import AUTHORITY_MAP, score_authority
+    assert AUTHORITY_MAP["stackoverflow"] >= 6
+    assert score_authority("stackoverflow") >= 6
