@@ -481,6 +481,8 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "github-actions": {"url": "https://docs.github.com/en/actions", "title": "GitHub Actions — Official Documentation"},
     "jenkins": {"url": "https://jenkins.io", "title": "Jenkins — Official Documentation"},
     "gitlab-ci": {"url": "https://docs.gitlab.com/ee/ci", "title": "GitLab CI — Official Documentation"},
+    "drone": {"url": "https://docs.drone.io/", "title": "Drone — Official Documentation"},
+    "tekton": {"url": "https://tekton.dev/docs/", "title": "Tekton — Official Documentation"},
     # Web server / proxy / comms
     "nginx": {"url": "https://nginx.org/en/docs/", "title": "nginx — Official Documentation"},
     "caddy": {"url": "https://caddyserver.com", "title": "Caddy — Official Documentation"},

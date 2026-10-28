@@ -427,3 +427,8 @@ def test_malformed_ipv6_urls_do_not_fail_the_official_channel():
     assert official_mod._deep_doc_links(
         "https://docs.example.com/", "", ["http://[bad"],
         ("security", "policy"), "https://docs.example.com/") == []
+
+def test_drone_and_tekton_have_curated_official_roots():
+    from deepchoice.retrievers.official import TECH_DOCS
+    assert TECH_DOCS["drone"]["url"] == "https://docs.drone.io/"
+    assert TECH_DOCS["tekton"]["url"] == "https://tekton.dev/docs/"
