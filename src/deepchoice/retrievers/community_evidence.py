@@ -579,8 +579,6 @@ async def fetch_evidence_packs(
         for variant in variants[:MAX_SEARCH_VARIANTS]:
             if variant in search_cache:
                 candidates.extend(search_cache[variant])
-                if candidates:
-                    break
                 continue
             body = await _request_json(
                 client, "/search/advanced",
@@ -590,10 +588,8 @@ async def fetch_evidence_packs(
             items = body.get("items") or []
             search_cache[variant] = items
             candidates.extend(items)
-            # Candidate-name search normally returns results. Only spend the
-            # fallback variant when the first query produced nothing.
-            if candidates:
-                break
+            # Search both candidate variants: stopping after the first one
+            # silently loses the other candidate's practitioner evidence.
         selected = select_questions(
             candidates, candidate_techs, dimension_terms,
             limit=min(MAX_PACKS_PER_CASE, max(1, max_results)), now=now)
