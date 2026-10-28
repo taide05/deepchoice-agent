@@ -1,7 +1,38 @@
 import asyncio
 import os
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin as _stdlib_urljoin
+from urllib.parse import urlparse as _stdlib_urlparse
+
+
+def _safe_urlparse(value):
+    """urlparse that treats malformed URLs as empty, never a channel failure.
+
+    ``urllib.parse`` raises ``ValueError: Invalid IPv6 URL`` for a malformed
+    bracketed netloc. A single bad link harvested from a documentation page must
+    not fail the whole official channel.
+    """
+    try:
+        return _stdlib_urlparse(str(value or ""))
+    except ValueError:
+        return _stdlib_urlparse("")
+
+
+def _safe_urljoin(base: str, target: str, *args, **kwargs) -> str:
+    try:
+        return _stdlib_urljoin(base, target, *args, **kwargs)
+    except ValueError:
+        return ""
+
+
+# Existing module code calls these names; route them through the safe wrappers.
+urljoin = _safe_urljoin
+urlparse = _safe_urlparse
+
+
+def _valid_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return bool(parsed.scheme in ("http", "https") and parsed.netloc)
 
 from ..utils.candidate_identity import (
     constraint_discovery_terms,
@@ -163,7 +194,6 @@ def _deep_doc_links(base_url: str, body: str, links: list[str],
 
 def _official_index_candidates(mapping_root: str) -> list[str]:
     """Docs-index URLs likely to list the site's deep documentation pages."""
-    from urllib.parse import urlparse
 
     parsed = urlparse(str(mapping_root or ""))
     scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
@@ -309,7 +339,6 @@ def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     tried first, then llms.txt; the caller still admits only a page whose body names
     the declared candidate (see the curated-mapping-scope identity check).
     """
-    from urllib.parse import urlparse
 
     parsed = urlparse(str(base_url or ""))
     scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
@@ -336,7 +365,6 @@ def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> li
     of them, and the derived page must still pass body admission and identity
     verification before it can be cited.
     """
-    from urllib.parse import urlparse
 
     host = urlparse(base_url).netloc.lower()
     ranked: list[tuple[int, int, int, str]] = []
@@ -790,7 +818,7 @@ class OfficialSearch(BaseRetriever):
                     url = str(item.get("url") or "")
                     title = str(item.get("title") or "")
                     snippet = str(item.get("snippet") or item.get("content") or "")
-                    if not url.startswith(("http://", "https://")):
+                    if not _valid_http_url(url):
                         continue
                     if not source_url_identity_match(owner, url):
                         continue
@@ -887,6 +915,13 @@ class OfficialSearch(BaseRetriever):
         fallback_added = 0
         fallback_owners: set[str] = set()
         for entry in results:
+            if not _valid_http_url(entry.get("url", "")):
+                entry["has_body"] = False
+                entry["snippet"] = ""
+                entry["body_identity_verified"] = False
+                entry["body_error"] = "invalid_url"
+                entry["fetch_status"] = "navigation"
+                continue
             if missing_candidate_coverage and entry.get("source_kind") != "candidate":
                 # Do not spend the remaining page budget on a platform homepage
                 # when a declared candidate still has no discovered source.

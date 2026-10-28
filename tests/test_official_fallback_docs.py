@@ -414,3 +414,16 @@ def test_navigation_root_tries_static_fallback_and_can_admit_body(monkeypatch):
         adapted_queries=[], candidate_techs=["LangGraph"]))
     assert any("stable/" in url for url in written), written
     assert any(row.get("has_body") and row.get("_from_fallback") for row in rows), written
+
+def test_malformed_ipv6_urls_do_not_fail_the_official_channel():
+    # urllib raises "Invalid IPv6 URL" for a malformed bracketed netloc. One bad
+    # harvested link must be skipped as navigation, not fail the whole source.
+    assert official_mod._valid_http_url("http://[bad") is False
+    assert official_mod.urlparse("http://[bad").netloc == ""
+    assert official_mod.urljoin("https://docs.example.com/", "http://[bad") == ""
+    assert official_mod._fallback_doc_targets("http://[bad") == []
+    assert official_mod._derived_doc_links(
+        "https://docs.example.com/", ["http://[bad"]) == []
+    assert official_mod._deep_doc_links(
+        "https://docs.example.com/", "", ["http://[bad"],
+        ("security", "policy"), "https://docs.example.com/") == []
