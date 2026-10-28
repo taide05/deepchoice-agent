@@ -214,8 +214,20 @@
   - 首轮健康门把 F200-138 的 arXiv `non-XML` 误判 invalid（academic 检测把产品名当学术题），
     已改为真正学术标记；非学术题 arXiv 失败按可选源处理；报告自身披露 5/6 来源可用。
   - 结论：修复端到端生效；CURRENT HEAD 6 例中由引用 gap 造成的 2 个非 DG 已消除。
-- 下一步（零成本优先）：修复后做单测/全量测试；若要验证修复，建议 2 例小样本（约 0.13M）另行
-  报批，仅验证重复标题 gap 是否消失，不扩样；不再追官方覆盖率。最终 200 例仍不决定。
+- **10/28 10:19 冻结正式验收协议 v1.0**（`FORMAL_ACCEPTANCE_PROTOCOL_20261028.md`，提交 `abecd9d`）：
+  固定题集 SHA、200 分母、日期/基线、运行配置、C1–C4 主评审口径、200/200 全量评审、
+  完整性门与变更控制；D1–D5 只作诊断，不替代正式口径。30 例试点协议同时冻结
+  （固定 seed、12 类比例配额、scene 8/8/7/7，样本 SHA `907216…`）。
+- **10/28 10:20–10:38 30 例试点失败（CONTAMINATED）**：
+  - API 账户 10:34:39 起返回 **402 Insufficient Balance**，conclusion/self-review/conflict 均失败；
+  - summary 仍显示 30/30 complete，但仅 **17 例**有完整报告；**13 例**为 invalid/短 fallback
+    （F200-126/144/148/153/158/166/176/178/184/189/191/192/194）；known tokens 1,039,072；
+  - 原 health gate 只捕获 F200-148 的 `official: Invalid IPv6 URL`，漏掉 12 例 LLM 402；
+    已加固 health gate（检查 final_recommendation/状态/token/子问题/报告长度），现标
+    **invalid=13, warn=2, ok=15**，本批不得用于 DG/usable 估计，不进行 30/30 正式评审；
+  - 需要用户先充值/恢复 API 余额，并决定是否批准重跑 30 例（约 1.9–2.0M tokens，另算）；
+    重跑前建议先做一次极小 LLM 余额探针。失败记录：`PILOT_30_FAILURE_20261028.md`。
+- 下一步：等待用户恢复 API 余额并批准试点重跑；最终 200 仍未决定，交付材料不更新数字。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
