@@ -270,6 +270,10 @@ def score_candidate(
     enriched["_recency"] = round(recency, 4)
     enriched["_rank_score"] = round(total, 4)
     enriched["_name_hits"] = name_hits
+    enriched["_matched_candidates"] = [
+        candidate for candidate in candidates
+        if _contains_term(text, candidate)
+    ]
     return enriched
 
 
@@ -292,15 +296,31 @@ def select_questions(
     # small. The relevance gate in score_candidate already filters noise.
     selected: list[dict] = []
     seen_ids: set[str] = set()
-    for item in scored:
+
+    def _add(item: dict) -> bool:
         qid = str(item.get("question_id") or item.get("link") or "")
         if qid in seen_ids:
-            continue
+            return False
         seen_ids.add(qid)
         selected.append(item)
+        return True
+
+    # First pass: at least one result per declared candidate when available, so
+    # a comparison does not get both packs from the same candidate (and silently
+    # loses the other side's practitioner evidence).
+    for candidate in dict.fromkeys(candidate_techs or []):
+        for item in scored:
+            if candidate in (item.get("_matched_candidates") or []):
+                _add(item)
+                break
+        if len(selected) >= limit:
+            return selected[:limit]
+    # Fill remaining slots by rank.
+    for item in scored:
+        _add(item)
         if len(selected) >= limit:
             break
-    return selected
+    return selected[:limit]
 
 
 def _pack_date(item: dict) -> str:

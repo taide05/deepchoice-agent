@@ -61,6 +61,24 @@ def test_selection_keeps_relevant_niche_and_drops_unrelated():
     assert all("python" not in (q.get("tags") or []) for q in selected)
 
 
+def test_selection_keeps_one_pack_per_candidate_when_available():
+    langgraph_best = _question(
+        question_id=11, title="LangGraph deployment issue", tags=["langgraph"],
+        score=30, answer_count=5, accepted_answer_id=2)
+    langgraph_second = _question(
+        question_id=12, title="LangGraph checkpoint question", tags=["langgraph"],
+        score=20, answer_count=3, accepted_answer_id=3)
+    autogen = _question(
+        question_id=21, title="AutoGen agent configuration", tags=["ms-autogen"],
+        score=2, answer_count=1, accepted_answer_id=4)
+    selected = ce.select_questions(
+        [langgraph_best, langgraph_second, autogen],
+        candidate_techs=["LangGraph", "AutoGen"],
+        dimension_terms=[],
+    )
+    assert {item["question_id"] for item in selected} >= {11, 21}
+
+
 def test_build_pack_has_question_answer_comment_and_attribution():
     pack = ce.build_pack(
         _question(),
