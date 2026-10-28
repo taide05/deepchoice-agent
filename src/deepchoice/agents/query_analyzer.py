@@ -17,6 +17,14 @@ CRITICAL: Each sub-question MUST include:
 - Minimum 15 Chinese characters or 10 English words
 - NO generic "Compare X and Y" questions — always narrow to a specific aspect
 
+CONTEXT IS CLOSED: use only the user query, the scene context and the known constraints
+provided in the user message. Do NOT add facts that were not given — no DAG count, team
+composition beyond the stated team size, specific monitoring stack, cloud/database/
+orchestrator product, version, machine size, traffic volume, or current deployment state.
+If a metric depends on a missing premise, phrase it as a conditional/unknown to verify,
+not as a fact (e.g. "if the team already runs Airflow 2.x…") — never turn a typical stack
+or a source article's hypothetical into a premise.
+
 Scene context is ALREADY DETERMINED by the pipeline and given in the user message — do NOT re-detect it; decompose sub-questions for that scene.
 
 Return ONLY a JSON object (no markdown):
