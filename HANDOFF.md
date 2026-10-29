@@ -326,10 +326,14 @@
   - **通道可靠性加强（`0d48fe4`）**：每 case 请求预算 6→8、捕获 TimeoutError、
     社区源层面加一次重试；对 F200-001/F200-021 失败例复测 **2/2 complete、
     community 2/2 success、各 2 pack、无 community failure**（131,342 tokens）；
-    全量测试 **758 passed**。详见 `COMMUNITY_RELIABILITY_20261029.md`。
-- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因/可靠性
-  已在 10+6+2 例验证；下一步做通用渲染修复（同 URL 双身份/来源计数/官方标签粒度），
-  或进入最终 200 审批前检查。当前**没有**待跑的批准批次。
+    同一独立 6 例整体复测 **6/6 community success、6/6 报告引用、raw/gap=0**
+    （374,260 tokens，约 11 分钟）；全量测试 **758 passed**。详见
+    `COMMUNITY_RELIABILITY_20261029.md`。
+  - **通用渲染探索（待实现）**：`GENERIC_RENDERING_DESIGN_20261029.md`；建议先做
+    canonical URL 去重 + 来源计数/清单一致，再做官方 page-kind 标签；registry 合并后置。
+- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因/
+  可靠性已在 10+6+2 例验证；按用户要求下一步实现通用渲染（同 URL 双身份/来源计数/
+  官方标签粒度），之后再考虑最终 200。当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、

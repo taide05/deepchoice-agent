@@ -35,8 +35,18 @@
 - 报告有 Stack Overflow 引用，raw/gap=0；
 - health 仅来源集中 warn，无 invalid。
 
-## 4. 限制
+## 4. 独立 6 例整体复测
 
-- 只复测 2 例，不能证明所有外部故障消失；链路上仍可能出现 resolver/网络/timeout；
+对同一独立 6 例（F200-001/021/049/137/177/117）在修复后整体复跑：
+
+- 6/6 complete，约 11 分钟，374,260 tokens；
+- **community 6/6 success**（修复前为 4/6），每例 2 个 pack；
+- **6/6 报告引用 Stack Overflow**，raw/gap=0；
+- health 无 community failure；仅来源集中/official 页面 warn；
+- 结论：该独立样本上，可靠性修复有效；仍不能外推所有外部故障。
+
+## 5. 限制
+
+- 只复测 2 例失败 + 6 例整体，不能证明所有外部故障消失；链路上仍可能出现 resolver/网络/timeout；
 - 8 次预算和 source-level 重试会增加少量 API 请求/时间，需在最终 200 观察；
 - 不改 legacy 回退路径。
