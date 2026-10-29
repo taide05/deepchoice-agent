@@ -151,6 +151,8 @@ def build_source_registry(evidence_chains: list[dict]) -> dict:
     by_identity: dict[str, dict] = {}
     _disambiguate_same_title_entries(entries)
     for entry in entries:
+        entry["title"] = _citation_safe_title(entry["title"])
+    for entry in entries:
         by_norm.setdefault(_norm_title(entry["title"]), []).append(entry)
         by_number[entry["number"]] = entry
         by_identity.setdefault(entry["source_id"], entry)
@@ -434,6 +436,17 @@ def _disambiguate_same_title_entries(entries: list[dict]) -> None:
 def _norm_title(s: str) -> str:
     """Lowercase + alphanumerics only — matches metrics._normalize_title."""
     return "".join(c for c in s.lower() if c.isalnum())
+
+
+def _citation_safe_title(title: str) -> str:
+    """Keep a title from breaking the `[Source: ...]` citation grammar.
+
+    Source titles occasionally contain square brackets (e.g. PDF labels or
+    release tags). They are display data, not citation syntax; full-width
+    brackets keep them readable while preventing the marker parser from ending
+    the title at the first `]` and turning a valid citation into a gap.
+    """
+    return str(title or "").replace("[", "［").replace("]", "］")
 
 
 def _has_cjk(text: str) -> bool:

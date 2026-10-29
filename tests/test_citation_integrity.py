@@ -713,3 +713,14 @@ class TestFreeTextCitationCleanup:
         assert "[[1]]" not in joined and "[[2]]" not in joined
         assert "引用未解析" not in joined
         assert "Source:" in joined
+
+class TestCitationSafeTitles:
+    def test_bracketed_source_title_does_not_break_source_marker(self):
+        chains = _chains(_source("PDF [2026] guide", "body", "https://example.com/pdf"))
+        registry = cs.build_source_registry(chains)
+        tit = registry["entries"][0]["title"]
+        assert "[" not in tit and "］" in tit
+        rec = {"recommendation": f"claim [Source: {tit}]"}
+        cs.apply_citation_rules(rec, chains)
+        assert "引用未解析" not in rec["recommendation"]
+        assert "Source:" in rec["recommendation"]
