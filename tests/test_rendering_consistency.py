@@ -116,3 +116,11 @@ def test_verified_first_party_page_is_labelled_without_official_doc_type():
         "body_identity_verified": True,
     }, "zh")
     assert "官方" in note
+
+def test_official_title_documentation_marks_docs_when_path_is_not_home():
+    note = source_provenance_note({
+        "url": "https://example.com/streaming/current/deploy.md",
+        "title": "Redpanda — deep documentation — deploy",
+        "source_type": "official_doc",
+    }, "zh")
+    assert "官方文档" in note

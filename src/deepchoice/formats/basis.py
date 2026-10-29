@@ -417,8 +417,9 @@ def _official_page_note(src: dict, lang: str) -> str:
         return "（官方公告）" if lang == "zh" else " (official announcement)"
     if path in {"", "/"}:
         return "（官方页面）" if lang == "zh" else " (official page)"
-    if not any(token in path for token in (
-            "docs", "documentation", "reference", "guide", "tutorial", "api")):
+    docs_tokens = ("docs", "documentation", "reference", "guide", "tutorial", "api")
+    if not (any(token in path for token in docs_tokens)
+            or ("documentation" in title and path not in {"", "/"})):
         # A product/marketing page is still first-party material, but calling it
         # "official docs" would overstate how neutral/technical it is.
         return "（官方页面）" if lang == "zh" else " (official page)"
