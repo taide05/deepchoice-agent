@@ -594,6 +594,11 @@ def source_binding(entry: dict) -> dict:
         "channel": entry["channel"],
         "date": entry.get("date", ""),
         "source_type": entry.get("source_type", ""),
+        # Display provenance: lets the report distinguish first-party pages from
+        # anonymous web material without changing identity or scoring.
+        "source_owner": entry.get("source_owner", ""),
+        "source_kind": entry.get("source_kind", ""),
+        "body_identity_verified": entry.get("body_identity_verified"),
     }
 
 

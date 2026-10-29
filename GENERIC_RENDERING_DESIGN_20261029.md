@@ -117,3 +117,26 @@
 2. `+N more` 是显示全部还是保留截断但显式列出“未显示 N 条 + 总数”？
 3. 官方标签分类用 URL/title 规则是否足够，是否要改 official retriever 记录 page_kind？
 4. “噪声来源不计入 basis”是否可确定性判断，还是只做显示标注？
+
+## 8. 第一阶段实现状态（2026-10-29）
+
+已实现（A + D + C 的显示层，B registry merge 未做）：
+
+- `basis._canonical_source_url` / `_merge_used_entries`：
+  同 canonical URL 的引用行合并；标题优先更具体者；citation 次数累加；
+  `used_sources` 在 identity map/title fallback 合并后再走 relevance filter；
+- 三个 renderer 移除 `used[:12]` 截断与 `+N more`，参考清单与计数使用同一 `used_sources`；
+- `source_binding` 增加 source_owner/source_kind/body_identity_verified，
+  使 verified first-party 页面即使 `source_type=web_document` 也能显示为官方；
+- `source_provenance_note` 分类：官方文档 / 官方公告 / 官方页面；community 保持社区问答/非官方；
+- 新增 `tests/test_rendering_consistency.py`：
+  canonical URL、同 URL 双标题合并、官方三类标签、first-party verified 标签、
+  13 来源时不截断且计数/清单一致；
+- 全量测试 **763 passed**。
+
+未做：
+
+- registry 层 canonical merge（B，影响 prompt/编号，等 A/C 稳定后再评估）；
+- 噪声来源不计入 basis（仅提示/规则，未做硬判定）；
+- 真实运行后的目视检查（当前用单元/合同测试；下一步可用已有 20/6/2 报告离线重放）。
+

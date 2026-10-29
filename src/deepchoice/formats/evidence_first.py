@@ -139,7 +139,7 @@ def render(state: dict) -> str:
     if used:
         lines.append(T["sources_used"][lang].format(n=len(used)))
         lines.append("")
-        for src in used[:12]:
+        for src in used:
             note = source_provenance_note(src, lang)
             lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")

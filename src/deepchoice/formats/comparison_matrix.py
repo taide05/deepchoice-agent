@@ -229,7 +229,7 @@ def render(state: dict) -> str:
     used = used_sources(rec, chains)
     lines.extend(["", L["sources_used"][lang], ""])
     if used:
-        for src in used[:12]:
+        for src in used:
             note = source_provenance_note(src, lang)
             lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}){note}")
     else:

@@ -19,7 +19,7 @@ from __future__ import annotations
 import html
 import re
 
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 # Titles that identify a publisher/site rather than the page. They are not
 # locatable enough to show as a source label on their own (F200-178 showed four
@@ -28,6 +28,56 @@ from urllib.parse import unquote, urlsplit
 _GENERIC_SOURCE_TITLES = {
     "medium", "github", "youtube", "unknown", "documentation",
 }
+
+
+def _canonical_source_url(url: str) -> str:
+    """Display/identity normalization for the source list.
+
+    Query and fragment are not part of a document's display identity; a trailing
+    slash is not a different page. The citation registry remains unchanged; this
+    is only the key used to avoid showing one page twice when different channels
+    collected it under different titles.
+    """
+    raw = str(url or "").strip()
+    if not raw:
+        return ""
+    parsed = urlsplit(raw)
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path or "/"
+    if path != "/":
+        path = path.rstrip("/")
+    return urlunsplit((scheme, netloc, path, parsed.query, ""))
+
+
+def _merge_used_entries(entries: list[dict]) -> list[dict]:
+    """Merge cited-source rows that point to the same canonical page."""
+    merged: dict[str, dict] = {}
+    for raw in entries:
+        if not isinstance(raw, dict):
+            continue
+        url = str(raw.get("url") or "")
+        key = _canonical_source_url(url) or url
+        if not key:
+            continue
+        entry = merged.get(key)
+        if entry is None:
+            merged[key] = dict(raw)
+            continue
+        entry["citations"] = int(entry.get("citations") or 0) + int(
+            raw.get("citations") or 0)
+        # Prefer the more specific display title (community packs usually carry
+        # "Stack Overflow — ..." while another channel may have the bare title).
+        old_title = str(entry.get("title") or "")
+        new_title = str(raw.get("title") or "")
+        if (len(new_title), new_title) > (len(old_title), old_title):
+            entry["title"] = new_title
+        for key_name in ("provenance", "channel", "date", "source_type",
+                         "source_owner", "source_kind",
+                         "body_identity_verified"):
+            if not entry.get(key_name) and raw.get(key_name):
+                entry[key_name] = raw[key_name]
+    return list(merged.values())
 
 
 def source_display_title(src: dict) -> str:
@@ -147,17 +197,31 @@ def _used_from_identity_map(rec: dict) -> list[dict]:
                 # A source with no URL cannot be a linkable reference; the old
                 # title-based basis also required one.
                 continue
-            entry = used.setdefault(identity, {
-                "title": title,
-                "url": url,
-                "provenance": binding.get("provenance", "unknown"),
-                "channel": binding.get("channel", ""),
-                "date": str(binding.get("date") or ""),
-                "source_type": str(binding.get("source_type") or ""),
-                "citations": 0,
-            })
+            entry = used.get(identity)
+            if entry is None:
+                entry = used[identity] = {
+                    "title": title,
+                    "url": url,
+                    "provenance": binding.get("provenance", "unknown"),
+                    "channel": binding.get("channel", ""),
+                    "date": str(binding.get("date") or ""),
+                    "source_type": str(binding.get("source_type") or ""),
+                    "source_owner": str(binding.get("source_owner") or ""),
+                    "source_kind": str(binding.get("source_kind") or ""),
+                    "body_identity_verified": binding.get("body_identity_verified"),
+                    "citations": 0,
+                }
+            else:
+                old_title = str(entry.get("title") or "")
+                if (len(title), title) > (len(old_title), old_title):
+                    entry["title"] = title
+                for key in ("provenance", "channel", "date", "source_type",
+                            "source_owner", "source_kind",
+                            "body_identity_verified"):
+                    if not entry.get(key) and binding.get(key):
+                        entry[key] = binding.get(key)
             entry["citations"] += 1
-    return list(used.values())
+    return _merge_used_entries(list(used.values()))
 
 
 def _title_index(chains: list[dict]) -> dict[str, list[dict]]:
@@ -225,10 +289,13 @@ def _used_from_titles(rec: dict, chains: list[dict],
                     "channel": src.get("channel", ""),
                     "date": str(src.get("date") or ""),
                     "source_type": str(src.get("source_type") or ""),
+                    "source_owner": str(src.get("source_owner") or ""),
+                    "source_kind": str(src.get("source_kind") or ""),
+                    "body_identity_verified": src.get("body_identity_verified"),
                     "citations": 0,
                 })
                 entry["citations"] += 1
-    return list(used.values())
+    return _merge_used_entries(list(used.values()))
 
 
 def _meaningful_candidate_name(name: str) -> bool:
@@ -324,15 +391,38 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
     if identity_map is None:
         return _filter_relevant_used(rec, chains,
                                      _used_from_titles(rec, chains))
-    used = {entry["url"]: entry for entry in _used_from_identity_map(rec)}
+    used = {
+        _canonical_source_url(entry["url"]): entry
+        for entry in _used_from_identity_map(rec)
+    }
     for entry in _used_from_titles(rec, chains,
                                    skip_locators=set(identity_map)):
         if not entry["url"]:
             continue
-        existing = used.setdefault(entry["url"], entry)
+        key = _canonical_source_url(entry["url"])
+        existing = used.setdefault(key, entry)
         if existing is not entry:
             existing["citations"] += entry["citations"]
-    return _filter_relevant_used(rec, chains, list(used.values()))
+    return _filter_relevant_used(rec, chains,
+                                 _merge_used_entries(list(used.values())))
+
+
+def _official_page_note(src: dict, lang: str) -> str:
+    """Distinguish official docs, announcements, and ordinary official pages."""
+    url = str(src.get("url") or "").lower()
+    title = str(src.get("title") or "").lower()
+    path = unquote(urlsplit(url).path).lower()
+    if any(token in path or token in title for token in (
+            "blog", "release", "announcement", "news", "changelog", "article")):
+        return "（官方公告）" if lang == "zh" else " (official announcement)"
+    if path in {"", "/"}:
+        return "（官方页面）" if lang == "zh" else " (official page)"
+    if not any(token in path for token in (
+            "docs", "documentation", "reference", "guide", "tutorial", "api")):
+        # A product/marketing page is still first-party material, but calling it
+        # "official docs" would overstate how neutral/technical it is.
+        return "（官方页面）" if lang == "zh" else " (official page)"
+    return "（官方文档）" if lang == "zh" else " (official docs)"
 
 
 def source_provenance_note(src: dict, lang: str) -> str:
@@ -363,8 +453,9 @@ def source_provenance_note(src: dict, lang: str) -> str:
         if date:
             note += f"（{date}）" if lang == "zh" else f" ({date})"
         return note
-    if source_type == "official_doc":
-        note = "（官方文档）" if lang == "zh" else " (official docs)"
+    if source_type == "official_doc" or (
+            src.get("source_owner") and src.get("body_identity_verified") is True):
+        note = _official_page_note(src, lang)
         if date:
             note += f"（{date}）" if lang == "zh" else f" ({date})"
         return note

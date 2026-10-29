@@ -306,7 +306,7 @@ def render(state: dict) -> str:
                          "count shows how often a source is used, not how strongly it "
                          "supports a claim:")
         lines.append("")
-        for src in used[:12]:
+        for src in used:
             note = source_provenance_note(src, lang)
             lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}) ×{src['citations']}{note}")
         lines.append("")
@@ -502,11 +502,9 @@ def render(state: dict) -> str:
     # synthesis result actually used. Retrieving a page does not make it a
     # reference for a claim, so unused material is not listed here.
     refs = used_sources(rec, chains)
-    for src in refs[:12]:
+    for src in refs:
         note = source_provenance_note(src, lang)
         lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}){note}")
-    if len(refs) > 12:
-        lines.append(f"*(+{len(refs) - 12} more sources used)")
     if not refs:
         lines.append("- 本次没有可追溯的引用来源。" if lang == "zh"
                      else "- No traceable source was used in this run.")
