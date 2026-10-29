@@ -339,10 +339,18 @@
     - **B 决策：暂不做 registry 层 canonical merge**——A/D 已覆盖显示层重复/计数/标签，
       B 会影响 prompt 编号且收益有限；等出现 registry 层引用/评分异常再评估；
     - 全量测试 **764 passed**。
-- 下一步：**最终 200 计划已冻结待批准**（`FINAL_200_RUN_PLAN_20261029.md`）：
-  题集 SHA `46728f...`、200 唯一 case、单批 concurrency=2、`evidence_pack`、
-  `LEARNED_DOCS_READONLY=1`；预算上限 **15.0M tokens**；窗口 **18:00–次日 02:00**；
-  200/200 全量评审 + 替换披露。当前**没有**在跑的付费任务；最终 200 未批准、未运行。
+- **最终 200 已执行并完成内部全量评审（2026-10-30）**：
+  - 10 批 ×20 例，主批 `95d8bea`，200/200 单位齐全；替换 5 例（1 invalid + 4 引用问题），
+    替换后 tokens **12,646,242**（<15.0M）；wall p50 221.2s / p95 415.1s；
+  - 全量评审 200/200：**usable 200/200、DG 185/200（92.5%）、C4=0**；
+    C2 partial 15、C3 partial 1；决策状态 recommended 6 / conditional 149 /
+    insufficient_evidence 45；community cited 169 / pack-unused 28 / none 3；
+  - 已知限制：F200-158 输出截断导致 C3 partial；15 个 C2 partial 为弱证据/厂商/二手/
+    引用完整性问题；mixed-version 与替换内部披露；
+  - 内部结果：`FINAL_200_RESULT_20261029.md`；运行/review 在
+    `.scratch/cases/runs/final-200-20261029/`；
+  - 未对外发布；对外表述需用户确认。全量测试 **765 passed**。
+- 当前没有在跑的付费任务；最终 200 已完成。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
