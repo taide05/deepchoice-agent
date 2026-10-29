@@ -323,8 +323,12 @@
   - **独立 6 例验证（13:45–13:58，371,661 tokens）**：样本不在 20 例开发集内；community
     4/6 成功、2/6 外部失败；4 例有 pack 均被引用，引用均标社区/非官方，raw/gap=0；
     未发现需要扩大 community 引用量，主要缺口仍是通道可靠性。
-- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因修复
-  已在 10+6 例验证；下一步做通用渲染修复（同 URL 双身份/来源计数/官方标签粒度），
+  - **通道可靠性加强（`0d48fe4`）**：每 case 请求预算 6→8、捕获 TimeoutError、
+    社区源层面加一次重试；对 F200-001/F200-021 失败例复测 **2/2 complete、
+    community 2/2 success、各 2 pack、无 community failure**（131,342 tokens）；
+    全量测试 **758 passed**。详见 `COMMUNITY_RELIABILITY_20261029.md`。
+- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因/可靠性
+  已在 10+6+2 例验证；下一步做通用渲染修复（同 URL 双身份/来源计数/官方标签粒度），
   或进入最终 200 审批前检查。当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
