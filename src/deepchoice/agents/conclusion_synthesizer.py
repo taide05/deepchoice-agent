@@ -69,6 +69,7 @@ the source is wrong or that the two sources contradict.
 19. EVIDENCE APPLICABILITY (C2): a decisive comparative claim needs either (a) a primary/official source whose identity and body are verified, or (b) at least two genuinely independent sources. A single vendor comparison page, a single secondary blog, or a single Stack Overflow answer/comment is not enough to rank candidates as fact. In that situation, state the claim as a hypothesis/limitation/PoC condition, or leave it as an explicit unknown — do not present it as the decisive basis.
 20. COMMUNITY EVIDENCE IS PRACTITIONER EVIDENCE (P2): material with provenance=community or source_identity type=stackoverflow is user/commenter experience, not official fact. Use it for concrete implementation caveats, version traps, or operational experience; label it as community/unofficial. Never use a single community post as the sole basis for a decisive comparison; if no official or independent support exists, downgrade the claim to conditional/unknown.
 21. OMIT IRRELEVANT COMMUNITY MATERIAL: cite or list a community pack only when it directly addresses a declared sub-question or a concrete implementation caveat for a declared candidate. A generic Q&A, a definition/explainer, an installation question for an unrelated stack, or a tangential platform thread is not evidence for this decision. Omit it from the report and its citation list rather than padding the basis with weak community material.
+22. HOLD RANKING MUST NOT IMPLY PRODUCT SUPERIORITY: when decision_status is insufficient_evidence, do not present ranked_options as a product-quality ranking. Either omit the ranking or explicitly label the ordering as "evidence coverage / materials availability" and keep the hold explicit. When conditional, ranking must follow the stated branch conditions, not evidence availability alone.
 
 ## Output Structure
 Return ONLY a JSON object:
@@ -735,7 +736,28 @@ def _is_index_context(text: str, start: int, end: int, inner: str) -> bool:
             return False
     if before and before[-1].isascii() and (
             before[-1].isalnum() or before[-1] in "_]"):
-        return True
+        # A citation in prose is often written directly against the preceding
+        # word (`... v2[[8]]。`). Treat attached brackets as indexing only when
+        # the following character shows code/subscript usage; a sentence
+        # punctuation/end after the token is a citation, not an array index.
+        after = text[end:]
+        if before.endswith("]") and re.search(r"\[Source:[^\]]*\]$", before):
+            return False
+        if after and (after[0].isalnum() or after[0] in "_[="):
+            # A source/citation bracket directly after the token is a citation,
+            # not array indexing (`...word[[1]][Source: X]`).
+            if after.startswith("[Source:") or (
+                    after.startswith("[[")
+                    and re.match(r"\[\[\s*[+-]?\d", after)):
+                return False
+            return True
+        if after and after[0].isspace():
+            rest = after.lstrip()
+            if rest.startswith("[[") and re.match(r"\[\[\s*[+-]?\d", rest):
+                return False
+            if rest and rest[0] in "[=]":
+                return True
+        return False
     if before and before[-1].isspace():
         previous_nonspace = before.rstrip()[-1:] or ""
         if (previous_nonspace.isascii()
@@ -906,7 +928,39 @@ def apply_citation_rules(result: dict, evidence_chains: list[dict],
         if bindings:
             bindings_by_field[locator] = bindings
     result[CITATION_SOURCES_KEY] = bindings_by_field
+    # `unresolved_questions` and similar free-text lists are deliberately not
+    # citation-bearing fields, but the synthesis model sometimes puts `[[N]]`
+    # markers in them. Resolve those markers against the same registry so the
+    # rendered report never shows a raw number or an avoidable unresolved gap.
+    _resolve_supporting_text_citations(result, registry, effective_mapping)
     return result
+
+
+def _resolve_supporting_text_citations(result: dict, registry: dict,
+                                       mapping: dict[int, str]) -> None:
+    """Resolve citation markers in free-text fields outside the cited field list.
+
+    These fields do not get identity bindings (they are not claims the report
+    cites), but leaving raw `[[N]]` markers there makes the report look broken
+    and can turn a presentation defect into a C2 "unresolved citation" finding.
+    """
+    for key, value in list(result.items()):
+        if key == CITATION_SOURCES_KEY:
+            continue
+        if isinstance(value, str):
+            if _CITATION_TOKEN.search(value):
+                result[key] = resolve_text(
+                    value, registry=registry, mapping=mapping)
+        elif isinstance(value, list):
+            changed = False
+            new_value = list(value)
+            for index, item in enumerate(value):
+                if isinstance(item, str) and _CITATION_TOKEN.search(item):
+                    new_value[index] = resolve_text(
+                        item, registry=registry, mapping=mapping)
+                    changed = True
+            if changed:
+                result[key] = new_value
 
 
 def resolve_citations_with_sources(

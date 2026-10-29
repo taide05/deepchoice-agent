@@ -45,3 +45,7 @@ def test_prompt_requires_applicability_and_community_p2():
 def test_prompt_requires_omitting_irrelevant_community():
     assert "OMIT IRRELEVANT COMMUNITY MATERIAL" in SYNTHESIS_PROMPT
     assert "generic Q&A" in SYNTHESIS_PROMPT
+
+def test_prompt_forbids_hold_ranking_as_product_quality():
+    assert "HOLD RANKING MUST NOT IMPLY PRODUCT SUPERIORITY" in SYNTHESIS_PROMPT
+    assert "evidence coverage / materials availability" in SYNTHESIS_PROMPT

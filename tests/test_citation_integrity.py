@@ -679,3 +679,37 @@ class TestFixedMaterialReplay:
         assert "token_usage" not in blob
         assert "D:\\\\" not in blob
         assert len(fixture["evidence_chains"]) == 6
+
+class TestAttachedProseCitations:
+    def test_citation_attached_to_word_ending_in_punctuation_resolves(self):
+        chains = _duplicate_title_chains()
+        rec = {"recommendation": "text Pydantic v2[[1]]。next"}
+        cs.apply_citation_rules(rec, chains)
+        assert "[[1]]" not in rec["recommendation"]
+        assert "引用未解析" not in rec["recommendation"]
+        assert rec[cs.CITATION_SOURCES_KEY]["recommendation"]
+
+    def test_citation_attached_to_word_at_field_end_resolves(self):
+        chains = _duplicate_title_chains()
+        rec = {"recommendation": "text Pydantic v2[[1]]"}
+        cs.apply_citation_rules(rec, chains)
+        assert "[[1]]" not in rec["recommendation"]
+        assert "引用未解析" not in rec["recommendation"]
+
+    def test_citation_after_source_bracket_resolves(self):
+        chains = _duplicate_title_chains()
+        registry = cs.build_source_registry(chains)
+        text = "claim [Source: A] [[1]]"
+        resolved = cs.resolve_text(text, registry=registry)
+        assert "[[1]]" not in resolved
+        assert "引用未解析" not in resolved
+
+class TestFreeTextCitationCleanup:
+    def test_unresolved_questions_raw_markers_are_resolved(self):
+        chains = _duplicate_title_chains()
+        rec = {"unresolved_questions": ["子问题：v2[[1]]", "另一问：[[2]]。"]}
+        cs.apply_citation_rules(rec, chains)
+        joined = " ".join(rec["unresolved_questions"])
+        assert "[[1]]" not in joined and "[[2]]" not in joined
+        assert "引用未解析" not in joined
+        assert "Source:" in joined
