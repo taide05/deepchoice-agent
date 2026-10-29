@@ -354,6 +354,15 @@ def source_provenance_note(src: dict, lang: str) -> str:
         return "（评测答案材料）" if lang == "zh" else " (benchmark answer material)"
     if channel == "local_kb" or url.startswith("file://"):
         return "（本地知识库文档）" if lang == "zh" else " (local knowledge-base document)"
+    if provenance == "community" or channel == "community" or source_type == "stackoverflow":
+        # StackExchange packs are practitioner discussion, not official facts;
+        # keep the label adjacent to the reference even when the body text did
+        # not repeat it. This is provenance display, not a change to citation
+        # identity or evidence scoring.
+        note = "（社区问答/非官方）" if lang == "zh" else " (community Q&A; unofficial)"
+        if date:
+            note += f"（{date}）" if lang == "zh" else f" ({date})"
+        return note
     if source_type == "official_doc":
         note = "（官方文档）" if lang == "zh" else " (official docs)"
         if date:

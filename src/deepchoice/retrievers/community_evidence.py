@@ -537,11 +537,15 @@ async def _fetch_pack_details(
         full_question = q_items.get(qid)
         if full_question is None:
             continue
-        packs.append(build_pack(
-            full_question,
-            answers_by_q.get(qid, []),
-            comments_by_q.get(qid, []),
-        ))
+        selected_answers = answers_by_q.get(qid, [])
+        selected_comments = comments_by_q.get(qid, [])
+        # A question body with no answer and no comment is only a prompt for
+        # discussion, not usable practitioner evidence. The 20-case review found
+        # such a pack carried no citable claim; skip it rather than padding the
+        # report with an empty thread.
+        if not selected_answers and not selected_comments:
+            continue
+        packs.append(build_pack(full_question, selected_answers, selected_comments))
     return packs
 
 

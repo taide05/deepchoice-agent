@@ -260,3 +260,19 @@ def test_stackoverflow_authority_reaches_evidence_chain_threshold():
     from deepchoice.agents.source_evaluator import AUTHORITY_MAP, score_authority
     assert AUTHORITY_MAP["stackoverflow"] >= 6
     assert score_authority("stackoverflow") >= 6
+
+@pytest.mark.asyncio
+async def test_pack_without_answers_or_comments_is_dropped(monkeypatch):
+    class NoDiscussionClient:
+        async def get(self, url, params=None):
+            if url.endswith("/answers") or url.endswith("/comments"):
+                return _FakeResponse(payload={"items": []})
+            return _FakeResponse(payload={"items": [_question()]})
+
+    async def no_backoff():
+        return None
+
+    monkeypatch.setattr(ce, "_wait_for_backoff", no_backoff)
+    packs = await ce._fetch_pack_details(
+        NoDiscussionClient(), [_question()], budget=ce.RequestBudget(), key="")
+    assert packs == []

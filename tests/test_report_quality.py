@@ -59,3 +59,16 @@ def test_independence_claim_with_single_publisher_is_flagged():
     assert "independence_claim_single_publisher" in source_concentration_flags(
         rec, "这是两份独立来源的结论。")
 
+
+def test_community_source_gets_unofficial_label():
+    from deepchoice.formats.basis import source_provenance_note
+    zh = source_provenance_note({
+        "url": "https://stackoverflow.com/questions/1",
+        "provenance": "community", "date": "2025-01-02",
+    }, "zh")
+    en = source_provenance_note({
+        "url": "https://stackoverflow.com/questions/1",
+        "channel": "community",
+    }, "en")
+    assert "社区问答" in zh and "非官方" in zh and "2025-01-02" in zh
+    assert "community" in en and "unofficial" in en
