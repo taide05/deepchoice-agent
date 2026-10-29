@@ -35,3 +35,9 @@ def test_prompt_forbids_inventing_specific_tool_stack():
 def test_prompt_requires_useful_hold():
     assert "A HOLD MUST STILL BE USEFUL" in SYNTHESIS_PROMPT
     assert "do not leave candidate sections or what empty" in SYNTHESIS_PROMPT.lower()
+
+def test_prompt_requires_applicability_and_community_p2():
+    assert "EVIDENCE APPLICABILITY" in SYNTHESIS_PROMPT
+    assert "single vendor comparison page" in SYNTHESIS_PROMPT
+    assert "COMMUNITY EVIDENCE IS PRACTITIONER EVIDENCE" in SYNTHESIS_PROMPT
+    assert "single community post" in SYNTHESIS_PROMPT
