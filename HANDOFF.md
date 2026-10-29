@@ -293,8 +293,16 @@
   - 负担：每 case ≤5 次 StackExchange 请求、无新增 LLM 调用；F200-083 配对 input +1,934 tokens（+5.2%），
     但总 tokens 因输出长度波动未单向上升（pack 63,240 vs legacy 78,019）；200 例固定上下文增量上限约 0.4M；
   - 本轮 community 迭代一次性验证成本约 **0.78M tokens**（含被替换运行）；不能把三主题结果当 200 成绩；
-  - 全量测试（默认切换后）**746 passed**；旧 legacy 测试仍保留，新增 9 个 community 单元/契约测试。
-- 下一步：最终 200 仍未批准/未运行；如继续，需另行批准并安排在谷价窗口；社区质量/负担要在最终全量
+  - **10/29 09:14–09:53 20 例扩大验证（用户允许峰价窗口）**：固定种子分层抽样 20 例（12 类全覆盖，
+    含已做 3 例），默认 evidence_pack，concurrency=2；20/20 complete，约 40 分钟；
+    community 命中 16/20（80%），4 例外部失败（ReadTimeout/无 outbound，optional_source_failed，未 invalid）；
+    14/20 报告实际引用 Stack Overflow（70%），raw/空括号 0；
+    合计 1,212,857 tokens，同 20 例旧基线 1,020,580，+18.8%（跨版本，不能全归因 community；
+    单例配对 context 增量约 +5.2%）；health 4 ok/16 warn，无 community 导致 invalid；
+  - **回退演练零跑例**：设置 `COMMUNITY_RETRIEVAL_MODE=legacy` 后跑 legacy/community/retriever 测试
+    40 passed；未启动任何研究 case；
+  - community 累计验证成本约 **1.99M tokens**（三主题迭代 + 20 例）；全量测试 **746 passed**。
+- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；社区质量/负担要在最终全量
   评审中实测。当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
