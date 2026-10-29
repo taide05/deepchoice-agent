@@ -32,7 +32,10 @@ SE_QUOTA_FLOOR = 500
 # tunable; the important property is that a case can never issue unbounded
 # StackExchange requests.
 MAX_SEARCH_VARIANTS = 2
-MAX_CASE_REQUESTS = 6
+# Search + three batched detail calls can use 5 requests; retries must still fit.
+# 6 was too tight and produced "per-case request budget exhausted" in the
+# independent 6-case run (F200-001), so leave room for two transient retries.
+MAX_CASE_REQUESTS = 8
 MAX_PACKS_PER_CASE = 2
 MAX_ANSWERS_PER_PACK = 2
 MAX_COMMENTS_PER_PACK = 6
@@ -420,7 +423,7 @@ async def _community_client():
     for attempt in range(3):
         try:
             return await _outbound.make_client("community")
-        except RuntimeError as exc:
+        except (RuntimeError, TimeoutError) as exc:
             last_error = exc
             if attempt < 2:
                 await asyncio.sleep(1.5 * (attempt + 1))
@@ -450,7 +453,8 @@ async def _request_json(
             budget.take()
             try:
                 response = await client.get(SE_API_BASE + path, params=query)
-            except (httpx.TimeoutException, httpx.TransportError, RuntimeError) as exc:
+            except (httpx.TimeoutException, httpx.TransportError, RuntimeError,
+                    TimeoutError) as exc:
                 last_error = exc
                 if attempt < 2:
                     await asyncio.sleep(1.5 * (attempt + 1))

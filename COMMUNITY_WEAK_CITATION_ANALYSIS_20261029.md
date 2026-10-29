@@ -128,3 +128,17 @@
 见 `C2_CITATION_FIX_20261029.md`：两个根因（正文引用被误判为数组索引；
 `unresolved_questions` 自由文本未参与 citation pass）已修复，新独立报告 0 残余。
 
+## 11. 通道可靠性加强（2026-10-29）
+
+独立 6 例中 2/6 失败：F200-001 每 case 请求预算耗尽、F200-021 TimeoutError。
+已修：预算 6→8（为重试留余量）、捕获 TimeoutError、社区源层面增加一次重试。
+对 F200-001/F200-021 复测：2/2 complete，community 2/2 success，各 2 pack，
+无 community failure；详见 `COMMUNITY_RELIABILITY_20261029.md`。
+
+现有引用质量/披露：
+- 社区来源统一标“（社区问答/非官方）”；
+- C2/P2 规则 + 规则 21 已限制社区作为决定性依据/弱材料；
+- 独立 6 例中 4/6 有 pack 均被引用，引用均标注，未出现弱引用回归；
+- 不扩大引用数量；提高可靠性比增加引用面更优先。
+
+

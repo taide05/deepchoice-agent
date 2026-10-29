@@ -54,11 +54,22 @@ class CommunitySearch(BaseRetriever):
             # Default v1 path after three-theme validation; legacy remains an
             # explicit, immediate rollback switch.
             from .community_evidence import fetch_evidence_packs
-            packs = await fetch_evidence_packs(
-                query, sub_questions, max_results=max_results,
-                adapted_queries=adapted_queries or [],
-                candidate_techs=candidate_techs or [],
-            )
+            try:
+                packs = await fetch_evidence_packs(
+                    query, sub_questions, max_results=max_results,
+                    adapted_queries=adapted_queries or [],
+                    candidate_techs=candidate_techs or [],
+                )
+            except (RuntimeError, TimeoutError):
+                # One source-level retry for a transient channel/read failure.
+                # The inner request loop already retries; this covers the case
+                # where the resolver itself was temporarily unavailable.
+                await asyncio.sleep(2.0)
+                packs = await fetch_evidence_packs(
+                    query, sub_questions, max_results=max_results,
+                    adapted_queries=adapted_queries or [],
+                    candidate_techs=candidate_techs or [],
+                )
             if not packs:
                 raise NoRetrievableMaterial(
                     "stackexchange_no_results",

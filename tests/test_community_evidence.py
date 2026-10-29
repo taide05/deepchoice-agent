@@ -276,3 +276,31 @@ async def test_pack_without_answers_or_comments_is_dropped(monkeypatch):
     packs = await ce._fetch_pack_details(
         NoDiscussionClient(), [_question()], budget=ce.RequestBudget(), key="")
     assert packs == []
+
+def test_request_budget_allows_search_plus_detail_and_retries():
+    assert ce.MAX_CASE_REQUESTS >= 8
+
+
+@pytest.mark.asyncio
+async def test_community_search_retries_transient_source_failure(monkeypatch):
+    from deepchoice.retrievers.community import CommunitySearch
+
+    calls = {"n": 0}
+
+    async def fake_fetch(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("no outbound channel available for source: community")
+        return [{"url": "https://stackoverflow.com/q/1", "title": "pack",
+                 "snippet": "body", "has_body": True}]
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(ce, "fetch_evidence_packs", fake_fetch)
+    monkeypatch.setattr("deepchoice.retrievers.community.asyncio.sleep", no_sleep)
+    monkeypatch.setenv("COMMUNITY_RETRIEVAL_MODE", "evidence_pack")
+    results = await CommunitySearch()._do_search(
+        "Cilium vs Calico", [], 2, adapted_queries=[], candidate_techs=["Cilium"])
+    assert calls["n"] == 2
+    assert results[0]["title"] == "pack"
