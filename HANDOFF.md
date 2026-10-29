@@ -305,9 +305,14 @@
   - **20 例开发反馈迭代（避免过拟合）**：仅修基础设施可靠性——`_community_client` 与
     `_request_json` 加 3 次有界重试（`b612f70`），不改查询/评分/权重；两例“有 pack 未引用”
     已确认 pack 进入 evidence chain，是综合模型未采用，不据此改 prompt；token +18.8% 跨版本、
-    未据此缩减 pack；完整 C1–C4 报告审阅仍待做。全量测试 **747 passed**。
+    未据此缩减 pack；**20 份报告完整内容审阅已完成**：C4=0/20、usable=20/20、DG=8/20，
+    C2 partial 12/20（单一二手/厂商来源、引用未解析、社区承担决定性判断），无社区当官方；
+  - 基于审阅的呈现修复（`929b851`）：社区来源统一标“（社区问答/非官方）”，
+    丢弃无 answer/comment 的空 thread pack；不改引用身份/评分；未凭 20 例硬调权重；
+  - 全量测试 **749 passed**。
 - 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；社区质量/负担要在最终全量
-  评审中实测。当前**没有**待跑的批准批次。
+  评审中实测；下一步可处理同 URL 双身份/引用未解析等渲染问题，或进入最终 200 审批前检查。
+  当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
