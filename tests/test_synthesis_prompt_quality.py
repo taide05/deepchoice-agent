@@ -41,3 +41,7 @@ def test_prompt_requires_applicability_and_community_p2():
     assert "single vendor comparison page" in SYNTHESIS_PROMPT
     assert "COMMUNITY EVIDENCE IS PRACTITIONER EVIDENCE" in SYNTHESIS_PROMPT
     assert "single community post" in SYNTHESIS_PROMPT
+
+def test_prompt_requires_omitting_irrelevant_community():
+    assert "OMIT IRRELEVANT COMMUNITY MATERIAL" in SYNTHESIS_PROMPT
+    assert "generic Q&A" in SYNTHESIS_PROMPT
