@@ -115,7 +115,7 @@
 
 - 样本：F200-001（Svelte/Vue）、F200-021（ASP.NET/Spring）、F200-049（CockroachDB/Yugabyte）、
   F200-137（MLflow/W&B）、F200-177（Poetry/uv）、F200-117（Pulsar/Redpanda）；
-- 6/6 complete，约 16 分钟，371,657 tokens；
+- 6/6 complete，约 13 分钟，371,661 tokens；
 - community：4/6 success、2/6 failed（F200-001 per-case budget exhausted，F200-021 TimeoutError）；
 - 有 pack 的 4 例均被报告引用；引用内容与具体子问题/迁移/兼容性/版本/运维坑点相关，
   未出现“泛化定义/无关安装”型弱引用；引用均标“（社区问答/非官方）”；

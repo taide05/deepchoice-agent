@@ -757,6 +757,11 @@ def _is_index_context(text: str, start: int, end: int, inner: str) -> bool:
                 return False
             if rest and rest[0] in "[=]":
                 return True
+            # `matrix m[[2,3]] element`: a spaced bracket followed by prose is
+            # still code/index context; a citation followed by normal prose is
+            # not the common attachment pattern this rule exists to protect.
+            if rest and (rest[0].isalnum() or rest[0] == "_"):
+                return True
         return False
     if before and before[-1].isspace():
         previous_nonspace = before.rstrip()[-1:] or ""
@@ -943,9 +948,15 @@ def _resolve_supporting_text_citations(result: dict, registry: dict,
     These fields do not get identity bindings (they are not claims the report
     cites), but leaving raw `[[N]]` markers there makes the report look broken
     and can turn a presentation defect into a C2 "unresolved citation" finding.
+    Only fields that the citation pass did not already process are touched; a
+    second pass over a resolved `[Source: ...]` against a partial mapping would
+    turn a valid title into a fresh gap.
     """
+    processed_keys = {
+        *_CITATION_TEXT_FIELDS, "ranked_options", "trade_offs",
+    }
     for key, value in list(result.items()):
-        if key == CITATION_SOURCES_KEY:
+        if key == CITATION_SOURCES_KEY or key in processed_keys:
             continue
         if isinstance(value, str):
             if _CITATION_TOKEN.search(value):

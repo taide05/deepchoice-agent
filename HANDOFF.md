@@ -313,15 +313,18 @@
     `COMMUNITY EVIDENCE IS PRACTITIONER EVIDENCE (P2)`；self-review check 1 增加
     “单一厂商/二手/社区来源不能支撑决定性排名”；20 例弱引用根因与未做调整记录在
     `COMMUNITY_WEAK_CITATION_ANALYSIS_20261029.md`；
-  - **C2 验证（10 个 C2-partial 案例，12:22–12:43）**：659,895 tokens，10/10 complete，
-    C4=0/10；审阅结论 C2 实质改善 9/10，F200-058 基本不变，无 C2 变差；
-    残余为引用未解析（104/183/158）、官方标签粒度、“证据可得性排序”误读风险；
-    详见 `C2_VALIDATION_20261029.md`；
+  - **C2 验证（10 个 C2-partial 案例，12:22–12:43）**：659,895 tokens，10/10 complete，C4=0/10；
+    审阅结论 C2 实质改善 9/10，F200-058 基本不变，无 C2 变差；详见 `C2_VALIDATION_20261029.md`；
   - **弱 community 引用修复**：synthesis 追加规则 21 `OMIT IRRELEVANT COMMUNITY MATERIAL`
     （通用问答/定义/无关安装问题不进入报告与引用清单）；不硬调权重/阈值；
-    全量测试 **751 passed**。
-- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2 修复已在
-  10 例验证，但未在最终 200 验证；下一步做通用渲染修复（同 URL 双身份/引用未解析/来源计数），
+  - **引用未解析根因修复（`6648f29`）**：两个根因——正文 `v2[[8]]` 被误判为数组索引、
+    `unresolved_questions` 自由文本未参与 citation pass；修复后旧报告重放与独立新报告均为
+    raw=0/引用未解析=0；新增规则 22 禁止 hold 排名被读成产品优劣；全量测试 **756 passed**；
+  - **独立 6 例验证（13:45–13:58，371,661 tokens）**：样本不在 20 例开发集内；community
+    4/6 成功、2/6 外部失败；4 例有 pack 均被引用，引用均标社区/非官方，raw/gap=0；
+    未发现需要扩大 community 引用量，主要缺口仍是通道可靠性。
+- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因修复
+  已在 10+6 例验证；下一步做通用渲染修复（同 URL 双身份/来源计数/官方标签粒度），
   或进入最终 200 审批前检查。当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
@@ -427,4 +430,8 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
 活动文档：本页、`AGENTS.md`、`README.md`。历史记录：`CHANGELOG.md`、`RETRACTIONS.md`、
 `fix_pack_*.md`、`run_record*.md`、`template-data/`、`template-outputs/`、
 `local_cleanup_archive/`、`.scratch/`。
+
+
+  - **引用未解析根因修复（`6648f29`）**：两个根因——正文 `v2[[8]]` 被误判为数组索引、`unresolved_questions` 自由文本未参与 citation pass；修复后旧报告重放与独立新报告均为 raw=0/引用未解析=0；新增规则 22 禁止 hold 排名被读成产品优劣；全量测试 **756 passed**。
+  - **独立 6 例验证（13:45–13:58，371,661 tokens）**：样本不在 20 例开发集内；community 4/6 成功、2/6 外部失败；4 例有 pack 均被引用，引用均标社区/非官方，raw/gap=0；未发现需要扩大 community 引用量，主要缺口仍是通道可靠性。
 
