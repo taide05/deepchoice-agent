@@ -291,18 +291,39 @@ C. 换 Reddit/其他社区：用户认为 SE 更可信、通道更好；不选�
 - 新增 API 请求：每 case 最多 2 次搜索 + 3 次批量详情（≤5 次）；无新增 LLM 调用。
 - 新增上下文：每例 2 个 pack，约 1.4–3.5k 字符；F200-083 配对显示 prompt/input +1,934 tokens
   （+5.2%），但总 tokens 因模型输出长度波动并未单向上升（pack 63,240 vs legacy 78,019）。
-  按 200 例粗估，固定上下文增量上限约 0.4M tokens（相对基线 10.6M 约 3–4%），实际取决于命中数。
 - 延迟：pack 单例 155.8–334.1s，基线 185.8–275.9s；没有稳定变慢，网络/LLM 输出波动更大。
-- 可靠性：曾出现一次 `no outbound channel available for source: community`（health 记为
-  optional_source_failed，未 invalid）；重试后恢复。
-- 一次性开发/验证成本：本轮 community 迭代约 **0.78M tokens**（含被替换的中间运行），
+- 可靠性：20 例中有 4 例 community 外部失败（ReadTimeout/无 outbound），health 记为
+  optional_source_failed，未 invalid；这是默认启用的主要风险。
+- 一次性开发/验证成本：community 迭代累计约 **1.99M tokens**（0.78M 三主题迭代 + 1.21M 20 例），
   这是验证成本，不是每例固定负担。
-- 限制：只有 3 个主题、每主题 1 例；评论/回答的实际引用仍取决于综合模型；默认启用不等于
+- 限制：20 例仍只覆盖一次批跑；评论/回答的实际引用取决于综合模型；默认启用不等于
   全量可用性证明；最终 200 全量评审才是测量。
+
+### 10.5 20 例扩大验证（2026-10-29 09:14–09:53，峰价窗口，用户允许）
+
+- 固定种子分层抽样 20 例：12 类全覆盖；已做 3 例保留，新增 17 例；
+- 默认 evidence_pack，concurrency=2；20/20 complete，wall 约 40 分钟；
+- **community 命中**：16/20 有 evidence pack（80%）；4 例失败（1 个 ReadTimeout，3 个
+  `no outbound channel available`；health 记为 optional_source_failed，未 invalid）；
+- **报告引用**：14/20 报告实际出现 Stack Overflow 引用（70%）；raw citation 0、空括号 0；
+- **token**：合计 1,212,857，同 20 例旧基线 1,020,580，+192,277（+18.8%）；中位 +6,403/例。
+  该对比跨版本，不能全部归因于 community；单例配对 F200-083 的 prompt 增量只有 +1,934
+  （+5.2%），差异主要来自模型输出/检索组合波动；
+- **健康**：4/20 ok，16/20 warn；community 相关失败 4 例；其余 warn 为官方页/page_issue/
+  来源集中/可选源失败，没有因 community 导致的 invalid；
+- 结论：社区源**能稳定覆盖多数（80%）案例并进入报告（70%）**，但仍有 20% 外部失败；
+  默认保留 evidence_pack，同时保留 legacy 回退；不把 20 例当作 200 成绩。
+
+### 10.6 回退演练（零跑例）
+
+- 回退演练只检查代码/env 分支，不跑任何研究 case；
+- 设置 `COMMUNITY_RETRIEVAL_MODE=legacy` 后运行 legacy/community/retriever 测试：
+  **40 passed**；旧路径可即时恢复；
+- 没有为回退演练启动付费运行。
 
 ## 11. 当前状态
 
-- v1 已实现并**默认启用 evidence_pack**，legacy 可回退；3 主题扩大验证通过（有上述限制）；
+- v1 已实现并**默认启用 evidence_pack**，legacy 可回退；3 主题 + 20 例扩大验证完成（有上述限制）；
 - 余额预检已加并验证；arXiv non-XML 重试已加；并发按用户要求为 2；
 - 最终 200 未批准/未运行；社区源质量、token 负担需在最终全量评审中实测，不能把本轮
-  3 主题验证当作最终成绩。
+  3 主题/20 例验证当作最终成绩。
