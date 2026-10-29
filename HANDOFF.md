@@ -339,8 +339,10 @@
     - **B 决策：暂不做 registry 层 canonical merge**——A/D 已覆盖显示层重复/计数/标签，
       B 会影响 prompt 编号且收益有限；等出现 registry 层引用/评分异常再评估；
     - 全量测试 **764 passed**。
-- 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因/
-  可靠性/渲染 A/C 已做离线验证；当前无待跑批准批次。
+- 下一步：**最终 200 计划已冻结待批准**（`FINAL_200_RUN_PLAN_20261029.md`）：
+  题集 SHA `46728f...`、200 唯一 case、单批 concurrency=2、`evidence_pack`、
+  `LEARNED_DOCS_READONLY=1`；预算上限 **15.0M tokens**；窗口 **18:00–次日 02:00**；
+  200/200 全量评审 + 替换披露。当前**没有**在跑的付费任务；最终 200 未批准、未运行。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
