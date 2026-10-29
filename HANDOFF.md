@@ -301,7 +301,11 @@
     单例配对 context 增量约 +5.2%）；health 4 ok/16 warn，无 community 导致 invalid；
   - **回退演练零跑例**：设置 `COMMUNITY_RETRIEVAL_MODE=legacy` 后跑 legacy/community/retriever 测试
     40 passed；未启动任何研究 case；
-  - community 累计验证成本约 **1.99M tokens**（三主题迭代 + 20 例）；全量测试 **746 passed**。
+  - community 累计验证成本约 **1.99M tokens**（三主题迭代 + 20 例）；全量测试 **746 passed**；
+  - **20 例开发反馈迭代（避免过拟合）**：仅修基础设施可靠性——`_community_client` 与
+    `_request_json` 加 3 次有界重试（`b612f70`），不改查询/评分/权重；两例“有 pack 未引用”
+    已确认 pack 进入 evidence chain，是综合模型未采用，不据此改 prompt；token +18.8% 跨版本、
+    未据此缩减 pack；完整 C1–C4 报告审阅仍待做。全量测试 **747 passed**。
 - 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；社区质量/负担要在最终全量
   评审中实测。当前**没有**待跑的批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
