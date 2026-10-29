@@ -329,8 +329,12 @@
     同一独立 6 例整体复测 **6/6 community success、6/6 报告引用、raw/gap=0**
     （374,260 tokens，约 11 分钟）；全量测试 **758 passed**。详见
     `COMMUNITY_RELIABILITY_20261029.md`。
-  - **通用渲染探索（待实现）**：`GENERIC_RENDERING_DESIGN_20261029.md`；建议先做
-    canonical URL 去重 + 来源计数/清单一致，再做官方 page-kind 标签；registry 合并后置。
+  - **通用渲染第一阶段（`e7d0245` 已实现）**：
+    - canonical URL 去重 + 同 URL 双标题合并（`basis._canonical_source_url/_merge_used_entries`）；
+    - 三个格式移除来源清单 12 条截断/`+N more`，计数与可见清单同源；
+    - 官方标签分文档/公告/页面；verified first-party 页面不再只靠 source_type；
+    - 新增 5 个渲染一致性测试；全量测试 **763 passed**；
+    - registry 层 canonical merge（B）仍未做，等 A/C 稳定后评估。
 - 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因/
   可靠性已在 10+6+2 例验证；按用户要求下一步实现通用渲染（同 URL 双身份/来源计数/
   官方标签粒度），之后再考虑最终 200。当前**没有**待跑的批准批次。
