@@ -228,6 +228,34 @@ async def test_request_retries_retryable_status(monkeypatch):
     assert calls["n"] == 2
     assert body["quota_remaining"] == 9000
 
+
+@pytest.mark.asyncio
+async def test_community_client_retries_missing_outbound_channel(monkeypatch):
+    attempts = {"n": 0}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    async def make_client(source):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise RuntimeError("no outbound channel available for source: community")
+        return Client()
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(ce._outbound, "make_client", make_client)
+    monkeypatch.setattr(ce.asyncio, "sleep", no_sleep)
+    client = await ce._community_client()
+    assert attempts["n"] == 3
+    assert isinstance(client, Client)
+
+
 def test_stackoverflow_authority_reaches_evidence_chain_threshold():
     from deepchoice.agents.source_evaluator import AUTHORITY_MAP, score_authority
     assert AUTHORITY_MAP["stackoverflow"] >= 6

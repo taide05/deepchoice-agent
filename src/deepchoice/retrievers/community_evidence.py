@@ -411,14 +411,19 @@ async def _wait_for_backoff() -> None:
 
 
 async def _community_client():
+    """Resolve the community outbound channel with bounded retries.
+
+    The 20-case expanded run exposed transient ``no outbound channel available``
+    failures. This is an infrastructure retry, not a per-case tuning change.
+    """
     last_error: Exception | None = None
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             return await _outbound.make_client("community")
         except RuntimeError as exc:
             last_error = exc
-            if attempt == 0:
-                await asyncio.sleep(1.5)
+            if attempt < 2:
+                await asyncio.sleep(1.5 * (attempt + 1))
     raise last_error if last_error is not None else RuntimeError(
         "community outbound client unavailable")
 
@@ -441,14 +446,14 @@ async def _request_json(
     try:
         await _wait_for_backoff()
         last_error: Exception | None = None
-        for attempt in range(2):
+        for attempt in range(3):
             budget.take()
             try:
                 response = await client.get(SE_API_BASE + path, params=query)
             except (httpx.TimeoutException, httpx.TransportError, RuntimeError) as exc:
                 last_error = exc
-                if attempt == 0:
-                    await asyncio.sleep(1.5)
+                if attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))
                     continue
                 raise RuntimeError(
                     f"StackExchange request {path} failed: {type(exc).__name__}: {exc}"
@@ -472,7 +477,7 @@ async def _request_json(
                     )
                 return body
             body_text = (response.text or "")[:300]
-            if response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+            if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
                 backoff = 1.5
                 try:
                     payload = response.json()
