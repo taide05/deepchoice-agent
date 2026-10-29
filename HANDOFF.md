@@ -333,11 +333,14 @@
     - canonical URL 去重 + 同 URL 双标题合并（`basis._canonical_source_url/_merge_used_entries`）；
     - 三个格式移除来源清单 12 条截断/`+N more`，计数与可见清单同源；
     - 官方标签分文档/公告/页面；verified first-party 页面不再只靠 source_type；
-    - 新增 5 个渲染一致性测试；全量测试 **763 passed**；
-    - registry 层 canonical merge（B）仍未做，等 A/C 稳定后评估。
+    - 新增 6 个渲染一致性测试；离线重放 38 个 snapshot×3 格式 = 114 份报告：
+      0 render error、0 计数/清单不一致、0 canonical 重复、0 `+N more`；
+      旧 snapshot 中 raw/gap 仍有显示（修复前数据），新独立/retest snapshot 为 0；
+    - **B 决策：暂不做 registry 层 canonical merge**——A/D 已覆盖显示层重复/计数/标签，
+      B 会影响 prompt 编号且收益有限；等出现 registry 层引用/评分异常再评估；
+    - 全量测试 **764 passed**。
 - 下一步：最终 200 仍未批准/未运行；默认保留 evidence_pack + legacy 回退；C2/引用根因/
-  可靠性已在 10+6+2 例验证；按用户要求下一步实现通用渲染（同 URL 双身份/来源计数/
-  官方标签粒度），之后再考虑最终 200。当前**没有**待跑的批准批次。
+  可靠性/渲染 A/C 已做离线验证；当前无待跑批准批次。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
