@@ -72,3 +72,31 @@ def test_community_source_gets_unofficial_label():
     }, "en")
     assert "社区问答" in zh and "非官方" in zh and "2025-01-02" in zh
     assert "community" in en and "unofficial" in en
+
+def test_malformed_and_truncated_numeric_markers_become_explicit_gaps():
+    text = "one [[7] same source, two [[2"
+    assert report_quality_flags(text) == [
+        "malformed_numeric_citation:1", "truncated_numeric_citation:1"]
+    final = finalize_report_text(text)
+    assert "[[" not in final
+    assert "编号 7（格式不完整）" in final
+    assert "编号 2（截断）" in final
+    assert report_quality_flags(final) == []
+
+
+def test_truncated_marker_without_number_is_explicit():
+    final = finalize_report_text("a claim [[")
+    assert "[[" not in final
+    assert "引用未解析：截断" in final
+
+def test_report_contract_flags_catch_empty_ranked_and_truncated_gap():
+    from deepchoice.formats.report_quality import report_contract_flags
+    rec = {
+        "ranked_options": [{"name": "A", "rationale": ""}],
+        "unresolved_questions": ["gap text [[2"],
+        "decision_validation_recovered": True,
+    }
+    flags = report_contract_flags(rec)
+    assert "ranked_option_no_rationale" in flags
+    assert "malformed_unresolved_question" in flags
+    assert "decision_validation_recovered" in flags

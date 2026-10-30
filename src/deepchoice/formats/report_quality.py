@@ -15,6 +15,10 @@ from __future__ import annotations
 import re
 
 RAW_NUMERIC_CITATION = re.compile(r"\[\[(\d+)\]\]")
+# `[[7]` / `[[2` survive when the model truncates a citation or annotates it
+# ("[[7] 同源"). They are not valid markers and must not leak into the report.
+MALFORMED_NUMERIC_CITATION = re.compile(r"\[\[(\d+)\](?!\])")
+TRUNCATED_NUMERIC_CITATION = re.compile(r"\[\[(\d*)(?=[^0-9\]]|$)")
 EMPTY_SOURCE_PARENS = re.compile(r"（\s*）|\(\s*\)")
 DANGLING_PUNCT_SPACE = re.compile(r"[ \t]+([。，、；：！？])")
 
@@ -23,6 +27,11 @@ def finalize_report_text(report: str) -> str:
     """Make citation presentation explicit before the report is stored/exported."""
     text = RAW_NUMERIC_CITATION.sub(
         lambda match: f"〔引用未解析：编号 {match.group(1)}〕", report or "")
+    text = MALFORMED_NUMERIC_CITATION.sub(
+        lambda match: f"〔引用未解析：编号 {match.group(1)}（格式不完整）〕", text)
+    text = TRUNCATED_NUMERIC_CITATION.sub(
+        lambda match: (f"〔引用未解析：编号 {match.group(1)}（截断）〕"
+                       if match.group(1) else "〔引用未解析：截断〕"), text)
     text = EMPTY_SOURCE_PARENS.sub("", text)
     text = DANGLING_PUNCT_SPACE.sub(r"\1", text)
     return text
@@ -34,11 +43,47 @@ def report_quality_flags(report: str) -> list[str]:
     raw = RAW_NUMERIC_CITATION.findall(report or "")
     if raw:
         flags.append(f"raw_numeric_citation:{len(raw)}")
+    malformed = MALFORMED_NUMERIC_CITATION.findall(report or "")
+    if malformed:
+        flags.append(f"malformed_numeric_citation:{len(malformed)}")
+    truncated = TRUNCATED_NUMERIC_CITATION.findall(report or "")
+    if truncated:
+        flags.append(f"truncated_numeric_citation:{len(truncated)}")
     if EMPTY_SOURCE_PARENS.search(report or ""):
         flags.append("empty_source_parentheses")
     if re.search(r"^[-*] \[(Medium|GitHub|YouTube|Unknown)\]\(https?://", report or "",
                  re.MULTILINE | re.IGNORECASE):
         flags.append("generic_source_label")
+    return flags
+
+
+def report_contract_flags(rec: dict) -> list[str]:
+    """Deterministic contract checks on the synthesis decision object.
+
+    These are report-construction checks, not content-quality judgements. A
+    missing ranked rationale or a truncated open-question string means the
+    rendered report cannot be treated as a complete unit even if the decision
+    status itself is valid.
+    """
+    rec = rec or {}
+    flags: list[str] = []
+    ranked = rec.get("ranked_options") or []
+    if not ranked:
+        flags.append("no_ranked_options")
+    for option in ranked:
+        if not str((option or {}).get("rationale") or "").strip() and \
+                not str((option or {}).get("constraint_fit") or "").strip():
+            flags.append("ranked_option_no_rationale")
+            break
+    for question in rec.get("unresolved_questions") or []:
+        text = str(question or "")
+        if re.search(r"\[\[[^\]]*$", text) or text.rstrip().endswith("[["):
+            flags.append("malformed_unresolved_question")
+            break
+    if rec.get("decision_validation_error"):
+        flags.append("decision_validation_error")
+    if rec.get("decision_validation_recovered"):
+        flags.append("decision_validation_recovered")
     return flags
 
 
