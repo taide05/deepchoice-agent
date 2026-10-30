@@ -516,3 +516,11 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 2/2 usable/DG、C4=0；但 data/attribution caveat 已记录；
   - Phase C 累计验证 2.95M tokens（含 402 失败运行）；
   - 仍需 26 例 G1 复测才能确认 Phase C 闭环；不跑 200。
+
+- **Phase C 12 例分层 G1（2026-10-30，727,750 tokens）**：
+  - 12 category 各 1 例；12/12 complete、0 invalid、official 正文 44 页；
+  - usable 12/12、DG **10/12**、C4=0；
+  - F200-117/076 目标缺陷已修复；但 F200-104/158 出现新的 C2 partial，
+    整体 DG 相比 26 例 retry 子集无净提升；
+  - Phase C 未闭环；下一步扩展 claim-support 到 conditional top option；
+  - 详情 `PHASE_C_G1_12_RESULT_20261030.md`；不跑 200。
