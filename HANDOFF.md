@@ -489,5 +489,13 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 官方正文覆盖 86→96 页（+10），msgspec/Terraform 映射生效；
   - usable 26/26、DG 25/26、C4=0；
   - F200-075 原始 contract invalid（截断）已由契约门捕获并替换；
-  - 全量测试 777 passed；详情 `PHASE_B_G1_RESULT_20261030.md`；
-  - 下一步 Phase C（claim support），仍先零付费/G1，不跑 200。
+  - 全量测试 777 passed；详情 `PHASE_B_G1_RESULT_20261030.md`。
+- **Phase C 零付费实现（2026-10-30）**：
+  - 新增 `utils/claim_support.py`：decision-bearing fields 的 primary/independent/
+    secondary/community 来源审计与 `claim_support_flags`；
+  - 接入 synthesis/report_generator quality signals、self-review 的
+    Decisive Claim Support 段、batch health 诊断；
+  - 最终 200 snapshot：recommended 6 个无推荐级告警，conditional 8 个
+    `conditional_no_primary` 仅诊断；
+  - 全量测试 **781 passed**；详情 `PHASE_C_CLAIM_SUPPORT_20261030.md`；
+  - Phase C G1（26 例，约 1.6M tokens，上限 2.0M）待批准，不跑 200。
