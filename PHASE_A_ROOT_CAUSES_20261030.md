@@ -84,11 +84,9 @@
 
 - `.scratch/cases/phase_a_invariants.py`：直接读最终报告；
 - `.scratch/cases/phase_a_render_audit.py`：用当前 renderer 重放 snapshot 再审计；
-- 原始报告审计结果：64 个 `body-title-not-in-used`、5 个 `used-not-in-body`、
+- 初始报告审计（C 方案之前）：64 个 `body-title-not-in-used`、5 个 `used-not-in-body`、
   2 个 raw/gap、1 个 ranked-option-no-rationale、1 个 malformed-uq；
-- 当前代码重放 + finalize 后：raw marker 0、malformed-uq 1（F200-158 源数据本身损坏），
-  64 个 ledger 不一致与 5 个 unlisted 仍存在；
-- 说明：**渲染层能统一处理 raw marker，但账本不一致仍在 `basis/citation_sources` 侧，需要单独设计。**
+- C 方案实现后的最终审计见第 8 节。
 
 ## 5. 本轮已实现的安全修复
 
@@ -101,67 +99,49 @@
 - 新增 `tests/test_report_quality.py` 覆盖；
 - 这是纯展示/后处理修复，不影响调研内容。
 
-## 6. 待实现（Phase A 之后）
+## 6. 已选的 C 方案（已实现）
 
-### P0：账本归一化（零付费）
+不采用裸 A/裸 B，而采用 **ledger-first + 标题别名**：
 
-二选一，需要先设计再实现：
+1. `used_sources` 不再做“候选相关性”后置过滤：**正文可见的引用必须进入账本**；
+2. `_merge_used_entries` 为同一 canonical URL 保留所有标题别名（`aliases`）；
+   解决 `https://qwik.dev/docs` 与 `/docs/`、`Ruff` 等标题变体被误判 ghost 的问题；
+3. 由 synthesis 阶段决定是否引用来源，rendering 不再隐藏已引用来源；
+4. 仍由 `report_contract_flags` 拦截空 ranked/截断字段。
 
-- 方案 A：以“正文实际出现的引用”为唯一来源，移除 filtered/ghost markers，reference 只列可见引用；
-- 方案 B：取消 relevance filter，所有被引来源都进 reference（包括方法/泛化来源），保证一致但会保留噪声。
+效果（当前代码离线重放 200 snapshot）：
 
-仿真结果见第 7 节：裸 A / 裸 B 都有明显代价，需要方案 C（在 citation 生成时决定入账）。
+- 账本不一致从 64 个 case 降到 **6 个 case**；
+- 6 个都是旧 snapshot 的方括号标题被 marker 截断（新写入流程已由
+  `_citation_safe_title` 处理，旧 snapshot 不可逆）；
+- 1 个空 ranked（F200-173）、1 个 truncated unresolved（F200-158）；
+- raw marker：0。
 
-### P0：输出契约拦截
+### 未做的部分
 
-- synthesis 结果要求 What/ranked_options 非空、rationale 非空；
-- 检测截断/序列化损坏，重试一次或标 invalid；
-- 不把 F200-173/158 这类缺陷带入最终指标。
+- 不会强行修复旧 snapshot 的方括号标题截断内容（需要重跑/重新取正文）；
+- F200-158 的截断是源数据/输出损坏，F200-173 的空 ranked 是模型输出契约问题；
+  本轮只能检测/标记，不能零付费“补内容”；
+- 证据获取仍属 Phase B，不在本轮。
 
-### P1：来源标签
+### 历史仿真（C 之前）
 
-- `source_owner/body_identity_verified/page_kind` 已在 binding 中；
-- 需要把“厂商页/官方页/官方文档/公告”的判定统一到 registry，而不是渲染层猜。
+| 方案 | reference 总数 | 问题 |
+|---|---:|---|
+| A：以正文可见引用为准 | 653 | 可能误删合法来源 |
+| B：所有正文引用都入账 | 920 | 把噪声也纳入 |
 
-### P1：证据获取（Phase B，需付费批准）
+结论：采用 C（ledger-first + aliases + 取消渲染层 relevance filter）。
 
-- 官方文档 fallback/身份校验；
-- 在独立验证集上做小规模实验，不使用这些 C2/C3 partial 调参。
+## 7. 契约校验接入
 
-### P1：证据使用（Phase C，需付费批准）
+- `conclusion_synthesizer` 在 citation 处理完成后把 `report_contract_flags`
+  写入 `quality_signals`；
+- `report_generator` 把 `report_quality_flags` 与 `report_contract_flags`
+  写入其 `quality_signals`；
+- 当前是“检测/记录”语义，不改变已有报告；是否自动重试/拒绝留给下一轮。
 
-- claim-level evidence ledger；
-- 单一二手来源不得支撑决定性结论；
-- 允许诚实 hold，不强行提高 DG。
-
-## 7. Ledger 方案仿真（只读）
-
-对 200 个 snapshot 重放当前 renderer 后，发现 **64 个 case** 有 body 中引用但 used/reference 没有的来源；5 个 case 有 reference 列了但正文不可见的来源。
-
-两种简单方案的数量对比：
-
-| 方案 | 行为 | reference 总数 | 问题 |
-|---|---|---:|---|
-| A：以正文可见引用为准 | 删除幽灵 marker，refs 只列 visible used | 653 | 可能误删合法来源（Qwik/Ruff 官方文档也被判 ghost） |
-| B：所有正文引用都入账 | 把可解析 ghost 加进 refs | 920 | 把财经新闻/股票等噪声也纳入 |
-
-结论：**裸 A / 裸 B 都不可取**。ghost 中既有噪声，也有被 relevance filter 误伤的真实来源（如 F200-011 的 Qwik 官方文档、F200-188 的 Ruff 文档）。因此需要方案 C：
-
-- **在 citation 生成时决定来源是否入账**，而不是渲染后猜；
-- 正文可见引用必须可从 registry 解析；
-- 明确不相关来源应在 synthesis 阶段不引用（rule 21），而不是“引用了再从 refs 删除”；
-- 渲染层只负责“账本里的来源都显示、显示的来源都在账本里”。
-
-## 8. 下一步（Phase A 剩余）
-
-1. 在 citation generation 处建立 ledger 设计，避免 body/refs 二分；
-2. 为“可见引用 ↔ ledger”增加合同测试；
-3. 对输出契约 flags（empty ranked/truncated uq）接入合成结果校验；
-4. 完成全量测试与离线重放；
-5. 再决定 Phase B 的检索实验是否值得付费。
-
-
-## 9. Phase A 完成度
+## 8. Phase A 完成度
 
 - [x] 16 个 partial 判定的根因复核（15 个唯一 case）
 - [x] 200 个 snapshot 的不变量审计
@@ -169,8 +149,17 @@
 - [x] malformed/truncated citation marker 修复 + 测试
 - [x] report contract flags + 测试
 - [x] ledger A/B 只读仿真
-- [ ] ledger 方案 C 的实现
-- [ ] 输出契约 flags 接入合成结果校验
-- [ ] 全量重放后复测
+- [x] ledger 方案 C 实现（去后置 relevance filter + canonical aliases）
+- [x] 输出契约 flags 接入 synthesis/report generator quality_signals
+- [x] 全量重放后复测
 
-全量测试：**768 passed**。零付费跑例。
+最终审计结果（当前代码，200 snapshot）：
+
+- ledger 不一致：64 → **6**（均为旧 snapshot 方括号标题截断，新增流程已避免）；
+- used-not-in-body：5 → **0**；
+- raw marker：**0**；
+- 空 ranked：1（F200-173，内容问题）；
+- truncated unresolved：1（F200-158，内容问题）。
+
+全量测试：**769 passed**。零付费跑例。
+

@@ -124,3 +124,20 @@ def test_official_title_documentation_marks_docs_when_path_is_not_home():
         "source_type": "official_doc",
     }, "zh")
     assert "官方文档" in note
+
+def test_canonical_aliases_are_retained_when_same_page_has_two_titles():
+    chains = [_chain("Qwik — Official Documentation", "https://qwik.dev/docs/")]
+    rec = {
+        "recommendation": "A [Source: Qwik — Official Documentation]",
+        "citation_sources": {"recommendation": [
+            _binding("Overview | Introduction 📚 Qwik Documentation",
+                     "https://qwik.dev/docs"),
+            _binding("Qwik — Official Documentation", "https://qwik.dev/docs/"),
+        ]},
+    }
+    used = used_sources(rec, chains)
+    assert len(used) == 1
+    assert set(used[0]["aliases"]) == {
+        "Overview | Introduction 📚 Qwik Documentation",
+        "Qwik — Official Documentation",
+    }

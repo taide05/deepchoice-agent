@@ -208,11 +208,12 @@ class TestRegisteredIdentity:
         report = what_why_how.render(_state(rec, chains))
         assert "https://unique.example/x" in report
 
-    def test_basis_drops_cited_source_that_names_no_candidate(self):
-        """A source cited in a hidden/aside field must still discuss a candidate.
+    def test_basis_keeps_cited_source_that_names_no_candidate(self):
+        """The reference ledger mirrors visible citations.
 
-        F200-130 listed finance/crypto articles in "why this was used" because the
-        citation map had collected them from fields the report never renders.
+        Relevance filtering happens when the citation is created, not when the
+        report is rendered: hiding a source here would make the body and
+        reference counts disagree.
         """
         relevant = _source("Jaeger Features", "Jaeger tracing backend",
                            "https://jaeger.example/features")
@@ -227,11 +228,12 @@ class TestRegisteredIdentity:
         }
         cs.apply_citation_rules(rec, chains)
         used = used_sources(rec, chains)
-        assert [src["url"] for src in used] == ["https://jaeger.example/features"]
+        assert {src["url"] for src in used} == {
+            "https://jaeger.example/features", "https://news.example/btc"}
         report = what_why_how.render(_state(rec, chains,
                                             candidates=["Jaeger", "Zipkin"]))
         assert "https://jaeger.example/features" in report
-        assert "https://news.example/btc" not in report
+        assert "https://news.example/btc" in report
 
     def test_a_partial_identity_map_does_not_hide_legacy_fields(self):
         """A record revised later has identities only for revised fields; the

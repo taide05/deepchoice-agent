@@ -63,6 +63,8 @@ def _merge_used_entries(entries: list[dict]) -> list[dict]:
         entry = merged.get(key)
         if entry is None:
             merged[key] = dict(raw)
+            if raw.get("aliases"):
+                merged[key]["aliases"] = list(raw["aliases"])
             continue
         entry["citations"] = int(entry.get("citations") or 0) + int(
             raw.get("citations") or 0)
@@ -72,6 +74,10 @@ def _merge_used_entries(entries: list[dict]) -> list[dict]:
         new_title = str(raw.get("title") or "")
         if (len(new_title), new_title) > (len(old_title), old_title):
             entry["title"] = new_title
+        aliases = entry.setdefault("aliases", [])
+        for alias in (raw.get("aliases") or ([new_title] if new_title else [])):
+            if alias and alias not in aliases:
+                aliases.append(alias)
         for key_name in ("provenance", "channel", "date", "source_type",
                          "source_owner", "source_kind",
                          "body_identity_verified"):
@@ -201,6 +207,7 @@ def _used_from_identity_map(rec: dict) -> list[dict]:
             if entry is None:
                 entry = used[identity] = {
                     "title": title,
+                    "aliases": [title],
                     "url": url,
                     "provenance": binding.get("provenance", "unknown"),
                     "channel": binding.get("channel", ""),
@@ -213,6 +220,8 @@ def _used_from_identity_map(rec: dict) -> list[dict]:
                 }
             else:
                 old_title = str(entry.get("title") or "")
+                if title and title not in (entry.get("aliases") or []):
+                    entry.setdefault("aliases", []).append(title)
                 if (len(title), title) > (len(old_title), old_title):
                     entry["title"] = title
                 for key in ("provenance", "channel", "date", "source_type",
@@ -284,6 +293,7 @@ def _used_from_titles(rec: dict, chains: list[dict],
                 url = str(src.get("url") or "")
                 entry = used.setdefault(url, {
                     "title": title,
+                    "aliases": [title],
                     "url": url,
                     "provenance": src.get("provenance", "unknown"),
                     "channel": src.get("channel", ""),
@@ -383,14 +393,18 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
     does not cover are resolved from their full titles, and an unknown or shared
     title there contributes nothing rather than a guessed source.
 
+    The ledger is not filtered by candidate relevance here: a citation visible in
+    the report must be listed in the references. If a citation is genuinely
+    irrelevant, synthesis should avoid emitting it; the renderer must not hide it
+    after the fact and leave the body/reference counts inconsistent.
+
     Body-less links are excluded: a link with no collected body is navigation, not
     a basis. The count says how often the source is used, not how strongly it
     supports anything.
     """
     identity_map = _registered_citation_bindings(rec)
     if identity_map is None:
-        return _filter_relevant_used(rec, chains,
-                                     _used_from_titles(rec, chains))
+        return _used_from_titles(rec, chains)
     used = {
         _canonical_source_url(entry["url"]): entry
         for entry in _used_from_identity_map(rec)
@@ -403,8 +417,7 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
         existing = used.setdefault(key, entry)
         if existing is not entry:
             existing["citations"] += entry["citations"]
-    return _filter_relevant_used(rec, chains,
-                                 _merge_used_entries(list(used.values())))
+    return _merge_used_entries(list(used.values()))
 
 
 def _official_page_note(src: dict, lang: str) -> str:

@@ -1,6 +1,10 @@
 from ..formats.comparison_matrix import render as render_comparison_matrix
 from ..formats.evidence_first import render as render_evidence_first
-from ..formats.report_quality import finalize_report_text
+from ..formats.report_quality import (
+    finalize_report_text,
+    report_contract_flags,
+    report_quality_flags,
+)
 from ..formats.what_why_how import render as render_what_why_how
 from ..utils.views import print_agent_output
 
@@ -49,5 +53,7 @@ class ReportGeneratorAgent:
                 "format": fmt,
                 "has_recommendation": bool(rec.get("recommendation")),
                 "recommendation_confidence": rec.get("confidence", "N/A"),
+                "report_quality_flags": report_quality_flags(report),
+                "report_contract_flags": report_contract_flags(rec),
             }],
         }
