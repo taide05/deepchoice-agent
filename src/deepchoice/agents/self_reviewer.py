@@ -796,6 +796,13 @@ Field locations with an unresolved citation:
 ## Decisive Claim Support (deterministic; a citation count is not proof)
 {claim_support_text}
 
+If status is `recommended` and the flags include
+`recommended_winner_owner_dominates`, check whether any non-winner independent
+source actually supports the comparative ranking. If not, the correct outcome is
+a conditional/PoC recommendation or an evidence-insufficient hold — not a
+recommended winner based only on the winner's own docs plus secondary/community
+material.
+
 ## Source Register (numbered; same numbering as synthesis)
 {source_register_text}
 

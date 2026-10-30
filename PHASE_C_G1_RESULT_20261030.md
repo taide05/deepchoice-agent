@@ -62,13 +62,25 @@ Phase C 第一版 **未通过 G1 质量目标**：
 - 不建议直接进入最终 200；
 - 未跑 200。
 
-## 6. 下一步
+## 6. 定向 2 例验证（2026-10-30）
 
-选项：
+用户批准后运行 F200-117、F200-076：
 
-1. 先用 2 个代表 case（F200-117、F200-076）做一次小规模验证
-   （约 0.12M tokens），确认 owner-dominance 修复能让 self-review 降级；
-2. 若通过，再做 26 例 Phase C G1 复测；
-3. 不通过则继续修 claim-support/self-review。
+- 输出：`.scratch/cases/runs/phase-c-targeted-2-20261030/`
+- 2/2 complete，health 0 invalid，tokens **121,141**
+- Phase C 验证累计 tokens：1,224,581（失败）+ 1,604,605（重试）+ 121,141 = **2,950,327**
+- 内容评审：
+  - F200-117：由 `recommended` 变为 `conditional`，C1/C2/C3 met、C4=0、usable/DG；
+  - F200-076：`insufficient_evidence` hold，C1/C2/C3 met、C4=0、usable/DG；
+  - 两例均无 C4。
+- 因果归因 caveat：
+  - F200-117 本轮 synthesis 已先写成 conditional，不能单独归因于 owner-dominance 修复；
+  - F200-076 本轮 NetApp EN/zh 双 URL 未出现，部分是检索数据差异；
+  - 只能说明“定向样本未复现原缺陷”，不能证明修复已完全生效。
 
-当前没有付费任务在跑。
+## 7. 下一步
+
+- Phase C 仍需一次 26 例 G1 复测（约 1.6M tokens）才能判断是否闭环；
+- 不直接进最终 200；
+- 当前没有付费任务在跑。
+
