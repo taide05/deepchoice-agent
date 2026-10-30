@@ -1,6 +1,7 @@
 import os
 
 from ..utils.decision import decision_view, withdraw_decision
+from ..utils.claim_support import decisive_claim_support
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import (
@@ -709,9 +710,32 @@ class SelfReviewerAgent:
         # Cheap pre-review signals first: the opt-in trigger may skip the paid
         # review entirely and must not build an evidence package for it.
         cite_stats = _citation_coverage(recommendation, registry=registry)
+        claim_support = decisive_claim_support(recommendation)
+        support_lines = [
+            f"- status: {claim_support['status']}",
+            f"- distinct decisive sources: {claim_support['distinct_sources']}",
+            "- source classes: " + ", ".join(
+                f"{name}={count}" for name, count in claim_support["counts"].items()),
+            "- flags: " + (", ".join(claim_support["flags"]) or "none"),
+        ]
+        for source in claim_support["sources"][:12]:
+            support_lines.append(
+                f"- [{source['class']}/{source['source_type'] or 'unknown'}] "
+                f"{source['title']} <{source['url']}>")
+        claim_support_text = "\n".join(support_lines)
         review_budget = _self_review_budget_chars()
         should_review, review_reason = _should_self_review(
             recommendation, cite_stats, research_state)
+        critical_support_flags = [
+            flag for flag in claim_support["flags"]
+            if flag.startswith("recommended_")
+        ]
+        if not should_review and critical_support_flags:
+            # A deterministic *recommended* claim-support flag is a concrete
+            # reason to spend the review even when the cheap trigger would skip
+            # it. A conditional hold without a primary source may be an honest
+            # evidence gap, so it does not override the trigger.
+            should_review, review_reason = True, "claim-support-flag"
         if not should_review:
             print_agent_output(
                 f"Self-review skipped by trigger ({review_reason})", agent="SELF_REVIEWER")
@@ -768,6 +792,9 @@ Field locations with no citation:
 {uncited_text}
 Field locations with an unresolved citation:
 {unresolved_text}
+
+## Decisive Claim Support (deterministic; a citation count is not proof)
+{claim_support_text}
 
 ## Source Register (numbered; same numbering as synthesis)
 {source_register_text}

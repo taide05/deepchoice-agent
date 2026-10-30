@@ -1266,6 +1266,11 @@ class ConclusionSynthesizerAgent:
         contract_flags = report_contract_flags(result)
         quality_signals[0]["report_contract_flags"] = contract_flags
         quality_signals[0]["report_contract_ok"] = not contract_flags
+        from ..utils.claim_support import decisive_claim_support
+        support = decisive_claim_support(result)
+        quality_signals[0]["claim_support_flags"] = support["flags"]
+        quality_signals[0]["decisive_source_counts"] = support["counts"]
+        quality_signals[0]["decisive_distinct_sources"] = support["distinct_sources"]
 
         return {
             "final_recommendation": result,

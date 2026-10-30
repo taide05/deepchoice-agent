@@ -6,6 +6,7 @@ from ..formats.report_quality import (
     report_ledger_flags,
     report_quality_flags,
 )
+from ..utils.claim_support import decisive_claim_support
 from ..formats.what_why_how import render as render_what_why_how
 from ..utils.views import print_agent_output
 
@@ -48,6 +49,7 @@ class ReportGeneratorAgent:
 
         rec = research_state.get("final_recommendation", {})
         contract_flags = report_contract_flags(rec)
+        support = decisive_claim_support(rec)
         return {
             "report": report,
             "quality_signals": [{
@@ -60,5 +62,7 @@ class ReportGeneratorAgent:
                 "report_contract_ok": not contract_flags,
                 "report_ledger_flags": report_ledger_flags(
                     rec, research_state.get("evidence_chains") or [], report),
+                "claim_support_flags": support["flags"],
+                "decisive_source_counts": support["counts"],
             }],
         }
