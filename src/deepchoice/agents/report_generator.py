@@ -3,6 +3,7 @@ from ..formats.evidence_first import render as render_evidence_first
 from ..formats.report_quality import (
     finalize_report_text,
     report_contract_flags,
+    report_ledger_flags,
     report_quality_flags,
 )
 from ..formats.what_why_how import render as render_what_why_how
@@ -46,6 +47,7 @@ class ReportGeneratorAgent:
         report, fmt = render_report(research_state)
 
         rec = research_state.get("final_recommendation", {})
+        contract_flags = report_contract_flags(rec)
         return {
             "report": report,
             "quality_signals": [{
@@ -54,6 +56,9 @@ class ReportGeneratorAgent:
                 "has_recommendation": bool(rec.get("recommendation")),
                 "recommendation_confidence": rec.get("confidence", "N/A"),
                 "report_quality_flags": report_quality_flags(report),
-                "report_contract_flags": report_contract_flags(rec),
+                "report_contract_flags": contract_flags,
+                "report_contract_ok": not contract_flags,
+                "report_ledger_flags": report_ledger_flags(
+                    rec, research_state.get("evidence_chains") or [], report),
             }],
         }

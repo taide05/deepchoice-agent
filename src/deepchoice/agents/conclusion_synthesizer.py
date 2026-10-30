@@ -1263,7 +1263,9 @@ class ConclusionSynthesizerAgent:
         # gap instead of being deleted.
         apply_citation_rules(result, evidence_chains, cite_map)
         from ..formats.report_quality import report_contract_flags
-        quality_signals[0]["report_contract_flags"] = report_contract_flags(result)
+        contract_flags = report_contract_flags(result)
+        quality_signals[0]["report_contract_flags"] = contract_flags
+        quality_signals[0]["report_contract_ok"] = not contract_flags
 
         return {
             "final_recommendation": result,

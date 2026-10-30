@@ -100,3 +100,20 @@ def test_report_contract_flags_catch_empty_ranked_and_truncated_gap():
     assert "ranked_option_no_rationale" in flags
     assert "malformed_unresolved_question" in flags
     assert "decision_validation_recovered" in flags
+
+def test_report_ledger_flags_detect_ghost_and_unlisted_sources():
+    from deepchoice.formats.report_quality import report_ledger_flags
+    chain = {"sources": [{
+        "url": "https://example.com/a", "title": "Source A", "body": "A body",
+        "has_body": True,
+    }]}
+    rec = {"recommendation": "x", "citation_sources": {"recommendation": [{
+        "source_id": "https://example.com/a", "title": "Source A",
+        "url": "https://example.com/a",
+    }]}}
+    clean = report_ledger_flags(
+        rec, [chain], "claim [Source: Source A]\n- [Source A](https://example.com/a)")
+    assert clean == []
+    dirty = report_ledger_flags(
+        rec, [chain], "claim [Source: Source B]\n- [Source A](https://example.com/a)")
+    assert "ledger_ghost_markers:1" in dirty

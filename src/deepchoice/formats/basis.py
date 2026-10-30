@@ -439,6 +439,22 @@ def _official_page_note(src: dict, lang: str) -> str:
     return "（官方文档）" if lang == "zh" else " (official docs)"
 
 
+def _is_vendor_comparison(src: dict) -> bool:
+    """A first-party page that argues one candidate beats another.
+
+    Such a page is still first-party material, but calling it neutral "official
+    docs" overstates it. The marker only changes the provenance label, never the
+    source identity or the claim.
+    """
+    title = str((src or {}).get("title") or "").lower()
+    path = unquote(urlsplit(str((src or {}).get("url") or "")).path).lower()
+    comparison_tokens = (
+        " vs ", " vs. ", " versus ", " compare", "comparison", "alternative",
+        "alternatives", "对比",
+    )
+    return any(token in f" {title} {path} " for token in comparison_tokens)
+
+
 def source_provenance_note(src: dict, lang: str) -> str:
     """Describe a source's origin honestly, without calling local material public.
 
@@ -469,7 +485,11 @@ def source_provenance_note(src: dict, lang: str) -> str:
         return note
     if source_type == "official_doc" or (
             src.get("source_owner") and src.get("body_identity_verified") is True):
-        note = _official_page_note(src, lang)
+        if _is_vendor_comparison(src):
+            note = ("（厂商对比页/利益相关方）" if lang == "zh"
+                    else " (vendor comparison; interested party)")
+        else:
+            note = _official_page_note(src, lang)
         if date:
             note += f"（{date}）" if lang == "zh" else f" ({date})"
         return note

@@ -87,6 +87,39 @@ def report_contract_flags(rec: dict) -> list[str]:
     return flags
 
 
+def report_ledger_flags(rec: dict, chains: list[dict], report: str) -> list[str]:
+    """Check that visible citations and the source ledger are the same set.
+
+    This is a presentation/ledger invariant, not a content-quality score. It is
+    intentionally report-level so batch health can catch a regression without
+    re-reading the content.
+    """
+    from .basis import used_sources
+    from ..agents.conclusion_synthesizer import _norm_title
+
+    used = used_sources(rec or {}, chains or [])
+    used_titles: set[str] = set()
+    for source in used:
+        used_titles.add(str(source.get("title") or ""))
+        used_titles.update(str(alias) for alias in (source.get("aliases") or []))
+    markers = [m.strip() for m in re.findall(
+        r"\[Source:\s*([^\]\n]+)\]", report or "") if m.strip()]
+    ghost = [m for m in markers
+             if not any(_norm_title(m) == _norm_title(t) for t in used_titles)]
+    missing = [
+        str(source.get("title") or "") for source in used
+        if not any(_norm_title(alias) == _norm_title(m)
+                   for alias in ([source.get("title")] + list(source.get("aliases") or []))
+                   for m in markers)
+    ]
+    flags: list[str] = []
+    if ghost:
+        flags.append(f"ledger_ghost_markers:{len(ghost)}")
+    if missing:
+        flags.append(f"ledger_unlisted_sources:{len(missing)}")
+    return flags
+
+
 def source_concentration_flags(rec: dict, report: str) -> list[str]:
     """Non-blocking publisher-concentration flags for source-independence review.
 

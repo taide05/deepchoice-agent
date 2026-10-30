@@ -141,3 +141,12 @@ def test_canonical_aliases_are_retained_when_same_page_has_two_titles():
         "Overview | Introduction 📚 Qwik Documentation",
         "Qwik — Official Documentation",
     }
+
+def test_vendor_comparison_page_is_not_labelled_neutral_official_docs():
+    note = source_provenance_note({
+        "url": "https://buildkite.com/resources/comparison/buildkite-vs-circleci",
+        "title": "Buildkite vs CircleCI | CI platform comparison",
+        "source_type": "official_doc",
+    }, "zh")
+    assert "厂商对比页" in note and "利益相关方" in note
+    assert "官方文档" not in note

@@ -133,13 +133,24 @@
 
 结论：采用 C（ledger-first + aliases + 取消渲染层 relevance filter）。
 
-## 7. 契约校验接入
+## 7. 契约校验与拦截接入
 
-- `conclusion_synthesizer` 在 citation 处理完成后把 `report_contract_flags`
-  写入 `quality_signals`；
-- `report_generator` 把 `report_quality_flags` 与 `report_contract_flags`
-  写入其 `quality_signals`；
-- 当前是“检测/记录”语义，不改变已有报告；是否自动重试/拒绝留给下一轮。
+- `conclusion_synthesizer` 在 citation 处理完成后写入：
+  - `report_contract_flags`
+  - `report_contract_ok`
+- `report_generator` 写入：
+  - `report_quality_flags`
+  - `report_contract_flags` / `report_contract_ok`
+  - `report_ledger_flags`
+- `batch_health.py` 接入：
+  - `report_quality:*`
+  - `report_contract:*`
+  - `report_ledger:*`
+  - 关键契约失败（空 ranked、missing rationale、malformed unresolved、decision validation error）
+    会让该单位 batch health **invalid**，不再只是 warn。
+- 来源标签增加确定性规则：
+  - 官方域下的 “X vs Y / comparison / alternatives / 对比” 页面标为
+    “厂商对比页/利益相关方”，不再标成“官方文档/官方公告”。
 
 ## 8. Phase A 完成度
 
@@ -150,8 +161,11 @@
 - [x] report contract flags + 测试
 - [x] ledger A/B 只读仿真
 - [x] ledger 方案 C 实现（去后置 relevance filter + canonical aliases）
-- [x] 输出契约 flags 接入 synthesis/report generator quality_signals
-- [x] 全量重放后复测
+- [x] 契约 flags 接入 quality_signals
+- [x] 契约 flags 接入 batch health 的 invalid 门槛
+- [x] ledger 不变量接入 batch health
+- [x] 官方来源中的厂商对比页标签修复
+- [x] 全量测试与离线重放
 
 最终审计结果（当前代码，200 snapshot）：
 
@@ -161,5 +175,18 @@
 - 空 ranked：1（F200-173，内容问题）；
 - truncated unresolved：1（F200-158，内容问题）。
 
-全量测试：**769 passed**。零付费跑例。
+全量测试：**771 passed**。零付费跑例。
+
+## 9. Phase A 边界
+
+Permanently out of scope for Phase A：
+
+- 旧 snapshot 的方括号标题截断内容：无法从已保存内容恢复，只能重跑；
+- F200-158 / F200-173：需要模型重跑或自动重试，Phase A 只负责检测/拦截；
+- D0 证据获取、D4 证据使用：Phase B/C；
+- 最终 200 正式报告不重渲染、不重新评审，保持冻结。
+
+因此 Phase A 的完成定义是：**确定性引用/契约/标签问题已修，且有回归测试和批次健康门槛**；
+不是“200 份内容已经重跑到更好”。
+
 
