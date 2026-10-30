@@ -68,7 +68,7 @@ def test_transport_construction_failure_does_not_consume_http_budget(monkeypatch
     assert budget.http_requests == 0
 
 
-def test_gzip_is_rejected_before_decompression(monkeypatch):
+def test_gzip_is_decoded_inside_the_retained_byte_cap(monkeypatch):
     import gzip
 
     compressed = gzip.compress(DOCS_HTML.encode())
@@ -80,8 +80,20 @@ def test_gzip_is_rejected_before_decompression(monkeypatch):
         budget=OfficialFetchBudget(), deadline_s=1.0,
         max_response_bytes=100_000, max_redirects=2, store_chars=1000,
     ))
+    assert result["ok"] is True
+    assert result["budget"]["bytes_read"] > 0
+
+
+def test_brotli_encoding_is_rejected_before_decoding(monkeypatch):
+    _patch_transport(monkeypatch, lambda request: httpx.Response(
+        200, headers={"content-type": "text/html", "content-encoding": "br"},
+        content=DOCS_HTML.encode()))
+    result = asyncio.run(fetch_official_page(
+        "https://docs.example.com/page", policy=_PublicPolicy(),
+        budget=OfficialFetchBudget(), deadline_s=1.0,
+        max_response_bytes=100_000, max_redirects=2, store_chars=1000,
+    ))
     assert result["ok"] is False
-    assert result["failure"].startswith("content_encoding:")
     assert result["budget"]["bytes_read"] == 0
     assert result["budget"]["bytes_retained"] == 0
 

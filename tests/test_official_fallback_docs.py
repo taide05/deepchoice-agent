@@ -432,3 +432,45 @@ def test_drone_and_tekton_have_curated_official_roots():
     from deepchoice.retrievers.official import TECH_DOCS
     assert TECH_DOCS["drone"]["url"] == "https://docs.drone.io/"
     assert TECH_DOCS["tekton"]["url"] == "https://tekton.dev/docs/"
+
+def test_github_repository_uses_raw_readme_fallback():
+    targets = _fallback_doc_targets("https://github.com/GoogleContainerTools/kaniko#readme")
+    assert targets[0].startswith("https://raw.githubusercontent.com/GoogleContainerTools/kaniko/")
+    assert targets[0].endswith("/README.md")
+    assert not any("/stable/" in target or "/latest/" in target for target in targets)
+
+
+def test_versioned_docs_root_does_not_get_nested_latest_segment():
+    targets = _fallback_doc_targets("https://www.envoyproxy.io/docs/envoy/latest/")
+    assert targets
+    assert not any("/latest/latest" in target or "/latest/stable" in target
+                   for target in targets)
+
+
+def test_problem_mappings_point_at_current_official_docs():
+    from deepchoice.retrievers.official import TECH_DOCS
+    assert TECH_DOCS["msgspec"]["url"] == "https://msgspec.dev/"
+    assert TECH_DOCS["aws cdk"]["url"].startswith("https://docs.aws.amazon.com/cdk/v2/")
+    assert TECH_DOCS["terraform"]["url"].startswith("https://developer.hashicorp.com/terraform/")
+
+def test_deep_docs_do_not_cross_top_path_segments():
+    from deepchoice.retrievers.official import _deep_doc_links
+    root = "https://docs.aws.amazon.com/cdk/v2/guide/"
+    links = [
+        "https://docs.aws.amazon.com/cdk/v2/guide/work-with.html",
+        "https://docs.aws.amazon.com/AL2/latest/relnotes/relnotes-al2.md",
+    ]
+    picked = _deep_doc_links(root, "", links, ("guide",), root, limit=2)
+    assert picked
+    assert all("/cdk/" in url for url in picked)
+    assert not any("/AL2/" in url for url in picked)
+
+def test_github_raw_readme_identity_requires_same_repo_and_candidate_name():
+    from deepchoice.retrievers.official import _mapping_scope_identity
+    root = "https://github.com/GoogleContainerTools/kaniko#readme"
+    assert _mapping_scope_identity(
+        "Kaniko", "https://raw.githubusercontent.com/GoogleContainerTools/kaniko/main/README.md",
+        "Kaniko README", "Kaniko is a tool to build container images", root)
+    assert not _mapping_scope_identity(
+        "Kaniko", "https://raw.githubusercontent.com/other/repo/main/README.md",
+        "README", "Kaniko is a tool", root)

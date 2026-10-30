@@ -363,7 +363,15 @@
     剩余 F200-173 空 ranked、F200-158 截断为内容问题，Phase A 只检测不补内容；
   - 最终 200 正式报告不重渲染/不重新评审，保持冻结；
   - 全量测试 **771 passed**；详情：`PHASE_A_ROOT_CAUSES_20261030.md`。
-- 当前没有在跑的付费任务；最终 200 已完成，Phase A 已完成，Phase B 尚未开始。
+- 当前没有在跑的付费任务；最终 200 已完成，Phase A 已完成。
+- **Phase B 首轮（2026-10-30，零付费）**：
+  - 400/400 候选可解析映射；official 正文覆盖 0 页 9 case、1 页 16 case；
+  - 主要失败原因：navigation/JS、404、403、gzip、identity、ConnectError；
+  - 已修映射：msgspec→msgspec.dev、AWS CDK→v2 guide、Terraform→developer docs、
+    Hapi→hapi.dev；GitHub raw README fallback；versioned docs 不再追加 latest；
+    deep-doc top-path 边界；gzip 有界解码；
+  - 全量测试 **777 passed**；详情 `PHASE_B_OFFICIAL_COVERAGE_20261030.md`；
+  - 下一步 G1（20+6 开发集，约 1.6M tokens，上限 2.0M）需用户批准；不跑 200。
 - **验证门槛（2026-10-30）**：见 `VALIDATION_GATES_20261030.md`；
   G0 离线/单元每次跑，G1 小规模行为每个 bundle 一次（≤2.0M tokens），
   G2 正式 200 仅 release candidate 一次（≤15.0M tokens）；**不逐 commit 跑 200**。

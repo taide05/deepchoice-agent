@@ -168,12 +168,16 @@ async def _fetch_inner(url: str, *, policy: SafeUrlPolicy, request_budget,
                     for item in header.split(",")
                     if item.strip()
                 }
-                # The request asks for identity. Reject anything else before
-                # aiter_bytes; HTTPX may decode a full compressed body first.
-                if any(encoding != "identity" for encoding in encodings):
+                # The request asks for identity. HTTPX can still transparently
+                # decode gzip; other encodings are rejected before aiter_bytes
+                # because the decoder is not bounded here. The decoded stream is
+                # read through the same retained-byte cap below.
+                unsupported = {encoding for encoding in encodings
+                               if encoding not in {"identity", "gzip"}}
+                if unsupported:
                     request_budget.record_failure("content_encoding")
                     return {"ok": False, "url": current,
-                            "failure": f"content_encoding:{','.join(sorted(encodings))}"}
+                            "failure": f"content_encoding:{','.join(sorted(unsupported))}"}
                 declared = response.headers.get("content-length")
                 declared_bytes = None
                 declared_exceeded = False

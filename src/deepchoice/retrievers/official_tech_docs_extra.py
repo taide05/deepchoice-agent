@@ -12,7 +12,7 @@ and spaces removed.
 
 _RAW = {
     "ASP.NET Core": "https://learn.microsoft.com/en-us/aspnet/core/",
-    "AWS CDK": "https://docs.aws.amazon.com/cdk/",
+    "AWS CDK": "https://docs.aws.amazon.com/cdk/v2/guide/",
     "ActiveMQ": "https://activemq.apache.org/components/classic/documentation",
     "Actix Web": "https://actix.rs/docs/",
     "Airbyte": "https://docs.airbyte.com/",
@@ -43,7 +43,7 @@ _RAW = {
     "GitLab CI": "https://docs.gitlab.com/ee/ci/",
     "Go Fiber": "https://docs.gofiber.io/",
     "HAProxy": "https://docs.haproxy.org/",
-    "Hapi": "https://hapi.dev/tutorials/",
+    "Hapi": "https://hapi.dev/",
     "Haystack": "https://docs.haystack.deepset.ai/docs/intro",
     "InfluxDB": "https://docs.influxdata.com/influxdb/",
     "Jaeger": "https://www.jaegertracing.io/docs/",
@@ -76,6 +76,7 @@ _RAW = {
     "Spring Boot": "https://docs.spring.io/spring-boot/index.html",
     "SvelteKit": "https://svelte.dev/docs/kit",
     "Tekton": "https://tekton.dev/docs/",
+    "Terraform": "https://developer.hashicorp.com/terraform/docs",
     "Text Generation Inference": "https://huggingface.co/docs/text-generation-inference/index",
     "TimescaleDB": "https://docs.timescale.com/",
     "Vault": "https://developer.hashicorp.com/vault/docs",
@@ -86,7 +87,7 @@ _RAW = {
     "containerd": "https://containerd.io/docs/",
     "dbt": "https://docs.getdbt.com/",
     "etcd": "https://etcd.io/docs/",
-    "msgspec": "https://jcristharif.com/msgspec/",
+    "msgspec": "https://msgspec.dev/",
     "pgvector": "https://github.com/pgvector/pgvector",
     "uv": "https://docs.astral.sh/uv/",
 }

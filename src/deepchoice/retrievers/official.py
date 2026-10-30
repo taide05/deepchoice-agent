@@ -155,6 +155,21 @@ def _links_in_text(text: str) -> list[str]:
         r"\[[^\]]*\]\((https?://[^)\s]+)\)", str(text or ""))]
 
 
+def _shares_top_path(base_url: str, target_url: str) -> bool:
+    """Whether a deep link stays in the base documentation's top path segment.
+
+    A host such as docs.aws.amazon.com hosts hundreds of products; body identity
+    is not enough because an unrelated release-notes page can mention a package
+    name. The mapping root's first path segment (e.g. /cdk/) is the bounded
+    scope; a link under /AL2/ is a different product and must not be admitted.
+    """
+    base_parts = [p for p in urlparse(str(base_url or "")).path.split("/") if p]
+    target_parts = [p for p in urlparse(str(target_url or "")).path.split("/") if p]
+    if not base_parts:
+        return True
+    return bool(target_parts) and target_parts[0] == base_parts[0]
+
+
 def _deep_doc_links(base_url: str, body: str, links: list[str],
                     focus_terms: tuple[str, ...], mapping_root: str | None,
                     *, limit: int = 2) -> list[str]:
@@ -172,6 +187,8 @@ def _deep_doc_links(base_url: str, body: str, links: list[str],
         if parsed.netloc.lower() != base.netloc.lower():
             continue
         if not _url_in_mapping_scope(target, mapping_root or base_url):
+            continue
+        if not _shares_top_path(mapping_root or base_url, target):
             continue
         key = target.rstrip("/")
         if key in seen or key == str(base_url).rstrip("/"):
@@ -302,6 +319,31 @@ def _origin_url(url: str) -> str:
     return f"{parsed.scheme or 'https'}://{parsed.netloc}"
 
 
+def _github_raw_scope_identity(owner: str, url: str, title: str, body: str,
+                               mapping_root: str | None) -> bool:
+    """A raw README is first-party material for the curated GitHub repo root.
+
+    The raw host differs from github.com, so the normal host/path scope check
+    would reject it. The repository owner/repo pair must match the curated root
+    exactly, and the fetched README must still name the candidate.
+    """
+    root = urlparse(str(mapping_root or ""))
+    target = urlparse(str(url or ""))
+    if root.netloc.lower() not in {"github.com", "www.github.com"}:
+        return False
+    if target.netloc.lower() != "raw.githubusercontent.com":
+        return False
+    root_parts = [part for part in root.path.strip("/").split("/") if part]
+    target_parts = [part for part in target.path.strip("/").split("/") if part]
+    if len(root_parts) < 2 or len(target_parts) < 2:
+        return False
+    if target_parts[0].lower() != root_parts[0].lower():
+        return False
+    if target_parts[1].lower() != root_parts[1].lower():
+        return False
+    return source_text_discusses_candidate(owner, title, body)
+
+
 def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
                             mapping_root: str | None,
                             allow_path_alias: bool = False) -> bool:
@@ -318,6 +360,8 @@ def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
     """
     if not mapping_root:
         return False
+    if _github_raw_scope_identity(owner, url, title, body, mapping_root):
+        return True
     if not _url_in_mapping_scope(url, mapping_root):
         return False
     if source_text_discusses_candidate(owner, title, body):
@@ -330,6 +374,26 @@ def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
     return False
 
 
+def _github_readme_targets(url: str) -> list[str]:
+    """Raw README candidates for a GitHub repository URL.
+
+    GitHub repository pages are often JS-heavy or rate-limited HTML; the raw
+    README is the same first-party material in a fetchable text form. The caller
+    still runs the normal identity check on the fetched body.
+    """
+    parsed = urlparse(str(url or ""))
+    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+        return []
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) < 2:
+        return []
+    owner, repo = parts[0], parts[1]
+    return [
+        f"https://raw.githubusercontent.com/{owner}/{repo}/main/README.md",
+        f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md",
+    ]
+
+
 def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     """Same-host static fallbacks for a curated root that only served a JS shell.
 
@@ -340,6 +404,9 @@ def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     the declared candidate (see the curated-mapping-scope identity check).
     """
 
+    github = _github_readme_targets(base_url)
+    if github:
+        return github[:limit]
     parsed = urlparse(str(base_url or ""))
     scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
     host = parsed.netloc.lower()
@@ -347,13 +414,17 @@ def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
         return []
     path = parsed.path.rstrip("/")
     root = f"{scheme}://{host}{path}" if path else f"{scheme}://{host}"
-    targets = [f"{root}/stable/", f"{root}/latest/",
-               f"{scheme}://{host}/llms.txt",
-               f"{scheme}://{host}/llms-full.txt"]
-    targets += [f"{root}/docs/", f"{root}/en/latest/"]
-    if path:
-        targets.append(f"{root}/llms.txt")
-    return targets[:limit]
+    targets = []
+    lowered = path.lower()
+    # A curate URL that already points at a versioned documentation page should
+    # not have another stable/latest segment appended: that produces 404s such
+    # as /docs/envoy/latest/latest/ or /latest/stable/.
+    if not any(segment in lowered for segment in ("/latest", "/stable", "/current")):
+        targets += [f"{root}/stable/", f"{root}/latest/"]
+    targets += [f"{scheme}://{host}/llms.txt", f"{scheme}://{host}/llms-full.txt"]
+    if not path:
+        targets += [f"{root}/docs/", f"{root}/en/latest/"]
+    return list(dict.fromkeys(targets))[:limit]
 
 
 def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> list[str]:
