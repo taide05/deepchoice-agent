@@ -364,6 +364,9 @@
   - 最终 200 正式报告不重渲染/不重新评审，保持冻结；
   - 全量测试 **771 passed**；详情：`PHASE_A_ROOT_CAUSES_20261030.md`。
 - 当前没有在跑的付费任务；最终 200 已完成，Phase A 已完成，Phase B 尚未开始。
+- **验证门槛（2026-10-30）**：见 `VALIDATION_GATES_20261030.md`；
+  G0 离线/单元每次跑，G1 小规模行为每个 bundle 一次（≤2.0M tokens），
+  G2 正式 200 仅 release candidate 一次（≤15.0M tokens）；**不逐 commit 跑 200**。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
   `D1_D5_AUDIT_PROTOCOL.md`、`CURRENT_HEAD_6_AUDIT_20261028.md`、`CONTENT_FIX_PLAN_20261027.md`、
