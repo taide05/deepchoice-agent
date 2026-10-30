@@ -350,15 +350,17 @@
   - 内部结果：`FINAL_200_RESULT_20261029.md`；运行/review 在
     `.scratch/cases/runs/final-200-20261029/`；
   - 未对外发布；对外表述需用户确认。全量测试 **765 passed**。
-- **Phase A（2026-10-30，零付费）已完成根因复核与不变量审计**：
+- **Phase A（2026-10-30，零付费）已完成根因复核、不变量审计与 C 方案实现**：
   - 15 个 C2 partial + 1 个 C3 partial 归入 D0 证据获取 / D1 引用账本 /
     D2 来源类型 / D3 输出契约 / D4 证据使用 / D5 评审口径；
-  - 200 snapshot 当前代码离线重放：raw marker 0；64 个 body-title-not-in-used、
-    5 个 used-not-in-body、1 个空 ranked rationale、1 个 malformed unresolved；
-  - ledger 方案 A/B 仿真：A refs 653 / B refs 920，均不可直接采用；建议方案 C
-    （citation 生成时决定入账），不渲染后猜；
-  - 已修 malformed/truncated citation marker 与 report contract flags；
-  - 详情：`PHASE_A_ROOT_CAUSES_20261030.md`；全量测试 **768 passed**。
+  - C 方案：`used_sources` 取消渲染后相关性过滤，正文可见引用必须入账；
+    同一 canonical URL 保留标题 `aliases`；synthesis/report generator 接入
+    `report_contract_flags`/`report_quality_flags`；
+  - 200 snapshot 当前代码离线重放：ledger 不一致 64→**6**（均为旧 snapshot
+    方括号标题截断）、used-not-in-body 5→**0**、raw marker 0；
+    剩余 F200-173 空 ranked、F200-158 截断为内容问题，需重跑/下一阶段；
+  - malformed/truncated citation marker 已修复；全量测试 **769 passed**；
+  - 详情：`PHASE_A_ROOT_CAUSES_20261030.md`；零付费跑例。
 - 当前没有在跑的付费任务；最终 200 已完成，Phase A 已完成，Phase B 尚未开始。
 - 计划/根因/回归：`.scratch/cases/runs/ab-analysis-20261027/` 下
   `DECISION_USEFULNESS_RUBRIC.md`、`DECISION_USEFULNESS_AUDIT.md`、`REPORT_PROVENANCE.md`、
