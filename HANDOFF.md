@@ -484,3 +484,10 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - **引用未解析根因修复（`6648f29`）**：两个根因——正文 `v2[[8]]` 被误判为数组索引、`unresolved_questions` 自由文本未参与 citation pass；修复后旧报告重放与独立新报告均为 raw=0/引用未解析=0；新增规则 22 禁止 hold 排名被读成产品优劣；全量测试 **756 passed**。
   - **独立 6 例验证（13:45–13:58，371,661 tokens）**：样本不在 20 例开发集内；community 4/6 成功、2/6 外部失败；4 例有 pack 均被引用，引用均标社区/非官方，raw/gap=0；未发现需要扩大 community 引用量，主要缺口仍是通道可靠性。
 
+
+- **Phase B G1（2026-10-30，26 例，1.57M tokens）通过**：
+  - 官方正文覆盖 86→96 页（+10），msgspec/Terraform 映射生效；
+  - usable 26/26、DG 25/26、C4=0；
+  - F200-075 原始 contract invalid（截断）已由契约门捕获并替换；
+  - 全量测试 777 passed；详情 `PHASE_B_G1_RESULT_20261030.md`；
+  - 下一步 Phase C（claim support），仍先零付费/G1，不跑 200。
