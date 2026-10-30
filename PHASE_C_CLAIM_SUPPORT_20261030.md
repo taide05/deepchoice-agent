@@ -74,7 +74,7 @@
   - 同 URL 只算一个决定性来源；
   - conditional no primary 仅诊断。
 - self-review trigger 兼容旧的低风险 skip 测试。
-- 全量测试结果见本轮执行记录。
+- 全量测试 **781 passed**。
 
 ## 4. 未做/边界
 
