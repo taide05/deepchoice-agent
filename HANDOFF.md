@@ -510,3 +510,9 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 已零付费补 `recommended_winner_owner_dominates` 与 self-review 约束；
   - Phase C 尚未闭环；下一步建议先 2 例定向验证再 26 例 G1；不跑 200。
   - 详情 `PHASE_C_G1_RESULT_20261030.md`。
+
+- **Phase C 定向 2 例（2026-10-30，121,141 tokens）**：
+  - F200-117 由 recommended→conditional，F200-076 为 insufficient hold；
+  - 2/2 usable/DG、C4=0；但 data/attribution caveat 已记录；
+  - Phase C 累计验证 2.95M tokens（含 402 失败运行）；
+  - 仍需 26 例 G1 复测才能确认 Phase C 闭环；不跑 200。
