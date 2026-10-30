@@ -66,3 +66,26 @@ def test_conditional_without_primary_is_diagnostic_only():
         },
     }
     assert "conditional_no_primary" in claim_support_flags(rec)
+
+def test_recommended_winner_owned_docs_dominate_is_flagged():
+    rec = {
+        "decision_status": "recommended",
+        "winner": "Redpanda",
+        "citation_sources": {
+            "recommendation": [
+                {"source_id": "https://docs.redpanda.com/a", "url": "https://docs.redpanda.com/a",
+                 "title": "Redpanda docs", "source_type": "official_doc",
+                 "source_owner": "Redpanda"},
+                {"source_id": "https://docs.redpanda.com/b", "url": "https://docs.redpanda.com/b",
+                 "title": "Redpanda deploy", "source_type": "official_doc",
+                 "source_owner": "Redpanda"},
+            ],
+            "winner_rationale": [
+                {"source_id": "https://docs.redpanda.com/a", "url": "https://docs.redpanda.com/a",
+                 "title": "Redpanda docs", "source_type": "official_doc",
+                 "source_owner": "Redpanda"},
+            ],
+        },
+    }
+    flags = claim_support_flags(rec)
+    assert "recommended_winner_owner_dominates" in flags

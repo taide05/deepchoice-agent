@@ -68,11 +68,21 @@ def decisive_claim_support(rec: dict) -> dict:
                 "title": str(binding.get("title") or ""),
                 "url": url,
                 "source_type": str(binding.get("source_type") or ""),
+                "source_owner": str(binding.get("source_owner") or ""),
                 "class": _source_class(binding),
             })
     counts = {"primary": 0, "independent": 0, "secondary": 0, "community": 0}
     for source in sources:
         counts[source["class"]] += 1
+    winner = str(rec.get("winner") or "").strip()
+    winner_owned = sum(
+        1 for source in sources
+        if winner and source.get("source_owner")
+        and source["source_owner"].casefold() == winner.casefold())
+    primary_owners = {
+        source.get("source_owner", "").casefold()
+        for source in sources if source["class"] == "primary" and source.get("source_owner")
+    }
     status = str(rec.get("decision_status") or "")
     flags: list[str] = []
     if status == "recommended":
@@ -86,6 +96,11 @@ def decisive_claim_support(rec: dict) -> dict:
             flags.append("recommended_community_only")
         if not (rec.get("citation_sources") or {}).get("winner_rationale"):
             flags.append("winner_rationale_uncited")
+        if winner_owned >= 2 and winner_owned > (counts["primary"] - winner_owned):
+            # The winner's own docs dominate the decisive fields while the
+            # non-winner primary support is thinner. This is a review signal,
+            # not an automatic downgrade.
+            flags.append("recommended_winner_owner_dominates")
     elif status == "conditional":
         if not sources:
             flags.append("conditional_uncited")
@@ -93,7 +108,10 @@ def decisive_claim_support(rec: dict) -> dict:
             flags.append("conditional_no_primary")
     return {
         "status": status,
+        "winner": winner,
         "counts": counts,
+        "winner_owned": winner_owned,
+        "primary_owners": sorted(owner for owner in primary_owners if owner),
         "distinct_sources": len(sources),
         "flags": flags,
         "sources": sources,

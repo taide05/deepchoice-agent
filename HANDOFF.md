@@ -499,3 +499,14 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
     `conditional_no_primary` 仅诊断；
   - 全量测试 **781 passed**；详情 `PHASE_C_CLAIM_SUPPORT_20261030.md`；
   - Phase C G1（26 例，约 1.6M tokens，上限 2.0M）待批准，不跑 200。
+
+- **Phase C G1（2026-10-30）**：
+  - 第一次 26 例运行遇 402 Insufficient Balance，9 invalid、1.22M tokens 作废；
+  - 余额恢复后完整重试：26/26 complete、1.60M tokens、health 0 invalid、
+    official 正文页 100；
+  - usable 26/26、DG **24/26**、C4=0；比 Phase B G1 的 25/26 DG 回退 1；
+  - F200-117 recommended 仍依赖 winner 自家文档 + 旧二手，F200-076 把同一厂商
+    EN/zh 两 URL 当独立来源；
+  - 已零付费补 `recommended_winner_owner_dominates` 与 self-review 约束；
+  - Phase C 尚未闭环；下一步建议先 2 例定向验证再 26 例 G1；不跑 200。
+  - 详情 `PHASE_C_G1_RESULT_20261030.md`。
