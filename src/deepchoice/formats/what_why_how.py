@@ -95,6 +95,65 @@ def _one_line(value) -> str:
     return " ".join(str(value or "").split())
 
 
+def _summary_excerpt(value, limit: int = 260) -> str:
+    """One compact sentence-sized excerpt for the front summary."""
+    text = _one_line(value)
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    for marker in ("。", "；", ". ", "! ", "? "):
+        pos = cut.rfind(marker)
+        if pos >= limit // 2:
+            return cut[:pos + len(marker)].rstrip()
+    return cut.rstrip() + "…"
+
+
+def _decision_summary(rec: dict, lang: str) -> list[str]:
+    """A short, answer-first block before the detailed sections.
+
+    It is additive: the detailed evidence below is unchanged. The point is that a
+    reader can stop after the first block and still know the status, the default
+    branch/winner, the recommendation and the decisive gap.
+    """
+    rec = rec or {}
+    view = decision_view(rec)
+    status = view["status"]
+    winner = view["winner"]
+    if status == RECOMMENDED:
+        verdict = (f"推荐 {winner}" if lang == "zh" and winner
+                   else f"Recommended: {winner}" if winner
+                   else "Recommendation" if lang == "en" else "推荐")
+    elif status == CONDITIONAL:
+        verdict = ("条件选择——无唯一胜者" if lang == "zh"
+                   else "Conditional decision — no single winner")
+    elif status == INSUFFICIENT:
+        verdict = ("证据不足——暂缓选型" if lang == "zh"
+                   else "Insufficient evidence — hold the selection")
+    else:
+        verdict = ("决策未生成" if lang == "zh"
+                   else "Decision unavailable")
+
+    lines = [("## 决策摘要" if lang == "zh" else "## Decision Summary"), ""]
+    lines.append(f"**{verdict}**")
+    gaps = [str(q) for q in (rec.get("unresolved_questions") or []) if str(q).strip()]
+    if gaps:
+        label = "关键缺口" if lang == "zh" else "Key gap"
+        lines.append(f"- **{label}：** {_summary_excerpt(gaps[0], 180)}")
+    guard = rec.get("decision_guard_actions") or []
+    if guard:
+        label = "强度校准" if lang == "zh" else "Strength guard"
+        lines.append(
+            f"- **{label}：** " +
+            ("排序已降级为条件/待验证假设；详见正文。" if lang == "zh"
+             else "The ranking is treated as conditional/unverified; see below."))
+    confidence = rec.get("confidence")
+    if confidence:
+        label = "置信度" if lang == "zh" else "Confidence"
+        lines.append(f"- **{label}：** {confidence}")
+    lines.append("")
+    return lines
+
+
 def _has_body(src: dict) -> bool:
     from ..utils.candidate_identity import has_factual_content
 
@@ -187,6 +246,8 @@ def render(state: dict) -> str:
     data_note = derive_data_source_note(state)
     if data_note:
         lines.extend([f"> {data_note}", ""])
+
+    lines.extend(_decision_summary(rec, lang))
 
     lines.extend([T["what"][lang], ""])
 

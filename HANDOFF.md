@@ -563,3 +563,11 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
     - B 闭环；C 结构性部分关闭（12 例 DG 9/12，3 个诚实证据缺口保留）；
   - 后续 backlog：报告长度/摘要+附录、官方覆盖残余、C2 证据缺口、逐句 claim；
   - 无付费任务；最近全量测试 789 passed。
+
+- **零付费报告形态/材料整理（2026-10-31）**：
+  - what_why_how 新增 Decision Summary（状态/关键缺口/强度校准/置信度），
+    不重复 recommendation；200 snapshot 平均字符 +302（约 +1.4%）；
+  - 离线审计无新增 raw/ledger 异常；全量测试 **791 passed**；
+  - 材料索引 `DELIVERY_MATERIALS_20261031.md`；
+  - 新正式 200 评估 `FINAL_200_DECISION_20261031.md`：可开启但需代码冻结/
+    15M 预算/用户窗口，旧 200 不能代表当前代码。

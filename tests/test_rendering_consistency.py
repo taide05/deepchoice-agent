@@ -150,3 +150,27 @@ def test_vendor_comparison_page_is_not_labelled_neutral_official_docs():
     }, "zh")
     assert "厂商对比页" in note and "利益相关方" in note
     assert "官方文档" not in note
+
+def test_summary_block_appears_before_what_and_carries_verdict():
+    state = _render_state(2)
+    state["task"]["query"] = "Alpha vs Beta 技术选型"
+    state["final_recommendation"]["decision_status"] = "conditional"
+    state["final_recommendation"]["recommendation"] = "按条件分支选择，不选唯一赢家。"
+    state["final_recommendation"]["unresolved_questions"] = ["缺少迁移成本数据。"]
+    report = render(state)
+    summary_at = report.index("## 决策摘要")
+    what_at = report.index("## What:")
+    assert summary_at < what_at
+    summary = report[summary_at:what_at]
+    assert "条件选择" in summary
+    assert "缺少迁移成本" in summary
+
+
+def test_summary_reports_decision_guard_actions():
+    state = _render_state(2)
+    state["task"]["query"] = "Alpha vs Beta 技术选型"
+    state["final_recommendation"]["decision_status"] = "conditional"
+    state["final_recommendation"]["decision_guard_actions"] = [
+        "conditional_top_option_strength_caveat"]
+    report = render(state)
+    assert "强度校准" in report
