@@ -533,3 +533,12 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - self-review 对上述 flags 增加约束并强制 review；
   - 只读扫描 12 例旧 snapshot：F200-104、F200-158、F200-117 均命中对应 flag；
   - 全量测试 **785 passed**；下一步需 12 例分层 G1 复测（约 0.73M tokens）。
+
+- **Phase C 12 例复测（2026-10-31，828,748 tokens）**：
+  - 12/12 complete，health 修正后 0 invalid（原脚本把 claim flags 误当 invalid，已修）；
+  - usable 12/12、DG **6/12**、C4=0；
+  - claim flags 正确识别 vendor/secondary 主导，但 self-review 无改变排名/默认分支
+    的动作，导致 6 个 C2 partial 无法修正；
+  - 结论：Phase C 需结构层降级 guard（recommended→conditional/hold；
+    conditional 默认分支改为待验证假设），不能只靠 prompt；
+  - 详情 `PHASE_C_G1_12_RETEST_RESULT_20261031.md`；不跑 200。
