@@ -580,3 +580,12 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - batch-02..10 未运行；端口已释放；无后台付费任务；
   - 恢复前先诊断 GitHub outbound channel，再从 batch-01 重跑全 200；
   - 详见 `FINAL_200_PAUSE_20261031.md`。
+
+- **GitHub 通道诊断（2026-10-31）**：
+  - 失败批次仅 github 通道不可用，其他 source 正常；
+  - 当前预检通过：resolver 选 direct，GitHub rate_limit 200，
+    search_remaining=10/10；
+  - 判断为运行窗口内 GitHub-only 短时故障/限流 + resolver 缓存失败 route；
+    github_api 无 source-level retry；未配置 GITHUB_TOKEN（匿名 search 10/min）；
+  - 恢复建议：先跑 `.scratch/cases/preflight_github.py`，从 batch-01 重跑全 200；
+  - 详见 `GITHUB_CHANNEL_DIAGNOSIS_20261031.md`；最终 200 仍 0/200 有效。
