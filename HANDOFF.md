@@ -571,3 +571,12 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 材料索引 `DELIVERY_MATERIALS_20261031.md`；
   - 新正式 200 评估 `FINAL_200_DECISION_20261031.md`：可开启但需代码冻结/
     15M 预算/用户窗口，旧 200 不能代表当前代码。
+
+- **最终 200 运行暂停（2026-10-31 15:44）**：
+  - 新 final run `final-200-20261031` 在 batch-01 后停止；
+  - batch-01 20/20 中 **20 个 invalid**，统一原因
+    `source_failed:github:no outbound channel available`；
+  - 消耗 1,275,952 tokens，**0/200 有效**，本批不可用；
+  - batch-02..10 未运行；端口已释放；无后台付费任务；
+  - 恢复前先诊断 GitHub outbound channel，再从 batch-01 重跑全 200；
+  - 详见 `FINAL_200_PAUSE_20261031.md`。
