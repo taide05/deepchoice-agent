@@ -549,3 +549,10 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 已接入 synthesis 与 self-review 后处理，幂等；
   - 12 例 dry-run：F200-183 rec→cond，F200-021/117/158/198 加 conditional caveat；
   - 全量测试状态见提交；下一步 12 例复测（约 0.83M tokens），不跑 200。
+
+- **Phase C 结构 guard 验证（2026-10-31，784,648 tokens）**：
+  - 12/12 complete、health 0 invalid、official 正文 47 页；
+  - usable 12/12、DG **9/12**（前一轮 6/12）、C4=0；
+  - F200-183 降为 conditional；F200-104/117 等进入 DG；
+  - 剩余 F200-158/172/183 为诚实证据缺口 C2 partial，不是 guard 失效；
+  - 详情 `PHASE_C_GUARD_VALIDATION_20261031.md`；Phase C 是否关闭待用户决定。
