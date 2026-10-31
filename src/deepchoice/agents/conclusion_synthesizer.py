@@ -612,6 +612,7 @@ def source_binding(entry: dict) -> dict:
         "source_owner": entry.get("source_owner", ""),
         "source_kind": entry.get("source_kind", ""),
         "body_identity_verified": entry.get("body_identity_verified"),
+        "has_body": entry.get("has_body"),
     }
 
 

@@ -93,3 +93,21 @@ claim-support 当前只对 `recommended` 检查 winner-owned 来源占比：
 4. 不跑 200。
 
 当前没有付费任务在跑。
+
+## 7. 后续零付费实现（已完成）
+
+- claim-support 增加：
+  - conditional top-ranked option 的 `top_option_owner_dominates`；
+  - `conditional_top_option_secondary_dominant`；
+  - official binding 的 `has_body`（导航页不算 primary）；
+- self-review 增加对应约束，且这些 flags 会强制 review；
+- 只读扫描 12 例旧 snapshot：
+  - F200-104 命中 `conditional_top_option_owner_dominates`；
+  - F200-158 命中 `conditional_top_option_secondary_dominant`；
+  - F200-117 命中 owner-dominates（已为 conditional）；
+- 全量测试状态见提交记录。
+
+## 8. 下一步
+
+需要对同一 12 例做第二次分层 G1（约 0.73M tokens）确认这些 flag 是否真正让
+self-review 改写默认分支；通过后再判断 Phase C 是否闭环。不跑 200。

@@ -89,3 +89,63 @@ def test_recommended_winner_owned_docs_dominate_is_flagged():
     }
     flags = claim_support_flags(rec)
     assert "recommended_winner_owner_dominates" in flags
+
+def test_conditional_top_option_owner_dominance_is_flagged():
+    rec = {
+        "decision_status": "conditional",
+        "ranked_options": [{"name": "Buildkite", "rank": 1},
+                           {"name": "CircleCI", "rank": 2}],
+        "citation_sources": {
+            "recommendation": [
+                {"source_id": "https://buildkite.com/a", "url": "https://buildkite.com/a",
+                 "title": "Buildkite comparison", "source_type": "official_doc",
+                 "source_owner": "Buildkite", "has_body": True},
+                {"source_id": "https://buildkite.com/b", "url": "https://buildkite.com/b",
+                 "title": "Buildkite docs", "source_type": "official_doc",
+                 "source_owner": "Buildkite", "has_body": True},
+            ],
+            "option=Buildkite/rationale": [
+                {"source_id": "https://buildkite.com/a", "url": "https://buildkite.com/a",
+                 "title": "Buildkite comparison", "source_type": "official_doc",
+                 "source_owner": "Buildkite", "has_body": True},
+            ],
+        },
+    }
+    flags = claim_support_flags(rec)
+    assert "conditional_top_option_owner_dominates" in flags
+
+
+def test_navigation_official_page_is_not_primary_support():
+    rec = {
+        "decision_status": "recommended",
+        "winner": "A",
+        "citation_sources": {
+            "recommendation": [{
+                "source_id": "https://docs.example.com/nav",
+                "url": "https://docs.example.com/nav",
+                "title": "Nav", "source_type": "official_doc", "has_body": False,
+            }],
+            "winner_rationale": [{
+                "source_id": "https://docs.example.com/nav",
+                "url": "https://docs.example.com/nav",
+                "title": "Nav", "source_type": "official_doc", "has_body": False,
+            }],
+        },
+    }
+    result = decisive_claim_support(rec)
+    assert result["counts"]["navigation"] == 1
+    assert "recommended_no_primary" in result["flags"]
+
+def test_conditional_top_option_secondary_dominance_is_flagged():
+    rec = {
+        "decision_status": "conditional",
+        "ranked_options": [{"name": "A", "rank": 1}, {"name": "B", "rank": 2}],
+        "citation_sources": {
+            "recommendation": [
+                {"source_id": f"https://blog{i}.example/x", "url": f"https://blog{i}.example/x",
+                 "title": f"Blog {i}", "source_type": "tech_blog"}
+                for i in range(3)
+            ],
+        },
+    }
+    assert "conditional_top_option_secondary_dominant" in claim_support_flags(rec)

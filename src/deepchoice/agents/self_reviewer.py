@@ -729,6 +729,8 @@ class SelfReviewerAgent:
         critical_support_flags = [
             flag for flag in claim_support["flags"]
             if flag.startswith("recommended_")
+            or flag in {"conditional_top_option_owner_dominates",
+                        "conditional_top_option_secondary_dominant"}
         ]
         if not should_review and critical_support_flags:
             # A deterministic *recommended* claim-support flag is a concrete
@@ -802,6 +804,15 @@ source actually supports the comparative ranking. If not, the correct outcome is
 a conditional/PoC recommendation or an evidence-insufficient hold — not a
 recommended winner based only on the winner's own docs plus secondary/community
 material.
+
+If status is `conditional` and the flags include
+`conditional_top_option_owner_dominates`, apply the same check to the top-ranked
+default option: if its decisive comparison rests only on its own first-party
+material and secondary/community material, the default branch must be presented
+as a hypothesis/PoC condition, not as a supported ordering.
+If the flags include `conditional_top_option_secondary_dominant`, check whether
+the top option's comparison is supported only by secondary/community material;
+if so, downgrade it to a PoC hypothesis or remove the ordering claim.
 
 ## Source Register (numbered; same numbering as synthesis)
 {source_register_text}
