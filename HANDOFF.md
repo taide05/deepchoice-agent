@@ -589,3 +589,12 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
     github_api 无 source-level retry；未配置 GITHUB_TOKEN（匿名 search 10/min）；
   - 恢复建议：先跑 `.scratch/cases/preflight_github.py`，从 batch-01 重跑全 200；
   - 详见 `GITHUB_CHANNEL_DIAGNOSIS_20261031.md`；最终 200 仍 0/200 有效。
+
+- **GitHub 通道防护（2026-10-31，代码已解冻后重新验证）**：
+  - `github_api.py` 增加 source-level retry（invalidate + 2s + 再解析一次）；
+  - `batch_health.py` 将 github 归为 optional（has_body=False 导航/元数据），
+    失败由 hard invalid 改为 warn；本次失败 batch 重审为 0 invalid；
+  - 新增 `.scratch/cases/run_final_200_guard_preflight.py`：
+    GitHub preflight → 非最终 canary → 才启动 10 批 200；
+  - 全量测试 **793 passed**；
+  - 最终 200 仍 0/200 有效；恢复需重新冻结当前 HEAD 后用 guard 启动。
