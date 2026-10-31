@@ -137,6 +137,31 @@ def test_failed_review_does_not_apply_withdrawal(monkeypatch):
         "ranked_options": [{"name": "Alpha", "rank": 1},
                            {"name": "Beta", "rank": 2}],
         "unresolved_questions": [], "confidence": "medium",
+        "citation_sources": {
+            "recommendation": [{
+                "source_id": "https://alpha.example/docs",
+                "url": "https://alpha.example/docs",
+                "title": "Alpha docs",
+                "source_type": "official_doc",
+                "source_owner": "Alpha",
+                "has_body": True,
+            }, {
+                "source_id": "https://beta.example/docs",
+                "url": "https://beta.example/docs",
+                "title": "Beta docs",
+                "source_type": "official_doc",
+                "source_owner": "Beta",
+                "has_body": True,
+            }],
+            "winner_rationale": [{
+                "source_id": "https://alpha.example/docs",
+                "url": "https://alpha.example/docs",
+                "title": "Alpha docs",
+                "source_type": "official_doc",
+                "source_owner": "Alpha",
+                "has_body": True,
+            }],
+        },
     }
     state = _state(rec)
 

@@ -542,3 +542,10 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 结论：Phase C 需结构层降级 guard（recommended→conditional/hold；
     conditional 默认分支改为待验证假设），不能只靠 prompt；
   - 详情 `PHASE_C_G1_12_RETEST_RESULT_20261031.md`；不跑 200。
+
+- **Phase C 结构 guard（2026-10-31，零付费）**：
+  - 新增 `utils/decision_guard.py`：recommended+claim flag 降级为 conditional/hold；
+    conditional top-option flag 添加“待验证假设”强度校准；
+  - 已接入 synthesis 与 self-review 后处理，幂等；
+  - 12 例 dry-run：F200-183 rec→cond，F200-021/117/158/198 加 conditional caveat；
+  - 全量测试状态见提交；下一步 12 例复测（约 0.83M tokens），不跑 200。
