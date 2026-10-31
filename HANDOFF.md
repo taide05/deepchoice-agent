@@ -524,3 +524,12 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
     整体 DG 相比 26 例 retry 子集无净提升；
   - Phase C 未闭环；下一步扩展 claim-support 到 conditional top option；
   - 详情 `PHASE_C_G1_12_RESULT_20261030.md`；不跑 200。
+
+- **Phase C conditional claim-support 扩展（2026-10-30，零付费）**：
+  - 增加 conditional top-ranked option 审计：
+    `conditional_top_option_owner_dominates` /
+    `conditional_top_option_secondary_dominant`；
+  - official binding 增加 `has_body`，导航页不再算 primary；
+  - self-review 对上述 flags 增加约束并强制 review；
+  - 只读扫描 12 例旧 snapshot：F200-104、F200-158、F200-117 均命中对应 flag；
+  - 全量测试 **785 passed**；下一步需 12 例分层 G1 复测（约 0.73M tokens）。
