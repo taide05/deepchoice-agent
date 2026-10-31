@@ -556,3 +556,10 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - F200-183 降为 conditional；F200-104/117 等进入 DG；
   - 剩余 F200-158/172/183 为诚实证据缺口 C2 partial，不是 guard 失效；
   - 详情 `PHASE_C_GUARD_VALIDATION_20261031.md`；Phase C 是否关闭待用户决定。
+
+- **阶段收口（2026-10-31）**：
+  - 最终 200 冻结：usable 200/200、DG 185/200、C4=0，12,646,242 tokens；
+  - Phase A/B/C 按 `PROJECT_CLOSURE_20261031.md` 关闭：
+    - B 闭环；C 结构性部分关闭（12 例 DG 9/12，3 个诚实证据缺口保留）；
+  - 后续 backlog：报告长度/摘要+附录、官方覆盖残余、C2 证据缺口、逐句 claim；
+  - 无付费任务；最近全量测试 789 passed。
