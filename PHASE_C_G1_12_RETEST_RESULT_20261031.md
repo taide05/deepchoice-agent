@@ -71,3 +71,36 @@ Phase C 仍未闭环，且这次复测说明继续调 self-review prompt 本身�
 实现后再做 12 例复测；不跑 200。
 
 当前没有付费任务在跑。
+
+## 6. 后续零付费实现：结构性 decision guard
+
+新增 `utils/decision_guard.py`，并在 synthesis 与 self-review 后执行：
+
+- `recommended` + `recommended_*` claim flag：
+  - 有 ≥2 ranked options → 降级为 `conditional`，清空 winner；
+  - 不足 2 个选项 → 降级为 `insufficient_evidence`；
+  - recommendation 添加“证据强度校准”说明；
+- `conditional` + top-option owner/secondary flag：
+  - 保留分支；
+  - recommendation 添加“默认/排序靠前分支仅为待验证假设”的强度校准说明；
+- 幂等，不重复添加标记。
+
+对本次 12 例 snapshot 做只读 dry-run：
+
+| case | 原状态 | guard 动作 |
+|---|---|---|
+| F200-183 | recommended | recommended → conditional |
+| F200-021 | conditional | top-option strength caveat |
+| F200-117 | conditional | top-option strength caveat |
+| F200-158 | conditional | top-option strength caveat |
+| F200-198 | conditional | top-option strength caveat |
+
+其余 7 例不变。新增测试覆盖 guard 幂等/降级/条件说明。
+
+## 7. 下一步
+
+需要对同一 12 例再做一次复测（约 0.83M tokens），确认 guard 后：
+- F200-183 不再是 recommended；
+- 4 个 conditional 的默认分支表述被降级；
+- DG/C2 是否改善，是否引入过度拒绝/C4。
+不跑 200。

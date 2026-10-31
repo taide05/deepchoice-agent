@@ -1263,6 +1263,10 @@ class ConclusionSynthesizerAgent:
         # citation is recorded, and an unresolvable citation stays visible as a
         # gap instead of being deleted.
         apply_citation_rules(result, evidence_chains, cite_map)
+        from ..utils.decision_guard import apply_claim_support_guard
+        result, guard_actions = apply_claim_support_guard(
+            result, lang=str(task.get("language") or ""))
+        quality_signals[0]["decision_guard_actions"] = guard_actions
         from ..formats.report_quality import report_contract_flags
         contract_flags = report_contract_flags(result)
         quality_signals[0]["report_contract_flags"] = contract_flags

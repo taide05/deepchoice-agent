@@ -925,6 +925,13 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
                 )
             recommendation["confidence_rationale"] = prior_rationale + note
 
+        # A claim-support flag is a structural problem: the reviewer may have
+        # corrected wording, but a ranking whose decisive support is winner-owned
+        # or secondary-only must be reduced in strength before it is rendered.
+        from ..utils.decision_guard import apply_claim_support_guard
+        recommendation, guard_actions = apply_claim_support_guard(
+            recommendation, lang=str((research_state.get("task") or {}).get("language") or ""))
+
         # The report body is re-rendered from the **complete** reviewed state, so
         # the saved report.md, the snapshot's `report`, the report endpoint, the
         # reading view and every export all show the same post-review result.
@@ -964,6 +971,7 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
                 # Counts and fixed categories only; never model prose.
                 "corrections_applied": len(applied),
                 "corrections_rejected": len(rejected),
+                "decision_guard_actions": guard_actions,
                 "corrected_fields": [f"{c['option']}/{c['field']}" for c in applied],
                 "report_rerendered": True,
                 "evidence_input_budget_chars": review_budget or EVIDENCE_INPUT_BUDGET_CHARS,
