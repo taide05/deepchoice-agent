@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import httpx
@@ -5,6 +6,30 @@ import httpx
 from .. import outbound as _outbound
 from . import github_rate
 from .base import BaseRetriever
+
+
+async def _make_github_client():
+    """Open the GitHub client with one source-level channel retry.
+
+    The resolver caches a failed route and backs off; a single transient probe
+    failure must not make the whole GitHub source fail. Invalidate the cached
+    route and re-resolve once after a short pause. If both attempts fail, the
+    caller still raises the original RuntimeError.
+    """
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            return await _outbound.make_client("github")
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt == 0:
+                try:
+                    await _outbound.get_resolver().invalidate("github")
+                except Exception:
+                    pass
+                await asyncio.sleep(2.0)
+    raise last_error if last_error is not None else RuntimeError(
+        "github outbound client unavailable")
 
 
 def _extract_tech_names(query: str, sub_questions: list[str]) -> list[str]:
@@ -83,7 +108,7 @@ class GitHubSearch(BaseRetriever):
         seen_full_names: set[str] = set()
         errors: list[str] = []
 
-        async with await _outbound.make_client("github") as client:
+        async with await _make_github_client() as client:
             for term in all_terms[:4]:  # max 4 searches per case (throttling centralized in github_rate)
                 try:
                     resp = await github_rate.get_with_throttle(

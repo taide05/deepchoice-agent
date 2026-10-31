@@ -77,3 +77,49 @@ search_remaining=10 search_limit=10 core_remaining=60
 - batch-01 失效，tokens 1,275,952 不计入最终结果
 - 预检通过，但正式运行尚未恢复
 - 无后台付费任务
+
+## 6. 已实现的防护（2026-10-31）
+
+### GitHub source-level retry
+
+`github_api.py` 新增 `_make_github_client()`：
+
+- `make_client("github")` 失败后：
+  1. 调用 resolver.invalidate("github")；
+  2. 等待 2s；
+  3. 再解析一次；
+- 两次都失败才抛错；
+- 新增 `tests/test_github_retry.py`。
+
+### GitHub 降为 optional source
+
+`batch_health.py`：
+
+- `OPTIONAL_SOURCES = {"community", "github"}`；
+- GitHub 失败从 hard invalid 改为 warn；
+- 原因：GitHub 结果只有 `has_body=False` 的导航/元数据，不是可引用正文；
+- 本次 batch-01 重新审计：20 个 case 从 invalid 变为 **warn，0 invalid**。
+
+### 启动前 guard
+
+新增 `.scratch/cases/run_final_200_guard_preflight.py`：
+
+1. 跑 `preflight_github.py`；失败则不启动任何 case；
+2. 跑一个非最终 200 canary（C2-valkey-vs-redis）；
+3. 检查 canary health 与 `search_results.github.status == success`；
+4. 全部通过才启动 10 批正式 200。
+
+canary 不进最终 200 分母，成本约 1 例。
+
+### 测试
+
+- 全量测试 **793 passed**；
+- 预检当前通过；
+- batch health 可选源变更后本次 batch-01 为 0 invalid。
+
+## 7. 恢复条件
+
+- 重新冻结恢复后的代码 HEAD；
+- 必须用 `run_final_200_guard_preflight.py` 启动，不直接跑旧 runner；
+- preflight 或 canary 任一失败则停止，不消耗 200 预算。
+
