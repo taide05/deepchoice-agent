@@ -66,6 +66,11 @@ def test_conditional_top_option_flag_adds_strength_caveat():
     assert adjusted["decision_status"] == "conditional"
     assert actions == ["conditional_top_option_strength_caveat"]
     assert "证据强度校准" in adjusted["recommendation"]
+    # The caveat says what the evidence problem actually is: the decisive
+    # comparison rests on own/secondary material, not "no first-party material at
+    # all" (final-200 review: the old wording overstated cases whose top option did
+    # have first-party official bodies but no independent comparison).
+    assert "独立的非厂商对照" in adjusted["recommendation"]
 
 
 def test_guard_is_idempotent():

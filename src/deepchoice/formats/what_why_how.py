@@ -144,13 +144,44 @@ def _summary_excerpt(value, limit: int = 260) -> str:
     """One compact sentence-sized excerpt for the front summary."""
     text = _one_line(value)
     if len(text) <= limit:
-        return text
+        return _trim_unbalanced_markup(text)
     cut = text[:limit]
     for marker in ("。", "；", ". ", "! ", "? "):
         pos = cut.rfind(marker)
         if pos >= limit // 2:
-            return cut[:pos + len(marker)].rstrip()
-    return cut.rstrip() + "…"
+            return _trim_unbalanced_markup(cut[:pos + len(marker)].rstrip())
+    trimmed = cut.rstrip()
+    return _trim_unbalanced_markup(trimmed) + ("" if trimmed.endswith("…") else "…")
+
+
+def _trim_unbalanced_markup(text: str) -> str:
+    """Drop a citation/link fragment left open by excerpting.
+
+    The decision-summary excerpt is a mid-sentence cut. When the cut lands inside
+    a ``[Source: ...]`` marker the summary would render a dangling fragment such
+    as ``[Source: Airflow vs.`` (the frozen-200 and G1 reviews recorded this in
+    F200-049/053/056/165). Trim the open fragment so the excerpt stays parseable.
+    """
+    def _last_unclosed(s: str, open_ch: str, close_ch: str) -> int:
+        depth = 0
+        last_open = -1
+        for index, ch in enumerate(s):
+            if ch == open_ch:
+                depth += 1
+                last_open = index
+            elif ch == close_ch and depth:
+                depth -= 1
+        return last_open if depth else -1
+
+    stripped = text.rstrip()
+    bracket = _last_unclosed(stripped, "[", "]")
+    if bracket >= 0:
+        stripped = stripped[:bracket].rstrip()
+        stripped = re.sub(r"[（(]\s*$", "", stripped).rstrip()
+        if not stripped:
+            return ""
+        return stripped + "…"
+    return stripped
 
 
 def _decision_summary(rec: dict, lang: str) -> list[str]:

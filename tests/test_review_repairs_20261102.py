@@ -237,3 +237,38 @@ class TestContentRulesAreInThePromptsOffline:
         from deepchoice.agents.self_reviewer import _REVIEW_REPAIR_NOTE
         assert "exactly six objects" in _REVIEW_REPAIR_NOTE
         assert "{error}" in _REVIEW_REPAIR_NOTE
+
+
+class TestSummaryExcerptCitationTrim:
+    """G1 review: the front-summary excerpt cut landed inside a [Source: ...]
+    marker (F200-049/053/056/165), leaving a dangling citation fragment."""
+
+    def test_dangling_source_marker_is_trimmed(self):
+        from deepchoice.formats.what_why_how import _summary_excerpt
+        value = "关键缺口：" + ("背景信息" * 60) + "[Source: Airflow vs. Dagster comparison "
+        out = _summary_excerpt(value, limit=120)
+        assert "[Source:" not in out, out
+        assert out.endswith("…"), out
+
+    def test_complete_citation_is_kept(self):
+        from deepchoice.formats.what_why_how import _summary_excerpt
+        value = "关键缺口很短。[Source: Short Source]"
+        assert _summary_excerpt(value, limit=120) == value
+
+    def test_no_markup_is_unchanged(self):
+        from deepchoice.formats.what_why_how import _summary_excerpt
+        assert _summary_excerpt("没有引用标记的短句。", limit=120) == "没有引用标记的短句。"
+
+
+class TestInternalMetadataLeakRules:
+    """G1 review: F200-151 leaked the prompt rule number ("rule 25") into the
+    report; the prompts now forbid internal metadata in user-facing text."""
+
+    def test_synthesis_prompt_forbids_internal_metadata(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        assert "NO INTERNAL METADATA IN THE REPORT" in SYNTHESIS_PROMPT
+        assert "rule 25" in SYNTHESIS_PROMPT
+
+    def test_review_prompt_flags_internal_metadata_leak(self):
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+        assert "Internal metadata leakage" in REVIEW_SYSTEM

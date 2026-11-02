@@ -75,6 +75,8 @@ Also check these decisive-error patterns when applying items 1, 2, 4 and 6:
 - Lifecycle / roadmap facts: if a source states a merger, acquisition, archive, end-of-life, maintenance mode, ownership change or roadmap change for a candidate, the ranking and recommendation must factor it into long-term maintenance/roadmap reasoning or record it as an explicit condition or gap. Quoting it only in passing while ranking that candidate as the default branch is an incomplete analysis; add the missing condition/gap through a correction where a cited source supports it.
 - Excluded material in the basis: a sentence that marks a source as irrelevant/excluded/not used must not carry a [Source: ...] citation, and a source declared excluded must not be listed among the sources the recommendation relies on. Confirm the Cited Source Register and the "excluded/unused" statements do not contradict each other.
 - Coverage asymmetry: if the top option's decisive comparison rests on its own first-party material while the other candidate is only missing retrieved body text, the ordering must be presented as an evidence-availability branch or hypothesis, not as a proven capability difference.
+- Internal metadata leakage: user-facing text must not mention rule numbers ("rule 25"), the prompt, pipeline field names, agent/model names or internal processing notes. Correct such a field to the reader-facing statement, keeping the substance.
+- Dangling citation in the decision summary: if a summary excerpt ends inside an open "[Source: ..." fragment, the served text must not carry an unparseable marker; note it for the renderer's excerpt trimming rather than inventing a source.
 
 Confidence Assessment:
 - high: 5-6/6 passed, no critical gaps

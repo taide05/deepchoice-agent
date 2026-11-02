@@ -96,12 +96,13 @@ def apply_claim_support_guard(rec: dict, *, lang: str = "") -> tuple[dict, list[
     ]
     if status == "conditional" and conditional_flags:
         note = (
-            "（证据强度校准：默认/排序靠前分支缺少非厂商、独立或一手正文支撑；"
-            "以下排序仅作为待验证假设，不作为已证实的产品优劣结论。）"
+            "（证据强度校准：默认/排序靠前分支的决定性比较主要依赖其自有材料或二手来源，"
+            "缺少独立的非厂商对照；以下排序仅作为待验证假设，不作为已证实的产品优劣结论。）"
             if zh else
-            " (Evidence-strength guard: the default/top-ranked branch lacks "
-            "non-vendor, independent, or full-text first-party support; the ordering "
-            "is an unverified hypothesis, not an established product comparison.)"
+            " (Evidence-strength guard: the decisive comparison for the default/top-ranked "
+            "branch rests mainly on its own or secondary material, without an independent "
+            "non-vendor counter-check; the ordering is an unverified hypothesis, not an "
+            "established product comparison.)"
         )
         adjusted["recommendation"] = _append_note(
             adjusted.get("recommendation"), note, marker)
