@@ -38,6 +38,9 @@
 | usable | 200/200 | 200/200 |
 | DG | 185/200（92.5%） | 197/200（98.5%） |
 | community cited / pack-unused / none | 169 / 28 / 3 | 166 / 32 / 2 |
+| official 正文页：0 页 case / 合计 / p50 | 9 / 698 / 4 | 5 / 743 / 4 |
+
+> official 正文页取自各批 `summary.json` 的 `official_body_pages`（official 通道逐 case），是诊断不是验收目标；两轮 0 页 case 分别见各自运行目录的 batch health。
 
 ## 4. 逐例变化（方向性信息，不是因果）
 

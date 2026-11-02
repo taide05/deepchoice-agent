@@ -88,8 +88,10 @@
 
 ### official 覆盖
 
-- 有 official 正文的 case：**200/200**；`official_body_results`（official + community 有正文条数口径）合计 1116 条。
+- official 正文页（`batch summary official_body_pages`，official 通道逐 case）：**195/200 例 ≥1 页**；0 页 5 例（F200-030, F200-070, F200-071, F200-072, F200-088）；合计 743 页，p50 4 页/例。
+- `review_inputs.official_body_results` 的构建口径是**全部检索源** `has_body` 合计（非 official 专属），合计 1116 条，仅作参考。
 - official 检索状态（200 单位，按 case 计）：success 200。
+- official 覆盖率是诊断信号，不是验收目标；0 页的 5 例在评审中仍按 C1–C4 如实评级（均 usable/DG，缺口已写入各自 key_issue/official_notes）。
 
 ### 批次 health 信号（评审外的运行侧诊断，仅作内容限制参考）
 

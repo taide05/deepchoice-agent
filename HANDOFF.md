@@ -43,7 +43,8 @@
 - 正式指标：**usable 200/200（100%）、decision-grade 197/200（98.5%）、C4 致命错误 0**。
 - C1 met 200；C2 met 197 / partial 3（F200-041、F200-060、F200-130）；C3 met 200。
 - 决策状态：recommended 6 / conditional 159 / insufficient_evidence 35；置信度 low 134 / medium 66。
-- community cited 166 / pack-unused 32 / none 2；official 正文覆盖 200/200。
+- community cited 166 / pack-unused 32 / none 2；official 正文页 195/200 例 ≥1 页
+  （0 页 5 例：F200-030/070/071/072/088；合计 743 页，p50 4 页/例；覆盖率是诊断不是目标）。
 - 口径：`usable = C1 met && C4=0`；`DG = usable && C2 met && C3 met`；不动报告/prompt/retrieval/guard。
 - 评审产物：`reviews/chunk-01..20.json`、`reviews_merged.json`、`review_aggregate.json`；
   结果文档 `FINAL_200_REVIEW_RESULT_20261102.md`。
@@ -54,7 +55,7 @@
 ### 与上一轮 `final-200-20261029` 的对照（信息性，不作提升/下降声明）
 
 - 见 `FINAL_200_ROUND_COMPARISON_20261102.md`：两轮 usable 均 200/200、C4 均 0；
-  DG 185/200 → 197/200；C2 partial 15 → 3。
+  DG 185/200 → 197/200；C2 partial 15 → 3；official 正文页 0 页 case 9 → 5（合计 698 → 743 页）。
 - 不是受控实验（代码身份/运行时间/替换/评审组成不同），差异不能归因给单个改动；
   对外默认只引用一轮数字。
 
