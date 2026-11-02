@@ -27,6 +27,24 @@ from urllib.parse import unquote, urlparse
 EVIDENCE_INPUT_BUDGET_CHARS = int(
     os.environ.get("EVIDENCE_INPUT_BUDGET_CHARS", "24000"))
 
+# Decision-relevant anchor words used only when a source body must be excerpted
+# (2026-11-02 R9 work). The full-200 review found that decisive caveats/lifecycle
+# facts could sit in the omitted middle of a long official page while the
+# excerpt kept only head/tail and candidate-name windows. These anchors widen the
+# excerpt toward the facts a selection decision depends on; they never admit a
+# source or change the budget.
+_DECISION_KEYWORDS = (
+    "however", " but ", " only ", " not ", "cannot", " requires", " required",
+    " must ", "limitation", "depends", "unknown", "caveat", "except",
+    "restrict", "deprecated", "migration", "breaking change", "end of life",
+    "eol", "maintenance", "license", "pricing", "cost", " sla", "support",
+    "security", "audit", "rbac", "permission", "performance", "latency",
+    "throughput", "benchmark", "rollback", "backup", "upgrade", "compatib",
+    "不支持", "仅", "限制", "必须", "未知", "弃用", "迁移", "维护",
+    "许可", "价格", "成本", "安全", "审计", "权限", "性能", "延迟",
+    "吞吐", "基准", "回滚", "升级", "兼容",
+)
+
 # Words that carry no identity in a product name. A token from here never makes
 # a mapping entry count as "named by this candidate". This list predates the
 # candidate-attribution work; attribution itself no longer consults word lists.
@@ -215,8 +233,16 @@ def _merge_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 def _excerpt_spans(content: str, raw_budget: int,
-                    focus_terms: list[str]) -> list[tuple[int, int]]:
-    """Select original-character spans within a raw-text allowance."""
+                    focus_terms: list[str],
+                    decision_windows: bool = True) -> list[tuple[int, int]]:
+    """Select original-character spans within a raw-text allowance.
+
+    Priority order: candidate/sub-question focus windows (and nearby qualifiers)
+    first, then decision-relevant anchor windows, then head/tail context with the
+    remaining room. The 2026-11-02 R9 work added the decision anchors because a
+    long official page's decisive caveat/lifecycle/licensing sentence could sit in
+    the omitted middle while head/tail consumed the budget.
+    """
     raw_budget = max(40, int(raw_budget))
     spans: list[tuple[int, int]] = []
     qualifiers = ("however", "but ", "only", "not ", "cannot", "requires",
@@ -239,23 +265,42 @@ def _excerpt_spans(content: str, raw_budget: int,
                     spans.append((max(0, qpos - 160), min(len(content), qpos + 240)))
             start = pos + len(needle)
             hits += 1
-    head = max(180, min(len(content), raw_budget // 2))
-    tail = max(120, min(len(content), raw_budget - head - 100))
-    spans.append((0, head))
-    spans.append((max(0, len(content) - tail), len(content)))
+    if decision_windows:
+        hits = 0
+        for term in _DECISION_KEYWORDS:
+            if hits >= 12:
+                break
+            start = 0
+            while hits < 12:
+                pos = haystack.find(term, start)
+                if pos < 0:
+                    break
+                spans.append((max(0, pos - 180), min(len(content),
+                                                     pos + len(term) + 240)))
+                hits += 1
+                start = pos + max(1, len(term))
+
+    def _union_len(ranges: list[tuple[int, int]]) -> int:
+        return sum(end - start for start, end in _merge_spans(ranges))
+
     selected: list[tuple[int, int]] = []
-    used = 0
-    for start, end in _merge_spans(spans):
-        room = raw_budget - used
-        if room <= 40:
-            break
-        end = min(end, start + room)
-        if end - start < 80:
-            continue
-        selected.append((start, end))
-        used += end - start
+    for span in spans:
+        trial = _merge_spans(selected + [span])
+        if _union_len(trial) <= raw_budget:
+            selected = trial
     if not selected:
+        # No focus/decision anchor in this body: keep the historical prefix cut
+        # (a head/tail-only slice would waste budget on such bodies and leave
+        # substantial headroom unused across the package).
         selected = [(0, min(len(content), raw_budget))]
+    else:
+        # Head/tail context only gets the room the priority spans did not need.
+        head = max(160, min(len(content), raw_budget // 4))
+        tail = max(120, min(len(content), raw_budget // 5))
+        for span in ((0, head), (max(0, len(content) - tail), len(content))):
+            trial = _merge_spans(selected + [span])
+            if _union_len(trial) <= raw_budget:
+                selected = trial
     return selected
 
 
@@ -277,7 +322,8 @@ def _render_excerpt(content: str,
 
 
 def _select_excerpt(content: str, limit: int,
-                    focus_terms: list[str] | None = None
+                    focus_terms: list[str] | None = None,
+                    decision_windows: bool = True
                     ) -> tuple[str, list[tuple[int, int]], int, bool]:
     """Bounded excerpt whose *complete serialized text* fits `limit`.
 
@@ -301,7 +347,7 @@ def _select_excerpt(content: str, limit: int,
     text = ""
     omitted = len(content)
     for _ in range(16):
-        selected = _excerpt_spans(content, raw_budget, focus_terms)
+        selected = _excerpt_spans(content, raw_budget, focus_terms, decision_windows)
         text, omitted = _render_excerpt(content, selected)
         if len(text) <= limit:
             return text, selected, omitted, False
@@ -316,18 +362,58 @@ def _select_excerpt(content: str, limit: int,
     return content[:kept], [(0, kept)], len(content) - kept, False
 
 
-def _evidence_limits(contents: list[str], budget: int) -> list[int]:
-    """Water-fill limits: small bodies stay complete, remaining budget goes to large ones."""
-    limits = [0] * len(contents)
-    active = list(range(len(contents)))
+def _source_budget_weight(entry: dict) -> float:
+    """Relative share of a constrained evidence budget for one source.
+
+    Decisive-source signals (a source in a recorded conflict pair, first-party
+    official documentation, identity-verified body) get a larger share; community
+    material gets a slightly smaller one. This changes only how a fixed budget is
+    divided when the package is already over budget; it never admits, drops or
+    increases the total, so the token cost is unchanged.
+    """
+    weight = 1.0
+    if entry.get("disputed"):
+        weight += 0.35
+    source_type = str(entry.get("source_type") or "").lower()
+    if source_type == "official_doc":
+        weight += 0.20
+    if entry.get("body_identity_verified") is True:
+        weight += 0.15
+    is_community = (
+        source_type in {"stackoverflow", "reddit"}
+        or str(entry.get("provenance") or "").lower() == "community"
+        or str(entry.get("channel") or "").lower() == "community")
+    if is_community:
+        weight -= 0.10
+    return max(0.6, min(weight, 1.75))
+
+
+def _evidence_limits(contents: list[str], budget: int,
+                     weights: list[float] | None = None) -> list[int]:
+    """Water-fill limits, weighted by source importance.
+
+    Small bodies stay complete; the remaining budget is divided by weight instead
+    of equally, so a decisive/large source keeps more of its middle content.
+    """
+    count = len(contents)
+    if not weights or len(weights) != count:
+        weights = [1.0] * count
+    limits = [0] * count
+    active = list(range(count))
     remaining = budget
     while active:
-        share = remaining // len(active)
-        cap = max(80, share - min(160, share // 5))
-        small = [index for index in active if len(contents[index]) <= cap]
+        total_weight = sum(weights[index] for index in active) or 1.0
+        caps: dict[int, int] = {}
+        small: list[int] = []
+        for index in active:
+            share = remaining * weights[index] / total_weight
+            cap = max(80, int(share) - min(160, max(0, int(share)) // 5))
+            caps[index] = cap
+            if len(contents[index]) <= cap:
+                small.append(index)
         if not small:
             for index in active:
-                limits[index] = cap
+                limits[index] = caps[index]
             break
         for index in small:
             limits[index] = len(contents[index])
@@ -349,12 +435,17 @@ def _evidence_limits(contents: list[str], budget: int) -> list[int]:
 
 def shared_evidence_package(entries: list[dict], *,
                             focus_terms: list[str] | None = None,
-                            budget_chars: int | None = None) -> dict:
+                            budget_chars: int | None = None,
+                            prioritize: bool = True,
+                            decision_windows: bool = True) -> dict:
     """Build the one evidence package used by synthesis and self-review.
 
     The package includes complete saved bodies whenever their total fits the
     configured input budget. Only when the total is larger does it select bounded
     excerpts, and every view records its original ranges and omitted characters.
+    The total budget is unchanged; ``prioritize`` (weighted per-source shares) and
+    ``decision_windows`` (decision-relevant anchor windows) only change which part
+    of an over-budget body stays visible.
     """
     entries = list(entries or [])
     budget = max(500, int(EVIDENCE_INPUT_BUDGET_CHARS if budget_chars is None
@@ -362,7 +453,12 @@ def shared_evidence_package(entries: list[dict], *,
     contents = [_compact_text(source_content(entry)) for entry in entries]
     total_stored = sum(len(c) for c in contents)
     full_included = total_stored <= budget
-    limits = None if full_included else _evidence_limits(contents, budget)
+    if full_included:
+        limits = None
+    else:
+        weights = ([_source_budget_weight(entry) for entry in entries]
+                   if prioritize else None)
+        limits = _evidence_limits(contents, budget, weights)
     views: dict[int, dict] = {}
     visible_total = 0
     omitted_total = 0
@@ -372,7 +468,8 @@ def shared_evidence_package(entries: list[dict], *,
             visible, ranges, omitted, included = content, [(0, len(content))], 0, True
         else:
             visible, ranges, omitted, included = _select_excerpt(
-                content, max(1, limits[index] if limits else budget), focus_terms)
+                content, max(1, limits[index] if limits else budget), focus_terms,
+                decision_windows)
         view = _evidence_view(entry, content, visible, ranges, omitted,
                               included)
         views[key] = view

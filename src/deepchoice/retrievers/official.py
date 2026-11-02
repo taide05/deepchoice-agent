@@ -590,7 +590,10 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "qdrant": {"url": "https://qdrant.tech", "title": "Qdrant — Official Documentation"},
     "milvus": {"url": "https://milvus.io", "title": "Milvus — Official Documentation"},
     "faiss": {"url": "https://github.com/facebookresearch/faiss", "title": "FAISS — Official Repository"},
-    "elasticsearch": {"url": "https://elastic.co", "title": "Elasticsearch — Official Documentation"},
+    # 2026-11-02 R7a: the bare site root timed out in the final-200 run (5 cases
+    # ended with 0 official body pages); the docs path is the locatable first-party
+    # page. Fetch admission/identity checks still decide whether it becomes evidence.
+    "elasticsearch": {"url": "https://www.elastic.co/docs", "title": "Elasticsearch — Official Documentation"},
     "meilisearch": {"url": "https://meilisearch.com", "title": "Meilisearch — Official Documentation"},
     # Infra / messaging / config
     "kafka": {"url": "https://kafka.apache.org", "title": "Apache Kafka — Official Documentation"},

@@ -110,4 +110,23 @@ def apply_claim_support_guard(rec: dict, *, lang: str = "") -> tuple[dict, list[
             "conditional_top_option_strength_caveat"]
         return adjusted, ["conditional_top_option_strength_caveat"]
 
+    # R7b (2026-11-02): a conditional conclusion with no primary (official or
+    # independent) support anywhere is an evidence-gap judgement, not an ordering.
+    # The owner/secondary caveat above covers the dominance cases; this covers the
+    # remaining honest gap so the served text cannot read as a supported ranking.
+    if status == "conditional" and "conditional_no_primary" in flags:
+        note = (
+            "（证据强度校准：该条件结论没有任何一手（官方或独立）来源支撑，属于证据缺口型判断；"
+            "以下分支只按现有材料给出，不构成已证实的优劣排序。）"
+            if zh else
+            " (Evidence-strength guard: this conditional conclusion has no primary "
+            "(official or independent) source support; it is an evidence-gap judgement. "
+            "The branches below follow the available material only and are not an "
+            "established product comparison.)"
+        )
+        adjusted["recommendation"] = _append_note(
+            adjusted.get("recommendation"), note, marker)
+        adjusted["decision_guard_actions"] = ["conditional_no_primary_caveat"]
+        return adjusted, ["conditional_no_primary_caveat"]
+
     return rec, []
