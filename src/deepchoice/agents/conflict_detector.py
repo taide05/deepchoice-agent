@@ -30,6 +30,7 @@ Rules:
 2. If both have code/benchmark evidence, both may be partially right (different contexts)
 3. If neither has strong evidence, declare "insufficient_data"
 4. Your reasoning MUST cite the score difference or evidence type difference
+5. NEVER mention rule numbers, these rules, or internal scoring logic in your output. Write the reasoning in reader-facing terms ("the score gap is below the decision threshold", "both sources cite benchmarks"), not "rule 1"/"rule 2".
 
 Return ONLY a JSON object:
 {"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Specific reason citing score/evidence difference", "key_factor": "The single most decisive factor"}"""

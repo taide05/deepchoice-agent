@@ -6,6 +6,7 @@ from .basis import (
     short_report_title,
     source_display_title,
     source_provenance_note,
+    unused_retrieved_count,
     used_sources,
 )
 from .coverage import derive_data_source_note
@@ -13,8 +14,9 @@ from .report_quality import (
     MALFORMED_NUMERIC_CITATION,
     TRUNCATED_NUMERIC_CITATION,
     finalize_report_text,
+    sanitize_arbitration_text,
 )
-from ..agents.conclusion_synthesizer import clean_label
+from ..agents.conclusion_synthesizer import build_source_registry, clean_label
 from ..utils.decision import (
     CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
 )
@@ -138,6 +140,36 @@ def _one_line(value) -> str:
     rest of that candidate's explanation.
     """
     return " ".join(str(value or "").split())
+
+
+_SINGLE_BRACKET_NUMBER = re.compile(r"\[(\d{1,3})\]")
+
+
+def _resolve_single_bracket_numbers(text: str, chains: list[dict]) -> str:
+    """Turn bare [N] source ordinals into [Source: title] labels.
+
+    The small validation run (F200-176) had synthesis write "[1] 与 [13] 是同一
+    Airbyte 对比页" in the evidence summary. Registry ordinals are internal
+    numbering, not report content, and the single-bracket form escapes the [[N]]
+    resolution pass. Resolve them against the same registry mapping; an unmatched
+    number is left visible rather than guessed.
+    """
+    value = str(text or "")
+    if not _SINGLE_BRACKET_NUMBER.search(value):
+        return value
+    try:
+        mapping = (build_source_registry(chains or []) or {}).get("mapping") or {}
+    except Exception:  # registry construction is best-effort for display cleanup
+        return value
+
+    def _sub(match: re.Match) -> str:
+        title = mapping.get(int(match.group(1)))
+        if not title:
+            return match.group(0)
+        label = clean_label(str(title))
+        return f"[Source: {label}]" if label else match.group(0)
+
+    return _SINGLE_BRACKET_NUMBER.sub(_sub, value)
 
 
 def _summary_excerpt(value, limit: int = 260) -> str:
@@ -463,12 +495,12 @@ def render(state: dict) -> str:
             "",
         ])
 
-    retrieved = sum(len(c.get("sources") or []) for c in chains)
-    if retrieved > len(used):
+    unused = unused_retrieved_count(chains, used)
+    if unused:
         lines.extend([
-            f"其余 {retrieved - len(used)} 条检索结果未进入本报告的依据，保留在原始检索记录中。"
+            f"其余 {unused} 条检索结果未进入本报告的依据，保留在原始检索记录中。"
             if lang == "zh"
-            else f"The other {retrieved - len(used)} retrieved item(s) are not part of "
+            else f"The other {unused} retrieved item(s) are not part of "
                  f"this report's basis and remain in the raw retrieval record.",
             "",
         ])
@@ -476,11 +508,11 @@ def render(state: dict) -> str:
     if conflicts:
         lines.extend([T["disputes"][lang], ""])
         for i, c in enumerate(conflicts):
-            lines.append(f"### {T['conflict'][lang]} {i+1}: {c.get('resolution', 'unresolved')}")
+            lines.append(f"### {T['conflict'][lang]} {i+1}: {sanitize_arbitration_text(c.get('resolution', 'unresolved'))}")
             for label, key in ((T["claim_a"][lang], "source_a"),
                                (T["claim_b"][lang], "source_b")):
                 lines.append(f"- {label}: {_claim_source(c, key, lang)}")
-            lines.append(f"- {T['resolution'][lang]}: {c.get('reasoning', '')}")
+            lines.append(f"- {T['resolution'][lang]}: {sanitize_arbitration_text(c.get('reasoning', ''))}")
             lines.append(f"- {T['key_factor'][lang]}: {c.get('key_factor', '')}")
             lines.append(f"- {T['confidence'][lang]}: {c.get('confidence', 'low')}")
             lines.append("")
@@ -503,12 +535,22 @@ def render(state: dict) -> str:
         # recorded this in 198/200 reports). State the fact without a claim the
         # page cannot back up.
         if lang == "zh":
-            lines.extend(["> 另有高相关来源没有取得正文（无正文来源不能作为依据，见上文导航链接），"
-                          f"未参与冲突比较；这不代表它们之间没有分歧。", ""])
+            if conflicts:
+                lines.extend(["> 另有高相关来源没有取得正文（无正文来源不能作为依据，见上文导航链接），"
+                              "未参与冲突比较；这不代表它们之间没有分歧。", ""])
+            else:
+                lines.extend(["> 另有高相关来源没有取得正文（无正文来源不能作为依据，见上文导航链接）；"
+                              "本次没有记录可裁决的争议，但这不代表这些来源之间没有分歧。", ""])
         else:
-            lines.extend(["> Some high-scoring source(s) had no collected body and were "
-                          f"not compared for conflicts; this does not establish that "
-                          f"they agree.", ""])
+            if conflicts:
+                lines.extend(["> Some high-scoring source(s) had no collected body and were "
+                              "not compared for conflicts; this does not establish that "
+                              "they agree.", ""])
+            else:
+                lines.extend(["> Some high-scoring source(s) had no collected body (a page "
+                              "without a collected body is not evidence); no arbitrable "
+                              "conflict was recorded here, which does not establish that "
+                              "these sources agree.", ""])
     if not conflicts:
         if not check or unscanned or arb_failed or scanned == 0:
             if lang == "zh":
@@ -626,7 +668,8 @@ def render(state: dict) -> str:
                     lines.append(f"    *Sources: {'; '.join(impact_links)}*")
         lines.append("")
     if rec.get("evidence_summary"):
-        summary = _one_line(rec.get("evidence_summary"))
+        summary = _one_line(_resolve_single_bracket_numbers(
+            rec.get("evidence_summary"), chains))
         lines.append(T["evidence_summary"][lang])
         lines.append(summary)
         summary_links = _field_source_links(rec, "evidence_summary", summary, chains)

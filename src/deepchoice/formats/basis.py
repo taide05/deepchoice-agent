@@ -54,6 +54,49 @@ def _canonical_source_url(url: str) -> str:
     return urlunsplit((scheme, netloc, path, parsed.query, ""))
 
 
+def _title_key(text) -> str:
+    return "".join(ch for ch in str(text or "").lower() if ch.isalnum())
+
+
+def unused_retrieved_count(chains: list[dict], used: list[dict]) -> int:
+    """Count retrieved rows that are genuinely not part of the report's basis.
+
+    The final-200/G1 reviews found the "其余 N 条检索结果未进入本报告的依据"
+    remainder could be one too high: two collected rows pointing at the same
+    canonical page are merged into one cited source row, so subtracting the merged
+    citation-row count from the raw retrieval count over-counts the unused items.
+    Count raw retrieved rows whose URL/title does not map to a cited entry instead.
+    """
+    urls: set[str] = set()
+    titles: set[str] = set()
+    for entry in used or []:
+        if not isinstance(entry, dict):
+            continue
+        url = str(entry.get("url") or "")
+        if url:
+            urls.add(_canonical_source_url(url))
+        for title in [entry.get("title")] + list(entry.get("aliases") or []):
+            key = _title_key(title)
+            if key:
+                titles.add(key)
+    total = 0
+    cited = 0
+    for chain in chains or []:
+        if not isinstance(chain, dict):
+            continue
+        for source in chain.get("sources") or []:
+            if not isinstance(source, dict):
+                continue
+            total += 1
+            url = str(source.get("url") or "")
+            if url and _canonical_source_url(url) in urls:
+                cited += 1
+                continue
+            if _title_key(source.get("title")) in titles:
+                cited += 1
+    return max(0, total - cited)
+
+
 def _merge_used_entries(entries: list[dict]) -> list[dict]:
     """Merge cited-source rows that point to the same canonical page."""
     merged: dict[str, dict] = {}

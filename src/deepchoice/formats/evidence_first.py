@@ -4,10 +4,11 @@ from .basis import (
     short_report_title,
     source_display_title,
     source_provenance_note,
+    unused_retrieved_count,
     used_sources,
 )
 from .coverage import derive_data_source_note
-from .report_quality import finalize_report_text
+from .report_quality import finalize_report_text, sanitize_arbitration_text
 from ..utils.decision import (
     CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
 )
@@ -183,9 +184,9 @@ def render(state: dict) -> str:
         if shown:
             lines.append("")
 
-    retrieved = sum(len(c.get("sources") or []) for c in chains)
-    if retrieved > len(used):
-        lines.append(T["unused_note"][lang].format(n=retrieved - len(used)))
+    unused = unused_retrieved_count(chains, used)
+    if unused:
+        lines.append(T["unused_note"][lang].format(n=unused))
         lines.append("")
 
     lines.extend(["", T["disputes"][lang], ""])
@@ -199,7 +200,7 @@ def render(state: dict) -> str:
                         if isinstance(check, dict) else 0)
     if conflicts:
         for c in conflicts:
-            lines.append(f"- {c.get('resolution', 'unresolved')}: {c.get('reasoning', '')[:200]}")
+            lines.append(f"- {sanitize_arbitration_text(c.get('resolution', 'unresolved'))}: {sanitize_arbitration_text(c.get('reasoning', ''))[:200]}")
             for label, key in ((T["claim_a"][lang], "source_a"),
                                (T["claim_b"][lang], "source_b")):
                 lines.append(f"  - {label}: {_claim_source(c, key, lang)}")
@@ -224,12 +225,24 @@ def render(state: dict) -> str:
     if excluded_no_body:
         # No count: the exclusion population differs from the visible navigation
         # list, so a printed number read as a miscount (final-200 review).
-        lines.append(
-            "另有高相关来源没有取得正文（无正文来源不能作为依据），未参与冲突比较；"
-            "这不代表它们之间没有分歧。" if lang == "zh" else
-            "Some high-scoring source(s) had no collected body and were not "
-            "compared for conflicts; this does not establish that they agree."
-        )
+        # G1 review (F200-164): with zero recorded conflicts, saying the sources
+        # "were not compared for conflicts" was redundant next to the no-conflict
+        # statement; the no-conflict case now says no arbitrable conflict was
+        # recorded instead of implying the comparison happened and agreed.
+        if lang == "zh":
+            lines.append(
+                "另有高相关来源没有取得正文（无正文来源不能作为依据），未参与冲突比较；"
+                "这不代表它们之间没有分歧。" if conflicts else
+                "另有高相关来源没有取得正文（无正文来源不能作为依据）；"
+                "本次没有记录可裁决的争议，但这不代表这些来源之间没有分歧。")
+        else:
+            lines.append(
+                "Some high-scoring source(s) had no collected body and were not "
+                "compared for conflicts; this does not establish that they agree."
+                if conflicts else
+                "Some high-scoring source(s) had no collected body (a page without a "
+                "collected body is not evidence); no arbitrable conflict was recorded "
+                "here, which does not establish that these sources agree.")
 
     lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}"])
     # User-facing gaps come from the synthesis result. `knowledge_gaps` on the

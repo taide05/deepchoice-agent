@@ -32,8 +32,14 @@ CITATION_GAP_MARK = re.compile(
 
 def finalize_report_text(report: str) -> str:
     """Make citation presentation explicit before the report is stored/exported."""
+    # The small validation run (F200-165) rendered literal "\n" escape sequences
+    # where the model meant paragraph breaks ("建议: ...。\n\n分支 A"). JSON
+    # escaping is transport, not report text; unescape the common sequences and
+    # collapse runs of blank lines.
+    text = re.sub(r"\\r\\n|\\n", "\n", report or "")
+    text = re.sub(r"\n{3,}", "\n\n", text)
     text = RAW_NUMERIC_CITATION.sub(
-        lambda match: f"〔引用未解析：编号 {match.group(1)}〕", report or "")
+        lambda match: f"〔引用未解析：编号 {match.group(1)}〕", text)
     text = MALFORMED_NUMERIC_CITATION.sub(
         lambda match: f"〔引用未解析：编号 {match.group(1)}（格式不完整）〕", text)
     text = TRUNCATED_NUMERIC_CITATION.sub(
@@ -155,3 +161,26 @@ def source_concentration_flags(rec: dict, report: str) -> list[str]:
     if ("两份独立" in text or "independent sources" in text.lower()) and len(hosts) <= 1:
         flags.append("independence_claim_single_publisher")
     return flags
+
+_INTERNAL_RULE_REF = re.compile(r"\brule\s*\d{1,2}\b", re.IGNORECASE)
+
+
+def _has_cjk(text: str) -> bool:
+    return any("\u4e00" <= ch <= "\u9fff" for ch in str(text or ""))
+
+
+def sanitize_arbitration_text(text) -> str:
+    """Strip internal arbitration rule numbers from user-facing dispute text.
+
+    The small validation run (F200-082, 2026-11-02) rendered the arbitrator's
+    reasoning verbatim and it echoed the internal rules ("so rule 1 does not
+    apply. Both sources provide benchmark evidence (rule 2)"). Rule numbers are
+    internal instructions, not report content; the backstop renames them to a
+    neutral phrase so a prompt miss cannot leak the arbitration scheme.
+    """
+    value = str(text or "")
+    if not _INTERNAL_RULE_REF.search(value):
+        return value
+    replacement = "该规则" if _has_cjk(value) else "the scoring rule"
+    return _INTERNAL_RULE_REF.sub(replacement, value)
+

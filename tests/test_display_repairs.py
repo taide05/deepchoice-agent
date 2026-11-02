@@ -179,7 +179,12 @@ class TestScannerRobustness:
             # navigation list, so a number here read as a miscount (final-200
             # review recorded this in 198/200 reports).
             assert "Some high-scoring source(s) had no collected body" in md, (renderer, md)
-            assert "were not compared for conflicts" in md, (renderer, md)
+            # G1 review (F200-164): with zero recorded conflicts the old sentence
+            # "were not compared for conflicts" was redundant next to the
+            # "no conflicts" statement, so the no-conflict case now states that no
+            # arbitrable conflict was recorded without claiming the sources agree.
+            assert "no arbitrable conflict was recorded here" in md, (renderer, md)
+            assert "does not establish that these sources agree" in md, (renderer, md)
 
 class TestBodylessSourceRegistry:
     def test_a_bodyless_repository_metadata_row_is_navigation_not_citation(self):

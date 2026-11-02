@@ -41,6 +41,16 @@ _SELF_REVIEW_NOTE_ZH = re.compile(r"[ \t]*（自审调整：[^）]*）")
 _SELF_REVIEW_NOTE_EN = re.compile(r"[ \t]*\(Self-review adjustment:[^)]*\)",
                                   re.IGNORECASE)
 
+# G1 review (F200-186): the rationale said "结论本身证据充分（high）" while the
+# authoritative label was medium — not a "final level" clause, so the first regex
+# missed it. A parenthetical level attached to confidence/evidence wording is also
+# a level claim; a bare "（high）" without that context (e.g. a quoted source's
+# priority) is left alone.
+_PAREN_LEVEL = re.compile(
+    r"((?:置信|评级|定级|证据|充分|结论)[^。；;!?！？\n]{0,24})"
+    r"[（(](low|medium|high)[）)]",
+    re.IGNORECASE)
+
 
 def normalize_confidence(value) -> str | None:
     """Map a confidence value to low/medium/high, or None if it is not one."""
@@ -72,4 +82,8 @@ def align_confidence_rationale(text, confidence) -> str:
     def _sub(match: re.Match) -> str:
         return match.group(1) + _replacement_word(match.group(2), level)
 
+    def _paren_sub(match: re.Match) -> str:
+        return f"{match.group(1)}（{level}）"
+
+    cleaned = _PAREN_LEVEL.sub(_paren_sub, cleaned)
     return _CLAIM.sub(_sub, cleaned).rstrip()
