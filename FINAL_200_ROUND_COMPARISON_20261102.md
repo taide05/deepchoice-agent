@@ -70,6 +70,8 @@ C2 变化分桶：
 | F200-198 | recommended | conditional |
 | F200-199 | conditional | recommended |
 
+全部状态变化（46 例）：
+
 | case | A 状态 | B 状态 |
 |---|---|---|
 | F200-007 | conditional | insufficient_evidence |
