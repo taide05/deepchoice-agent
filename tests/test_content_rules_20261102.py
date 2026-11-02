@@ -182,3 +182,60 @@ class TestLiteralEscapeCleanup:
         from deepchoice.formats.report_quality import finalize_report_text
         cleaned = finalize_report_text("a\n\n\n\nb")
         assert "\n\n\n" not in cleaned
+
+
+class TestRoundTwoContentRules:
+    """Second content round (2026-11-02): managed-option search, global absence
+    claims, guidance-vs-requirement, reader-facing strength caveat, and reordered
+    R9 decision anchors."""
+
+    def test_prompt_requires_managed_option_search(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        assert "azure app service" in SYNTHESIS_PROMPT.lower()
+        assert "no comparable managed/hosted option" in SYNTHESIS_PROMPT
+        assert "search B's cited bodies" in SYNTHESIS_PROMPT
+
+    def test_prompt_covers_gap_checklist(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        assert "price, licence, import/adoption path" in SYNTHESIS_PROMPT
+        assert "GLOBAL ABSENCE CLAIMS" in SYNTHESIS_PROMPT
+        assert "本报告可见材料未给出" in SYNTHESIS_PROMPT
+
+    def test_prompt_distinguishes_guidance_from_requirement(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        assert "Operational advice" in SYNTHESIS_PROMPT
+        assert "not a requirement" in SYNTHESIS_PROMPT
+
+    def test_review_prompt_has_the_three_checks(self):
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+        for marker in ("Global absence claims", "Managed-option search",
+                       "Guidance vs requirement"):
+            assert marker in REVIEW_SYSTEM, marker
+
+    def test_strength_caveat_is_reader_facing(self):
+        state = _state(retrieved=2, cited=2)
+        state["final_recommendation"]["decision_guard_actions"] = [
+            "conditional_top_option_strength_caveat"]
+        report = render(state)
+        assert "不构成已证实的产品优劣结论" in report
+        assert "排序已降级" not in report
+
+    def test_managed_hosting_fact_survives_a_small_budget(self):
+        from deepchoice.utils.candidate_identity import shared_evidence_package
+        body = ("p" * 3000
+                + " ASP.NET Core can be published to Azure App Service (a fully managed "
+                  "hosting option) as well as IIS."
+                + "q" * 3000)
+        pkg = shared_evidence_package(
+            [{"number": 1, "title": "Host and deploy", "url": "https://x/docs",
+              "snippet": body}],
+            focus_terms=["unrelated"], budget_chars=1400)
+        visible = pkg["views"][1]["text"]
+        assert len(visible) <= 1400
+        assert "Azure App Service" in visible or "hosting option" in visible, visible
+
+    def test_licence_anchor_is_scanned_before_generic_qualifiers(self):
+        from deepchoice.utils.candidate_identity import _DECISION_KEYWORDS
+        words = list(_DECISION_KEYWORDS)
+        assert words.index("license") < words.index("however")
+        assert words.index("managed") < words.index("caveat")

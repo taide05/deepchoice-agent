@@ -29,20 +29,25 @@ EVIDENCE_INPUT_BUDGET_CHARS = int(
 
 # Decision-relevant anchor words used only when a source body must be excerpted
 # (2026-11-02 R9 work). The full-200 review found that decisive caveats/lifecycle
-# facts could sit in the omitted middle of a long official page while the
-# excerpt kept only head/tail and candidate-name windows. These anchors widen the
-# excerpt toward the facts a selection decision depends on; they never admit a
-# source or change the budget.
+# facts could sit in the omitted middle of a long official page while the excerpt
+# kept only head/tail and candidate-name windows. These anchors widen the excerpt
+# toward the facts a selection decision depends on; they never admit a source or
+# change the budget. Order matters: specific decision facts (licence, price,
+# lifecycle, managed/hosted options, limits) are scanned before generic
+# qualifiers, because the hit cap is finite.
 _DECISION_KEYWORDS = (
-    "however", " but ", " only ", " not ", "cannot", " requires", " required",
-    " must ", "limitation", "depends", "unknown", "caveat", "except",
-    "restrict", "deprecated", "migration", "breaking change", "end of life",
-    "eol", "maintenance", "license", "pricing", "cost", " sla", "support",
-    "security", "audit", "rbac", "permission", "performance", "latency",
-    "throughput", "benchmark", "rollback", "backup", "upgrade", "compatib",
-    "不支持", "仅", "限制", "必须", "未知", "弃用", "迁移", "维护",
-    "许可", "价格", "成本", "安全", "审计", "权限", "性能", "延迟",
-    "吞吐", "基准", "回滚", "升级", "兼容",
+    "license", "licence", "pricing", "price", "cost", " sla", "support policy",
+    "end of life", "eol", "deprecated", "maintenance", "migration",
+    "breaking change", "managed", "hosted", "hosting", "cloud", "self-hosted",
+    "azure app service", "enterprise", "free tier", "quota", "limitation",
+    "known issue", "requires", " required", " must ", "cannot", "not supported",
+    "unsupported", "compatib", "rollback", "backup", "upgrade", "performance",
+    "latency", "throughput", "benchmark", "security", "audit", "rbac",
+    "permission", "however", " but ", " only ", " not ", "depends", "unknown",
+    "caveat", "except", "restrict",
+    "许可", "许可证", "价格", "成本", "维护", "迁移", "不支持", "限制", "必须",
+    "未知", "弃用", "回滚", "升级", "兼容", "托管", "云托管", "自托管", "安全",
+    "审计", "权限", "性能", "延迟", "吞吐", "基准",
 )
 
 # Words that carry no identity in a product name. A token from here never makes

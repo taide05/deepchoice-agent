@@ -250,10 +250,16 @@ def _decision_summary(rec: dict, lang: str) -> list[str]:
     guard = rec.get("decision_guard_actions") or []
     if guard:
         label = "强度校准" if lang == "zh" else "Strength guard"
+        # G1 review (F200-142/151): the old wording ("排序已降级为条件/待验证假设；
+        # 详见正文。") was a self-referential process note. State the reader-facing
+        # consequence instead: the ordering is a conditional hypothesis, not an
+        # established product comparison.
         lines.append(
             f"- **{label}：** " +
-            ("排序已降级为条件/待验证假设；详见正文。" if lang == "zh"
-             else "The ranking is treated as conditional/unverified; see below."))
+            ("以下排序只作为条件性/待验证假设，不构成已证实的产品优劣结论。"
+             if lang == "zh"
+             else "The ordering below is a conditional, unverified hypothesis, "
+                  "not an established product comparison."))
     confidence = rec.get("confidence")
     if confidence:
         label = "置信度" if lang == "zh" else "Confidence"
