@@ -1,6 +1,7 @@
 # DeepChoice 恢复线：当前状态与接续
 
-更新：2026-10-26。给接手开发的 dsh 看代码身份、真实结果、材料位置与下一步。
+更新：2026-11-02。给接手开发的 dsh 看代码身份、真实结果、材料位置与下一步。
+最新状态见「2026-11-02 当前状态」一节（含最终 200 全量评审结果）；本文件更早的“当前判断/下一步”是历史记录。
 历史过程在 Git、`CHANGELOG.md`、`RETRACTIONS.md` 和本地 run 记录里，不在此重复。
 
 ## 代码身份
@@ -9,7 +10,7 @@
 |---|---|
 | 工作区 | `D:\deepchoice-precodex` |
 | 分支 | `precodex/deepseek-adapter` |
-| HEAD | 本交接文档提交 |
+| HEAD | 本交接文档提交（2026-11-02 更新，仅 docs 提交；产品代码仍为 `c8fad27`） |
 | 生产代码基点 | **`b080213`**（恢复线代码；其上仅文档提交） |
 | 历史恢复起点 | `48b32bd`（只追溯，不 reset） |
 | 入口 | `POST /research` + `frontend/app.py`（Streamlit） |
@@ -26,6 +27,51 @@
 - 配对诊断入口 `scripts/launch_pair.py` / `pair_worker.py` / `run_pair.py`（同一共享采集，
   基线臂 vs 候选臂）；`scripts/seal_case.py` 冻结案例；`run_service.py` 启动受守卫的单次运行。
 - 模型：DeepSeek Flash（默认 `deepseek-v4-flash`）；旧 Qwen/DashScope 名称只是兼容，不再使用。
+
+## 2026-11-02 当前状态（最新；优先于本文之后的历史章节）
+
+### 最终 200（`final-200-20261031b`，2026-10-31 ~ 11-01 运行）
+
+- 200/200 唯一 case 完成，不重跑；3 个替换 F200-058 / F200-187 / F200-126（按 v1.1 披露）。
+- 运行 HEAD `adecccb`（产品代码 `c8fad27`）；此后 `b4b9b0a`、`c33f2a0` 仅 docs 提交。
+- tokens：本次 13,068,148；累计 14,344,100（含失败旧批 1,275,952）；15M 上限剩余 655,900。
+- wall p50 211.8s / p95 345.0s（200 采用单位）；运行目录
+  `.scratch/cases/runs/final-200-20261031b/`；预算/批次详见 `FINAL_200_RUN_COMPLETE_20261101.md`。
+
+### 200/200 全量内容评审（2026-11-02 完成，只读，不抽样）
+
+- 正式指标：**usable 200/200（100%）、decision-grade 197/200（98.5%）、C4 致命错误 0**。
+- C1 met 200；C2 met 197 / partial 3（F200-041、F200-060、F200-130）；C3 met 200。
+- 决策状态：recommended 6 / conditional 159 / insufficient_evidence 35；置信度 low 134 / medium 66。
+- community cited 166 / pack-unused 32 / none 2；official 正文覆盖 200/200。
+- 口径：`usable = C1 met && C4=0`；`DG = usable && C2 met && C3 met`；不动报告/prompt/retrieval/guard。
+- 评审产物：`reviews/chunk-01..20.json`、`reviews_merged.json`、`review_aggregate.json`；
+  结果文档 `FINAL_200_REVIEW_RESULT_20261102.md`。
+- 注：本轮评审按 2026-11-02 handoff 只做 C1–C4，**未包含**
+  `FORMAL_ACCEPTANCE_PROTOCOL_20261028` §2 的 D1–D5 / paraphrase / P3 附加诊断；
+  若投递口径需要，需另行补评（待用户确认）。
+
+### 与上一轮 `final-200-20261029` 的对照（信息性，不作提升/下降声明）
+
+- 见 `FINAL_200_ROUND_COMPARISON_20261102.md`：两轮 usable 均 200/200、C4 均 0；
+  DG 185/200 → 197/200；C2 partial 15 → 3。
+- 不是受控实验（代码身份/运行时间/替换/评审组成不同），差异不能归因给单个改动；
+  对外默认只引用一轮数字。
+
+### 报告形态（交付层，零代码改动）
+
+- 产品报告中的「决策摘要」块已于 2026-10-31（`ee13c62`）加入；
+  「决策摘要 + 证据附录分离」当时仍未做（`PROJECT_CLOSURE_20261031.md` backlog）。
+- 2026-11-02 已产出**呈现层**分离预览：`.scratch/delivery/final200_briefs_20261102/`
+  （200 份决策简报，p50 3,924 字符 ≈ 完整报告的 17%；证据附录 = 未改动的原报告）。
+- 未改产品代码/生成器，本轮 200 指标仍归属冻结代码。
+
+### 待用户确认（不自行决定）
+
+1. 是否按当前正式指标进入投递；对外口径、是否引用两轮对照、是否披露替换/provenance。
+2. 是否补 D1–D5 等附加诊断、是否更新 `DELIVERY_MATERIALS` 索引。
+3. 是否改产品代码做报告形态优化（会立即使本轮 200 指标失效，需新验收）。
+4. 是否升级 DSH 核心 / launcher（未做）。
 
 ## 最新真实结果（2026-10-26，200 例正式批跑）
 
@@ -627,3 +673,17 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 运行目录 `.scratch/cases/runs/final-200-20261031b/`；
   - 尚未做 200/200 内容评审；不重跑；
   - 详情 `FINAL_200_RUN_COMPLETE_20261101.md`。
+
+- **最终 200 全量内容评审完成（2026-11-02，只读）**：
+  - 上次会话 2026-11-02 02:25 的 chunk-15/16/17 评审被 DSH 崩溃中断
+    （chunk-15 只落 4 条，chunk-16/17 为空，无 chunk 文件）；本轮复用同一评审 prompt
+    重跑 chunk-15，并按「3 agent 并行 × 每轮 3 chunk（30 例）」两轮完成 chunk 15–17、18–20；
+  - chunk-15 旧半成品归档 `reviews/archive/chunk-15.partial.json`；
+  - 20 chunk × 10 = 200/200 唯一 case，与固定题集 ID 完全一致，无缺失/重复，题集 SHA 校验一致；
+  - 只写了 reviews/ 与合并产物：评审后核查无 report/snapshot 被修改；
+  - 指标：usable 200/200、DG 197/200（98.5%）、C4=0；C2 partial 3（F200-041/060/130）；
+  - 评审结果 `FINAL_200_REVIEW_RESULT_20261102.md`；
+  - 两轮对照 `FINAL_200_ROUND_COMPARISON_20261102.md`（A p50 21,860 → B p50 23,242 字符）；
+  - 交付层决策简报预览 `.scratch/delivery/final200_briefs_20261102/`
+    （200 份，简报 p50 3,924 字符 ≈ 原报告 17%，证据附录为未改动原报告）；
+  - 零付费、未重跑、未改产品代码；待用户确认是否投递与后续方向。
