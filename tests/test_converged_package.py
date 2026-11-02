@@ -1048,3 +1048,56 @@ class TestSubjectGuessingStaysRemoved:
         assert names_candidate("ClickHouse for logs", "ClickHouse")
         # A page naming a different product is not matched onto a candidate.
         assert not names_candidate("SelectDB vs Elasticsearch", "ClickHouse")
+
+
+class TestSelfReviewContractRetry:
+    """A 6-item contract violation got one structured repair attempt (the
+    final-200 review found 15/200 runs unavailable this way)."""
+
+    def _run_with_sequence(self, state, responses):
+        calls = {"n": 0}
+
+        async def fake_call_model(prompt, **kwargs):
+            index = min(calls["n"], len(responses) - 1)
+            calls["n"] += 1
+            return responses[index]
+
+        real = sr.call_model
+        sr.call_model = fake_call_model
+        try:
+            out = asyncio.run(sr.SelfReviewerAgent().run(dict(state)))
+        finally:
+            sr.call_model = real
+        return out, calls["n"]
+
+    @staticmethod
+    def _valid_review(passed=4):
+        review = {"confidence": "low", "knowledge_gaps": [], "passed_count": passed}
+        return _with_valid_checks(review)
+
+    def test_malformed_contract_triggers_one_repair_attempt(self):
+        state = _failed_run_state()
+        bad = {"checks": [{"item": 1, "passed": True}], "passed_count": 1,
+               "confidence": "low"}
+        out, calls = self._run_with_sequence(state, [bad, self._valid_review()])
+        signal = out["quality_signals"][0]
+        assert calls == 2, calls
+        assert signal["review_status"] == "completed", signal
+        assert signal["review_attempts"] == 2, signal
+
+    def test_valid_first_response_is_not_retried(self):
+        state = _failed_run_state()
+        out, calls = self._run_with_sequence(state, [self._valid_review()])
+        signal = out["quality_signals"][0]
+        assert calls == 1, calls
+        assert signal["review_status"] == "completed", signal
+        assert signal["review_attempts"] == 1, signal
+
+    def test_repair_that_also_fails_keeps_unavailable_status(self):
+        state = _failed_run_state()
+        bad = {"checks": [], "passed_count": 0, "confidence": "low"}
+        out, calls = self._run_with_sequence(state, [bad, bad])
+        signal = out["quality_signals"][0]
+        assert calls == 2, calls
+        assert signal["review_status"] == "unavailable", signal
+        assert signal["review_attempts"] == 2, signal

@@ -515,16 +515,43 @@ class TestSelfReviewInput:
         assert "REASON-A_correct" in first_section
         assert "REASON-B_correct" in second_section
 
-    def test_self_review_still_uses_one_model_call(self, monkeypatch):
+    def test_self_review_uses_one_model_call_when_contract_valid(self, monkeypatch):
         calls = {"n": 0}
 
         async def fake_call_model(prompt, **kwargs):
             calls["n"] += 1
-            return {"confidence": "medium", "knowledge_gaps": [], "corrections": []}
+            return {"confidence": "medium", "knowledge_gaps": [], "corrections": [],
+                    "checks": [{"item": i, "passed": i <= 3, "note": "t"}
+                               for i in range(1, 7)],
+                    "passed_count": 3}
 
         monkeypatch.setattr(sr, "call_model", fake_call_model)
-        asyncio.run(sr.SelfReviewerAgent().run(dict(self._full_state())))
+        out = asyncio.run(sr.SelfReviewerAgent().run(dict(self._full_state())))
         assert calls["n"] == 1
+        assert out["quality_signals"][0]["review_attempts"] == 1
+
+    def test_self_review_gets_one_repair_attempt_on_contract_violation(self, monkeypatch):
+        """A contract violation is a pipeline-quality defect (final-200 review:
+        15/200 runs), so exactly one structured repair call is allowed; the
+        malformed payload itself is still never applied."""
+        calls = {"n": 0}
+
+        async def fake_call_model(prompt, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return {"confidence": "medium", "knowledge_gaps": [],
+                        "corrections": []}
+            return {"confidence": "medium", "knowledge_gaps": [], "corrections": [],
+                    "checks": [{"item": i, "passed": i <= 3, "note": "t"}
+                               for i in range(1, 7)],
+                    "passed_count": 3}
+
+        monkeypatch.setattr(sr, "call_model", fake_call_model)
+        out = asyncio.run(sr.SelfReviewerAgent().run(dict(self._full_state())))
+        assert calls["n"] == 2
+        signal = out["quality_signals"][0]
+        assert signal["review_attempts"] == 2
+        assert signal["review_status"] == "completed"
 
     def test_bound_source_wording_handles_historical_and_partial_maps(self):
         chains = _duplicate_title_chains()

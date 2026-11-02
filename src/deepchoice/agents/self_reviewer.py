@@ -70,6 +70,12 @@ Answer YES or NO for each, with a brief note:
 5. Are any user sub-questions unanswered? Check each original sub-question and every declared constraint against the fields below, and say which ones have no substantive answer rather than only a marker or a gap note. A knowledge gap list entry does not answer a required item by itself.
 6. Are there counter-examples or negative findings not flagged?
 
+Also check these decisive-error patterns when applying items 1, 2, 4 and 6:
+- Modality / scale strengthening: if a source says "recommended", "may", "can", "should" or gives a figure/unit/version/date, the served fields must not state it as "required", "must", "guarantees", "官方要求" or with a different figure/unit. Correct the field to the source's own strength.
+- Lifecycle / roadmap facts: if a source states a merger, acquisition, archive, end-of-life, maintenance mode, ownership change or roadmap change for a candidate, the ranking and recommendation must factor it into long-term maintenance/roadmap reasoning or record it as an explicit condition or gap. Quoting it only in passing while ranking that candidate as the default branch is an incomplete analysis; add the missing condition/gap through a correction where a cited source supports it.
+- Excluded material in the basis: a sentence that marks a source as irrelevant/excluded/not used must not carry a [Source: ...] citation, and a source declared excluded must not be listed among the sources the recommendation relies on. Confirm the Cited Source Register and the "excluded/unused" statements do not contradict each other.
+- Coverage asymmetry: if the top option's decisive comparison rests on its own first-party material while the other candidate is only missing retrieved body text, the ordering must be presented as an evidence-availability branch or hypothesis, not as a proven capability difference.
+
 Confidence Assessment:
 - high: 5-6/6 passed, no critical gaps
 - medium: 3-4 items passed, no critical gaps
@@ -127,6 +133,18 @@ which is not acceptable: it must also appear in "corrections". An error you
 cannot correct or withdraw from the material given — because the field is missing
 from the list above, or you cannot tell which entry owns it — goes in
 knowledge_gaps and is left as it is."""
+
+# Appended to the review body for one repair attempt when the first response was
+# usable JSON but violated the fixed 6-item contract. The malformed payload is
+# never applied; this asks only for the contract shape again.
+_REVIEW_REPAIR_NOTE = """
+
+## Previous Response Did Not Meet The Review Contract
+Your previous answer was rejected with `{error}`. Re-issue the review now.
+`checks` MUST contain exactly six objects with `item` values 1,2,3,4,5,6 (each
+exactly once) and a boolean `passed`; `passed_count` MUST equal the number of
+true checks; `confidence` MUST be exactly one of "low", "medium", "high".
+Return the same JSON contract, corrected, and nothing else."""
 
 # "option" may name a ranked option, a trade-off dimension, or be omitted for a
 # top-level field. These are matched case-insensitively on the trimmed value.
@@ -850,14 +868,49 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
         if not isinstance(result, dict):
             result = {}
 
+        def _validated(payload: dict):
+            pc, err = _validate_review_counts(
+                payload.get("checks"), payload.get("passed_count"))
+            conf = _normalize_confidence(payload.get("confidence"))
+            if err is None and conf is None:
+                err = "confidence_invalid"
+            return pc, err, conf
+
         # Strict accounting before trusting anything from the review. A partial,
         # malformed or internally inconsistent checklist is unavailable, not a
         # 0/6 or 7/6 result; its corrections and confidence are not applied.
-        passed_count, review_error = _validate_review_counts(
-            result.get("checks"), result.get("passed_count"))
-        reviewed = _normalize_confidence(result.get("confidence"))
-        if review_error is None and reviewed is None:
-            review_error = "confidence_invalid"
+        passed_count, review_error, reviewed = _validated(result)
+        review_attempts = 1
+        if review_error is not None and result:
+            # One structured repair attempt. The first answer was usable JSON but
+            # broke the fixed 6-item contract, and the 2026-11-02 final-200 review
+            # found 15/200 runs marked unavailable this way (a pipeline quality
+            # signal, not a content defect). Ask again for the exact contract shape
+            # and keep the first response that validates; the malformed payload is
+            # still never trusted.
+            print_agent_output(
+                f"Self-review contract invalid ({review_error}); retrying once with "
+                f"the fixed 6-item contract", agent="SELF_REVIEWER")
+            repair_prompt = [
+                {"role": "system", "content": REVIEW_SYSTEM},
+                {"role": "user",
+                 "content": user_content + _REVIEW_REPAIR_NOTE.format(error=review_error)},
+            ]
+            try:
+                retried = await call_model(
+                    repair_prompt, model="deepseek-flash", response_format="json",
+                    tag="self_reviewer", usage=local_usage)
+            except Exception as e:
+                print_agent_output(
+                    f"Self-review repair attempt unavailable: {type(e).__name__}",
+                    agent="SELF_REVIEWER")
+                retried = {}
+            if isinstance(retried, dict):
+                pc2, err2, conf2 = _validated(retried)
+                if err2 is None:
+                    result, passed_count, review_error, reviewed = (
+                        retried, pc2, err2, conf2)
+                review_attempts = 2
         review_usable = review_error is None
 
         # A decisive error must change the served result, not only its
@@ -948,6 +1001,7 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
                 "review_status": "completed" if review_usable else "unavailable",
                 "review_mode": _self_review_mode(),
                 "review_validation_error": review_error,
+                "review_attempts": review_attempts,
                 "passed_count": passed_count if review_usable else None,
                 "total_checks": 6,
                 "confidence": confidence,

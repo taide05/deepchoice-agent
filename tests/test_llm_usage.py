@@ -279,8 +279,11 @@ class TestAgentTokenUsageWiring:
             "quality_signals": [],
             "retry_count": 0,
         }
-        content = ('{"checks": [], "passed_count": 5, '
-                   '"confidence": "high", "knowledge_gaps": []}')
+        checks = ",".join(
+            '{"item": %d, "passed": %s, "note": "t"}'
+            % (i, "true" if i <= 5 else "false") for i in range(1, 7))
+        content = ('{"checks": [%s], "passed_count": 5, '
+                   '"confidence": "medium", "knowledge_gaps": []}' % checks)
         with patch("deepchoice.utils.llm._get_client",
                    return_value=_fake_client(_fake_response(content))):
             first = await SelfReviewerAgent().run(state)

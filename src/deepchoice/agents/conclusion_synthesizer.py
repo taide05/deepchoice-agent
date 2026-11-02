@@ -70,6 +70,10 @@ the source is wrong or that the two sources contradict.
 20. COMMUNITY EVIDENCE IS PRACTITIONER EVIDENCE (P2): material with provenance=community or source_identity type=stackoverflow is user/commenter experience, not official fact. Use it for concrete implementation caveats, version traps, or operational experience; label it as community/unofficial. Never use a single community post as the sole basis for a decisive comparison; if no official or independent support exists, downgrade the claim to conditional/unknown.
 21. OMIT IRRELEVANT COMMUNITY MATERIAL: cite or list a community pack only when it directly addresses a declared sub-question or a concrete implementation caveat for a declared candidate. A generic Q&A, a definition/explainer, an installation question for an unrelated stack, or a tangential platform thread is not evidence for this decision. Omit it from the report and its citation list rather than padding the basis with weak community material.
 22. HOLD RANKING MUST NOT IMPLY PRODUCT SUPERIORITY: when decision_status is insufficient_evidence, do not present ranked_options as a product-quality ranking. Either omit the ranking or explicitly label the ordering as "evidence coverage / materials availability" and keep the hold explicit. When conditional, ranking must follow the stated branch conditions, not evidence availability alone.
+23. NUMBER DISCIPLINE: cite only numbers that appear in the Retrieved sources list above, exactly as listed. Never estimate, skip to, or invent a source number; a number that is not in the list is not a citation. If nothing in the list supports a claim, write the claim as an explicit gap/inference instead of attaching a number.
+24. MODALITY FIDELITY: keep each source's strength of statement. "recommended", "may", "can", "should", "typically" must not become "required", "must", "guarantees", "官方要求", or any stronger claim; a source's figure, unit, version and date stay exactly as stated. Do not upgrade a recommendation into a requirement or a possibility into a fact.
+25. LIFECYCLE / ROADMAP FACTS ARE DECISION INPUTS: if any retrieved source states that a candidate is merging/acquiring/being acquired, being archived, reaching end-of-life, entering maintenance mode, changing owner, or changing its roadmap, that fact must be factored into the ranking's long-term maintenance/roadmap reasoning or recorded as an explicit condition/gap in the recommendation. Quoting it once in passing is not enough; a ranking that ignores a known lifecycle fact it already cited is incomplete.
+26. EXCLUDED MATERIAL MUST NOT BE COUNTED AS A BASIS: when you state that a source is irrelevant, out of scope, excluded, superseded or not used, do not attach a [Source: ...] citation to that sentence, and do not mention that source as one the recommendation relies on. The citation list and the "actually used" sources must match what the report relies on; material that is only named to be rejected stays in the narrative without a citation marker.
 
 ## Output Structure
 Return ONLY a JSON object:
@@ -737,10 +741,24 @@ def _resolve_number_marker(inner: str, registry: dict, mapping: dict[int, str],
     return resolved, entries
 
 
+_SINGLE_NUMBER = re.compile(r"^\s*\+?(\d+)\s*$")
+# A single-number token that ends a word/clause (followed by whitespace, sentence
+# punctuation, or end of text) is a citation attempt even when it is attached to
+# the preceding word: `deployment[[1]] 与`, `389.73x[[12]] vs`, `$0.35/hr[[10]] 外`.
+# The 2026-11-02 final-200 review found these left as bracket fragments and then
+# finalised into unresolved-citation gaps even when the number was registered.
+_CLAUSE_END_AFTER = frozenset("。，、；：！？.,;:!?)]}）】")
+
+
 def _is_index_context(text: str, start: int, end: int, inner: str) -> bool:
     """Whether a bracket token sits where a citation would not.
 
     One rule, applied once:
+    - a single positive number that ends a word/clause is a citation attempt, even
+      when written directly against the preceding word (`deployment[[1]] 与`);
+      a known registered number resolves, an unknown one stays a visible gap.
+      A token followed by a subscript (`row[[2]][0]`) or by more ASCII text with
+      no separator (`x[[1]]y`, `arr[[1,2]]`) keeps the indexing reading;
     - attached directly to an ASCII word/`_`/`]` before it, a token is indexing
       (`arr[[1,2]]`); a token that follows another citation token is not;
     - a spaced numeric fragment (not a clean number list) after an ASCII word is
@@ -753,6 +771,14 @@ def _is_index_context(text: str, start: int, end: int, inner: str) -> bool:
     Whitespace separates tokens, so a citation written after a space — including
     a clean number list between two other citation markers — is not indexing.
     """
+    single = _SINGLE_NUMBER.fullmatch(inner or "")
+    if single is not None:
+        after_token = text[end:]
+        clause_end = (not after_token
+                      or after_token[0].isspace()
+                      or after_token[0] in _CLAUSE_END_AFTER)
+        if clause_end:
+            return False
     before = text[:start]
     if before.endswith("]]"):
         previous = re.search(r"\[\[([^\[\]]*)\]\]$", before)

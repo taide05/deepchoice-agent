@@ -3,6 +3,10 @@
 Each test pins one root cause found while reviewing the frozen 200 reports and
 replayed offline; none of them needs a network or model call.
 """
+from deepchoice.agents.conclusion_synthesizer import (
+    build_source_registry,
+    resolve_text_with_sources,
+)
 from deepchoice.agents.report_generator import render_report
 from deepchoice.formats.basis import _merge_used_entries, source_display_title
 from deepchoice.formats.what_why_how import _display_text
@@ -10,6 +14,68 @@ from deepchoice.utils.confidence_text import (
     align_confidence_rationale,
     normalize_confidence,
 )
+
+
+def _chains(*sources: dict) -> list[dict]:
+    return [{"sources": list(sources)}]
+
+
+def _source(title: str, body: str = "a real body with a factual claim",
+            url: str = "") -> dict:
+    entry = {"title": title, "snippet": body}
+    if url:
+        entry["url"] = url
+    return entry
+
+
+def _n_sources(n: int) -> list[dict]:
+    return [_source(f"Source {i}", f"body of source {i}",
+                    f"https://s{i}.example/doc")
+            for i in range(1, n + 1)]
+
+
+def _chains_of(n: int, per_chain: int = 4) -> list[dict]:
+    """The registry keeps at most 4 fact-bearing sources per evidence chain."""
+    sources = _n_sources(n)
+    return [{"sources": sources[i:i + per_chain]}
+            for i in range(0, len(sources), per_chain)]
+
+
+class TestRegisteredNumberAttachedToWordIsACitation:
+    """F200-042/165/186/188: registered numbers written against the preceding word
+    were classified as array indexing and then finalised into unresolved gaps."""
+
+    def test_single_registered_number_after_word_is_resolved(self):
+        chains = _chains(*_n_sources(2))
+        resolved, bindings = resolve_text_with_sources(
+            "见 deployment[[1]] 与 versioning 文档。", chains)
+        assert "[Source: Source 1]" in resolved, resolved
+        assert "[[1]]" not in resolved, resolved
+        assert bindings, bindings
+
+    def test_number_after_numeric_prose_is_resolved(self):
+        chains = _chains_of(12)
+        resolved, _ = resolve_text_with_sources(
+            "关键数字不一致（389.73x[[12]] vs 10-100x）。", chains)
+        assert "[Source: Source 12]" in resolved, resolved
+
+    def test_subscript_after_token_stays_indexing(self):
+        chains = _chains(*_n_sources(2))
+        resolved, bindings = resolve_text_with_sources("row[[2]][0] = x", chains)
+        assert resolved == "row[[2]][0] = x", resolved
+        assert not bindings
+
+    def test_multi_number_array_is_still_indexing(self):
+        chains = _chains(*_n_sources(2))
+        resolved, bindings = resolve_text_with_sources("code: arr[[1,2]] = x", chains)
+        assert resolved == "code: arr[[1,2]] = x", resolved
+        assert not bindings
+
+    def test_unregistered_number_is_still_a_visible_gap(self):
+        chains = _chains(*_n_sources(2))
+        resolved, _ = resolve_text_with_sources("见 deployment[[19]] 与文档。", chains)
+        assert "引用未解析" in resolved, resolved
+        assert "19" in resolved, resolved
 
 
 class TestCanonicalSourceIdentity:
@@ -146,3 +212,28 @@ class TestRenderedReportConsistency:
         assert "另有高相关来源没有取得正文" in report
         import re
         assert re.search(r"另有\s*\d+\s*个高相关来源", report) is None
+
+
+class TestContentRulesAreInThePromptsOffline:
+    """The content-level fixes are prompt rules until a paid G1 validates model
+    behaviour; these tests pin that the rules are actually shipped."""
+
+    def test_synthesis_prompt_has_the_four_new_rules(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        for needle in ("NUMBER DISCIPLINE", "MODALITY FIDELITY",
+                       "LIFECYCLE / ROADMAP FACTS ARE DECISION INPUTS",
+                       "EXCLUDED MATERIAL MUST NOT BE COUNTED AS A BASIS"):
+            assert needle in SYNTHESIS_PROMPT, needle
+
+    def test_review_prompt_checks_the_content_defect_patterns(self):
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+        for needle in ("Modality / scale strengthening",
+                       "Lifecycle / roadmap facts",
+                       "Excluded material in the basis",
+                       "Coverage asymmetry"):
+            assert needle in REVIEW_SYSTEM, needle
+
+    def test_review_retry_contract_is_documented(self):
+        from deepchoice.agents.self_reviewer import _REVIEW_REPAIR_NOTE
+        assert "exactly six objects" in _REVIEW_REPAIR_NOTE
+        assert "{error}" in _REVIEW_REPAIR_NOTE
