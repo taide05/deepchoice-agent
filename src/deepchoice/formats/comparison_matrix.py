@@ -43,8 +43,14 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
     claim = " ".join(str(claim).split())
     if len(claim) > 240:
         claim = claim[:240].rstrip() + "…"
-    label = escape_markdown_text(title or claim or "N/A")
     url = src.get("url", "")
+    if title and url:
+        # Locatable label: retriever-generated "<owner> — deep documentation"
+        # titles get a path suffix so a wrong page cannot hide behind the owner.
+        label = escape_markdown_text(
+            source_display_title({"title": title, "url": url}))
+    else:
+        label = escape_markdown_text(title or claim or "N/A")
     link = f"[{label}]({url})" if url else label
     excerpt = ""
     if title and claim and claim != title:
@@ -171,11 +177,13 @@ def render(state: dict) -> str:
         else:
             lines.append(L["no_disputes"][lang])
     if excluded_no_body:
+        # No count: the exclusion population differs from the visible navigation
+        # list, so a printed number read as a miscount (final-200 review).
         lines.append(
-            f"另有 {excluded_no_body} 个高相关来源没有取得正文，未参与冲突比较；"
-            f"这不代表它们之间没有分歧。" if lang == "zh" else
-            f"{excluded_no_body} high-scoring source(s) had no collected body and "
-            f"were not compared for conflicts; this does not establish that they agree."
+            "另有高相关来源没有取得正文（无正文来源不能作为依据），未参与冲突比较；"
+            "这不代表它们之间没有分歧。" if lang == "zh" else
+            "Some high-scoring source(s) had no collected body and were not "
+            "compared for conflicts; this does not establish that they agree."
         )
 
     decision = decision_view(rec)

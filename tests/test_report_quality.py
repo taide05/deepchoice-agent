@@ -14,7 +14,9 @@ def test_raw_numeric_citations_become_explicit_gaps():
     assert "[[12]]" not in final
     assert "〔引用未解析：编号 3〕" in final
     assert "〔引用未解析：编号 12〕" in final
-    assert report_quality_flags(final) == []
+    # A finalized gap is honest but still a presentation defect worth surfacing
+    # in batch health (final-200 review: 14/200 reports carried one).
+    assert report_quality_flags(final) == ["citation_gap_markers:2"]
 
 
 def test_empty_source_parentheses_are_removed_and_flagged_before_finalize():
@@ -81,7 +83,7 @@ def test_malformed_and_truncated_numeric_markers_become_explicit_gaps():
     assert "[[" not in final
     assert "编号 7（格式不完整）" in final
     assert "编号 2（截断）" in final
-    assert report_quality_flags(final) == []
+    assert report_quality_flags(final) == ["citation_gap_markers:2"]
 
 
 def test_truncated_marker_without_number_is_explicit():

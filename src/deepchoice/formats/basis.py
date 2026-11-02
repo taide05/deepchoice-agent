@@ -34,9 +34,13 @@ def _canonical_source_url(url: str) -> str:
     """Display/identity normalization for the source list.
 
     Query and fragment are not part of a document's display identity; a trailing
-    slash is not a different page. The citation registry remains unchanged; this
-    is only the key used to avoid showing one page twice when different channels
-    collected it under different titles.
+    slash is not a different page. Percent-encoding must not split one page into
+    two identities: the same article reached as ``.../solidjs-vs-react-%E6%AF%94``
+    and as ``.../solidjs-vs-react-比较`` is one page, and the final-200 review
+    found both listed as separate sources. The path is decoded before comparison;
+    the query string still distinguishes pages (``?v=`` video ids). The citation
+    registry remains unchanged; this is only the key used to avoid showing one
+    page twice when different channels collected it under different titles.
     """
     raw = str(url or "").strip()
     if not raw:
@@ -44,7 +48,7 @@ def _canonical_source_url(url: str) -> str:
     parsed = urlsplit(raw)
     scheme = parsed.scheme.lower()
     netloc = parsed.netloc.lower()
-    path = parsed.path or "/"
+    path = unquote(parsed.path or "/")
     if path != "/":
         path = path.rstrip("/")
     return urlunsplit((scheme, netloc, path, parsed.query, ""))
@@ -86,21 +90,40 @@ def _merge_used_entries(entries: list[dict]) -> list[dict]:
     return list(merged.values())
 
 
+# Official deep-documentation pages are titled by the retriever as
+# "<owner> — deep documentation" before the page identity is known. When the
+# fetched page is actually a different page (the final-200 review found an
+# Amazon Linux 2 release-notes URL displayed as "AWS CDK — deep documentation"),
+# the owner-only label hides that mismatch. A path suffix is display-only and
+# makes the label locatable; identity/title matching keeps the stored title.
+_AUTO_DEEP_DOC_TITLE = re.compile(r"—\s*deep documentation\s*$", re.IGNORECASE)
+
+
+def _source_path_tail(url: str) -> str:
+    """The last two URL path segments (or the host) for a locatable suffix."""
+    parsed = urlsplit(str(url or ""))
+    path = unquote(parsed.path).strip("/")
+    parts = [part for part in path.split("/") if part]
+    tail = "/".join(parts[-2:]) if parts else (parsed.netloc or "")
+    if len(tail) > 72:
+        tail = tail[:69] + "..."
+    return tail
+
+
 def source_display_title(src: dict) -> str:
     """A source label a reader can locate; never replaces identity/title matching."""
     title = str((src or {}).get("title") or "").strip()
     url = str((src or {}).get("url") or "").strip()
+    tail = _source_path_tail(url)
+    if title and url and _AUTO_DEEP_DOC_TITLE.search(title) and tail \
+            and tail.lower() not in title.lower():
+        return f"{title} — {tail}"
     normalized = re.sub(r"[\s._-]+", " ", title.lower()).strip()
     if normalized not in _GENERIC_SOURCE_TITLES and title:
         return title
     parsed = urlsplit(url)
-    path = unquote(parsed.path).strip("/")
-    parts = [part for part in path.split("/") if part]
-    tail = "/".join(parts[-2:]) if parts else (parsed.netloc or "")
     base = title or parsed.netloc or "Unknown source"
     if tail:
-        if len(tail) > 72:
-            tail = tail[:69] + "..."
         return f"{base} — {tail}"
     return base
 

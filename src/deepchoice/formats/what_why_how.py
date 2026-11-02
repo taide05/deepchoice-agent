@@ -9,7 +9,11 @@ from .basis import (
     used_sources,
 )
 from .coverage import derive_data_source_note
-from .report_quality import finalize_report_text
+from .report_quality import (
+    MALFORMED_NUMERIC_CITATION,
+    TRUNCATED_NUMERIC_CITATION,
+    finalize_report_text,
+)
 from ..agents.conclusion_synthesizer import clean_label
 from ..utils.decision import (
     CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
@@ -73,6 +77,8 @@ def _field_source_links(rec: dict, locator: str, text: str,
 
 
 _DANGLING_PUNCT_RE = re.compile(r"\s+([。，、；：！？])")
+_SOURCE_MARKER_IN_GAP = re.compile(r"\[Source:\s*([^\]\n]*)\]", re.IGNORECASE)
+_GAP_SOURCE_LABEL_LIMIT = 60
 
 
 def _display_text(text: str) -> str:
@@ -81,9 +87,48 @@ def _display_text(text: str) -> str:
     Citation markers may be stripped from a label for readability; removing a
     marker can leave a space before sentence punctuation. That is a presentational
     leftover, not a reason to remove the surrounding statement.
+
+    A gap sentence often names the source it leans on ("...称有，但 [Source: 宣布
+    Deno 2] 的工具链清单未列 bundle"). Stripping that marker deleted the only
+    mention of the source and left a broken clause ("但 的 ..."); the final-200
+    review recorded this in ~60 cases. Resolved source markers in this section are
+    therefore kept as a short readable parenthetical instead of being deleted,
+    while raw bracket/number markers — which are not followable citations — are
+    still removed. Labels are stashed out of the bracket grammar first, so a source
+    title that itself contains `[[N]` cannot leave a bracket fragment that the
+    finaliser would turn into a brand-new unresolved-citation gap.
     """
-    cleaned = clean_label(text)
-    return _DANGLING_PUNCT_RE.sub(r"\1", cleaned)
+    raw = str(text)
+    # A malformed/truncated numeric marker (`[[9]`, `[[3`) is not a followable
+    # citation; remove it before stashing source labels, otherwise the leftover
+    # bracket fragment is finalised into a brand-new unresolved-citation gap.
+    raw = MALFORMED_NUMERIC_CITATION.sub("", raw)
+    raw = TRUNCATED_NUMERIC_CITATION.sub("", raw)
+    labels: list[str] = []
+
+    def _stash(match: re.Match) -> str:
+        labels.append(match.group(1))
+        return f"\x00src{len(labels) - 1}\x00"
+
+    stashed = _SOURCE_MARKER_IN_GAP.sub(_stash, raw)
+    cleaned = clean_label(stashed)
+    # Citation syntax has been handled; any remaining square bracket is an orphan
+    # fragment of a marker, not report content.
+    cleaned = re.sub(r"[\[\]]+", "", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cjk = any("\u4e00" <= ch <= "\u9fff" for ch in raw)
+
+    def _restore(match: re.Match) -> str:
+        label = " ".join(labels[int(match.group(1))].split())
+        if not label:
+            return ""
+        if len(label) > _GAP_SOURCE_LABEL_LIMIT:
+            label = label[:_GAP_SOURCE_LABEL_LIMIT - 1].rstrip() + "…"
+        return f"（来源：{label}）" if cjk else f" (source: {label})"
+
+    restored = re.sub(r"\x00src(\d+)\x00", _restore, cleaned)
+    restored = re.sub(r"[ \t]{2,}", " ", restored)
+    return _DANGLING_PUNCT_RE.sub(r"\1", restored)
 
 
 def _one_line(value) -> str:
@@ -175,8 +220,15 @@ def _claim_source(conflict: dict, key: str, lang: str) -> str:
     claim = _one_line(conflict.get("claim_a" if key == "source_a" else "claim_b", ""))
     if len(claim) > 240:
         claim = claim[:240].rstrip() + "…"
-    label = escape_markdown_text(title or claim or "N/A")
     url = src.get("url", "")
+    if title and url:
+        # Same locatable display label as the source lists: retriever-generated
+        # "<owner> — deep documentation" titles get a path suffix so a page that is
+        # not that owner's documentation cannot hide behind the candidate name.
+        label = escape_markdown_text(
+            source_display_title({"title": title, "url": url}))
+    else:
+        label = escape_markdown_text(title or claim or "N/A")
     if url:
         link = f"[{label}]({url})"
     else:
@@ -330,23 +382,23 @@ def render(state: dict) -> str:
         # record; only the displayed navigation list omits it.
         from ..utils.candidate_identity import names_candidate
 
-        nav_links: list[tuple[str, str]] = []
+        nav_links: list[tuple[str, str, str]] = []
         for chain in chains:
             for src in chain.get("sources", []):
                 if not _has_body(src):
                     url = src.get("url", "")
                     title = src.get("title", "")
-                    if not url or (title, url) in nav_links:
+                    if not url or any((t, u) == (title, url) for t, u, _ in nav_links):
                         continue
                     if any(names_candidate(f"{title} {url}", candidate)
                            for candidate in candidates):
-                        nav_links.append((title, url))
+                        nav_links.append((title, url, source_display_title(src)))
         if nav_links:
             lines.append("**导航链接（无正文，不能作为依据）**" if lang == "zh"
                          else "**Navigation links (no body collected; not usable as a basis)**")
             lines.append("")
-            for title, url in nav_links[:6]:
-                lines.append(f"- [{escape_markdown_text(title)}]({url})")
+            for _raw_title, url, label in nav_links[:6]:
+                lines.append(f"- [{escape_markdown_text(label)}]({url})")
             lines.append("")
 
     lines.extend([T["why"][lang], ""])
@@ -414,13 +466,18 @@ def render(state: dict) -> str:
     excluded_no_body = (int(check.get("sources_without_comparable_claim") or 0)
                         if isinstance(check, dict) else 0)
     if excluded_no_body:
+        # No count here: the conflict check's exclusion population and the
+        # displayed navigation list are different sets, so a number printed here
+        # read as a miscount against the visible list (the final-200 review
+        # recorded this in 198/200 reports). State the fact without a claim the
+        # page cannot back up.
         if lang == "zh":
-            lines.extend([f"> 另有 {excluded_no_body} 个高相关来源没有取得正文，未参与冲突比较；"
-                          f"这不代表它们之间没有分歧。", ""])
+            lines.extend(["> 另有高相关来源没有取得正文（无正文来源不能作为依据，见上文导航链接），"
+                          f"未参与冲突比较；这不代表它们之间没有分歧。", ""])
         else:
-            lines.extend([f"> {excluded_no_body} high-scoring source(s) had no collected "
-                          f"body and were not compared for conflicts; this does not "
-                          f"establish that they agree.", ""])
+            lines.extend(["> Some high-scoring source(s) had no collected body and were "
+                          f"not compared for conflicts; this does not establish that "
+                          f"they agree.", ""])
     if not conflicts:
         if not check or unscanned or arb_failed or scanned == 0:
             if lang == "zh":

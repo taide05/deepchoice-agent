@@ -330,10 +330,15 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
     # contradiction without this qualifier would hide that those sources were
     # never compared at all.
     excluded_no_body = int(check.get("sources_without_comparable_claim") or 0)
+    # The count is deliberately not repeated to the synthesizer: the 2026-11-02
+    # final-200 review found reports where model prose echoed this number into
+    # evidence_summary and readers counted it against a different population (the
+    # visible navigation list), so it read as a miscount. The qualitative fact is
+    # what the synthesis needs; the number stays in the structured snapshot.
     no_body_note = (
-        f" NOTE: {excluded_no_body} high-scoring source(s) carried no collected "
-        f"body and were not compared; this does not establish that they contain "
-        f"no disagreement." if excluded_no_body else "")
+        " NOTE: some high-scoring source(s) carried no collected body and were "
+        "not compared; this does not establish that they contain no disagreement."
+        if excluded_no_body else "")
     if not conflicts:
         if not check:
             return ("No confirmed conflicts, but this run recorded no conflict "

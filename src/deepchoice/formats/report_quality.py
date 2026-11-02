@@ -21,6 +21,13 @@ MALFORMED_NUMERIC_CITATION = re.compile(r"\[\[(\d+)\](?!\])")
 TRUNCATED_NUMERIC_CITATION = re.compile(r"\[\[(\d*)(?=[^0-9\]]|$)")
 EMPTY_SOURCE_PARENS = re.compile(r"（\s*）|\(\s*\)")
 DANGLING_PUNCT_SPACE = re.compile(r"[ \t]+([。，、；：！？])")
+# An unresolved citation is deliberately kept in the text (honest gap, never a
+# guessed source), but it is still a presentation defect: the final-200 content
+# review found 14/200 reports carrying one. Surface the count in batch health so
+# a citation-resolution regression is visible without re-reading the report; the
+# marker itself stays in the text.
+CITATION_GAP_MARK = re.compile(
+    r"〔引用未解析：[^〕]*〕|\[citation-unresolved: [^\]]*\]")
 
 
 def finalize_report_text(report: str) -> str:
@@ -51,6 +58,9 @@ def report_quality_flags(report: str) -> list[str]:
         flags.append(f"truncated_numeric_citation:{len(truncated)}")
     if EMPTY_SOURCE_PARENS.search(report or ""):
         flags.append("empty_source_parentheses")
+    gaps = CITATION_GAP_MARK.findall(report or "")
+    if gaps:
+        flags.append(f"citation_gap_markers:{len(gaps)}")
     if re.search(r"^[-*] \[(Medium|GitHub|YouTube|Unknown)\]\(https?://", report or "",
                  re.MULTILINE | re.IGNORECASE):
         flags.append("generic_source_label")

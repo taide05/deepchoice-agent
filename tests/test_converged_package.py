@@ -358,9 +358,11 @@ class TestReviewCorrectionsReachTheReport:
         levels = {"low": 0, "medium": 1, "high": 2}
         assert levels[out["confidence"]] <= levels[state["final_recommendation"]["confidence"]]
         rationale = out["final_recommendation"]["confidence_rationale"]
-        assert "自审调整" in rationale, rationale
-        assert f"最终置信度为 {out['confidence']}" in rationale, rationale
-        # The substantive synthesis reason remains; process counts are separate.
+        # The served rationale keeps the substantive synthesis reason and no longer
+        # carries the internal self-review process note (final-200 review: 173/200
+        # reports rendered "（自审调整：…）" into user-facing text); it must not name
+        # a different final level than the authoritative field.
+        assert "自审调整" not in rationale, rationale
         prior = state["final_recommendation"]["confidence_rationale"]
         assert rationale.startswith(prior), rationale
         assert "5/6" not in rationale, rationale

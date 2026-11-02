@@ -174,7 +174,11 @@ class TestScannerRobustness:
         for renderer in (render_www, render_cm, render_ef):
             md = renderer(state)
             # Language follows the task query (this fixture is English).
-            assert "3 high-scoring source(s) had no collected body" in md, (renderer, md)
+            # The count is intentionally not printed in user-facing reports: the
+            # conflict-check exclusion population differs from the visible
+            # navigation list, so a number here read as a miscount (final-200
+            # review recorded this in 198/200 reports).
+            assert "Some high-scoring source(s) had no collected body" in md, (renderer, md)
             assert "were not compared for conflicts" in md, (renderer, md)
 
 class TestBodylessSourceRegistry:

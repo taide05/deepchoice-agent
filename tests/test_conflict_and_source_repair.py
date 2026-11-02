@@ -584,5 +584,9 @@ class TestBodylessCoverageIsVisible:
                  "scan_outcomes": {"difference": 0, "no_difference": 2,
                                    "unscanned": 0},
                  "sources_without_comparable_claim": 2})
-        assert "2 high-scoring source(s) carried no collected body" in text, text
+        assert "some high-scoring source(s) carried no collected body" in text, text
         assert "not establish" in text, text
+        # The count is not handed to the synthesizer: model prose echoed it into
+        # evidence_summary and readers counted it against another population
+        # (final-200 review: 198/200 reports carried a mismatched count).
+        assert "2 high-scoring" not in text, text

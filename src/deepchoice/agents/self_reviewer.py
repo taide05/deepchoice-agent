@@ -2,6 +2,7 @@ import os
 
 from ..utils.decision import decision_view, withdraw_decision
 from ..utils.claim_support import decisive_claim_support
+from ..utils.confidence_text import align_confidence_rationale
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 from .conclusion_synthesizer import (
@@ -886,9 +887,6 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
             )
         else:
             applied, rejected = [], []
-        corrected_confidence_reason = any(
-            isinstance(item, dict) and item.get("field") == "confidence_rationale"
-            for item in applied)
 
         # The top-level confidence and the recommendation's own confidence are one
         # verdict, not two. Use the reviewer's level only when the review itself is
@@ -898,32 +896,18 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
         confidence = min(candidates, key=lambda c: _LEVELS[c]) if candidates else "low"
         recommendation["confidence"] = confidence
 
-        # Preserve the substantive synthesis reason. Never replace it with a
-        # pass-count summary. If the usable review changes the level or supplied no
-        # replacement reason, append a clearly separated adjustment note so the
-        # served text names the final level while the checklist count stays in the
-        # quality signal.
-        if review_usable and not corrected_confidence_reason and prior_rationale:
-            zh = any("\u4e00" <= ch <= "\u9fff" for ch in str(query_text))
-            if confidence != prior:
-                note = (
-                    f"（自审调整：最终置信度由 {prior or '未知'} 调整为 {confidence}；"
-                    f"上述为综合判断，检查项计数与知识缺口单列，不替代上述理由。）"
-                    if zh else
-                    f" (Self-review adjustment: final confidence changed from "
-                    f"{prior or 'unknown'} to {confidence}; the synthesis reason above "
-                    f"is retained and checklist counts are reported separately.)"
-                )
-            else:
-                note = (
-                    f"（自审调整：最终置信度为 {confidence}；上述为综合判断，"
-                    f"检查项计数与知识缺口单列，不替代上述理由。）"
-                    if zh else
-                    f" (Self-review adjustment: final confidence is {confidence}; "
-                    f"the synthesis reason above is retained and checklist counts are "
-                    f"reported separately.)"
-                )
-            recommendation["confidence_rationale"] = prior_rationale + note
+        # Keep the served confidence prose consistent with the authoritative field.
+        # The final-200 review found reports whose rationale named a different final
+        # level than the field (5/200) and every usable review appended an internal
+        # "（自审调整：…）" note to user-facing text (173/200). The structured
+        # confidence field already reports the review's final level, so the
+        # rationale keeps its substantive reason (including a reviewer-supplied
+        # correction) and only explicit final-level claims are aligned; the process
+        # note is removed.
+        served_rationale = str(recommendation.get("confidence_rationale") or "").strip()
+        if served_rationale:
+            recommendation["confidence_rationale"] = align_confidence_rationale(
+                served_rationale, confidence)
 
         # A claim-support flag is a structural problem: the reviewer may have
         # corrected wording, but a ranking whose decisive support is winner-owned

@@ -8,6 +8,7 @@ from ..formats.report_quality import (
 )
 from ..utils.claim_support import decisive_claim_support
 from ..formats.what_why_how import render as render_what_why_how
+from ..utils.confidence_text import align_confidence_rationale
 from ..utils.views import print_agent_output
 
 FORMAT_RENDERERS = {
@@ -15,6 +16,29 @@ FORMAT_RENDERERS = {
     "evidence_first": render_evidence_first,
     "comparison_matrix": render_comparison_matrix,
 }
+
+
+def _state_with_consistent_confidence(research_state: dict) -> dict:
+    """A render input whose confidence prose agrees with the confidence field.
+
+    The final-200 review found reports where the rationale named a different final
+    level than the authoritative field, and internal "（自审调整：…）" notes rendered
+    into user-facing text. The stored/finalised state is normalised in the
+    self-review; this render-time pass covers the draft and replayed/legacy states
+    without mutating the caller's dict.
+    """
+    rec = research_state.get("final_recommendation")
+    if not isinstance(rec, dict):
+        return research_state
+    rationale = rec.get("confidence_rationale")
+    if not rationale:
+        return research_state
+    aligned = align_confidence_rationale(rationale, rec.get("confidence"))
+    if aligned == rationale:
+        return research_state
+    patched = dict(research_state)
+    patched["final_recommendation"] = {**rec, "confidence_rationale": aligned}
+    return patched
 
 
 def render_report(research_state: dict) -> tuple[str, str]:
@@ -25,9 +49,10 @@ def render_report(research_state: dict) -> tuple[str, str]:
     corrected state, so the two cannot diverge and a correction reaches every
     artefact that renders from the state.
     """
-    fmt = research_state["task"].get("report_format", "what_why_how")
+    state = _state_with_consistent_confidence(research_state)
+    fmt = state["task"].get("report_format", "what_why_how")
     renderer = FORMAT_RENDERERS.get(fmt, render_what_why_how)
-    return finalize_report_text(renderer(research_state)), fmt
+    return finalize_report_text(renderer(state)), fmt
 
 
 class ReportGeneratorAgent:
