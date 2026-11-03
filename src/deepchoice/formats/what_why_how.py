@@ -773,9 +773,12 @@ def render(state: dict) -> str:
     # reader should be told instead of having the count silently understate use.
     unlisted = _unlisted_mention_count(body_text, chains, refs)
     if unlisted:
-        lines.extend(["", f"- 另有 {unlisted} 个在正文中被提及、但无可引用编号（无正文或仅摘要）的来源，"
-                          "未计入本清单。" if lang == "zh" else
-                     "", f"- {unlisted} source(s) are named in the prose without a citable "
-                         "number (no body or snippet only) and are not part of this list."])
+        if lang == "zh":
+            lines.extend(["", f"- 另有 {unlisted} 个在正文中被提及、但无可引用编号（无正文或仅摘要）"
+                              "的来源，未计入本清单。"])
+        else:
+            lines.extend(["", f"- {unlisted} source(s) are named in the prose without a "
+                              "citable number (no body or snippet only) and are not part "
+                              "of this list."])
 
     return finalize_report_text("\n".join(lines))

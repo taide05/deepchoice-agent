@@ -185,11 +185,18 @@
   - 覆盖行在"仅 page 级失败、无渠道失败"时缺失 → page 级失败独立触发；
   - 摘要缺口去标记后的标点/空格残留 → 清理；
   - 全量测试 **876 passed**。
-- 待验证：以上运行后修复需一次 151 小样本（~85k tokens）确认。
+- **F200-151 单例复验** `.scratch/cases/runs/validation-r4-151-20261102/`（51,266 tokens，上限 90k）：
+  评审 **usable true / DG false（C2 partial、C4=0）**；四项修复中 3 项成功、1 项部分成功
+  （摘要级 vLLM 页同时被列为"无正文不能作为依据"又是 #1 官方依据 → C2 partial）。
+  确定性结果：> citation gap 标记 50→**0**、覆盖行缺失→**有 page 级失败**、声明引用 3→**9=9**、
+  未列来源披露出现。R4 又暴露 3 个小 bug（未列来源注记重复两遍、not_prose 误标 fetch error、
+  空渠道未计入渠道可用数）→ 已修 + 测试，全量测试 **878 passed**。
+- 151 结论：usable 非 DG；外部 HF 抓取失败持续（official body 1/7、TGI 0/3），
+  残留为台账绑定/标签一致性问题，建议**归档为已知限制**（不再为单例再开运行）。
 
 ## 4. 验证阶梯与预算现状
 
-- **G0（已完成）**：单测 + 全量测试 **876 passed** + 冻结 200 snapshot 离线重放（0 error）。
+- **G0（已完成）**：单测 + 全量测试 **878 passed** + 冻结 200 snapshot 离线重放（0 error）。
 - **G1（已完成 16/16 评审，1,176,528 tokens）**：
   - 第一次运行 2026-11-02 17:05 因 **HTTP 402 Insufficient Balance** 中止
     （`.scratch/cases/runs/g1-review-fixes-20261102/`，标记 CONTAMINATED，记录 tokens 下界 181,102）；

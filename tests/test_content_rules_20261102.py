@@ -305,7 +305,7 @@ class TestRoundThreeRepairs:
             ],
         }
         note = derive_data_source_note(state)
-        assert "页面正文抓取失败" in note
+        assert "未返回可用正文" in note
         assert "ConnectError" in note and "timeout" in note
         assert "arxiv" in note
 
@@ -399,7 +399,7 @@ class TestRoundThreeRunRepairs:
             ]}],
         }
         note = derive_data_source_note(state)
-        assert "页面正文抓取失败" in note, note
+        assert "未返回可用正文" in note, note
         assert "ConnectError" in note
 
     def test_gap_excerpt_has_no_dangling_punctuation_space(self):
@@ -409,3 +409,38 @@ class TestRoundThreeRunRepairs:
         assert "[Source:" not in cleaned
         assert "， 的" not in cleaned, cleaned
         assert " 的" not in cleaned, cleaned
+
+
+class TestR4RunFixes:
+    """Bugs exposed by the F200-151 revalidation (2026-11-03): the unlisted-source
+    note was emitted twice (zh + stray en), and not_prose/empty-channel outcomes
+    were mislabelled in the coverage note."""
+
+    def test_unlisted_note_is_emitted_once(self):
+        state = _state(retrieved=4, cited=1)
+        state["final_recommendation"]["evidence_summary"] = (
+            "补充提及 Alpha vs Beta source 3 的社区转储，但未取得正文。")
+        report = render(state)
+        assert report.count("未计入本清单") == 1
+        assert "not part of this list" not in report
+
+    def test_not_prose_and_empty_channels_are_labelled(self):
+        from deepchoice.formats.coverage import derive_data_source_note
+        state = {
+            "task": {"query": "vLLM vs TGI 技术选型"},
+            "partial_failures": [],
+            "empty_sources": ["chroma"],
+            "search_results": [
+                {"source": "official", "results": [
+                    {"url": "https://a", "has_body": False,
+                     "body_error": "not_prose:low_prose_ratio"},
+                    {"url": "https://b", "has_body": False,
+                     "body_error": "ConnectError"},
+                ]},
+            ],
+        }
+        note = derive_data_source_note(state)
+        assert "非正文" in note, note
+        assert "ConnectError" in note
+        assert "chroma" in note
+        assert "空结果" in note
