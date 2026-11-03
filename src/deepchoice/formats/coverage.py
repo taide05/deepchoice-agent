@@ -27,7 +27,7 @@ def derive_data_source_note(state: dict) -> str:
         return explicit
 
     partial_failures = [str(f) for f in (state.get("partial_failures") or []) if str(f)]
-    empty_sources = [str(f) for f in (state.get("empty_sources") or []) if str(f)]
+    empty_sources = [_empty_source_name(f) for f in (state.get("empty_sources") or [])]
     page_failures = _page_fetch_failures(state.get("search_results") or [])
     if not partial_failures and not page_failures and not empty_sources:
         return ""
@@ -56,6 +56,18 @@ def derive_data_source_note(state: dict) -> str:
                  f"({page_failures['summary']}).")
     return (note + " Conclusions are based on the retrieved bodies and snippets and "
             "may miss perspectives from the failed pages.")
+
+
+def _empty_source_name(item) -> str:
+    """A readable channel name for an empty-source record.
+
+    Snapshots carry `empty_sources` as dicts ({"source": "chroma", "reason": ...});
+    str(dict) printed raw in the note before (round-five validation F200-151).
+    """
+    if isinstance(item, dict):
+        return str(item.get("source") or item.get("name") or item.get("channel")
+                   or "未知渠道")
+    return str(item)
 
 
 def _page_fetch_failures(search_results: list[dict]) -> dict | None:

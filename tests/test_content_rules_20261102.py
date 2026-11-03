@@ -498,3 +498,32 @@ class TestNavigationVsCitation:
         assert "Navigation/citation contradiction" in REVIEW_SYSTEM
         assert "Citation-source match" in REVIEW_SYSTEM
         assert "Snippet-only decisive basis" in REVIEW_SYSTEM
+
+
+class TestR5RunFixes:
+    """Bugs exposed by the fifth F200-151 run (2026-11-03): [DISPUTED] suffix in
+    literal citation titles became unresolved gaps, and empty-source dicts were
+    printed raw in the coverage note."""
+
+    def test_disputed_title_suffix_resolves(self):
+        from deepchoice.agents.conclusion_synthesizer import resolve_text_with_sources
+        chains = [{"sources": [{
+            "title": "vLLM vs. TGI", "url": "https://x/vs", "snippet": "body",
+            "has_body": True, "body": "body", "disputed": True}]}]
+        resolved, bindings = resolve_text_with_sources(
+            "对比结论 [Source: vLLM vs. TGI [DISPUTED]]。", chains)
+        assert "引用未解析" not in resolved, resolved
+        assert "[Source: vLLM vs. TGI]" in resolved
+        assert bindings
+
+    def test_empty_source_dict_is_rendered_readably(self):
+        from deepchoice.formats.coverage import derive_data_source_note
+        state = {
+            "task": {"query": "vLLM vs TGI 技术选型"},
+            "partial_failures": [],
+            "empty_sources": [{"source": "chroma", "reason": "no_research_material"}],
+            "search_results": [],
+        }
+        note = derive_data_source_note(state)
+        assert "chroma" in note
+        assert "{'source'" not in note, note

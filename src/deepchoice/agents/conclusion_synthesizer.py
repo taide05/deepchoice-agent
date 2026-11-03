@@ -706,6 +706,21 @@ def _classify_bracket(inner: str) -> tuple[str, list[int]]:
     return "leave", []
 
 
+_DISPUTED_TITLE_SUFFIX = re.compile(
+    r"\s*\[?\s*DISPUTED\s*\]?\s*$", re.IGNORECASE)
+
+
+def _clean_citation_title(part: str) -> str:
+    """Remove an internal disputed-source suffix from a written title.
+
+    The source list marks conflicted sources with "[DISPUTED]" for the model; when
+    the model copies that marker into a [Source: ...] citation the literal pass no
+    longer matches the registered title and the citation becomes a visible gap
+    (round-five validation F200-151: 16 gaps with `[DISPUTED` in the title).
+    """
+    return _DISPUTED_TITLE_SUFFIX.sub("", str(part or "")).strip()
+
+
 def _resolve_literal_marker(marker: str, registry: dict,
                             context: str) -> tuple[str, list[dict]]:
     """Resolve a literal `[Source: title]` to registered identities and a gap."""
@@ -720,6 +735,7 @@ def _resolve_literal_marker(marker: str, registry: dict,
     entries: list[dict] = []
     gaps: list[str] = []
     for part in parts:
+        part = _clean_citation_title(part) or part
         entry = resolve_literal_entry(registry, part)
         if entry is None:
             # Unknown or ambiguous: never pick one of several same-title sources.
