@@ -17,10 +17,13 @@ def test_github_pages_root_gets_same_host_static_paths_first():
     assert not any("raw.githubusercontent" in target for target in targets)
 
 
-def test_plain_docs_root_gets_path_candidates_and_llms():
+def test_plain_docs_root_gets_llms_and_real_path_candidates():
     targets = _fallback_doc_targets("https://docs.example.com/docs/")
-    assert targets[0] == "https://docs.example.com/docs/stable/"
+    # Custom domains no longer get guessed /stable/ /latest/ paths (R7a dead
+    # paths); llms.txt and real /docs/ candidates remain.
     assert any(target == "https://docs.example.com/llms.txt" for target in targets)
+    assert not any(target.rstrip("/").endswith(("/stable", "/latest"))
+                   for target in targets)
 
 
 def test_fallback_targets_are_bounded_and_http_only():
@@ -394,7 +397,7 @@ def test_navigation_root_tries_static_fallback_and_can_admit_body(monkeypatch):
 
     async def fake_fetch(self, url, **kwargs):
         written.append(url)
-        if "stable/" in url or "llms" in url:
+        if "llms" in url:
             body = "LangGraph is a framework for stateful agent workflows. " * 10
             return {
                 "ok": True, "url": url, "body": body, "title": "LangGraph",
@@ -412,7 +415,7 @@ def test_navigation_root_tries_static_fallback_and_can_admit_body(monkeypatch):
     rows = asyncio.run(official_mod.OfficialSearch()._do_search(
         "LangGraph vs AutoGen", [], 10,
         adapted_queries=[], candidate_techs=["LangGraph"]))
-    assert any("stable/" in url for url in written), written
+    assert any("llms" in url for url in written), written
     assert any(row.get("has_body") and row.get("_from_fallback") for row in rows), written
 
 def test_malformed_ipv6_urls_do_not_fail_the_official_channel():

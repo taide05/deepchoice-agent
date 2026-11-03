@@ -420,10 +420,13 @@ def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     # A curate URL that already points at a versioned documentation page should
     # not have another stable/latest segment appended: that produces 404s such
     # as /docs/envoy/latest/latest/ or /latest/stable/.
-    # Do not guess /stable/ or /latest/: many sites never serve those paths and
-    # every attempt is a guaranteed 404 (R7a: elastic.co/stable, gofiber/stable).
-    # Real versioned roots come from the curated mapping; index discovery handles
-    # the rest.
+    # /stable/ and /latest/ are only a real convention on GitHub Pages project
+    # sites (mkdocs-style versioned docs); on ordinary custom domains they are
+    # frequently 404 (R7a: elastic.co/stable, docs.gofiber.io/stable) so they are
+    # not guessed there. llms.txt and curated mapping deep paths remain.
+    if host.endswith(".github.io") and not any(
+            segment in lowered for segment in ("/latest", "/stable", "/current")):
+        targets += [f"{root}/stable/", f"{root}/latest/"]
     targets += [f"{scheme}://{host}/llms.txt", f"{scheme}://{host}/llms-full.txt"]
     if not path:
         targets += [f"{root}/docs/", f"{root}/en/latest/"]
