@@ -142,6 +142,16 @@ def _one_line(value) -> str:
     return " ".join(str(value or "").split())
 
 
+_SOURCE_ONLY_MARKER = re.compile(
+    r"\[Source:[^\]]*\]|〔引用未解析：[^〕]*〕|\[citation-unresolved: [^\]]*\]")
+
+
+def _strip_marker_text(value) -> str:
+    """User-facing prose without citation/gap markers (summary excerpts)."""
+    text = str(value or "")
+    return " ".join(_SOURCE_ONLY_MARKER.sub("", text).split())
+
+
 _SINGLE_BRACKET_NUMBER = re.compile(r"\[(\d{1,3})\]")
 
 
@@ -170,6 +180,44 @@ def _resolve_single_bracket_numbers(text: str, chains: list[dict]) -> str:
         return f"[Source: {label}]" if label else match.group(0)
 
     return _SINGLE_BRACKET_NUMBER.sub(_sub, value)
+
+
+_UNRESOLVED_TITLE = re.compile(r"〔引用未解析：来源标题 “([^”]+)”〕")
+
+
+def _unlisted_mention_count(body_text: str, chains: list[dict],
+                            used: list[dict]) -> int:
+    """Count sources named in the prose but absent from the citation ledger."""
+    def title_key(text) -> str:
+        return "".join(ch for ch in str(text or "").lower() if ch.isalnum())
+
+    used_keys = set()
+    for entry in used or []:
+        for title in [entry.get("title")] + list(entry.get("aliases") or []):
+            key = title_key(title)
+            if key:
+                used_keys.add(key)
+    seen: set[str] = set()
+    count = 0
+    for chain in chains or []:
+        if not isinstance(chain, dict):
+            continue
+        for source in chain.get("sources") or []:
+            if not isinstance(source, dict):
+                continue
+            title = str(source.get("title") or "")
+            key = title_key(title)
+            if not key or len(key) < 6 or key in used_keys or key in seen:
+                continue
+            if title and title in body_text:
+                seen.add(key)
+                count += 1
+    for title in _UNRESOLVED_TITLE.findall(body_text):
+        key = title_key(title)
+        if key and key not in used_keys and key not in seen:
+            seen.add(key)
+            count += 1
+    return count
 
 
 def _summary_excerpt(value, limit: int = 260) -> str:
@@ -246,10 +294,10 @@ def _decision_summary(rec: dict, lang: str) -> list[str]:
     gaps = [str(q) for q in (rec.get("unresolved_questions") or []) if str(q).strip()]
     if gaps:
         label = "关键缺口" if lang == "zh" else "Key gap"
-        lines.append(f"- **{label}：** {_summary_excerpt(gaps[0], 180)}")
+        lines.append(f"- **{label}：** {_summary_excerpt(_strip_marker_text(gaps[0]), 220)}")
     guard = rec.get("decision_guard_actions") or []
     if guard:
-        label = "强度校准" if lang == "zh" else "Strength guard"
+        label = "证据强度" if lang == "zh" else "Evidence strength"
         # G1 review (F200-142/151): the old wording ("排序已降级为条件/待验证假设；
         # 详见正文。") was a self-referential process note. State the reader-facing
         # consequence instead: the ordering is a conditional hypothesis, not an
@@ -651,6 +699,13 @@ def render(state: dict) -> str:
             linked = _field_source_links(rec, locator, rationale, chains)
             if linked:
                 lines.append(f"  *Sources: {'; '.join(linked)}*")
+        if rec.get("decision_guard_actions"):
+            # G1.5 review (F200-142/151): the reader-facing strength caveat was
+            # only in the summary; repeat its consequence next to the ranking.
+            lines.append("> 上述排序为条件性/待验证假设，不构成已证实的产品优劣排序。"
+                         if lang == "zh" else
+                         "> The ordering above is a conditional, unverified "
+                         "hypothesis, not an established product comparison.")
         lines.append("")
     if rec.get("trade_offs"):
         lines.append(T["trade_offs"][lang])
@@ -695,6 +750,7 @@ def render(state: dict) -> str:
             "",
         ])
 
+    body_text = "\n".join(lines)
     lines.append(T["references"][lang])
     # References are the same set the Why section just derived: the sources the
     # synthesis result actually used. Retrieving a page does not make it a
@@ -706,5 +762,14 @@ def render(state: dict) -> str:
     if not refs:
         lines.append("- 本次没有可追溯的引用来源。" if lang == "zh"
                      else "- No traceable source was used in this run.")
+    # G1.5 review (F200-190/151): a bodyless or unnumbered source can still be
+    # named in the prose; it is not part of the declared citation ledger, and the
+    # reader should be told instead of having the count silently understate use.
+    unlisted = _unlisted_mention_count(body_text, chains, refs)
+    if unlisted:
+        lines.extend(["", f"- 另有 {unlisted} 个在正文中被提及、但无可引用编号（无正文或仅摘要）的来源，"
+                          "未计入本清单。" if lang == "zh" else
+                     "", f"- {unlisted} source(s) are named in the prose without a citable "
+                         "number (no body or snippet only) and are not part of this list."])
 
     return finalize_report_text("\n".join(lines))

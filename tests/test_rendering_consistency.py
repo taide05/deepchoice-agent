@@ -173,4 +173,4 @@ def test_summary_reports_decision_guard_actions():
     state["final_recommendation"]["decision_guard_actions"] = [
         "conditional_top_option_strength_caveat"]
     report = render(state)
-    assert "强度校准" in report
+    assert "证据强度" in report

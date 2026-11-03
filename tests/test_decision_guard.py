@@ -34,7 +34,7 @@ def test_recommended_owner_dominance_downgrades_to_conditional():
     assert adjusted["decision_status"] == "conditional"
     assert adjusted["winner"] == ""
     assert actions == ["recommended_to_conditional"]
-    assert "证据强度校准" in adjusted["recommendation"]
+    assert "证据强度提示" in adjusted["recommendation"]
     assert len(adjusted["ranked_options"]) == 2
 
 
@@ -65,7 +65,7 @@ def test_conditional_top_option_flag_adds_strength_caveat():
     adjusted, actions = apply_claim_support_guard(rec, lang="zh")
     assert adjusted["decision_status"] == "conditional"
     assert actions == ["conditional_top_option_strength_caveat"]
-    assert "证据强度校准" in adjusted["recommendation"]
+    assert "证据强度提示" in adjusted["recommendation"]
     # The caveat says what the evidence problem actually is: the decisive
     # comparison rests on own/secondary material, not "no first-party material at
     # all" (final-200 review: the old wording overstated cases whose top option did
@@ -76,5 +76,5 @@ def test_conditional_top_option_flag_adds_strength_caveat():
 def test_guard_is_idempotent():
     adjusted, _ = apply_claim_support_guard(_recommended_rec(), lang="zh")
     again, actions = apply_claim_support_guard(adjusted, lang="zh")
-    assert again["recommendation"].count("证据强度校准") == 1
+    assert again["recommendation"].count("证据强度提示") == 1
     assert actions == []

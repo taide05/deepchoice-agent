@@ -282,3 +282,82 @@ class TestUnnumberedSourceTitleMarker:
     def test_prompt_forbids_marks_for_unnumbered_sources(self):
         from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
         assert "listed without a number" in SYNTHESIS_PROMPT
+
+
+class TestRoundThreeRepairs:
+    """Residual fixes from the round-two validation (2026-11-03): coverage note
+    page failures, remainder identity matching, clipped gap summaries, unlisted
+    source note, availability/snippet rules and their diagnostics."""
+
+    def test_coverage_note_lists_page_fetch_failures(self):
+        from deepchoice.formats.coverage import derive_data_source_note
+        state = {
+            "task": {"query": "vLLM vs TGI 技术选型"},
+            "partial_failures": ['"arxiv"'],
+            "search_results": [
+                {"source": "official", "results": [
+                    {"url": "https://docs.example/a", "has_body": False,
+                     "body_error": "ConnectError"},
+                    {"url": "https://docs.example/b", "has_body": False,
+                     "body_error": "timeout"},
+                    {"url": "https://docs.example/c", "has_body": True},
+                ]},
+            ],
+        }
+        note = derive_data_source_note(state)
+        assert "页面正文抓取失败" in note
+        assert "ConnectError" in note and "timeout" in note
+        assert "arxiv" in note
+
+    def test_remainder_does_not_merge_distinct_pages_with_same_title(self):
+        chains = [{"sources": [
+            {"url": "https://a.example/page", "title": "X — deep documentation"},
+            {"url": "https://b.example/page", "title": "X — deep documentation"},
+        ]}]
+        used = [{"url": "https://a.example/page", "title": "X — deep documentation"}]
+        assert unused_retrieved_count(chains, used) == 1
+
+    def test_gap_summary_excerpt_has_no_clipped_citation(self):
+        state = _state(retrieved=2, cited=2)
+        state["final_recommendation"]["unresolved_questions"] = [
+            "缺失数据：迁移工时与回滚成本，且部分来源 [Source: Alpha vs Beta source 1] 仅摘要级。"
+        ]
+        report = render(state)
+        summary = report.split("## 决策摘要", 1)[1].split("\n## ", 1)[0]
+        assert "[Source:" not in summary, summary
+        assert "迁移工时" in summary
+
+    def test_reference_section_notes_unlisted_mentioned_sources(self):
+        state = _state(retrieved=4, cited=1)
+        state["final_recommendation"]["evidence_summary"] = (
+            "补充提及 Alpha vs Beta source 3 的社区转储，但未取得正文。")
+        report = render(state)
+        assert "未计入本清单" in report
+
+    def test_availability_and_snippet_rules_in_prompts(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+        assert "same deployment mode for every option" in SYNTHESIS_PROMPT
+        assert "SNIPPET-LEVEL EVIDENCE IS NOT BODY" in SYNTHESIS_PROMPT
+        assert "Self-contradictory availability claim" in REVIEW_SYSTEM
+        assert "Same-mode ranking" in REVIEW_SYSTEM
+        assert "Snippet-level sources" in REVIEW_SYSTEM
+
+    def test_availability_claim_flag(self):
+        from deepchoice.formats.report_quality import report_ledger_flags
+        chains = [{"sources": [{"title": "Host and deploy", "url": "https://docs.example/h",
+                                "has_body": True, "snippet": "body"}]}]
+        rec = {"recommendation": "见 [Source: Host and deploy]",
+               "citation_sources": {"recommendation": [
+                   {"title": "Host and deploy", "url": "https://docs.example/h",
+                    "has_body": True}]}}
+        flags = report_ledger_flags(
+            rec, chains, "报告称该指南正文未取回，故未纳入比较。")
+        assert "availability_claim_with_collected_bodies" in flags
+
+    def test_ranked_options_repeat_reader_facing_caveat(self):
+        state = _state(retrieved=2, cited=2)
+        state["final_recommendation"]["decision_guard_actions"] = [
+            "conditional_top_option_strength_caveat"]
+        report = render(state)
+        assert "上述排序为条件性/待验证假设" in report

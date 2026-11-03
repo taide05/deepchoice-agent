@@ -133,6 +133,18 @@ def report_ledger_flags(rec: dict, chains: list[dict], report: str) -> list[str]
         flags.append(f"ledger_ghost_markers:{len(ghost)}")
     if missing:
         flags.append(f"ledger_unlisted_sources:{len(missing)}")
+    # Round-two validation (F200-041, 2026-11-03): a report can claim that a
+    # source's body "was not retrieved" while the cited body is present. Surface it
+    # for batch health; the prompt/self-review rules carry the correction.
+    body_available = any(
+        bool((source or {}).get("has_body"))
+        for chain in (chains or []) if isinstance(chain, dict)
+        for source in chain.get("sources") or [] if isinstance(source, dict))
+    if body_available and re.search(
+            r"正文未取回|未取回正文|正文缺失|正文未取到|"
+            r"body (?:was )?not (?:retrieved|collected)|no retrieved body",
+            report or "", re.IGNORECASE):
+        flags.append("availability_claim_with_collected_bodies")
     return flags
 
 

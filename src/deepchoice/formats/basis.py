@@ -68,17 +68,18 @@ def unused_retrieved_count(chains: list[dict], used: list[dict]) -> int:
     Count raw retrieved rows whose URL/title does not map to a cited entry instead.
     """
     urls: set[str] = set()
-    titles: set[str] = set()
+    titles: dict[str, list[str]] = {}
     for entry in used or []:
         if not isinstance(entry, dict):
             continue
         url = str(entry.get("url") or "")
-        if url:
-            urls.add(_canonical_source_url(url))
+        canonical = _canonical_source_url(url) if url else ""
+        if canonical:
+            urls.add(canonical)
         for title in [entry.get("title")] + list(entry.get("aliases") or []):
             key = _title_key(title)
             if key:
-                titles.add(key)
+                titles.setdefault(key, []).append(canonical)
     total = 0
     cited = 0
     for chain in chains or []:
@@ -89,10 +90,18 @@ def unused_retrieved_count(chains: list[dict], used: list[dict]) -> int:
                 continue
             total += 1
             url = str(source.get("url") or "")
-            if url and _canonical_source_url(url) in urls:
+            canonical = _canonical_source_url(url) if url else ""
+            if canonical and canonical in urls:
                 cited += 1
                 continue
-            if _title_key(source.get("title")) in titles:
+            # Title matching is only identity-safe when exactly one cited source
+            # carries that normalized title and the rows do not name different
+            # pages. Two different pages can share a display title ("X — deep
+            # documentation"); treating the uncited one as cited under-counted the
+            # remainder by one in F200-041/151 (round-two validation, 2026-11-03).
+            used_urls = titles.get(_title_key(source.get("title")))
+            if used_urls and len(used_urls) == 1 and (
+                    not canonical or not used_urls[0] or canonical == used_urls[0]):
                 cited += 1
     return max(0, total - cited)
 

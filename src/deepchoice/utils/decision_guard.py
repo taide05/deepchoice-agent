@@ -20,7 +20,7 @@ import copy
 
 from .claim_support import claim_support_flags, decisive_claim_support
 
-_ZH_MARKER = "证据强度校准"
+_ZH_MARKER = "证据强度提示"
 _EN_MARKER = "evidence-strength guard"
 
 
@@ -64,7 +64,7 @@ def apply_claim_support_guard(rec: dict, *, lang: str = "") -> tuple[dict, list[
         if len(ranked) >= 2:
             adjusted["decision_status"] = "conditional"
             note = (
-                "（证据强度校准：现有材料不足以支持唯一推荐；以下排序仅为条件性、"
+                "（证据强度提示：现有材料不足以支持唯一推荐；以下排序仅为条件性、"
                 "待验证比较，不构成唯一选型结论。）"
                 if zh else
                 " (Evidence-strength guard: the material does not support a single "
@@ -75,7 +75,7 @@ def apply_claim_support_guard(rec: dict, *, lang: str = "") -> tuple[dict, list[
         else:
             adjusted["decision_status"] = "insufficient_evidence"
             note = (
-                "（证据强度校准：现有材料不足以支持唯一推荐，且缺少可分支比较；"
+                "（证据强度提示：现有材料不足以支持唯一推荐，且缺少可分支比较；"
                 "以下为待补证据的 hold。）"
                 if zh else
                 " (Evidence-strength guard: the material does not support a unique "
@@ -96,7 +96,7 @@ def apply_claim_support_guard(rec: dict, *, lang: str = "") -> tuple[dict, list[
     ]
     if status == "conditional" and conditional_flags:
         note = (
-            "（证据强度校准：默认/排序靠前分支的决定性比较主要依赖其自有材料或二手来源，"
+            "（证据强度提示：默认/排序靠前分支的决定性比较主要依赖其自有材料或二手来源，"
             "缺少独立的非厂商对照；以下排序仅作为待验证假设，不作为已证实的产品优劣结论。）"
             if zh else
             " (Evidence-strength guard: the decisive comparison for the default/top-ranked "
@@ -116,7 +116,7 @@ def apply_claim_support_guard(rec: dict, *, lang: str = "") -> tuple[dict, list[
     # remaining honest gap so the served text cannot read as a supported ranking.
     if status == "conditional" and "conditional_no_primary" in flags:
         note = (
-            "（证据强度校准：该条件结论没有任何一手（官方或独立）来源支撑，属于证据缺口型判断；"
+            "（证据强度提示：该条件结论没有任何一手（官方或独立）来源支撑，属于证据缺口型判断；"
             "以下分支只按现有材料给出，不构成已证实的优劣排序。）"
             if zh else
             " (Evidence-strength guard: this conditional conclusion has no primary "

@@ -101,12 +101,12 @@ class TestConditionalNoPrimaryCaveat:
     def test_no_primary_conditional_gets_gap_caveat(self):
         adjusted, actions = apply_claim_support_guard(self._rec(), lang="zh")
         assert actions == ["conditional_no_primary_caveat"]
-        assert "证据强度校准" in adjusted["recommendation"]
+        assert "证据强度提示" in adjusted["recommendation"]
         assert "证据缺口型判断" in adjusted["recommendation"]
         assert adjusted["decision_guard_actions"] == ["conditional_no_primary_caveat"]
 
     def test_caveat_is_idempotent(self):
         adjusted, _ = apply_claim_support_guard(self._rec(), lang="zh")
         again, actions = apply_claim_support_guard(adjusted, lang="zh")
-        assert again["recommendation"].count("证据强度校准") == 1
+        assert again["recommendation"].count("证据强度提示") == 1
         assert actions == []
