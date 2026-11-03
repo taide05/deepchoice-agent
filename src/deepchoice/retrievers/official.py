@@ -1286,6 +1286,8 @@ class OfficialSearch(BaseRetriever):
                 or entry["body_stored_truncated"])
             entry["body_prose_chars"] = fetched.get("prose_chars", len(entry["snippet"]))
             entry["body_admission"] = fetched.get("admission", "prose_ok")
+            if fetched.get("fetch_via"):
+                entry["fetch_via"] = fetched.get("fetch_via")
             entry["body_content_type"] = fetched.get("content_type", "")
             # A curated root is the candidate's identity anchor, but its overview
             # often does not answer migration/rollback/security/performance. Rank

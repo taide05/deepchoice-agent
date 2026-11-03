@@ -66,6 +66,11 @@ def finalize_report_text(report: str) -> str:
     # escaping is transport, not report text; unescape the common sequences and
     # collapse runs of blank lines.
     text = re.sub(r"\\r\\n|\\n", "\n", report or "")
+    # A model occasionally writes a citation as `[[Source: title]]`; the outer pair
+    # is then shredded by the truncated-numeric rule into many "〔引用未解析：截断〕"
+    # markers (observed 60x in the Phase-B2 F200-030 re-run). Repair the claimed
+    # double-bracket citation first so a real citation is not reported as a gap.
+    text = re.sub(r"\[\[\s*(Source:[^\[\]]*?)\]\]", r"[\1]", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = RAW_NUMERIC_CITATION.sub(
         lambda match: f"〔引用未解析：编号 {match.group(1)}〕", text)

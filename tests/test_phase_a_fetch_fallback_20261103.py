@@ -143,3 +143,13 @@ def test_extract_pages_uses_extract_endpoint(monkeypatch):
     out = asyncio.run(te.extract_pages(["https://example.com/docs"]))
     assert seen["url"] == te.TAVILY_EXTRACT_URL, seen
     assert out["https://example.com/docs"]["title"] == "Example"
+
+def test_finalize_repairs_double_bracket_citation():
+    """Regression: `[[Source: ...]]` must not be shredded into truncated-gap markers."""
+    from deepchoice.formats.report_quality import finalize_report_text
+    out = finalize_report_text("结论 [[Source: Go Fiber — Official Documentation]] 成立")
+    assert "[Source: Go Fiber — Official Documentation]" in out
+    assert "〔引用未解析" not in out
+    # a genuinely truncated numeric citation still becomes an honest gap marker
+    out2 = finalize_report_text("见 [[12")
+    assert "〔引用未解析" in out2
