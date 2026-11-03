@@ -152,6 +152,11 @@ def _strip_marker_text(value) -> str:
     text = str(value or "")
     text = _SOURCE_ONLY_MARKER.sub("", text)
     text = re.sub(r"[ \t]{2,}", " ", " ".join(text.split()))
+    # Marker wrappers can survive as bracket residue (`[]]`, stray `[` before a
+    # gap, or a leaked [DISPUTED] tag); strip them so a summary bullet reads as
+    # prose (round-five F200-151).
+    text = re.sub(r"\[DISPUTED\]?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"[\[\]]+", "", text)
     # A removed marker can leave space before Chinese punctuation or a dangling
     # comma/space at the cut ("无 NestJS 对照， 的对手是"); tidy the excerpt.
     text = re.sub(r"\s+([，。、；：！？）])", r"\1", text)
@@ -580,7 +585,7 @@ def render(state: dict) -> str:
     unused = unused_retrieved_count(chains, used)
     if unused:
         lines.extend([
-            f"其余 {unused} 条检索结果未进入本报告的依据，保留在原始检索记录中。"
+            f"其余 {unused} 条检索结果未进入本报告的可引用依据清单，保留在原始检索记录中。"
             if lang == "zh"
             else f"The other {unused} retrieved item(s) are not part of "
                  f"this report's basis and remain in the raw retrieval record.",

@@ -50,6 +50,12 @@ def _collapse_nested_gaps(text: str) -> str:
         if not changed:
             break
     value = value.replace("〕]]", "〕").replace("〕]", "〕")
+    # A marker written as `[Source: title [DISPUTED]]` leaves wrapper brackets once
+    # the inner literal fails and is rendered as a gap (round-five validation
+    # F200-151: 13 of 16 gap markers kept an unmatched leading "[").
+    value = re.sub(r"\[\s*(〔引用未解析)", r"\1", value)
+    value = re.sub(r"(〔引用未解析[^〕]*〕)\s*\]", r"\1", value)
+    value = re.sub(r"\[\](?!\()", "", value)
     return value
 
 
@@ -70,6 +76,9 @@ def finalize_report_text(report: str) -> str:
                        if match.group(1) else "〔引用未解析：截断〕"), text)
     text = EMPTY_SOURCE_PARENS.sub("", text)
     text = DANGLING_PUNCT_SPACE.sub(r"\1", text)
+    # The internal conflict marker "[DISPUTED]" is model-facing only; if it leaked
+    # into a citation title or prose it is not report content (R5 F200-151).
+    text = re.sub(r"\s*\[DISPUTED\]?", "", text)
     text = _collapse_nested_gaps(text)
     return text
 

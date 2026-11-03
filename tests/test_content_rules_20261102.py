@@ -100,7 +100,7 @@ class TestRemainderCount:
 
     def test_rendered_remainder_uses_uncited_rows(self):
         report = render(_state(retrieved=5, cited=3))
-        assert "其余 2 条检索结果未进入本报告的依据" in report, report[-1200:]
+        assert "其余 2 条检索结果未进入本报告的可引用依据清单" in report, report[-1200:]
 
 
 class TestConflictHedgePhrasing:
@@ -527,3 +527,25 @@ class TestR5RunFixes:
         note = derive_data_source_note(state)
         assert "chroma" in note
         assert "{'source'" not in note, note
+
+
+class TestR5DisplayResidue:
+    """Round-five review residues: unmatched brackets around gap markers and
+    bracket residue in the decision-summary key-gap excerpt."""
+
+    def test_gap_wrapper_brackets_are_removed(self):
+        from deepchoice.formats.report_quality import finalize_report_text
+        raw = "对比结论 [〔引用未解析：来源标题 “vLLM vs. TGI [DISPUTED”〕]]。"
+        cleaned = finalize_report_text(raw)
+        assert "[〔引用未解析" not in cleaned, cleaned
+        assert "〕]]" not in cleaned, cleaned
+        assert "引用未解析" in cleaned
+
+    def test_summary_gap_excerpt_has_no_bracket_residue(self):
+        state = _state(retrieved=2, cited=2)
+        state["final_recommendation"]["unresolved_questions"] = [
+            "缺失数据 [DISPUTED]] 与回滚成本。"]
+        report = render(state)
+        summary = report.split("## 决策摘要", 1)[1].split("\n## ", 1)[0]
+        assert "]]" not in summary, summary
+        assert "[]]" not in summary, summary

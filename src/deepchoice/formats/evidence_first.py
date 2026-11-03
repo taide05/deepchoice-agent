@@ -81,7 +81,7 @@ def render(state: dict) -> str:
                        "zh": "**导航链接（无正文，不能作为依据）**"},
         "unused_note": {"en": "The other {n} retrieved item(s) are not part of this report's "
                               "basis and remain in the raw retrieval record.",
-                        "zh": "其余 {n} 条检索结果未进入本报告的依据，保留在原始检索记录中。"},
+                        "zh": "其余 {n} 条检索结果未进入本报告的可引用依据清单，保留在原始检索记录中。"},
         "disputes": {"en": "## Disputes", "zh": "## 争议"},
         "no_disputes": {"en": "No major disputes detected.", "zh": "未检测到重大争议。"},
         "claim_a": {"en": "Claim A", "zh": "主张 A"},
