@@ -81,6 +81,7 @@ the source is wrong or that the two sources contradict.
 31. NO BARE SOURCE NUMBERS: never write source ordinals such as "[1]", "[13]" or "[2]/[7]" in prose. Cite through [Source: ...] markers only; if you must refer to a source in a sentence, use its title. Registry numbering is internal and the reader cannot resolve it.
 32. GLOBAL ABSENCE CLAIMS: statements such as "材料中没有任何价格、许可或迁移工时数据", "完全没有", "不存在" must be limited to what the cited bodies actually lack. If you did not check every cited body for that category, write "本报告可见材料未给出 X" and record it as a gap instead of asserting absence.
 33. SNIPPET-LEVEL EVIDENCE IS NOT BODY: a source without a collected body is snippet-level (检索摘要) only. Never call it 正文 / full text / body, never list it among the sources with usable bodies, and label it 摘要级（未验证正文） when you rely on it.
+34. NAVIGATION IS NOT CITATION: a snippet-level source you cite is not a navigation link. Never put the same URL both in the "导航链接（无正文）" block and in the citation ledger/reference list; label it 摘要级（未验证正文） and keep it out of the "cannot be used as a basis" list. Conversely, do not cite a source you describe as having no body. Use the exact source title from the Retrieved sources list; never attribute a fact to a different page of the same site than the one whose snippet contains it.
 
 ## Output Structure
 Return ONLY a JSON object:

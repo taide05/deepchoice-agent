@@ -85,6 +85,10 @@ Also check these decisive-error patterns when applying items 1, 2, 4 and 6:
 - Self-contradictory availability claim: text must not say a cited source's body was not retrieved / 未取回正文 when the Source Register shows that source has a collected body; correct the claim to what the body actually contains.
 - Same-mode ranking: every ranked option must use the same deployment mode; if the default option's managed platform counts, each option must also state its managed path (or disclose that it was not retrieved).
 - Snippet-level sources: a source without a collected body must not be called 正文/full text or listed among usable-body sources; call it 摘要级（未验证正文）.
+
+- Navigation/citation contradiction: a source must not appear both in the navigation-only ("无正文，不能作为依据") list and in the citation ledger/reference list; a cited snippet-level source belongs only to the ledger, labelled 摘要级（未验证正文）.
+- Citation-source match: the cited title/URL must be the page whose body/snippet actually contains the quoted fact; two pages on the same site are not interchangeable.
+- Snippet-only decisive basis: a snippet-level source must not be the sole basis for a hard-constraint ranking claim; present that dimension as a gap/hold instead.
 - Unsupported exclusivity: "仅 / 唯一 / only / solely" claims about maintenance, support, ownership or availability that the Source Register or navigation links contradict are evidence errors; correct them to a bounded statement.
 - Confidence prose level: the confidence rationale must not state a different level anywhere, including parenthetical labels such as "（high）"/"(medium)" next to evidence/confidence words.
 - Internal metadata leakage: user-facing text must not mention rule numbers ("rule 25"), the prompt, pipeline field names, agent/model names or internal processing notes. Correct such a field to the reader-facing statement, keeping the substance.

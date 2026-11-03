@@ -1,6 +1,7 @@
 import re
 
 from .basis import (
+    _canonical_source_url,
     escape_markdown_text,
     research_question_line,
     short_report_title,
@@ -378,6 +379,12 @@ def render(state: dict) -> str:
     # explanations, the ranking and the references all come from this one result.
     rec = state.get("final_recommendation", {}) or {}
     lang = _lang(query)
+    # One derived view of the cited sources for the navigation filter and the
+    # reference list: a snippet-level source that IS cited must not also appear in
+    # the "no body, not usable as a basis" navigation list (round-four validation,
+    # F200-151: the same vLLM page was both declared unusable and used as the #1
+    # official basis).
+    used_entries = used_sources(rec, chains)
 
     T = {
         "title_suffix": {"en": " — Decision Brief", "zh": " — 技术决策简报"},
@@ -505,7 +512,11 @@ def render(state: dict) -> str:
         # record; only the displayed navigation list omits it.
         from ..utils.candidate_identity import names_candidate
 
+        cited_urls = {
+            _canonical_source_url(str(entry.get("url") or ""))
+            for entry in used_entries if entry.get("url")}
         nav_links: list[tuple[str, str, str]] = []
+        cited_snippet_sources = 0
         for chain in chains:
             for src in chain.get("sources", []):
                 if not _has_body(src):
@@ -515,6 +526,11 @@ def render(state: dict) -> str:
                         continue
                     if any(names_candidate(f"{title} {url}", candidate)
                            for candidate in candidates):
+                        if _canonical_source_url(url) in cited_urls:
+                            # Cited but bodyless: it belongs to the citation ledger
+                            # (labelled 摘要级), not to the "cannot be used" list.
+                            cited_snippet_sources += 1
+                            continue
                         nav_links.append((title, url, source_display_title(src)))
         if nav_links:
             lines.append("**导航链接（无正文，不能作为依据）**" if lang == "zh"
@@ -522,6 +538,12 @@ def render(state: dict) -> str:
             lines.append("")
             for _raw_title, url, label in nav_links[:6]:
                 lines.append(f"- [{escape_markdown_text(label)}]({url})")
+            lines.append("")
+        if cited_snippet_sources:
+            lines.append("（另有被引用的摘要级来源未取得正文，已在参考来源中标注，"
+                         "不能作为正文依据。）" if lang == "zh" else
+                         "(Snippet-level sources are cited but have no collected body; "
+                         "they are marked in References and are not body-level evidence.)")
             lines.append("")
 
     lines.extend([T["why"][lang], ""])
@@ -761,7 +783,7 @@ def render(state: dict) -> str:
     # References are the same set the Why section just derived: the sources the
     # synthesis result actually used. Retrieving a page does not make it a
     # reference for a claim, so unused material is not listed here.
-    refs = used_sources(rec, chains)
+    refs = used_entries
     for src in refs:
         note = source_provenance_note(src, lang)
         lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}){note}")

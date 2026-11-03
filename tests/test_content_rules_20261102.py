@@ -444,3 +444,57 @@ class TestR4RunFixes:
         assert "ConnectError" in note
         assert "chroma" in note
         assert "空结果" in note
+
+
+class TestNavigationVsCitation:
+    """Round-four validation (F200-151): one URL appeared both as "no body, not
+    usable as a basis" navigation and as the #1 ranking's cited official basis."""
+
+    def _state(self):
+        state = _state(retrieved=3, cited=1)
+        state["evidence_chains"] = [{"sources": [
+            {"url": "https://docs.example/body", "title": "Alpha Docs",
+             "snippet": "fact", "has_body": True, "body": "fact"},
+            {"url": "https://docs.example/snippet", "title": "Beta Snippet",
+             "snippet": "snippet fact", "has_body": False},
+            {"url": "https://docs.example/nav", "title": "Beta Nav",
+             "snippet": "nav", "has_body": False},
+        ]}]
+        state["final_recommendation"]["citation_sources"] = {
+            "recommendation": [
+                {"source_id": "https://docs.example/body", "title": "Alpha Docs",
+                 "url": "https://docs.example/body", "has_body": True},
+                {"source_id": "https://docs.example/snippet", "title": "Beta Snippet",
+                 "url": "https://docs.example/snippet", "has_body": False},
+            ],
+        }
+        state["final_recommendation"]["recommendation"] = (
+            "Alpha or Beta [Source: Alpha Docs]，摘要证据 [Source: Beta Snippet]。")
+        return state
+
+    def test_cited_snippet_is_not_in_navigation_block(self):
+        report = render(self._state())
+        nav_block = report.split("导航链接")[1] if "导航链接" in report else ""
+        nav_block = nav_block.split("\n## ", 1)[0]
+        assert "https://docs.example/nav" in nav_block
+        assert "https://docs.example/snippet" not in nav_block
+        assert "另有被引用的摘要级来源" in report
+
+    def test_reference_marks_snippet_level_source(self):
+        report = render(self._state())
+        assert "（摘要级：未取得正文）" in report
+
+    def test_provenance_note_marks_snippet_level(self):
+        from deepchoice.formats.basis import source_provenance_note
+        assert "摘要级" in source_provenance_note(
+            {"url": "https://x/y", "title": "T", "has_body": False}, "zh")
+        assert "摘要级" not in source_provenance_note(
+            {"url": "https://x/y", "title": "T", "has_body": True}, "zh")
+
+    def test_nav_citation_rules_in_prompts(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+        assert "NAVIGATION IS NOT CITATION" in SYNTHESIS_PROMPT
+        assert "Navigation/citation contradiction" in REVIEW_SYSTEM
+        assert "Citation-source match" in REVIEW_SYSTEM
+        assert "Snippet-only decisive basis" in REVIEW_SYSTEM

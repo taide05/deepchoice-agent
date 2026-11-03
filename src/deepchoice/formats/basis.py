@@ -492,7 +492,20 @@ def used_sources(rec: dict, chains: list[dict]) -> list[dict]:
         existing = used.setdefault(key, entry)
         if existing is not entry:
             existing["citations"] += entry["citations"]
-    return _merge_used_entries(list(used.values()))
+    merged = _merge_used_entries(list(used.values()))
+    body_by_key: dict[str, bool] = {}
+    for chain in chains or []:
+        for source in (chain or {}).get("sources") or []:
+            if not isinstance(source, dict):
+                continue
+            url = str(source.get("url") or "")
+            if url:
+                body_by_key[_canonical_source_url(url)] = bool(source.get("has_body"))
+    for entry in merged:
+        key = _canonical_source_url(str(entry.get("url") or ""))
+        if key in body_by_key:
+            entry["has_body"] = body_by_key[key]
+    return merged
 
 
 def _official_page_note(src: dict, lang: str) -> str:
@@ -531,6 +544,21 @@ def _is_vendor_comparison(src: dict) -> bool:
 
 
 def source_provenance_note(src: dict, lang: str) -> str:
+    """Source-origin note plus an explicit snippet-level marker.
+
+    Round-four validation (F200-151): a cited page with no collected body was the
+    #1 ranking's "official basis" yet its reference entry carried the same note as
+    a body-backed page. Mark such entries so the reader can see the evidence level.
+    """
+    note = _provenance_note_base(src, lang)
+    if src.get("has_body") is False:
+        extra = ("（摘要级：未取得正文）" if lang == "zh"
+                 else " (snippet-level; no collected body)")
+        return f"{note}{extra}" if note else extra
+    return note
+
+
+def _provenance_note_base(src: dict, lang: str) -> str:
     """Describe a source's origin honestly, without calling local material public.
 
     Only material whose origin could be mistaken for something else is
