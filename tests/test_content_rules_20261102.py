@@ -361,3 +361,51 @@ class TestRoundThreeRepairs:
             "conditional_top_option_strength_caveat"]
         report = render(state)
         assert "上述排序为条件性/待验证假设" in report
+
+
+class TestRoundThreeRunRepairs:
+    """Defects exposed by the round-three validation run itself (2026-11-03):
+    mixed literal+numeric markers nested gaps (F200-151), and coverage notes that
+    were absent when only page-level fetches failed."""
+
+    def test_mixed_literal_and_numeric_marker_is_split(self):
+        from deepchoice.agents.conclusion_synthesizer import resolve_text_with_sources
+        chains = [{"sources": [
+            {"title": "vLLM — Official Documentation", "url": "https://docs.vllm.ai",
+             "snippet": "body", "has_body": True, "body": "body"}]}]
+        resolved, bindings = resolve_text_with_sources(
+            "见 [Source: vLLM — Official Documentation [[1]]", chains)
+        assert "引用未解析" not in resolved, resolved
+        assert "[Source: vLLM — Official Documentation]" in resolved
+        assert bindings
+
+    def test_nested_gap_marker_is_collapsed(self):
+        from deepchoice.formats.report_quality import finalize_report_text
+        raw = ("〔引用未解析：来源标题 “vLLM — Official Documentation "
+               "〔引用未解析：编号 4（截断）〕”〕]]")
+        cleaned = finalize_report_text(raw)
+        assert cleaned.count("〔引用未解析") == 1, cleaned
+        assert "]]" not in cleaned
+        assert "vLLM — Official Documentation" in cleaned
+
+    def test_coverage_note_renders_without_channel_failures(self):
+        from deepchoice.formats.coverage import derive_data_source_note
+        state = {
+            "task": {"query": "vLLM vs TGI 技术选型"},
+            "partial_failures": [],
+            "search_results": [{"source": "official", "results": [
+                {"url": "https://huggingface.co/docs/x", "has_body": False,
+                 "body_error": "ConnectError"},
+            ]}],
+        }
+        note = derive_data_source_note(state)
+        assert "页面正文抓取失败" in note, note
+        assert "ConnectError" in note
+
+    def test_gap_excerpt_has_no_dangling_punctuation_space(self):
+        from deepchoice.formats.what_why_how import _strip_marker_text
+        text = ("现有数字不可拼接 [Source: A] [Source: B] 无 NestJS 对照， 的对手是 [Source: C]。")
+        cleaned = _strip_marker_text(text)
+        assert "[Source:" not in cleaned
+        assert "， 的" not in cleaned, cleaned
+        assert " 的" not in cleaned, cleaned

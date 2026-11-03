@@ -846,6 +846,26 @@ def _is_index_context(text: str, start: int, end: int, inner: str) -> bool:
     return False
 
 
+_MIXED_SOURCE_MARKER = re.compile(
+    r"\[Source:\s*([^\[\]]+?)\s*(\[\[\d*\]?\]?)")
+
+
+def _split_mixed_citation_markers(text: str) -> str:
+    """Split a literal title marker that swallowed a numeric citation.
+
+    The round-three validation (F200-151, 2026-11-03) showed the model writing
+    `[Source: vLLM — Official Documentation [[4]]`: the literal-marker pass captured
+    the numeric part into the title, the title then failed to resolve, and finalize
+    nested a numeric gap inside a title gap (50 nested markers in one report).
+    Split the two markers before resolution so each is handled by its own pass.
+    """
+    value = str(text or "")
+    if "[Source:" not in value or "[[" not in value:
+        return value
+    return _MIXED_SOURCE_MARKER.sub(
+        lambda match: f"[Source: {match.group(1).strip()}] {match.group(2)}", value)
+
+
 def resolve_text_with_sources(
         text: str, evidence_chains: list[dict] | None = None,
         mapping: dict[int, str] | None = None,
@@ -860,6 +880,7 @@ def resolve_text_with_sources(
     """
     if not text:
         return text, []
+    text = _split_mixed_citation_markers(text)
     registry = registry or build_source_registry(evidence_chains or [])
     effective_mapping = (dict(registry.get("mapping") or {})
                          if mapping is None else mapping)

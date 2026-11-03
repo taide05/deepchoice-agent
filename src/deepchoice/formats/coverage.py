@@ -27,23 +27,25 @@ def derive_data_source_note(state: dict) -> str:
         return explicit
 
     partial_failures = [str(f) for f in (state.get("partial_failures") or []) if str(f)]
-    if not partial_failures:
+    page_failures = _page_fetch_failures(state.get("search_results") or [])
+    if not partial_failures and not page_failures:
         return ""
 
     total = len(state.get("search_results") or [])
     available = max(0, total - len(partial_failures))
-    page_failures = _page_fetch_failures(state.get("search_results") or [])
     query = str((state.get("task") or {}).get("query", ""))
     is_zh = bool(_ZH.search(query))
     if is_zh:
-        note = (f"数据覆盖: {available}/{total} 个渠道可用。"
-                f"不可用: {', '.join(partial_failures)}。")
+        note = f"数据覆盖: {available}/{total} 个渠道可用。"
+        if partial_failures:
+            note += f"不可用: {', '.join(partial_failures)}。"
         if page_failures:
             note += (f"另有 {page_failures['count']} 个页面正文抓取失败"
                      f"（{page_failures['summary']}）。")
         return note + "结论基于已取得的正文与检索摘要，可能遗漏失败页面的视角。"
-    note = (f"Data coverage: {available}/{total} sources available. "
-            f"Unavailable: {', '.join(partial_failures)}.")
+    note = f"Data coverage: {available}/{total} sources available."
+    if partial_failures:
+        note += f" Unavailable: {', '.join(partial_failures)}."
     if page_failures:
         note += (f" {page_failures['count']} page(s) failed to return a body "
                  f"({page_failures['summary']}).")

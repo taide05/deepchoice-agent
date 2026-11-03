@@ -149,7 +149,13 @@ _SOURCE_ONLY_MARKER = re.compile(
 def _strip_marker_text(value) -> str:
     """User-facing prose without citation/gap markers (summary excerpts)."""
     text = str(value or "")
-    return " ".join(_SOURCE_ONLY_MARKER.sub("", text).split())
+    text = _SOURCE_ONLY_MARKER.sub("", text)
+    text = re.sub(r"[ \t]{2,}", " ", " ".join(text.split()))
+    # A removed marker can leave space before Chinese punctuation or a dangling
+    # comma/space at the cut ("无 NestJS 对照， 的对手是"); tidy the excerpt.
+    text = re.sub(r"\s+([，。、；：！？）])", r"\1", text)
+    text = re.sub(r"([，。、；：！？])\s+", r"\1", text)
+    return text.strip()
 
 
 _SINGLE_BRACKET_NUMBER = re.compile(r"\[(\d{1,3})\]")

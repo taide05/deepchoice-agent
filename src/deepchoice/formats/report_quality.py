@@ -30,6 +30,29 @@ CITATION_GAP_MARK = re.compile(
     r"〔引用未解析：[^〕]*〕|\[citation-unresolved: [^\]]*\]")
 
 
+_NESTED_GAP_TITLE = re.compile(
+    r"(〔引用未解析：来源标题 “)([^”〔]*)(〔引用未解析：[^〕]*〕)([^”]*)(”)")
+
+
+def _collapse_nested_gaps(text: str) -> str:
+    """Remove a gap marker nested inside another gap's title.
+
+    The round-three validation (F200-151) produced title gaps whose title had
+    swallowed a numeric gap, plus bracket residue (`”〕]]`). A gap inside a title
+    is not readable and hides the actual reason; keep the title and drop the inner
+    marker.
+    """
+    value = str(text or "")
+    for _ in range(3):
+        value, changed = _NESTED_GAP_TITLE.subn(
+            lambda match: f"{match.group(1)}{match.group(2)}…{match.group(4)}{match.group(5)}",
+            value)
+        if not changed:
+            break
+    value = value.replace("〕]]", "〕").replace("〕]", "〕")
+    return value
+
+
 def finalize_report_text(report: str) -> str:
     """Make citation presentation explicit before the report is stored/exported."""
     # The small validation run (F200-165) rendered literal "\n" escape sequences
@@ -47,6 +70,7 @@ def finalize_report_text(report: str) -> str:
                        if match.group(1) else "〔引用未解析：截断〕"), text)
     text = EMPTY_SOURCE_PARENS.sub("", text)
     text = DANGLING_PUNCT_SPACE.sub(r"\1", text)
+    text = _collapse_nested_gaps(text)
     return text
 
 
