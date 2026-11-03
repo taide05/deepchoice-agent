@@ -153,3 +153,12 @@ def test_finalize_repairs_double_bracket_citation():
     # a genuinely truncated numeric citation still becomes an honest gap marker
     out2 = finalize_report_text("见 [[12")
     assert "〔引用未解析" in out2
+
+def test_http_403_failure_gets_server_side_body(monkeypatch):
+    """OpenSearch docs answer 403 to the local pinned fetch; extraction must still try."""
+    result = _fallback(monkeypatch, "http:403", "prose " * 200)
+    assert result is not None and result["fetch_via"] == "tavily_extract"
+
+
+def test_http_404_failure_still_skips_fallback(monkeypatch):
+    assert _fallback(monkeypatch, "http:404", "prose " * 200) is None

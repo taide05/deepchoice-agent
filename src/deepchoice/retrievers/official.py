@@ -765,7 +765,7 @@ class OfficialSearch(BaseRetriever):
         failure = str(failed.get("failure") or "")
         retryable = ("timeout", "Timeout", "Connect", "ReadError", "RemoteProtocol",
                      "Transport", "http_budget_exhausted", "not_prose",
-                     "fetch_failed")
+                     "fetch_failed", "http:403", "http:429")
         if not any(marker in failure for marker in retryable):
             return None
         extracted = await extract_pages([url])
