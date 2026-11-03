@@ -38,6 +38,28 @@ def interleave_batches(batches: list[list[dict]], max_results: int) -> list[dict
     return merged
 
 
+INDEPENDENT_SOURCE_DOMAINS = ("reddit.com", "stackoverflow.com",
+                              "news.ycombinator.com", "dev.to")
+
+
+def diversity_queries(candidate_techs: list[str] | None) -> list[str]:
+    """Neutral comparison queries for an independent (non-vendor) source pass.
+
+    Limitation 2 (source concentration / single-source): ordinary retrieval ranks
+    each candidate's own documentation highest, so the decisive comparison can
+    rest on vendor material. One extra search restricted to independent community
+    domains gives every candidate pair a chance at a non-owner comparison without
+    changing the official channel or the evidence rules. Generic placeholders
+    ("A"/"B") are ignored.
+    """
+    names = [str(name).strip() for name in candidate_techs or []
+             if str(name or "").strip()]
+    names = [name for name in names if len(name) >= 2 and name.upper() != name.lower()]
+    if len(names) < 2:
+        return []
+    return [f"{names[0]} vs {names[1]} independent comparison review"]
+
+
 class TavilySearch(BaseRetriever):
     source = "tavily"
 
@@ -51,12 +73,15 @@ class TavilySearch(BaseRetriever):
             async def post(url, json=None, **kw):
                 return await client.post(url, json=json, **kw)
 
-            async def _one(q):
-                resp, _ = await post_with_failover(post, {
+            async def _one(q, include_domains=None):
+                payload = {
                     "query": q,
                     "search_depth": "basic",
-                    "max_results": max(3, max_results // len(queries)),
-                })
+                    "max_results": max(3, max_results // max(1, len(queries))),
+                }
+                if include_domains:
+                    payload["include_domains"] = list(include_domains)
+                resp, _ = await post_with_failover(post, payload)
                 if resp is None:
                     raise RuntimeError("no Tavily API key available")
                 resp.raise_for_status()
@@ -71,5 +96,9 @@ class TavilySearch(BaseRetriever):
             # Fan out concurrently: post_with_failover round-robins across the
             # key pool (24 keys) and each key's token bucket spaces 5/min, so
             # concurrent queries do not burst a single key into 429.
-            batches = await asyncio.gather(*[_one(q) for q in queries])
+            pending = [_one(q) for q in queries]
+            for extra_q in diversity_queries(candidate_techs):
+                pending.append(_one(extra_q,
+                                    include_domains=INDEPENDENT_SOURCE_DOMAINS))
+            batches = await asyncio.gather(*pending)
             return interleave_batches(batches, max_results)
