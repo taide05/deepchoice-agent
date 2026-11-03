@@ -83,3 +83,63 @@ def test_fallback_targets_no_longer_guess_stable_latest():
     assert not any(target.rstrip("/").endswith(("/stable", "/latest"))
                    for target in targets)
     assert any("llms.txt" in target for target in targets)
+
+def test_post_with_failover_posts_to_given_endpoint(monkeypatch):
+    """Phase-A regression: /extract must not be posted to /search (silent empty)."""
+    import asyncio
+    from deepchoice.retrievers import tavily_keypool as kp
+
+    calls = []
+
+    class Resp:
+        status_code = 200
+
+    async def fake_post(url, json=None, **kw):
+        calls.append((url, json))
+        return Resp()
+
+    monkeypatch.setattr(kp, "ensure_probed", lambda _post: asyncio.sleep(0))
+    async def fake_current():
+        return "k-test"
+    monkeypatch.setattr(kp, "current", fake_current)
+    async def fake_acquire(_key):
+        return None
+    monkeypatch.setattr(kp, "_acquire_token", fake_acquire)
+
+    resp, key = asyncio.run(kp.post_with_failover(
+        fake_post, {"urls": ["https://example.com/docs"]},
+        url=kp_extract_url()))
+    assert resp.status_code == 200 and key == "k-test"
+    assert calls and calls[0][0] == kp_extract_url(), calls
+    assert "api_key" in calls[0][1]
+
+
+def kp_extract_url():
+    from deepchoice.retrievers.tavily_extract import TAVILY_EXTRACT_URL
+    return TAVILY_EXTRACT_URL
+
+
+def test_extract_pages_uses_extract_endpoint(monkeypatch):
+    """The extract module must pass TAVILY_EXTRACT_URL into the failover helper."""
+    import asyncio
+    from deepchoice.retrievers import tavily_extract as te
+
+    seen = {}
+
+    class Resp:
+        status_code = 200
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"results": [{"url": "https://example.com/docs",
+                                 "raw_content": "prose " * 200,
+                                 "title": "Example"}]}
+
+    async def fake_failover(post, payload, url=None):
+        seen["url"] = url
+        return Resp(), "k-test"
+
+    monkeypatch.setattr(te, "post_with_failover", fake_failover)
+    out = asyncio.run(te.extract_pages(["https://example.com/docs"]))
+    assert seen["url"] == te.TAVILY_EXTRACT_URL, seen
+    assert out["https://example.com/docs"]["title"] == "Example"

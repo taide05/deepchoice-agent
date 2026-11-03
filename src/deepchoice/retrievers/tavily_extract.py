@@ -40,7 +40,8 @@ async def extract_pages(urls: list[str]) -> dict[str, dict]:
             return await client.post(url, json=json, **kw)
 
         try:
-            response, _ = await post_with_failover(post, {"urls": wanted})
+            response, _ = await post_with_failover(
+                post, {"urls": wanted}, url=TAVILY_EXTRACT_URL)
             if response is None:
                 return {}
             response.raise_for_status()
