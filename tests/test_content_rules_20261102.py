@@ -239,3 +239,46 @@ class TestRoundTwoContentRules:
         words = list(_DECISION_KEYWORDS)
         assert words.index("license") < words.index("however")
         assert words.index("managed") < words.index("caveat")
+
+
+class TestUnnumberedSourceTitleMarker:
+    """Round-two validation F200-151/190: the model cited a collected but
+    bodyless/navigation source by title. Established contract: a navigation-only
+    source cannot be cited, so such a marker stays a visible gap; the prompt now
+    forbids writing the marker in the first place."""
+
+    def _chains(self):
+        return [{"sources": [
+            {"title": "Official Deployment Guide", "url": "https://docs.example/deploy",
+             "snippet": "A real body text.", "has_body": True,
+             "body": "A real body text."},
+            {"title": "Serving models on Huggingface Spaces",
+             "url": "https://example/community-post",
+             "snippet": "Stars: 12", "has_body": False},
+        ]}]
+
+    def test_registered_source_still_resolves(self):
+        from deepchoice.agents.conclusion_synthesizer import resolve_text_with_sources
+        resolved, bindings = resolve_text_with_sources(
+            "部署见 [Source: Official Deployment Guide]。", self._chains())
+        assert "引用未解析" not in resolved
+        assert "[Source: Official Deployment Guide]" in resolved
+        assert bindings
+
+    def test_bodyless_source_citation_stays_a_visible_gap(self):
+        from deepchoice.agents.conclusion_synthesizer import resolve_text_with_sources
+        resolved, bindings = resolve_text_with_sources(
+            "社区转储提到 api_key 参数 [Source: Serving models on Huggingface Spaces]（非官方）。",
+            self._chains())
+        assert "引用未解析" in resolved, resolved
+        assert not bindings
+
+    def test_unknown_title_still_gap(self):
+        from deepchoice.agents.conclusion_synthesizer import resolve_text_with_sources
+        resolved, _ = resolve_text_with_sources(
+            "某处 [Source: Never Collected Page] 声称。", self._chains())
+        assert "引用未解析" in resolved, resolved
+
+    def test_prompt_forbids_marks_for_unnumbered_sources(self):
+        from deepchoice.agents.conclusion_synthesizer import SYNTHESIS_PROMPT
+        assert "listed without a number" in SYNTHESIS_PROMPT

@@ -158,12 +158,15 @@
 
 - 自审新增检查项：Global absence claims、Managed-option search、Guidance vs requirement。
 - 新增 `tests/test_content_rules_20261102.py` 第二轮测试 7 项；全量测试 **861 passed**。
-- **均未参与任何付费运行**；需一次小样本验证（建议 6 例：041/190/199/060/142/151，
-  约 0.45–0.52M tokens，待批准）。
+- **第二轮小样本验证已运行**（2026-11-03，`.scratch/cases/runs/validation-r2-20261102/`，
+  6 例 430,792 tokens，git `178c84d`，source_dirty=False）；6/6 完成，评审结果见
+  `VALIDATION_R2_20261103.md`。展示修复（仲裁规则号/裸序号/字面 \n/自指注记）本轮 **0 复现**。
+  新发现：F200-151/190 对无正文来源写了 `[Source: 标题]` → 可见 gap（7 处）；
+  已按既有契约保留 gap，并扩展合成规则 26 禁止对无编号来源写引用标记；全量测试 **865 passed**。
 
 ## 4. 验证阶梯与预算现状
 
-- **G0（已完成）**：单测 + 全量测试 **861 passed** + 冻结 200 snapshot 离线重放（0 error）。
+- **G0（已完成）**：单测 + 全量测试 **865 passed** + 冻结 200 snapshot 离线重放（0 error）。
 - **G1（已完成 16/16 评审，1,176,528 tokens）**：
   - 第一次运行 2026-11-02 17:05 因 **HTTP 402 Insufficient Balance** 中止
     （`.scratch/cases/runs/g1-review-fixes-20261102/`，标记 CONTAMINATED，记录 tokens 下界 181,102）；
