@@ -42,6 +42,7 @@ from ..utils.candidate_identity import (
 )
 from ..utils.llm import call_model, summarize_usage
 from .base import BaseRetriever
+from .tavily_extract import extract_pages
 from .learned_docs import (
     learn,
     load_learned,
@@ -419,8 +420,10 @@ def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
     # A curate URL that already points at a versioned documentation page should
     # not have another stable/latest segment appended: that produces 404s such
     # as /docs/envoy/latest/latest/ or /latest/stable/.
-    if not any(segment in lowered for segment in ("/latest", "/stable", "/current")):
-        targets += [f"{root}/stable/", f"{root}/latest/"]
+    # Do not guess /stable/ or /latest/: many sites never serve those paths and
+    # every attempt is a guaranteed 404 (R7a: elastic.co/stable, gofiber/stable).
+    # Real versioned roots come from the curated mapping; index discovery handles
+    # the rest.
     targets += [f"{scheme}://{host}/llms.txt", f"{scheme}://{host}/llms-full.txt"]
     if not path:
         targets += [f"{root}/docs/", f"{root}/en/latest/"]
@@ -735,11 +738,77 @@ class OfficialSearch(BaseRetriever):
                     store_chars=OFFICIAL_BODY_STORE_CHARS,
                     allow_navigation_intro=allow_navigation_intro,
                 )
+            if not result.get("ok"):
+                fallback = await self._tavily_body_fallback(url, result)
+                if fallback is not None:
+                    return fallback
             return result
         except Exception as exc:
             budget.record_failure(type(exc).__name__)
-            return {"ok": False, "url": url,
-                    "failure": type(exc).__name__, "budget": budget.snapshot()}
+            failed = {"ok": False, "url": url,
+                      "failure": type(exc).__name__, "budget": budget.snapshot()}
+            fallback = await self._tavily_body_fallback(url, failed)
+            return fallback if fallback is not None else failed
+
+    async def _tavily_body_fallback(self, url: str, failed: dict) -> dict | None:
+        """Server-side page extraction when the local pinned fetch cannot reach a page.
+
+        Observed 2026-11: huggingface.co docs and raw.githubusercontent.com are
+        unreachable from this machine (ConnectError), so the decisive official
+        pages stayed bodyless. Tavily fetches server-side; the extracted text is
+        admitted only when it is substantially prose and is labelled with
+        ``fetch_via="tavily_extract"`` so reports/health can show the provenance.
+        """
+        failure = str(failed.get("failure") or "")
+        retryable = ("timeout", "Timeout", "Connect", "ReadError", "RemoteProtocol",
+                     "Transport", "http_budget_exhausted", "not_prose",
+                     "fetch_failed")
+        if not any(marker in failure for marker in retryable):
+            return None
+        extracted = await extract_pages([url])
+        item = extracted.get(url)
+        if not item:
+            return None
+        text = " ".join(str(item.get("text") or "").split())
+        if len(text) < 600:
+            return None
+        budget = self._fetch_budget
+        if budget is not None and hasattr(budget, "body_pages"):
+            try:
+                budget.body_pages += 1
+            except Exception:
+                pass
+        stored = text[:OFFICIAL_BODY_STORE_CHARS].rstrip()
+        return {
+            "ok": True,
+            "url": url,
+            "body_url": url,
+            "title": str(item.get("title") or ""),
+            "body": stored,
+            "body_blocks": [text],
+            "page_chars": len(text),
+            "stored_chars": len(stored),
+            "page_truncated": False,
+            "stored_truncated": len(text) > len(stored),
+            "truncated": len(text) > len(stored),
+            "truncation_reason": None,
+            "declared_content_length": None,
+            "content_length_exceeded": False,
+            "max_response_bytes": None,
+            "prose_chars": len(text),
+            "main_block_count": 1,
+            "prose_block_count": 1,
+            "heading_context_count": 0,
+            "page_role": "content",
+            "admission": "tavily_extract",
+            "content_type": "text/markdown",
+            "fetch_via": "tavily_extract",
+            "bytes": 0,
+            "bytes_read": 0,
+            "bytes_retained": 0,
+            "links": [],
+            "budget": budget.snapshot() if budget is not None else {},
+        }
 
     async def _discover_index_doc_links(self, mapping_url: str,
                                         focus: tuple[str, ...],
