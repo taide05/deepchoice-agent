@@ -22,14 +22,15 @@ A（收尾）→ B → C → D → 独立复核 → 交付包草稿。
 | A: D1–D5 200/200 | 完成 | 0（评审 agent） | `D1D5_DIAGNOSTIC_RESULT_20261103.md` |
 | B1: 10 例定向 | 完成 + 发现兜底未生效并修复 | 753,745 | `PHASE_B_RESULT_20261103.md` |
 | B2: 5 例官方 0 页复验 | 完成（官方正文 0→3） | 350,770 | 同上 |
+| C: pilot-30 | 完成，gate **PASS**（30/30、invalid=0） | 2,386,159（含补跑 75,333） | `PHASE_C_RESULT_20261104.md` |
 
 代码修复（已提交）：`35db3c9` extract 端点、`eb28262` provenance+双括号引用、
 `a8ed6fc` 403/429 兜底触发。测试 899 passed。
 
 ## 3. 进行中 / 待办
 
-- Phase C pilot-30：运行中（`phase-c-pilot-30b-20261103`，cap 2.1M，gate 通过后进入 D）；
-- Phase D 正式 200：未开始；
+- Phase C pilot-30：**gate PASS**（`phase-c-pilot-30b-20261103` + `phase-c-fill-20261104`）；
+- Phase D 正式 200：启动（`final-200-newcode-20261104`，cap 16M，并发 4）；
 - 独立复核、交付包草稿：未开始。
 
 ## 4. 预算台账（累计付费 tokens）
@@ -39,7 +40,7 @@ A（收尾）→ B → C → D → 独立复核 → 交付包草稿。
 | 既有记录（G1/R2–R5 等） | 2,012,101 |
 | Phase B1 | 753,745 |
 | Phase B2 | 350,770 |
-| Phase C | 进行中（cap 2.1M） |
+| Phase C | 2,386,159 |
 | Phase D | 预算 16M |
 
 剩余空间按 ≤22M 总上限控制；Phase C 结束后在本文件更新实际值。
