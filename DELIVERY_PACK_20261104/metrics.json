@@ -27,32 +27,28 @@
   "mean": 4.56,
   "zero_cases": 0
  },
- "tavily_extract_pages": 170,
+ "tavily_extract_pages": 171,
  "evidence_budget": {
   "budget_chars": "32000",
   "full_included": {
-   "True": 91,
-   "False": 109
+   "True": 92,
+   "False": 108
   },
-  "omitted_chars_total": 1473339,
-  "cases_with_omission": 109
+  "omitted_chars_total": 1468523,
+  "cases_with_omission": 108
  },
  "report_chars": {
-  "mean": 21645.1,
+  "mean": 21637.8,
   "min": 6481,
   "max": 42230
  },
  "citation_gap": {
-  "cases_with_gap": 31,
-  "total_markers": 489,
+  "cases_with_gap": 30,
+  "total_markers": 429,
   "worst": [
    [
     "F200-180",
     68
-   ],
-   [
-    "F200-066",
-    60
    ],
    [
     "F200-100",
@@ -77,6 +73,10 @@
    [
     "F200-051",
     19
+   ],
+   [
+    "F200-143",
+    16
    ]
   ]
  },

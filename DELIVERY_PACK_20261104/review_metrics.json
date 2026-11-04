@@ -5,43 +5,43 @@
   "C1": 200,
   "C2": 157,
   "C3": 200,
-  "C4": 1,
-  "usable": 199,
+  "C4": 0,
+  "usable": 200,
   "decision_grade": 157,
-  "usable_rate": 0.995,
+  "usable_rate": 1.0,
   "decision_grade_rate": 0.785,
   "means": {
    "D1": 4.46,
-   "D2": 4.62,
-   "D3": 4.27,
-   "D4": 4.95,
+   "D2": 4.61,
+   "D3": 4.26,
+   "D4": 4.94,
    "D5": 4.95
   },
   "paraphrase_risk": {
-   "low": 142,
-   "medium": 55,
-   "high": 3
+   "low": 140,
+   "medium": 56,
+   "high": 4
   },
   "evidence_asymmetry": {
-   "mild": 110,
-   "strong": 90
+   "strong": 90,
+   "mild": 110
   }
  },
  "independent": {
   "count": 200,
   "C1": 200,
-  "C2": 178,
+  "C2": 180,
   "C3": 200,
-  "C4": 3,
-  "usable": 197,
-  "decision_grade": 178,
-  "usable_rate": 0.985,
-  "decision_grade_rate": 0.89,
+  "C4": 0,
+  "usable": 200,
+  "decision_grade": 180,
+  "usable_rate": 1.0,
+  "decision_grade_rate": 0.9,
   "means": {
-   "D1": 4.36,
-   "D2": 4.72,
-   "D3": 4.64,
-   "D4": 4.84,
+   "D1": 4.33,
+   "D2": 4.71,
+   "D3": 4.62,
+   "D4": 4.85,
    "D5": 4.96
   },
   "paraphrase_risk": {
@@ -49,33 +49,16 @@
    "medium": 14
   },
   "evidence_asymmetry": {
-   "mild": 115,
-   "strong": 84,
+   "mild": 116,
+   "strong": 83,
    "none": 1
   }
  },
  "agreement": {
   "shared_cases": 200,
-  "usable_agreement": 0.98,
-  "decision_grade_agreement": 0.785,
-  "c4_agreement": 0.98,
-  "c4_disagreements": [
-   {
-    "case_id": "F200-018",
-    "kind": "C4"
-   },
-   {
-    "case_id": "F200-023",
-    "kind": "C4"
-   },
-   {
-    "case_id": "F200-026",
-    "kind": "C4"
-   },
-   {
-    "case_id": "F200-066",
-    "kind": "C4"
-   }
-  ]
+  "usable_agreement": 1.0,
+  "decision_grade_agreement": 0.805,
+  "c4_agreement": 1.0,
+  "c4_disagreements": []
  }
 }
