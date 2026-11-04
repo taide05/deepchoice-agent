@@ -3,13 +3,13 @@
  "internal": {
   "count": 200,
   "C1": 200,
-  "C2": 157,
+  "C2": 156,
   "C3": 200,
   "C4": 0,
   "usable": 200,
-  "decision_grade": 157,
+  "decision_grade": 156,
   "usable_rate": 1.0,
-  "decision_grade_rate": 0.785,
+  "decision_grade_rate": 0.78,
   "means": {
    "D1": 4.46,
    "D2": 4.61,
@@ -30,34 +30,34 @@
  "independent": {
   "count": 200,
   "C1": 200,
-  "C2": 180,
+  "C2": 176,
   "C3": 200,
   "C4": 0,
   "usable": 200,
-  "decision_grade": 180,
+  "decision_grade": 176,
   "usable_rate": 1.0,
-  "decision_grade_rate": 0.9,
+  "decision_grade_rate": 0.88,
   "means": {
-   "D1": 4.33,
+   "D1": 4.36,
    "D2": 4.71,
    "D3": 4.62,
-   "D4": 4.85,
-   "D5": 4.96
+   "D4": 4.84,
+   "D5": 4.98
   },
   "paraphrase_risk": {
-   "low": 186,
-   "medium": 14
+   "low": 185,
+   "medium": 15
   },
   "evidence_asymmetry": {
-   "mild": 116,
-   "strong": 83,
+   "mild": 114,
+   "strong": 85,
    "none": 1
   }
  },
  "agreement": {
   "shared_cases": 200,
   "usable_agreement": 1.0,
-  "decision_grade_agreement": 0.805,
+  "decision_grade_agreement": 0.8,
   "c4_agreement": 1.0,
   "c4_disagreements": []
  }
