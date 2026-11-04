@@ -1,0 +1,31 @@
+# 复现说明（新代码正式 200）
+
+## 环境
+- worktree：`D:\deepchoice-precodex`，分支 `precodex/deepseek-adapter`
+- 代码 commit：`a0355554d33b`（含 Phase A 修复：Tavily extract 端点/403 兜底/provenance/双括号引用）
+- Python：`D:\deepchoice-agent\.venv\Scripts\python.exe`
+- 凭据：`D:\deepchoice-agent\.env`（由 `run_service.load_credentials()` 加载，不打印）
+
+## 运行
+```powershell
+$env:PYTHONPATH='D:\deepchoice-precodex\src;D:\deepchoice-precodex'
+$env:EVIDENCE_INPUT_BUDGET_CHARS='32000'
+& D:\deepchoice-agent\.venv\Scripts\python.exe .scratch\cases\run_batch.py `
+  --cases .scratch\cases\cases_formal_200.json `
+  --out .scratch\cases\runs\final-200-newcode-20261104 `
+  --concurrency 4 --timeout 1800 --max-tokens 16000000
+```
+
+## 后处理（只读、零模型调用）
+```powershell
+python .scratch\cases\prepare_new_run_review_ready_20261104.py <run>
+python .scratch\cases\compute_new200_metrics_20261104.py <run>
+python .scratch\cases\aggregate_reviews_20261104.py <run>
+python .scratch\cases\make_new200_result_20261104.py <run>
+python .scratch\cases\check_batch_gate_20261104.py <run> 200 --require-provenance --extra <fill_run>
+```
+
+## 评审
+- 卡：`INDEPENDENT_REVIEW_CARD_20261104.md`；
+- 内部层：`<run>/review_internal/*.json`（agent workflow，只读两文件/例）；
+- 独立层：`<run>/review_independent/*.json`（独立 prompt，不见内部结论）。

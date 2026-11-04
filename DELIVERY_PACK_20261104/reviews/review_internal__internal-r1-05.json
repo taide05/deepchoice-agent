@@ -1,0 +1,42 @@
+{
+ "chunk": "internal-r1-05",
+ "_input_provenance": "029/030 的 compact/review 对在 review_ready 中缺失（快照冻结于2:30:40，两例2:30:44/52才完成；批次仍在跑）。已用系统 prepare 脚本从冻结的 report.md+snapshot.json 重建到临时目录，并在 F200-028/F200-031 验证与官方对字节一致；未修改任何报告/快照。",
+ "reviews": [
+  {
+   "case_id": "F200-029",
+   "C1": true,
+   "C2": true,
+   "C3": true,
+   "C4": false,
+   "usable": true,
+   "decision_grade": true,
+   "D1": 5,
+   "D2": 5,
+   "D3": 4,
+   "D4": 5,
+   "D5": 5,
+   "paraphrase_risk": "low",
+   "p3_only_decisive_facts": 1,
+   "evidence_asymmetry": "strong",
+   "notes": "默认Echo与反转分支清楚；关键运维依据仅单一二手来源，两侧官方证据不对称"
+  },
+  {
+   "case_id": "F200-030",
+   "C1": true,
+   "C2": false,
+   "C3": true,
+   "C4": false,
+   "usable": true,
+   "decision_grade": false,
+   "D1": 4,
+   "D2": 4,
+   "D3": 4,
+   "D4": 5,
+   "D5": 5,
+   "paraphrase_risk": "low",
+   "p3_only_decisive_facts": 1,
+   "evidence_asymmetry": "strong",
+   "notes": "条件与PoC步骤完整，但Echo低改写面未验证却排#1；官方证据强不对称"
+  }
+ ]
+}

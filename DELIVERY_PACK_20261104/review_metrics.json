@@ -1,0 +1,81 @@
+{
+ "run": "D:\\deepchoice-precodex\\.scratch\\cases\\runs\\final-200-newcode-20261104",
+ "internal": {
+  "count": 200,
+  "C1": 200,
+  "C2": 157,
+  "C3": 200,
+  "C4": 1,
+  "usable": 199,
+  "decision_grade": 157,
+  "usable_rate": 0.995,
+  "decision_grade_rate": 0.785,
+  "means": {
+   "D1": 4.46,
+   "D2": 4.62,
+   "D3": 4.27,
+   "D4": 4.95,
+   "D5": 4.95
+  },
+  "paraphrase_risk": {
+   "low": 142,
+   "medium": 55,
+   "high": 3
+  },
+  "evidence_asymmetry": {
+   "mild": 110,
+   "strong": 90
+  }
+ },
+ "independent": {
+  "count": 200,
+  "C1": 200,
+  "C2": 178,
+  "C3": 200,
+  "C4": 3,
+  "usable": 197,
+  "decision_grade": 178,
+  "usable_rate": 0.985,
+  "decision_grade_rate": 0.89,
+  "means": {
+   "D1": 4.36,
+   "D2": 4.72,
+   "D3": 4.64,
+   "D4": 4.84,
+   "D5": 4.96
+  },
+  "paraphrase_risk": {
+   "low": 186,
+   "medium": 14
+  },
+  "evidence_asymmetry": {
+   "mild": 115,
+   "strong": 84,
+   "none": 1
+  }
+ },
+ "agreement": {
+  "shared_cases": 200,
+  "usable_agreement": 0.98,
+  "decision_grade_agreement": 0.785,
+  "c4_agreement": 0.98,
+  "c4_disagreements": [
+   {
+    "case_id": "F200-018",
+    "kind": "C4"
+   },
+   {
+    "case_id": "F200-023",
+    "kind": "C4"
+   },
+   {
+    "case_id": "F200-026",
+    "kind": "C4"
+   },
+   {
+    "case_id": "F200-066",
+    "kind": "C4"
+   }
+  ]
+ }
+}

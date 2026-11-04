@@ -800,3 +800,16 @@ D1 恢复路径真实触发、D2 arXiv 在 holdout 上 29→0、D4 预算修复�
   - 冻结 200 产物未改动；新代码指标需 G1 + 新正式 200，旧指标不迁移；
   - 待修/待批准：R1–R5/R8（内容级缺陷）、G1 预算、是否重开正式 200；
   - 详情 `REVIEW_FIX_LOG_20261102.md`。
+
+## 2026-11-04 夜间：新代码正式 200 完成
+
+- 正式结果：`NEW_200_FORMAL_RESULT_20261104.md`（运行 `final-200-newcode-20261104`，代码 `a0355554d33b`，
+  `EVIDENCE_INPUT_BUDGET_CHARS=32000`，cap 16M；200/200；3 例 invalid 同案例重跑后 invalid=0）。
+- 内容评审（协议 v1.2）：内部 200/200（usable 199、DG 157、C4=1）；独立复核 200/200（usable 197、DG 178、C4=3）；
+  两层 C4 一致率 98%、usable 98%、DG 78.5%；共识可用 196/200；人工抽检 pending。
+- 交付包草稿：`DELIVERY_PACK_20261104/`（报告/披露/复现/指标/评审原始记录；未发布）。
+- 阶段文档：`PHASE_A_PROGRESS_20261103.md`、`PHASE_B_RESULT_20261103.md`、`PHASE_C_RESULT_20261104.md`、
+  `D1D5_DIAGNOSTIC_RESULT_20261103.md`、`PROTOCOL_V12_DRAFT_20261103.md`、`NIGHT_RUN_STATUS_20261103.md`。
+- 代码修复（夜间）：`35db3c9` Tavily extract 端点、`eb28262` provenance+双括号引用、`a8ed6fc` 403/429 兜底；
+  全量测试 899 passed。
+- 下一步：用户人工抽检 20–30 例 → 交付包定稿/发布决定 → 如需可再做旧口径对比与文档整理。

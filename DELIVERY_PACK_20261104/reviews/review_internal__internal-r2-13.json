@@ -1,0 +1,59 @@
+{
+  "chunk": "internal-r2-13",
+  "reviews": [
+    {
+      "case_id": "F200-115",
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": false,
+      "usable": true,
+      "decision_grade": true,
+      "D1": 4,
+      "D2": 5,
+      "D3": 4,
+      "D4": 5,
+      "D5": 5,
+      "paraphrase_risk": "low",
+      "p3_only_decisive_facts": 0,
+      "evidence_asymmetry": "strong",
+      "notes": "审计单向证据已明示；默认分支可执行；成本/性能缺口诚实标注"
+    },
+    {
+      "case_id": "F200-116",
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": false,
+      "usable": true,
+      "decision_grade": true,
+      "D1": 4,
+      "D2": 4,
+      "D3": 5,
+      "D4": 5,
+      "D5": 5,
+      "paraphrase_risk": "low",
+      "p3_only_decisive_facts": 0,
+      "evidence_asymmetry": "mild",
+      "notes": "反向迁移文档已降级为概念参考；hold+PoC分支可执行；阈值需自定"
+    },
+    {
+      "case_id": "F200-117",
+      "C1": true,
+      "C2": true,
+      "C3": true,
+      "C4": false,
+      "usable": true,
+      "decision_grade": true,
+      "D1": 5,
+      "D2": 4,
+      "D3": 4,
+      "D4": 5,
+      "D5": 5,
+      "paraphrase_risk": "medium",
+      "p3_only_decisive_facts": 2,
+      "evidence_asymmetry": "mild",
+      "notes": "EOL元数据未误读；默认分支依据含竞品/二手来源，已标PoC验证"
+    }
+  ]
+}
