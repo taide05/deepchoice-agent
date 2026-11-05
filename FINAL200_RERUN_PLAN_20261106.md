@@ -2,6 +2,7 @@
 
 > 用户决策（2026-11-05）：采用方案 B —— 用最终代码从零重跑正式 200；追加 16M tokens（总上限 40,000,000）；
 > **运行必须落在 DeepSeek 谷价窗口内**（北京时间 00:30–08:30，UTC 16:30–00:30）。
+> 2026-11-05 更新：原 Windows 定时任务已按用户要求删除；改为**用户通知后立即手动启动**，仍须在谷价窗口内。
 
 ## 1. 运行配置
 
@@ -12,7 +13,7 @@
 | 代码 | 当前 HEAD（含修复：抓取兜底/32k 预算/规则 35–46/v1.2.3 严格契约；commit 以启动时实际 HEAD 记录） |
 | 配置 | `EVIDENCE_INPUT_BUDGET_CHARS=32000`；并发 4；timeout 1800；token 上限 16,000,000 |
 | 输出 | `.scratch/cases/runs/final-200-finalcode-20261106` |
-| 启动 | Windows 计划任务 `DeepChoiceFinal200Rerun`，2026-11-06 **00:32** |
+| 启动 | **由用户手动触发**（原定时任务已于 2026-11-05 按用户要求删除；用户会通知实际运行时间） |
 | 预计时长 | 约 4–5 小时（并发 4，单例 wall p50 ≈ 250–450s），预计 04:30–05:30 完成 |
 | 预算 | 计划 ≤16M；总上限 40,000,000（已含此前 22,738,695） |
 
@@ -31,7 +32,17 @@
 4. **第三层抽检**：由用户把新的抽检口令交给第三层 AI（针对新批次新报告）；
 5. **交付包最终版**：仅在第三层复检通过后生成，状态标"最终验收通过"；否则保持暂缓并披露。
 
-## 4. 前置条件与风险
+## 4. 启动方式（手动，用户通知后执行）
+
+```powershell
+$env:PYTHONPATH='D:\deepchoice-precodex\src;D:\deepchoice-precodex'
+$env:EVIDENCE_INPUT_BUDGET_CHARS='32000'
+& D:\deepchoice-agent\.venv\Scripts\python.exe .scratch\cases\run_batch.py --cases .scratch\cases\cases_formal_200.json --out .scratch\cases\runs\final-200-finalcode-20261106 --concurrency 4 --timeout 1800 --max-tokens 16000000
+```
+
+运行完成后自动/手动执行：gate → 确定性指标 → review-ready（见 §3）。
+
+## 4.1 前置条件与风险
 
 - 计划任务为 **Interactive only**（Windows 要求登录会话）：请保持电脑开机且当前用户已登录；
   休眠会阻止启动（已设置 WakeToRun，但系统休眠/关机仍会失败）；
