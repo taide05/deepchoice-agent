@@ -1,0 +1,67 @@
+{
+ "freeze_name": "final-200-finalcode-20261105",
+ "created_at": "2026-11-05T22:14:28.581985+08:00",
+ "git": {
+  "head": "095bd5b9ffc9f0dbf1b46d085aa8eb4813b10eee",
+  "branch": "precodex/deepseek-adapter",
+  "latest_code_commit": "890591d",
+  "worktree": "D:\\deepchoice-precodex",
+  "frozen_code_head": "095bd5b9ffc9f0dbf1b46d085aa8eb4813b10eee"
+ },
+ "hashes": {
+  "src_tree": "8899d44c3890010ef4e75ba278555c86695cba1121779257f0f21d4c2aad9686",
+  "generation_prompt_files": {
+   "src/deepchoice/agents/conclusion_synthesizer.py": "c2a1bfc914ffca88ac0a1b01a093a5807708af8418eb458de48e9c900f1fad15",
+   "src/deepchoice/agents/self_reviewer.py": "300c20ee270cd56d1bdeddd41474dee564eff681dccba8d74dfade75280e940b",
+   "src/deepchoice/utils/confidence_text.py": "1e0e37b7b93b8893aa6e94d3d6b65f066ec8781678ac358aea502bbefc7dece0",
+   "src/deepchoice/formats/report_quality.py": "2c593e65d5cccbf7631c0e4eef7032c26c14d2ae233d52ceba4b43e062a80006",
+   "src/deepchoice/retrievers/official.py": "3042b8436a3b7f55f2e59a44d921eba17a8d4189449bba54d875c753228476be",
+   "src/deepchoice/retrievers/tavily_extract.py": "a567b453837abb048800f06e6ed132384c5d4f52ee48c9f8128658a79d66e3db",
+   "src/deepchoice/retrievers/tavily_keypool.py": "c4ba2c52897e824912b225498706e9df724b049e3796733ead891e7ebfe03199"
+  },
+  "review_criteria": {
+   "PROTOCOL_V12_DRAFT_20261103.md": "443a8e50d2e78a11fbf13f5a4ddae567bf83ddbb0274ca26b1d9a1f156477323",
+   "INDEPENDENT_REVIEW_CARD_20261104.md": "30a5f8c174fe034b9e07e615f7eabf80d3ce6b9bddf8adba44e97ce312a5303c"
+  },
+  "cases_formal_200": "46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807",
+  "cases_path": "D:\\deepchoice-precodex\\.scratch\\cases\\cases_formal_200.json"
+ },
+ "frozen_runtime": {
+  "EVIDENCE_INPUT_BUDGET_CHARS": "32000",
+  "concurrency": 4,
+  "timeout_s": 1800,
+  "max_tokens": 16000000,
+  "official_fetch_defaults": {
+   "OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN": "12",
+   "OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN": "32",
+   "OFFICIAL_FETCH_BUDGET_PER_CASE": "1",
+   "OFFICIAL_FETCH_TOTAL_DEADLINE_S": "25"
+  },
+  "community_retrieval_mode": "evidence_pack",
+  "output_dir": ".scratch/cases/runs/final-200-finalcode-20261106"
+ },
+ "frozen_review": {
+  "layers": [
+   "internal full 200 (C1-C4 + D1-D5, v1.2.3 strict)",
+   "independent full 200 (same criteria, blind to internal)",
+   "third-layer AI spot check (external)"
+  ],
+  "usable": "C1 && C4==0",
+  "decision_grade": "usable && C2 && C3",
+  "C2": "5 checks + C2_comparable (v1.2.3)",
+  "notes_rule": "notes describing a C4-class defect force C4=1; failed checks need evidence"
+ },
+ "freeze_rules": [
+  "From this freeze (tag freeze-final200-20261105) until the new batch's third-layer recheck completes: no changes to src/, generation prompts, review criteria, runtime config or case set.",
+  "If a systemic generation defect is found, stop and record an UNFREEZE note (what changed, why, new commit, new run required).",
+  "Case-level content repairs after the run are allowed only as documented same-case reruns with mixed-batch provenance (no replacement cases).",
+  "Docs/session notes may be committed during the freeze; they must not alter code, prompts, config or review criteria."
+ ],
+ "test_result": {
+  "command": "python -m pytest tests -q -p no:cacheprovider",
+  "result": "902 passed, 1 warning",
+  "at_code_commit": "890591d",
+  "at_worktree_head": "095bd5b9ffc9f0dbf1b46d085aa8eb4813b10eee",
+  "duration_s": 227.3
+ }
+}
