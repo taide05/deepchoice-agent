@@ -3,7 +3,7 @@
 ## 环境
 - worktree：`D:\deepchoice-precodex`，分支 `precodex/deepseek-adapter`
 - 代码：主批 `a0355554d33b`；修复批 6 例（018/023/026/066/111/194）`beec4495db3c7`（并发 2）；
-  023/026 复修批 `df99023`（待第三层复检）；均含 Phase A 修复（Tavily extract 端点/403 兜底/provenance/双括号引用）
+  023/026 复修批 `df99023`；第 4 轮复修批 `890591d`（014/023/085/187）；均含 Phase A 修复（Tavily extract 端点/403 兜底/provenance/双括号引用）
 - Python：`D:\deepchoice-agent\.venv\Scripts\python.exe`
 - 凭据：`D:\deepchoice-agent\.env`（由 `run_service.load_credentials()` 加载，不打印）
 
@@ -41,4 +41,11 @@ python .scratch\cases\check_batch_gate_20261104.py <run> 200 --require-provenanc
 & D:\deepchoice-agent\.venv\Scripts\python.exe .scratch\cases\run_batch.py `
   --cases .scratch\cases\cases_fix2_20261104.json `
   --out .scratch\cases\runs\final-200-fix2-20261104 --concurrency 2 --timeout 1200 --max-tokens 300000
+```
+
+## 第 4 轮定向复修（2026-11-05，代码 890591d，并发 2，cap 500k）
+```powershell
+& D:\deepchoice-agent\.venv\Scripts\python.exe .scratch\cases\run_batch.py `
+  --cases .scratch\cases\cases_fix4_20261104.json `
+  --out .scratch\cases\runs\final-200-fix4-20261104 --concurrency 2 --timeout 1200 --max-tokens 500000
 ```

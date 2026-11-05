@@ -3,45 +3,47 @@
  "internal": {
   "count": 200,
   "C1": 200,
-  "C2": 156,
+  "C2": 152,
   "C3": 200,
   "C4": 0,
   "usable": 200,
-  "decision_grade": 156,
+  "decision_grade": 152,
   "usable_rate": 1.0,
-  "decision_grade_rate": 0.78,
+  "decision_grade_rate": 0.76,
   "means": {
-   "D1": 4.46,
-   "D2": 4.61,
-   "D3": 4.26,
-   "D4": 4.94,
-   "D5": 4.95
+   "D1": 4.38,
+   "D2": 4.54,
+   "D3": 4.2,
+   "D4": 4.86,
+   "D5": 4.87
   },
   "paraphrase_risk": {
-   "low": 140,
-   "medium": 56,
+   "low": 137,
+   "unknown": 4,
+   "medium": 55,
    "high": 4
   },
   "evidence_asymmetry": {
-   "strong": 90,
-   "mild": 110
+   "strong": 89,
+   "mild": 107,
+   "unknown": 4
   }
  },
  "independent": {
   "count": 200,
   "C1": 200,
-  "C2": 176,
+  "C2": 173,
   "C3": 200,
   "C4": 0,
   "usable": 200,
-  "decision_grade": 176,
+  "decision_grade": 173,
   "usable_rate": 1.0,
-  "decision_grade_rate": 0.88,
+  "decision_grade_rate": 0.865,
   "means": {
-   "D1": 4.36,
-   "D2": 4.71,
-   "D3": 4.62,
-   "D4": 4.84,
+   "D1": 4.35,
+   "D2": 4.7,
+   "D3": 4.61,
+   "D4": 4.86,
    "D5": 4.98
   },
   "paraphrase_risk": {
@@ -49,15 +51,15 @@
    "medium": 15
   },
   "evidence_asymmetry": {
-   "mild": 114,
-   "strong": 85,
+   "mild": 113,
+   "strong": 86,
    "none": 1
   }
  },
  "agreement": {
   "shared_cases": 200,
   "usable_agreement": 1.0,
-  "decision_grade_agreement": 0.8,
+  "decision_grade_agreement": 0.805,
   "c4_agreement": 1.0,
   "c4_disagreements": []
  }

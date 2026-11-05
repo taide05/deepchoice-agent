@@ -34,17 +34,17 @@
    "True": 93,
    "False": 107
   },
-  "omitted_chars_total": 1462103,
+  "omitted_chars_total": 1462816,
   "cases_with_omission": 107
  },
  "report_chars": {
-  "mean": 21684.6,
+  "mean": 21719.8,
   "min": 6481,
   "max": 42230
  },
  "citation_gap": {
-  "cases_with_gap": 31,
-  "total_markers": 483,
+  "cases_with_gap": 30,
+  "total_markers": 429,
   "worst": [
    [
     "F200-180",
@@ -53,10 +53,6 @@
    [
     "F200-100",
     59
-   ],
-   [
-    "F200-023",
-    54
    ],
    [
     "F200-092",
@@ -77,6 +73,10 @@
    [
     "F200-051",
     19
+   ],
+   [
+    "F200-143",
+    16
    ]
   ]
  },
