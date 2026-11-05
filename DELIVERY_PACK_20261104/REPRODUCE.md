@@ -43,7 +43,7 @@ python .scratch\cases\check_batch_gate_20261104.py <run> 200 --require-provenanc
   --out .scratch\cases\runs\final-200-fix2-20261104 --concurrency 2 --timeout 1200 --max-tokens 300000
 ```
 
-## 第 4 轮定向复修（2026-11-05，代码 890591d，并发 2，cap 500k）
+## 第 4 轮定向复修（2026-11-05，代码 890591d，并发 2，cap 500k，实际消耗 313,330 tokens）
 ```powershell
 & D:\deepchoice-agent\.venv\Scripts\python.exe .scratch\cases\run_batch.py `
   --cases .scratch\cases\cases_fix4_20261104.json `
