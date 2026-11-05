@@ -17,6 +17,10 @@
 | 预计时长 | 约 4–5 小时（并发 4，单例 wall p50 ≈ 250–450s），预计 04:30–05:30 完成 |
 | 预算 | 计划 ≤16M；总上限 40,000,000（已含此前 22,738,695） |
 
+## 1.1 冻结状态（2026-11-05）
+
+生成代码、评审口径、运行配置、题集已在 `FREEZE_20261105.md` + `FREEZE_MANIFEST_20261105.json` 冻结；Git tag `freeze-final200-20261105`（commit `98d8229`，代码 `890591d`，src_tree `8899d44c…`，902 tests passed）。启动前我会先校验冻结未被破坏（src_tree 哈希 + 冻结后提交不触碰冻结范围），再启动。
+
 ## 2. 启动脚本
 
 `.scratch/cases/run_final200_offpeak_20261106.ps1`：设置 PYTHONPATH/预算 env → 运行 run_batch →
