@@ -1,5 +1,5 @@
 {
- "run": "D:\\deepchoice-precodex\\.scratch\\cases\\runs\\final-200-newcode-20261104",
+ "run": "D:\\deepchoice-precodex\\.scratch\\cases\\runs\\final-200-finalcode-20261106",
  "case_count": 200,
  "completed": 200,
  "statuses": {
@@ -7,76 +7,76 @@
  },
  "missing": [],
  "tokens": {
-  "total": 15932513,
-  "mean": 79662.6,
-  "p50": 78060,
-  "min": 45764,
-  "max": 133860
+  "total": 15993977,
+  "mean": 79969.9,
+  "p50": 76674,
+  "min": 46433,
+  "max": 133724
  },
  "wall_s": {
-  "p50": 248.9,
-  "p95": 371.2,
-  "max": 452.3
+  "p50": 262.8,
+  "p95": 453.8,
+  "max": 617.9
  },
  "confidence": {
-  "low": 124,
-  "medium": 76
+  "low": 117,
+  "medium": 83
  },
  "official_body_pages": {
-  "total": 912,
-  "mean": 4.56,
+  "total": 903,
+  "mean": 4.51,
   "zero_cases": 0
  },
- "tavily_extract_pages": 170,
+ "tavily_extract_pages": 211,
  "evidence_budget": {
   "budget_chars": "32000",
   "full_included": {
    "True": 93,
    "False": 107
   },
-  "omitted_chars_total": 1462816,
+  "omitted_chars_total": 1392641,
   "cases_with_omission": 107
  },
  "report_chars": {
-  "mean": 21719.8,
-  "min": 6481,
-  "max": 42230
+  "mean": 20810.1,
+  "min": 8636,
+  "max": 38032
  },
  "citation_gap": {
-  "cases_with_gap": 30,
-  "total_markers": 429,
+  "cases_with_gap": 33,
+  "total_markers": 493,
   "worst": [
    [
-    "F200-180",
-    68
+    "F200-035",
+    55
    ],
    [
-    "F200-100",
-    59
+    "F200-170",
+    55
+   ],
+   [
+    "F200-010",
+    53
+   ],
+   [
+    "F200-076",
+    51
+   ],
+   [
+    "F200-083",
+    44
+   ],
+   [
+    "F200-194",
+    36
    ],
    [
     "F200-092",
-    50
+    34
    ],
    [
-    "F200-043",
-    48
-   ],
-   [
-    "F200-157",
-    33
-   ],
-   [
-    "F200-189",
-    33
-   ],
-   [
-    "F200-051",
-    19
-   ],
-   [
-    "F200-143",
-    16
+    "F200-084",
+    22
    ]
   ]
  },
@@ -85,20 +85,18 @@
  },
  "health": {
   "statuses": {
-   "warn": 167,
-   "ok": 30,
-   "invalid": 3
+   "ok": 34,
+   "warn": 166
   },
   "issue_kinds": {
-   "report_claim_support": 100,
-   "report_quality": 187,
-   "page_issue": 52,
-   "report_ledger": 5,
-   "report_contract": 5
+   "report_claim_support": 99,
+   "report_quality": 169,
+   "page_issue": 39,
+   "report_ledger": 9
   }
  },
  "git": {
-  "commit": "a0355554d33be01cc83e5cc11a0c4fb4edbdb0d0",
+  "commit": "7af8ffaa14923e3733f4dce30f14fd3f798c04be",
   "dirty": true,
   "source_dirty": false,
   "source_changed_files": [],
@@ -106,6 +104,6 @@
  },
  "cases_sha256": "46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807",
  "budget_stopped": false,
- "tokens_used": 15932513,
+ "tokens_used": 15993977,
  "max_tokens": 16000000
 }

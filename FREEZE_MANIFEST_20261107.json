@@ -9,9 +9,13 @@
   "c4_ids": [
    "F200-174"
   ],
-  "c2_true": 182,
+  "c2_true": 179,
   "usable": 199,
-  "decision_grade": 182
+  "decision_grade": 179
  },
- "spend": "42,422,985 / 42,400,000 (+22,985 disclosed)"
+ "spend": "42,422,985 / 42,400,000 (+22,985 disclosed; ledger BUDGET_LEDGER_20261107.md)",
+ "review_round5": {
+  "verdict": "failed blockers B1-B4; fixed 2026-11-07; recheck pending",
+  "budget_ledger": "BUDGET_LEDGER_20261107.md"
+ }
 }

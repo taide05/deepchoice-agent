@@ -1,5 +1,5 @@
 {
- "run": "D:\\deepchoice-precodex\\.scratch\\cases\\runs\\final-200-newcode-20261104",
+ "run": "D:\\deepchoice-precodex\\.scratch\\cases\\runs\\final-200-finalcode-20261106",
  "expected": 200,
  "checks": {
   "summary_rows": 200,
@@ -7,10 +7,10 @@
   "unique_cases": 200,
   "health_entries": 200,
   "health_invalid": 0,
-  "health_warn": 169,
+  "health_warn": 166,
   "cases_sha256": "46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807",
   "max_tokens": 16000000,
-  "tokens_used": 15932513,
+  "tokens_used": 15993977,
   "budget_stopped": false,
   "missing_artifacts": 0,
   "missing_provenance": 0
