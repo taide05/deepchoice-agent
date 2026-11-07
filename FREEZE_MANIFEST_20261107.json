@@ -1,38 +1,17 @@
 {
- "freeze_name": "final-200-after-fix39-20261107",
- "created_at": "2026-11-07T10:05:00+08:00",
- "git_head": "pending-commit",
- "code_commit": "7c553b0",
- "src_tree_sha256": "f0b291829680fe6b0ca6cefb8d52423f44e511381c8558c97c7f98555d6828c2",
+ "freeze_name": "final-200-final-20261107-v3",
+ "code_commit": "da99f23",
+ "src_tree_sha256": "a51a5bc4123f4b94d67f705dece9d569fd9e4e79d01e2db8aae62c779d06b00d",
  "cases_sha256": "46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807",
- "frozen_runtime": {
-  "EVIDENCE_INPUT_BUDGET_CHARS": "32000",
-  "concurrency": 4,
-  "timeout_s": 1800,
-  "max_tokens": 16000000
- },
- "review_criteria": "v1.2.5 calibration + v1.2.6 branch-consistency",
- "repair_batch": {
-  "dir": "D:\\deepchoice-precodex\\.scratch\\cases\\runs\\final-200-finalcode-20261106\\FIX39_PROVENANCE.json",
-  "cases": 39,
-  "tokens": 3342375,
-  "note": "same-case repair reruns after rules 47-48; no replacements; F200-138 rerun after invalid"
- },
+ "review_criteria": "v1.2.5 calibration + v1.2.6/1.2.7",
  "final_metrics": {
-  "c4": 4,
+  "c4": 1,
+  "c4_ids": [
+   "F200-174"
+  ],
   "c2_true": 182,
-  "usable": 196,
-  "decision_grade": 179
+  "usable": 199,
+  "decision_grade": 182
  },
- "residual_c4": [
-  "F200-029",
-  "F200-124",
-  "F200-174",
-  "F200-192"
- ],
- "rules": [
-  "No changes to src/, prompts, review criteria, config, case set until third-layer recheck completes.",
-  "Case-level repairs only as documented same-case reruns with mixed-batch provenance.",
-  "Docs may be committed; code/config/frozen scope may not."
- ]
+ "spend": "42,422,985 / 42,400,000 (+22,985 disclosed)"
 }
