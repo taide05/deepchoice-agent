@@ -1,6 +1,6 @@
 # DeepChoice 交付包（最终版状态，2026-11-07）
 
-> 版本：候选最终版（第 5 轮抽检未通过 → B1–B4 已修复 → 待复审）。
+> 版本：候选最终版（第 5 轮抽检 → blocker 修复 → 第二复审通过，**抽检验证通过（仅此口径，非最终验收标记）**）。
 > 最终指标：C4=1/200（F200-174，已披露）、C2=true 179/200、usable 199/200、DG 179/200；
 > 累计付费 42,422,985 / 42,400,000（超 22,985 已披露，见 `BUDGET_LEDGER_20261107.md`）。
 > 最终文档：`FINAL200_FINAL_RESULT_20261107.md`、`CALIBRATION_RESULT_20261106.md`、
@@ -8,7 +8,7 @@
 > `ROUND5_REVIEW_RESULT_20261107.md`、`ROUND5_RECHECK_INSTRUCTION_20261107.md`。
 > 本目录中第 4 轮旧文件（metrics.json/review_metrics.json/gate_result.json/NEW_200_FORMAL_RESULT_20261104.md）
 > 已在 `SUPERSEDED.md` 标注，仅供历史记录，不得对外交付。
-> **AI 辅助抽检 ≠ 真人签字；样本不可外推全量 200；复审通过前不得标记"最终验收通过"。**
+> **AI 辅助抽检 ≠ 真人签字；样本不可外推全量 200；不得标记"最终验收通过"（该标记由用户/真人决定）。**
 
 ---
 
