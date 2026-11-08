@@ -44,6 +44,10 @@
 | `INDEPENDENT_REVIEW_CARD_20261104.md` | `30a5f8c174fe034b9e07e615f7eabf80d3ce6b9bddf8adba44e97ce312a5303c` |
 | `AI_SPOT_CHECK_LAYER3_20261104.md` | `f03ef971475aa2feb9e175ed092244097c20506852a9ab2a265eb65619de46cc` |
 
+## 4.1 内部完整性自检
+
+- `FINAL_INTEGRITY_CHECK_20261108.md`：18 项内部检查全部通过（快照/指标/冻结哈希/预算台账/跨文档一致性/修复 SHA/provenance/包副本/审查归档）。
+
 ## 5. 运行产物
 
 - 最终批次：`.scratch/cases/runs/final-200-finalcode-20261106`（200 例报告 + review_final_200.json + provenance）；
