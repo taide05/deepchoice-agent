@@ -1,0 +1,4208 @@
+{
+  "dataset": "formal-200-v1-draft",
+  "created": "2026-10-26",
+  "status": "DRAFT — not run; no answer key; evaluation protocol separate",
+  "note": "50 个候选对 × 4 个场景生成的用户式短问题；用于 200 题正式运行。案例由 dsh 起草，无 expected_winner 标注；指标以完成率、结构指标与抽样内容评审为主。",
+  "cases": [
+    {
+      "id": "F200-001",
+      "category": "Frontend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Svelte 和 Vue 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Svelte",
+          "Vue"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-002",
+      "category": "Frontend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Svelte 和 Vue 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Svelte",
+          "Vue"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-003",
+      "category": "Frontend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Svelte 和 Vue 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Svelte",
+          "Vue"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-004",
+      "category": "Frontend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Svelte 和 Vue 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Svelte",
+          "Vue"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-005",
+      "category": "Frontend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 SolidJS 和 React 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "SolidJS",
+          "React"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-006",
+      "category": "Frontend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 SolidJS 和 React 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "SolidJS",
+          "React"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-007",
+      "category": "Frontend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 SolidJS 和 React 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "SolidJS",
+          "React"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-008",
+      "category": "Frontend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 SolidJS 和 React 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "SolidJS",
+          "React"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-009",
+      "category": "Frontend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Qwik 和 SvelteKit 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Qwik",
+          "SvelteKit"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-010",
+      "category": "Frontend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Qwik 和 SvelteKit 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Qwik",
+          "SvelteKit"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-011",
+      "category": "Frontend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Qwik 和 SvelteKit 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Qwik",
+          "SvelteKit"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-012",
+      "category": "Frontend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Qwik 和 SvelteKit 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Qwik",
+          "SvelteKit"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-013",
+      "category": "Frontend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 SvelteKit 和 Nuxt 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "SvelteKit",
+          "Nuxt"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-014",
+      "category": "Frontend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 SvelteKit 和 Nuxt 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "SvelteKit",
+          "Nuxt"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-015",
+      "category": "Frontend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 SvelteKit 和 Nuxt 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "SvelteKit",
+          "Nuxt"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-016",
+      "category": "Frontend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 SvelteKit 和 Nuxt 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "SvelteKit",
+          "Nuxt"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-017",
+      "category": "Frontend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 React Native 和 Flutter 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "React Native",
+          "Flutter"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-018",
+      "category": "Frontend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 React Native 和 Flutter 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "React Native",
+          "Flutter"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-019",
+      "category": "Frontend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 React Native 和 Flutter 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "React Native",
+          "Flutter"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-020",
+      "category": "Frontend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 React Native 和 Flutter 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "React Native",
+          "Flutter"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-021",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 Spring Boot 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "Spring Boot"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-022",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 Spring Boot 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "Spring Boot"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-023",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 Spring Boot 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "Spring Boot"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-024",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 Spring Boot 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "Spring Boot"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-025",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Phoenix 和 Rails 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Phoenix",
+          "Rails"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-026",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Phoenix 和 Rails 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Phoenix",
+          "Rails"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-027",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Phoenix 和 Rails 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Phoenix",
+          "Rails"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-028",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Phoenix 和 Rails 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Phoenix",
+          "Rails"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-029",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Go Fiber 和 Echo 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Go Fiber",
+          "Echo"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-030",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Go Fiber 和 Echo 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Go Fiber",
+          "Echo"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-031",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Go Fiber 和 Echo 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Go Fiber",
+          "Echo"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-032",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Go Fiber 和 Echo 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Go Fiber",
+          "Echo"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-033",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Axum 和 Actix Web 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Axum",
+          "Actix Web"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-034",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Axum 和 Actix Web 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Axum",
+          "Actix Web"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-035",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Axum 和 Actix Web 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Axum",
+          "Actix Web"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-036",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Axum 和 Actix Web 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Axum",
+          "Actix Web"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-037",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Deno 和 Bun 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Deno",
+          "Bun"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-038",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Deno 和 Bun 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Deno",
+          "Bun"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-039",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Deno 和 Bun 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Deno",
+          "Bun"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-040",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Deno 和 Bun 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Deno",
+          "Bun"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-041",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 NestJS 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "NestJS"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-042",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 NestJS 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "NestJS"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-043",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 NestJS 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "NestJS"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-044",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 ASP.NET Core 和 NestJS 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "ASP.NET Core",
+          "NestJS"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-045",
+      "category": "Backend",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Koa 和 Hapi 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Koa",
+          "Hapi"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-046",
+      "category": "Backend",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Koa 和 Hapi 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Koa",
+          "Hapi"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-047",
+      "category": "Backend",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Koa 和 Hapi 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Koa",
+          "Hapi"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-048",
+      "category": "Backend",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Koa 和 Hapi 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Koa",
+          "Hapi"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-049",
+      "category": "Database",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 CockroachDB 和 YugabyteDB 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "CockroachDB",
+          "YugabyteDB"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-050",
+      "category": "Database",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 CockroachDB 和 YugabyteDB 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "CockroachDB",
+          "YugabyteDB"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-051",
+      "category": "Database",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 CockroachDB 和 YugabyteDB 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "CockroachDB",
+          "YugabyteDB"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-052",
+      "category": "Database",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 CockroachDB 和 YugabyteDB 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "CockroachDB",
+          "YugabyteDB"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-053",
+      "category": "Database",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 TimescaleDB 和 InfluxDB 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "TimescaleDB",
+          "InfluxDB"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-054",
+      "category": "Database",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 TimescaleDB 和 InfluxDB 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "TimescaleDB",
+          "InfluxDB"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-055",
+      "category": "Database",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 TimescaleDB 和 InfluxDB 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "TimescaleDB",
+          "InfluxDB"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-056",
+      "category": "Database",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 TimescaleDB 和 InfluxDB 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "TimescaleDB",
+          "InfluxDB"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-057",
+      "category": "Database",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 ScyllaDB 和 Cassandra 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "ScyllaDB",
+          "Cassandra"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-058",
+      "category": "Database",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 ScyllaDB 和 Cassandra 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "ScyllaDB",
+          "Cassandra"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-059",
+      "category": "Database",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 ScyllaDB 和 Cassandra 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "ScyllaDB",
+          "Cassandra"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-060",
+      "category": "Database",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 ScyllaDB 和 Cassandra 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "ScyllaDB",
+          "Cassandra"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-061",
+      "category": "Database",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Couchbase 和 MongoDB 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Couchbase",
+          "MongoDB"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-062",
+      "category": "Database",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Couchbase 和 MongoDB 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Couchbase",
+          "MongoDB"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-063",
+      "category": "Database",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Couchbase 和 MongoDB 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Couchbase",
+          "MongoDB"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-064",
+      "category": "Database",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Couchbase 和 MongoDB 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Couchbase",
+          "MongoDB"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-065",
+      "category": "Database",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 MariaDB 和 MySQL 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "MariaDB",
+          "MySQL"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-066",
+      "category": "Database",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 MariaDB 和 MySQL 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "MariaDB",
+          "MySQL"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-067",
+      "category": "Database",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 MariaDB 和 MySQL 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "MariaDB",
+          "MySQL"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-068",
+      "category": "Database",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 MariaDB 和 MySQL 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "MariaDB",
+          "MySQL"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-069",
+      "category": "Database",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Elasticsearch 和 OpenSearch 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Elasticsearch",
+          "OpenSearch"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-070",
+      "category": "Database",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Elasticsearch 和 OpenSearch 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Elasticsearch",
+          "OpenSearch"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-071",
+      "category": "Database",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Elasticsearch 和 OpenSearch 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Elasticsearch",
+          "OpenSearch"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-072",
+      "category": "Database",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Elasticsearch 和 OpenSearch 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Elasticsearch",
+          "OpenSearch"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-073",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Nomad 和 Kubernetes 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Nomad",
+          "Kubernetes"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-074",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Nomad 和 Kubernetes 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Nomad",
+          "Kubernetes"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-075",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Nomad 和 Kubernetes 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Nomad",
+          "Kubernetes"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-076",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Nomad 和 Kubernetes 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Nomad",
+          "Kubernetes"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-077",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 OpenTofu 和 Terraform 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "OpenTofu",
+          "Terraform"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-078",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 OpenTofu 和 Terraform 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "OpenTofu",
+          "Terraform"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-079",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 OpenTofu 和 Terraform 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "OpenTofu",
+          "Terraform"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-080",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 OpenTofu 和 Terraform 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "OpenTofu",
+          "Terraform"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-081",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Cilium 和 Calico 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Cilium",
+          "Calico"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-082",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Cilium 和 Calico 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Cilium",
+          "Calico"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-083",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Cilium 和 Calico 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Cilium",
+          "Calico"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-084",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Cilium 和 Calico 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Cilium",
+          "Calico"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-085",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 HAProxy 和 Envoy 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "HAProxy",
+          "Envoy"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-086",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 HAProxy 和 Envoy 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "HAProxy",
+          "Envoy"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-087",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 HAProxy 和 Envoy 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "HAProxy",
+          "Envoy"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-088",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 HAProxy 和 Envoy 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "HAProxy",
+          "Envoy"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-089",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Consul 和 etcd 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Consul",
+          "etcd"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-090",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Consul 和 etcd 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Consul",
+          "etcd"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-091",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Consul 和 etcd 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Consul",
+          "etcd"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-092",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Consul 和 etcd 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Consul",
+          "etcd"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-093",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Vault 和 SOPS 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Vault",
+          "SOPS"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-094",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Vault 和 SOPS 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Vault",
+          "SOPS"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-095",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Vault 和 SOPS 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Vault",
+          "SOPS"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-096",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Vault 和 SOPS 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Vault",
+          "SOPS"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-097",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Argo Rollouts 和 Spinnaker 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Argo Rollouts",
+          "Spinnaker"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-098",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Argo Rollouts 和 Spinnaker 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Argo Rollouts",
+          "Spinnaker"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-099",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Argo Rollouts 和 Spinnaker 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Argo Rollouts",
+          "Spinnaker"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-100",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Argo Rollouts 和 Spinnaker 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Argo Rollouts",
+          "Spinnaker"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-101",
+      "category": "CI/CD",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Buildkite 和 CircleCI 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Buildkite",
+          "CircleCI"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-102",
+      "category": "CI/CD",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Buildkite 和 CircleCI 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Buildkite",
+          "CircleCI"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-103",
+      "category": "CI/CD",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Buildkite 和 CircleCI 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Buildkite",
+          "CircleCI"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-104",
+      "category": "CI/CD",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Buildkite 和 CircleCI 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Buildkite",
+          "CircleCI"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-105",
+      "category": "CI/CD",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Drone 和 Tekton 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Drone",
+          "Tekton"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-106",
+      "category": "CI/CD",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Drone 和 Tekton 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Drone",
+          "Tekton"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-107",
+      "category": "CI/CD",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Drone 和 Tekton 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Drone",
+          "Tekton"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-108",
+      "category": "CI/CD",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Drone 和 Tekton 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Drone",
+          "Tekton"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-109",
+      "category": "CI/CD",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Renovate 和 Dependabot 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Renovate",
+          "Dependabot"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-110",
+      "category": "CI/CD",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Renovate 和 Dependabot 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Renovate",
+          "Dependabot"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-111",
+      "category": "CI/CD",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Renovate 和 Dependabot 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Renovate",
+          "Dependabot"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-112",
+      "category": "CI/CD",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Renovate 和 Dependabot 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Renovate",
+          "Dependabot"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-113",
+      "category": "CI/CD",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 GitLab CI 和 CircleCI 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "GitLab CI",
+          "CircleCI"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-114",
+      "category": "CI/CD",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 GitLab CI 和 CircleCI 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "GitLab CI",
+          "CircleCI"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-115",
+      "category": "CI/CD",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 GitLab CI 和 CircleCI 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "GitLab CI",
+          "CircleCI"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-116",
+      "category": "CI/CD",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 GitLab CI 和 CircleCI 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "GitLab CI",
+          "CircleCI"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-117",
+      "category": "Messaging",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Pulsar 和 Redpanda 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Pulsar",
+          "Redpanda"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-118",
+      "category": "Messaging",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Pulsar 和 Redpanda 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Pulsar",
+          "Redpanda"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-119",
+      "category": "Messaging",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Pulsar 和 Redpanda 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Pulsar",
+          "Redpanda"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-120",
+      "category": "Messaging",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Pulsar 和 Redpanda 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Pulsar",
+          "Redpanda"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-121",
+      "category": "Messaging",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 RabbitMQ 和 ActiveMQ 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "RabbitMQ",
+          "ActiveMQ"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-122",
+      "category": "Messaging",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 RabbitMQ 和 ActiveMQ 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "RabbitMQ",
+          "ActiveMQ"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-123",
+      "category": "Messaging",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 RabbitMQ 和 ActiveMQ 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "RabbitMQ",
+          "ActiveMQ"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-124",
+      "category": "Messaging",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 RabbitMQ 和 ActiveMQ 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "RabbitMQ",
+          "ActiveMQ"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-125",
+      "category": "Observability",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Vector 和 Fluent Bit 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Vector",
+          "Fluent Bit"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-126",
+      "category": "Observability",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Vector 和 Fluent Bit 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Vector",
+          "Fluent Bit"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-127",
+      "category": "Observability",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Vector 和 Fluent Bit 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Vector",
+          "Fluent Bit"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-128",
+      "category": "Observability",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Vector 和 Fluent Bit 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Vector",
+          "Fluent Bit"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-129",
+      "category": "Observability",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Jaeger 和 Zipkin 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Jaeger",
+          "Zipkin"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-130",
+      "category": "Observability",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Jaeger 和 Zipkin 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Jaeger",
+          "Zipkin"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-131",
+      "category": "Observability",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Jaeger 和 Zipkin 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Jaeger",
+          "Zipkin"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-132",
+      "category": "Observability",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Jaeger 和 Zipkin 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Jaeger",
+          "Zipkin"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-133",
+      "category": "Observability",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Datadog 和 New Relic 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Datadog",
+          "New Relic"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-134",
+      "category": "Observability",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Datadog 和 New Relic 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Datadog",
+          "New Relic"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-135",
+      "category": "Observability",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Datadog 和 New Relic 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Datadog",
+          "New Relic"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-136",
+      "category": "Observability",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Datadog 和 New Relic 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Datadog",
+          "New Relic"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-137",
+      "category": "AI/ML",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 MLflow 和 Weights & Biases 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "MLflow",
+          "Weights & Biases"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-138",
+      "category": "AI/ML",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 MLflow 和 Weights & Biases 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "MLflow",
+          "Weights & Biases"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-139",
+      "category": "AI/ML",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 MLflow 和 Weights & Biases 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "MLflow",
+          "Weights & Biases"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-140",
+      "category": "AI/ML",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 MLflow 和 Weights & Biases 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "MLflow",
+          "Weights & Biases"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-141",
+      "category": "AI/ML",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 LangGraph 和 AutoGen 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "LangGraph",
+          "AutoGen"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-142",
+      "category": "AI/ML",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 LangGraph 和 AutoGen 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "LangGraph",
+          "AutoGen"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-143",
+      "category": "AI/ML",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 LangGraph 和 AutoGen 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "LangGraph",
+          "AutoGen"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-144",
+      "category": "AI/ML",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 LangGraph 和 AutoGen 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "LangGraph",
+          "AutoGen"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-145",
+      "category": "AI/ML",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 LlamaIndex 和 Haystack 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "LlamaIndex",
+          "Haystack"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-146",
+      "category": "AI/ML",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 LlamaIndex 和 Haystack 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "LlamaIndex",
+          "Haystack"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-147",
+      "category": "AI/ML",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 LlamaIndex 和 Haystack 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "LlamaIndex",
+          "Haystack"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-148",
+      "category": "AI/ML",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 LlamaIndex 和 Haystack 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "LlamaIndex",
+          "Haystack"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-149",
+      "category": "AI/ML",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 vLLM 和 Text Generation Inference 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "vLLM",
+          "Text Generation Inference"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-150",
+      "category": "AI/ML",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 vLLM 和 Text Generation Inference 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "vLLM",
+          "Text Generation Inference"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-151",
+      "category": "AI/ML",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 vLLM 和 Text Generation Inference 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "vLLM",
+          "Text Generation Inference"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-152",
+      "category": "AI/ML",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 vLLM 和 Text Generation Inference 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "vLLM",
+          "Text Generation Inference"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-153",
+      "category": "AI/ML",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 pgvector 和 Qdrant 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "pgvector",
+          "Qdrant"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-154",
+      "category": "AI/ML",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 pgvector 和 Qdrant 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "pgvector",
+          "Qdrant"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-155",
+      "category": "AI/ML",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 pgvector 和 Qdrant 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "pgvector",
+          "Qdrant"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-156",
+      "category": "AI/ML",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 pgvector 和 Qdrant 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "pgvector",
+          "Qdrant"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-157",
+      "category": "Security",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Keycloak 和 Auth0 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Keycloak",
+          "Auth0"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-158",
+      "category": "Security",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Keycloak 和 Auth0 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Keycloak",
+          "Auth0"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-159",
+      "category": "Security",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Keycloak 和 Auth0 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Keycloak",
+          "Auth0"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-160",
+      "category": "Security",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Keycloak 和 Auth0 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Keycloak",
+          "Auth0"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-161",
+      "category": "Security",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Ory 和 Authentik 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Ory",
+          "Authentik"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-162",
+      "category": "Security",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Ory 和 Authentik 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Ory",
+          "Authentik"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-163",
+      "category": "Security",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Ory 和 Authentik 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Ory",
+          "Authentik"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-164",
+      "category": "Security",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Ory 和 Authentik 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Ory",
+          "Authentik"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-165",
+      "category": "Data",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Dagster 和 Airflow 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Dagster",
+          "Airflow"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-166",
+      "category": "Data",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Dagster 和 Airflow 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Dagster",
+          "Airflow"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-167",
+      "category": "Data",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Dagster 和 Airflow 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Dagster",
+          "Airflow"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-168",
+      "category": "Data",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Dagster 和 Airflow 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Dagster",
+          "Airflow"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-169",
+      "category": "Data",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 dbt 和 SQLMesh 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "dbt",
+          "SQLMesh"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-170",
+      "category": "Data",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 dbt 和 SQLMesh 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "dbt",
+          "SQLMesh"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-171",
+      "category": "Data",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 dbt 和 SQLMesh 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "dbt",
+          "SQLMesh"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-172",
+      "category": "Data",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 dbt 和 SQLMesh 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "dbt",
+          "SQLMesh"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-173",
+      "category": "Data",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Airbyte 和 Fivetran 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Airbyte",
+          "Fivetran"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-174",
+      "category": "Data",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Airbyte 和 Fivetran 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Airbyte",
+          "Fivetran"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-175",
+      "category": "Data",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Airbyte 和 Fivetran 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Airbyte",
+          "Fivetran"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-176",
+      "category": "Data",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Airbyte 和 Fivetran 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Airbyte",
+          "Fivetran"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-177",
+      "category": "Python",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Poetry 和 uv 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Poetry",
+          "uv"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-178",
+      "category": "Python",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Poetry 和 uv 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Poetry",
+          "uv"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-179",
+      "category": "Python",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Poetry 和 uv 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Poetry",
+          "uv"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-180",
+      "category": "Python",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Poetry 和 uv 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Poetry",
+          "uv"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-181",
+      "category": "Python",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Pydantic v2 和 msgspec 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Pydantic v2",
+          "msgspec"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-182",
+      "category": "Python",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Pydantic v2 和 msgspec 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Pydantic v2",
+          "msgspec"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-183",
+      "category": "Python",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Pydantic v2 和 msgspec 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Pydantic v2",
+          "msgspec"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-184",
+      "category": "Python",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Pydantic v2 和 msgspec 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Pydantic v2",
+          "msgspec"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-185",
+      "category": "Python",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Ruff 和 Flake8 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Ruff",
+          "Flake8"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-186",
+      "category": "Python",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Ruff 和 Flake8 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Ruff",
+          "Flake8"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-187",
+      "category": "Python",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Ruff 和 Flake8 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Ruff",
+          "Flake8"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-188",
+      "category": "Python",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Ruff 和 Flake8 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Ruff",
+          "Flake8"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-189",
+      "category": "Infra",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Pulumi 和 AWS CDK 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Pulumi",
+          "AWS CDK"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-190",
+      "category": "Infra",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Pulumi 和 AWS CDK 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Pulumi",
+          "AWS CDK"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-191",
+      "category": "Infra",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Pulumi 和 AWS CDK 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Pulumi",
+          "AWS CDK"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-192",
+      "category": "Infra",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Pulumi 和 AWS CDK 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Pulumi",
+          "AWS CDK"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-193",
+      "category": "Containers",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 containerd 和 CRI-O 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "containerd",
+          "CRI-O"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-194",
+      "category": "Containers",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 containerd 和 CRI-O 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "containerd",
+          "CRI-O"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-195",
+      "category": "Containers",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 containerd 和 CRI-O 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "containerd",
+          "CRI-O"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-196",
+      "category": "Containers",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 containerd 和 CRI-O 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "containerd",
+          "CRI-O"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-197",
+      "category": "Containers",
+      "scene": "solo",
+      "task": {
+        "query": "我们正在 Buildah 和 Kaniko 之间做技术选型，背景是 3 人小团队、从零开始搭产品的场景。请比较两者并给出选择条件，尤其关注上线速度和后续运维负担。",
+        "scene_context": "小团队从零搭建产品，缺乏专职基础设施人员，关注上线速度和维护成本。",
+        "candidate_techs": [
+          "Buildah",
+          "Kaniko"
+        ],
+        "constraints": [
+          "团队 3 人，没有专职运维",
+          "希望尽快上线",
+          "预算有限",
+          "要能支撑未来一年的增长"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-198",
+      "category": "Containers",
+      "scene": "team",
+      "task": {
+        "query": "我们正在 Buildah 和 Kaniko 之间做技术选型，背景是 约 10 人工程团队、已有生产系统的场景。请比较两者，说明在什么条件下应该选哪一个，尤其关注迁移风险和长期维护成本。",
+        "scene_context": "中等团队维护生产系统，已有监控与发布流程，关注迁移风险与长期维护成本。",
+        "candidate_techs": [
+          "Buildah",
+          "Kaniko"
+        ],
+        "constraints": [
+          "团队约 10 人",
+          "已有生产流量",
+          "已有基础监控",
+          "希望尽量少改现有代码"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-199",
+      "category": "Containers",
+      "scene": "enterprise",
+      "task": {
+        "query": "我们正在 Buildah 和 Kaniko 之间做技术选型，背景是 受监管企业的平台团队场景。请比较两者并说明取舍，重点看审计、权限控制和长期可维护性。",
+        "scene_context": "受监管企业的平台团队，合规与审计优先，能接受托管服务费用，关注供应商支持和升级路径。",
+        "candidate_techs": [
+          "Buildah",
+          "Kaniko"
+        ],
+        "constraints": [
+          "受监管行业，需要审计和权限控制",
+          "平台团队约 20 人",
+          "可接受托管费用",
+          "需要长期维护和升级路径"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    },
+    {
+      "id": "F200-200",
+      "category": "Containers",
+      "scene": "migration",
+      "task": {
+        "query": "我们正在 Buildah 和 Kaniko 之间做技术选型，背景是 从现有自研/旧方案迁移的场景。我们目前有一套自研的旧方案，维护成本越来越高，准备迁移到其中一个候选。请比较两者，重点说明迁移成本、回滚和逐步切换的注意事项。",
+        "scene_context": "从自研旧方案迁移，存量数据和配置需要兼容，迁移需要可回滚并支持逐步切换。",
+        "candidate_techs": [
+          "Buildah",
+          "Kaniko"
+        ],
+        "constraints": [
+          "需要从旧方案迁移",
+          "迁移期间不能长时间停机",
+          "需要可回滚",
+          "现有团队只熟悉旧方案"
+        ],
+        "report_format": "what_why_how",
+        "language": "zh"
+      }
+    }
+  ]
+}
