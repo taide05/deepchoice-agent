@@ -1,29 +1,87 @@
-from deepchoice.formats.citations import citation_verification_section
+from ..agents.conclusion_synthesizer import clean_label
+from .basis import (
+    escape_markdown_text,
+    research_question_line,
+    short_report_title,
+    source_display_title,
+    source_provenance_note,
+    used_sources,
+)
+from .coverage import derive_data_source_note
+from .report_quality import finalize_report_text, sanitize_arbitration_text
+from ..utils.decision import (
+    CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED, decision_view,
+)
 
 
 def _lang(query: str) -> str:
     return "zh" if any('一' <= c <= '鿿' for c in query) else "en"
 
 
-def _link(text: str, src: dict) -> str:
-    url = (src or {}).get("url", "")
-    return f"[{text}]({url})" if url else text
+def _cell(value) -> str:
+    """A markdown table cell: one line, and no cell separator inside it."""
+    return " ".join(str(value or "").split()).replace("|", "\\|") or "—"
+
+
+def _has_body(src: dict) -> bool:
+    from ..utils.candidate_identity import has_factual_content
+
+    return has_factual_content(src)
+
+
+def _claim_source(conflict: dict, key: str, lang: str) -> str:
+    """A dispute claim's source, or a stated gap when it carries no body.
+
+    The source title labels the link; the body excerpt follows as plain, escaped
+    text. Historical rows without a stored title keep the claim-as-label fallback.
+    The link stays visible, but a page whose body was never collected is labelled
+    as such instead of being shown as the claim's source.
+    """
+    src = conflict.get(key, {}) or {}
+    title = " ".join(str(src.get("title") or "").split())
+    claim = conflict.get("claim_a" if key == "source_a" else "claim_b", "") or ""
+    claim = " ".join(str(claim).split())
+    if len(claim) > 240:
+        claim = claim[:240].rstrip() + "…"
+    url = src.get("url", "")
+    if title and url:
+        # Locatable label: retriever-generated "<owner> — deep documentation"
+        # titles get a path suffix so a wrong page cannot hide behind the owner.
+        label = escape_markdown_text(
+            source_display_title({"title": title, "url": url}))
+    else:
+        label = escape_markdown_text(title or claim or "N/A")
+    link = f"[{label}]({url})" if url else label
+    excerpt = ""
+    if title and claim and claim != title:
+        excerpt = f" — {escape_markdown_text(claim)}"
+    if _has_body(src):
+        return f"{link}{excerpt}"
+    note = "无正文（仅导航链接）" if lang == "zh" else \
+        "no body collected (navigation link only)"
+    return f"{link}{excerpt} — {note}"
 
 
 def render(state: dict) -> str:
     task = state.get("task", {})
     query = task.get("query", "Technology Comparison")
+    rec = state.get("final_recommendation", {}) or {}
+    title_core = short_report_title(task, rec)
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
     lang = _lang(query)
 
     L = {
-        "title": {"en": f"# {query} — 5-Dimension Comparison Matrix", "zh": f"# {query} — 五维对比矩阵"},
-        "col_dim": {"en": "Dimension", "zh": "维度"},
-        "col_criterion": {"en": "Criterion", "zh": "判据"},
-        "col_strength": {"en": "Evidence Strength", "zh": "证据强度"},
-        "no_data": {"en": "Insufficient data", "zh": "数据不足"},
-        "no_evidence": {"en": "Insufficient evidence", "zh": "证据不足"},
+        "title": {"en": f"# {title_core} — Candidate Comparison",
+                  "zh": f"# {title_core} — 候选对比"},
+        "col_candidate": {"en": "Candidate", "zh": "候选"},
+        "col_fit": {"en": "Constraint fit", "zh": "约束适配"},
+        "col_rationale": {"en": "Why", "zh": "理由"},
+        "col_strength": {"en": "Advantage", "zh": "优势"},
+        "col_weakness": {"en": "Limitation", "zh": "局限"},
+        "no_candidates": {"en": "The synthesis produced no per-candidate comparison.",
+                          "zh": "本次合成结果没有给出按候选的对比。"},
+        "no_data": {"en": "not stated", "zh": "未给出"},
         "disputes_title": {"en": "## Disputes & Conflicts", "zh": "## 争议与分歧"},
         "dispute": {"en": "Dispute", "zh": "争议"},
         "claim_a": {"en": "Side A", "zh": "A方"},
@@ -41,104 +99,131 @@ def render(state: dict) -> str:
         "ranking": {"en": "### Ranking", "zh": "### 排序"},
         "tradeoffs": {"en": "### Trade-offs", "zh": "### 权衡"},
         "scene_fit": {"en": "Scene Fit", "zh": "场景适配"},
-        "top_basis": {"en": "Top basis", "zh": "首选依据"},
-        "best_available": {"en": "Best available basis", "zh": "最佳可用依据"},
+        "sources_used": {"en": "### Sources Used", "zh": "### 使用的来源"},
+        "no_used_source": {"en": "The synthesis result cites no traceable source.",
+                           "zh": "本次合成结果没有引用任何可追溯的来源。"},
         "confidence": {"en": "Confidence", "zh": "置信度"},
         "next_steps": {"en": "### Next Steps", "zh": "### 下一步"},
-        "step1": {"en": "1. Independently verify the strongest evidence source", "zh": "1. 验证最强证据来源的独立性"},
+        "step1": {"en": "1. Independently verify the cited sources", "zh": "1. 独立验证所引来源"},
         "step2": {"en": "2. Run targeted supplementary searches on disputed items", "zh": "2. 对争议点做针对性补充搜索"},
         "step3": {"en": "3. Build a quick prototype with the recommended option", "zh": "3. 用推荐方案做快速原型验证"},
     }
 
-    dims = {
-        "functionality": {
-            "label_en": "Functionality", "label_zh": "功能覆盖",
-            "kw_en": ["feature", "api", "capability", "coverage", "support"],
-            "kw_zh": ["功能", "特性", "接口", "覆盖"],
-        },
-        "performance": {
-            "label_en": "Performance", "label_zh": "性能表现",
-            "kw_en": ["performance", "throughput", "latency", "benchmark", "speed", "fast"],
-            "kw_zh": ["性能", "吞吐", "延迟", "基准"],
-        },
-        "ecosystem": {
-            "label_en": "Ecosystem", "label_zh": "生态与社区",
-            "kw_en": ["ecosystem", "community", "plugin", "documentation", "star"],
-            "kw_zh": ["生态", "社区", "插件", "文档"],
-        },
-        "dx": {
-            "label_en": "Developer Experience", "label_zh": "开发体验",
-            "kw_en": ["learning", "developer", "debug", "productivity", "experience", "simple"],
-            "kw_zh": ["学习", "开发", "调试", "效率", "简单"],
-        },
-        "scenario": {
-            "label_en": "Scenario Fit", "label_zh": "场景适配",
-            "kw_en": ["scenario", "fit", "deploy", "production", "scale", "solo"],
-            "kw_zh": ["场景", "部署", "生产", "规模", "个人"],
-        },
-    }
+    # The heading is a short display title; the request itself is one line of
+    # context below it, and stays verbatim in the task and snapshot.
+    lines = [L["title"][lang], ""]
+    question = research_question_line(task, lang)
+    if question:
+        lines.extend([question, ""])
+    data_note = derive_data_source_note(state)
+    if data_note:
+        lines.extend([f"> {data_note}", ""])
 
-    # Classify evidence chains into dimensions
-    dim_results = {}
-    for dim_key, dim_info in dims.items():
-        rows = []
-        keywords = dim_info["kw_en"] + dim_info["kw_zh"]
-        for chain in chains:
-            conclusion = (chain.get("conclusion") or "").lower()
-            sources = chain.get("sources") or []
-            snippet = (sources[0].get("snippet") or "") if sources else ""
-            if any(kw in conclusion for kw in keywords) or any(kw in snippet.lower() for kw in keywords):
-                strength = chain.get("evidence_strength", "unknown")
-                dispute = " [disputed]" if chain.get("disputed") else ""
-                rows.append(f"- {chain.get('conclusion', '')} ({strength}){dispute}")
-        dim_results[dim_key] = rows
-
-    lines = [
-        L["title"][lang],
-        "",
-        f"| {L['col_dim'][lang]} | {L['col_criterion'][lang]} | {L['col_strength'][lang]} |",
-        "|------|------|---------|",
-    ]
-
-    for dim_key, dim_info in dims.items():
-        label = dim_info[f"label_{lang}"]
-        rows = dim_results[dim_key]
-        if rows:
-            first_row = rows[0].lstrip("- ")
-            lines.append(f"| **{label}** | {first_row} | |")
-            for row in rows[1:]:
-                lines.append(f"| | {row.lstrip('- ')} | |")
-        else:
-            lines.append(f"| **{label}** | {L['no_data'][lang]} | — |")
+    # The comparison comes from the synthesis result's own per-candidate
+    # explanations. The previous version sorted retrieval hits into five fixed
+    # "dimensions" by matching keywords in their titles and snippets and labelled
+    # each row with an "evidence strength" taken from its retrieval score — a
+    # judgement the pipeline never reached, built from a keyword table.
+    options = [o for o in (rec.get("ranked_options") or []) if isinstance(o, dict)]
+    if options:
+        lines.append(f"| {L['col_candidate'][lang]} | {L['col_fit'][lang]} | "
+                     f"{L['col_rationale'][lang]} | {L['col_strength'][lang]} | "
+                     f"{L['col_weakness'][lang]} |")
+        lines.append("|---|---|---|---|---|")
+        for opt in options:
+            cells = [f"**#{opt.get('rank', '?')} {opt.get('name', '')}**",
+                     _cell(opt.get("constraint_fit")),
+                     _cell(opt.get("rationale")),
+                     _cell(opt.get("key_strength")),
+                     _cell(opt.get("key_weakness"))]
+            lines.append("| " + " | ".join(cells) + " |")
+        lines.append("")
+    else:
+        lines.extend([L["no_candidates"][lang], ""])
 
     lines.extend(["", L["disputes_title"][lang], ""])
+    check = state.get("conflict_check") or {}
+    outcomes = (check.get("scan_outcomes") or {}) if isinstance(check, dict) else {}
+    unscanned = int(outcomes.get("unscanned") or 0)
+    scanned = int(check.get("pairs_scanned") or 0) if isinstance(check, dict) else 0
+    arb_failed = (int(check.get("pairs_arbitration_failed") or 0)
+                  if isinstance(check, dict) else 0)
+    excluded_no_body = (int(check.get("sources_without_comparable_claim") or 0)
+                        if isinstance(check, dict) else 0)
     if conflicts:
         for i, c in enumerate(conflicts):
             lines.append(f"### {L['dispute'][lang]} {i+1}")
-            lines.append(f"- {L['claim_a'][lang]}: {_link(c.get('claim_a', 'N/A'), c.get('source_a', {}))}")
-            lines.append(f"- {L['claim_b'][lang]}: {_link(c.get('claim_b', 'N/A'), c.get('source_b', {}))}")
-            lines.append(f"- {L['resolution'][lang]}: **{c.get('resolution', L['unresolved'][lang])}**")
-            lines.append(f"- {L['basis'][lang]}: {c.get('reasoning', '')}")
+            for label, key in ((L["claim_a"][lang], "source_a"),
+                               (L["claim_b"][lang], "source_b")):
+                lines.append(f"- {label}: {_claim_source(c, key, lang)}")
+            lines.append(f"- {L['resolution'][lang]}: **{sanitize_arbitration_text(c.get('resolution', L['unresolved'][lang]))}**")
+            lines.append(f"- {L['basis'][lang]}: {sanitize_arbitration_text(c.get('reasoning', ''))}")
             lines.append("")
     else:
-        lines.append(L["no_disputes"][lang])
+        # "No disputes" is only a finding when the check ran to completion.
+        if not check or unscanned or arb_failed or scanned == 0:
+            if arb_failed:
+                lines.append(
+                    f"发现 {arb_failed} 组潜在分歧，但未完成裁定。" if lang == "zh"
+                    else f"{arb_failed} candidate pair(s) showed a potential "
+                         f"disagreement that was not resolved."
+                )
+            else:
+                lines.append(
+                    "冲突检查未完成，缺失争议不代表来源一致。" if lang == "zh"
+                    else "The conflict check did not complete; a missing dispute does "
+                         "not mean the sources agree."
+                )
+        else:
+            lines.append(L["no_disputes"][lang])
+    if excluded_no_body:
+        # No count: the exclusion population differs from the visible navigation
+        # list, so a printed number read as a miscount (final-200 review).
+        # G1 review (F200-164): with zero recorded conflicts, saying the sources
+        # "were not compared for conflicts" was redundant next to the no-conflict
+        # statement; the no-conflict case now says no arbitrable conflict was
+        # recorded instead of implying the comparison happened and agreed.
+        if lang == "zh":
+            lines.append(
+                "另有高相关来源没有取得正文（无正文来源不能作为依据），未参与冲突比较；"
+                "这不代表它们之间没有分歧。" if conflicts else
+                "另有高相关来源没有取得正文（无正文来源不能作为依据）；"
+                "本次没有记录可裁决的争议，但这不代表这些来源之间没有分歧。")
+        else:
+            lines.append(
+                "Some high-scoring source(s) had no collected body and were not "
+                "compared for conflicts; this does not establish that they agree."
+                if conflicts else
+                "Some high-scoring source(s) had no collected body (a page without a "
+                "collected body is not evidence); no arbitrable conflict was recorded "
+                "here, which does not establish that these sources agree.")
 
-    rec = state.get("final_recommendation", {})
-    winner = rec.get("winner", "")
-    if not winner and rec.get("ranked_options"):
-        winner = (rec.get("ranked_options") or [{}])[0].get("name", "")
+    decision = decision_view(rec)
+    status = decision["status"]
+    winner = decision["winner"]
 
     lines.extend(["", L["recommendation_title"][lang], ""])
     scene = task.get("scene_context", "team")
     scene_map = {"solo": L["scene_solo"][lang], "team": L["scene_team"][lang], "enterprise": L["scene_enterprise"][lang]}
     lines.append(f"{L['scene'][lang]}: **{scene_map.get(scene, scene)}**")
 
-    if winner:
+    if status == RECOMMENDED and winner:
         lines.append(f"\n**Winner: {winner}**")
         if rec.get("winner_rationale"):
             lines.append(f"*{rec['winner_rationale']}*")
+    elif status == CONDITIONAL:
+        lines.append("\n**" + ("Conditional decision — no single winner; choose by the "
+                                "conditions below" if lang == "en" else
+                                "条件选择——无唯一胜者，按下列条件选择") + "**")
+    elif status == INSUFFICIENT:
+        lines.append("\n**" + ("Insufficient evidence — hold the selection"
+                                if lang == "en" else "证据不足——暂缓选型") + "**")
+    else:
+        lines.append("\n**" + ("Decision unavailable — model output invalid or "
+                                "execution failed" if lang == "en" else
+                                "决策未生成——模型输出无效或执行失败") + "**")
 
-    if rec.get("recommendation"):
+    if rec.get("recommendation") and status != INVALID:
         lines.append("")
         lines.append(f"**{L['recommend'][lang]}:** {rec['recommendation']}")
         if rec.get("ranked_options"):
@@ -150,18 +235,25 @@ def render(state: dict) -> str:
             lines.append("")
             lines.append(L["tradeoffs"][lang])
             for t in rec["trade_offs"]:
-                lines.append(f"- **{t.get('dimension', '')}**: {t.get('finding', '')}")
+                # A dimension is a display label; a saved snapshot may still carry
+                # a raw source number in it, so it is cleaned for display exactly
+                # as the other format does.
+                lines.append(f"- **{clean_label(t.get('dimension', ''))}**: "
+                             f"{t.get('finding', '')}")
         if rec.get("scene_fit_note"):
             lines.append(f"\n*{L['scene_fit'][lang]}: {rec['scene_fit_note']}*")
     else:
-        strong = [c for c in chains if c.get("evidence_strength") == "strong" and not c.get("disputed")]
-        if strong:
-            lines.append(f"{L['top_basis'][lang]}: {strong[0].get('conclusion', '')}")
-        else:
-            top_chain = chains[0] if chains else None
-            if top_chain:
-                strength = top_chain.get('evidence_strength', 'unknown')
-                lines.append(f"{L['best_available'][lang]}: {top_chain.get('conclusion', '')} (strength: {strength})")
+        lines.extend(["", L["no_candidates"][lang], ""])
+
+    # The sources this report actually relies on, derived like every other format.
+    used = used_sources(rec, chains)
+    lines.extend(["", L["sources_used"][lang], ""])
+    if used:
+        for src in used:
+            note = source_provenance_note(src, lang)
+            lines.append(f"- [{escape_markdown_text(source_display_title(src))}]({src['url']}){note}")
+    else:
+        lines.append(L["no_used_source"][lang])
 
     lines.extend([
         "",
@@ -173,6 +265,4 @@ def render(state: dict) -> str:
         L["step3"][lang],
     ])
 
-    lines.extend(citation_verification_section(state, lang))
-
-    return "\n".join(lines)
+    return finalize_report_text("\n".join(lines))

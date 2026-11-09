@@ -27,8 +27,11 @@ class TestScoreAuthority:
     def test_github_gets_6(self):
         assert score_authority("github") == 6
 
-    def test_stackoverflow_gets_5(self):
-        assert score_authority("stackoverflow") == 5
+    def test_stackoverflow_gets_6(self):
+        # Community packs carry verified question/answer/comment bodies; 6 keeps
+        # them above the evidence-chain 4.0 threshold without making them
+        # equivalent to official docs or GitHub.
+        assert score_authority("stackoverflow") == 6
 
     def test_reddit_gets_4(self):
         assert score_authority("reddit") == 4
@@ -113,11 +116,28 @@ class TestClassifySourceType:
     def test_github_url(self):
         assert classify_source_type("https://github.com/langchain-ai/langgraph", "unknown") == "github"
 
-    def test_readthedocs_url(self):
-        assert classify_source_type("https://langchain.readthedocs.io/en/latest/", "unknown") == "official_doc"
+    def test_readthedocs_host_alone_is_not_official(self):
+        assert classify_source_type(
+            "https://langchain.readthedocs.io/en/latest/", "unknown") == "web_document"
+
+    def test_verified_identity_makes_official(self):
+        assert classify_source_type(
+            "https://docs.confluent.io/kafka", "official",
+            {"source_owner": "Apache Kafka", "has_body": True,
+             "body_identity_verified": True, "fetch_status": "body",
+             "source_kind": "candidate"}) == "official_doc"
+        assert classify_source_type(
+            "https://docs.confluent.io/kafka", "official",
+            {"source_owner": "Apache Kafka", "has_body": False,
+             "fetch_status": "navigation"}) == "navigation_link"
 
     def test_chroma_source(self):
-        assert classify_source_type("some-internal-id", "chroma") == "official_doc"
+        # A local knowledge-base hit is a retrieved document, not a vendor
+        # document: authority comes from explicit provenance, not a URL word.
+        assert classify_source_type(
+            "https://example.com/blog/redis-vs-kafka", "chroma") == "tech_blog"
+        assert classify_source_type(
+            "https://docs.confluent.io/kafka", "chroma") == "web_document"
 
 
 class TestClassifyEvidenceType:
@@ -167,11 +187,69 @@ class TestSourceEvaluatorAgent:
 
         scores = result["source_scores"]
         assert len(scores) == 2
-        assert scores[0]["rank"] == 1
-        assert scores[1]["rank"] == 2
         assert scores[0]["total_score"] > scores[1]["total_score"]
+        assert "rank" not in scores[0]  # order is the signal; no unused row field
         assert all("authority" in s["scores"] for s in scores)
         assert all("timeliness" in s["scores"] for s in scores)
+
+    @pytest.mark.asyncio
+    async def test_official_fetch_provenance_is_preserved(self):
+        state = {"search_results": [{"source": "official", "results": [{
+            "url": "https://docs.example.com/page",
+            "title": "Docs",
+            "snippet": "bounded body",
+            "has_body": True,
+            "body_url": "https://docs.example.com/canonical",
+            "body_page_chars": 500,
+            "body_stored_chars": 200,
+            "body_page_truncated": False,
+            "body_stored_truncated": True,
+            "body_truncated": True,
+            "body_admission": "prose_ok",
+            "fetch_status": "body",
+        }]}]}
+        row = (await SourceEvaluatorAgent().run(state))["source_scores"][0]
+        assert row["body_url"] == "https://docs.example.com/canonical"
+        assert row["body_page_chars"] == 500
+        assert row["body_stored_chars"] == 200
+        assert row["body_page_truncated"] is False
+        assert row["body_stored_truncated"] is True
+        assert row["body_admission"] == "prose_ok"
+        assert row["body_truncated"] is True
+        assert row["fetch_status"] == "body"
+
+    @pytest.mark.asyncio
+    async def test_row_identity_is_preserved_and_same_url_rows_stay_separate(self):
+        state = {"search_results": [
+            {"source": "official", "results": [{
+                "url": "https://docs.example.com/page",
+                "title": "Docs",
+                "snippet": "snippet from a different channel",
+                "source_owner": "Example Product",
+                "source_kind": "candidate",
+                "has_body": False,
+                "body_identity_verified": False,
+                "fetch_status": "navigation",
+                "body_error": "content_too_large",
+            }]},
+            {"source": "tavily", "results": [{
+                "url": "https://docs.example.com/page",
+                "title": "Docs",
+                "snippet": "search snippet only",
+                "date": "2026-01-01",
+            }]},
+        ]}
+        rows = (await SourceEvaluatorAgent().run(state))["source_scores"]
+        assert len(rows) == 2
+        official = next(r for r in rows if r.get("source_owner"))
+        snippet = next(r for r in rows if not r.get("source_owner"))
+        assert official["source_type"] == "navigation_link"
+        assert official["source_owner"] == "Example Product"
+        assert official["fetch_status"] == "navigation"
+        assert official["has_body"] is False
+        assert snippet["source_type"] == "web_document"
+        assert snippet["url"] == official["url"]
+        assert snippet["snippet"] == "search snippet only"
 
     @pytest.mark.asyncio
     async def test_empty_results(self):

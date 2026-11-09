@@ -43,9 +43,9 @@ async def make_client(source: str):
     return await resolver.make_client(source)
 
 
-async def safe_fetch(source: str, url: str, **kwargs):
-    """Fetch an untrusted/dynamic URL through the resolver's pinned path."""
-    return await get_resolver().safe_fetch(source, url, **kwargs)
+async def safe_fetch_page(source: str, url: str, **kwargs):
+    """The explicit pinned-IP content-fetch entry (no network probe)."""
+    return await get_resolver().safe_fetch_page(source, url, **kwargs)
 
 
 def reset_for_tests() -> None:
@@ -67,7 +67,7 @@ __all__ = [
     "build_channels",
     "get_resolver",
     "make_client",
+    "safe_fetch_page",
     "reset_for_tests",
-    "safe_fetch",
     "set_resolver",
 ]

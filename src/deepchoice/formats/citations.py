@@ -2,87 +2,127 @@
 import html
 import re
 
-from deepchoice.citations import canonicalize_source_url
-
-MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)", re.IGNORECASE)
+# Inline Markdown link scanner. A real source title may contain `[...]`, and a
+# report may contain an unmatched `[` in body text; both must be handled without
+# losing the annotations of later links.
 HEADING_RE = re.compile(r"^(#{1,3})[ \t]+(.*)$", re.MULTILINE)
+
+# The display renderers HTML-escape and Markdown-escape untrusted labels/text.
+# The annotated artifact is still Markdown (the PDF path and the reading view
+# parse it again), so only the HTML layer is undone before the label is re-
+# inserted; Markdown escapes must stay so the second Markdown pass cannot
+# re-interpret a source title as a link/image/emphasis.
+def _plain_label(label: str) -> str:
+    """Undo the HTML entity layer of a display label, keeping Markdown escapes.
+
+    The caller re-escapes the result for the final HTML/Markdown: one HTML escape
+    for the annotated page, while the retained Markdown backslashes stay literal
+    on the second Markdown parse.
+    """
+    return html.unescape(label)
+
+
+def _iter_markdown_links(text: str):
+    """Yield (start, end, label, url) for inline Markdown links.
+
+    Link labels may contain balanced square brackets — a real source title like
+    `Stop Leaked Secrets in Git With Gitleaks [2026]` is a valid Markdown label.
+    A flat `[^]]*` regex stopped at the inner bracket and silently skipped the
+    link, so its citation badge was never injected even though the rendered
+    Markdown itself was valid. The scanner tracks bracket depth and then reads
+    the `(url)` destination.
+    """
+    i = 0
+    length = len(text)
+    while i < length:
+        if text[i] != "[":
+            i += 1
+            continue
+        depth = 0
+        label_end = -1
+        j = i
+        while j < length:
+            char = text[j]
+            if char == "\\":
+                j += 2
+                continue
+            if char == "[":
+                depth += 1
+            elif char == "]":
+                depth -= 1
+                if depth == 0:
+                    label_end = j
+                    break
+            j += 1
+        if label_end == -1:
+            # An unmatched `[` in body text is not a reason to abandon the rest
+            # of the report; advance past it and keep looking for real links.
+            i += 1
+            continue
+        if label_end + 1 < length and text[label_end + 1] == "(":
+            url_end = text.find(")", label_end + 2)
+            if url_end != -1:
+                url = text[label_end + 2:url_end].strip()
+                if url.startswith(("http://", "https://")) and " " not in url:
+                    yield i, url_end + 1, text[i + 1:label_end], url
+                    i = url_end + 1
+                    continue
+        i += 1
 
 
 def number_sources(chains: list[dict]) -> list[dict]:
     """Assign stable 1-based numbers to unique source URLs across evidence chains.
 
-    Returns one registry entry per canonical URL. The frontend renders one
-    evidence card per entry with id="ev-{n}".
-    """
-    registry: list[dict] = []
-    by_canonical_url: dict[str, dict] = {}
-    status_priority = {"verified": 0, "unknown": 1, "unreachable": 2, "unsupported": 3}
-    allowed_reasons = {
-        "lexical_support", "citation_missing", "source_not_found", "source_ambiguous",
-        "url_invalid", "source_limit", "not_publicly_accessible", "network_uncertain",
-        "http_uncertain", "content_insufficient", "cross_language", "numeric_mismatch",
-        "negation_conflict", "lexical_mismatch", "not_cited",
-    }
-    for chain_idx, chain in enumerate(chains):
-        for source_idx, src in enumerate(chain.get("sources", [])):
-            url = src.get("url", "")
-            if not isinstance(url, str) or not url:
-                continue
-            # Recompute at the presentation boundary; legacy/imported state is
-            # not trusted merely because it contains a canonical_url field.
-            canonical_url = canonicalize_source_url(url)
-            # Invalid or legacy URLs still get a stable registry key based on
-            # their exact original value; the frontend independently gates links.
-            key = canonical_url or url
-            status = src.get("verification_status", "unknown")
-            if not isinstance(status, str) or status not in status_priority:
-                status = "unknown"
-            reason = src.get("verification_reason")
-            if not isinstance(reason, str) or reason not in allowed_reasons:
-                reason = "not_checked"
+    Returns registry entries: {"n", "url", "title", "chain_idx"}. The frontend
+    renders one evidence card per entry with id="ev-{n}".
 
-            entry = by_canonical_url.get(key)
-            if entry is None:
-                entry = {
+    Only fact-bearing sources are numbered. A discovered link whose page body was
+    never collected is navigation, not evidence: giving it a citation number and
+    an evidence card would present it as a source of the report's claims.
+    """
+    from ..utils.candidate_identity import has_factual_content
+
+    registry: list[dict] = []
+    seen: set[str] = set()
+    for chain_idx, chain in enumerate(chains):
+        for src in chain.get("sources", []):
+            if not has_factual_content(src):
+                continue
+            url = src.get("url", "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            registry.append(
+                {
                     "n": len(registry) + 1,
-                    "url": canonical_url or url,
-                    "canonical_url": canonical_url,
+                    "url": url,
                     "title": src.get("title", ""),
                     "chain_idx": chain_idx,
-                    "source_idx": source_idx,
-                    "verification_status": status,
-                    "verification_reason": reason,
                 }
-                by_canonical_url[key] = entry
-                registry.append(entry)
-            elif status_priority[status] > status_priority[entry["verification_status"]]:
-                entry["verification_status"] = status
-                entry["verification_reason"] = reason
+            )
     return registry
 
 
 def inject_citations(md: str, registry: list[dict]) -> str:
     """Replace [title](url) links with title + superscript [N] anchor to #ev-N.
 
-    Links whose URL is not in the registry are left untouched.
+    Links whose URL is not in the registry are left untouched. Link labels with
+    balanced brackets are handled by the shared scanner, so a legitimate title
+    containing `[...]` still gets its annotation.
     """
-    by_url: dict[str, int] = {}
-    for entry in registry:
-        url = entry.get("url", "")
-        if not isinstance(url, str) or not url:
-            continue
-        canonical = canonicalize_source_url(url)
-        by_url[canonical or url] = entry["n"]
-
-    def _sub(match: re.Match) -> str:
-        title, url = match.group(1), match.group(2)
-        canonical = canonicalize_source_url(url)
-        n = by_url.get(canonical or url)
+    by_url = {r["url"]: r["n"] for r in registry}
+    pieces: list[str] = []
+    last = 0
+    for start, end, title, url in _iter_markdown_links(md):
+        n = by_url.get(url)
         if n is None:
-            return match.group(0)
-        return f'{html.escape(title)}<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>'
-
-    return MD_LINK_RE.sub(_sub, md)
+            continue
+        pieces.append(md[last:start])
+        pieces.append(f'{html.escape(_plain_label(title))}'
+                      f'<sup><a class="cite" href="#ev-{n}">[{n}]</a></sup>')
+        last = end
+    pieces.append(md[last:])
+    return "".join(pieces)
 
 
 def build_toc(md: str) -> tuple[list[dict], str]:
@@ -96,35 +136,3 @@ def build_toc(md: str) -> tuple[list[dict], str]:
         return f'<span id="sec-{sec_id}"></span>\n{match.group(0)}'
 
     return toc, HEADING_RE.sub(_sub, md)
-
-
-def citation_verification_section(state: dict, lang: str) -> list[str]:
-    """Return a concise bilingual citation-verification summary, if present."""
-    verification = state.get("citation_verification")
-    counts = verification.get("status_counts") if isinstance(verification, dict) else None
-    if not isinstance(counts, dict):
-        return []
-
-    statuses = ("verified", "unsupported", "unreachable", "unknown")
-    normalized: dict[str, int] = {}
-    for status in statuses:
-        value = counts.get(status, 0)
-        normalized[status] = value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
-
-    if lang == "zh":
-        heading = "## 引用验证 / Citation Verification"
-        summary = "已核验 {verified} · 不支持 {unsupported} · 无法访问 {unreachable} · 未能判定 {unknown}"
-        warning = "请人工复核不支持、无法访问或未能判定的引用；“未能判定”表示证据不足以判断，不等于引用错误。"
-        success = "所有已检查的引用均通过确定性核验。"
-    else:
-        heading = "## Citation Verification / 引用验证"
-        summary = "Verified {verified} · Unsupported {unsupported} · Unreachable {unreachable} · Unknown {unknown}"
-        warning = "Please review unsupported, unreachable, or unknown citations. Unknown means inconclusive, not necessarily incorrect."
-        success = "All checked citations passed deterministic verification."
-
-    lines = [heading, "", summary.format(**normalized)]
-    if any(normalized[s] for s in ("unsupported", "unreachable", "unknown")):
-        lines.append(warning)
-    elif normalized["verified"]:
-        lines.append(success)
-    return [*lines, ""]

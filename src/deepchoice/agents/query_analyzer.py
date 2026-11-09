@@ -1,10 +1,10 @@
-from ..budget_errors import BudgetError
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 DECOMPOSITION_SYSTEM = """You are a technical research analyst. Decompose the user's technology selection question into 5 analysis dimensions.
 
-For EACH of these 5 dimensions, generate 1-2 specific sub-questions:
+For EACH of these 5 dimensions, generate exactly one specific sub-question
+(sub-question i addresses dimension i). Return exactly 5 sub-questions in total:
 1. Functionality: Feature coverage, API completeness, capability fit
 2. Performance: Throughput, latency, resource consumption
 3. Ecosystem: Community activity, plugins/extensions, documentation quality
@@ -16,6 +16,14 @@ CRITICAL: Each sub-question MUST include:
 - A specific metric or comparison point
 - Minimum 15 Chinese characters or 10 English words
 - NO generic "Compare X and Y" questions — always narrow to a specific aspect
+
+CONTEXT IS CLOSED: use only the user query, the scene context and the known constraints
+provided in the user message. Do NOT add facts that were not given — no DAG count, team
+composition beyond the stated team size, specific monitoring stack, cloud/database/
+orchestrator product, version, machine size, traffic volume, or current deployment state.
+If a metric depends on a missing premise, phrase it as a conditional/unknown to verify,
+not as a fact (e.g. "if the team already runs Airflow 2.x…") — never turn a typical stack
+or a source article's hypothetical into a premise.
 
 Scene context is ALREADY DETERMINED by the pipeline and given in the user message — do NOT re-detect it; decompose sub-questions for that scene.
 
@@ -53,9 +61,7 @@ class QueryAnalyzerAgent:
 
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
-        print_agent_output(
-            f"Analyzing query ({len(task['query'])} chars)", agent="QUERY_ANALYZER"
-        )
+        print_agent_output(f"Analyzing query: {task['query']}", agent="QUERY_ANALYZER")
 
         scene = _detect_scene(task["query"], task.get("scene_context", "unspecified"))
 
@@ -67,14 +73,22 @@ class QueryAnalyzerAgent:
         local_usage: list = []
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_analyzer",
-                                      usage=local_usage, seed=0)
-        except BudgetError:
-            raise
-        except Exception:
-            print_agent_output("Query decomposition failed; using raw query", agent="QUERY_ANALYZER")
+                                      usage=local_usage)
+        except Exception as e:
+            print_agent_output(f"Query decomposition failed: {e}, using raw query", agent="QUERY_ANALYZER")
             result = {}
 
         sub_questions = result.get("sub_questions", [])
+        # The decomposition contract is exactly five sub-questions, one per
+        # dimension: retrieval/adaptation budgets and the clarify path are built
+        # for five. A model that emits more is capped deterministically here
+        # rather than inflating per-run Tavily calls and report width.
+        if not isinstance(sub_questions, list):
+            sub_questions = []
+        cleaned = [str(question).strip() for question in sub_questions
+                   if str(question).strip()]
+        capped = len(cleaned) > 5
+        sub_questions = cleaned[:5]
         return {
             "sub_questions": sub_questions,
             "scene_context": scene,
@@ -82,6 +96,8 @@ class QueryAnalyzerAgent:
             "quality_signals": [{
                 "agent": "query_analyzer",
                 "sub_question_count": len(sub_questions),
+                "sub_question_limit": 5,
+                "sub_questions_capped": capped,
                 "dimensions_covered": 5,
                 "scene_context": scene,
                 "has_constraints": bool(task.get("constraints")),

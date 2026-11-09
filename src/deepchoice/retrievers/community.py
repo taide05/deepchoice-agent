@@ -4,7 +4,7 @@ import time
 from datetime import UTC, datetime
 
 from .. import outbound as _outbound
-from .base import BaseRetriever
+from .base import BaseRetriever, NoRetrievableMaterial
 
 # Stack Exchange allows exactly ONE request per IP at a time (throttle_violation
 # otherwise). This semaphore serializes community searches within the process —
@@ -15,7 +15,7 @@ from .base import BaseRetriever
 # only when such a topology actually appears; SO misses are non-fatal
 # (partial_failure + 5 sourcing backstops).
 _SEARCH_SEM = asyncio.Semaphore(1)
-_SEARCH_TIMEOUT_S = 40.0
+_SEARCH_TIMEOUT_S = 20.0
 
 # Stack Exchange throttles dynamically via the response `backoff` field (seconds
 # to wait before the next request). Track the next-allowed instant and honor it
@@ -29,11 +29,53 @@ async def _wait_for_backoff() -> None:
         await asyncio.sleep(_next_allowed - now)
 
 
+async def _community_client():
+    """Outbound community client with one retry for a transient missing channel."""
+    last_error: Exception | None = None
+    for attempt in range(2):
+        try:
+            return await _outbound.make_client("community")
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt == 0:
+                await asyncio.sleep(1.5)
+    raise last_error if last_error is not None else RuntimeError(
+        "community outbound client unavailable")
+
+
 class CommunitySearch(BaseRetriever):
     source = "community"
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
+                         adapted_queries: list[str] | None = None,
+                         candidate_techs: list[str] | None = None) -> list[dict]:
+        mode = os.getenv("COMMUNITY_RETRIEVAL_MODE", "evidence_pack").strip().lower()
+        if mode != "legacy":
+            # Default v1 path after three-theme validation; legacy remains an
+            # explicit, immediate rollback switch.
+            from .community_evidence import fetch_evidence_packs
+            try:
+                packs = await fetch_evidence_packs(
+                    query, sub_questions, max_results=max_results,
+                    adapted_queries=adapted_queries or [],
+                    candidate_techs=candidate_techs or [],
+                )
+            except (RuntimeError, TimeoutError):
+                # One source-level retry for a transient channel/read failure.
+                # The inner request loop already retries; this covers the case
+                # where the resolver itself was temporarily unavailable.
+                await asyncio.sleep(2.0)
+                packs = await fetch_evidence_packs(
+                    query, sub_questions, max_results=max_results,
+                    adapted_queries=adapted_queries or [],
+                    candidate_techs=candidate_techs or [],
+                )
+            if not packs:
+                raise NoRetrievableMaterial(
+                    "stackexchange_no_results",
+                    "no usable StackExchange evidence pack for this case",
+                )
+            return packs
         keywords = (adapted_queries[0] if adapted_queries else query).replace(" vs ", " ").replace(" versus ", " ")[:150]
         results = []
 
@@ -46,31 +88,21 @@ class CommunitySearch(BaseRetriever):
             )
         try:
             await _wait_for_backoff()
-            async with await _outbound.make_client("community") as client:
-                so_resp = None
-                for attempt in range(3):
-                    so_resp = await client.get(
-                        "https://api.stackexchange.com/2.3/search",
-                        params={
-                            "intitle": keywords, "site": "stackoverflow",
-                            "pagesize": max(2, max_results),
-                            "order": "desc", "sort": "votes",
-                            "key": se_key,
-                        } if se_key else {
-                            "intitle": keywords, "site": "stackoverflow",
-                            "pagesize": max(2, max_results),
-                            "order": "desc", "sort": "votes",
-                        },
-                        timeout=15.0,
-                    )
-                    if so_resp.status_code not in (429, 502, 503) or attempt == 2:
-                        break
-                    try:
-                        _b = so_resp.json().get("backoff")
-                        delay = float(_b) if _b else 5.0
-                    except Exception:
-                        delay = 5.0
-                    await asyncio.sleep(delay)
+            client = await _community_client()
+            async with client as client:
+                so_resp = await client.get(
+                    "https://api.stackexchange.com/2.3/search",
+                    params={
+                        "intitle": keywords, "site": "stackoverflow",
+                        "pagesize": max(2, max_results),
+                        "order": "desc", "sort": "votes",
+                        "key": se_key,
+                    } if se_key else {
+                        "intitle": keywords, "site": "stackoverflow",
+                        "pagesize": max(2, max_results),
+                        "order": "desc", "sort": "votes",
+                    },
+                )
 
             body = so_resp.json() if so_resp.status_code == 200 else None
             if body is not None and body.get("backoff"):
@@ -86,7 +118,12 @@ class CommunitySearch(BaseRetriever):
                     results.append({
                         "url": item.get("link", ""),
                         "title": item.get("title", ""),
+                        # StackExchange search returns score/tags metadata, not
+                        # the question/answer body. It identifies a thread but
+                        # states no citable claim, so it must not be numbered as
+                        # evidence (same boundary as GitHub repository metadata).
                         "snippet": f"Score: {item.get('score', 0)}, Tags: {', '.join(item.get('tags', []))}",
+                        "has_body": False,
                         "date": date_str,
                     })
             else:

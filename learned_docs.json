@@ -653,5 +653,65 @@
     "url": "https://kompose.io/",
     "title": "kompose — Official Documentation",
     "via": "llm"
+  },
+  "gVisor": {
+    "url": "https://gvisor.dev/docs/",
+    "title": "gVisor — Official Documentation",
+    "via": "body_fetch"
+  },
+  "gvisor": {
+    "url": "https://gvisor.dev/docs/",
+    "title": "gVisor — Official Documentation",
+    "via": "harvest:official"
+  },
+  "LangGraph": {
+    "url": "https://langgraph.dev/llms-full.txt",
+    "title": "LangGraph — Official Documentation",
+    "via": "body_fetch"
+  },
+  "DeepFramework": {
+    "url": "https://docs.example.com/docs/migration.md",
+    "title": "DeepFramework — Official Documentation",
+    "via": "body_fetch"
+  },
+  "Redpanda": {
+    "url": "https://docs.redpanda.com/streaming/current/upgrade.md",
+    "title": "Redpanda — Official Documentation",
+    "via": "body_fetch"
+  },
+  "Pulsar": {
+    "url": "https://pulsar.apache.org/docs/next/security-tls-authentication/",
+    "title": "Pulsar — Official Documentation",
+    "via": "body_fetch"
+  },
+  "IndexedFramework": {
+    "url": "https://docs.example.com/docs/security",
+    "title": "IndexedFramework — Official Documentation",
+    "via": "body_fetch"
+  },
+  "MLflow": {
+    "url": "https://mlflow.org/docs/latest/ml/deployment/deploy-model-to-sagemaker/",
+    "title": "MLflow — Official Documentation",
+    "via": "body_fetch"
+  },
+  "Cilium": {
+    "url": "https://docs.cilium.io/en/stable/security/dns/",
+    "title": "Cilium — Official Documentation",
+    "via": "body_fetch"
+  },
+  "Calico": {
+    "url": "https://docs.tigera.io/calico/latest/operations/crd-migration.md",
+    "title": "Calico — Official Documentation",
+    "via": "body_fetch"
+  },
+  "LeafyFramework": {
+    "url": "https://docs.example.com/stable/security/intro/",
+    "title": "LeafyFramework — Official Documentation",
+    "via": "body_fetch"
+  },
+  "Weights & Biases": {
+    "url": "https://docs.coreweave.com/products/wandb/platform/launch/launch-faq/launch_support_parallelization_limit_resources_consumed_job.md",
+    "title": "Weights & Biases — Official Documentation",
+    "via": "body_fetch"
   }
 }

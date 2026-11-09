@@ -74,11 +74,14 @@ def _is_fresh(ts: float) -> bool:
 
 
 def _reset_for_tests() -> None:
-    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last, _bucket_lock
+    global _pool, _exhausted, _probed, _rr_idx, _bucket_tokens, _bucket_last, _bucket_lock, _lock
     _pool, _exhausted, _probed = [], {}, False
     _rr_idx = -1
     _bucket_tokens, _bucket_last = {}, {}
     _bucket_lock = asyncio.Lock()
+    # The probe lock is module-global; a later test's event loop cannot use a
+    # lock first bound to an earlier test's (now closed) loop.
+    _lock = asyncio.Lock()
 
 
 async def _probe_one(post, key: str) -> bool:
@@ -169,8 +172,14 @@ async def current() -> str | None:
     return _pool[_rr_idx]
 
 
-async def post_with_failover(post, payload: dict):
-    """POST to the Tavily search endpoint with key failover.
+async def post_with_failover(post, payload: dict,
+                             url: str = "https://api.tavily.com/search"):
+    """POST to a Tavily endpoint with key failover.
+
+    ``url`` defaults to the search endpoint; callers using another Tavily
+    endpoint (e.g. /extract) must pass it, otherwise the payload is posted to
+    the wrong path and the API answers 4xx (the Phase-A extract fallback
+    silently returned nothing for exactly this reason).
 
     Returns (response, key_used); response is None when no key is available.
     On a dead-code response the key is blacklisted and the request retried
@@ -181,14 +190,14 @@ async def post_with_failover(post, payload: dict):
     if key is None:
         return None, None
     await _acquire_token(key)
-    resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
+    resp = await post(url, json={**payload, "api_key": key})
     if resp.status_code in _DEAD_CODES:
         mark_dead(key)
         key = await current()
         if key:
             await _acquire_token(key)
-            resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
+            resp = await post(url, json={**payload, "api_key": key})
     elif resp.status_code == 429:
         await asyncio.sleep(_RATE_LIMIT_BACKOFF_S * (0.5 + random.random()))
-        resp = await post("https://api.tavily.com/search", json={**payload, "api_key": key})
+        resp = await post(url, json={**payload, "api_key": key})
     return resp, key

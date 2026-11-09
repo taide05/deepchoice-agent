@@ -84,20 +84,6 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
     if not report:
         return None
 
-    # Pattern 1.5 (FIRST): "**Winner: X**" bold line — the authoritative winner
-    # rendered from final_recommendation.winner. Must run before Pattern 1 so a
-    # tech name inside a "[Source: X-vs-Y]" citation title can never win over
-    # the real winner (fixes TC-0009). A "No single/clear winner" marker means
-    # the synthesizer abstained — treat as no-match so Pattern 1/2 still run.
-    m = re.search(
-        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.\/]+(?:\s[A-Za-z0-9+\-_.\/]+){0,2})(?:\s*\([^)]*\))?\*\*',
-        report,
-    )
-    if m and not re.search(r'(?i)^no\s+(single|clear)\s+winner$', m.group(1).strip()):
-        result = _clean_tech_name(m.group(1))
-        if result:
-            return result
-
     # Pattern 1: Find "Recommendation:" section, then locate tech_a or tech_b nearby.
     # All report formats: "**Recommendation:** <context>, <TechName> is/choose/adopt..."
     m = re.search(
@@ -112,6 +98,19 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
                 result = _clean_tech_name(tech)
                 if result:
                     return result
+
+    # Pattern 1.5: "**Winner: X**" bold line (new format from fixed synthesizer).
+    # Parenthesized suffixes like "Firebase Cloud Messaging (FCM)" are allowed;
+    # the tech-name char class includes "/" so "Swagger/OpenAPI" matches
+    # (repo-path winners were already sanitized by _validate_winner).
+    m = re.search(
+        r'(?im)\*\*Winner:\s*([A-Za-z0-9+\-_.\/]+(?:\s[A-Za-z0-9+\-_.\/]+){0,2})(?:\s*\([^)]*\))?\*\*',
+        report,
+    )
+    if m:
+        result = _clean_tech_name(m.group(1))
+        if result:
+            return result
 
     # Pattern 2: "## How: Action Path" section with explicit recommendation
     # Matches: "start with the highest-scored option: X" or "verdict: X"
@@ -181,23 +180,6 @@ def extract_top_recommendation(report: str, tech_a: str = "", tech_b: str = "") 
     return None
 
 
-# Tranche 2 B1: precise alias + punctuation normalization for near-miss names.
-# Only "same product/package, different spelling" entries — never fuzzy matching.
-_TECH_ALIASES = {
-    "gitlab": "gitlab-ci",  # GitLab platform == GitLab CI product
-    "chromadb": "chroma",   # ChromaDB package == Chroma product
-    "model context protocol": "mcp",  # full name == MCP acronym (TC-0050)
-    "open policy agent": "opa",  # full name == OPA acronym (OS-0048)
-}
-
-
-def _normalize_tech_name(s: str) -> str:
-    """Lowercase, map exact aliases, collapse [-_] to space, strip."""
-    s = (s or "").strip().lower()
-    s = _TECH_ALIASES.get(s, s)
-    return re.sub(r"[-_]+", " ", s).strip()
-
-
 def compute_top1_accuracy(
     runs: list[dict[str, Any]],
     annotated_cases: list[dict[str, Any]],
@@ -237,32 +219,15 @@ def compute_top1_accuracy(
             tech_a=case.get("tech_a", ""),
             tech_b=case.get("tech_b", ""),
         )
-        # Open-scenario tie: when the synthesizer abstains (winner ==
-        # "context_dependent") on a list-GT case, the report's "No single
-        # winner" line defeats text extraction. Fall back to the synthesizer's
-        # own #1 ranked option — an acceptable answer for every list-GT tie
-        # observed (V1 audit) — measuring the top pick it actually produced.
-        if acceptable:
-            fr = run.get("final_recommendation") or {}
-            if (fr.get("winner") or "").lower() == "context_dependent":
-                ranked = fr.get("ranked_options") or []
-                if ranked:
-                    top = (ranked[0].get("name") or "").strip().lower()
-                    predicted = top or predicted
         if acceptable:
             # Open-scenario case: any acceptable winner counts (word-boundary,
-            # so 'react' never matches 'react-native'). Normalize aliases and
-            # punctuation (hyphen/underscore -> space) on both sides first.
-            norm_pred = _normalize_tech_name(predicted)
-            is_correct = bool(norm_pred) and any(
-                re.search(rf"\b{re.escape(_normalize_tech_name(w))}\b", norm_pred)
-                for w in acceptable)
+            # so 'react' never matches 'react-native').
+            is_correct = bool(predicted) and any(
+                re.search(rf"\b{re.escape(w)}\b", predicted) for w in acceptable)
             expected_label = "/".join(acceptable)
         else:
-            norm_pred = _normalize_tech_name(predicted)
-            norm_expected = _normalize_tech_name(expected)
-            is_correct = bool(norm_pred) and re.search(
-                rf"\b{re.escape(norm_expected)}\b", norm_pred) is not None
+            is_correct = bool(predicted) and re.search(
+                rf"\b{re.escape(expected)}\b", predicted) is not None
             expected_label = expected
         if is_correct:
             correct += 1

@@ -50,13 +50,14 @@ from deepchoice.utils.llm import set_current_case, set_record_callback
 # ---------------------------------------------------------------------------
 
 async def probe_tavily_direct() -> tuple[bool, str]:
-    """Check Tavily key availability through its selected outbound route."""
-    from deepchoice import outbound
+    """Tavily stays direct (user decision 2026-09-01): one keypool POST probe."""
+    import httpx
+
     from deepchoice.retrievers.base import error_text
     from deepchoice.retrievers.tavily_keypool import post_with_failover
 
     try:
-        async with await outbound.make_client("tavily") as client:
+        async with httpx.AsyncClient(timeout=10) as client:
 
             async def post(url, json=None, **kw):
                 return await client.post(url, json=json, **kw)
@@ -130,7 +131,7 @@ BENCHMARKS_DIR = Path(__file__).resolve().parent
 RUNS_DIR = BENCHMARKS_DIR / "runs"
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
 FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
-TIMEOUT_PER_CASE_S = 900  # 15 minutes per case (thinking synthesis adds latency)
+TIMEOUT_PER_CASE_S = 600  # 10 minutes per case (thinking synthesis adds latency)
 DEFAULT_CONCURRENCY = 8
 
 
@@ -401,9 +402,9 @@ async def run_baseline(
 
     print(f"\nPhase 1 complete: {ok} success / {fail} failure")
 
-    # Phase 2: Report Quality Checklist (deterministic, no LLM)
+    # Phase 2: Structural report checklist (deterministic; NOT content quality)
     print(f"\n{'=' * 60}")
-    print("PHASE 2: Report Quality Checklist")
+    print("PHASE 2: Structural report checklist (NOT content quality)")
     print(f"{'=' * 60}\n")
 
     quality_stats = evaluate_batch(runs)
@@ -447,6 +448,7 @@ async def run_baseline(
     # Add report quality stats
     report["quality"]["report_quality"] = quality_stats
     report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]
+    report["summary"]["report_quality_metric_scope"] = quality_stats.get("metric_scope")
 
     # Outbound channel audit (routes actually used by this run)
     try:
@@ -500,7 +502,7 @@ async def run_baseline(
     print(f"  Conflict Detection:     {s['conflict_detection_rate']:.1%}")
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
-    print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
+    print(f"  Structural checklist A/B % (NOT content quality):   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
     if s.get("sources_degraded"):
         print(f"  *** SOURCES DEGRADED: {s['degraded_sources']} — source_recall NOT comparable to healthy runs ***")
 
@@ -556,7 +558,7 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     # Run quality checklist on all reports
     quality_stats = evaluate_batch(all_runs)
     qs = quality_stats
-    print("\nReport Quality (aggregate):")
+    print("\nStructural report checklist (aggregate; NOT content quality):")
     print(f"  A={qs['grade_distribution']['A']} B={qs['grade_distribution']['B']} "
           f"C={qs['grade_distribution']['C']} D={qs['grade_distribution']['D']}")
     print(f"  Mean pass count: {qs['mean_pass_count']}/5")
@@ -588,6 +590,7 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
 
     report["quality"]["report_quality"] = quality_stats
     report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]
+    report["summary"]["report_quality_metric_scope"] = quality_stats.get("metric_scope")
 
     # Print summary
     s = report["summary"]
@@ -600,7 +603,7 @@ async def merge_all_batches(verbose: bool = False) -> dict[str, Any]:
     print(f"  Conflict Detection:     {s['conflict_detection_rate']:.1%}")
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
-    print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
+    print(f"  Structural checklist A/B % (NOT content quality):   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
     if s.get("sources_degraded"):
         print(f"  *** SOURCES DEGRADED: {s['degraded_sources']} — source_recall NOT comparable to healthy runs ***")
 

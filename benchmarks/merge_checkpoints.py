@@ -97,6 +97,7 @@ async def main() -> None:
 
     report["quality"]["report_quality"] = quality_stats
     report["summary"]["report_quality_grade_a_pct"] = quality_stats["grade_a_pct"]
+    report["summary"]["report_quality_metric_scope"] = quality_stats.get("metric_scope")
 
     src_split = compute_source_recall_by_source(runs, cases)
     report["quality"]["source_recall_by_source"] = src_split
@@ -126,7 +127,7 @@ async def main() -> None:
     print(f"  Conflict Detection:     {s['conflict_detection_rate']:.1%}")
     print(f"  Latency P50 / P95:      {s['latency_p50_s']}s / {s['latency_p95_s']}s")
     print(f"  Success Rate:           {s['success_rate']:.1%}")
-    print(f"  Report Quality A/B %:   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
+    print(f"  Structural checklist A/B % (NOT content quality):   {quality_stats['grade_a_pct']:.0f}% / {quality_stats['grade_b_pct']:.0f}%")
 
     path = save_benchmark(report, RUNS_DIR, label="-merged200")
     print(f"\nBenchmark saved to: {path}")

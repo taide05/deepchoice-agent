@@ -1,22 +1,508 @@
 import asyncio
+import os
+import re
+from urllib.parse import urljoin as _stdlib_urljoin
+from urllib.parse import urlparse as _stdlib_urlparse
 
-from .. import outbound as _outbound
-from ..utils.llm import call_model
+
+def _safe_urlparse(value):
+    """urlparse that treats malformed URLs as empty, never a channel failure.
+
+    ``urllib.parse`` raises ``ValueError: Invalid IPv6 URL`` for a malformed
+    bracketed netloc. A single bad link harvested from a documentation page must
+    not fail the whole official channel.
+    """
+    try:
+        return _stdlib_urlparse(str(value or ""))
+    except ValueError:
+        return _stdlib_urlparse("")
+
+
+def _safe_urljoin(base: str, target: str, *args, **kwargs) -> str:
+    try:
+        return _stdlib_urljoin(base, target, *args, **kwargs)
+    except ValueError:
+        return ""
+
+
+# Existing module code calls these names; route them through the safe wrappers.
+urljoin = _safe_urljoin
+urlparse = _safe_urlparse
+
+
+def _valid_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return bool(parsed.scheme in ("http", "https") and parsed.netloc)
+
+from ..utils.candidate_identity import (
+    constraint_discovery_terms,
+    source_identity_verified,
+    source_text_discusses_candidate,
+    source_url_identity_match,
+)
+from ..utils.llm import call_model, summarize_usage
 from .base import BaseRetriever
+from .tavily_extract import extract_pages
 from .learned_docs import (
-    _looks_official,
-    domain_label_match,
-    is_plausible_term,
     learn,
     load_learned,
 )
+from .official_tech_docs_extra import EXTRA_TECH_DOCS
+from .official_fetch import (
+    OfficialFetchBudget,
+    budget_for_research,
+    fetch_official_index,
+    fetch_official_page,
+)
+
+# Path hints used to pick one deeper documentation page from a navigation root.
+# This runs only after an official page was fetched successfully but rejected as
+# navigation; the derived page is fetched and identity-checked by the same rules,
+# so a guessed path can never become evidence by itself.
+_DOC_PATH_HINTS = (
+    "/docs/", "/doc/", "/documentation/", "/reference/", "/api/", "/guide/",
+    "/guides/", "/en/", "/stable/", "/latest/", "/manual/", "/tutorial",
+)
+_SKIP_LINK_HINTS = (
+    "/login", "/signup", "/pricing", "/careers", "/jobs", "/search",
+    "/download", "/contact", "/privacy", "/terms", "/blog/", "/news/",
+    ".pdf", ".zip", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".css", ".js",
+    ".xml", ".json",
+)
+
+# Index pages are link directories, not bodies: a derived index page would be
+# rejected by the same navigation admission and waste a page attempt.
+_INDEX_PATH_SUFFIXES = ("/index.html", "/index.htm", "/index", "/")
+
+
+# Focused deep documentation pages fetched from a curated mapping root. A root
+# overview page is enough to establish the candidate's identity, but decision-grade
+# claims need the official page about the actual decision dimension (migration,
+# rollback, security, performance, ...). Up to this many same-scope links are
+# ranked by the question's dimensions and fetched within the existing page budget.
+OFFICIAL_DEEP_DOC_PAGES_PER_CANDIDATE = 2
+
+_FOCUS_TERM_GROUPS = {
+    "migration": ("migration", "migrate", "upgrade", "迁移", "升级", "切换"),
+    "rollback": ("rollback", "revert", "failover", "回滚", "回退", "恢复"),
+    "deployment": ("deploy", "deployment", "production", "部署", "上线"),
+    "persistence": ("persistence", "durable", "checkpoint", "持久", "检查点"),
+    "interrupt": ("interrupt", "resume", "human-in-the-loop", "中断", "人工介入"),
+    "security": ("security", "audit", "permission", "rbac", "acl", "安全", "审计", "权限"),
+    "performance": ("performance", "benchmark", "latency", "throughput", "性能", "基准", "延迟"),
+    "maintenance": ("maintenance", "release", "version", "support", "维护", "版本", "发布"),
+}
+_FOCUS_LINK_TERMS = {
+    "migration": ("migration", "migrate", "upgrade", "changelog"),
+    "rollback": ("rollback", "revert", "failover"),
+    "deployment": ("deploy", "deployment", "production", "operations"),
+    "persistence": ("persistence", "durable", "checkpoint", "state"),
+    "interrupt": ("interrupt", "resume", "human-in-the-loop"),
+    "security": ("security", "audit", "permission", "rbac", "acl", "authentication"),
+    "performance": ("performance", "benchmark", "latency", "throughput"),
+    "maintenance": ("maintenance", "release", "version", "support", "changelog"),
+}
+
+
+_MAPPING_LANDING_SEGMENTS = {
+    "about", "overview", "intro", "introduction", "index", "home",
+    "docs", "documentation", "latest", "stable", "current",
+}
+
+
+def _mapping_scope_root_path(mapping_root: str | None) -> str:
+    """Directory scope of a curated mapping root (file/landing mappings use parent)."""
+    path = urlparse(str(mapping_root or "")).path.rstrip("/")
+    if not path:
+        return path
+    last = path.rsplit("/", 1)[-1].lower()
+    if "." in last or last in _MAPPING_LANDING_SEGMENTS:
+        path = path.rsplit("/", 1)[0]
+    return path
+
+
+def _url_in_mapping_scope(url: str, mapping_root: str | None) -> bool:
+    if not mapping_root:
+        return False
+    root = urlparse(str(mapping_root))
+    target = urlparse(str(url or ""))
+    if (target.scheme not in ("http", "https")
+            or target.netloc.lower() != root.netloc.lower()):
+        return False
+    root_path = _mapping_scope_root_path(mapping_root)
+    target_path = target.path.rstrip("/")
+    if not root_path:
+        return True
+    return target_path == root_path or target_path.startswith(root_path + "/")
+
+
+def _deep_doc_focus_terms(*texts: str) -> tuple[str, ...]:
+    """Link keywords for the decision dimensions this question actually names."""
+    blob = " ".join(str(text or "") for text in texts).lower()
+    terms: list[str] = []
+    for group, markers in _FOCUS_TERM_GROUPS.items():
+        if any(str(marker).lower() in blob for marker in markers):
+            terms.extend(_FOCUS_LINK_TERMS[group])
+    if not terms:
+        # A general selection question still benefits from production/migration
+        # documentation rather than only the marketing overview.
+        terms = ["migration", "deployment", "production", "persistence",
+                 "security", "performance"]
+    return tuple(dict.fromkeys(terms))
+
+
+def _links_in_text(text: str) -> list[str]:
+    return [match.split("#", 1)[0] for match in re.findall(
+        r"\[[^\]]*\]\((https?://[^)\s]+)\)", str(text or ""))]
+
+
+def _shares_top_path(base_url: str, target_url: str) -> bool:
+    """Whether a deep link stays in the base documentation's top path segment.
+
+    A host such as docs.aws.amazon.com hosts hundreds of products; body identity
+    is not enough because an unrelated release-notes page can mention a package
+    name. The mapping root's first path segment (e.g. /cdk/) is the bounded
+    scope; a link under /AL2/ is a different product and must not be admitted.
+    """
+    base_parts = [p for p in urlparse(str(base_url or "")).path.split("/") if p]
+    target_parts = [p for p in urlparse(str(target_url or "")).path.split("/") if p]
+    if not base_parts:
+        return True
+    return bool(target_parts) and target_parts[0] == base_parts[0]
+
+
+def _deep_doc_links(base_url: str, body: str, links: list[str],
+                    focus_terms: tuple[str, ...], mapping_root: str | None,
+                    *, limit: int = 2) -> list[str]:
+    """Rank same-scope documentation links by decision-dimension keywords."""
+    base = urlparse(str(base_url or ""))
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+    candidates = list(links or []) + _links_in_text(body)
+    for raw in candidates:
+        target = urljoin(str(base_url), str(raw or ""))
+        target = target.split("#", 1)[0]
+        if not target.startswith(("http://", "https://")):
+            continue
+        parsed = urlparse(target)
+        if parsed.netloc.lower() != base.netloc.lower():
+            continue
+        if not _url_in_mapping_scope(target, mapping_root or base_url):
+            continue
+        if not _shares_top_path(mapping_root or base_url, target):
+            continue
+        key = target.rstrip("/")
+        if key in seen or key == str(base_url).rstrip("/"):
+            continue
+        if parsed.path.lower().endswith(_SKIP_DOC_SUFFIXES):
+            continue
+        lowered = target.lower()
+        score = sum(1 for term in focus_terms if term in lowered)
+        if score <= 0:
+            continue
+        # ReadTheDocs-style pages live at ".../policy/" (without the slash the
+        # server serves a navigation shell); leaf document pages should outrank
+        # section roots with the same keyword.
+        leaf_bonus = int(target.endswith(("/", ".html", ".md")))
+        seen.add(key)
+        ranked.append((-(score * 2 + leaf_bonus), len(ranked), target))
+    ranked.sort()
+    return [target for _score, _order, target in ranked[:limit]]
+
+
+def _official_index_candidates(mapping_root: str) -> list[str]:
+    """Docs-index URLs likely to list the site's deep documentation pages."""
+
+    parsed = urlparse(str(mapping_root or ""))
+    scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
+    host = parsed.netloc.lower()
+    if not host:
+        return []
+    origin = f"{scheme}://{host}"
+    scope = _mapping_scope_root_path(mapping_root)
+    candidates = [f"{origin}/llms.txt", f"{origin}/sitemap.xml"]
+    if scope:
+        candidates += [f"{origin}{scope}/llms.txt",
+                       f"{origin}{scope}/sitemap.xml",
+                       f"{origin}{scope}/sitemap.md"]
+    return list(dict.fromkeys(candidates))
+
+
+def _index_urls(text: str) -> list[str]:
+    urls = re.findall(r"<loc>\s*(https?://[^<\s]+)\s*</loc>", str(text or ""),
+                      re.IGNORECASE)
+    urls += re.findall(r"https?://[^\s)\"'<>`]+", str(text or ""))
+    return list(dict.fromkeys(url.rstrip(".,;") for url in urls if url))
+
+
+def _nested_index_urls(text: str, index_url: str) -> list[str]:
+    """One level of sitemap-index navigation (e.g. llms.txt -> sitemap.md)."""
+    base = urlparse(str(index_url or ""))
+    nested = []
+    for url in _index_urls(text):
+        parsed = urlparse(url)
+        if parsed.netloc.lower() != base.netloc.lower():
+            continue
+        if url.rstrip("/") == str(index_url).rstrip("/"):
+            continue
+        lowered = url.lower()
+        if (("sitemap" in lowered and ".xml" in lowered)
+                or "sitemap-llms" in lowered
+                or "sitemap.md" in lowered
+                or lowered.endswith("/llms.txt")):
+            nested.append(url)
+    return list(dict.fromkeys(nested))[:1]
+
+
+def _index_doc_links(text: str, mapping_root: str,
+                     focus_terms: tuple[str, ...], *, limit: int = 2,
+                     required_terms: tuple[str, ...] = ()) -> list[str]:
+    entries: list[tuple[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for label, url in re.findall(
+            r"\[([^\]]*)\]\((https?://[^)\s]+)\)", str(text or "")):
+        pair = (url, label)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            entries.append(pair)
+    for url in _index_urls(text):
+        pair = (url, "")
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            entries.append(pair)
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+    for url, label in entries:
+        if not _url_in_mapping_scope(url, mapping_root):
+            continue
+        lowered = url.lower()
+        if any(marker in lowered for marker in
+               ("sitemap.xml", "sitemap.md", "sitemap-llms", "/llms.txt")):
+            continue
+        haystack = f"{url} {label}".lower()
+        if required_terms and not any(term in haystack for term in required_terms):
+            continue
+        if urlparse(url).path.lower().endswith(_SKIP_DOC_SUFFIXES):
+            continue
+        score = sum(1 for term in focus_terms if term in haystack)
+        if score <= 0:
+            continue
+        key = url.rstrip("/")
+        if key in seen:
+            continue
+        seen.add(key)
+        ranked.append((-score, len(ranked), url))
+    ranked.sort()
+    return [url for _score, _order, url in ranked[:limit]]
+
+
+_SKIP_DOC_SUFFIXES = (".pdf", ".zip", ".png", ".jpg", ".jpeg", ".svg", ".gif",
+                      ".css", ".js", ".json", ".xml", ".tar", ".gz")
+
+
+def _candidate_alias_terms(owner: str) -> tuple[str, ...]:
+    """Aliases that must appear when a docs index redirects to another host."""
+    lowered = str(owner or "").lower()
+    words = [w for w in re.split(r"[^a-z0-9]+", lowered) if len(w) >= 3]
+    terms = list(words)
+    compact = "".join(words)
+    if compact:
+        terms.append(compact)
+    if "weights" in lowered or "biases" in lowered:
+        terms.append("wandb")
+    return tuple(dict.fromkeys(terms))
+
+
+def _origin_url(url: str) -> str:
+    parsed = urlparse(str(url or ""))
+    if not parsed.netloc:
+        return ""
+    return f"{parsed.scheme or 'https'}://{parsed.netloc}"
+
+
+def _github_raw_scope_identity(owner: str, url: str, title: str, body: str,
+                               mapping_root: str | None) -> bool:
+    """A raw README is first-party material for the curated GitHub repo root.
+
+    The raw host differs from github.com, so the normal host/path scope check
+    would reject it. The repository owner/repo pair must match the curated root
+    exactly, and the fetched README must still name the candidate.
+    """
+    root = urlparse(str(mapping_root or ""))
+    target = urlparse(str(url or ""))
+    if root.netloc.lower() not in {"github.com", "www.github.com"}:
+        return False
+    if target.netloc.lower() != "raw.githubusercontent.com":
+        return False
+    root_parts = [part for part in root.path.strip("/").split("/") if part]
+    target_parts = [part for part in target.path.strip("/").split("/") if part]
+    if len(root_parts) < 2 or len(target_parts) < 2:
+        return False
+    if target_parts[0].lower() != root_parts[0].lower():
+        return False
+    if target_parts[1].lower() != root_parts[1].lower():
+        return False
+    return source_text_discusses_candidate(owner, title, body)
+
+
+def _mapping_scope_identity(owner: str, url: str, title: str, body: str,
+                            mapping_root: str | None,
+                            allow_path_alias: bool = False) -> bool:
+    """Body identity inside a hand-curated mapping root.
+
+    A curated root is already an explicit statement that the site belongs to the
+    candidate (e.g. ``microsoft.github.io/autogen/stable/`` for AutoGen, where the
+    product name is in the path, not the host). A page fetched from under that
+    exact host/path scope may therefore pass body identity even though the URL
+    token check alone would reject a GitHub Pages host; the page body must still
+    name the declared candidate. ``allow_path_alias`` is used only for a curated
+    root that redirected to a successor docs host: there the candidate token in
+    the path (e.g. ``/products/wandb/``) is the remaining identity anchor.
+    """
+    if not mapping_root:
+        return False
+    if _github_raw_scope_identity(owner, url, title, body, mapping_root):
+        return True
+    if not _url_in_mapping_scope(url, mapping_root):
+        return False
+    if source_text_discusses_candidate(owner, title, body):
+        return True
+    if allow_path_alias:
+        path = urlparse(str(url or "")).path.lower()
+        aliases = [alias for alias in _candidate_alias_terms(owner) if len(alias) >= 4]
+        if any(alias in path for alias in aliases):
+            return True
+    return False
+
+
+def _github_readme_targets(url: str) -> list[str]:
+    """Raw README candidates for a GitHub repository URL.
+
+    GitHub repository pages are often JS-heavy or rate-limited HTML; the raw
+    README is the same first-party material in a fetchable text form. The caller
+    still runs the normal identity check on the fetched body.
+    """
+    parsed = urlparse(str(url or ""))
+    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+        return []
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) < 2:
+        return []
+    owner, repo = parts[0], parts[1]
+    return [
+        f"https://raw.githubusercontent.com/{owner}/{repo}/main/README.md",
+        f"https://raw.githubusercontent.com/{owner}/{repo}/master/README.md",
+    ]
+
+
+def _fallback_doc_targets(base_url: str, *, limit: int = 3) -> list[str]:
+    """Same-host static fallbacks for a curated root that only served a JS shell.
+
+    Only same-host entry points are tried: the existing safe-fetch and body identity
+    rules reject off-host README mirrors as official evidence. For a docs root with
+    a path (e.g. a GitHub Pages project site), common static documentation paths are
+    tried first, then llms.txt; the caller still admits only a page whose body names
+    the declared candidate (see the curated-mapping-scope identity check).
+    """
+
+    github = _github_readme_targets(base_url)
+    if github:
+        return github[:limit]
+    parsed = urlparse(str(base_url or ""))
+    scheme = parsed.scheme if parsed.scheme in ("http", "https") else "https"
+    host = parsed.netloc.lower()
+    if not host:
+        return []
+    path = parsed.path.rstrip("/")
+    root = f"{scheme}://{host}{path}" if path else f"{scheme}://{host}"
+    targets = []
+    lowered = path.lower()
+    # A curate URL that already points at a versioned documentation page should
+    # not have another stable/latest segment appended: that produces 404s such
+    # as /docs/envoy/latest/latest/ or /latest/stable/.
+    # /stable/ and /latest/ are only a real convention on GitHub Pages project
+    # sites (mkdocs-style versioned docs); on ordinary custom domains they are
+    # frequently 404 (R7a: elastic.co/stable, docs.gofiber.io/stable) so they are
+    # not guessed there. llms.txt and curated mapping deep paths remain.
+    if host.endswith(".github.io") and not any(
+            segment in lowered for segment in ("/latest", "/stable", "/current")):
+        targets += [f"{root}/stable/", f"{root}/latest/"]
+    targets += [f"{scheme}://{host}/llms.txt", f"{scheme}://{host}/llms-full.txt"]
+    if not path:
+        targets += [f"{root}/docs/", f"{root}/en/latest/"]
+    return list(dict.fromkeys(targets))[:limit]
+
+
+def _derived_doc_links(base_url: str, links: list[str], *, limit: int = 2) -> list[str]:
+    """Deeper same-site documentation links from a navigation page.
+
+    A documentation root is often a link directory; the prose lives one hop
+    deeper. This only ranks already-fetched links (same host, documentation-like
+    path, no asset/login links); the caller spends a bounded page attempt on one
+    of them, and the derived page must still pass body admission and identity
+    verification before it can be cited.
+    """
+
+    host = urlparse(base_url).netloc.lower()
+    ranked: list[tuple[int, int, int, str]] = []
+    seen: set[str] = set()
+    for href in links or []:
+        try:
+            parsed = urlparse(str(href))
+        except ValueError:
+            continue
+        if parsed.scheme not in ("http", "https"):
+            continue
+        if parsed.netloc.lower() != host:
+            continue
+        path = parsed.path.lower()
+        if not path or path in ("/", "/index.html"):
+            continue
+        if path.endswith(_INDEX_PATH_SUFFIXES):
+            continue
+        if any(skip in path for skip in _SKIP_LINK_HINTS):
+            continue
+        hint_score = sum(1 for hint in _DOC_PATH_HINTS if hint in path)
+        depth = path.count("/")
+        if hint_score == 0 and depth < 2:
+            continue
+        clean = href.split("#", 1)[0].rstrip("/")
+        if not clean or clean == base_url.rstrip("/") or clean in seen:
+            continue
+        seen.add(clean)
+        # Deeper and documentation-like first; shorter path breaks ties.
+        ranked.append((-hint_score, -depth, len(path), clean))
+    ranked.sort()
+    return [item[-1] for item in ranked[:limit]]
+
+# A discovered official link is not a body. These are cumulative bounds for one
+# research run: page attempts and actual HTTP requests are counted separately.
+# Redirects consume the HTTP-request count; a proxy/forward route is rejected
+# rather than being allowed to bypass IP pinning. Route selection is
+# configuration-only and makes no network probe.
+#
+# Defaults restored to the caps the frozen paired diagnostics used (4 page
+# attempts / 12 HTTP requests / 1 MiB retained): the earlier 2/6/200 KB values
+# exhausted the page budget on the first candidate and truncated documentation
+# pages mid-body. Each attempt remains bounded by the per-page deadline, size and
+# redirect limits; the four attempts cover two candidates with one discovered page
+# and one curated root each.
+OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN = int(
+    os.environ.get("OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN", "4"))
+OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN = int(
+    os.environ.get("OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN", "12"))
+OFFICIAL_FETCH_TOTAL_DEADLINE_S = float(
+    os.environ.get("OFFICIAL_FETCH_TOTAL_DEADLINE_S", "15"))
+OFFICIAL_FETCH_MAX_BYTES = int(os.environ.get("OFFICIAL_FETCH_MAX_BYTES", "1048576"))
+OFFICIAL_FETCH_MAX_REDIRECTS = 3
+OFFICIAL_BODY_STORE_CHARS = int(os.environ.get("OFFICIAL_BODY_STORE_CHARS", "8000"))
 
 # Mapping of known tech terms to their official documentation sites.
 # Curated list — only entries with stable, well-known doc URLs.
 # Self-updates at runtime: learned pairs (harvest + LLM fallback) persist
 # to learned_docs.json and are consulted before this seed dict.
 
-_LLM_FALLBACK_MAX = 3
+_LLM_FALLBACK_MAX = 4
 
 _VS_MARKERS = (" vs ", " versus ", " 对比 ", " 比较 ")
 
@@ -72,6 +558,8 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "github-actions": {"url": "https://docs.github.com/en/actions", "title": "GitHub Actions — Official Documentation"},
     "jenkins": {"url": "https://jenkins.io", "title": "Jenkins — Official Documentation"},
     "gitlab-ci": {"url": "https://docs.gitlab.com/ee/ci", "title": "GitLab CI — Official Documentation"},
+    "drone": {"url": "https://docs.drone.io/", "title": "Drone — Official Documentation"},
+    "tekton": {"url": "https://tekton.dev/docs/", "title": "Tekton — Official Documentation"},
     # Web server / proxy / comms
     "nginx": {"url": "https://nginx.org/en/docs/", "title": "nginx — Official Documentation"},
     "caddy": {"url": "https://caddyserver.com", "title": "Caddy — Official Documentation"},
@@ -92,10 +580,10 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "sentencepiece": {"url": "https://github.com/google/sentencepiece", "title": "SentencePiece — Official Repository"},
     # Agent frameworks
     "langchain": {"url": "https://python.langchain.com/docs/", "title": "LangChain — Official Documentation"},
-    "langgraph": {"url": "https://langchain-ai.github.io/langgraph/", "title": "LangGraph — Official Documentation"},
+    "langgraph": {"url": "https://docs.langchain.com/oss/python/langgraph/overview.md", "title": "LangGraph — Official Documentation"},
     "llamaindex": {"url": "https://docs.llamaindex.ai", "title": "LlamaIndex — Official Documentation"},
     "crewai": {"url": "https://docs.crewai.com", "title": "CrewAI — Official Documentation"},
-    "autogen": {"url": "https://microsoft.github.io/autogen", "title": "AutoGen — Official Documentation"},
+    "autogen": {"url": "https://microsoft.github.io/autogen/stable/", "title": "AutoGen — Official Documentation"},
     "semantic-kernel": {"url": "https://learn.microsoft.com/semantic-kernel", "title": "Semantic Kernel — Official Documentation"},
     "dify": {"url": "https://dify.ai", "title": "Dify — Official Documentation"},
     "langflow": {"url": "https://docs.langflow.org", "title": "LangFlow — Official Documentation"},
@@ -108,7 +596,10 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "qdrant": {"url": "https://qdrant.tech", "title": "Qdrant — Official Documentation"},
     "milvus": {"url": "https://milvus.io", "title": "Milvus — Official Documentation"},
     "faiss": {"url": "https://github.com/facebookresearch/faiss", "title": "FAISS — Official Repository"},
-    "elasticsearch": {"url": "https://elastic.co", "title": "Elasticsearch — Official Documentation"},
+    # 2026-11-02 R7a: the bare site root timed out in the final-200 run (5 cases
+    # ended with 0 official body pages); the docs path is the locatable first-party
+    # page. Fetch admission/identity checks still decide whether it becomes evidence.
+    "elasticsearch": {"url": "https://www.elastic.co/docs", "title": "Elasticsearch — Official Documentation"},
     "meilisearch": {"url": "https://meilisearch.com", "title": "Meilisearch — Official Documentation"},
     # Infra / messaging / config
     "kafka": {"url": "https://kafka.apache.org", "title": "Apache Kafka — Official Documentation"},
@@ -119,12 +610,6 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "ansible": {"url": "https://docs.ansible.com", "title": "Ansible — Official Documentation"},
     "airflow": {"url": "https://airflow.apache.org", "title": "Apache Airflow — Official Documentation"},
     "prefect": {"url": "https://prefect.io", "title": "Prefect — Official Documentation"},
-    # Workflow / rules engines
-    "temporal": {"url": "https://docs.temporal.io", "title": "Temporal — Official Documentation"},
-    "camunda": {"url": "https://docs.camunda.org", "title": "Camunda — Official Documentation"},
-    "drools": {"url": "https://www.drools.org", "title": "Drools — Official Documentation"},
-    "cadence": {"url": "https://cadenceworkflow.io", "title": "Cadence — Official Documentation"},
-    "conductor": {"url": "https://conductor-oss.org", "title": "Conductor — Official Documentation"},
     "prometheus": {"url": "https://prometheus.io", "title": "Prometheus — Official Documentation"},
     "datadog": {"url": "https://datadoghq.com", "title": "Datadog — Official Documentation"},
     "pydantic": {"url": "https://docs.pydantic.dev", "title": "Pydantic — Official Documentation"},
@@ -155,11 +640,50 @@ TECH_DOCS: dict[str, dict[str, str]] = {
     "gitlab": {"url": "https://about.gitlab.com", "title": "GitLab — Official Documentation"},
 }
 
+# Additional curated roots for the 2026-10 formal case technology set. These are
+# discovery candidates only: the safe fetch, prose admission and body identity
+# check still decide whether a URL becomes evidence.
+TECH_DOCS.update(EXTRA_TECH_DOCS)
+
 
 class OfficialSearch(BaseRetriever):
     source = "official"
 
-    async def _propose_official_url(self, term: str) -> str | None:
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self._fetch_budget = None
+        self._last_fetch_stats: dict = {}
+        self._fallback_usage: list[dict] = []
+        self._discovery_context: dict = {}
+
+    async def search(self, query: str, sub_questions: list[str],
+                     max_results: int = 7,
+                     adapted_queries: list[str] | None = None,
+                     candidate_techs: list[str] | None = None,
+                     constraints: list[str] | None = None,
+                     prior_results: list[dict] | None = None) -> dict:
+        # The official source runs after the ordinary retrievers and may reuse
+        # their already-paid result rows for source discovery. It never issues a
+        # second search. The context is not a second source of truth; the safe
+        # fetch below still verifies the page identity.
+        self._discovery_context = {
+            "constraints": list(constraints or []),
+            "prior_results": list(prior_results or []),
+        }
+        result = await super().search(
+            query, sub_questions, max_results,
+            adapted_queries=adapted_queries, candidate_techs=candidate_techs)
+        # Keep the base envelope; add the cumulative count record for this run's
+        # official source. Source result rows and dispatched HTTP requests are
+        # different counters and both remain explicit.
+        result["fetch_stats"] = dict(self._last_fetch_stats)
+        if self._fallback_usage:
+            result["token_usage"] = [
+                summarize_usage("official_fallback", self._fallback_usage)]
+        return result
+
+    async def _propose_official_url(self, term: str,
+                                    usage: list | None = None) -> str | None:
         """LLM fallback: propose an official docs URL for an unmapped term."""
         result = await call_model(
             [
@@ -174,112 +698,670 @@ class OfficialSearch(BaseRetriever):
                 {"role": "user", "content": f"Official documentation URL for: {term}"},
             ],
             model="deepseek-flash", tag="official_fallback",
-            response_format="json",
+            response_format="json", usage=usage,
         )
         if isinstance(result, dict):
             return result.get("url")
         return None
 
-    async def _verify_reachable(self, url: str) -> bool:
-        try:
-            resp = await _outbound.safe_fetch(
-                "official",
-                url,
-                method="HEAD",
-                allowed_content_types=("text/html", "application/xhtml+xml"),
-                head_fallback_to_range_get=True,
+    async def _fetch_official_body(self, url: str, *,
+                                   allow_navigation_intro: bool = False) -> dict:
+        budget = self._fetch_budget
+        if budget is None:
+            budget = OfficialFetchBudget(
+                max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
             )
-            return resp.status_code == 200
-        except Exception:
-            return False
+            self._fetch_budget = budget
+        if budget.http_requests >= budget.max_http_requests:
+            budget.record_failure("http_budget_exhausted")
+            return {"ok": False, "url": url, "failure": "http_budget_exhausted",
+                    "budget": budget.snapshot()}
+        try:
+            result = await fetch_official_page(
+                url, budget=budget,
+                deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                store_chars=OFFICIAL_BODY_STORE_CHARS,
+                allow_navigation_intro=allow_navigation_intro,
+            )
+            transient = str(result.get("failure") or "")
+            if (not result.get("ok")
+                    and any(marker in transient for marker in
+                            ("timeout", "Timeout", "Connect", "ReadError",
+                             "RemoteProtocol", "Transport"))
+                    and budget.http_requests < budget.max_http_requests):
+                await asyncio.sleep(0.6)
+                result = await fetch_official_page(
+                    url, budget=budget,
+                    deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                    max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                    max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                    store_chars=OFFICIAL_BODY_STORE_CHARS,
+                    allow_navigation_intro=allow_navigation_intro,
+                )
+            if not result.get("ok"):
+                fallback = await self._tavily_body_fallback(url, result)
+                if fallback is not None:
+                    return fallback
+            return result
+        except Exception as exc:
+            budget.record_failure(type(exc).__name__)
+            failed = {"ok": False, "url": url,
+                      "failure": type(exc).__name__, "budget": budget.snapshot()}
+            fallback = await self._tavily_body_fallback(url, failed)
+            return fallback if fallback is not None else failed
+
+    async def _tavily_body_fallback(self, url: str, failed: dict) -> dict | None:
+        """Server-side page extraction when the local pinned fetch cannot reach a page.
+
+        Observed 2026-11: huggingface.co docs and raw.githubusercontent.com are
+        unreachable from this machine (ConnectError), so the decisive official
+        pages stayed bodyless. Tavily fetches server-side; the extracted text is
+        admitted only when it is substantially prose and is labelled with
+        ``fetch_via="tavily_extract"`` so reports/health can show the provenance.
+        """
+        failure = str(failed.get("failure") or "")
+        retryable = ("timeout", "Timeout", "Connect", "ReadError", "RemoteProtocol",
+                     "Transport", "http_budget_exhausted", "not_prose",
+                     "fetch_failed", "http:403", "http:429")
+        if not any(marker in failure for marker in retryable):
+            return None
+        extracted = await extract_pages([url])
+        item = extracted.get(url)
+        if not item:
+            return None
+        text = " ".join(str(item.get("text") or "").split())
+        if len(text) < 600:
+            return None
+        budget = self._fetch_budget
+        if budget is not None and hasattr(budget, "body_pages"):
+            try:
+                budget.body_pages += 1
+            except Exception:
+                pass
+        stored = text[:OFFICIAL_BODY_STORE_CHARS].rstrip()
+        return {
+            "ok": True,
+            "url": url,
+            "body_url": url,
+            "title": str(item.get("title") or ""),
+            "body": stored,
+            "body_blocks": [text],
+            "page_chars": len(text),
+            "stored_chars": len(stored),
+            "page_truncated": False,
+            "stored_truncated": len(text) > len(stored),
+            "truncated": len(text) > len(stored),
+            "truncation_reason": None,
+            "declared_content_length": None,
+            "content_length_exceeded": False,
+            "max_response_bytes": None,
+            "prose_chars": len(text),
+            "main_block_count": 1,
+            "prose_block_count": 1,
+            "heading_context_count": 0,
+            "page_role": "content",
+            "admission": "tavily_extract",
+            "content_type": "text/markdown",
+            "fetch_via": "tavily_extract",
+            "bytes": 0,
+            "bytes_read": 0,
+            "bytes_retained": 0,
+            "links": [],
+            "budget": budget.snapshot() if budget is not None else {},
+        }
+
+    async def _discover_index_doc_links(self, mapping_url: str,
+                                        focus: tuple[str, ...],
+                                        budget: OfficialFetchBudget,
+                                        owner: str = "") -> list[str]:
+        """Deterministically find focused docs pages via llms.txt/sitemap."""
+        mapping_host = urlparse(str(mapping_url or "")).netloc.lower()
+        for index_url in _official_index_candidates(mapping_url):
+            if budget.http_requests >= budget.max_http_requests:
+                return []
+            result = await fetch_official_index(
+                index_url, budget=budget,
+                deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+            )
+            if not result.get("ok"):
+                continue
+            scope_root = str(result.get("body_url") or index_url)
+            text = str(result.get("text") or "")
+            for nested in _nested_index_urls(text, scope_root):
+                if budget.http_requests >= budget.max_http_requests:
+                    break
+                nested_result = await fetch_official_index(
+                    nested, budget=budget,
+                    deadline_s=OFFICIAL_FETCH_TOTAL_DEADLINE_S,
+                    max_response_bytes=OFFICIAL_FETCH_MAX_BYTES,
+                    max_redirects=OFFICIAL_FETCH_MAX_REDIRECTS,
+                )
+                if nested_result.get("ok"):
+                    scope_root = str(nested_result.get("body_url") or nested)
+                    text += "\n" + str(nested_result.get("text") or "")
+            index_host = urlparse(scope_root).netloc.lower()
+            # A docs URL may redirect to a successor host (e.g. W&B docs to a
+            # platform docs site). There the focused pages must also name the
+            # candidate, or the index would pull unrelated platform docs.
+            required = (_candidate_alias_terms(owner)
+                        if owner and index_host and index_host != mapping_host
+                        else ())
+            links = _index_doc_links(text, scope_root, focus, limit=2,
+                                     required_terms=required)
+            if links:
+                return links
+        return []
 
     async def _do_search(self, query: str, sub_questions: list[str], max_results: int,
-                         adapted_queries: list[str] | None = None) -> list[dict]:
-        all_text = " ".join(adapted_queries) if adapted_queries else query
-        keywords = all_text.lower().replace(" vs ", " ").replace(" versus ", " ").split()
+                         adapted_queries: list[str] | None = None,
+                         candidate_techs: list[str] | None = None) -> list[dict]:
+        # Only declared candidates may introduce an official source. The adapted
+        # queries are search aids: an ordinary word in them is not a research
+        # target, and a learned-cache hit is not proof of candidacy either.
+        from ..utils.candidate_identity import candidate_names_key, normalize_term
+
+        candidates = [c for c in (candidate_techs or []) if str(c).strip()]
+        self._fallback_usage = []
         learned = load_learned()
         # Curated seed always wins: a learned entry must never shadow a
         # hand-verified mapping (e.g. a harvested 'python' entry once
         # overrode docs.python.org with python.langchain.com).
         lookup = {**learned, **TECH_DOCS}
         results = []
+        if self._fetch_budget is None:
+            if os.environ.get("OFFICIAL_FETCH_BUDGET_PER_CASE", "") == "1":
+                # Batch runners execute several research identities in one
+                # process; the shared run_limits identity would otherwise make all
+                # cases consume one page budget and starve later cases.
+                self._fetch_budget = OfficialFetchBudget(
+                    max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                    max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                )
+            else:
+                try:
+                    self._fetch_budget = budget_for_research(
+                        max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                        max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                    )
+                except LookupError:
+                    # No durable research identity (tests/direct callers): keep the
+                    # budget on this retriever instance rather than inventing one.
+                    self._fetch_budget = OfficialFetchBudget(
+                        max_page_attempts=OFFICIAL_FETCH_MAX_PAGE_ATTEMPTS_PER_RUN,
+                        max_http_requests=OFFICIAL_FETCH_MAX_HTTP_REQUESTS_PER_RUN,
+                    )
+        self._last_fetch_stats = self._fetch_budget.snapshot()
 
-        # Pass 1: curated seed + learned cache via normalized n-gram matching.
-        # Space-separated multi-word terms ('AWS Lambda') match hyphenated or
-        # dotted keys ('aws-lambda', 'next.js') through alnum normalization.
-        norm_lookup = {_normalize(k): k for k in lookup}
-        for alias, target in _TECH_ALIASES.items():
-            if target in lookup:
-                norm_lookup[_normalize(alias)] = target
-        matched_norms: set[str] = set()
-        matched_ngram_components: set[str] = set()
-        for n in (1, 2, 3):
-            for i in range(len(keywords) - n + 1):
-                phrase = " ".join(keywords[i:i + n])
-                norm = _normalize(phrase)
-                key = norm_lookup.get(norm)
-                if key is None or norm in matched_norms:
-                    continue
-                matched_norms.add(norm)
-                matched_ngram_components.update(_normalize(kw) for kw in keywords[i:i + n])
-                doc = lookup[key]
-                results.append({
-                    "url": doc["url"],
-                    "title": doc["title"],
-                    "snippet": f"Official documentation site for {key}",
-                    "date": "",
-                })
+        if not candidates:
+            # No declared identity, so nothing may be promoted to "official".
+            # Better an explicit gap than an unowned official-looking source.
+            return []
 
-        # Pass 1.5: LLM fallback for unmapped candidate terms (validated + learned)
-        unmapped = []
-        for kw in keywords:
-            kw_clean = kw.strip().rstrip(".").rstrip(",")
-            if (kw_clean not in lookup and kw_clean not in unmapped
-                    and is_plausible_term(kw_clean)
-                    and _normalize(kw_clean) not in matched_ngram_components):
-                unmapped.append(kw_clean)
-        async def _resolve_fallback(kw):
-            url = await self._propose_official_url(kw)
-            if not url or not domain_label_match(kw, url):
-                return None
-            if not _looks_official(url):
-                return None
-            if not await self._verify_reachable(url):
-                return None
-            return kw, url
-
-        pending = unmapped[:_LLM_FALLBACK_MAX]
-        resolved = await asyncio.gather(*[_resolve_fallback(kw) for kw in pending])
-        for item in resolved:
-            if item is None:
+        context = getattr(self, "_discovery_context", {}) or {}
+        constraint_terms = constraint_discovery_terms(
+            context.get("constraints") or [], candidates, lookup)
+        targets: list[tuple[str, str]] = [(c, "candidate") for c in candidates]
+        seen_targets = {c.strip().lower() for c in candidates}
+        for term in constraint_terms:
+            if term.strip().lower() in seen_targets:
                 continue
-            kw, url = item
-            learn(kw, url, f"{kw} — Official Documentation", via="llm")
-            lookup[kw] = {"url": url, "title": f"{kw} — Official Documentation"}
-            results.append({
-                "url": url,
-                "title": f"{kw} — Official Documentation",
-                "snippet": f"Official documentation site for {kw}",
-                "date": "",
-            })
+            seen_targets.add(term.strip().lower())
+            targets.append((term, "platform_constraint"))
 
-        # Pass 2: PyPI search for packages. Restricted to vs-style comparison
-        # queries — on open-scenario queries the tokens are ordinary English
-        # words ('feature', 'team', 'wants'), and PyPI matches polluted the
-        # evidence chains with junk packages (recommended "flag (PyPI)" once).
-        if _is_vs_query(query):
-            async with await _outbound.make_client("official") as client:
-                for kw in keywords[:3]:
-                    if len(kw) < 3:
+        # Mapping entries that a declared target actually names. Longest match
+        # wins, so a candidate naming both 'postgresql' and a more specific key
+        # resolves to the more specific one. The mapping is the only source list
+        # that carries hand-verified ownership; it is not inferred from a
+        # lookalike domain.
+        for owner, kind in targets:
+            named = [k for k in lookup if candidate_names_key(owner, k)]
+            if not named:
+                continue
+            # A hand-verified mapping outranks a learned cache entry even when the
+            # learned key is a different casing/alias; stale learned URLs (e.g. a
+            # formerly-working langgraph.dev path) must not shadow the curated
+            # canonical docs root. Longest match still wins within each tier.
+            named.sort(key=lambda k: (0 if k in TECH_DOCS else 1,
+                                      -len(_normalize(k))))
+            key = named[0]
+            if key not in lookup:
+                continue
+            curated = key in TECH_DOCS
+            if not curated:
+                # A learned cache entry is a hint, not ownership proof. It may
+                # resolve only the same full identity (e.g. learned "gVisor" for
+                # gVisor), never a one-token fragment like "amazon" for a
+                # multi-word target. Its page body is verified before admission.
+                if normalize_term(key) != normalize_term(owner):
+                    continue
+            doc = lookup[key]
+            entry = {
+                "url": doc["url"],
+                "title": doc["title"],
+                "snippet": "",
+                "has_body": False,
+                "date": "",
+                "_from_mapping": curated,
+                "_from_learned": not curated,
+                "_from_prior_search": False,
+                "_mapping_root": doc["url"] if curated else None,
+                "source_owner": owner,
+                "source_kind": kind,
+            }
+            if entry["url"] not in {r["url"] for r in results}:
+                results.append(entry)
+
+        # Reuse already-paid ordinary-search rows. A row becomes an official
+        # target only when its URL and visible snippet both name the declared
+        # product/constraint; the safe-fetched page must confirm the same identity
+        # before the body is admitted. No new search is issued for this.
+        for owner, kind in targets:
+            for channel in context.get("prior_results") or []:
+                for item in channel.get("results") or []:
+                    url = str(item.get("url") or "")
+                    title = str(item.get("title") or "")
+                    snippet = str(item.get("snippet") or item.get("content") or "")
+                    if not _valid_http_url(url):
                         continue
-                    resp = await client.get(f"https://pypi.org/pypi/{kw}/json")
-                    if resp.status_code != 200:
+                    if not source_url_identity_match(owner, url):
                         continue
-                    info = resp.json().get("info", {})
+                    if not source_text_discusses_candidate(owner, title, snippet):
+                        continue
+                    if url in {r["url"] for r in results}:
+                        continue
                     results.append({
-                        "url": info.get("package_url", f"https://pypi.org/project/{kw}/"),
-                        "title": f"{kw} (PyPI)",
-                        "snippet": f"Version: {info.get('version', 'N/A')}, Summary: {info.get('summary', '')}",
-                        "date": "",
+                        "url": url,
+                        "title": title or f"{owner} — discovered documentation",
+                        "snippet": "",
+                        "has_body": False,
+                        "date": str(item.get("date") or ""),
+                        "_from_mapping": False,
+                        "_from_prior_search": True,
+                        "source_owner": owner,
+                        "source_kind": kind,
                     })
+                    break
+                if any(r.get("source_owner") == owner for r in results):
+                    break
+
+        # LLM fallback stays available for declared candidates and explicit
+        # platform constraints that neither the mapping nor an existing search
+        # row resolved. The URL must still pass the bounded identity gate, and
+        # the fetched body must name the same owner.
+        resolved_owners = {r.get("source_owner") for r in results}
+        unresolved = [(owner, kind) for owner, kind in targets
+                      if owner not in resolved_owners]
+
+        async def _resolve_fallback(owner):
+            url = await self._propose_official_url(
+                owner, usage=self._fallback_usage)
+            if not url or not source_url_identity_match(owner, url):
+                return None
+            return owner, url
+
+        pending = unresolved[:_LLM_FALLBACK_MAX]
+        resolved = await asyncio.gather(
+            *[_resolve_fallback(owner) for owner, _kind in pending],
+            return_exceptions=True)
+        kind_by_owner = dict(targets)
+        for item in resolved:
+            if isinstance(item, Exception) or item is None:
+                # One fallback failure is a source gap, not a reason to discard
+                # successful candidate/platform rows from other targets.
+                continue
+            owner, url = item
+            entry = {
+                "url": url,
+                "title": f"{owner} — Official Documentation",
+                "snippet": "",
+                "has_body": False,
+                "date": "",
+                "_from_mapping": False,
+                "_from_prior_search": False,
+                "source_owner": owner,
+                "source_kind": kind_by_owner.get(owner, "candidate"),
+            }
+            if entry["url"] not in {r["url"] for r in results}:
+                results.append(entry)
+
+        # Candidate pages are attempted before platform-constraint pages. Within
+        # each group, an actual retrieved document outranks a curated root and a
+        # model-proposed URL: the search result is a discovered page, the model
+        # proposal is not.
+        def _priority(entry: dict) -> tuple[int, int, str]:
+            kind_rank = 0 if entry.get("source_kind") == "candidate" else 1
+            if entry.get("_from_prior_search"):
+                origin_rank = 0
+            elif entry.get("_from_mapping"):
+                origin_rank = 1
+            else:
+                origin_rank = 2
+            return kind_rank, origin_rank, entry.get("url", "")
+
+        results.sort(key=_priority)
+
+        # Fetch bounded bodies only after candidates/URLs are de-duplicated, so a
+        # failed or seeded link cannot trigger duplicate network work. Page
+        # attempts and dispatched HTTP requests are separate cumulative bounds;
+        # redirects consume the HTTP count. Every attempt remains visible on the
+        # saved source row; an exhausted budget is navigation.
+        budget = self._fetch_budget
+        found_candidate_owners = {r.get("source_owner") for r in results
+                                  if r.get("source_kind") == "candidate"}
+        missing_candidate_coverage = [
+            candidate for candidate in candidates
+            if candidate not in found_candidate_owners
+        ]
+        known_urls = {r.get("url") for r in results}
+        derived_added = 0
+        derived_owners: set[str] = set()
+        fallback_added = 0
+        fallback_owners: set[str] = set()
+        for entry in results:
+            if not _valid_http_url(entry.get("url", "")):
+                entry["has_body"] = False
+                entry["snippet"] = ""
+                entry["body_identity_verified"] = False
+                entry["body_error"] = "invalid_url"
+                entry["fetch_status"] = "navigation"
+                continue
+            if missing_candidate_coverage and entry.get("source_kind") != "candidate":
+                # Do not spend the remaining page budget on a platform homepage
+                # when a declared candidate still has no discovered source.
+                entry["body_error"] = "candidate_coverage_incomplete"
+                entry["fetch_status"] = "navigation"
+                continue
+            if not budget.begin_page():
+                entry["body_error"] = "page_attempt_budget_exhausted"
+                entry["fetch_status"] = "navigation"
+                continue
+            fetched = await self._fetch_official_body(
+                entry["url"],
+                allow_navigation_intro=bool(entry.get("_from_mapping")),
+            )
+            if not fetched.get("ok"):
+                entry["has_body"] = False
+                entry["snippet"] = ""
+                entry["body_identity_verified"] = False
+                entry["body_error"] = str(
+                    fetched.get("failure") or fetched.get("error") or "fetch_failed")
+                entry["fetch_status"] = "navigation"
+                if fetched.get("page_chars") is not None:
+                    entry["body_page_chars"] = fetched.get("page_chars")
+                if fetched.get("prose_chars") is not None:
+                    entry["body_prose_chars"] = fetched.get("prose_chars")
+                for key in ("bytes_read", "bytes_retained",
+                            "declared_content_length", "content_length_exceeded",
+                            "page_truncated", "truncation_reason"):
+                    if key in fetched:
+                        entry[key] = fetched.get(key)
+                # A successful fetch rejected as a navigation page may still link
+                # to the prose documentation one hop deeper. Spend a bounded extra
+                # attempt on it, never on a page derived from a derived page.
+                body_error = str(entry.get("body_error") or "")
+                owner = entry.get("source_owner") or ""
+                if (owner and not entry.get("_from_derived")
+                        and owner not in derived_owners
+                        and ("navigation_like" in body_error
+                             or "short_prose_only" in body_error)
+                        and budget.page_attempts < budget.max_page_attempts
+                        and derived_added < 2):
+                    for target in _derived_doc_links(entry["url"],
+                                                     fetched.get("links") or []):
+                        if target in known_urls or derived_added >= 2:
+                            continue
+                        known_urls.add(target)
+                        derived_added += 1
+                        derived_owners.add(owner)
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_mapping_root": entry.get("_mapping_root"),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+                # A navigation/JS root has no readable prose, but the site's own
+                # docs index can still expose the focused documentation pages. Try
+                # the index before spending page attempts on guessed static paths.
+                index_added = 0
+                if (owner and entry.get("_from_mapping")
+                        and not entry.get("_from_derived")
+                        and budget.page_attempts < budget.max_page_attempts
+                        and budget.http_requests < budget.max_http_requests):
+                    constraints = list((getattr(self, "_discovery_context", {}) or {})
+                                       .get("constraints") or [])
+                    focus = _deep_doc_focus_terms(
+                        query, " ".join(str(item) for item in sub_questions or []),
+                        " ".join(str(item) for item in constraints))
+                    for target in await self._discover_index_doc_links(
+                            entry.get("_mapping_root") or entry["url"],
+                            focus, budget, owner):
+                        if target in known_urls:
+                            continue
+                        if budget.page_attempts >= budget.max_page_attempts:
+                            break
+                        known_urls.add(target)
+                        index_added += 1
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — deep documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_deep_doc": True,
+                            "_mapping_root": _origin_url(target) or entry.get("_mapping_root"),
+                            "_redirect_scope": (
+                                _origin_url(target) != _origin_url(
+                                    entry.get("_mapping_root") or entry["url"])),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+                if index_added:
+                    # The index is a better source of focused pages than the
+                    # guessed /stable/, /latest/ paths; don't spend attempts on both.
+                    fallback_owners.add(owner)
+                # A curated root that served only a JS shell/navigation page may
+                # also expose static documentation under common paths, or llms.txt.
+                # Try one static fallback only when the normal derived-page route
+                # found nothing for this owner and the page budget still allows it.
+                if (owner and entry.get("_from_mapping")
+                        and owner not in derived_owners
+                        and owner not in fallback_owners
+                        and budget.page_attempts < budget.max_page_attempts
+                        and fallback_added < 2):
+                    for target in _fallback_doc_targets(entry["url"]):
+                        if target in known_urls or fallback_added >= 2:
+                            continue
+                        known_urls.add(target)
+                        fallback_added += 1
+                        fallback_owners.add(owner)
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — static documentation fallback",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_from_fallback": True,
+                            "_mapping_root": entry.get("_mapping_root"),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+                # A focused deep page that is itself a section/navigation page
+                # (common on ReadTheDocs sites) may link one level further to the
+                # actual prose leaf. Follow at most one such level; never recurse
+                # from a leaf or from a non-focused page.
+                if (entry.get("_deep_doc") and not entry.get("_deep_leaf")
+                        and ("navigation_like" in body_error
+                             or "short_prose_only" in body_error)
+                        and budget.page_attempts < budget.max_page_attempts):
+                    constraints = list((getattr(self, "_discovery_context", {}) or {})
+                                       .get("constraints") or [])
+                    focus = _deep_doc_focus_terms(
+                        query, " ".join(str(item) for item in sub_questions or []),
+                        " ".join(str(item) for item in constraints))
+                    for target in _deep_doc_links(
+                            entry["url"], "", fetched.get("links") or [], focus,
+                            entry.get("_mapping_root"), limit=2):
+                        if target in known_urls:
+                            continue
+                        if budget.page_attempts >= budget.max_page_attempts:
+                            break
+                        known_urls.add(target)
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — deep documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_deep_doc": True,
+                            "_deep_leaf": True,
+                            "_mapping_root": entry.get("_mapping_root"),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+                continue
+            body = fetched["body"]
+            owner = entry.get("source_owner") or entry.get("title") or ""
+            if not entry.get("_from_mapping"):
+                # Search metadata and our generated title are discovery hints, not
+                # page identity. Only the safe-fetched body may establish that the
+                # page names the owner. A page derived from a hand-curated mapping
+                # root may still be official when it stays on the same host/path
+                # scope and its body names the product (GitHub Pages project sites
+                # put the product name in the path, not the host).
+                verified = source_identity_verified(
+                    owner, entry["url"], str(fetched.get("title") or ""), body)
+                if not verified:
+                    verified = _mapping_scope_identity(
+                        owner, entry["url"], str(fetched.get("title") or ""), body,
+                        entry.get("_mapping_root"),
+                        allow_path_alias=bool(entry.get("_redirect_scope")))
+                if not verified:
+                    # A safe-fetched page that does not name the declared
+                    # product/constraint is not that product's evidence. Keep the
+                    # attempt visible as navigation, never as a citable body.
+                    entry["has_body"] = False
+                    entry["snippet"] = ""
+                    entry["body_identity_verified"] = False
+                    entry["fetch_status"] = "navigation"
+                    entry["body_url"] = fetched.get("body_url") or entry["url"]
+                    entry["body_error"] = "source_identity_unverified"
+                    continue
+            entry["snippet"] = body
+            entry["has_body"] = True
+            entry["body_identity_verified"] = True
+            entry["fetch_status"] = "body"
+            entry["body_url"] = fetched.get("body_url") or entry["url"]
+            entry["body_page_chars"] = fetched.get("page_chars", fetched.get(
+                "source_chars", len(body)))
+            entry["body_chars"] = entry["body_page_chars"]
+            entry["body_stored_chars"] = fetched.get(
+                "stored_chars", len(body))
+            entry["body_page_truncated"] = bool(fetched.get("page_truncated"))
+            entry["body_stored_truncated"] = bool(fetched.get(
+                "stored_truncated", len(entry["snippet"]) < entry["body_stored_chars"]))
+            entry["body_truncated"] = bool(
+                fetched.get("truncated")
+                or entry["body_page_truncated"]
+                or entry["body_stored_truncated"])
+            entry["body_prose_chars"] = fetched.get("prose_chars", len(entry["snippet"]))
+            entry["body_admission"] = fetched.get("admission", "prose_ok")
+            if fetched.get("fetch_via"):
+                entry["fetch_via"] = fetched.get("fetch_via")
+            entry["body_content_type"] = fetched.get("content_type", "")
+            # A curated root is the candidate's identity anchor, but its overview
+            # often does not answer migration/rollback/security/performance. Rank
+            # same-scope documentation links by the question's dimensions and spend
+            # a bounded number of extra page attempts on them. They still need the
+            # body identity check below; the mapping scope only replaces the URL-token
+            # check for a hand-verified root.
+            if (entry.get("_from_mapping") and not entry.get("_from_derived")
+                    and budget.page_attempts < budget.max_page_attempts):
+                constraints = list((getattr(self, "_discovery_context", {}) or {})
+                                   .get("constraints") or [])
+                focus = _deep_doc_focus_terms(
+                    query, " ".join(str(item) for item in sub_questions or []),
+                    " ".join(str(item) for item in constraints))
+                deep_added = 0
+                for target in _deep_doc_links(
+                        entry["url"], body, fetched.get("links") or [], focus,
+                        entry.get("_mapping_root") or entry["url"],
+                        limit=OFFICIAL_DEEP_DOC_PAGES_PER_CANDIDATE):
+                    if target in known_urls:
+                        continue
+                    if budget.page_attempts >= budget.max_page_attempts:
+                        break
+                    known_urls.add(target)
+                    deep_added += 1
+                    results.append({
+                        "url": target,
+                        "title": f"{owner} — deep documentation",
+                        "snippet": "",
+                        "has_body": False,
+                        "date": "",
+                        "_from_mapping": False,
+                        "_from_prior_search": False,
+                        "_from_derived": True,
+                        "_deep_doc": True,
+                        "_mapping_root": entry.get("_mapping_root") or entry["url"],
+                        "source_owner": owner,
+                        "source_kind": entry.get("source_kind"),
+                    })
+                # JS-shell roots often expose no in-page documentation links. Their
+                # own llms.txt/sitemap is a deterministic index; use it instead of
+                # relying on Tavily having happened to return an official page.
+                if not deep_added and budget.http_requests < budget.max_http_requests:
+                    for target in await self._discover_index_doc_links(
+                            entry.get("_mapping_root") or entry["url"],
+                            focus, budget, owner):
+                        if target in known_urls:
+                            continue
+                        if budget.page_attempts >= budget.max_page_attempts:
+                            break
+                        known_urls.add(target)
+                        deep_added += 1
+                        results.append({
+                            "url": target,
+                            "title": f"{owner} — deep documentation",
+                            "snippet": "",
+                            "has_body": False,
+                            "date": "",
+                            "_from_mapping": False,
+                            "_from_prior_search": False,
+                            "_from_derived": True,
+                            "_deep_doc": True,
+                            "_mapping_root": _origin_url(target) or entry.get("_mapping_root") or entry["url"],
+                            "_redirect_scope": (
+                                _origin_url(target) != _origin_url(
+                                    entry.get("_mapping_root") or entry["url"])),
+                            "source_owner": owner,
+                            "source_kind": entry.get("source_kind"),
+                        })
+            # Learn only a verified identity whose body was actually collected,
+            # and only when it came from discovery rather than the curated map.
+            if not entry.get("_from_mapping") and entry.get("body_identity_verified"):
+                learn(owner, entry["url"],
+                      f"{owner} — Official Documentation", via="body_fetch")
+
+        self._last_fetch_stats = budget.snapshot()
         return results[:max_results]

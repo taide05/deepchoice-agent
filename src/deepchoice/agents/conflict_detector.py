@@ -1,23 +1,23 @@
 import asyncio
 import json
 import os
+import time
 
+import httpx
 import numpy as np
 
 from .. import outbound as _outbound
-from ..budget_errors import BudgetError
 from ..retrievers.tavily_keypool import post_with_failover
+from ..utils.candidate_identity import has_factual_content, source_content
 from ..utils.embedding import get_embedding_model
-from ..utils.llm import MAX_OUTPUT_TOKENS, call_model, summarize_usage
+from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
 # ---------------------------------------------------------------------------
-# Concurrency limits. Two flash tiers: deepseek-flash (500/min) + qwen-flash.
-# Env-tunable — set LLM_DS_CONCURRENCY / LLM_QW_CONCURRENCY to the provider RPM.
-# QW_SEM is the separate re-arbitration-path gate (qwen-flash tier).
+# Concurrency limit for the DeepSeek flash tier (500/min).
+# Env-tunable — set LLM_DS_CONCURRENCY to the provider RPM.
 # ---------------------------------------------------------------------------
 FLASH_SEM = asyncio.Semaphore(int(os.environ.get("LLM_DS_CONCURRENCY", "80")))
-QW_SEM = asyncio.Semaphore(int(os.environ.get("LLM_QW_CONCURRENCY", "10")))
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -30,9 +30,10 @@ Rules:
 2. If both have code/benchmark evidence, both may be partially right (different contexts)
 3. If neither has strong evidence, declare "insufficient_data"
 4. Your reasoning MUST cite the score difference or evidence type difference
+5. NEVER mention rule numbers, these rules, or internal scoring logic in your output. Write the reasoning in reader-facing terms ("the score gap is below the decision threshold", "both sources cite benchmarks"), not "rule 1"/"rule 2".
 
-Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; keep "reasoning" and "key_factor" to a short phrase (<=12 words each):
-{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Short phrase citing score/evidence difference", "key_factor": "Short decisive factor"}"""
+Return ONLY a JSON object:
+{"resolution": "A_correct|B_correct|both_partial|insufficient_data", "confidence": "high|medium|low", "reasoning": "Specific reason citing score/evidence difference", "key_factor": "The single most decisive factor"}"""
 
 
 CONTRADICTION_SCAN_SYSTEM = """You are checking if two technical sources present meaningfully different perspectives about a technology comparison.
@@ -52,6 +53,28 @@ A "difference" does NOT require factual contradiction. Different recommendations
 # call. Only close-score pairs need semantic arbitration (evidence-type nuance).
 SCORE_GAP_DECIDE = 2.5
 SCORE_GAP_HIGH_CONF = 5.0
+
+# A conflict is a disagreement between claims, not between article titles. A
+# source can only supply a comparable claim when a body was actually collected;
+# repository metadata and official navigation links identify a source but state
+# no claim. The excerpt is taken from the stored body, never reconstructed from
+# the title.
+_CLAIM_EXCERPT_LIMIT = 400
+
+
+def comparable_claim(source: dict, limit: int = _CLAIM_EXCERPT_LIMIT) -> str:
+    """The bounded body excerpt that a conflict scan/arbitration may compare.
+
+    Returns "" when the source has no collected body (navigation, repository
+    metadata). Callers must not fall back to the title: a title is source identity,
+    not an assertion to arbitrate.
+    """
+    if not has_factual_content(source):
+        return ""
+    text = " ".join(str(source_content(source)).split())
+    if not text:
+        return ""
+    return text[:limit].rstrip()
 
 
 def _deterministic_arbitration(a: dict, b: dict) -> dict | None:
@@ -125,21 +148,6 @@ SEARCH_TOOLS = [
         },
     },
 ]
-EVIDENCE_GATHER_SYSTEM = (
-    "You gather evidence to resolve technical disagreements. "
-    "Search broadly across sources, then summarize the key finding "
-    "in 2-3 sentences that would help an arbitrator decide which claim is more credible."
-)
-EVIDENCE_GATHER_USER_TEMPLATE = (
-    "Topic: {topic}\n"
-    "Claim A: {claim_a}\n"
-    "Claim B: {claim_b}\n\n"
-    "Search for evidence using at least 1 different tool."
-)
-EVIDENCE_GATHER_MAX_ITERATIONS = 2
-EVIDENCE_GATHER_CLIENT_TIMEOUT_S = 60.0
-EVIDENCE_GATHER_CALL_TIMEOUT_S = 30.0
-EVIDENCE_GATHER_TOOL_TIMEOUT_S = 20.0
 
 
 async def _execute_search(tool_name: str, arguments: dict) -> str:
@@ -148,12 +156,12 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
     max_results = min(arguments.get("max_results", 3), 5)
 
     if tool_name == "search_web":
-        try:
-            async with await _outbound.make_client("tavily") as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
 
-                async def post(url, json=None, **kw):
-                    return await client.post(url, json=json, **kw)
+            async def post(url, json=None, **kw):
+                return await client.post(url, json=json, **kw)
 
+            try:
                 resp, _ = await post_with_failover(post, {
                     "query": query,
                     "search_depth": "basic",
@@ -168,10 +176,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                                     "content": r.get("content", "")[:300],
                                     "url": r.get("url", "")} for r in results],
                                   ensure_ascii=False)
-        except BudgetError:
-            raise
-        except Exception as exc:
-            return json.dumps({"error": type(exc).__name__})
+            except Exception as e:
+                return json.dumps({"error": str(e)})
 
     elif tool_name == "search_scholarly":
         import urllib.parse
@@ -195,10 +201,8 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
                         "url": link.text.strip() if link is not None else "",
                     })
                 return json.dumps(results[:max_results], ensure_ascii=False)
-        except BudgetError:
-            raise
-        except Exception as exc:
-            return json.dumps({"error": type(exc).__name__})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
 
     elif tool_name == "search_kb":
         chroma_path = os.environ.get("CHROMA_PATH", "./chroma_kb/chroma_db")
@@ -221,36 +225,15 @@ async def _execute_search(tool_name: str, arguments: dict) -> str:
             return json.dumps(docs, ensure_ascii=False)
         except ImportError:
             return json.dumps({"error": "chromadb not installed in this process"})
-        except BudgetError:
-            raise
-        except Exception as exc:
-            return json.dumps({"error": type(exc).__name__})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
 
     return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
 
-def _tool_failure_category(result: str) -> str | None:
-    """Map a structured tool error to a public-safe trace category."""
-
-    try:
-        payload = json.loads(result)
-    except (TypeError, json.JSONDecodeError):
-        return None
-    if not isinstance(payload, dict) or "error" not in payload:
-        return None
-    error = str(payload.get("error", "")).lower()
-    if "unknown tool" in error:
-        return "unsupported_tool"
-    if "kb collection" in error:
-        return "knowledge_base_unavailable"
-    if "api key" in error or "provider" in error or "available" in error:
-        return "provider_unavailable"
-    return "provider_error"
-
-
 async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
-                           max_iterations: int = EVIDENCE_GATHER_MAX_ITERATIONS,
-                           per_call_timeout: float = EVIDENCE_GATHER_CALL_TIMEOUT_S,
+                           max_iterations: int = 2,
+                           per_call_timeout: float = 30.0,
                            usage: list | None = None) -> str:
     """Inline multi-turn evidence gathering via OpenAI-compatible tool calling.
 
@@ -258,80 +241,26 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
     enriching claim descriptions in the arbitration prompt.
     """
     from ..utils.llm import TIERS, _get_client
-    from ..observability import ExternalCallKind, TraceStatus, current_trace_recorder
-    from ..runtime.context import classify_cancelled_trace_status
-    from ..budget import (
-        BudgetAmount,
-        BudgetError,
-        BudgetExceededError,
-        BudgetResource,
-        reserve_call,
-        settle_call,
-        unknown_call,
-    )
 
-    client = _get_client(timeout=EVIDENCE_GATHER_CLIENT_TIMEOUT_S, tier="deepseek-flash")
+    client = _get_client(timeout=60.0, tier="deepseek-flash")
 
     messages = [
-        {"role": "system", "content": EVIDENCE_GATHER_SYSTEM},
-        {
-            "role": "user",
-            "content": EVIDENCE_GATHER_USER_TEMPLATE.format(
-                topic=topic,
-                claim_a=claim_a,
-                claim_b=claim_b,
-            ),
-        },
+        {"role": "system", "content": (
+            "You gather evidence to resolve technical disagreements. "
+            "Search broadly across sources, then summarize the key finding "
+            "in 2-3 sentences that would help an arbitrator decide which claim is more credible."
+        )},
+        {"role": "user", "content": (
+            f"Topic: {topic}\n"
+            f"Claim A: {claim_a}\n"
+            f"Claim B: {claim_b}\n\n"
+            f"Search for evidence using at least 1 different tool."
+        )},
     ]
 
     summaries = []
 
-    for iteration in range(max_iterations):
-        trace, node_attempt_id = current_trace_recorder()
-        trace_call = None
-        if trace is not None:
-            trace_call = await trace.start_external_call(
-                node_attempt_id=node_attempt_id,
-                kind=ExternalCallKind.LLM,
-                provider="deepseek-flash",
-                operation="evidence_gather.chat",
-                request_summary={"iteration_no": iteration + 1},
-            )
-        llm_reservations = ()
-        try:
-            message_bytes = len(
-                json.dumps(
-                    messages,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                    default=str,
-                ).encode("utf-8")
-            )
-            llm_reservations = await reserve_call(
-                (
-                    BudgetAmount(resource=BudgetResource.LLM_CALLS, amount=1),
-                    BudgetAmount(
-                        resource=BudgetResource.TOTAL_TOKENS,
-                        amount=message_bytes + MAX_OUTPUT_TOKENS,
-                    ),
-                ),
-                call_id=trace_call.call_id if trace_call is not None else None,
-                summary={"operation": "evidence_gather_llm", "iteration_no": iteration + 1},
-            )
-        except BudgetError as budget_exc:
-            if trace is not None:
-                await trace.finish_external_call(
-                    trace_call,
-                    status=TraceStatus.FAILED,
-                    result_summary={
-                        "failure_category": (
-                            "budget_exceeded"
-                            if isinstance(budget_exc, BudgetExceededError)
-                            else "budget_gate_failed"
-                        )
-                    },
-                )
-            raise
+    for _ in range(max_iterations):
         try:
             response = await asyncio.wait_for(
                 client.chat.completions.create(
@@ -339,75 +268,15 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
                     messages=messages,
                     tools=SEARCH_TOOLS,
                     temperature=0,
-                    max_tokens=MAX_OUTPUT_TOKENS,
                 ),
                 timeout=per_call_timeout,
             )
-        except asyncio.CancelledError:
-            await unknown_call(
-                llm_reservations,
-                known_actuals={BudgetResource.LLM_CALLS: 1},
-            )
-            if trace is not None:
-                await trace.finish_external_call(
-                    trace_call, status=classify_cancelled_trace_status()
-                )
-            raise
         except TimeoutError:
-            await unknown_call(
-                llm_reservations,
-                known_actuals={BudgetResource.LLM_CALLS: 1},
-            )
-            if trace is not None:
-                await trace.finish_external_call(
-                    trace_call, status=TraceStatus.TIMED_OUT
-                )
             print_agent_output("Evidence gathering LLM call timed out", agent="CONFLICT_DETECTOR")
             break
-        except BudgetError:
-            await unknown_call(
-                llm_reservations,
-                known_actuals={BudgetResource.LLM_CALLS: 1},
-            )
-            raise
-        except Exception as exc:
-            await unknown_call(
-                llm_reservations,
-                known_actuals={BudgetResource.LLM_CALLS: 1},
-            )
-            if trace is not None:
-                await trace.finish_external_call(
-                    trace_call,
-                    status=TraceStatus.FAILED,
-                    result_summary={"error_type": type(exc).__name__},
-                )
-            print_agent_output("Evidence gathering LLM error", agent="CONFLICT_DETECTOR")
+        except Exception as e:
+            print_agent_output(f"Evidence gathering LLM error: {e}", agent="CONFLICT_DETECTOR")
             break
-
-        trace_usage = {}
-        if getattr(response, "usage", None) is not None:
-            trace_usage = {
-                "input_tokens": response.usage.prompt_tokens,
-                "output_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
-            }
-        await settle_call(
-            llm_reservations,
-            {
-                BudgetResource.LLM_CALLS: 1,
-                BudgetResource.TOTAL_TOKENS: (
-                    response.usage.total_tokens
-                    if getattr(response, "usage", None) is not None
-                    else None
-                ),
-            },
-        )
-        if trace is not None:
-            await trace.finish_external_call(
-                trace_call,
-                status=TraceStatus.SUCCEEDED,
-                usage_summary=trace_usage,
-            )
 
         # Capture token usage (same 4-field shape as call_model) so the
         # panel does not undercount direct-AsyncOpenAI evidence-gathering calls.
@@ -430,40 +299,6 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
         tool_calls = [tc for tc in msg.tool_calls if tc.type == "function"]
 
         async def _run_tool(tc):
-            tool_trace = None
-            if trace is not None:
-                tool_trace = await trace.start_external_call(
-                    node_attempt_id=node_attempt_id,
-                    kind=ExternalCallKind.RETRIEVAL,
-                    provider=tc.function.name,
-                    operation="evidence_gather.tool",
-                    request_summary={"iteration_no": iteration + 1},
-                )
-            try:
-                tool_reservations = await reserve_call(
-                    (
-                        BudgetAmount(
-                            resource=BudgetResource.RETRIEVAL_CALLS,
-                            amount=1,
-                        ),
-                    ),
-                    call_id=tool_trace.call_id if tool_trace is not None else None,
-                    summary={"operation": "evidence_gather_tool"},
-                )
-            except BudgetError as budget_exc:
-                if trace is not None:
-                    await trace.finish_external_call(
-                        tool_trace,
-                        status=TraceStatus.FAILED,
-                        result_summary={
-                            "failure_category": (
-                                "budget_exceeded"
-                                if isinstance(budget_exc, BudgetExceededError)
-                                else "budget_gate_failed"
-                            )
-                        },
-                    )
-                raise
             try:
                 arguments = json.loads(tc.function.arguments)
             except json.JSONDecodeError:
@@ -471,66 +306,12 @@ async def _gather_evidence(topic: str, claim_a: str, claim_b: str,
             try:
                 result = await asyncio.wait_for(
                     _execute_search(tc.function.name, arguments),
-                    timeout=EVIDENCE_GATHER_TOOL_TIMEOUT_S,
+                    timeout=20.0,
                 )
-            except asyncio.CancelledError:
-                await settle_call(
-                    tool_reservations,
-                    {BudgetResource.RETRIEVAL_CALLS: 1},
-                )
-                if trace is not None:
-                    await trace.finish_external_call(
-                        tool_trace, status=classify_cancelled_trace_status()
-                    )
-                raise
             except TimeoutError:
-                await settle_call(
-                    tool_reservations,
-                    {BudgetResource.RETRIEVAL_CALLS: 1},
-                )
                 result = json.dumps({"error": f"{tc.function.name} timed out"})
-                if trace is not None:
-                    await trace.finish_external_call(
-                        tool_trace, status=TraceStatus.TIMED_OUT
-                    )
-            except BudgetError:
-                await settle_call(
-                    tool_reservations,
-                    {BudgetResource.RETRIEVAL_CALLS: 1},
-                )
-                raise
-            except Exception as exc:
-                await settle_call(
-                    tool_reservations,
-                    {BudgetResource.RETRIEVAL_CALLS: 1},
-                )
-                result = json.dumps({"error": type(exc).__name__})
-                if trace is not None:
-                    await trace.finish_external_call(
-                        tool_trace,
-                        status=TraceStatus.FAILED,
-                        result_summary={"error_type": type(exc).__name__},
-                    )
-            else:
-                await settle_call(
-                    tool_reservations,
-                    {BudgetResource.RETRIEVAL_CALLS: 1},
-                )
-                failure_category = _tool_failure_category(result)
-                if trace is not None:
-                    await trace.finish_external_call(
-                        tool_trace,
-                        status=(
-                            TraceStatus.FAILED
-                            if failure_category is not None
-                            else TraceStatus.SUCCEEDED
-                        ),
-                        result_summary=(
-                            {"failure_category": failure_category}
-                            if failure_category is not None
-                            else {"result_chars": len(result)}
-                        ),
-                    )
+            except Exception as e:
+                result = json.dumps({"error": str(e)})
             return tc.id, result
 
         tool_results = await asyncio.gather(*[_run_tool(tc) for tc in tool_calls])
@@ -553,24 +334,28 @@ async def _scan_pair_contradiction(src_a: dict, src_b: dict, query: str,
                                    usage: list | None = None) -> dict | None:
     """Ask flash model whether two sources present meaningfully different perspectives.
 
-    Returns a dict with contradiction info if detected, None otherwise.
+    The comparison uses the stored body excerpts, not the titles: two article
+    titles can point at the same topic without asserting anything comparable.
+    Titles are kept only as the source identity in the prompt.
     """
-    snippet_a = src_a.get("snippet", "")[:400]
-    snippet_b = src_b.get("snippet", "")[:400]
+    claim_a = comparable_claim(src_a)
+    claim_b = comparable_claim(src_b)
+    if not claim_a or not claim_b:
+        return None
     prompt = [
         {"role": "system", "content": CONTRADICTION_SCAN_SYSTEM},
         {"role": "user", "content": (
             f"Query: {query}\n\n"
-            f"Source A: {src_a.get('title', '')}\nDescription: {snippet_a if snippet_a else '(no description)'}\n\n"
-            f"Source B: {src_b.get('title', '')}\nDescription: {snippet_b if snippet_b else '(no description)'}\n\n"
+            f"Source A: {src_a.get('title', '')}\nExcerpt: {claim_a}\n\n"
+            f"Source B: {src_b.get('title', '')}\nExcerpt: {claim_b}\n\n"
             f"Do these two sources present meaningfully different perspectives? Return JSON."
             """
 
-Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; keep "explanation" to a short phrase (<=12 words):
+Return ONLY a JSON object:
 {{
   "has_difference": true/false,
   "type": "winner_disagreement|tradeoff_disagreement|vendor_bias|none",
-  "explanation": "Short phrase stating the difference (or 'none')"
+  "explanation": "One sentence explaining the difference (or why there is none)"
 }}"""
         )},
     ]
@@ -582,14 +367,85 @@ Return ONLY a JSON object — no prose or analysis paragraphs outside the JSON; 
                 response_format="json",
                 usage=usage,
             )
-        if isinstance(result, dict) and result.get("has_difference"):
-            return result
-        return None
-    except BudgetError:
+    except Exception as e:
+        print_agent_output(f"Conflict scan failed: {e}", agent="CONFLICT_DETECTOR")
+        # No answer at all. The caller records this as unscanned instead of
+        # treating it as evidence that no conflict exists.
         raise
-    except Exception:
-        print_agent_output("Conflict scan failed", agent="CONFLICT_DETECTOR")
-        return None
+
+    # A judgement exists only when the reply states `has_difference` as a real
+    # boolean. call_model returns {} for unparsable output, and the model can
+    # return "" or "false" for the field, so anything else carries no
+    # judgement and must not be read as "no difference".
+    verdict = result.get("has_difference") if isinstance(result, dict) else None
+    if isinstance(verdict, bool):
+        if verdict:
+            return result
+        # The model answered and found no disagreement. That is a completed scan
+        # with a negative result, not a failure.
+        return {"has_difference": False, "type": "none"}
+    print_agent_output(
+        f"Conflict scan returned no usable judgement: {result!r}"[:200],
+        agent="CONFLICT_DETECTOR",
+    )
+    return None
+
+
+# Coverage of the conflict check for the current run. A completed scan that found
+# no difference and a scan that never completed are different facts, and a bare
+# conflict list cannot express the difference. This is a plain counter dict, not
+# a state framework.
+conflict_detector_coverage: dict = {}
+
+
+def _record_coverage(**fields) -> dict:
+    """Replace the coverage record. Never merged, so a stale run cannot leak."""
+    conflict_detector_coverage.clear()
+    conflict_detector_coverage.update(fields)
+    return dict(conflict_detector_coverage)
+
+
+# Per-stage elapsed seconds for this node, so a slow run can be read as scan vs
+# arbitration vs evidence vs re-arbitration instead of one opaque node duration.
+# Plain dict of floats; not a tracing system.
+conflict_stage_timing: dict = {}
+
+
+def _stage(name: str, started: float) -> None:
+    conflict_stage_timing[name] = round(
+        conflict_stage_timing.get(name, 0.0) + (time.monotonic() - started), 2)
+
+
+# Outcomes the scan can report. Anything else is not a completed judgement.
+SCAN_DIFFERENCE = "difference"
+SCAN_NO_DIFFERENCE = "no_difference"
+SCAN_UNSCANNED = "unscanned"
+
+
+def conflict_check_incomplete() -> bool:
+    """Whether any confirmed difference was left without a resolution.
+
+    Two ways the check can be unfinished, and both read as incomplete:
+
+      * the scan never classified a candidate pair, so a difference could not be
+        found; and
+      * the scan DID find a difference but its arbitration produced no row, so a
+        real disagreement was confirmed and then left unresolved.
+
+    The second case must not read as "check complete, no conflicts": the
+    disagreement exists and simply was not adjudicated.
+    """
+    outcomes = getattr(find_contradictions, "last_outcomes", None) or {}
+    if outcomes.get(SCAN_UNSCANNED):
+        return True
+    # A check that never reached a candidate pair (too few sources, too few
+    # comparable claims, or no similar pair) cannot be reported as a completed
+    # "no conflict" result either.
+    early_reason = conflict_detector_coverage.get("reason")
+    if early_reason in ("too_few_comparable_sources", "too_few_high_score_sources",
+                        "no_candidate_pairs"):
+        return True
+    return bool(conflict_detector_coverage.get("pairs_arbitration_failed"))
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
@@ -600,20 +456,51 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     Pipeline: BGE similarity pre-filter → LLM contradiction scan
     (replaces old negation-word matching).
     """
+    # Reset the outcome record for this call so a later reader can never see a
+    # previous call's counts and read an incomplete scan as a clean one.
+    find_contradictions.last_outcomes = {
+        "difference": 0, "no_difference": 0, "unscanned": 0}
+    find_contradictions.last_rejected = {}
+    find_contradictions.last_insufficient_claim = 0
+    # A completed scan with no differences records no coverage of its own; clear
+    # the previous run's diagnostic so a later node cannot read a stale reason.
+    conflict_detector_coverage.clear()
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
+    # Only sources that actually carry a body can supply a comparable claim.
+    # A navigation link or repository-metadata row identifies a source but
+    # asserts nothing, and arbitrating on its title would manufacture a
+    # disagreement between article names. Keep the count visible instead of
+    # silently dropping the ineligible sources.
+    eligible_sources = [s for s in high_score_sources if comparable_claim(s)]
+    find_contradictions.last_insufficient_claim = (
+        len(high_score_sources) - len(eligible_sources))
+    high_score_sources = eligible_sources
     if len(high_score_sources) < 2:
+        _record_coverage(
+            pairs_scanned=0,
+            pairs_arbitrated=0,
+            pairs_evidence=0,
+            scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
+            sources_without_comparable_claim=find_contradictions.last_insufficient_claim,
+            reason="too_few_comparable_sources",
+        )
         return []
 
     titles = [s.get("title", "") for s in high_score_sources]
     embeddings = await asyncio.to_thread(model.encode, titles)
     norms = np.linalg.norm(embeddings, axis=1)
 
-    # Build candidate pairs (BGE similarity — LLM handles semantic filtering)
+    # Candidate pairs (BGE similarity — LLM handles semantic filtering). The
+    # bound is deliberate and unchanged: at most 15 pairs are scanned, ranked by
+    # similarity, so the scan cost stays proportional to the source count rather
+    # than growing with every possible pair.
     candidates: list[tuple[int, int, float]] = []
+    rejected = {"missing_title": 0}
     for i in range(len(high_score_sources)):
         for j in range(i + 1, len(high_score_sources)):
             if not titles[i] or not titles[j]:
+                rejected["missing_title"] += 1
                 continue
             sim = float(np.dot(embeddings[i], embeddings[j]) / (norms[i] * norms[j]))
             if sim < threshold:
@@ -621,40 +508,93 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
             candidates.append((i, j, sim))
 
     if not candidates:
+        print_agent_output(
+            f"No candidate pairs above the similarity threshold "
+            f"(missing_title={rejected['missing_title']})",
+            agent="CONFLICT_DETECTOR",
+        )
+        _record_coverage(
+            pairs_scanned=0,
+            pairs_arbitrated=0,
+            pairs_evidence=0,
+            scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
+            sources_without_comparable_claim=find_contradictions.last_insufficient_claim,
+            reason="no_candidate_pairs",
+        )
         return []
 
-    # Cap at top-15 by similarity to prevent O(n²) explosion with many sources
     candidates.sort(key=lambda x: x[2], reverse=True)
     candidates = candidates[:15]
 
-    # LLM scan in parallel
+    # LLM scan in parallel. A pair the scan could not classify is reported as
+    # unscanned rather than being folded into "no difference": an empty conflict
+    # list must not silently mean "we did not finish looking".
+    outcomes = {"difference": 0, "no_difference": 0, "unscanned": 0}
+
     async def _scan(cand):
         i, j, sim = cand
-        info = await _scan_pair_contradiction(
-            high_score_sources[i], high_score_sources[j], query_topic,
-            usage=usage,
-        )
-        return (i, j, sim, info) if info else None
+        try:
+            info = await _scan_pair_contradiction(
+                high_score_sources[i], high_score_sources[j], query_topic,
+                usage=usage,
+            )
+        except Exception as exc:
+            print_agent_output(
+                f"Conflict scan error for pair ({i},{j}): {exc}",
+                agent="CONFLICT_DETECTOR",
+            )
+            return (i, j, sim, None, "unscanned")
+        if info is None:
+            return (i, j, sim, None, "unscanned")
+        if not info.get("has_difference"):
+            return (i, j, sim, None, "no_difference")
+        return (i, j, sim, info, "difference")
 
     print_agent_output(
         f"LLM scanning {len(candidates)} candidate pairs for contradictions",
         agent="CONFLICT_DETECTOR",
     )
+    _scan_started = time.monotonic()
     scan_results = await asyncio.gather(*[_scan(c) for c in candidates])
+    _stage("scan_s", _scan_started)
 
     pairs = []
     for r in scan_results:
-        if r is not None:
-            i, j, sim, info = r
-            pairs.append({
-                "source_a": high_score_sources[i],
-                "source_b": high_score_sources[j],
-                "similarity": round(sim, 3),
-                "difference_type": info.get("type", "unknown"),
-                "difference_explanation": info.get("explanation", ""),
-            })
+        i, j, sim, info, outcome = r
+        outcomes[outcome] += 1
+        if outcome != "difference":
+            continue
+        pairs.append({
+            "source_a": high_score_sources[i],
+            "source_b": high_score_sources[j],
+            "similarity": round(sim, 3),
+            "difference_type": info.get("type", "unknown"),
+            "difference_explanation": info.get("explanation", ""),
+        })
+
+    if outcomes["unscanned"]:
+        # Visible incompleteness: these pairs were never classified, so the
+        # conflict list is partial. Reported rather than passed off as clean.
+        print_agent_output(
+            f"WARNING: {outcomes['unscanned']} pair(s) were not scanned; "
+            f"the conflict list is incomplete",
+            agent="CONFLICT_DETECTOR",
+        )
+    print_agent_output(
+        f"Scan outcomes: differences={outcomes['difference']} "
+        f"no_difference={outcomes['no_difference']} "
+        f"unscanned={outcomes['unscanned']}",
+        agent="CONFLICT_DETECTOR",
+    )
+    find_contradictions.last_outcomes = dict(outcomes)
+    find_contradictions.last_rejected = dict(rejected)
 
     return pairs
+
+
+find_contradictions.last_outcomes = {}
+find_contradictions.last_rejected = {}
+find_contradictions.last_insufficient_claim = 0
 
 
 # ---------------------------------------------------------------------------
@@ -681,10 +621,42 @@ class ConflictDetectorAgent:
         local_usage: list = []
         pairs = await find_contradictions(source_scores, query_topic=query, usage=local_usage)
         if not pairs:
-            print_agent_output("No contradictory pairs found after LLM scan", agent="CONFLICT_DETECTOR")
+            outcomes = dict(getattr(find_contradictions, "last_outcomes", {}))
+            # Keep the diagnostic recorded by an early return (too few sources /
+            # too few comparable claims / no candidate pairs); a completed scan
+            # with no differences has no earlier reason.
+            diagnostic_reason = (
+                dict(conflict_detector_coverage).get("reason") or "no_pairs_confirmed")
+            check = _record_coverage(
+                # The scan did run; the count comes from what it classified.
+                # Reporting 0 here would say no pair was ever examined.
+                pairs_scanned=(int(outcomes.get(SCAN_DIFFERENCE, 0))
+                               + int(outcomes.get(SCAN_NO_DIFFERENCE, 0))
+                               + int(outcomes.get(SCAN_UNSCANNED, 0))),
+                pairs_arbitrated=0,
+                pairs_evidence=0,
+                scan_outcomes=outcomes,
+                sources_without_comparable_claim=(
+                    getattr(find_contradictions, "last_insufficient_claim", 0)),
+                reason=diagnostic_reason,
+            )
+            incomplete = conflict_check_incomplete()
+            print_agent_output(
+                f"No confirmed contradictory pairs "
+                f"(scan {outcomes}, incomplete={incomplete})",
+                agent="CONFLICT_DETECTOR",
+            )
             return {
                 "conflicts": [],
-                "quality_signals": [{"agent": "conflict_detector", "conflicts_found": 0, "resolved_count": 0}],
+                "conflict_check": check,
+                "quality_signals": [{
+                    "agent": "conflict_detector",
+                    "conflicts_found": 0,
+                    "resolved_count": 0,
+                    "scan_no_difference": outcomes.get(SCAN_NO_DIFFERENCE, 0),
+                    "scan_unscanned": outcomes.get(SCAN_UNSCANNED, 0),
+                    "conflict_check_incomplete": incomplete,
+                }],
                 "token_usage": research_state.get("token_usage", [])
                 + [summarize_usage("conflict_detector", local_usage)],
             }
@@ -695,21 +667,48 @@ class ConflictDetectorAgent:
         )
 
         def _make_prompt(a: dict, b: dict) -> list[dict]:
+            claim_a = comparable_claim(a)
+            claim_b = comparable_claim(b)
             return [
                 {"role": "system", "content": ARBITRATION_SYSTEM},
                 {"role": "user", "content": (
                     f"## Topic\n{query}\n\n"
-                    f"## Source A (score: {a['total_score']}/10, authority: {a['scores']['authority']}, evidence: {a.get('evidence_type', 'citation')})\nClaim: {a.get('title', '')}\n\n"
-                    f"## Source B (score: {b['total_score']}/10, authority: {b['scores']['authority']}, evidence: {b.get('evidence_type', 'citation')})\nClaim: {b.get('title', '')}"
+                    f"## Source A\nTitle: {a.get('title', '')}\n"
+                    f"Score: {a['total_score']}/10, authority: {a['scores']['authority']}, "
+                    f"evidence: {a.get('evidence_type', 'citation')}\n"
+                    f"Claim excerpt: {claim_a}\n\n"
+                    f"## Source B\nTitle: {b.get('title', '')}\n"
+                    f"Score: {b['total_score']}/10, authority: {b['scores']['authority']}, "
+                    f"evidence: {b.get('evidence_type', 'citation')}\n"
+                    f"Claim excerpt: {claim_b}"
                 )},
             ]
 
+        def _cited_source(src: dict) -> dict:
+            """The claim's source, keeping what the renderer needs to judge it.
+
+            The marker says whether a body was collected; the snippet is the body.
+            Dropping either one made has_factual_content fall back to an empty
+            string and brand an ordinary evidence source as carrying no body.
+            """
+            entry = {"url": src["url"], "title": src.get("title", ""),
+                     "score": src["total_score"]}
+            if "has_body" in src:
+                entry["has_body"] = src["has_body"]
+            snippet = src.get("snippet")
+            if snippet:
+                entry["snippet"] = snippet
+            return entry
+
         def _build_conflict(pair: dict, result: dict, model: str = "flash") -> dict:
             return {
-                "claim_a": pair["source_a"].get("title", ""),
-                "claim_b": pair["source_b"].get("title", ""),
-                "source_a": {"url": pair["source_a"]["url"], "score": pair["source_a"]["total_score"]},
-                "source_b": {"url": pair["source_b"]["url"], "score": pair["source_b"]["total_score"]},
+                # The stored claim is the comparable body excerpt, not the
+                # source title. The source identity travels separately below,
+                # so a report can show what was compared and where it came from.
+                "claim_a": comparable_claim(pair["source_a"]),
+                "claim_b": comparable_claim(pair["source_b"]),
+                "source_a": _cited_source(pair["source_a"]),
+                "source_b": _cited_source(pair["source_b"]),
                 "similarity": pair["similarity"],
                 "resolution": result.get("resolution", "insufficient_data"),
                 "confidence": result.get("confidence", "low"),
@@ -721,129 +720,138 @@ class ConflictDetectorAgent:
                 "difference_explanation": pair.get("difference_explanation", ""),
             }
 
-        # --- Stage 1: Flash arbitration (parallel) ---
-        async def _arbitrate_one(pair: dict) -> dict:
+        # A pair is arbitrated once on titles, and the single ambiguous pair is
+        # then arbitrated once more with gathered evidence. That second call is
+        # the only one whose input actually differs from the first. The removed
+        # work is the pair being judged twice on identical titles.
+        async def _arbitrate_one(pair: dict, evidence: str = "") -> dict:
             det = _deterministic_arbitration(pair["source_a"], pair["source_b"])
             if det is not None:
+                # The deterministic rule decides from scores alone and needs no
+                # evidence, so it must not pay the multi-search cost.
                 return _build_conflict(pair, det, model="deepseek-flash(rule)")
+            source_a = pair["source_a"]
+            source_b = pair["source_b"]
+            if evidence:
+                note = f"\n\n[Evidence from additional search: {evidence}]"
+                source_a = dict(source_a, title=f"{source_a.get('title', '')}{note}")
+                source_b = dict(source_b, title=f"{source_b.get('title', '')}{note}")
             async with FLASH_SEM:
                 result = await call_model(
-                    _make_prompt(pair["source_a"], pair["source_b"]),
+                    _make_prompt(source_a, source_b),
                     model="deepseek-flash", tag="conflict_arbitration",
                     response_format="json",
                     usage=local_usage,
                 )
             return _build_conflict(pair, result, model="deepseek-flash")
 
+        _arb_started = time.monotonic()
         raw_conflicts = await asyncio.gather(
             *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
         )
+        _stage("initial_arbitration_s", _arb_started)
 
         conflicts = []
-        low_confidence_pairs = []
+        # Track the pair index alongside its conflict row, so a later stage can
+        # address the original pair. Using the position inside `conflicts` would
+        # be off by the number of failed arbitrations, spending the single
+        # evidence slot on a pair that had already failed.
+        conflict_pairs = []
+        low_confidence = []
+        failed_arbitrations = 0
         for pair, result in zip(pairs, raw_conflicts):
-            if isinstance(result, BudgetError):
-                raise result
             if isinstance(result, Exception):
-                print_agent_output("Flash arbitration failed", agent="CONFLICT_DETECTOR")
+                print_agent_output(
+                    f"Arbitration failed: {result}", agent="CONFLICT_DETECTOR")
+                failed_arbitrations += 1
                 continue
             conflicts.append(result)
-            if result["confidence"] == "low":
-                low_confidence_pairs.append(pair)
+            conflict_pairs.append(pair)
+            if result.get("confidence") == "low":
+                low_confidence.append(len(conflicts) - 1)
 
-        # Cap evidence gathering at top-1 most ambiguous pair (sorted by confidence gap)
-        low_confidence_pairs = low_confidence_pairs[:1]
-
-        # --- Stage 2: Evidence gathering + pro re-arbitration (parallel) ---
-        if low_confidence_pairs and self.gather_evidence:
+        # Evidence gathering stays bounded exactly as before: the single most
+        # ambiguous pair only.
+        evidence_pairs = low_confidence[:1] if self.gather_evidence else []
+        if not self.gather_evidence and low_confidence:
             print_agent_output(
-                f"Evidence-gathering re-arbitration: {len(low_confidence_pairs)} pair(s)",
+                f"Evidence gathering disabled: {len(low_confidence)} ambiguous pair(s)",
                 agent="CONFLICT_DETECTOR",
             )
-            sem = asyncio.Semaphore(3)  # Evidence gathering is heavy (multi-API per pair)
+        for index in evidence_pairs:
+            pair = conflict_pairs[index]
+            evidence = ""
+            _ev_started = time.monotonic()
+            try:
+                evidence = await _gather_evidence(
+                    topic=query,
+                    claim_a=comparable_claim(pair["source_a"]),
+                    claim_b=comparable_claim(pair["source_b"]),
+                    usage=local_usage,
+                )
+            except Exception as e:
+                print_agent_output(
+                    f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
+            finally:
+                _stage("evidence_gathering_s", _ev_started)
+            if not evidence:
+                continue
+            _re_started = time.monotonic()
+            try:
+                revised = await _arbitrate_one(pair, evidence)
+            except Exception as e:
+                print_agent_output(
+                    f"Evidence arbitration failed: {e}", agent="CONFLICT_DETECTOR")
+                continue
+            finally:
+                _stage("re_arbitration_s", _re_started)
+            revised["evidence_collected"] = evidence[:500]
+            conflicts[index] = revised
 
-            async def _re_arbitrate(idx: int, pair: dict) -> int | None:
-                async with sem:
-                    a = pair["source_a"]
-                    b = pair["source_b"]
-                    evidence = ""
-                    try:
-                        evidence = await _gather_evidence(
-                            topic=query,
-                            claim_a=a.get("title", ""),
-                            claim_b=b.get("title", ""),
-                            usage=local_usage,
-                        )
-                    except BudgetError:
-                        raise
-                    except Exception:
-                        print_agent_output("Evidence gathering failed", agent="CONFLICT_DETECTOR")
+        coverage = {
+            "pairs_scanned": len(pairs),
+            "pairs_arbitrated": len(conflicts),
+            "pairs_evidence": len(evidence_pairs),
+            # A scan-confirmed pair whose arbitration failed produced no conflict
+            # row. Recorded so the loss is visible instead of looking like the
+            # scan never found anything.
+            "pairs_arbitration_failed": failed_arbitrations,
+            "scan_outcomes": dict(getattr(find_contradictions, "last_outcomes", {})),
+            # Sources that could not supply a comparable claim (navigation or
+            # repository metadata). They are not silently treated as agreeing.
+            "sources_without_comparable_claim": (
+                getattr(find_contradictions, "last_insufficient_claim", 0)),
+            # Where this node's time went, so a slow run reads as scan vs
+            # arbitration vs evidence vs re-arbitration.
+            "stage_timing_s": dict(conflict_stage_timing),
+        }
+        conflict_detector_coverage.clear()
+        conflict_detector_coverage.update(coverage)
 
-                    enriched_claim_a = a.get("title", "")
-                    enriched_claim_b = b.get("title", "")
-                    if evidence:
-                        enriched_claim_a = (
-                            f"{a.get('title', '')}\n\n"
-                            f"[Evidence from additional search: {evidence}]"
-                        )
-                        enriched_claim_b = (
-                            f"{b.get('title', '')}\n\n"
-                            f"[Evidence from additional search: {evidence}]"
-                        )
-
-                    enriched_a = dict(a, title=enriched_claim_a)
-                    enriched_b = dict(b, title=enriched_claim_b)
-
-                    try:
-                        async with QW_SEM:
-                            qw_result = await call_model(
-                                _make_prompt(enriched_a, enriched_b),
-                                model="qwen-flash", tag="conflict_rearbitration",
-                                response_format="json",
-                                timeout=300.0,
-                                usage=local_usage,
-                            )
-                    except BudgetError:
-                        raise
-                    except Exception:
-                        print_agent_output("Pro re-arbitration failed", agent="CONFLICT_DETECTOR")
-                        return None
-
-                    qw_conflict = _build_conflict(pair, qw_result, model="qwen-flash+evidence")
-                    qw_conflict["evidence_collected"] = evidence[:500] if evidence else ""
-                    return idx, qw_conflict
-
-            re_results = await asyncio.gather(
-                *[_re_arbitrate(i, p) for i, p in enumerate(low_confidence_pairs)],
-                return_exceptions=True,
-            )
-            for r in re_results:
-                if isinstance(r, BudgetError):
-                    raise r
-                if isinstance(r, Exception):
-                    continue
-                if r is not None:
-                    idx, qw_conflict = r
-                    if idx < len(conflicts):
-                        conflicts[idx] = qw_conflict
-        elif low_confidence_pairs:
-            print_agent_output(
-                f"Skipping evidence gathering (disabled): {len(low_confidence_pairs)} pair(s)",
-                agent="CONFLICT_DETECTOR",
-            )
-
-        resolved_count = sum(
-            1 for c in conflicts
-            if c.get("resolution") not in ("insufficient_data", None)
-        )
         return {
             "conflicts": conflicts,
+            "conflict_check": dict(conflict_detector_coverage),
             "quality_signals": [{
                 "agent": "conflict_detector",
                 "conflicts_found": len(conflicts),
-                "resolved_count": resolved_count,
-                "unresolved_count": len(conflicts) - resolved_count,
+                "resolved_count": sum(
+                    1 for c in conflicts
+                    if c.get("resolution") not in ("insufficient_data", None)
+                ),
+                "unresolved_count": sum(
+                    1 for c in conflicts
+                    if c.get("resolution") in ("insufficient_data", None)
+                ),
+                # Pairs the scan could not classify, so partial coverage stays
+                # visible instead of looking like a clean empty result.
+                "scan_unscanned": coverage["scan_outcomes"].get(SCAN_UNSCANNED, 0),
+                "scan_no_difference": coverage["scan_outcomes"].get(SCAN_NO_DIFFERENCE, 0),
+                "sources_without_comparable_claim": coverage.get(
+                    "sources_without_comparable_claim", 0),
+                "conflict_check_incomplete": conflict_check_incomplete(),
+                "pairs_arbitrated": len(conflicts),
             }],
             "token_usage": research_state.get("token_usage", [])
             + [summarize_usage("conflict_detector", local_usage)],
         }
+

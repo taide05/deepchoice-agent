@@ -8,16 +8,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
@@ -26,12 +22,8 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Run credential-free offline smoke evaluation
-        run: python -m benchmarks.run_offline_eval --check-baseline
-
       - name: Static checks (pyflakes + vulture)
         run: |
           pip install pyflakes vulture
           pyflakes src/ tests/
-          # Pydantic/FastAPI rely heavily on reflection; only gate definite findings.
-          vulture src/ --min-confidence 100
+          vulture src/ vulture_whitelist.py

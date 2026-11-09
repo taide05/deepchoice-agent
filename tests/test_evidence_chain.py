@@ -2,7 +2,14 @@ from deepchoice.agents.evidence_chain import build_evidence_chain
 
 
 class TestBuildEvidenceChain:
-    def test_strong_evidence_when_high_score_and_supporting(self):
+    """A retrieval hit is a source record, not a finding.
+
+    The builder used to turn each scored result into a "conclusion" (its title)
+    with an "evidence strength" derived from the metadata score, presenting a
+    search result as an established judgment. The score ranks retrieval only.
+    """
+
+    def test_high_score_does_not_become_strong_evidence(self):
         scores = [{
             "url": "https://docs.example.com",
             "title": "Feature X is production-ready",
@@ -12,10 +19,32 @@ class TestBuildEvidenceChain:
         }]
         chains = build_evidence_chain(scores, [])
         assert len(chains) == 1
-        assert chains[0]["evidence_strength"] == "strong"
+        assert chains[0]["evidence_strength"] == "unknown"
+        assert chains[0]["conclusion"] == ""
+        assert chains[0]["retrieval_score"] == 8.5
         assert chains[0]["disputed"] is False
 
-    def test_moderate_evidence(self):
+    def test_page_fetch_provenance_travels_with_the_source(self):
+        scores = [{
+            "url": "https://docs.example.com", "title": "Docs",
+            "snippet": "bounded body", "total_score": 8.5,
+            "has_body": True, "body_url": "https://docs.example.com/canonical",
+            "body_page_chars": 400, "body_stored_chars": 100,
+            "body_page_truncated": False, "body_stored_truncated": True,
+            "body_truncated": True, "body_admission": "prose_ok",
+            "fetch_status": "body",
+        }]
+        source = build_evidence_chain(scores, [])[0]["sources"][0]
+        assert source["body_url"] == "https://docs.example.com/canonical"
+        assert source["body_page_chars"] == 400
+        assert source["body_stored_chars"] == 100
+        assert source["body_page_truncated"] is False
+        assert source["body_stored_truncated"] is True
+        assert source["body_admission"] == "prose_ok"
+        assert source["body_truncated"] is True
+        assert source["fetch_status"] == "body"
+
+    def test_mid_score_does_not_become_moderate_evidence(self):
         scores = [{
             "url": "https://blog.example.com",
             "title": "Feature Y works well",
@@ -24,9 +53,10 @@ class TestBuildEvidenceChain:
             "supporting_sources": [],
         }]
         chains = build_evidence_chain(scores, [])
-        assert chains[0]["evidence_strength"] == "moderate"
+        assert chains[0]["evidence_strength"] == "unknown"
+        assert chains[0]["retrieval_score"] == 7.0
 
-    def test_weak_evidence_when_low_score(self):
+    def test_low_score_still_records_the_retrieval_priority(self):
         scores = [{
             "url": "https://blog.example.com",
             "title": "Feature Y might work",
@@ -35,7 +65,22 @@ class TestBuildEvidenceChain:
             "supporting_sources": [],
         }]
         chains = build_evidence_chain(scores, [])
-        assert chains[0]["evidence_strength"] == "weak"
+        assert chains[0]["evidence_strength"] == "unknown"
+        assert chains[0]["retrieval_score"] == 5.0
+
+    def test_provenance_is_carried_with_the_source(self):
+        scores = [{
+            "url": "file:///kb/x.md",
+            "title": "local doc",
+            "snippet": "body",
+            "total_score": 6.0,
+            "supporting_sources": [],
+            "provenance": "benchmark_ground_truth",
+            "channel": "local_kb",
+        }]
+        chains = build_evidence_chain(scores, [])
+        assert chains[0]["sources"][0]["provenance"] == "benchmark_ground_truth"
+        assert chains[0]["sources"][0]["channel"] == "local_kb"
 
     def test_filters_out_very_low_scores(self):
         scores = [{

@@ -1,13 +1,11 @@
 from .arxiv_api import ArxivSearch
-from .base import BaseRetriever
 from .chroma_kb import ChromaKB
 from .community import CommunitySearch
-from .contracts import RetrievalRequest, RetrievalResult, RetrieverPort
 from .github_api import GitHubSearch
 from .official import OfficialSearch
 from .tavily_search import TavilySearch
 
-RETRIEVER_REGISTRY: dict[str, type[BaseRetriever]] = {
+RETRIEVER_REGISTRY = {
     "tavily": TavilySearch,
     "chroma": ChromaKB,
     "github": GitHubSearch,
@@ -24,8 +22,4 @@ __all__ = [
     "GitHubSearch",
     "OfficialSearch",
     "TavilySearch",
-    "RetrievalRequest",
-    "RetrievalResult",
-    "RetrieverPort",
-    "BaseRetriever",
 ]

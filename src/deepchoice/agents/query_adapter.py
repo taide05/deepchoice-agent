@@ -1,4 +1,5 @@
-from ..budget_errors import BudgetError
+import re
+
 from ..utils.llm import call_model, summarize_usage
 from ..utils.views import print_agent_output
 
@@ -16,7 +17,6 @@ For EACH sub-question, generate 6 query variants:
 Language: Detect query language. Generate adapted queries in that language where the source supports it (Tavily/chroma). For English-only sources (arxiv/github/official), use English technical terms.
 
 Rules:
-- For open-ended sub-questions (no "vs"/"versus", no named candidate technologies): first enumerate 3-5 mainstream candidate technologies that plausibly satisfy the question, then generate every retriever query naming those candidates — official/github/arxiv especially need concrete tech names to retrieve anything.
 - Each variant MUST be specific and searchable
 - Include version numbers or years where relevant
 - If a sub-question doesn't fit a particular retriever type, still generate the best possible query
@@ -25,6 +25,33 @@ Return ONLY a JSON object:
 {"adapted": [{"sub_question_index": 0, "sub_question": "...", "tavily": "...", "arxiv": "...", "github": "...", "chroma": "...", "community": "...", "official": "..."}]}"""
 
 RETRIEVER_KEYS = ["tavily", "arxiv", "github", "chroma", "community", "official"]
+
+
+def ensure_candidate_query_coverage(adapted_queries: dict[str, list[str]],
+                                    candidate_techs: list[str]) -> bool:
+    """Guarantee one comparison query that names every declared candidate.
+
+    The LLM adapter can emit queries for sub-questions that mention only one
+    side (or neither); retrieval then has no deterministic coverage of the other
+    candidate. This adds one combined Tavily query only when a candidate is
+    absent from the whole adapted set. It is not a source alias or an answer.
+    """
+    candidates = [str(c).strip() for c in (candidate_techs or []) if str(c).strip()]
+    if not candidates:
+        return False
+    existing = " ".join(adapted_queries.get("tavily", [])).lower()
+
+    def _covered(candidate: str) -> bool:
+        tokens = [t for t in re.split(r"[^a-z0-9.+#-]+", candidate.lower())
+                  if len(t) >= 3]
+        return bool(tokens) and all(token in existing for token in tokens)
+
+    if all(_covered(candidate) for candidate in candidates):
+        return False
+    addition = (" vs ".join(candidates)
+                + " official documentation architecture deployment constraints limitations")
+    adapted_queries.setdefault("tavily", []).append(addition)
+    return True
 
 
 class QueryAdapterAgent:
@@ -36,6 +63,7 @@ class QueryAdapterAgent:
     async def run(self, research_state: dict) -> dict:
         task = research_state["task"]
         sub_questions = research_state.get("sub_questions", [])
+
         # On retry, knowledge_gaps are the new adaptation targets
         knowledge_gaps = research_state.get("knowledge_gaps", [])
         if knowledge_gaps and research_state.get("retry_count", 0) > 0:
@@ -44,13 +72,6 @@ class QueryAdapterAgent:
                 f"Retry adaptation: targeting {len(knowledge_gaps)} knowledge gaps",
                 agent="QUERY_ADAPTER",
             )
-
-        # A user's explicit answer must survive the retry targeting above.
-        supplemental_input = research_state.get("_supplemental_input")
-        if isinstance(supplemental_input, str) and supplemental_input.strip():
-            supplement = supplemental_input.strip()
-            if supplement not in sub_questions:
-                sub_questions = [*sub_questions, supplement]
 
         if not sub_questions:
             return {
@@ -73,14 +94,10 @@ class QueryAdapterAgent:
         local_usage: list = []
         try:
             result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="query_adapter",
-                                      usage=local_usage, seed=0)
+                                      usage=local_usage)
             adapted_items = result.get("adapted", [])
-        except BudgetError:
-            raise
-        except Exception:
-            print_agent_output(
-                "Query adaptation failed; using raw sub_questions", agent="QUERY_ADAPTER"
-            )
+        except Exception as e:
+            print_agent_output(f"Query adaptation failed: {e}, using raw sub_questions", agent="QUERY_ADAPTER")
             adapted_items = []
 
         # Build adapted_queries dict: {retriever_name: [query_strings]}
@@ -97,11 +114,15 @@ class QueryAdapterAgent:
             if not adapted_queries[key]:
                 adapted_queries[key] = sub_questions
 
+        candidate_coverage_added = ensure_candidate_query_coverage(
+            adapted_queries, task.get("candidate_techs") or [])
+
         quality_signals = [{
             "agent": "query_adapter",
             "adapted_count": len(adapted_items),
             "covered_retrievers": [k for k in RETRIEVER_KEYS if adapted_queries.get(k)],
             "fallback_retrievers": [k for k in RETRIEVER_KEYS if not adapted_queries.get(k)],
+            "candidate_coverage_query_added": candidate_coverage_added,
         }]
 
         return {
