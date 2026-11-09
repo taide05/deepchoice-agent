@@ -6,7 +6,7 @@ The model may emit a substantive conditional recommendation with a bad
 conditional whose own branch text names at least two declared candidates.
 """
 from deepchoice.agents.conclusion_synthesizer import normalize_decision
-from deepchoice.utils.decision import CONDITIONAL, INSUFFICIENT, INVALID, RECOMMENDED
+from deepchoice.utils.decision import CONDITIONAL, INSUFFICIENT, INVALID
 
 
 BASE = {

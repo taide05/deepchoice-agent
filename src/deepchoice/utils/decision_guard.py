@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import copy
 
-from .claim_support import claim_support_flags, decisive_claim_support
+from .claim_support import claim_support_flags
 
 _ZH_MARKER = "证据强度提示"
 _EN_MARKER = "evidence-strength guard"

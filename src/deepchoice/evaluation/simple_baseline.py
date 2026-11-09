@@ -14,7 +14,7 @@ import contextlib
 import contextvars
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ..agents import conclusion_synthesizer as cs
 from ..agents import conflict_detector as cd

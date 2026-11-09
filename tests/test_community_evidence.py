@@ -4,7 +4,6 @@ No live network is used here; the HTTP client is a small fake. The feature is
 opt-in via COMMUNITY_RETRIEVAL_MODE, so the legacy tests remain the default-path
 guard.
 """
-import asyncio
 
 import pytest
 

@@ -1,7 +1,5 @@
 """Offline tests for the bounded page probe and downstream identity path."""
 import asyncio
-import json
-import pathlib
 
 from deepchoice.evaluation import page_probe
 

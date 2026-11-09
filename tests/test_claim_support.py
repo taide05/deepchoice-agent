@@ -1,6 +1,4 @@
 """Tests for the deterministic decisive-claim support audit."""
-import json
-from pathlib import Path
 
 from deepchoice.utils.claim_support import (
     claim_support_flags,

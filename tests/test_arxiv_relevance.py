@@ -1,5 +1,4 @@
 """D2: arXiv domain gating and candidate-relevance filter."""
-import asyncio
 
 import pytest
 

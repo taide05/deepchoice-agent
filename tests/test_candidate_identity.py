@@ -12,7 +12,6 @@ an official source.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import pathlib
 
@@ -256,7 +255,6 @@ class TestNavigationLinksAreNotCitable:
         'NO CONTENT RETRIEVED — …' sentence, so every body-less official source
         stayed citable through the numbered path.
         """
-        from deepchoice.retrievers.official import OfficialSearch
 
         entry = {"url": "https://www.postgresql.org/docs/",
                  "title": "PostgreSQL — Official Documentation",
@@ -564,7 +562,6 @@ class TestBodyLessSourcesAcrossEveryRoute:
         as body-less. A test that hand-builds the conflicts dict never executes
         that function, so it would pass even if the snippet were stripped again.
         """
-        import asyncio
 
         from deepchoice.agents import conflict_detector as cd
         from deepchoice.utils.candidate_identity import has_factual_content

@@ -960,7 +960,6 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
 
         recommendation = copy.deepcopy(recommendation)
         prior = _normalize_confidence(recommendation.get("confidence"))
-        prior_rationale = str(recommendation.get("confidence_rationale") or "").strip()
         if review_usable:
             # Revisions are resolved with the same numbered source registry the
             # reviewer read, so a number the reviewer cites means the source it saw,

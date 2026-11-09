@@ -6,6 +6,8 @@ observed in that run, not a synthetic stand-in.
 """
 from __future__ import annotations
 
+import importlib.util
+
 import asyncio
 import json
 import pathlib
@@ -140,7 +142,6 @@ class TestBenchmarkAnswersAreNotResearchBasis:
             assert "**Provenance**: benchmark ground-truth answer" in text, path.name
 
     def test_the_generator_writes_into_the_benchmark_directory(self):
-        import importlib.util
 
         path = pathlib.Path(r"D:\deepchoice-precodex\chroma_kb\populate_benchmark_kb.py")
         spec = importlib.util.spec_from_file_location("populate_benchmark_kb", path)
@@ -150,7 +151,6 @@ class TestBenchmarkAnswersAreNotResearchBasis:
         assert "benchmark ground-truth answer" in mod.PROVENANCE_LINE
 
     def test_the_ingest_records_provenance_and_channel(self):
-        import importlib.util
 
         path = pathlib.Path(r"D:\deepchoice-precodex\chroma_kb\setup.py")
         source = path.read_text(encoding="utf-8")

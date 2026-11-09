@@ -6,7 +6,6 @@ cover the experiment switches used by the off-peak A/B validation.
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-import pytest
 
 from deepchoice.agents import self_reviewer as sr
 from deepchoice.utils.candidate_identity import shared_evidence_package

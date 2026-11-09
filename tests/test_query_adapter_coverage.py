@@ -1,7 +1,6 @@
 """Comparative query coverage is deterministic even when the LLM omits a side."""
 import asyncio
 
-import pytest
 
 from deepchoice.agents import query_adapter as qa
 

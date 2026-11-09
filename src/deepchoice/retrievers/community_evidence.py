@@ -363,7 +363,7 @@ def build_pack(question: dict, answers: list[dict], comments: list[dict]) -> dic
     q_body = _truncate(_clean_text(question.get("body") or ""), QUESTION_BODY_LIMIT)
     date = _pack_date(question)
     lines = [
-        f"社区讨论（Stack Overflow，非官方；下列内容为作者/评论者观点，不是官方事实）",
+        "社区讨论（Stack Overflow，非官方；下列内容为作者/评论者观点，不是官方事实）",
         f"问题：{title}",
         f"问题评分 {int(question.get('score') or 0)}；回答数 {int(question.get('answer_count') or 0)}；"
         f"最后活动 {date or '未知'}",

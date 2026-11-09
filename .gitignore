@@ -50,6 +50,7 @@ tavily_key_state.json
 # logs & tool caches
 *.log
 .env.*
+!.env.example
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

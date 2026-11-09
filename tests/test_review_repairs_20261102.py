@@ -4,7 +4,6 @@ Each test pins one root cause found while reviewing the frozen 200 reports and
 replayed offline; none of them needs a network or model call.
 """
 from deepchoice.agents.conclusion_synthesizer import (
-    build_source_registry,
     resolve_text_with_sources,
 )
 from deepchoice.agents.report_generator import render_report

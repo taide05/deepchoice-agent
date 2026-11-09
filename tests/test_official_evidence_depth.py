@@ -2,7 +2,6 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-import pytest
 
 from deepchoice.agents.query_analyzer import QueryAnalyzerAgent
 from deepchoice.retrievers.official import _derived_doc_links

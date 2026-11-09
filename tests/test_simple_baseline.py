@@ -163,7 +163,7 @@ def test_budget_argument_controls_actual_synthesis_prompt():
 
     out = asyncio.run(run_baseline(
         state, call_model_fn=_fake("tight"), budget_chars=500))
-    default_out = asyncio.run(run_baseline(
+    asyncio.run(run_baseline(
         state, call_model_fn=_fake("default")))
     assert out["evidence_package"]["budget_chars"] == 500
     assert len(out["evidence_package"]["views"][1]["text"]) <= 500

@@ -33,7 +33,7 @@ def test_generic_source_title_uses_url_path_for_display():
     label = source_display_title(src)
     assert label.startswith("Medium — ")
     assert "@author/poetry-vs-uv-2025" in label
-    assert report_quality_flags(f"- [Medium](https://medium.com/@author/poetry-vs-uv-2025)") \
+    assert report_quality_flags("- [Medium](https://medium.com/@author/poetry-vs-uv-2025)") \
         == ["generic_source_label"]
 
 

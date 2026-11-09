@@ -305,7 +305,7 @@ class TestAdjacentAndRepeatedCitations:
 
     def test_repeating_the_same_citation_is_collapsed_not_a_gap(self):
         chains = _chains(_source(PLAIN_TITLE, "body", "https://x"))
-        for text in (f"x [[1]] [[1]] y",
+        for text in ("x [[1]] [[1]] y",
                      f"x [Source: {PLAIN_TITLE}] [Source: {PLAIN_TITLE}] y"):
             resolved = cs.resolve_text(text, registry=cs.build_source_registry(chains))
             assert resolved.count(f"[Source: {PLAIN_TITLE}]") == 1, (text, resolved)
@@ -649,7 +649,7 @@ class TestSelfReviewInput:
         binding = out["final_recommendation"][cs.CITATION_SOURCES_KEY][locator][0]
         assert binding["url"] == \
             "https://opentelemetry.io/zh/docs/security/handling-sensitive-data"
-        assert f"[Source: 处理敏感数据 | OpenTelemetry]" in out["report"]
+        assert "[Source: 处理敏感数据 | OpenTelemetry]" in out["report"]
         used = used_sources(out["final_recommendation"],
                             fixture["evidence_chains"])
         assert any(src["url"] == binding["url"] for src in used)

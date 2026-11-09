@@ -327,7 +327,6 @@ def extract_page_document(value: str, *, truncated: bool,
     link_ratio = (parser.link_chars / total_chars) if total_chars else 1.0
     control_ratio = (parser.control_chars / total_chars) if total_chars else 1.0
     main_chars = sum(len(block) for block in selected)
-    content_ratio = (main_chars / total_chars) if total_chars else 0.0
     if selected and main_chars >= 120 and link_ratio <= 0.25 \
             and control_ratio <= 0.20:
         page_role = ("prose_document" if (prose_ratio >= 0.15

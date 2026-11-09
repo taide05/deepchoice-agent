@@ -1,6 +1,5 @@
 """The pair window caps each arm and the remaining total without resetting counts."""
 import asyncio
-import time
 
 import pytest
 

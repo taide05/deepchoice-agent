@@ -26,4 +26,4 @@ jobs:
         run: |
           pip install pyflakes vulture
           pyflakes src/ tests/
-          vulture src/
+          vulture src/ vulture_whitelist.py

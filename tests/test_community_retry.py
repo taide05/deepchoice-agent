@@ -1,5 +1,4 @@
 """Community (StackExchange) outbound-channel retry."""
-import asyncio
 
 import pytest
 
