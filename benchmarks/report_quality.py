@@ -1,12 +1,21 @@
-"""Deterministic report quality checklist — replaces unreliable LLM-as-Judge.
+"""Deterministic structural report checklist — not a content-quality metric.
 
-Five binary checks, no LLM calls. Computable in <1s per report, 100% reproducible.
+Five binary structural/keyword checks, no LLM calls. Computable in <1s per
+report and reproducible, but they only say whether a report contains a winner
+string, at least three citation links, both sides, a limitation keyword and
+three dimensions. They do NOT verify semantic support, answer completeness,
+source applicability, correctness or safety, and the A/B/C/D value must not be
+reported as "report quality", "deliverable", "production-ready" or a pass rate.
 
-Quality grades:
-  A = 5/5  — production-ready report
-  B = 4/5  — solid, minor gaps
-  C = 3/5  — usable but missing key elements
-  D = ≤2/5 — incomplete or unreliable
+Structural checklist grades (scope: structural checks only):
+  A = 5/5 structural checks present
+  B = 4/5 structural checks present
+  C = 3/5 structural checks present
+  D = ≤2/5 structural checks present
+
+The maintained content protocol is docs/product-effectiveness-optimization.md in
+the maintenance worktree; historical benchmark numbers that used this checklist
+remain historical values and are not rewritten by this distinction.
 """
 
 from __future__ import annotations
@@ -140,15 +149,17 @@ def grade(pass_count: int) -> str:
 
 
 def evaluate_report(report: str, tech_a: str = "", tech_b: str = "") -> dict[str, Any]:
-    """Run all 5 quality checks on a single report.
+    """Run the 5 structural checklist checks on a single report.
 
-    Returns a dict with individual check results, pass count, and grade.
+    The returned grade is a structural checklist result only; it is not a
+    content-quality, semantic-correctness or production-readiness verdict.
     """
     if not report or len(report.strip()) < 100:
         return {
             "pass_count": 0,
             "grade": "D",
             "checks": {},
+            "metric_scope": "structural_checklist_only",
             "note": "Report too short or empty",
         }
 
@@ -168,6 +179,7 @@ def evaluate_report(report: str, tech_a: str = "", tech_b: str = "") -> dict[str
         "pass_count": pass_count,
         "grade": grade(pass_count),
         "checks": results,
+        "metric_scope": "structural_checklist_only",
     }
 
 
@@ -207,6 +219,12 @@ def evaluate_batch(runs: list[dict[str, Any]]) -> dict[str, Any]:
     n = len(runs) if runs else 1
     return {
         "metric": "report_quality",
+        "metric_scope": "structural_checklist_only",
+        "metric_interpretation": (
+            "Five deterministic structural/keyword checks. This is NOT content "
+            "quality, semantic support, answer completeness or a deliverable/"
+            "production-ready verdict; use the maintained content protocol for "
+            "semantic review."),
         "grade_distribution": grade_dist,
         "grade_a_pct": round(grade_dist["A"] / n * 100, 1),
         "grade_b_pct": round(grade_dist["B"] / n * 100, 1),

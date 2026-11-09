@@ -12,7 +12,11 @@ import json
 import os
 import threading
 from pathlib import Path
-from urllib.parse import urlparse
+
+from ..utils.candidate_identity import (
+    source_text_identity_match,
+    source_url_identity_match,
+)
 
 LEARNED_DOCS_PATH = Path(os.environ.get("LEARNED_DOCS_PATH", "./learned_docs.json"))
 
@@ -95,12 +99,6 @@ def extract_terms(text: str) -> list[str]:
     return terms
 
 
-def domain_label_match(term: str, url: str) -> bool:
-    """True if `term` is a full label of the URL's host (supabase.com has label 'supabase')."""
-    host = urlparse(url).netloc.lower()
-    return bool(host) and term.lower().strip() in host.split(".")
-
-
 def _looks_official(url: str) -> bool:
     return any(sig in url.lower() for sig in _DOCS_SIGNALS)
 
@@ -120,7 +118,12 @@ def harvest(terms: list[str], search_results: list[dict],
             for sr in search_results:
                 for item in sr.get("results", []) or []:
                     url = item.get("url", "")
-                    if domain_label_match(term, url) and _looks_official(url):
+                    title = item.get("title", "")
+                    snippet = item.get("snippet", "")
+                    if (source_url_identity_match(term, url)
+                            and source_text_identity_match(
+                                term, title, f"{title} {snippet}")
+                            and _looks_official(url)):
                         entry = {
                             "url": url,
                             "title": item.get("title", term),

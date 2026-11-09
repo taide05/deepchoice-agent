@@ -21,6 +21,9 @@ Thumbs.db
 
 # Project
 chroma_kb/chroma_db/
+# Pre-change copy of the index, kept so its history is not lost when the
+# provenance metadata is migrated.
+chroma_kb/chroma_db.pre_provenance/
 chroma_db/
 outputs/
 .env
@@ -47,7 +50,19 @@ tavily_key_state.json
 # logs & tool caches
 *.log
 .env.*
+!.env.example
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 review-*.txt
+
+# Local cleanup archive: review probes and findings kept for reproduction.
+# Local only - session material, never part of a code commit.
+/local_cleanup_archive/
+
+# Test scratch kept inside the worktree so nothing is written to a drive root.
+/.pytest-tmp/
+/.scratch/
+
+# Local-only internal docs (dev/handoff/delivery archives; never pushed)
+/internal_docs/

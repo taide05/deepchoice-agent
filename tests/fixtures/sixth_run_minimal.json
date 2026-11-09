@@ -1,0 +1,165 @@
+{
+ "fixture_version": "sixth-run-minimal-v1",
+ "fixture_note": "Minimal sanitized excerpt of the sixth run's saved material, kept for citation/self-review regression replay. Public documentation titles, URLs and body excerpts only; run ids, task ids, timings, token usage, quota records and the full report are omitted. Bodies are truncated.",
+ "task": {
+  "query": "一家 B2B SaaS 团队在 EKS 上运行约 50 个 Python/Go 服务、20 个节点，已有 Prometheus 兼容指标后端、Loki 和 Tempo。现在要统一采集容器日志、Prometheus 指标和 OTLP 链路数据，比较自建的上游 OpenTelemetry Collector（需明确所需的 Core/Contrib 组件）与 Grafana Alloy，给出有依据的条件化选择。用于讨论的工作负载假设：日志约 100 GB/天、约 30 万活跃指标时间序列、15 秒抓取间隔、采样前约 1 万 span/秒；团队有 4 名后端和 1 名平台工程师，希望控制维护负担。必须回答：两个候选分别如何覆盖三类数据，所需组件、部署方式及版本限制是什么；如何在发送前处理敏感字段，哪些处理会影响排障能力；后端短暂不可用、采集进程重启和配置滚动更新时，重试、缓冲、丢失或重复风险分别是什么；配置维护、升级、故障定位、资源开销和后续更换后端有哪些取舍；在什么条件下选择其中一个，什么变化会使推荐反转。说明产品、协议与组件的关系，避免把某一组件或特定版本的能力泛化到整个候选；上述负载只是场景假设，没有适用实测依据时不要编造吞吐、延迟、内存或容量结论，要给出具体测量办法。最终报告须有实质推荐与理由，不能只剩资料缺口清单。",
+  "candidate_techs": [
+   "OpenTelemetry Collector",
+   "Grafana Alloy"
+  ],
+  "report_format": "what_why_how",
+  "scene_context": "EKS 上约 50 个 Python/Go 服务、20 个节点；已有 Prometheus 兼容指标后端、Loki 与 Tempo；团队 4 名后端 + 1 名平台工程师，希望控制维护负担。"
+ },
+ "evidence_chains": [
+  {
+   "sources": [
+    {
+     "title": "处理敏感数据 | OpenTelemetry",
+     "url": "https://opentelemetry.io/zh/docs/security/handling-sensitive-data",
+     "snippet": "`attribute` 处理器： 删除或修改特定属性。\n `filter` 处理器： 过滤掉包含敏感数据的整个 span 或指标。\n `redaction` 处理器： 删除 span、日志和指标数据点中不在允许属性列表内的属性。\n `transform` 处理器： 使用正则表达式对数据进行转换。\n\n### 删除和哈希化用户信息\n\n下面是一个 `attribute` 处理器的配置示例，用于对 `user.email` 进行哈希处理，并从敏感的 `user` 信息中删除 `user.full_name`： [...] ```\ntransform: transform: transform:   trace_statements:  trace_statements:  trace_statements:   - context: span  - context: span  context:  span   statements:  statements:  statements:   - replace_pattern(attributes[\"client.address\"], \"\\\\.\\\\d+$\", \".0\")  - rep",
+     "has_body": true
+    }
+   ]
+  },
+  {
+   "sources": [
+    {
+     "title": "在 Amazon EKS 上构建开源可观测性数据栈：VictoriaMetrics + Grafana Loki + Grafana Tempo | 亚马逊AWS官方博客",
+     "url": "https://aws.amazon.com/cn/blogs/china/amazon-eks-build-open-source-observability-victoriametrics",
+     "snippet": "Alloy 以 DaemonSet 部署在每个节点上，通过 Kubernetes 服务发现定位本节点的 Pod，再通过 Kubernetes API 拉取容器日志（无需挂载节点日志目录、无需 root 权限），附加 `namespace`、`pod`、`container` 标签后推送到 Loki。该方式需要为 Alloy 的 ServiceAccount 授予 `pods/log` 的 get/list/watch 权限。核心配置由几个组件串联而成： [...] 图中右侧为存储指向：日志与链路的长期数据存入 Amazon S3，指标数据存放在 Amazon EBS gp3；Tempo 的 metrics\\_generator 从 trace 生成的指标也写回 VictoriaMetrics（对应图中回流箭头）。\n\n## 四、前置条件与基础设施\n\n在部署可观测性组件之前，需要确保以下基础设施就绪。\n\n### 4.1 Amazon EKS 集群\n\n本文所述配置在以下版本组合上实测通过（供复现参考）：EKS 1",
+     "has_body": true
+    }
+   ]
+  },
+  {
+   "sources": [
+    {
+     "title": "快速入门 | OpenTelemetry",
+     "url": "https://opentelemetry.io/zh/docs/platforms/kubernetes/getting-started",
+     "snippet": "收集 Kubernetes 遥测数据的第一步是部署 OpenTelemetry Collector 的 Daemonset 实例，以收集与节点和在这些节点上运行的工作负载相关的遥测数据。 使用 Daemonset 是为了保证 Collector 的这个实例安装在所有节点上。 Daemonset 中的每个 Collector 实例只会从其运行所在的节点收集数据。\n\nCollector 的这个实例将使用以下组件：\n\n OTLP 接收器： 用于收集应用程序链路、指标和日志。\n Kubernetes 属性处理器： 用于向传入的应用程序遥测数据添加 Kubernetes 元数据。\n Kubeletstats 接收器： 用于从 kubelet 上的 API 服务器拉取节点、Pod 和容器指标。\n Filelog 接收器： 用于收集 Kubernetes 日志和写入 stdout、stderr 的应用程序日志。\n\n让我们详细分析这些组件。\n\n",
+     "has_body": true
+    }
+   ]
+  },
+  {
+   "sources": [
+    {
+     "title": "自适应性 | OpenTelemetry",
+     "url": "https://opentelemetry.io/zh/docs/collector/resiliency",
+     "snippet": "工作原理：当配置一个导出器时，通常会包含一个发送队列，它在将数据发送到下游终端前， 会先在内存中进行缓冲。如果终端是可用的，数据会快速通过。\n 处理终端不可用情况：如果终端不可用（如网络问题或后端重启），导出器无法立即发送数据。 此时，它不会丢弃数据，而是将其加入内存中的发送队列。\n 重试机制：Collector 会使用带指数退避和抖动的重试机制。在等待一段时间后， 它会重复尝试发送缓冲数据。默认情况下，它最多重试 5 分钟。\n 数据丢失场景：\n\n  + 队列满：内存队列的大小是可配置的（默认通常为 1000 批/请求）。如果终端持续不可用且持续有新数据进入， 队列可能会被填满。一旦队列满，为防止 Collector 内存耗尽，新的数据将被丢弃。\n  + 重试超时：如果终端不可用时间超过配置的最大重试时长（默认 5 分钟），Collector 会停止",
+     "has_body": true
+    }
+   ]
+  },
+  {
+   "sources": [
+    {
+     "title": "Migrate from OpenTelemetry Collector to Grafana Alloy | Grafana Alloy documentation",
+     "url": "https://grafana.com/docs/alloy/latest/set-up/migrate/from-otelcol",
+     "snippet": "# Migrate from OpenTelemetry Collector to Alloy\n\nThe built-in Grafana Alloy convert command can migrate your OpenTelemetry Collector configuration to a Alloy configuration.\n\nThis topic describes how to:\n\n## Components used in this topic\n\n`otelcol.receiver.otlp`\n`otelcol.processor.memory_limiter`\n`otelcol.exporter.otlp`\n\n## Before you begin\n\n## Convert an Ope",
+     "has_body": true
+    }
+   ]
+  },
+  {
+   "sources": [
+    {
+     "title": "Grafana Alloy vs OpenTelemetry Collector: which should you use?",
+     "url": "https://www.parseable.com/blog/grafana-alloy-vs-opentelemetry-collector",
+     "snippet": "The OpenTelemetry Collector can scrape Prometheus endpoints through its Prometheus receiver. For an OTLP gateway with a few scrape jobs, that may be all you need.\n\nAlloy carries more of the Prometheus operating model into one process: service discovery, relabeling, scraping and remote write are represented by native components. This matters when your collect",
+     "has_body": true
+    }
+   ]
+  }
+ ],
+ "final_recommendation": {
+  "winner": "Grafana Alloy",
+  "recommendation": "建议以 Grafana Alloy 作为统一采集层：用 DaemonSet 从 Kubernetes API 拉取本节点 Pod 容器日志并附加 namespace/pod/container 标签写入 Loki，需要 ServiceAccount 具备 pods/log 的 get/list/watch 权限 [Source: 在 Amazon EKS 上构建开源可观测性数据栈：VictoriaMetrics + Grafana Loki + Grafana Tempo | 亚马逊AWS官方博客]；OTLP 链路与指标经 otelcol.receiver.otlp 接收、经 otelcol.processor.* 处理、经 otelcol.exporter.otlp 发送 [Source: Migrate from OpenTelemetry Collector to Grafana Alloy | Grafana Alloy documentation]；Prometheus 指标用原生服务发现、relabel 与 remote write 组件抓取 [Source: Grafana Alloy vs OpenTelemetry Collector: which should you use?]。若更看重上游 OTel 语义一致与 Contrib 组件广度，则选 OpenTelemetry Collector：DaemonSet 用 OTLP receiver、k8sattributes、kubeletstats、filelog 采集节点与工作负载数据 [Source: 快速入门 | OpenTelemetry]，Prometheus 走 Prometheus receiver，可靠性依赖导出器发送队列、指数退避重试与可选 WAL [Source: 自适应性 | OpenTelemetry]。两者都必须在发送前用 attribute/transform/filter 处理器脱敏并配置 memory_limiter、batch 。100 GB/天、30 万时间序列、1 万 span/秒只是假设：须按自身负载压测，记录队列丢弃计数、重试超时、导出延迟与采集器 CPU/内存，并用断网与 Pod 重启实验测量丢失和重复。",
+  "winner_rationale": "已有 Loki/Tempo/Prometheus 兼容后端、仅 5 名工程师控制维护负担时，Alloy 用原生组件承载 Prometheus 抓取/relabel/remote_write，并能以 otelcol.* 组件接收 OTLP，组件拼接最少 。",
+  "confidence": "medium",
+  "confidence_rationale": "部署形态、脱敏处理器与重试/队列语义有官方文档支撑 ，但缺 Alloy 崩溃与配置重载的可靠性细节，也无任何实测容量数据 。",
+  "evidence_summary": "可用证据集中在官方文档：OpenTelemetry Kubernetes 入门给出 DaemonSet 下 OTLP receiver、k8sattributes、kubeletstats、filelog 的组合 [Source: 快速入门 | OpenTelemetry]；韧性文档说明发送队列、重试上限与 WAL 的丢失场景 [Source: 自适应性 | OpenTelemetry]；敏感数据文档列出 attribute/filter/redaction/transform 处理器 。Alloy 侧有从 Collector 迁移的 convert 命令与 otelcol.* 组件说明 [Source: Migrate from OpenTelemetry Collector to Grafana Alloy | Grafana Alloy documentation]，以及 EKS 上以 DaemonSet 拉 Pod 日志的实践与实测版本组合 [Source: 在 Amazon EKS 上构建开源可观测性数据栈：VictoriaMetrics + Grafana Loki + Grafana Tempo | 亚马逊AWS官方博客]；对比文章指出 Alloy 原生承载 Prometheus 抓取模型 [Source: Grafana Alloy vs OpenTelemetry Collector: which should you use?]。检索结果中大量条目（如 Kubernetes 调度论文与无关仓库）不含采集器事实，属证据缺口 ；任何吞吐、内存与延迟数字均未在资料中出现，不可外推。",
+  "scene_fit_note": "EKS 上 20 节点、50 个服务、已有 Prometheus 兼容后端加 Loki/Tempo，且团队无专职 SRE，最省维护的路径是把 Prometheus 抓取、容器日志与 OTLP 收敛到一个 Alloy 进程 ；Collector 仍是可用的上游基线，适合需要 Contrib 组件广度或严格 OTLP 标准对齐时切换 。",
+  "ranked_options": [
+   {
+    "name": "Grafana Alloy",
+    "rank": 1,
+    "constraint_fit": "high",
+    "constraint_fit_reason": "已有 Loki/Tempo/Prometheus 兼容后端与 5 人团队，Alloy 把 Prometheus 抓取模型与 OTLP 组件放在同一进程，运维面最小 。",
+    "rationale": "Alloy 以 DaemonSet 通过 Kubernetes API 拉取容器日志、附加命名空间与 Pod 标签推 Loki，且不挂载节点日志目录 [Source: 在 Amazon EKS 上构建开源可观测性数据栈：VictoriaMetrics + Grafana Loki + Grafana Tempo | 亚马逊AWS官方博客]；OTLP 侧使用 otelcol.receiver.otlp、otelcol.processor.memory_limiter、otelcol.exporter.otlp 等组件，并提供从 OpenTelemetry Collector 配置转换的命令，迁移成本低 [Source: Migrate from OpenTelemetry Collector to Grafana Alloy | Grafana Alloy documentation]；Prometheus 抓取的服务发现、relabel 与 remote write 是原生组件 [Source: Grafana Alloy vs OpenTelemetry Collector: which should you use?]。",
+    "key_strength": "单进程内同时具备 Prometheus 抓取模型与 otelcol.* 组件，减少跨组件拼接与配置漂移 。",
+    "key_weakness": "otelcol.* 组件的能力与版本需按 Alloy 版本逐个核对，不能假定与上游 Collector 同步；实测版本组合为 Alloy v1.17.1 配 EKS 1.34、Loki 3.3.2、Tempo 2.7.1，跨大版本配置项可能变化 。"
+   },
+   {
+    "name": "OpenTelemetry Collector",
+    "rank": 2,
+    "constraint_fit": "medium",
+    "constraint_fit_reason": "三类数据都能覆盖：官方 Kubernetes 快速入门即用 DaemonSet 组合 OTLP receiver、k8sattributes 处理器、kubeletstats 与 filelog receiver 采集链路、节点/Pod/容器指标与 stdout/stderr 日志，Prometheus 指标通过 Prometheus receiver 抓取 [Source: 快速入门 | OpenTelemetry]；现有资料未给出 Core 与 Contrib 各自包含哪些组件的逐版本清单，也未量化两者的维护工作量差异。",
+    "rationale": "官方 Kubernetes 入门即在 DaemonSet 中组合 OTLP receiver、k8sattributes 处理器、kubeletstats 与 filelog receiver 采集节点、Pod、容器指标与 stdout/stderr 日志 [Source: 快速入门 | OpenTelemetry]；Prometheus 指标通过 Prometheus receiver 抓取；导出器提供内存发送队列、带指数退避与抖动的重试，以及把队列写入磁盘 WAL 的选项 [Source: 自适应性 | OpenTelemetry]。",
+    "key_strength": "上游项目，OTLP 语义与脱敏处理器（attribute、filter、redaction、transform）文档体系最贴近标准 。",
+    "key_weakness": "Prometheus 指标需通过 Prometheus receiver 抓取并按其抓取配置组织 [Source: 快速入门 | OpenTelemetry]；filelog、k8sattributes、kubeletstats 在官方入门中作为同一 Collector DaemonSet 的组件出现，但资料未给出 Core 与 Contrib 各自包含哪些 receiver/processor 的逐版本清单，组件的发行版归属与版本需另行核对。"
+   }
+  ],
+  "trade_offs": [
+   {
+    "dimension": "三类数据覆盖与部署拓扑",
+    "finding": "Collector 的推荐形态是 DaemonSet 采日志/节点指标、必要时再加网关层收 OTLP [Source: 快速入门 | OpenTelemetry]；Alloy 同样以 DaemonSet 从 API 拉本节点 Pod 日志并在同一配置内组织 OTLP 与 Prometheus 组件 。",
+    "impact": "决定需要维护几套配置与几个工作负载的平台工程师。"
+   },
+   {
+    "dimension": "配置维护与升级",
+    "finding": "Alloy 提供内置 convert 命令把 OpenTelemetry Collector 配置转换为 Alloy 配置，降低重写与切换成本 [Source: Migrate from OpenTelemetry Collector to Grafana Alloy | Grafana Alloy documentation]；Collector 侧官方快速入门给出的 DaemonSet 组合覆盖 OTLP receiver、k8sattributes、kubeletstats 与 filelog [Source: 快速入门 | OpenTelemetry]，但资料未给出 Core/Contrib 逐版本组件清单。",
+    "impact": "4 名后端 + 1 名平台工程师、希望控制维护负担的团队。"
+   },
+   {
+    "dimension": "敏感字段处理与排障能力",
+    "finding": "attribute 处理器可删/改/哈希指定属性，filter 丢弃整条 span 或指标，redaction 只保留白名单属性，transform 用正则改写；哈希与掩码保留关联性，整条丢弃或白名单会明显削弱排障与慢查询定位 。",
+    "impact": "既要合规脱敏又要保留排障信息量的团队。"
+   },
+   {
+    "dimension": "后端不可用、进程重启与配置滚动更新",
+    "finding": "导出器把数据放入内存发送队列并以带抖动的指数退避重试，默认最长约 5 分钟；队列满或重试超时会丢弃数据；WAL 可让进程崩溃后从磁盘恢复，但磁盘故障或空间不足仍会丢失 [Source: 自适应性 | OpenTelemetry]。",
+    "impact": "关心日志与链路丢失风险的高流量管道负责人。"
+   },
+   {
+    "dimension": "资源开销与容量结论",
+    "finding": "文档只给出 memory_limiter、batch 等必配处理器与队列参数建议，没有给出吞吐、延迟或内存实测数字，无法从资料推断 20 节点规模的容量 。",
+    "impact": "需要做容量规划与节点资源预留的人。"
+   },
+   {
+    "dimension": "后端可替换性",
+    "finding": "Alloy 的原生 remote write 面向 Prometheus 兼容后端，OTLP 数据经 otelcol.exporter.otlp 发送，可并行推送多个后端 ；Collector 同样可配置多个导出器，但没有资料给出两者并行双写的资源代价 [Source: 自适应性 | OpenTelemetry]。",
+    "impact": "计划后续更换或同时保留多个后端的团队。"
+   }
+  ],
+  "unresolved_questions": [
+   "Alloy 在导出失败时的队列、WAL 与重试默认语义是否与 Collector 文档所述一致，现有检索材料未覆盖 [[20]]。",
+   "Collector 的 Core 与 Contrib 在具体版本中各自包含哪些 receiver/processor（如 filelog、k8sattributes），资料未给出逐版本清单 [[18]]。",
+   "两者在约 100 GB/天日志、30 万时间序列、1 万 span/秒下的 CPU、内存与队列溢出行为，无任何实测或公开基准 [[21]]。"
+  ]
+ },
+ "confidence": "medium",
+ "sub_questions": [
+  "OpenTelemetry Collector 与 Grafana Alloy 分别如何覆盖容器日志、Prometheus 指标和 OTLP 链路三类数据？各自需要哪些 Core/Contrib 组件、部署方式（DaemonSet/Deployment 等）和版本限制？",
+  "两个候选如何在发送前处理敏感字段（如脱敏、丢弃、哈希、路由到不同后端），这些处理分别会怎样影响故障排查能力？",
+  "后端短暂不可用、采集进程重启、配置滚动更新三种情况下，两个候选的重试、缓冲、丢失和重复风险分别是什么？",
+  "配置维护、升级、故障定位、资源开销，以及后续更换后端或同时保留多个后端时，两个候选各有哪些取舍？",
+  "在什么条件下应选择其中一个？什么变化会使推荐反转？说明产品、协议与组件的关系，避免把某一组件或特定版本的能力泛化到整个候选。"
+ ],
+ "knowledge_gaps": [
+  "Grafana Alloy sending queue retry backoff WAL default behavior on export failure official documentation",
+  "Grafana Alloy config reload SIGHUP kubernetes rolling restart in-flight data loss duplication"
+ ],
+ "conflict_check": {
+  "pairs_scanned": 2,
+  "pairs_arbitrated": 0,
+  "pairs_evidence": 0,
+  "scan_outcomes": {
+   "difference": 0,
+   "no_difference": 2,
+   "unscanned": 0
+  },
+  "reason": "fixture excerpt"
+ },
+ "conflicts": []
+}

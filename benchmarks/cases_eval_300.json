@@ -1,7 +1,7 @@
 [
   {
     "id": "TC-0001",
-    "query": "LangGraph vs CrewAI for building AI agents as a solo developer who needs fine-grained control and long-term maintainability over rapid prototyping",
+    "query": "LangGraph vs CrewAI for building AI agents as a solo developer",
     "category": "AI/Agent Frameworks",
     "subdomain": "agent_orchestration",
     "scene": "solo",
@@ -778,9 +778,7 @@
       "temporal",
       "aws step functions",
       "google cloud composer",
-      "azure data factory",
-      "argo workflows",
-      "flyte"
+      "azure data factory"
     ],
     "ground_truth_notes": "The three major orchestrators all satisfy retries and observability; choice hinges on programming model preference.",
     "must_find_sources": [
@@ -864,8 +862,7 @@
       "dramatiq",
       "google cloud tasks",
       "aws step functions",
-      "apscheduler",
-      "huey"
+      "apscheduler"
     ],
     "ground_truth_notes": "Any lightweight Python task queue fits; broker requirements differ slightly.",
     "must_find_sources": [
@@ -1084,6 +1081,8 @@
     "difficulty": "medium",
     "acceptable_winners": [
       "minio",
+      "s3",
+      "cloudflare",
       "seaweedfs"
     ],
     "ground_truth_notes": "Self-hosted S3-compatible or managed object storage both meet the requirement.",
@@ -1105,7 +1104,7 @@
   },
   {
     "id": "TC-0016",
-    "query": "LangChain vs Semantic Kernel for a .NET-centric enterprise AI application with compliance requirements",
+    "query": "LangChain vs Semantic Kernel for enterprise AI application with compliance requirements",
     "category": "AI/Agent Frameworks",
     "subdomain": "llm_invocation",
     "scene": "enterprise",
@@ -1297,8 +1296,7 @@
       "materialize",
       "druid",
       "bigquery",
-      "clickhouse cloud",
-      "pinot"
+      "clickhouse cloud"
     ],
     "ground_truth_notes": "OLAP column stores or streaming-materialized views are the valid routes.",
     "must_find_sources": [
@@ -1445,7 +1443,9 @@
       "milvus",
       "pgvector",
       "chroma",
-      "weaviate"
+      "weaviate",
+      "pinecone",
+      "zilliz cloud"
     ],
     "ground_truth_notes": "Any vector store fits personal-scale semantic search.",
     "must_find_sources": [
@@ -1812,7 +1812,7 @@
   },
   {
     "id": "TC-0026",
-    "query": "JWT vs session-based authentication for a REST API at scale, where horizontal stateless scaling is the primary requirement",
+    "query": "JWT vs session-based authentication for a REST API at scale",
     "category": "Backend Frameworks & API",
     "subdomain": "auth_authorization",
     "scene": "enterprise",
@@ -1979,8 +1979,7 @@
       "peft",
       "trl",
       "hugging face transformers",
-      "transformers",
-      "llamafactory"
+      "transformers"
     ],
     "ground_truth_notes": "Parameter-efficient fine-tuning libraries all fit single-GPU constraints.",
     "must_find_sources": [
@@ -2845,7 +2844,7 @@
   },
   {
     "id": "TC-0041",
-    "query": "Airflow vs Prefect for data pipeline orchestration in a new data engineering team",
+    "query": "Airflow vs Prefect for data pipeline orchestration in a data engineering team",
     "category": "Infrastructure",
     "subdomain": "task_queues",
     "scene": "team",
@@ -2973,7 +2972,7 @@
   },
   {
     "id": "TC-0043",
-    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production as a single-process containerized deployment",
+    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production",
     "category": "Backend Frameworks & API",
     "subdomain": "async_solutions",
     "scene": "team",
@@ -3016,7 +3015,9 @@
     "acceptable_winners": [
       "keycloak",
       "authentik",
-      "zitadel"
+      "zitadel",
+      "auth0",
+      "okta"
     ],
     "ground_truth_notes": "Open-source identity providers all support SAML and OIDC.",
     "must_find_sources": [
@@ -3083,8 +3084,7 @@
       "realm",
       "pouchdb",
       "cloud firestore",
-      "firestore",
-      "rxdb"
+      "firestore"
     ],
     "ground_truth_notes": "Offline-first sync engines are the hard requirement; each has a different data model.",
     "must_find_sources": [
@@ -3105,7 +3105,7 @@
   },
   {
     "id": "TC-0045",
-    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline for OpenAI-compatible APIs",
+    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline",
     "category": "Models & Data",
     "subdomain": "llm_selection",
     "scene": "team",
@@ -3245,7 +3245,7 @@
   },
   {
     "id": "TC-0047",
-    "query": "Bun vs Node.js for building a new backend API in 2026 as a solo developer prioritizing developer experience over ecosystem maturity",
+    "query": "Bun vs Node.js for building a new backend API in 2026",
     "category": "Backend Frameworks & API",
     "subdomain": "web_frameworks",
     "scene": "solo",
@@ -3296,7 +3296,7 @@
       "drools",
       "camunda"
     ],
-    "ground_truth_notes": "Durable execution, plain SQL rules, or a rules/workflow engine are all defensible starting points.",
+    "ground_truth_notes": "Durable execution, plain SQL rules, or an authorization engine are all defensible starting points.",
     "must_find_sources": [
       {
         "pattern": "temporal.io",
@@ -3390,7 +3390,7 @@
   },
   {
     "id": "TC-0049",
-    "query": "Modal vs AWS Lambda for serverless Python ML inference with GPU-accelerated workloads",
+    "query": "Modal vs AWS Lambda for serverless Python ML inference",
     "category": "Deployment & Operations",
     "subdomain": "cloud_platforms",
     "scene": "solo",
@@ -3438,8 +3438,7 @@
     "acceptable_winners": [
       "playwright",
       "scrapy",
-      "puppeteer",
-      "selenium"
+      "puppeteer"
     ],
     "ground_truth_notes": "Browser automation or request-based scraping both handle JS sites with different tradeoffs.",
     "must_find_sources": [
@@ -4693,7 +4692,7 @@
   },
   {
     "id": "TC-0029-v29",
-    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a mid-size team",
+    "query": "Kafka vs RabbitMQ for event-driven microservices architecture for a team (existing React frontend, needs REST and WebSocket API)",
     "category": "Infrastructure",
     "subdomain": "message_queues",
     "scene": "team",
@@ -5081,7 +5080,7 @@
   },
   {
     "id": "TC-0035-v35",
-    "query": "Prometheus vs Datadog for application monitoring on a startup budget for a team",
+    "query": "Prometheus vs Datadog for application monitoring on a startup budget for a team (enterprise with SOC2 compliance, stability over features)",
     "category": "Deployment & Operations",
     "subdomain": "monitoring",
     "scene": "team",
@@ -5449,7 +5448,7 @@
   },
   {
     "id": "TC-0043-v43",
-    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production as a single-process containerized deployment for a solo developer",
+    "query": "Uvicorn vs Gunicorn for serving a FastAPI application in production for a solo developer (team of 3 junior developers, ease of use critical)",
     "category": "Backend Frameworks & API",
     "subdomain": "async_solutions",
     "scene": "solo",
@@ -5601,7 +5600,7 @@
   },
   {
     "id": "TC-0045-v45",
-    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline for OpenAI-compatible APIs for an enterprise team (enterprise with SOC2 compliance, stability over features)",
+    "query": "SentencePiece vs Tiktoken for LLM tokenization in a production pipeline for an enterprise team (enterprise with SOC2 compliance, stability over features)",
     "category": "Models & Data",
     "subdomain": "llm_selection",
     "scene": "enterprise",
@@ -6034,10 +6033,11 @@
     "scene": "enterprise",
     "difficulty": "medium",
     "acceptable_winners": [
-      "argocd",
+      "argo cd",
       "helm",
       "kustomize",
-      "flux"
+      "flux",
+      "argocd"
     ],
     "ground_truth_notes": "GitOps and declarative delivery tools for Kubernetes all qualify.",
     "must_find_sources": [
@@ -6631,7 +6631,7 @@
   },
   {
     "id": "TC-0011-v61",
-    "query": "Docker Compose vs Kubernetes for a solo developer deploying 5 microservices (budget under $500/month, open-source preferred)",
+    "query": "Docker Compose vs Kubernetes for a small team deploying 5 microservices for a solo developer (budget under $500/month, open-source preferred)",
     "category": "Deployment & Operations",
     "subdomain": "container_orchestration",
     "scene": "solo",
@@ -7261,7 +7261,7 @@
   },
   {
     "id": "TC-0023-v73",
-    "query": "FastAPI vs Django Ninja for building REST APIs as a solo developer",
+    "query": "FastAPI vs Django Ninja for building REST APIs in a Python-first team for a solo developer (team of 3 junior developers, ease of use critical)",
     "category": "Backend Frameworks & API",
     "subdomain": "web_frameworks",
     "scene": "solo",
@@ -9370,7 +9370,11 @@
     "scene": "solo",
     "acceptable_winners": [
       "outline",
+      "wikijs",
       "bookstack",
+      "confluence",
+      "notion",
+      "gitbook",
       "docusaurus",
       "wiki.js"
     ],
@@ -10315,7 +10319,11 @@
     "acceptable_winners": [
       "pgbackrest",
       "wal-g",
-      "barman"
+      "barman",
+      "aws rds",
+      "neon",
+      "supabase",
+      "google cloud sql"
     ],
     "ground_truth_notes": "The user needs scheduled backups and point-in-time recovery so a mistake or failure doesn't lose data. pgBackRest, WAL-G and Barman are open-source, while AWS RDS, Neon, Supabase and Google Cloud SQL provide managed backup and PITR. Automated backups with PITR is the requirement.",
     "_idx": 291

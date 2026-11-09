@@ -1,4 +1,4 @@
-"""Diagnostics observer hook tests: content-free LLM metadata capture."""
+"""Diagnostics observer hook tests (task 0.2): raw LLM response capture."""
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -56,14 +56,8 @@ class TestRecordCallback:
         assert e["tag"] == "node1"
         assert e["case_id"] == "TC-X"
         assert e["tier"] == "deepseek-flash"
-        assert "prompt" not in e
-        assert "raw_content" not in e
-        assert "parsed" not in e
-        assert e["prompt_chars"] > 0
-        assert len(e["prompt_sha256"]) == 64
-        assert e["response_chars"] == len('{"a": 1}')
-        assert len(e["response_sha256"]) == 64
-        assert e["parsed_type"] == "dict"
+        assert e["raw_content"] == '{"a": 1}'
+        assert e["parsed"] == {"a": 1}
         assert e["error"] is None
         assert e["elapsed_ms"] >= 0
         assert e["usage"]["total_tokens"] == 15
@@ -81,10 +75,8 @@ class TestRecordCallback:
             with pytest.raises(Exception):
                 await call_model([{"role": "user", "content": "hi"}], tag="node2")
         assert len(records) == 1
-        assert records[0]["error"] == "Exception"
-        assert records[0]["error_type"] == "Exception"
-        assert records[0]["response_sha256"] is None
-        assert "boom" not in str(records[0])
+        assert records[0]["error"] and "boom" in records[0]["error"]
+        assert records[0]["raw_content"] is None
 
     @pytest.mark.asyncio
     async def test_no_callback_is_noop(self):
@@ -132,14 +124,17 @@ class TestExtraBody:
         assert c.kwargs["extra_body"] == {"enable_thinking": True}
 
     @pytest.mark.asyncio
-    async def test_no_extra_body_uses_tier_default(self):
+    async def test_no_extra_body_on_the_report_tier(self):
+        # The report tier used to send the Qwen-only enable_thinking payload.
+        # RECOVERY ADAPTER: that tier is served by DeepSeek now, which has no such
+        # field, so a call without an explicit extra_body must send none.
         c = _CaptureClient(_resp('{"a": 1}'))
         with patch("deepchoice.utils.llm._get_client", return_value=c):
             await call_model(
                 [{"role": "user", "content": "json please"}],
                 model="qwen-flash", response_format="json",
             )
-        assert c.kwargs["extra_body"] == {"enable_thinking": False}
+        assert "extra_body" not in c.kwargs
 
     @pytest.mark.asyncio
     async def test_deepseek_flash_has_no_extra_body(self):

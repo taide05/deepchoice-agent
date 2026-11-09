@@ -12,8 +12,14 @@ AUTHORITY_MAP = {
     "arxiv_paper": 10,
     "tech_blog": 7,
     "github": 6,
-    "stackoverflow": 5,
+    "stackoverflow": 6,
+    "official_unverified": 5,
     "reddit": 4,
+    "web_document": 4,
+    # A document from this machine's own knowledge base has no external
+    # authority. It is not a published source and must not be scored like one.
+    "local_document": 3,
+    "navigation_link": 2,
     "anonymous": 2,
 }
 
@@ -25,23 +31,47 @@ VERIFIABILITY_MAP = {
 }
 
 
-def classify_source_type(url: str, source: str) -> str:
+def classify_source_type(url: str, source: str,
+                         identity: dict | None = None) -> str:
+    """Classify authority from explicit provenance, not a URL word.
+
+    A URL containing `docs.` or `readthedocs` is not proof of ownership. For the
+    official retriever, `identity` carries the owner/kind and whether the safe
+    fetch verified the page body; only that verified pair is `official_doc`.
+    A navigation/failed official row stays explicitly unverified.
+    """
     url_lower = url.lower()
-    if "arxiv.org" in url_lower:
+    # A local file is this machine's own material. Check it before generic
+    # URL rules, so a local markdown file cannot inherit published authority.
+    if url_lower.startswith("file://"):
+        return "local_document"
+    identity = identity or {}
+    if identity.get("source_owner"):
+        verified = (identity.get("has_body") is True
+                    and identity.get("body_identity_verified") is True)
+        kind = identity.get("source_kind")
+        if verified:
+            if kind in {"candidate", "platform_constraint"}:
+                return "official_doc"
+            # A verified public documentation page is a web document, not the
+            # declared candidate's official source.
+            return "web_document"
+        if identity.get("fetch_status") in {"navigation", "failed", None}:
+            return "navigation_link"
+        return "official_unverified"
+    host = url_lower.split("://", 1)[-1].split("/", 1)[0].split("?", 1)[0]
+    if host == "arxiv.org" or host.endswith(".arxiv.org"):
         return "arxiv_paper"
-    if "github.com" in url_lower:
+    if host == "github.com" or host.endswith(".github.com"):
         return "github"
-    if "stackoverflow.com" in url_lower or "stackexchange.com" in url_lower:
+    if host in {"stackoverflow.com", "stackexchange.com"} or \
+            host.endswith(".stackoverflow.com"):
         return "stackoverflow"
-    if "reddit.com" in url_lower:
+    if host == "reddit.com" or host.endswith(".reddit.com"):
         return "reddit"
-    if source == "official" or "readthedocs" in url_lower or "docs." in url_lower:
-        return "official_doc"
-    if source == "chroma":
-        return "official_doc"
     if "blog" in url_lower or "medium.com" in url_lower or "dev.to" in url_lower:
         return "tech_blog"
-    return "tech_blog"
+    return "web_document"
 
 
 def classify_evidence_type(snippet: str) -> str:
@@ -119,7 +149,15 @@ class SourceEvaluatorAgent:
         for result in all_results:
             url = result.get("url", "")
             source = result.get("_source", "unknown")
-            source_type = classify_source_type(url, source)
+            identity = {
+                "source_owner": result.get("source_owner"),
+                "source_kind": result.get("source_kind"),
+                "has_body": result.get("has_body"),
+                "body_identity_verified": result.get("body_identity_verified"),
+                "fetch_status": result.get("fetch_status"),
+                "body_error": result.get("body_error"),
+            }
+            source_type = classify_source_type(url, source, identity)
             evidence_type = classify_evidence_type(result.get("snippet", ""))
 
             scores = {
@@ -130,29 +168,62 @@ class SourceEvaluatorAgent:
             }
             total = compute_total_score(scores)
 
-            source_scores.append({
+            entry = {
                 "url": url,
                 "title": result.get("title", ""),
                 "snippet": result.get("snippet", ""),
+                "date": result.get("date", ""),
                 "source_type": source_type,
                 "evidence_type": evidence_type,
                 "scores": scores,
                 "total_score": total,
                 "supporting_sources": [],
-            })
+            }
+            # Row-level source identity travels with the score. Several channels
+            # may return the same URL; each row keeps its own fetch/body facts.
+            for key in ("source_owner", "source_kind", "body_identity_verified",
+                        "has_body", "fetch_status", "body_error"):
+                if result.get(key) is not None:
+                    entry[key] = result[key]
+            # Where this material came from travels with it. Unknown provenance
+            # stays `unknown`; it is never upgraded to a published source.
+            if "provenance" in result:
+                entry["provenance"] = result["provenance"]
+            if "channel" in result:
+                entry["channel"] = result["channel"]
+            # Preserve the retriever's own body marker so downstream stages can
+            # tell navigation from evidence without re-deriving it from text.
+            if "has_body" in result:
+                entry["has_body"] = result["has_body"]
+            # Bounded page-fetch provenance travels with the source: which URL
+            # supplied the body, page/storage/window sizes, truncation and why a
+            # fetch or prose admission failed. These are diagnostics, not evidence.
+            for key in ("body_url", "body_chars", "body_page_chars", "body_prose_chars",
+                        "body_stored_chars", "body_page_truncated",
+                        "body_stored_truncated", "body_truncated",
+                        "body_content_type", "body_admission", "body_error",
+                        "fetch_status"):
+                if key in result:
+                    entry[key] = result[key]
+            source_scores.append(entry)
 
+        # Support between sources is not established by this node. Deriving it
+        # from title-term overlap would invent a corroboration the pipeline never
+        # checked, and consistency must not be raised on that basis. The field
+        # stays empty so nothing downstream can read unproven support as support,
+        # and `strong` stays unreachable rather than being manufactured.
+        # consistency keeps its existing empty-support value rather than being
+        # zeroed: zeroing would lower every total by 0.8 against unchanged
+        # thresholds, which is a scoring change this repair is not making.
         for s in source_scores:
-            similar = [
-                x["url"] for x in source_scores
-                if x["url"] != s["url"] and x["total_score"] >= 6.0
-            ]
-            s["supporting_sources"] = similar[:3]
-            s["scores"]["consistency"] = score_consistency(similar)
+            s["supporting_sources"] = []
+            s["scores"]["consistency"] = score_consistency([])
             s["total_score"] = compute_total_score(s["scores"])
 
+        # Order is the only priority representation downstream uses; a separate
+        # per-row rank field had no consumer (evidence chains preserve this order,
+        # conflict preselection gates on the score itself), so it is not rebuilt.
         source_scores.sort(key=lambda x: x["total_score"], reverse=True)
-        for i, s in enumerate(source_scores):
-            s["rank"] = i + 1
 
         avg_score = round(sum(s["total_score"] for s in source_scores) / len(source_scores), 1) if source_scores else 0
 
@@ -164,5 +235,6 @@ class SourceEvaluatorAgent:
                 "avg_score": avg_score,
                 "high_score_count": sum(1 for s in source_scores if s["total_score"] >= 7.0),
                 "low_score_count": sum(1 for s in source_scores if s["total_score"] < 5.0),
+                "support_unestablished": len(source_scores),
             }],
         }

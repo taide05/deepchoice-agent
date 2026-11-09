@@ -217,7 +217,16 @@ class TestSummarizeUsage:
 
 def _embedding_fake(dim=8):
     def encode(titles):
-        return np.ones((len(titles), dim))
+        # Distinct vectors per title, all above the candidate similarity
+        # threshold, so the title-similarity pre-filter produces candidate pairs
+        # and the scan under test actually runs.
+        rows = []
+        for index in range(len(titles)):
+            row = np.ones(dim)
+            row[0] = 1.0 - 0.01 * (index % 3)
+            row[1] = 1.0 - 0.01 * ((index // 3) % 3)
+            rows.append(row)
+        return np.array(rows) if rows else np.ones((0, dim))
     return types.SimpleNamespace(encode=encode)
 
 
@@ -270,8 +279,11 @@ class TestAgentTokenUsageWiring:
             "quality_signals": [],
             "retry_count": 0,
         }
-        content = ('{"checks": [], "passed_count": 5, '
-                   '"confidence": "high", "knowledge_gaps": []}')
+        checks = ",".join(
+            '{"item": %d, "passed": %s, "note": "t"}'
+            % (i, "true" if i <= 5 else "false") for i in range(1, 7))
+        content = ('{"checks": [%s], "passed_count": 5, '
+                   '"confidence": "medium", "knowledge_gaps": []}' % checks)
         with patch("deepchoice.utils.llm._get_client",
                    return_value=_fake_client(_fake_response(content))):
             first = await SelfReviewerAgent().run(state)
@@ -295,9 +307,11 @@ class TestAgentTokenUsageWiring:
         with patch("deepchoice.utils.llm._get_client", return_value=client):
             pairs = await cd_module.find_contradictions(
                 [
-                    {"url": "https://a", "title": "A vs B", "snippet": "s",
+                    {"url": "https://a", "title": "A vs B",
+         "snippet": "A reports lower latency on the benchmark.",
                      "total_score": 7.5, "scores": {"authority": 7}},
-                    {"url": "https://b", "title": "B vs A", "snippet": "s",
+                    {"url": "https://b", "title": "B vs A",
+         "snippet": "B reports higher throughput at scale.",
                      "total_score": 8.0, "scores": {"authority": 8}},
                 ],
                 query_topic="A vs B",
@@ -380,8 +394,10 @@ class TestDeterministicArbitration:
 
 
 class TestCitationCoverage:
-    def test_counts_cited_and_uncited(self):
+    def test_counts_cited_and_uncited_with_locations(self):
         from deepchoice.agents.self_reviewer import _citation_coverage
+
+        chains = [{"sources": [{"title": "A", "snippet": "body of A"}]}]
         fr = {
             "recommendation": "Use X [Source: A].",
             "winner_rationale": "X wins [Source: A].",
@@ -389,15 +405,31 @@ class TestCitationCoverage:
                                 "key_weakness": "w"}],
             "trade_offs": [{"finding": "f [Source: A]", "impact": "i"}],
         }
-        out = _citation_coverage(fr)
+        out = _citation_coverage(fr, evidence_chains=chains)
         assert out["total_fields"] == 7
         assert out["cited_fields"] == 4
         assert out["uncited_fields"] == 3
+        assert out["uncited_locations"] == [
+            "option=?/key_strength", "option=?/key_weakness", "trade-off=?/impact"]
+        assert out["unresolved_locations"] == []
+
+    def test_the_completeness_report_is_not_a_support_verdict(self):
+        from deepchoice.agents.self_reviewer import REVIEW_SYSTEM
+
+        lowered = REVIEW_SYSTEM.lower()
+        assert "pre-computed" not in lowered, \
+            "the reviewer must not be told the citation count settles support"
+        assert "do not re-evaluate" not in lowered
+        assert "not proof" in lowered or "not a proof" in lowered
 
     def test_empty_recommendation_is_zeroed(self):
         from deepchoice.agents.self_reviewer import _citation_coverage
         out = _citation_coverage({})
-        assert out == {"total_fields": 0, "cited_fields": 0, "uncited_fields": 0}
+        assert out["total_fields"] == 0
+        assert out["cited_fields"] == 0
+        assert out["uncited_fields"] == 0
+        assert out["uncited_locations"] == []
+        assert out["unresolved_locations"] == []
 
 
 class TestDetectScene:

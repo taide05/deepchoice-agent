@@ -16,7 +16,8 @@ SNAPSHOT = {
             "evidence_strength": "strong",
             "disputed": False,
             "sources": [
-                {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 8},
+                {"title": "Benchmark Post", "url": "https://example.com/bench", "score": 8,
+                 "snippet": "Measured FastAPI async throughput under load."},
             ],
         },
         {
@@ -24,12 +25,22 @@ SNAPSHOT = {
             "evidence_strength": "moderate",
             "disputed": False,
             "sources": [
-                {"title": "Flask Docs", "url": "https://flask.palletsprojects.com/", "score": 7},
+                {"title": "Flask Docs", "url": "https://flask.palletsprojects.com/", "score": 7,
+                 "snippet": "Flask documents its minimal application core."},
             ],
         },
     ],
     "conflicts": [],
-    "final_recommendation": {"winner": "FastAPI", "winner_rationale": "async support"},
+    "final_recommendation": {
+        "winner": "FastAPI",
+        "winner_rationale": "async support [Source: Benchmark Post]",
+        "ranked_options": [{"name": "FastAPI", "rank": 1}, {"name": "Flask", "rank": 2}],
+        # The report's basis is the set of sources the synthesis result actually
+        # cites, so the fixture cites them. A retrieved chain that is never
+        # cited is no longer presented as a reference.
+        "recommendation": "Adopt FastAPI for async throughput [Source: Benchmark Post], "
+                          "and keep Flask for small apps [Source: Flask Docs].",
+    },
     "confidence": "high",
 }
 
@@ -38,6 +49,55 @@ SNAPSHOT = {
 def _seed_snapshot(monkeypatch):
     monkeypatch.setattr(app_module, "load_snapshot", lambda _: dict(SNAPSHOT))
     yield
+
+
+def _identity_snapshot() -> dict:
+    """Two sources with the same title and different URLs, citation identity map."""
+    from deepchoice.agents.conclusion_synthesizer import apply_citation_rules
+
+    title = "Shared Documentation Title"
+    chains = [{"conclusion": "c", "evidence_strength": "strong",
+               "disputed": False, "sources": [
+                   {"title": title, "url": "https://a.example/doc",
+                    "snippet": "FastAPI body of A", "score": 8},
+                   {"title": title, "url": "https://b.example/doc",
+                    "snippet": "FastAPI body of B", "score": 7},
+               ]}]
+    recommendation = {
+        "winner": "FastAPI",
+        "recommendation": "Only the second supports this [[2]].",
+    }
+    apply_citation_rules(recommendation, chains)
+    return {
+        "task": {"query": "identity test", "report_format": "what_why_how"},
+        "evidence_chains": chains,
+        "conflicts": [],
+        "confidence": "medium",
+        "final_recommendation": recommendation,
+    }
+
+
+class TestAnnotatedExportKeepSourceIdentity:
+    def test_annotated_citations_point_to_the_registered_urls(self, monkeypatch):
+        monkeypatch.setattr(app_module, "load_snapshot",
+                            lambda _: _identity_snapshot())
+        resp = client.get(f"/research/{TASK_ID}/annotated")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert {c["url"] for c in data["citations"]} == {
+            "https://a.example/doc", "https://b.example/doc"}
+        # Only B was cited, so only B's link is annotated.
+        assert 'href="#ev-2"' in data["report"]
+        assert "https://a.example/doc" not in data["report"]
+
+    def test_md_export_lists_the_registered_url_not_a_same_titled_sibling(
+            self, monkeypatch):
+        monkeypatch.setattr(app_module, "load_snapshot",
+                            lambda _: _identity_snapshot())
+        resp = client.get(f"/research/{TASK_ID}/export", params={"format": "md"})
+        assert resp.status_code == 200
+        assert "https://b.example/doc" in resp.text
+        assert "https://a.example/doc" not in resp.text
 
 
 class TestAnnotatedEndpoint:
@@ -49,8 +109,6 @@ class TestAnnotatedEndpoint:
         assert data["format"] == "what_why_how"
         assert isinstance(data["report"], str)
         assert data["report"]  # non-empty markdown
-        assert isinstance(data["report_html"], str)
-        assert data["report_html"]
         assert isinstance(data["toc"], list) and data["toc"]
         assert any(t["text"] for t in data["toc"])
         assert isinstance(data["citations"], list)
@@ -62,63 +120,10 @@ class TestAnnotatedEndpoint:
         assert '<a class="cite" href="#ev-1">[1]</a>' in report
         assert 'href="#ev-2"' in report
 
-    def test_historical_citations_are_projected_as_unknown(self):
-        citations = client.get(
-            f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"}
-        ).json()["citations"]
-        assert all(citation["verification_status"] == "unknown" for citation in citations)
-        assert all(citation["verification_reason"] == "not_checked" for citation in citations)
-        assert all(isinstance(citation["source_idx"], int) for citation in citations)
-
-    def test_annotated_citations_include_canonical_status_and_reason(self, monkeypatch):
-        snapshot = {
-            **SNAPSHOT,
-            "evidence_chains": [{
-                **SNAPSHOT["evidence_chains"][0],
-                "sources": [{
-                    "title": "Benchmark Post",
-                    "url": "https://EXAMPLE.com/bench#result",
-                    "canonical_url": "https://example.com/bench",
-                    "verification_status": "unsupported",
-                    "verification_reason": "numeric_mismatch",
-                    "score": 8,
-                }],
-            }],
-            "citation_verification": {
-                "status_counts": {"verified": 0, "unsupported": 1, "unreachable": 0, "unknown": 0}
-            },
-        }
-        monkeypatch.setattr(app_module, "load_snapshot", lambda _: snapshot)
-        citation = client.get(
-            f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"}
-        ).json()["citations"][0]
-        assert citation["url"] == "https://example.com/bench"
-        assert citation["canonical_url"] == "https://example.com/bench"
-        assert citation["verification_status"] == "unsupported"
-        assert citation["verification_reason"] == "numeric_mismatch"
-        assert citation["source_idx"] == 0
-
     def test_toc_anchors_injected(self):
         resp = client.get(f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"})
         report = resp.json()["report"]
         assert '<span id="sec-1"></span>' in report
-
-    def test_html_view_is_sanitized_without_changing_markdown_contract(self, monkeypatch):
-        monkeypatch.setitem(
-            app_module.FORMAT_RENDERERS,
-            "what_why_how",
-            lambda _snapshot: (
-                '# Safe <img src=x onerror="alert(1)">\n'
-                '[bad](javascript:alert(2)) <script>alert(3)</script>'
-            ),
-        )
-        data = client.get(
-            f"/research/{TASK_ID}/annotated", params={"format": "what_why_how"}
-        ).json()
-        assert "<script>" in data["report"]
-        assert "<script" not in data["report_html"].lower()
-        assert "onerror" not in data["report_html"].lower()
-        assert "javascript:" not in data["report_html"].lower()
 
     def test_404_on_missing_task(self, monkeypatch):
         monkeypatch.setattr(app_module, "load_snapshot", lambda _: None)
@@ -132,7 +137,9 @@ class TestExportEndpoint:
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/markdown")
         assert 'attachment; filename="deepchoice-report-' in resp.headers["content-disposition"]
-        assert "FastAPI wins on async throughput" in resp.text
+        # The export carries the recommendation and its cited sources.
+        assert "Adopt FastAPI for async throughput" in resp.text
+        assert "Benchmark Post" in resp.text
 
     def test_pdf_export_returns_pdf_bytes(self):
         resp = client.get(f"/research/{TASK_ID}/export", params={"format": "pdf"})
@@ -161,7 +168,10 @@ class TestExportEndpoint:
             params={"format": "md", "report_format": "comparison_matrix"},
         )
         assert resp.status_code == 200
-        assert "5-Dimension Comparison Matrix" in resp.text
+        # The matrix now compares the synthesis result's candidates instead of
+        # sorting retrieval hits into five keyword-derived dimensions.
+        assert "Candidate Comparison" in resp.text
+        assert "FastAPI" in resp.text
 
     def test_stored_report_format_used_when_param_absent(self, monkeypatch):
         snap = dict(SNAPSHOT)

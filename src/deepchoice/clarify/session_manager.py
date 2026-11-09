@@ -1,84 +1,32 @@
 import re
 import time
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
-
-from ..security.input_limits import validate_safe_text
-
-BoundedStateText = Annotated[str, StringConstraints(max_length=4000)]
-ShortStateText = Annotated[str, StringConstraints(max_length=500)]
-SESSION_ID_PATTERN = re.compile(r"^clarify_[0-9a-f]{12}$")
+from pydantic import BaseModel, Field
 
 
 class SessionState(BaseModel):
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
-
     session_id: str = ""
     status: Literal["clarifying","ready","running","done"] = "clarifying"
     
-    candidate_techs: list[ShortStateText] = Field(default_factory=list, max_length=50)
+    candidate_techs: list[str] = []
     scene: Literal["solo","team","enterprise"] | None = None
     complexity: Literal["simple","medium","complex"] | None = None
 
-    constraints: list[ShortStateText] = Field(default_factory=list, max_length=50)
+    constraints: list[str] = []
     unknown_techs: bool = False
 
-    clarify_rounds: int = Field(default=0, ge=0, le=100)
-    filled_required: list[ShortStateText] = Field(default_factory=list, max_length=20)
-    missing_required: list[ShortStateText] = Field(default_factory=list, max_length=20)
-    clarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    clarify_rounds: int = 0
+    filled_required: list[str] = []
+    missing_required: list[str] = []
+    clarity_score: float = 0.0
 
-    messages: list[dict[str, BoundedStateText]] = Field(default_factory=list, max_length=40)
+    messages: list[dict] = []
 
     clarified_task: dict | None = None
-    sub_questions: list[ShortStateText] | None = Field(default=None, max_length=20)
+    sub_questions: list[str] | None = None
     last_active: float = Field(default_factory = time.time)
-
-    @field_validator("session_id")
-    @classmethod
-    def validate_session_id(cls, value: str) -> str:
-        if value and not SESSION_ID_PATTERN.fullmatch(value):
-            raise ValueError("invalid session id")
-        return value
-
-    @field_validator(
-        "candidate_techs",
-        "constraints",
-        "filled_required",
-        "missing_required",
-        "sub_questions",
-    )
-    @classmethod
-    def validate_text_collections(cls, values):
-        if values is not None:
-            for value in values:
-                validate_safe_text(value)
-        return values
-
-    @field_validator("messages")
-    @classmethod
-    def validate_messages(cls, values: list[dict[str, str]]) -> list[dict[str, str]]:
-        for message in values:
-            if set(message) != {"role", "content"}:
-                raise ValueError("session message shape is invalid")
-            if message["role"] not in {"user", "assistant"}:
-                raise ValueError("session message role is invalid")
-            validate_safe_text(message["content"])
-            maximum = 2000 if message["role"] == "user" else 4000
-            if not message["content"] or len(message["content"]) > maximum:
-                raise ValueError("session message length is invalid")
-        return values
-
-    def append_message(self, role: Literal["user", "assistant"], content: str) -> None:
-        safe_content = validate_safe_text(str(content))
-        max_length = 2000 if role == "user" else 4000
-        if not safe_content or len(safe_content) > max_length:
-            raise ValueError("session message length is invalid")
-        updated = [*self.messages, {"role": role, "content": safe_content}]
-        # Assignment validation enforces the collection and item bounds.
-        self.messages = updated
 
 class SessionManager:
     SESSION_TIMEOUT = 1800
@@ -100,15 +48,10 @@ class SessionManager:
         self._sessions = {}
     
     def create(self,query:str) -> dict:
-        query = query.strip()
-        if not query or len(query) > 4000:
-            raise ValueError("query length is invalid")
-        validate_safe_text(query)
         session_id = f"clarify_{uuid4().hex[:12]}"
         state = self._extract_initial_state(query)
-        state.session_id = session_id
-        state.append_message("user", query)
         self._sessions[session_id] = state
+        state.session_id = session_id
         return self._response(state)
 
     def _extract_initial_state(self, query: str) -> SessionState:
@@ -143,18 +86,13 @@ class SessionManager:
 
     def process_message(self,session_id:str,message:str) -> dict:
         state = self._get_or_raise(session_id)
-        message = message.strip()
-        if not message or len(message) > 2000:
-            raise ValueError("message length is invalid")
-        validate_safe_text(message)
         state.last_active = time.time()
-        state.append_message("user", message)
+        user_message = {"role":"user","content":message}
+        state.messages.append(user_message)
         state.clarify_rounds += 1
         return self._response(state)
 
     def _get_or_raise(self,session_id:str) -> SessionState:
-        if not SESSION_ID_PATTERN.fullmatch(session_id):
-            raise KeyError
         if session_id not in self._sessions:
             raise KeyError
         state = self._sessions[session_id]
