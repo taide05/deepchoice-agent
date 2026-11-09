@@ -20,8 +20,15 @@ from deepchoice.agents import self_reviewer as sr
 from deepchoice.formats.what_why_how import render
 from deepchoice.utils.candidate_identity import names_candidate
 
-FAILED_RUN = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
+FAILED_RUN = ((pathlib.Path(__file__).resolve().parents[1]) / "outputs"
               / "8049500c-bd39-44e4-81bb-a1fbbebac780" / "research_snapshot.json")
+
+# Regressions pinned to a preserved local run; the fixture is git-ignored and not
+# shipped with the repository, so the module is skipped when it is absent (CI).
+pytestmark = pytest.mark.skipif(
+    not FAILED_RUN.exists(),
+    reason="local preserved-run fixture (outputs/) is not part of the repository",
+)
 
 
 def _failed_run_state() -> dict:

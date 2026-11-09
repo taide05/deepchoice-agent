@@ -28,6 +28,13 @@ import pytest
 
 from deepchoice import run_guard
 
+# The process-guard boundary tests exercise Windows process control (taskkill);
+# they are not meaningful on POSIX runners.
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="process-guard tests use Windows-specific process control (taskkill)",
+)
+
 
 @pytest.fixture(autouse=True)
 def _reset_module_state():

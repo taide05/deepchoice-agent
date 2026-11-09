@@ -17,8 +17,14 @@ import pytest
 from deepchoice.agents import conclusion_synthesizer as cs
 from deepchoice.formats.what_why_how import render
 
-V4_RUN = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
+V4_RUN = ((pathlib.Path(__file__).resolve().parents[1]) / "outputs"
           / "9dd25b70-f9f7-4c43-bfc4-ef6cc29c0c14" / "research_snapshot.json")
+
+# Regressions pinned to a preserved local run; skipped when the local fixture is absent.
+pytestmark = pytest.mark.skipif(
+    not V4_RUN.exists(),
+    reason="local preserved-run fixture (outputs/) is not part of the repository",
+)
 
 
 def v4_state() -> dict:
@@ -134,7 +140,7 @@ class TestBenchmarkAnswersAreNotResearchBasis:
     for the question that set is meant to evaluate."""
 
     def test_the_generated_documents_declare_their_provenance(self):
-        kb = pathlib.Path(r"D:\deepchoice-precodex\chroma_kb")
+        kb = (pathlib.Path(__file__).resolve().parents[1]) / "chroma_kb"
         marked = sorted((kb / "data" / "benchmark_answers").glob("*.md"))
         assert marked, "fixture: the generated answer documents exist"
         for path in marked:
@@ -143,7 +149,7 @@ class TestBenchmarkAnswersAreNotResearchBasis:
 
     def test_the_generator_writes_into_the_benchmark_directory(self):
 
-        path = pathlib.Path(r"D:\deepchoice-precodex\chroma_kb\populate_benchmark_kb.py")
+        path = (pathlib.Path(__file__).resolve().parents[1]) / "chroma_kb" / "populate_benchmark_kb.py"
         spec = importlib.util.spec_from_file_location("populate_benchmark_kb", path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -152,7 +158,7 @@ class TestBenchmarkAnswersAreNotResearchBasis:
 
     def test_the_ingest_records_provenance_and_channel(self):
 
-        path = pathlib.Path(r"D:\deepchoice-precodex\chroma_kb\setup.py")
+        path = (pathlib.Path(__file__).resolve().parents[1]) / "chroma_kb" / "setup.py"
         source = path.read_text(encoding="utf-8")
         assert "benchmark_ground_truth" in source
         assert '"provenance"' in source and '"channel"' in source
