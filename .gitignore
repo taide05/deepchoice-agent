@@ -62,3 +62,6 @@ review-*.txt
 # Test scratch kept inside the worktree so nothing is written to a drive root.
 /.pytest-tmp/
 /.scratch/
+
+# Local-only internal docs (dev/handoff/delivery archives; never pushed)
+/internal_docs/
