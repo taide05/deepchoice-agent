@@ -29,7 +29,7 @@ from deepchoice.utils.candidate_identity import (
     split_navigation_label,
 )
 
-FAILED_RUN = (pathlib.Path(r"D:\deepchoice-precodex\outputs")
+FAILED_RUN = (pathlib.Path(__file__).resolve().parents[1] / "outputs"
               / "e3b1c837-d2e1-46a1-b77c-c46eefe41dea" / "research_snapshot.json")
 
 

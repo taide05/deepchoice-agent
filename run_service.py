@@ -11,8 +11,8 @@ child's event loop is blocked in a synchronous call - the guard cancels first,
 waits a bounded grace period, and then stops only the child it created, recording
 the deadline and the actual exit time beside the run.
 
-Credentials come from the current project's local file by path. They are never
-printed, copied or committed.
+Credentials are loaded from a local `.env` file (override its location with the
+`DEEPCHOICE_ENV_FILE` environment variable). They are never printed, copied or committed.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from pathlib import Path
 
 WORKTREE = Path(__file__).resolve().parent
 SRC = WORKTREE / "src"
-CURRENT_ENV = Path(r"D:\deepchoice-agent\.env")
+CURRENT_ENV = Path(os.environ.get("DEEPCHOICE_ENV_FILE") or (WORKTREE / ".env"))
 HOST = "127.0.0.1"
 PORT = 8100
 BASE_URL = f"http://{HOST}:{PORT}"
