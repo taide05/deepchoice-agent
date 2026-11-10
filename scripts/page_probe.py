@@ -23,8 +23,8 @@ for path in (str(SRC), str(WORKTREE)):
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--outdir", default=str(
-        Path(r"D:\deepchoice-dsh\v11_page_probe")))
+    parser.add_argument("--outdir", default=os.environ.get(
+        "DEEPCHOICE_PAGE_PROBE_DIR", str(WORKTREE / ".scratch" / "page_probe")))
     args = parser.parse_args(argv)
     os.chdir(WORKTREE)
     # The probe uses the direct safe-fetch path only; it must not select a
