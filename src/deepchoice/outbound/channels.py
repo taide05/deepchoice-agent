@@ -1,6 +1,6 @@
 r"""Outbound channel layer: direct / local-proxy / self-forward / direct-v6.
 
-Design (2026-08-31, D:\ai-career\DC-网络层-设计-2026-08-31.md):
+Design notes (2026-08-31):
 - Channels are probed first, routed by table, executed with zero per-request
   trial-and-error.
 - self-forward passes each request through a user-owned forward endpoint

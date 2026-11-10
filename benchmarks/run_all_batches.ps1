@@ -1,5 +1,5 @@
 # DeepChoice 200-case benchmark — 5 cases per batch, 40 batches total
-# Run from D:\deepchoice-agent:  .\benchmarks\run_all_batches.ps1
+# Run from the repository root:  .\benchmarks\run_all_batches.ps1
 
 $ErrorActionPreference = "Continue"
 

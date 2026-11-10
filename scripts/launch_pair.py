@@ -17,7 +17,7 @@ from pathlib import Path
 
 WORKTREE = Path(__file__).resolve().parent.parent
 SRC = WORKTREE / "src"
-CURRENT_ENV = Path(r"D:\deepchoice-agent\.env")
+CURRENT_ENV = Path(os.environ.get("DEEPCHOICE_ENV_FILE") or (WORKTREE / ".env"))
 NEEDED = (
     "DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY",
     "DS_FLASH_MODEL", "FLASH_MODEL",
