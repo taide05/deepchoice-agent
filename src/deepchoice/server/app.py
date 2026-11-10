@@ -19,6 +19,7 @@ from ..formats.pdf import render_pdf
 from ..formats.what_why_how import render as render_what_why_how
 from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
+from .security import ApiSecurityMiddleware
 from .snapshot_store import (
     list_history,
     load_snapshot,
@@ -28,6 +29,7 @@ from .snapshot_store import (
 )
 
 app = FastAPI(title="DeepChoice API", version="0.1.0")
+app.add_middleware(ApiSecurityMiddleware)
 app.include_router(clarify_router)
 
 OUTPUT_DIR = Path("./outputs")

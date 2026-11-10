@@ -35,7 +35,8 @@ DeepChoice 是一个基于 Python / LangGraph 的技术选型深度研究 Agent�
 - **Three report formats** — `what_why_how` (decision summary first), `evidence_first`, and a comparison
   matrix; Markdown / PDF export.
 - **Operational features** — FastAPI backend, SSE progress stream, cancellation, history and snapshot
-  queries, SQLite checkpointing, Streamlit frontend.
+  queries, SQLite checkpointing, Streamlit frontend, optional API-key auth + per-client rate limiting
+  for shared deployments (env-gated, off by default).
 - **Reproducible evaluation harness** — fixed 200-case set, deterministic metrics and a documented
   evaluation protocol (see [EVALUATION.md](EVALUATION.md)).
 
@@ -48,6 +49,16 @@ A generated report renders as a decision-first document with cited evidence and 
 More examples (and the questions they answer) are in [`examples/`](examples/README.md).
 
 ## Architecture
+
+```mermaid
+flowchart LR
+    C[Client] --> API[FastAPI /research]
+    API --> QA[query_analyzer] --> QD[query_adapter] --> MR[multi_retriever]
+    MR --> SE[source_evaluator] --> CD[conflict_detector] --> EC[evidence_chain]
+    EC --> CS[conclusion_synthesizer] --> RG[report_generator] --> SR[self_reviewer]
+    MR --> SRC[(Web / official docs / GitHub / arXiv / community / local KB)]
+    SR --> OUT[Markdown / PDF report]
+```
 
 ```
                 ┌───────────────────────────── FastAPI /research ─────────────────────────────┐
@@ -143,6 +154,8 @@ See [`.env.example`](.env.example) for a template.
 | `CHROMA_PATH` | no | Local knowledge-base path |
 | `PRECODEX_LLM_MAX` / `PRECODEX_TAVILY_MAX` / `PRECODEX_WALL_MAX_S` | no | Local run stop lines (default 40 / 24 / 900) |
 | `LEARNED_DOCS_READONLY` / `RETRIEVAL_CACHE_ENABLED` | no | Freeze knowledge-base writes / retrieval cache for evaluation runs |
+| `DEEPCHOICE_API_KEY` | no | When set, require `X-API-Key` on all non-public endpoints (off by default) |
+| `DEEPCHOICE_RATE_LIMIT_PER_MINUTE` | no | Limit mutating requests per client per minute (0 = disabled) |
 
 ## Evaluation
 
@@ -168,8 +181,9 @@ Raw deterministic metrics: [`benchmarks/results/formal_200_metrics.json`](benchm
 
 ## Known limitations
 
-- Single-instance, trusted-network deployment: the API has no authentication or task ownership; do not expose
-  it directly to the public internet.
+- Single-instance, trusted-network deployment by default: no authentication/task ownership unless
+  `DEEPCHOICE_API_KEY` is set; for a shared demo enable the optional API key + rate limit and put the
+  service behind TLS/reverse proxy.
 - Citation `verified` means the page was reachable and passed lexical/citation checks — it does not validate
   model inferences or prove a deployment works.
 - Official-doc fetching is bounded (page attempts, HTTP requests, response size, wall-clock deadline); sites
