@@ -329,6 +329,8 @@ class TestTheGuardStopsABlockedChild:
         env["DEEPCHOICE_SERVICE_TOKEN"] = token
         return run_dir, subprocess.Popen([sys.executable, str(child_script)], env=env)
 
+    @pytest.mark.skipif(os.environ.get("CI") == "true",
+                        reason="process-tree topology differs on hosted CI runners")
     def test_a_child_blocked_in_synchronous_work_is_stopped(self, tmp_path):
         token = "test-token"
         run_dir, child = self._spawn_blocked_child(tmp_path, "blocked-task", """
@@ -863,6 +865,8 @@ class TestGuardBindsTheLaunchTree:
         monkeypatch.setattr(run_guard, "bind_service_process", fake_bind)
         return fake_bind
 
+    @pytest.mark.skipif(os.environ.get("CI") == "true",
+                        reason="process-tree topology differs on hosted CI runners")
     def test_a_record_naming_an_unrelated_process_is_not_signalled(self, tmp_path):
         decoy = subprocess.Popen([sys.executable, "-c",
                                   "import time; time.sleep(120)"])
@@ -1122,6 +1126,8 @@ class TestGuardBindsTheLaunchTree:
             "a process already gone is a confirmed stop"
 
 
+    @pytest.mark.skipif(os.environ.get("CI") == "true",
+                        reason="process-tree topology differs on hosted CI runners")
     def test_binding_uses_launch_relationship_when_record_is_unverified(self):
         child = subprocess.Popen([sys.executable, "-c",
                                   "import time; time.sleep(30)"])

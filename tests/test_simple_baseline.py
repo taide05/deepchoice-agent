@@ -24,6 +24,24 @@ pytestmark = pytest.mark.skipif(
     not SNAPSHOT.exists(),
     reason="preserved-run fixture missing from tests/fixtures",
 )
+
+
+@pytest.fixture(autouse=True)
+def _offline_embedding_model(monkeypatch):
+    """Deterministic local embeddings: CI has no BAAI/bge-m3 model download."""
+    import numpy as np
+
+    from deepchoice.agents import conflict_detector as cd
+
+    class _FakeEmbedding:
+        def encode(self, texts, **kwargs):
+            rows = []
+            for text in texts:
+                digest = hashlib.sha256(str(text).encode("utf-8")).digest()
+                rows.append([byte / 255.0 for byte in digest[:16]] + [1.0])
+            return np.array(rows, dtype=np.float32)
+
+    monkeypatch.setattr(cd, "get_embedding_model", lambda: _FakeEmbedding())
 HISTORICAL_SNAPSHOTS = [
     (pathlib.Path(__file__).resolve().parents[1]) / "tests" / "fixtures"
     / "baseline_historical_a_research_snapshot.json",
