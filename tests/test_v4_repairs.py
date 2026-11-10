@@ -1,8 +1,8 @@
 """Regressions for the v4 acceptance repairs.
 
 Each test uses the preserved fourth real run as fixed input
-(`outputs/9dd25b70-.../research_snapshot.json`) so the defect it pins is the one
-observed in that run, not a synthetic stand-in.
+(`tests/fixtures/v4_research_snapshot.json`, sanitized) so the defect it pins is
+the one observed in that run, not a synthetic stand-in.
 """
 from __future__ import annotations
 
@@ -17,13 +17,13 @@ import pytest
 from deepchoice.agents import conclusion_synthesizer as cs
 from deepchoice.formats.what_why_how import render
 
-V4_RUN = ((pathlib.Path(__file__).resolve().parents[1]) / "outputs"
-          / "9dd25b70-f9f7-4c43-bfc4-ef6cc29c0c14" / "research_snapshot.json")
+V4_RUN = ((pathlib.Path(__file__).resolve().parents[1]) / "tests" / "fixtures"
+          / "v4_research_snapshot.json")
 
-# Regressions pinned to a preserved local run; skipped when the local fixture is absent.
+# Regression fixture shipped in tests/fixtures (sanitized preserved run).
 pytestmark = pytest.mark.skipif(
     not V4_RUN.exists(),
-    reason="local preserved-run fixture (outputs/) is not part of the repository",
+    reason="preserved-run fixture missing from tests/fixtures",
 )
 
 

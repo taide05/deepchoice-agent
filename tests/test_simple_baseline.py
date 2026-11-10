@@ -16,20 +16,37 @@ from deepchoice.evaluation.simple_baseline import (
     run_pair,
 )
 
-SNAPSHOT = ((pathlib.Path(__file__).resolve().parents[1]) / "outputs"
-            / "600af92f-f65e-41c0-aa6f-2811f943c124"
-            / "research_snapshot.json")
+SNAPSHOT = ((pathlib.Path(__file__).resolve().parents[1]) / "tests" / "fixtures"
+            / "baseline_research_snapshot.json")
 
-# Fixtures are preserved local runs (git-ignored); skip the module when absent (CI).
+# Fixtures are sanitized preserved runs shipped in tests/fixtures.
 pytestmark = pytest.mark.skipif(
     not SNAPSHOT.exists(),
-    reason="local preserved-run fixture (outputs/) is not part of the repository",
+    reason="preserved-run fixture missing from tests/fixtures",
 )
+
+
+@pytest.fixture(autouse=True)
+def _offline_embedding_model(monkeypatch):
+    """Deterministic local embeddings: CI has no BAAI/bge-m3 model download."""
+    import numpy as np
+
+    from deepchoice.agents import conflict_detector as cd
+
+    class _FakeEmbedding:
+        def encode(self, texts, **kwargs):
+            rows = []
+            for text in texts:
+                digest = hashlib.sha256(str(text).encode("utf-8")).digest()
+                rows.append([byte / 255.0 for byte in digest[:16]] + [1.0])
+            return np.array(rows, dtype=np.float32)
+
+    monkeypatch.setattr(cd, "get_embedding_model", lambda: _FakeEmbedding())
 HISTORICAL_SNAPSHOTS = [
-    (pathlib.Path(__file__).resolve().parents[1]) / "outputs"
-    / "e339d065-7a61-4993-9819-1405b23bb7cd" / "research_snapshot.json",
-    (pathlib.Path(__file__).resolve().parents[1]) / "outputs"
-    / "f4e9b7d5-10a8-4dcf-a69d-5b2a20a58a3b" / "research_snapshot.json",
+    (pathlib.Path(__file__).resolve().parents[1]) / "tests" / "fixtures"
+    / "baseline_historical_a_research_snapshot.json",
+    (pathlib.Path(__file__).resolve().parents[1]) / "tests" / "fixtures"
+    / "baseline_historical_b_research_snapshot.json",
     SNAPSHOT,
 ]
 
@@ -249,8 +266,8 @@ def test_saved_tenth_material_keeps_candidate_coverage_gaps_visible():
 
 
 def test_saved_v11_coverage_uses_row_owner_not_retriever_label():
-    path = ((pathlib.Path(__file__).resolve().parents[1]) / "outputs"
-            / "v11pair-a42b7594fa47" / "shared_snapshot.json")
+    path = ((pathlib.Path(__file__).resolve().parents[1]) / "tests" / "fixtures"
+            / "baseline_v11pair_shared_snapshot.json")
     if not path.exists():
         pytest.skip(f"v11 snapshot not present at {path}")
     before = hashlib.sha256(path.read_bytes()).hexdigest()

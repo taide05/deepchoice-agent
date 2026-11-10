@@ -27,3 +27,19 @@ jobs:
           pip install pyflakes vulture
           pyflakes src/ tests/
           vulture src/ vulture_whitelist.py
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests (Windows-specific process-guard coverage)
+        run: pytest -q

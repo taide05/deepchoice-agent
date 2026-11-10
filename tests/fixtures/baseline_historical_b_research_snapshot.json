@@ -1,0 +1,1893 @@
+{
+  "task": {
+    "query": "我们是一家约 120 人的 B2B SaaS 公司。客户在我们的平台上上传 Python 或 Node.js 脚本，用来做数据清洗、报表生成和轻量自动化；平台把每个任务作为一次性 Pod 运行在 Kubernetes 上。客户脚本属于不可信代码，我们不能假设它不会读取其他租户的数据、探测内网、滥用系统调用或尝试利用内核漏洞。当前生产环境在 Amazon EKS 上，使用托管节点组（Amazon Linux 2023，x86_64）、containerd 运行时，约 200 个节点；日均约 10,000 个任务 Pod，峰值约 2,000 个并发，单任务通常 1–2 vCPU、2–4 GiB 内存、运行 30–120 秒。平台团队 6 人，没有专职的内核或虚拟化工程师；CI 已经构建 OCI 镜像，网络策略、日志、指标和告警也已接入现有平台。我们不打算重写任务编排或业务代码，只希望在 Kubernetes 的 RuntimeClass 与 containerd 这一层增加强隔离。\n\n现在要在 gVisor 和 Kata Containers 之间选择，作为未来 12–18 个月运行不可信客户代码的标准沙箱。当前生产只使用 EKS 托管节点组，第一阶段不准备引入裸金属节点；如果任一候选必须依赖裸金属、特定节点类型或额外的节点能力，请把这一点写成硬性前置条件或明确的第二阶段触发条件，而不是隐含假设。我们不在选型阶段搭环境实测，也不采购第三方沙箱服务；不要依赖实时价格。场景中的并发、任务大小、节点数都是假设，不是实测数据。\n\n请比较 gVisor 与 Kata Containers，结合上述场景给出有依据的主推荐、理由，以及具体到触发条件的反转结论。必须逐项回答以下六个问题：\n1. 职责边界与适用前提：两个候选各自覆盖哪一层隔离与运行时职责，哪些能力不在其核心职责内；各自对 Linux、CPU 架构、隔离所依赖的硬件/内核能力、Kubernetes 与 containerd 版本有什么硬性要求；在 EKS 托管节点组、x86_64、无裸金属的第一阶段约束下，哪些能力成立、哪些不成立。\n2. 隔离机制与攻击面：分别说明两者实现隔离的机制、依赖的内核/硬件能力，以及如何缩小宿主内核攻击面；各自仍存在哪些逃逸面；特权容器、/proc、io_uring、eBPF、GPU、嵌套容器分别会怎样影响隔离结论；区分官方文档明确记载、可从机制推出、以及需要实测/未知的部分。\n3. 实际执行与数据边界：从创建 Pod 到 RuntimeClass、containerd、shim 与运行时，各自实际启动哪些组件或隔离单元；哪些东西留在宿主机、哪些进入隔离边界；stdin/stdout、日志、网络、卷、Secret、设备访问如何跨越边界；kubectl exec、镜像拉取、卷挂载、设备插件分别经过谁；控制面/节点权限不足或运行时组件不可用时，隔离是否仍成立，审计能留下什么证据。\n4. 性能、密度、兼容性与测量：启动延迟、内存与 CPU 开销、I/O 与系统调用密集负载、页缓存、单节点密度、GPU 支持等，官方文档没有给出的数字必须标为未知；请给出可执行的测量方案（测什么、什么负载、什么环境、取哪些指标、什么门槛）。同时说明 Python/Node.js、原生依赖、seccomp、线程、FUSE、嵌套容器等兼容性风险，以及上线前如何验证。\n5. 失败模式、运维与退出：运行时/隔离单元启动失败、不支持的系统调用、内核 panic、CNI/eBPF 交互、节点升级、镜像不兼容、容量耗尽时各自的表现、数据风险与恢复路径；排障入口（事件、日志、指标、dmesg、运行时日志）和关键告警；滚动上线、回滚、安全响应、团队技能负担；如果要退出该方案，迁移路径和成本是什么。\n6. 版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（平台支持、GPU、机密容器、隔离机制依赖的内核能力、Kubernetes/containerd/内核/架构门槛）；哪些结论只适用于特定版本或部署形态；在本场景下应进一步核对哪些版本与配置组合。不要编造未实测的启动时间、内存开销、密度、吞吐或安全保证。\n\n所有决定性事实尽量引用三个方向的官方材料：gVisor 与 Kata Containers 各自的官方文档/官方发布说明，以及 Kubernetes、containerd、Amazon EKS 的官方文档；并标明版本或日期。第三方博客、基准测试和对比文章只能作为线索，不能单独支撑决定性结论。无法确认的内容请标 unknown，并说明核对或测量方法；不要把未知写成确定结论，也不要把场景假设当成官方保证。",
+    "scene_context": "一家约 120 人的 B2B SaaS 公司允许客户上传 Python/Node.js 脚本，在 Amazon EKS 上以一次性 Pod 运行数据清洗、报表和自动化任务。客户代码不可信，平台需要强隔离；生产使用 EKS 托管节点组（Amazon Linux 2023，x86_64）、containerd、约 200 个节点，日均约 10,000 个任务 Pod、峰值约 2,000 并发，单任务通常 1–2 vCPU、2–4 GiB 内存、运行 30–120 秒。平台团队 6 人，没有专职内核/虚拟化工程师；现有 CI、网络策略、日志和指标已接入。第一阶段不引入裸金属节点；未来 12 个月可能增加 GPU/ML 任务，某个受监管客户可能要求可证明的强隔离或机密计算。候选为 gVisor 与 Kata Containers。",
+    "candidate_techs": [
+      "gVisor",
+      "Kata Containers"
+    ],
+    "constraints": [
+      "生产环境为 Amazon EKS 托管节点组（Amazon Linux 2023，x86_64）、containerd 运行时，约 200 个节点；第一阶段不引入裸金属节点。若任一候选必须依赖裸金属、特定节点类型或额外的节点能力，必须写成硬性前置条件或明确的第二阶段触发条件，不能隐含假设。",
+      "日均约 10,000 个任务 Pod，峰值约 2,000 个并发，单任务通常 1–2 vCPU、2–4 GiB 内存、运行 30–120 秒；这些是场景假设，不是实测数据。",
+      "客户脚本属于不可信代码；不得依赖 privileged Pod、hostPath、hostNetwork 或关闭 seccomp/AppArmor 等降低隔离的做法来换取兼容性；必须说明隔离边界与逃逸面。",
+      "必须沿用现有 Kubernetes、containerd、RuntimeClass 与 OCI 镜像；应用镜像和任务提交方式尽量不改，只允许增加 runtime class、节点配置或平台侧适配。",
+      "平台团队 6 人，无专职内核/虚拟化工程师；升级、节点 AMI 轮换和回滚必须可控，不能长期维护无人能排障的运行时。",
+      "每个任务的 stdout/stderr、退出码、日志、指标和审计信息必须可观察；运行时故障不能静默变成成功。",
+      "当前不需要 GPU；未来 12 个月可能增加 GPU/ML 任务，且某个受监管客户可能要求可证明的强隔离或机密计算。",
+      "必须支持 EKS/Kubernetes 小版本升级和节点 AMI 轮换；任何只在特定版本或特定节点类型成立的能力都必须写明版本与前提。",
+      "成本只做方向性比较，不依赖实时价格；没有实测的启动延迟、内存开销、密度或性能数字必须标为未知并给出测量办法。"
+    ],
+    "sub_questions": [
+      "职责边界与适用前提：两个候选各自覆盖哪一层隔离与运行时职责（OCI 运行时/shim、RuntimeClass 与 containerd 集成、隔离边界本身），哪些能力不在其核心职责内（网络策略、镜像扫描、编排、密钥管理、多租户配额等）；各自对 Linux、CPU 架构、隔离所依赖的硬件/内核能力、Kubernetes 与 containerd 版本有什么硬性要求；在 EKS 托管节点组、x86_64、无裸金属的第一阶段约束下，哪些能力成立、哪些不成立。",
+      "隔离机制与攻击面：分别说明两个候选实现隔离的机制、依赖的内核/硬件能力，以及如何缩小宿主内核攻击面；各自仍存在哪些逃逸面；特权容器、/proc、io_uring、eBPF、GPU、嵌套容器分别会怎样影响隔离结论；区分官方文档明确记载、可从机制推出、以及需要实测/未知的部分。",
+      "实际执行与数据边界：从创建 Pod 到 RuntimeClass、containerd、shim 与运行时，各自实际启动哪些组件或隔离单元；哪些东西留在宿主机、哪些进入隔离边界；stdin/stdout、日志、网络、卷、Secret、设备访问如何跨越边界；kubectl exec、镜像拉取、卷挂载、设备插件分别经过谁；控制面/节点权限不足或运行时组件不可用时，隔离是否仍成立，审计能留下什么证据。",
+      "性能、密度、兼容性与测量：启动延迟、内存与 CPU 开销、I/O 与系统调用密集负载、页缓存、单节点密度、GPU 支持等，官方文档没有给出的数字必须标为未知；请给出可执行的测量方案（测什么、什么负载、什么环境、取哪些指标、什么门槛）。同时说明 Python/Node.js、原生依赖、seccomp、线程、FUSE、嵌套容器等兼容性风险，以及上线前如何验证。",
+      "失败模式、运维与退出：运行时/隔离单元启动失败、不支持的系统调用、内核 panic、CNI/eBPF 交互、节点升级、镜像不兼容、容量耗尽时各自的表现、数据风险与恢复路径；排障入口（事件、日志、指标、dmesg、运行时日志）和关键告警；滚动上线、回滚、安全响应、团队技能负担；如果要退出该方案，迁移路径和成本是什么。",
+      "版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（平台支持、GPU、机密容器、隔离机制依赖的内核能力、Kubernetes/containerd/内核/架构门槛）；哪些结论只适用于特定版本或部署形态；在本场景下应进一步核对哪些版本与配置组合。不要编造未实测的启动时间、内存开销、密度、吞吐或安全保证。"
+    ],
+    "report_format": "what_why_how",
+    "language": "zh"
+  },
+  "sub_questions": [
+    "职责边界与适用前提：两个候选各自覆盖哪一层隔离与运行时职责（OCI 运行时/shim、RuntimeClass 与 containerd 集成、隔离边界本身），哪些能力不在其核心职责内（网络策略、镜像扫描、编排、密钥管理、多租户配额等）；各自对 Linux、CPU 架构、隔离所依赖的硬件/内核能力、Kubernetes 与 containerd 版本有什么硬性要求；在 EKS 托管节点组、x86_64、无裸金属的第一阶段约束下，哪些能力成立、哪些不成立。",
+    "隔离机制与攻击面：分别说明两个候选实现隔离的机制、依赖的内核/硬件能力，以及如何缩小宿主内核攻击面；各自仍存在哪些逃逸面；特权容器、/proc、io_uring、eBPF、GPU、嵌套容器分别会怎样影响隔离结论；区分官方文档明确记载、可从机制推出、以及需要实测/未知的部分。",
+    "实际执行与数据边界：从创建 Pod 到 RuntimeClass、containerd、shim 与运行时，各自实际启动哪些组件或隔离单元；哪些东西留在宿主机、哪些进入隔离边界；stdin/stdout、日志、网络、卷、Secret、设备访问如何跨越边界；kubectl exec、镜像拉取、卷挂载、设备插件分别经过谁；控制面/节点权限不足或运行时组件不可用时，隔离是否仍成立，审计能留下什么证据。",
+    "性能、密度、兼容性与测量：启动延迟、内存与 CPU 开销、I/O 与系统调用密集负载、页缓存、单节点密度、GPU 支持等，官方文档没有给出的数字必须标为未知；请给出可执行的测量方案（测什么、什么负载、什么环境、取哪些指标、什么门槛）。同时说明 Python/Node.js、原生依赖、seccomp、线程、FUSE、嵌套容器等兼容性风险，以及上线前如何验证。",
+    "失败模式、运维与退出：运行时/隔离单元启动失败、不支持的系统调用、内核 panic、CNI/eBPF 交互、节点升级、镜像不兼容、容量耗尽时各自的表现、数据风险与恢复路径；排障入口（事件、日志、指标、dmesg、运行时日志）和关键告警；滚动上线、回滚、安全响应、团队技能负担；如果要退出该方案，迁移路径和成本是什么。",
+    "版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（平台支持、GPU、机密容器、隔离机制依赖的内核能力、Kubernetes/containerd/内核/架构门槛）；哪些结论只适用于特定版本或部署形态；在本场景下应进一步核对哪些版本与配置组合。不要编造未实测的启动时间、内存开销、密度、吞吐或安全保证。"
+  ],
+  "adapted_queries": {
+    "tavily": [
+      "gVisor 与 Kata Containers 在 OCI runtime/shim、RuntimeClass 与 containerd 集成中的职责边界是什么？哪些网络策略、镜像扫描、编排、密钥管理和配额不属于核心职责？在 Amazon EKS 托管节点组、x86_64、无裸金属的第一阶段，各自对 Linux 内核、CPU 架构、Kubernetes 和 containerd 版本的硬性要求哪些成立？请引用 2025 年官方文档。",
+      "gVisor 与 Kata Containers 的隔离机制和逃逸面分别是什么？gVisor 的 systrap/KVM 与 Kata 的硬件虚拟化如何缩小宿主内核攻击面？特权容器、/proc、io_uring、eBPF、GPU、嵌套容器会怎样影响隔离结论？请区分 2025 年官方文档、机制推导和未知项。",
+      "从 Pod 到 RuntimeClass、containerd、shim，gVisor 与 Kata Containers 实际启动哪些组件或隔离单元？stdin/stdout、日志、网络、卷、Secret、设备访问如何跨越边界？kubectl exec、镜像拉取、卷挂载、设备插件分别经过谁？运行时不可用或权限不足时审计能留下什么证据？",
+      "gVisor 与 Kata Containers 的启动延迟、内存 CPU 开销、I/O、页缓存、单节点密度和 GPU 支持有哪些官方数据，哪些必须标为未知？如何设计可执行的基准测量方案？Python/Node.js、原生依赖、seccomp、线程、FUSE、嵌套容器有哪些兼容性风险？",
+      "gVisor 与 Kata Containers 在运行时启动失败、不支持系统调用、内核 panic、CNI/eBPF 交互、节点升级、镜像不兼容和容量耗尽时分别会怎样表现？数据风险和恢复路径是什么？排障入口、关键告警、滚动上线、回滚、安全响应和退出迁移成本有哪些？",
+      "gVisor 与 Kata Containers 哪些决定性能力只在特定版本或配置下成立？平台支持、GPU、机密容器、隔离机制依赖的内核能力、Kubernetes/containerd/内核/架构门槛在 EKS AL2023 x86_64 下应核对哪些版本与配置组合？请引用 2025 年官方发布说明，不要编造未实测数字。"
+    ],
+    "arxiv": [
+      "gVisor Kata Containers OCI runtime shim RuntimeClass containerd isolation boundary requirements Linux x86_64 Kubernetes containerd EKS managed node",
+      "gVisor Kata Containers isolation attack surface systrap KVM hardware virtualization seccomp io_uring eBPF GPU nested containers privileged",
+      "gVisor Kata Containers pod RuntimeClass containerd shim data boundary stdin stdout volumes secrets device plugin audit exec image pull",
+      "gVisor Kata Containers performance benchmark startup latency memory overhead I/O syscall page cache density GPU compatibility measurement",
+      "gVisor Kata Containers failure modes kernel panic CNI eBPF node upgrade rollback migration observability runtime logs dmesg",
+      "gVisor Kata Containers version configuration requirements GPU confidential containers kernel Kubernetes containerd architecture"
+    ],
+    "github": [
+      "repo:google/gvisor runtimeclass containerd shim OR repo:kata-containers/kata-containers runtimeclass containerd shim EKS managed node",
+      "gvisor kata-containers security model attack surface systrap KVM io_uring eBPF GPU privileged nested containers",
+      "gvisor kata-containers containerd shim runtimeclass pod exec volumes secrets device plugin audit logs",
+      "gvisor kata-containers benchmark startup latency memory overhead density syscall FUSE seccomp GPU Python Node.js",
+      "gvisor kata-containers troubleshooting runtime failure kernel panic CNI eBPF node upgrade rollback migration",
+      "repo:google/gvisor releases GPU confidential containers kernel requirements OR repo:kata-containers/kata-containers releases GPU confidential containers kernel requirements"
+    ],
+    "chroma": [
+      "gVisor 和 Kata Containers 各自负责哪一层隔离和运行时职责，哪些网络策略、镜像扫描、编排、密钥管理、多租户配额不在核心职责内？在 EKS 托管节点组 x86_64 无裸金属第一阶段，哪些硬性要求成立？",
+      "gVisor 和 Kata Containers 各自用什么机制隔离？依赖哪些内核或硬件能力？还有哪些逃逸面？特权容器、/proc、io_uring、eBPF、GPU、嵌套容器会怎样影响隔离结论？",
+      "在 Kubernetes 中从创建 Pod 到 RuntimeClass、containerd、shim 和运行时，gVisor 与 Kata Containers 分别启动什么？哪些留在宿主机，哪些进入隔离边界？stdout、网络、卷、Secret、设备和 kubectl exec 如何跨边界？",
+      "应该怎样测量 gVisor 和 Kata Containers 的启动延迟、内存 CPU 开销、I/O、页缓存、密度与 GPU 支持？在 Python、Node.js、原生依赖、seccomp、线程、FUSE、嵌套容器上有什么兼容性风险和验证门槛？",
+      "gVisor 和 Kata Containers 启动失败、系统调用不支持、内核 panic、CNI/eBPF 冲突、节点升级、镜像不兼容、容量耗尽时怎么排障和恢复？应该看哪些事件、日志、指标、dmesg 和运行时日志？退出迁移成本是什么？",
+      "gVisor 和 Kata Containers 的哪些能力只在特定版本或配置下成立？在 EKS、Amazon Linux 2023、x86_64、containerd 场景下，GPU、机密容器、内核能力和 Kubernetes/containerd 版本门槛应核对哪些组合？"
+    ],
+    "community": [
+      "site:stackoverflow.com [kubernetes] [containerd] [gvisor] [kata-containers] RuntimeClass EKS managed node group x86_64 bare metal requirements",
+      "site:stackoverflow.com [kubernetes] [gvisor] [kata-containers] io_uring eBPF GPU privileged container escape nested containers",
+      "site:stackoverflow.com [kubernetes] [containerd] [gvisor] [kata-containers] RuntimeClass shim pod exec volume secret device plugin logs audit",
+      "site:stackoverflow.com [kubernetes] [gvisor] [kata-containers] performance startup latency memory overhead FUSE seccomp Python Node.js",
+      "site:stackoverflow.com [kubernetes] [containerd] [gvisor] [kata-containers] runtime failure kernel panic CNI eBPF node upgrade rollback",
+      "site:stackoverflow.com [kubernetes] [containerd] [gvisor] [kata-containers] version compatibility GPU confidential containers kernel requirements EKS AL2023"
+    ],
+    "official": [
+      "gVisor Kubernetes containerd RuntimeClass requirements; Kata Containers Kubernetes containerd RuntimeClass installation requirements x86_64 bare metal",
+      "gVisor security model platform requirements systrap KVM; Kata Containers threat model hardware virtualization isolation",
+      "Kubernetes RuntimeClass containerd shim gVisor Kata Containers pod exec volumes secrets device plugin audit logs",
+      "gVisor performance guide benchmarks; Kata Containers performance metrics density GPU compatibility",
+      "gVisor troubleshooting kernel panic; Kata Containers troubleshooting CNI eBPF node upgrade; Kubernetes node upgrade RuntimeClass rollback",
+      "gVisor release notes version requirements; Kata Containers release notes GPU confidential containers kernel requirements Kubernetes containerd EKS AL2023"
+    ]
+  },
+  "search_results": [
+    {
+      "source": "tavily",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "snippet": "Kata Containers enforces isolation at the hardware level. Each workload boots its own Linux kernel inside a KVM boundary enforced by CPU hardware. To escape, an attacker must first compromise the guest kernel, then escape the KVM hypervisor layer. Those are two separate hardware-enforced barriers. [...] For Kubernetes integration, both use RuntimeClass. Kata provides its runtime handler via `kata-runtime`. gVisor provides `runsc`. Both can run alongside standard container pods on the same cluster without changes to the control plane. See What is KVM? for more on the hardware requirements.\n\n## Syscall compatibility (Kata Containers vs gVisor) [...] ## Infrastructure requirements (Kata Containers vs gVisor)\n\nKata Containers requires KVM. The host must support Intel VT-x or AMD-V with KVM available. On cloud instances, the provider must support nested virtualisation for that instance type. Not all providers or instance types support this.",
+          "date": ""
+        },
+        {
+          "url": "https://atbug.com/sandboxed-container",
+          "title": "沙盒化容器：是容器还是虚拟机",
+          "snippet": "并且还要支持 OCI 和 CRI 规范，可以与 Docker 和 Kubernetes 等容器工具很好的集成。\n\n这里简单介绍下 gVisor 和 Kata Containers。\n\n### gVisor\n\ngVisor 是使用 Go 编写的应用内核，实现了 Linux 操作系统的大部分接口。其包含了一个叫做 `runsc` 的 OCI 运行时，提供了应用和宿主机内核间的隔离层。`runsc` 也实现了与 Docker 和 Kubernetes 的集成，可以很容易的运行沙盒容器。\n\ngVisor 为每个容器提供了独立的操作系统内核。应用与 gVisor 内核提供的虚拟环境进行交互，不是直接访问宿主机的内核。gVisor 还限制和管理文件和网络操作，确保容器化应用和主机操作系统之间有两个隔离层。通过减少和限制应用与主机内核的交互，尽可能减小攻击者绕过容器隔离机制的攻击面。\n\n与大部分内核不同，gVisor 不需要固定的物理资源；相反，其利用现有的主机内核功能，并作为一个正常进程运行。换句话说，gVisor 以 Linux 的方式实现了 Linux。",
+          "date": ""
+        },
+        {
+          "url": "https://www.cnblogs.com/v-fan/p/18843188",
+          "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+          "snippet": "### 低层运行时（Low-Level Runtime）\n\n作用：\n\n低层运行时直接与宿主机操作系统交互，负责容器进程的隔离与执行，包括设置Linux Namespace、Cgroups资源限制、文件系统挂载等底层操作。它是实际启动容器进程的核心组件。\n\n核心特点：\n\n 轻量级，仅关注进程隔离和资源控制。\n 遵循OCI（开放容器标准）规范，提供标准化接口\n\n代表产品与技术：\n\n1. runc\n\n   特点：最广泛使用的低层运行时，基于Namespace和Cgroups实现容器隔离。作为Docker和Containerd的默认执行引擎，启动速度快但安全性较低（共享内核）。\n\n   应用场景：通用容器场景，需高性能但隔离要求不高的环境\n2. runv（Kata Containers/Firecracker）\n\n   特点：基于虚拟化技术（如KVM），通过轻量级虚拟机（MicroVM）实现强隔离。适合多租户和高安全需求场景，但启动速度较慢（约100ms）\n\n   应用场景：金融、云服务等需要严格安全隔离的环境\n3. runsc（gVisor） [...] 默认情况下，所有 Pod 都使用 containerd 中配置的默认运行时创建。从 Kubernetes v1.12 开始，用户可以使用RuntimeClass。\n\nrunsc：\n\n```\ncat <\n```\n\n```\ncat <\n```\n\n```\nkubectl get RuntimeClass \n```\n\n#### 指定RuntimeClass创建Pod\n\nrunsc：\n\n```\ncat <\n```\n\nkata：\n\n```\ncat <\n```\n\n#### 检查 Pod 是否正在运行\n\n```\n# kubectl get pods # ctr c ls \n```\n\n# 结语\n\nposted @ 2025-04-23 17:59  塔克拉玛攻城狮  阅读(1325)  评论(0)    收藏)  举报\n\n刷新页面返回顶部\n\n[](\n\n博客园   ©  2004-2026   \n 浙公网安备 33010602011771号 浙ICP备2021040463号-3 [...] ### 与Kubernetes协作\n\nKubernetes通过容器运行时接口（CRI）统一管理不同运行时，典型流程如下：\n\n1. kubelet接收Pod创建请求，通过CRI接口调用高层运行时（如containerd）。\n2. 高层运行时拉取镜像并解压为rootfs，生成容器配置（config.json）。\n3. 低层运行时（如runc）根据配置启动容器进程，设置Namespace和Cgroups。\n4. 安全沙箱运行时（如Kata）通过虚拟化层隔离容器，提供额外安全保护。\n\n### 运行时总结",
+          "date": ""
+        },
+        {
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "snippet": "(1) gVisor intercepts syscalls in userspace with no hardware boundary between container and host kernel. (2) Kata Containers with Firecracker places each pod inside a microVM with a real guest kernel; hardware virtualization enforces the boundary. The dashed lines in (2) represent that hardware isolation layer. The solid lines in (1) show Sentry reaching the host kernel directly. [...] (1) gVisor intercepts syscalls in userspace with no hardware boundary between container and host kernel. (2) Kata Containers with Firecracker places each pod inside a microVM with a real guest kernel; hardware virtualization enforces the boundary. The dashed lines in (2) represent that hardware isolation layer. The solid lines in (1) show Sentry reaching the host kernel directly. [...] Running both runtimes in the same cluster revealed a few takeaways. gVisor added negligible launch latency and required nothing beyond a standard EKS setup: no special configuration beyond installing the runtime shim. Kata Containers with Firecracker carried a heavier cost. Cold start was around 5 seconds per sandbox, and EKS Managed Node Groups do not work yet: they override the CPU Options stanza needed for nested virtualization, forcing the use of self-managed node groups and the maintenance",
+          "date": ""
+        },
+        {
+          "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+          "snippet": "-Like containers but really lightweight VMs -Has roots in Intel Clear Containers and Hyper runV technology -Integrates seamlessly with Docker 🐳 and Kubernetes ☸ -Often mentioned alongside gVisor, which aims to solve a similar problem by filtering and redirecting system calls to a separate user space kernel (which as a result suffers from runtime performance penalties). [...] for DAX where file contents can be mapped into a memory window on the host, allowing the guest to directly access data from the host page cache -Reduced memory footprint as guest cache is bypassed -No communication necessary, (hopefully) improving I/O performance -Kata containers are OCI conformant which means that a Container Runtime Interface (CRI) that supports external runtime, e.g. CRI-O and containerd which use runC by default can instead use kata-qemu (since Kata 1.6.0 which uses 9pfs) [...] -Kata will only run on a machine configured to support nested virtualisation. -egrep --color 'vmx|svm' /proc/cpuinfo -Kata requires at least a Westmere processor architecture Considerations: hardware Considerations: virtio-9p vs virtio-fs -virtio-9p is based on existing network protocol that is not optimized for virtualization use cases -virtio-fs (available since Kata v1.7.0) takes advantage of the virtual machine’s co-location with the hypervisor -Experimental support for DAX where file",
+          "date": ""
+        },
+        {
+          "url": "https://cloud.tencent.com/developer/article/2402071",
+          "title": "容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云",
+          "snippet": "gVisor是一个由谷歌开发的开源容器运行时。它使用轻量级的用户空间内核“沙箱”为容器提供安全执行环境。\n\ngVisor不是直接在宿主机内核上运行容器，而是在隔离的沙箱中运行，增加了额外的安全和隔离层。沙箱拦截容器的系统调用，并应用自己的内核实现，提供针对内核级漏洞的防御。\n\nKata Containers是一个将轻量级虚拟机与容器运行时结合的开源项目。它使用硬件虚拟化为每个容器启动一个独立VM，在容器之间提供高度隔离。\n\n每个VM运行一个极简的轻量级Guest OS，例如精简版Linux内核。Kata Containers旨在兼具容器的性能优势和VM的安全隔离。\n\ngVisor和Kata Containers都解决了传统容器运行时的某些安全问题。它们有助于降低容器逃逸导致攻击者未经授权访问宿主机的风险。通过增加额外隔离和安全控制，这些运行时增强了容器化workload的保护。\n\ngVisor和Kata Containers并非互斥；事实上，它们可以配合使用，Kata利用gVisor作为运行时。这种组合进一步增强了安全性，结合了VM级隔离和gVisor的额外安全措施。 [...] 腾讯云\n开发者社区\n\n文档建议反馈控制台\n\n首页\n\n文章/答案/技术大牛\n\n云云众生s\n\n社区首页 >专栏 >容器安全与安全运行环境的重要性\n\n# 容器安全与安全运行环境的重要性\n\n作者头像\n\n云云众生s\n\n发布于 2024-03-28 13:37:12\n\n发布于 2024-03-28 13:37:12\n\n8880\n\n举报\n\n文章被收录于专栏：云云众生s云云众生s\n\n了解容器运行环境的工作机制，缘何若攻击者突破容器的限制，过度耦合的运行环境可能造成主机被接管，以及gVisor和Kata Containers等安全容器运行环境的好处。\n\n译自 Container Security and the Importance of Secure Runtimes 。\n\n容器已经彻底改变了我们开发和部署应用程序的方式，它为应用程序及其依赖提供了轻量级和可移植的运行环境。但是我们如何保证容器的安全呢？\n\n我们需要关注的一个关键方面是容器运行时，这是用于启动和管理容器的软件。 [...] 它处理容器生命周期管理、进程隔离和其他底层容器操作。Runsc 与 Sentry 和 Gofer 协作，为 gVisor 中的容器化应用提供一个安全的执行环境。\n\n### Kata Containers架构\n\nKata Container 为每个容器或 Pod 封装专属的 VM，提供了额外的保护层。因为每个 VM 都有自己的内核，其中只包含容器工作负载必需的服务，这样可以减少潜在的攻击面。\n\n除增强安全性外，Kata Container 还优先考虑性能和资源效率。这种精简的占用使 Kata Container 对追求在安全需求与高效利用资源间求平衡的组织具有吸引力。\n\nKata Container 被设计成与现有的容器化应用和部署基础设施兼容，使组织能在不作重大修改的情况下采用安全运行时功能。\n\n将 Kata Container 视为集群的安全运行时，您可以从其出色的隔离性、轻量资源占用和增强的安全性中获益，这使其成为部署敏感或不可信工作负载的引人注目的选择。\n\n### 配置gVisor容器安全",
+          "date": ""
+        },
+        {
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "snippet": "Both Kata-containers and Firecracker require the Linux Kernel-based Virtual Machine (KVM), which can only be supported on bare-metal instances or through nested virtualization. Since EKS manages virtualized EC2 instances with nested virtualization disabled, both these options are not viable. As for Nabla-containers, it only supports container images built specifically for Nabla, and does not support dynamic loading of libraries, along with other discouraging limitations. gVisor, on the other [...] gVisor is an application kernel that provides a sandboxed environment for containers by implementing a sandboxed guest kernel which intercepts and services most system calls, isolating containers from the host. Similarly, Nabla-containers use a library OS to reduce the attack surface by customizing the OS constructs to the applications’ needs and reducing the number of system calls to the host. On the other hand, Kata-containers run containers inside lightweight VMs, relying on hardware [...] on the other hand, handles OCI images out-of-the-box, integrates easily with EKS, and does not have any hardware virtualization requirements (KVM can be used as a platform to intercept syscalls, but ptrace is the default alternative).",
+          "date": ""
+        }
+      ],
+      "error": null,
+      "latency_ms": 41375
+    },
+    {
+      "source": "chroma",
+      "status": "empty",
+      "results": [],
+      "error": null,
+      "empty_reason": "no_research_material",
+      "empty_detail": "every indexed document is evaluation material",
+      "latency_ms": 19047
+    },
+    {
+      "source": "github",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://github.com/myspaghetti/macos-virtualbox",
+          "title": "myspaghetti/macos-virtualbox",
+          "snippet": "Stars: 13502, Forks: 1115, Updated: 2026-10-17T05:27:46Z, Description: Push-button installer of macOS Catalina, Mojave, and High Sierra guests in Virtualbox on x86 CPUs for Windows, Linux, and macOS",
+          "has_body": false,
+          "date": "2026-10-17T05:27:46Z"
+        },
+        {
+          "url": "https://github.com/AdnanHodzic/auto-cpufreq",
+          "title": "AdnanHodzic/auto-cpufreq",
+          "snippet": "Stars: 7850, Forks: 370, Updated: 2026-10-20T06:26:52Z, Description: Automatic CPU speed & power optimizer for Linux",
+          "has_body": false,
+          "date": "2026-10-20T06:26:52Z"
+        },
+        {
+          "url": "https://github.com/cloud-hypervisor/cloud-hypervisor",
+          "title": "cloud-hypervisor/cloud-hypervisor",
+          "snippet": "Stars: 6404, Forks: 807, Updated: 2026-10-20T10:37:43Z, Description: A Virtual Machine Monitor for modern Cloud workloads. Features include CPU, memory and device hotplug, support for running Windows and Linux guests, device offload with vhost-user and a minimal compact footprint. Written in Rust with a strong focus on security.",
+          "has_body": false,
+          "date": "2026-10-20T10:37:43Z"
+        },
+        {
+          "url": "https://github.com/aidlearning/AidLearning-FrameWork",
+          "title": "aidlearning/AidLearning-FrameWork",
+          "snippet": "Stars: 5814, Forks: 719, Updated: 2026-10-18T00:59:57Z, Description: 🔥🔥🔥AidLearning is a powerful AIOT development platform, AidLearning builds a linux env supporting GUI, deep learning and visual IDE on Android...Now Aid supports CPU+GPU+NPU for inference with high performance acceleration...Linux on Android or HarmonyOS ",
+          "has_body": false,
+          "date": "2026-10-18T00:59:57Z"
+        },
+        {
+          "url": "https://github.com/tianshiyeben/wgcloud",
+          "title": "tianshiyeben/wgcloud",
+          "snippet": "Stars: 5186, Forks: 909, Updated: 2026-10-19T09:30:59Z, Description: Linux运维监控工具，支持系统硬件信息，内存，CPU，温度，磁盘空间及IO，硬盘smart，GPU，防火墙，网络流量速率等监控，服务接口监测，大屏展示，拓扑图，端口监控，进程监控，docker监控，日志监控，文件防篡改，数据库监控，指令批量下发执行，web ssh，Linux面板(探针)，告警，SNMP监测，K8S，Redis，Nginx，Kafka，资产管理，计划任务，密码管理，工作笔记",
+          "has_body": false,
+          "date": "2026-10-19T09:30:59Z"
+        },
+        {
+          "url": "https://github.com/pixie-io/pixie",
+          "title": "pixie-io/pixie",
+          "snippet": "Stars: 6548, Forks: 507, Updated: 2026-10-20T01:21:58Z, Description: Instant Kubernetes-Native Application Observability",
+          "has_body": false,
+          "date": "2026-10-20T01:21:58Z"
+        },
+        {
+          "url": "https://github.com/devtron-labs/devtron",
+          "title": "devtron-labs/devtron",
+          "snippet": "Stars: 5618, Forks: 602, Updated: 2026-10-20T00:33:27Z, Description: The only Kubernetes dashboard you need",
+          "has_body": false,
+          "date": "2026-10-20T00:33:27Z"
+        }
+      ],
+      "error": null,
+      "latency_ms": 34094
+    },
+    {
+      "source": "arxiv",
+      "status": "success",
+      "results": [
+        {
+          "url": "http://arxiv.org/abs/2607.16596v1",
+          "title": "Cold-Start Model Delivery in Kubernetes Inference Serving: An Empirical Study of OCI-Based Distribution and Its Integrity",
+          "snippet": "The startup latency of a model-serving pod on Kubernetes is dominated by one step: delivering the model weights. As models reach the hundred-gigabyte weights of large language models, cold-start delivery time governs the economics of autoscaling and scale-to-zero, yet the dominant mechanisms remain ad-hoc downloads from object storage, with none of the pull caching, digest addressing, or verification Kubernetes provides for container images. We analyze the delivery paths available to a Kubernete",
+          "date": "2026-07-18"
+        },
+        {
+          "url": "http://arxiv.org/abs/2006.15275v1",
+          "title": "XI Commandments of Kubernetes Security: A Systematization of Knowledge Related to Kubernetes Security Practices",
+          "snippet": "Kubernetes is an open-source software for automating management of computerized services. Organizations, such as IBM, Capital One and Adidas use Kubernetes to deploy and manage their containers, and have reported benefits related to deployment frequency. Despite reported benefits, Kubernetes deployments are susceptible to security vulnerabilities, such as those that occurred at Tesla in 2018. A systematization of Kubernetes security practices can help practitioners mitigate vulnerabilities in th",
+          "date": "2020-06-27"
+        },
+        {
+          "url": "http://arxiv.org/abs/2411.03344v1",
+          "title": "Comparing Security and Efficiency of WebAssembly and Linux Containers in Kubernetes Cloud Computing",
+          "snippet": "This study investigates the potential of WebAssembly as a more secure and efficient alternative to Linux containers for executing untrusted code in cloud computing with Kubernetes. Specifically, it evaluates the security and performance implications of this shift. Security analyses demonstrate that both Linux containers and WebAssembly have attack surfaces when executing untrusted code, but WebAssembly presents a reduced attack surface due to an additional layer of isolation. The performance ana",
+          "date": "2024-11-02"
+        },
+        {
+          "url": "http://arxiv.org/abs/2605.13676v2",
+          "title": "EBCC: Enclave-Backed Confidential Containers via OCI-Compatible Runtime Integration",
+          "snippet": "Container runtimes provide a stable operational interface for deploying, monitoring, and controlling modern workloads, while trusted execution environments (TEEs) provide hardware-enforced isolation for sensitive computation. Existing confidential-container systems often rely on VM-backed deployment stacks or TEE-specific execution substrates, which can separate confidential execution from the conventional OCI runtime lifecycle. This paper presents EBCC (Enclave-Backed Confidential Containers),",
+          "date": "2026-05-13"
+        },
+        {
+          "url": "http://arxiv.org/abs/2403.01429v1",
+          "title": "Kubernetes in Action: Exploring the Performance of Kubernetes Distributions in the Cloud",
+          "snippet": "Kubernetes has emerged as a leading open-source platform for container orchestration, allowing organizations to efficiently manage and deploy containerized applications at scale. This paper investigates the performance of four Kubernetes distributions, namely Kubeadm, K3s, MicroK8s, and K0s when running OpenFaaS as a containerized service on a cluster of computing nodes on CloudLab. For this purpose, experiments are conducted to examine the performance of two virtualization modes, namely HVM and",
+          "date": "2024-03-03"
+        },
+        {
+          "url": "http://arxiv.org/abs/2207.01222v1",
+          "title": "KubeAdaptor: A Docking Framework for Workflow Containerization on Kubernetes",
+          "snippet": "As Kubernetes becomes the infrastructure of the cloud-native era, the integration of workflow systems with Kubernetes is gaining more and more popularity. To our knowledge, workflow systems employ scheduling algorithms that optimize task execution order of workflow to improve performance and execution efficiency. However, due to its inherent scheduling mechanism, Kubernetes does not execute containerized scheduling following the optimized task execution order of workflow amid migrating workflow",
+          "date": "2022-07-04"
+        },
+        {
+          "url": "http://arxiv.org/abs/1704.00419v1",
+          "title": "Requirements-Driven Dynamic Adaptation to Mitigate Runtime Uncertainties for Self-Adaptive Systems",
+          "snippet": "Self-adaptive systems are capable of adjusting their behavior to cope with the changes in environment and itself. These changes may cause runtime uncertainty, which refers to the system state of failing to achieve appropriate reconfigurations. However, it is often infeasible to exhaustively anticipate all the changes. Thus, providing dynamic adaptation mechanisms for mitigating runtime uncertainty becomes a big challenge. This paper suggests solving this challenge at requirements phase by presen",
+          "date": "2017-04-03"
+        }
+      ],
+      "error": null,
+      "latency_ms": 27625
+    },
+    {
+      "source": "community",
+      "status": "success",
+      "results": [],
+      "error": null,
+      "latency_ms": 20500
+    },
+    {
+      "source": "official",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://gvisor.dev/docs/",
+          "title": "gVisor — Official Documentation",
+          "snippet": "What is gVisor? - gVisor What is gVisor? Edit this page Create issue gVisor provides a strong layer of isolation between running applications and the host operating system. It is an application kernel that implements a Linux-like interface. Unlike Linux, it is written in a memory-safe language (Go) and runs in userspace. gVisor includes an Open Container Initiative (OCI) runtime called runsc that makes it easy to work with existing container tooling. The runsc runtime integrates with Docker and Kubernetes, making it simple to run sandboxed containers. gVisor can be used with Docker, Kubernetes, or directly using runsc. Use the links below to see detailed instructions for each of them: Docker: The quickest and easiest way to get started. Kubernetes: Isolate Pods in your K8s cluster with gVisor. OCI Quick Start: Expert mode. Customize gVisor for your environment. What does gVisor do? gVisor provides a virtualized environment in order to sandbox containers. The system interfaces normally implemented by the host kernel are moved into a distinct, per-sandbox application kernel in order to minimize the risk of a container escape exploit. gVisor does not introduce large fixed overheads however, and still retains a process-like model with respect to resource utilization. How is this different? Two other approaches are commonly taken to provide stronger isolation than native containers. gVisor is not a syscall filter (e.g. seccomp-bpf), nor a wrapper over Linux isolation primitives (e.g. firejail, AppArmor, etc.). gVisor is also not a VM in the everyday sense of the term (e.g. VirtualBox, QEMU). gVisor takes a distinct third approach, providing many security benefits of VMs while maintaining the lower resource footprint, fast startup, and flexibility of regular userspace applications. Let’s take a closer look. Machine-level virtualization, such as KVM and Xen, exposes virtualized hardware to a guest kernel via a Virtual Machine Monitor (VMM). This virtualized hardware is generally enlightened (paravirtualized) and additional mechanisms can be used to improve the visibility between the guest and host (e.g. balloon drivers, paravirtualized spinlocks). Running containers in distinct virtual machines can provide great isolation, compatibility and performance (though nested virtualization may bring challenges in this area), but for containers it often requires additional proxies and agents, and may require a larger resource footprint and slower start-up times. Rule-based execution, such as seccomp, SELinux and AppArmor, allows the specification of a fine-grained security policy for an application or container. These schemes typically rely on hooks implemented inside the host kernel to enforce the rules. If the surface can be made small enough, then this is an excellent way to sandbox applications and maintain native performance. However, in practice it can be extremely difficult (if not impossible) to reliably define a policy for arbitrary, previously unknown applications, making this approach challenging to apply universally. Rule-based execution is often combined with additional layers for defense-in-depth. gVisor provides a third isolation mechanism, distinct from those above. gVisor intercepts application system calls and acts as the guest kernel, without the need for translation through virtualized hardware. gVisor may be thought of as either a merged guest kernel and VMM, or as seccomp on steroids. This architecture allows it to provide a flexible resource footprint (i.e. one based on threads and memory mappings, not fixed guest physical resources) while also lowering the fixed costs of virtualization. However, this comes at the price of reduced application compatibility and higher per-system call overhead. On top of this, gVisor employs rule-based execution to provide defense-in-depth (details below). gVisor’s approach is similar to User Mode Linux (UML), although UML virtualizes hardware internally and thus provides a fixed resource footprint. Each of the above approaches may excel in distinct scenarios. For example, machine-level virtualization will face challenges achieving high density, while gVisor may provide poor performance for system call heavy workloads. Why Go? gVisor is written in Go in order to avoid security pitfalls that can plague kernels. With Go, there are strong types, built-in bounds checks, no uninitialized variables, no use-after-free, no stack overflow, and a built-in race detector. However, the use of Go has its challenges, and the runtime often introduces performance overhead. What are the different components? A gVisor sandbox consists of multiple processes. These processes collectively comprise an environment in which one or more containers can be run. Each sandbox has its own isolated instance of: The Sentry, which is a kernel that runs the containers and intercepts and responds to system calls made by the application. Each container running in the sandbox has its own isolated instance of: A Gofer which provides file system access to the containers. What is runsc? The entrypoint to running a sandboxed container is the runsc executable. runsc implements the Open Container Initiative (OCI) runtime specification, which is used by Docker and Kubernetes. This means that OCI compatible filesystem bundles can be run by runsc. Filesystem bundles are comprised of a config.json file containing container configuration, and a root filesystem for the container. Please see the OCI runtime spec for more information on filesystem bundles. runsc implements multiple commands that perform various functions such as starting, stopping, listing, and querying the status of containers. Sentry The Sentry is the largest component of gVisor. It can be thought of as a application kernel. The Sentry implements all the kernel functionality needed by the application, including: system calls, signal delivery, memory management and page faulting logic, the threading model, and more. When the application makes a system call, the Platform redirects the call to the Sentry, which will do the necessary work to service it. It is important to note that the Sentry does not pass system calls through to the host kernel. As a userspace application, the Sentry will make some host system calls to support its operation, but it does not allow the application to directly control the system calls it makes. For example, the Sentry is not able to open files directly; file system operations that extend beyond the sandbox (not internal /proc files, pipes, etc) are sent to the Gofer, described below. Gofer The Gofer is a standard host process which is started with each container and communicates with the Sentry via the 9P protocol over a socket or shared memory channel. The Sentry process is started in a restricted seccomp container without access to file system resources. The Gofer mediates all access to these resources, providing an additional level of isolation. Application The application is a normal Linux binary provided to gVisor in an OCI runtime bundle. gVisor aims to provide an environment equivalent to Linux, so applications should be able to run unmodified. However, gVisor does not presently implement every system call, /proc file, or /sys file so some incompatibilities may occur. See Compatibility for more information.",
+          "has_body": true,
+          "date": "",
+          "_from_mapping": false,
+          "fetch_status": "body",
+          "body_url": "https://gvisor.dev/docs/",
+          "body_page_chars": 7336,
+          "body_chars": 7336,
+          "body_stored_chars": 7336,
+          "body_page_truncated": false,
+          "body_stored_truncated": false,
+          "body_truncated": false,
+          "body_prose_chars": 6539,
+          "body_admission": "prose_ok",
+          "body_content_type": "text/html"
+        }
+      ],
+      "error": null,
+      "latency_ms": 14625,
+      "fetch_stats": {
+        "max_page_attempts": 2,
+        "max_http_requests": 6,
+        "page_attempts": 1,
+        "http_requests": 1,
+        "probe_requests": 0,
+        "redirects": 0,
+        "body_pages": 1,
+        "navigation_pages": 0,
+        "failed_pages": 0,
+        "bytes_read": 27954,
+        "bytes_retained": 27954,
+        "failures": []
+      }
+    }
+  ],
+  "source_scores": [
+    {
+      "url": "http://arxiv.org/abs/2607.16596v1",
+      "title": "Cold-Start Model Delivery in Kubernetes Inference Serving: An Empirical Study of OCI-Based Distribution and Its Integrity",
+      "snippet": "The startup latency of a model-serving pod on Kubernetes is dominated by one step: delivering the model weights. As models reach the hundred-gigabyte weights of large language models, cold-start delivery time governs the economics of autoscaling and scale-to-zero, yet the dominant mechanisms remain ad-hoc downloads from object storage, with none of the pull caching, digest addressing, or verification Kubernetes provides for container images. We analyze the delivery paths available to a Kubernete",
+      "date": "2026-07-18",
+      "source_type": "arxiv_paper",
+      "evidence_type": "benchmark",
+      "scores": {
+        "authority": 10,
+        "timeliness": 8,
+        "consistency": 4,
+        "verifiability": 8
+      },
+      "total_score": 7.9,
+      "supporting_sources": []
+    },
+    {
+      "url": "http://arxiv.org/abs/2605.13676v2",
+      "title": "EBCC: Enclave-Backed Confidential Containers via OCI-Compatible Runtime Integration",
+      "snippet": "Container runtimes provide a stable operational interface for deploying, monitoring, and controlling modern workloads, while trusted execution environments (TEEs) provide hardware-enforced isolation for sensitive computation. Existing confidential-container systems often rely on VM-backed deployment stacks or TEE-specific execution substrates, which can separate confidential execution from the conventional OCI runtime lifecycle. This paper presents EBCC (Enclave-Backed Confidential Containers),",
+      "date": "2026-05-13",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 8,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 7.5,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://gvisor.dev/docs/",
+      "title": "gVisor — Official Documentation",
+      "snippet": "What is gVisor? - gVisor What is gVisor? Edit this page Create issue gVisor provides a strong layer of isolation between running applications and the host operating system. It is an application kernel that implements a Linux-like interface. Unlike Linux, it is written in a memory-safe language (Go) and runs in userspace. gVisor includes an Open Container Initiative (OCI) runtime called runsc that makes it easy to work with existing container tooling. The runsc runtime integrates with Docker and Kubernetes, making it simple to run sandboxed containers. gVisor can be used with Docker, Kubernetes, or directly using runsc. Use the links below to see detailed instructions for each of them: Docker: The quickest and easiest way to get started. Kubernetes: Isolate Pods in your K8s cluster with gVisor. OCI Quick Start: Expert mode. Customize gVisor for your environment. What does gVisor do? gVisor provides a virtualized environment in order to sandbox containers. The system interfaces normally implemented by the host kernel are moved into a distinct, per-sandbox application kernel in order to minimize the risk of a container escape exploit. gVisor does not introduce large fixed overheads however, and still retains a process-like model with respect to resource utilization. How is this different? Two other approaches are commonly taken to provide stronger isolation than native containers. gVisor is not a syscall filter (e.g. seccomp-bpf), nor a wrapper over Linux isolation primitives (e.g. firejail, AppArmor, etc.). gVisor is also not a VM in the everyday sense of the term (e.g. VirtualBox, QEMU). gVisor takes a distinct third approach, providing many security benefits of VMs while maintaining the lower resource footprint, fast startup, and flexibility of regular userspace applications. Let’s take a closer look. Machine-level virtualization, such as KVM and Xen, exposes virtualized hardware to a guest kernel via a Virtual Machine Monitor (VMM). This virtualized hardware is generally enlightened (paravirtualized) and additional mechanisms can be used to improve the visibility between the guest and host (e.g. balloon drivers, paravirtualized spinlocks). Running containers in distinct virtual machines can provide great isolation, compatibility and performance (though nested virtualization may bring challenges in this area), but for containers it often requires additional proxies and agents, and may require a larger resource footprint and slower start-up times. Rule-based execution, such as seccomp, SELinux and AppArmor, allows the specification of a fine-grained security policy for an application or container. These schemes typically rely on hooks implemented inside the host kernel to enforce the rules. If the surface can be made small enough, then this is an excellent way to sandbox applications and maintain native performance. However, in practice it can be extremely difficult (if not impossible) to reliably define a policy for arbitrary, previously unknown applications, making this approach challenging to apply universally. Rule-based execution is often combined with additional layers for defense-in-depth. gVisor provides a third isolation mechanism, distinct from those above. gVisor intercepts application system calls and acts as the guest kernel, without the need for translation through virtualized hardware. gVisor may be thought of as either a merged guest kernel and VMM, or as seccomp on steroids. This architecture allows it to provide a flexible resource footprint (i.e. one based on threads and memory mappings, not fixed guest physical resources) while also lowering the fixed costs of virtualization. However, this comes at the price of reduced application compatibility and higher per-system call overhead. On top of this, gVisor employs rule-based execution to provide defense-in-depth (details below). gVisor’s approach is similar to User Mode Linux (UML), although UML virtualizes hardware internally and thus provides a fixed resource footprint. Each of the above approaches may excel in distinct scenarios. For example, machine-level virtualization will face challenges achieving high density, while gVisor may provide poor performance for system call heavy workloads. Why Go? gVisor is written in Go in order to avoid security pitfalls that can plague kernels. With Go, there are strong types, built-in bounds checks, no uninitialized variables, no use-after-free, no stack overflow, and a built-in race detector. However, the use of Go has its challenges, and the runtime often introduces performance overhead. What are the different components? A gVisor sandbox consists of multiple processes. These processes collectively comprise an environment in which one or more containers can be run. Each sandbox has its own isolated instance of: The Sentry, which is a kernel that runs the containers and intercepts and responds to system calls made by the application. Each container running in the sandbox has its own isolated instance of: A Gofer which provides file system access to the containers. What is runsc? The entrypoint to running a sandboxed container is the runsc executable. runsc implements the Open Container Initiative (OCI) runtime specification, which is used by Docker and Kubernetes. This means that OCI compatible filesystem bundles can be run by runsc. Filesystem bundles are comprised of a config.json file containing container configuration, and a root filesystem for the container. Please see the OCI runtime spec for more information on filesystem bundles. runsc implements multiple commands that perform various functions such as starting, stopping, listing, and querying the status of containers. Sentry The Sentry is the largest component of gVisor. It can be thought of as a application kernel. The Sentry implements all the kernel functionality needed by the application, including: system calls, signal delivery, memory management and page faulting logic, the threading model, and more. When the application makes a system call, the Platform redirects the call to the Sentry, which will do the necessary work to service it. It is important to note that the Sentry does not pass system calls through to the host kernel. As a userspace application, the Sentry will make some host system calls to support its operation, but it does not allow the application to directly control the system calls it makes. For example, the Sentry is not able to open files directly; file system operations that extend beyond the sandbox (not internal /proc files, pipes, etc) are sent to the Gofer, described below. Gofer The Gofer is a standard host process which is started with each container and communicates with the Sentry via the 9P protocol over a socket or shared memory channel. The Sentry process is started in a restricted seccomp container without access to file system resources. The Gofer mediates all access to these resources, providing an additional level of isolation. Application The application is a normal Linux binary provided to gVisor in an OCI runtime bundle. gVisor aims to provide an environment equivalent to Linux, so applications should be able to run unmodified. However, gVisor does not presently implement every system call, /proc file, or /sys file so some incompatibilities may occur. See Compatibility for more information.",
+      "date": "",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "has_body": true,
+      "body_url": "https://gvisor.dev/docs/",
+      "body_chars": 7336,
+      "body_page_chars": 7336,
+      "body_prose_chars": 6539,
+      "body_stored_chars": 7336,
+      "body_page_truncated": false,
+      "body_stored_truncated": false,
+      "body_truncated": false,
+      "body_content_type": "text/html",
+      "body_admission": "prose_ok",
+      "fetch_status": "body"
+    },
+    {
+      "url": "https://github.com/myspaghetti/macos-virtualbox",
+      "title": "myspaghetti/macos-virtualbox",
+      "snippet": "Stars: 13502, Forks: 1115, Updated: 2026-10-17T05:27:46Z, Description: Push-button installer of macOS Catalina, Mojave, and High Sierra guests in Virtualbox on x86 CPUs for Windows, Linux, and macOS",
+      "date": "2026-10-17T05:27:46Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://github.com/AdnanHodzic/auto-cpufreq",
+      "title": "AdnanHodzic/auto-cpufreq",
+      "snippet": "Stars: 7850, Forks: 370, Updated: 2026-10-20T06:26:52Z, Description: Automatic CPU speed & power optimizer for Linux",
+      "date": "2026-10-20T06:26:52Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://github.com/cloud-hypervisor/cloud-hypervisor",
+      "title": "cloud-hypervisor/cloud-hypervisor",
+      "snippet": "Stars: 6404, Forks: 807, Updated: 2026-10-20T10:37:43Z, Description: A Virtual Machine Monitor for modern Cloud workloads. Features include CPU, memory and device hotplug, support for running Windows and Linux guests, device offload with vhost-user and a minimal compact footprint. Written in Rust with a strong focus on security.",
+      "date": "2026-10-20T10:37:43Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://github.com/aidlearning/AidLearning-FrameWork",
+      "title": "aidlearning/AidLearning-FrameWork",
+      "snippet": "Stars: 5814, Forks: 719, Updated: 2026-10-18T00:59:57Z, Description: 🔥🔥🔥AidLearning is a powerful AIOT development platform, AidLearning builds a linux env supporting GUI, deep learning and visual IDE on Android...Now Aid supports CPU+GPU+NPU for inference with high performance acceleration...Linux on Android or HarmonyOS ",
+      "date": "2026-10-18T00:59:57Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://github.com/tianshiyeben/wgcloud",
+      "title": "tianshiyeben/wgcloud",
+      "snippet": "Stars: 5186, Forks: 909, Updated: 2026-10-19T09:30:59Z, Description: Linux运维监控工具，支持系统硬件信息，内存，CPU，温度，磁盘空间及IO，硬盘smart，GPU，防火墙，网络流量速率等监控，服务接口监测，大屏展示，拓扑图，端口监控，进程监控，docker监控，日志监控，文件防篡改，数据库监控，指令批量下发执行，web ssh，Linux面板(探针)，告警，SNMP监测，K8S，Redis，Nginx，Kafka，资产管理，计划任务，密码管理，工作笔记",
+      "date": "2026-10-19T09:30:59Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://github.com/pixie-io/pixie",
+      "title": "pixie-io/pixie",
+      "snippet": "Stars: 6548, Forks: 507, Updated: 2026-10-20T01:21:58Z, Description: Instant Kubernetes-Native Application Observability",
+      "date": "2026-10-20T01:21:58Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://github.com/devtron-labs/devtron",
+      "title": "devtron-labs/devtron",
+      "snippet": "Stars: 5618, Forks: 602, Updated: 2026-10-20T00:33:27Z, Description: The only Kubernetes dashboard you need",
+      "date": "2026-10-20T00:33:27Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false
+    },
+    {
+      "url": "https://www.cnblogs.com/v-fan/p/18843188",
+      "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+      "snippet": "### 低层运行时（Low-Level Runtime）\n\n作用：\n\n低层运行时直接与宿主机操作系统交互，负责容器进程的隔离与执行，包括设置Linux Namespace、Cgroups资源限制、文件系统挂载等底层操作。它是实际启动容器进程的核心组件。\n\n核心特点：\n\n 轻量级，仅关注进程隔离和资源控制。\n 遵循OCI（开放容器标准）规范，提供标准化接口\n\n代表产品与技术：\n\n1. runc\n\n   特点：最广泛使用的低层运行时，基于Namespace和Cgroups实现容器隔离。作为Docker和Containerd的默认执行引擎，启动速度快但安全性较低（共享内核）。\n\n   应用场景：通用容器场景，需高性能但隔离要求不高的环境\n2. runv（Kata Containers/Firecracker）\n\n   特点：基于虚拟化技术（如KVM），通过轻量级虚拟机（MicroVM）实现强隔离。适合多租户和高安全需求场景，但启动速度较慢（约100ms）\n\n   应用场景：金融、云服务等需要严格安全隔离的环境\n3. runsc（gVisor） [...] 默认情况下，所有 Pod 都使用 containerd 中配置的默认运行时创建。从 Kubernetes v1.12 开始，用户可以使用RuntimeClass。\n\nrunsc：\n\n```\ncat <\n```\n\n```\ncat <\n```\n\n```\nkubectl get RuntimeClass \n```\n\n#### 指定RuntimeClass创建Pod\n\nrunsc：\n\n```\ncat <\n```\n\nkata：\n\n```\ncat <\n```\n\n#### 检查 Pod 是否正在运行\n\n```\n# kubectl get pods # ctr c ls \n```\n\n# 结语\n\nposted @ 2025-04-23 17:59  塔克拉玛攻城狮  阅读(1325)  评论(0)    收藏)  举报\n\n刷新页面返回顶部\n\n[](\n\n博客园   ©  2004-2026   \n 浙公网安备 33010602011771号 浙ICP备2021040463号-3 [...] ### 与Kubernetes协作\n\nKubernetes通过容器运行时接口（CRI）统一管理不同运行时，典型流程如下：\n\n1. kubelet接收Pod创建请求，通过CRI接口调用高层运行时（如containerd）。\n2. 高层运行时拉取镜像并解压为rootfs，生成容器配置（config.json）。\n3. 低层运行时（如runc）根据配置启动容器进程，设置Namespace和Cgroups。\n4. 安全沙箱运行时（如Kata）通过虚拟化层隔离容器，提供额外安全保护。\n\n### 运行时总结",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "code",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 10
+      },
+      "total_score": 6.5,
+      "supporting_sources": []
+    },
+    {
+      "url": "http://arxiv.org/abs/2411.03344v1",
+      "title": "Comparing Security and Efficiency of WebAssembly and Linux Containers in Kubernetes Cloud Computing",
+      "snippet": "This study investigates the potential of WebAssembly as a more secure and efficient alternative to Linux containers for executing untrusted code in cloud computing with Kubernetes. Specifically, it evaluates the security and performance implications of this shift. Security analyses demonstrate that both Linux containers and WebAssembly have attack surfaces when executing untrusted code, but WebAssembly presents a reduced attack surface due to an additional layer of isolation. The performance ana",
+      "date": "2024-11-02",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 4,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.5,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+      "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+      "snippet": "(1) gVisor intercepts syscalls in userspace with no hardware boundary between container and host kernel. (2) Kata Containers with Firecracker places each pod inside a microVM with a real guest kernel; hardware virtualization enforces the boundary. The dashed lines in (2) represent that hardware isolation layer. The solid lines in (1) show Sentry reaching the host kernel directly. [...] (1) gVisor intercepts syscalls in userspace with no hardware boundary between container and host kernel. (2) Kata Containers with Firecracker places each pod inside a microVM with a real guest kernel; hardware virtualization enforces the boundary. The dashed lines in (2) represent that hardware isolation layer. The solid lines in (1) show Sentry reaching the host kernel directly. [...] Running both runtimes in the same cluster revealed a few takeaways. gVisor added negligible launch latency and required nothing beyond a standard EKS setup: no special configuration beyond installing the runtime shim. Kata Containers with Firecracker carried a heavier cost. Cold start was around 5 seconds per sandbox, and EKS Managed Node Groups do not work yet: they override the CPU Options stanza needed for nested virtualization, forcing the use of self-managed node groups and the maintenance",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "benchmark",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 8
+      },
+      "total_score": 6.1,
+      "supporting_sources": []
+    },
+    {
+      "url": "http://arxiv.org/abs/2006.15275v1",
+      "title": "XI Commandments of Kubernetes Security: A Systematization of Knowledge Related to Kubernetes Security Practices",
+      "snippet": "Kubernetes is an open-source software for automating management of computerized services. Organizations, such as IBM, Capital One and Adidas use Kubernetes to deploy and manage their containers, and have reported benefits related to deployment frequency. Despite reported benefits, Kubernetes deployments are susceptible to security vulnerabilities, such as those that occurred at Tesla in 2018. A systematization of Kubernetes security practices can help practitioners mitigate vulnerabilities in th",
+      "date": "2020-06-27",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": []
+    },
+    {
+      "url": "http://arxiv.org/abs/2403.01429v1",
+      "title": "Kubernetes in Action: Exploring the Performance of Kubernetes Distributions in the Cloud",
+      "snippet": "Kubernetes has emerged as a leading open-source platform for container orchestration, allowing organizations to efficiently manage and deploy containerized applications at scale. This paper investigates the performance of four Kubernetes distributions, namely Kubeadm, K3s, MicroK8s, and K0s when running OpenFaaS as a containerized service on a cluster of computing nodes on CloudLab. For this purpose, experiments are conducted to examine the performance of two virtualization modes, namely HVM and",
+      "date": "2024-03-03",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": []
+    },
+    {
+      "url": "http://arxiv.org/abs/2207.01222v1",
+      "title": "KubeAdaptor: A Docking Framework for Workflow Containerization on Kubernetes",
+      "snippet": "As Kubernetes becomes the infrastructure of the cloud-native era, the integration of workflow systems with Kubernetes is gaining more and more popularity. To our knowledge, workflow systems employ scheduling algorithms that optimize task execution order of workflow to improve performance and execution efficiency. However, due to its inherent scheduling mechanism, Kubernetes does not execute containerized scheduling following the optimized task execution order of workflow amid migrating workflow",
+      "date": "2022-07-04",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": []
+    },
+    {
+      "url": "http://arxiv.org/abs/1704.00419v1",
+      "title": "Requirements-Driven Dynamic Adaptation to Mitigate Runtime Uncertainties for Self-Adaptive Systems",
+      "snippet": "Self-adaptive systems are capable of adjusting their behavior to cope with the changes in environment and itself. These changes may cause runtime uncertainty, which refers to the system state of failing to achieve appropriate reconfigurations. However, it is often infeasible to exhaustively anticipate all the changes. Thus, providing dynamic adaptation mechanisms for mitigating runtime uncertainty becomes a big challenge. This paper suggests solving this challenge at requirements phase by presen",
+      "date": "2017-04-03",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+      "title": "Kata Containers vs gVisor | Blog — Northflank",
+      "snippet": "Kata Containers enforces isolation at the hardware level. Each workload boots its own Linux kernel inside a KVM boundary enforced by CPU hardware. To escape, an attacker must first compromise the guest kernel, then escape the KVM hypervisor layer. Those are two separate hardware-enforced barriers. [...] For Kubernetes integration, both use RuntimeClass. Kata provides its runtime handler via `kata-runtime`. gVisor provides `runsc`. Both can run alongside standard container pods on the same cluster without changes to the control plane. See What is KVM? for more on the hardware requirements.\n\n## Syscall compatibility (Kata Containers vs gVisor) [...] ## Infrastructure requirements (Kata Containers vs gVisor)\n\nKata Containers requires KVM. The host must support Intel VT-x or AMD-V with KVM available. On cloud instances, the provider must support nested virtualisation for that instance type. Not all providers or instance types support this.",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://atbug.com/sandboxed-container",
+      "title": "沙盒化容器：是容器还是虚拟机",
+      "snippet": "并且还要支持 OCI 和 CRI 规范，可以与 Docker 和 Kubernetes 等容器工具很好的集成。\n\n这里简单介绍下 gVisor 和 Kata Containers。\n\n### gVisor\n\ngVisor 是使用 Go 编写的应用内核，实现了 Linux 操作系统的大部分接口。其包含了一个叫做 `runsc` 的 OCI 运行时，提供了应用和宿主机内核间的隔离层。`runsc` 也实现了与 Docker 和 Kubernetes 的集成，可以很容易的运行沙盒容器。\n\ngVisor 为每个容器提供了独立的操作系统内核。应用与 gVisor 内核提供的虚拟环境进行交互，不是直接访问宿主机的内核。gVisor 还限制和管理文件和网络操作，确保容器化应用和主机操作系统之间有两个隔离层。通过减少和限制应用与主机内核的交互，尽可能减小攻击者绕过容器隔离机制的攻击面。\n\n与大部分内核不同，gVisor 不需要固定的物理资源；相反，其利用现有的主机内核功能，并作为一个正常进程运行。换句话说，gVisor 以 Linux 的方式实现了 Linux。",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+      "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+      "snippet": "-Like containers but really lightweight VMs -Has roots in Intel Clear Containers and Hyper runV technology -Integrates seamlessly with Docker 🐳 and Kubernetes ☸ -Often mentioned alongside gVisor, which aims to solve a similar problem by filtering and redirecting system calls to a separate user space kernel (which as a result suffers from runtime performance penalties). [...] for DAX where file contents can be mapped into a memory window on the host, allowing the guest to directly access data from the host page cache -Reduced memory footprint as guest cache is bypassed -No communication necessary, (hopefully) improving I/O performance -Kata containers are OCI conformant which means that a Container Runtime Interface (CRI) that supports external runtime, e.g. CRI-O and containerd which use runC by default can instead use kata-qemu (since Kata 1.6.0 which uses 9pfs) [...] -Kata will only run on a machine configured to support nested virtualisation. -egrep --color 'vmx|svm' /proc/cpuinfo -Kata requires at least a Westmere processor architecture Considerations: hardware Considerations: virtio-9p vs virtio-fs -virtio-9p is based on existing network protocol that is not optimized for virtualization use cases -virtio-fs (available since Kata v1.7.0) takes advantage of the virtual machine’s co-location with the hypervisor -Experimental support for DAX where file",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://cloud.tencent.com/developer/article/2402071",
+      "title": "容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云",
+      "snippet": "gVisor是一个由谷歌开发的开源容器运行时。它使用轻量级的用户空间内核“沙箱”为容器提供安全执行环境。\n\ngVisor不是直接在宿主机内核上运行容器，而是在隔离的沙箱中运行，增加了额外的安全和隔离层。沙箱拦截容器的系统调用，并应用自己的内核实现，提供针对内核级漏洞的防御。\n\nKata Containers是一个将轻量级虚拟机与容器运行时结合的开源项目。它使用硬件虚拟化为每个容器启动一个独立VM，在容器之间提供高度隔离。\n\n每个VM运行一个极简的轻量级Guest OS，例如精简版Linux内核。Kata Containers旨在兼具容器的性能优势和VM的安全隔离。\n\ngVisor和Kata Containers都解决了传统容器运行时的某些安全问题。它们有助于降低容器逃逸导致攻击者未经授权访问宿主机的风险。通过增加额外隔离和安全控制，这些运行时增强了容器化workload的保护。\n\ngVisor和Kata Containers并非互斥；事实上，它们可以配合使用，Kata利用gVisor作为运行时。这种组合进一步增强了安全性，结合了VM级隔离和gVisor的额外安全措施。 [...] 腾讯云\n开发者社区\n\n文档建议反馈控制台\n\n首页\n\n文章/答案/技术大牛\n\n云云众生s\n\n社区首页 >专栏 >容器安全与安全运行环境的重要性\n\n# 容器安全与安全运行环境的重要性\n\n作者头像\n\n云云众生s\n\n发布于 2024-03-28 13:37:12\n\n发布于 2024-03-28 13:37:12\n\n8880\n\n举报\n\n文章被收录于专栏：云云众生s云云众生s\n\n了解容器运行环境的工作机制，缘何若攻击者突破容器的限制，过度耦合的运行环境可能造成主机被接管，以及gVisor和Kata Containers等安全容器运行环境的好处。\n\n译自 Container Security and the Importance of Secure Runtimes 。\n\n容器已经彻底改变了我们开发和部署应用程序的方式，它为应用程序及其依赖提供了轻量级和可移植的运行环境。但是我们如何保证容器的安全呢？\n\n我们需要关注的一个关键方面是容器运行时，这是用于启动和管理容器的软件。 [...] 它处理容器生命周期管理、进程隔离和其他底层容器操作。Runsc 与 Sentry 和 Gofer 协作，为 gVisor 中的容器化应用提供一个安全的执行环境。\n\n### Kata Containers架构\n\nKata Container 为每个容器或 Pod 封装专属的 VM，提供了额外的保护层。因为每个 VM 都有自己的内核，其中只包含容器工作负载必需的服务，这样可以减少潜在的攻击面。\n\n除增强安全性外，Kata Container 还优先考虑性能和资源效率。这种精简的占用使 Kata Container 对追求在安全需求与高效利用资源间求平衡的组织具有吸引力。\n\nKata Container 被设计成与现有的容器化应用和部署基础设施兼容，使组织能在不作重大修改的情况下采用安全运行时功能。\n\n将 Kata Container 视为集群的安全运行时，您可以从其出色的隔离性、轻量资源占用和增强的安全性中获益，这使其成为部署敏感或不可信工作负载的引人注目的选择。\n\n### 配置gVisor容器安全",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": []
+    },
+    {
+      "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+      "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+      "snippet": "Both Kata-containers and Firecracker require the Linux Kernel-based Virtual Machine (KVM), which can only be supported on bare-metal instances or through nested virtualization. Since EKS manages virtualized EC2 instances with nested virtualization disabled, both these options are not viable. As for Nabla-containers, it only supports container images built specifically for Nabla, and does not support dynamic loading of libraries, along with other discouraging limitations. gVisor, on the other [...] gVisor is an application kernel that provides a sandboxed environment for containers by implementing a sandboxed guest kernel which intercepts and services most system calls, isolating containers from the host. Similarly, Nabla-containers use a library OS to reduce the attack surface by customizing the OS constructs to the applications’ needs and reducing the number of system calls to the host. On the other hand, Kata-containers run containers inside lightweight VMs, relying on hardware [...] on the other hand, handles OCI images out-of-the-box, integrates easily with EKS, and does not have any hardware virtualization requirements (KVM can be used as a platform to intercept syscalls, but ptrace is the default alternative).",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": []
+    }
+  ],
+  "conflicts": [],
+  "conflict_check": {
+    "pairs_scanned": 0,
+    "pairs_arbitrated": 0,
+    "pairs_evidence": 0,
+    "scan_outcomes": {
+      "difference": 0,
+      "no_difference": 0,
+      "unscanned": 0
+    },
+    "sources_without_comparable_claim": 7,
+    "reason": "no_candidate_pairs"
+  },
+  "evidence_chains": [
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2607.16596v1",
+          "title": "Cold-Start Model Delivery in Kubernetes Inference Serving: An Empirical Study of OCI-Based Distribution and Its Integrity",
+          "snippet": "The startup latency of a model-serving pod on Kubernetes is dominated by one step: delivering the model weights. As models reach the hundred-gigabyte weights of large language models, cold-start delivery time governs the economics of autoscaling and scale-to-zero, yet the dominant mechanisms remain ad-hoc downloads from object storage, with none of the pull caching, digest addressing, or verification Kubernetes provides for container images. We analyze the delivery paths available to a Kubernete",
+          "retrieval_score": 7.9,
+          "source_type": "arxiv_paper",
+          "date": "2026-07-18"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 7.9,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2605.13676v2",
+          "title": "EBCC: Enclave-Backed Confidential Containers via OCI-Compatible Runtime Integration",
+          "snippet": "Container runtimes provide a stable operational interface for deploying, monitoring, and controlling modern workloads, while trusted execution environments (TEEs) provide hardware-enforced isolation for sensitive computation. Existing confidential-container systems often rely on VM-backed deployment stacks or TEE-specific execution substrates, which can separate confidential execution from the conventional OCI runtime lifecycle. This paper presents EBCC (Enclave-Backed Confidential Containers),",
+          "retrieval_score": 7.5,
+          "source_type": "arxiv_paper",
+          "date": "2026-05-13"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 7.5,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://gvisor.dev/docs/",
+          "title": "gVisor — Official Documentation",
+          "snippet": "What is gVisor? - gVisor What is gVisor? Edit this page Create issue gVisor provides a strong layer of isolation between running applications and the host operating system. It is an application kernel that implements a Linux-like interface. Unlike Linux, it is written in a memory-safe language (Go) and runs in userspace. gVisor includes an Open Container Initiative (OCI) runtime called runsc that makes it easy to work with existing container tooling. The runsc runtime integrates with Docker and Kubernetes, making it simple to run sandboxed containers. gVisor can be used with Docker, Kubernetes, or directly using runsc. Use the links below to see detailed instructions for each of them: Docker: The quickest and easiest way to get started. Kubernetes: Isolate Pods in your K8s cluster with gVisor. OCI Quick Start: Expert mode. Customize gVisor for your environment. What does gVisor do? gVisor provides a virtualized environment in order to sandbox containers. The system interfaces normally implemented by the host kernel are moved into a distinct, per-sandbox application kernel in order to minimize the risk of a container escape exploit. gVisor does not introduce large fixed overheads however, and still retains a process-like model with respect to resource utilization. How is this different? Two other approaches are commonly taken to provide stronger isolation than native containers. gVisor is not a syscall filter (e.g. seccomp-bpf), nor a wrapper over Linux isolation primitives (e.g. firejail, AppArmor, etc.). gVisor is also not a VM in the everyday sense of the term (e.g. VirtualBox, QEMU). gVisor takes a distinct third approach, providing many security benefits of VMs while maintaining the lower resource footprint, fast startup, and flexibility of regular userspace applications. Let’s take a closer look. Machine-level virtualization, such as KVM and Xen, exposes virtualized hardware to a guest kernel via a Virtual Machine Monitor (VMM). This virtualized hardware is generally enlightened (paravirtualized) and additional mechanisms can be used to improve the visibility between the guest and host (e.g. balloon drivers, paravirtualized spinlocks). Running containers in distinct virtual machines can provide great isolation, compatibility and performance (though nested virtualization may bring challenges in this area), but for containers it often requires additional proxies and agents, and may require a larger resource footprint and slower start-up times. Rule-based execution, such as seccomp, SELinux and AppArmor, allows the specification of a fine-grained security policy for an application or container. These schemes typically rely on hooks implemented inside the host kernel to enforce the rules. If the surface can be made small enough, then this is an excellent way to sandbox applications and maintain native performance. However, in practice it can be extremely difficult (if not impossible) to reliably define a policy for arbitrary, previously unknown applications, making this approach challenging to apply universally. Rule-based execution is often combined with additional layers for defense-in-depth. gVisor provides a third isolation mechanism, distinct from those above. gVisor intercepts application system calls and acts as the guest kernel, without the need for translation through virtualized hardware. gVisor may be thought of as either a merged guest kernel and VMM, or as seccomp on steroids. This architecture allows it to provide a flexible resource footprint (i.e. one based on threads and memory mappings, not fixed guest physical resources) while also lowering the fixed costs of virtualization. However, this comes at the price of reduced application compatibility and higher per-system call overhead. On top of this, gVisor employs rule-based execution to provide defense-in-depth (details below). gVisor’s approach is similar to User Mode Linux (UML), although UML virtualizes hardware internally and thus provides a fixed resource footprint. Each of the above approaches may excel in distinct scenarios. For example, machine-level virtualization will face challenges achieving high density, while gVisor may provide poor performance for system call heavy workloads. Why Go? gVisor is written in Go in order to avoid security pitfalls that can plague kernels. With Go, there are strong types, built-in bounds checks, no uninitialized variables, no use-after-free, no stack overflow, and a built-in race detector. However, the use of Go has its challenges, and the runtime often introduces performance overhead. What are the different components? A gVisor sandbox consists of multiple processes. These processes collectively comprise an environment in which one or more containers can be run. Each sandbox has its own isolated instance of: The Sentry, which is a kernel that runs the containers and intercepts and responds to system calls made by the application. Each container running in the sandbox has its own isolated instance of: A Gofer which provides file system access to the containers. What is runsc? The entrypoint to running a sandboxed container is the runsc executable. runsc implements the Open Container Initiative (OCI) runtime specification, which is used by Docker and Kubernetes. This means that OCI compatible filesystem bundles can be run by runsc. Filesystem bundles are comprised of a config.json file containing container configuration, and a root filesystem for the container. Please see the OCI runtime spec for more information on filesystem bundles. runsc implements multiple commands that perform various functions such as starting, stopping, listing, and querying the status of containers. Sentry The Sentry is the largest component of gVisor. It can be thought of as a application kernel. The Sentry implements all the kernel functionality needed by the application, including: system calls, signal delivery, memory management and page faulting logic, the threading model, and more. When the application makes a system call, the Platform redirects the call to the Sentry, which will do the necessary work to service it. It is important to note that the Sentry does not pass system calls through to the host kernel. As a userspace application, the Sentry will make some host system calls to support its operation, but it does not allow the application to directly control the system calls it makes. For example, the Sentry is not able to open files directly; file system operations that extend beyond the sandbox (not internal /proc files, pipes, etc) are sent to the Gofer, described below. Gofer The Gofer is a standard host process which is started with each container and communicates with the Sentry via the 9P protocol over a socket or shared memory channel. The Sentry process is started in a restricted seccomp container without access to file system resources. The Gofer mediates all access to these resources, providing an additional level of isolation. Application The application is a normal Linux binary provided to gVisor in an OCI runtime bundle. gVisor aims to provide an environment equivalent to Linux, so applications should be able to run unmodified. However, gVisor does not presently implement every system call, /proc file, or /sys file so some incompatibilities may occur. See Compatibility for more information.",
+          "has_body": true,
+          "retrieval_score": 6.8,
+          "source_type": "official_doc",
+          "date": "",
+          "body_url": "https://gvisor.dev/docs/",
+          "body_chars": 7336,
+          "body_page_chars": 7336,
+          "body_prose_chars": 6539,
+          "body_stored_chars": 7336,
+          "body_page_truncated": false,
+          "body_stored_truncated": false,
+          "body_truncated": false,
+          "body_content_type": "text/html",
+          "body_admission": "prose_ok",
+          "fetch_status": "body"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.8,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/myspaghetti/macos-virtualbox",
+          "title": "myspaghetti/macos-virtualbox",
+          "snippet": "Stars: 13502, Forks: 1115, Updated: 2026-10-17T05:27:46Z, Description: Push-button installer of macOS Catalina, Mojave, and High Sierra guests in Virtualbox on x86 CPUs for Windows, Linux, and macOS",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-17T05:27:46Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/AdnanHodzic/auto-cpufreq",
+          "title": "AdnanHodzic/auto-cpufreq",
+          "snippet": "Stars: 7850, Forks: 370, Updated: 2026-10-20T06:26:52Z, Description: Automatic CPU speed & power optimizer for Linux",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-20T06:26:52Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/cloud-hypervisor/cloud-hypervisor",
+          "title": "cloud-hypervisor/cloud-hypervisor",
+          "snippet": "Stars: 6404, Forks: 807, Updated: 2026-10-20T10:37:43Z, Description: A Virtual Machine Monitor for modern Cloud workloads. Features include CPU, memory and device hotplug, support for running Windows and Linux guests, device offload with vhost-user and a minimal compact footprint. Written in Rust with a strong focus on security.",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-20T10:37:43Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/aidlearning/AidLearning-FrameWork",
+          "title": "aidlearning/AidLearning-FrameWork",
+          "snippet": "Stars: 5814, Forks: 719, Updated: 2026-10-18T00:59:57Z, Description: 🔥🔥🔥AidLearning is a powerful AIOT development platform, AidLearning builds a linux env supporting GUI, deep learning and visual IDE on Android...Now Aid supports CPU+GPU+NPU for inference with high performance acceleration...Linux on Android or HarmonyOS ",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-18T00:59:57Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/tianshiyeben/wgcloud",
+          "title": "tianshiyeben/wgcloud",
+          "snippet": "Stars: 5186, Forks: 909, Updated: 2026-10-19T09:30:59Z, Description: Linux运维监控工具，支持系统硬件信息，内存，CPU，温度，磁盘空间及IO，硬盘smart，GPU，防火墙，网络流量速率等监控，服务接口监测，大屏展示，拓扑图，端口监控，进程监控，docker监控，日志监控，文件防篡改，数据库监控，指令批量下发执行，web ssh，Linux面板(探针)，告警，SNMP监测，K8S，Redis，Nginx，Kafka，资产管理，计划任务，密码管理，工作笔记",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T09:30:59Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/pixie-io/pixie",
+          "title": "pixie-io/pixie",
+          "snippet": "Stars: 6548, Forks: 507, Updated: 2026-10-20T01:21:58Z, Description: Instant Kubernetes-Native Application Observability",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-20T01:21:58Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/devtron-labs/devtron",
+          "title": "devtron-labs/devtron",
+          "snippet": "Stars: 5618, Forks: 602, Updated: 2026-10-20T00:33:27Z, Description: The only Kubernetes dashboard you need",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-20T00:33:27Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://www.cnblogs.com/v-fan/p/18843188",
+          "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+          "snippet": "### 低层运行时（Low-Level Runtime）\n\n作用：\n\n低层运行时直接与宿主机操作系统交互，负责容器进程的隔离与执行，包括设置Linux Namespace、Cgroups资源限制、文件系统挂载等底层操作。它是实际启动容器进程的核心组件。\n\n核心特点：\n\n 轻量级，仅关注进程隔离和资源控制。\n 遵循OCI（开放容器标准）规范，提供标准化接口\n\n代表产品与技术：\n\n1. runc\n\n   特点：最广泛使用的低层运行时，基于Namespace和Cgroups实现容器隔离。作为Docker和Containerd的默认执行引擎，启动速度快但安全性较低（共享内核）。\n\n   应用场景：通用容器场景，需高性能但隔离要求不高的环境\n2. runv（Kata Containers/Firecracker）\n\n   特点：基于虚拟化技术（如KVM），通过轻量级虚拟机（MicroVM）实现强隔离。适合多租户和高安全需求场景，但启动速度较慢（约100ms）\n\n   应用场景：金融、云服务等需要严格安全隔离的环境\n3. runsc（gVisor） [...] 默认情况下，所有 Pod 都使用 containerd 中配置的默认运行时创建。从 Kubernetes v1.12 开始，用户可以使用RuntimeClass。\n\nrunsc：\n\n```\ncat <\n```\n\n```\ncat <\n```\n\n```\nkubectl get RuntimeClass \n```\n\n#### 指定RuntimeClass创建Pod\n\nrunsc：\n\n```\ncat <\n```\n\nkata：\n\n```\ncat <\n```\n\n#### 检查 Pod 是否正在运行\n\n```\n# kubectl get pods # ctr c ls \n```\n\n# 结语\n\nposted @ 2025-04-23 17:59  塔克拉玛攻城狮  阅读(1325)  评论(0)    收藏)  举报\n\n刷新页面返回顶部\n\n[](\n\n博客园   ©  2004-2026   \n 浙公网安备 33010602011771号 浙ICP备2021040463号-3 [...] ### 与Kubernetes协作\n\nKubernetes通过容器运行时接口（CRI）统一管理不同运行时，典型流程如下：\n\n1. kubelet接收Pod创建请求，通过CRI接口调用高层运行时（如containerd）。\n2. 高层运行时拉取镜像并解压为rootfs，生成容器配置（config.json）。\n3. 低层运行时（如runc）根据配置启动容器进程，设置Namespace和Cgroups。\n4. 安全沙箱运行时（如Kata）通过虚拟化层隔离容器，提供额外安全保护。\n\n### 运行时总结",
+          "retrieval_score": 6.5,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.5,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2411.03344v1",
+          "title": "Comparing Security and Efficiency of WebAssembly and Linux Containers in Kubernetes Cloud Computing",
+          "snippet": "This study investigates the potential of WebAssembly as a more secure and efficient alternative to Linux containers for executing untrusted code in cloud computing with Kubernetes. Specifically, it evaluates the security and performance implications of this shift. Security analyses demonstrate that both Linux containers and WebAssembly have attack surfaces when executing untrusted code, but WebAssembly presents a reduced attack surface due to an additional layer of isolation. The performance ana",
+          "retrieval_score": 6.5,
+          "source_type": "arxiv_paper",
+          "date": "2024-11-02"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.5,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "snippet": "(1) gVisor intercepts syscalls in userspace with no hardware boundary between container and host kernel. (2) Kata Containers with Firecracker places each pod inside a microVM with a real guest kernel; hardware virtualization enforces the boundary. The dashed lines in (2) represent that hardware isolation layer. The solid lines in (1) show Sentry reaching the host kernel directly. [...] (1) gVisor intercepts syscalls in userspace with no hardware boundary between container and host kernel. (2) Kata Containers with Firecracker places each pod inside a microVM with a real guest kernel; hardware virtualization enforces the boundary. The dashed lines in (2) represent that hardware isolation layer. The solid lines in (1) show Sentry reaching the host kernel directly. [...] Running both runtimes in the same cluster revealed a few takeaways. gVisor added negligible launch latency and required nothing beyond a standard EKS setup: no special configuration beyond installing the runtime shim. Kata Containers with Firecracker carried a heavier cost. Cold start was around 5 seconds per sandbox, and EKS Managed Node Groups do not work yet: they override the CPU Options stanza needed for nested virtualization, forcing the use of self-managed node groups and the maintenance",
+          "retrieval_score": 6.1,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.1,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2006.15275v1",
+          "title": "XI Commandments of Kubernetes Security: A Systematization of Knowledge Related to Kubernetes Security Practices",
+          "snippet": "Kubernetes is an open-source software for automating management of computerized services. Organizations, such as IBM, Capital One and Adidas use Kubernetes to deploy and manage their containers, and have reported benefits related to deployment frequency. Despite reported benefits, Kubernetes deployments are susceptible to security vulnerabilities, such as those that occurred at Tesla in 2018. A systematization of Kubernetes security practices can help practitioners mitigate vulnerabilities in th",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2020-06-27"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2403.01429v1",
+          "title": "Kubernetes in Action: Exploring the Performance of Kubernetes Distributions in the Cloud",
+          "snippet": "Kubernetes has emerged as a leading open-source platform for container orchestration, allowing organizations to efficiently manage and deploy containerized applications at scale. This paper investigates the performance of four Kubernetes distributions, namely Kubeadm, K3s, MicroK8s, and K0s when running OpenFaaS as a containerized service on a cluster of computing nodes on CloudLab. For this purpose, experiments are conducted to examine the performance of two virtualization modes, namely HVM and",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2024-03-03"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2207.01222v1",
+          "title": "KubeAdaptor: A Docking Framework for Workflow Containerization on Kubernetes",
+          "snippet": "As Kubernetes becomes the infrastructure of the cloud-native era, the integration of workflow systems with Kubernetes is gaining more and more popularity. To our knowledge, workflow systems employ scheduling algorithms that optimize task execution order of workflow to improve performance and execution efficiency. However, due to its inherent scheduling mechanism, Kubernetes does not execute containerized scheduling following the optimized task execution order of workflow amid migrating workflow",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2022-07-04"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/1704.00419v1",
+          "title": "Requirements-Driven Dynamic Adaptation to Mitigate Runtime Uncertainties for Self-Adaptive Systems",
+          "snippet": "Self-adaptive systems are capable of adjusting their behavior to cope with the changes in environment and itself. These changes may cause runtime uncertainty, which refers to the system state of failing to achieve appropriate reconfigurations. However, it is often infeasible to exhaustively anticipate all the changes. Thus, providing dynamic adaptation mechanisms for mitigating runtime uncertainty becomes a big challenge. This paper suggests solving this challenge at requirements phase by presen",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2017-04-03"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "snippet": "Kata Containers enforces isolation at the hardware level. Each workload boots its own Linux kernel inside a KVM boundary enforced by CPU hardware. To escape, an attacker must first compromise the guest kernel, then escape the KVM hypervisor layer. Those are two separate hardware-enforced barriers. [...] For Kubernetes integration, both use RuntimeClass. Kata provides its runtime handler via `kata-runtime`. gVisor provides `runsc`. Both can run alongside standard container pods on the same cluster without changes to the control plane. See What is KVM? for more on the hardware requirements.\n\n## Syscall compatibility (Kata Containers vs gVisor) [...] ## Infrastructure requirements (Kata Containers vs gVisor)\n\nKata Containers requires KVM. The host must support Intel VT-x or AMD-V with KVM available. On cloud instances, the provider must support nested virtualisation for that instance type. Not all providers or instance types support this.",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://atbug.com/sandboxed-container",
+          "title": "沙盒化容器：是容器还是虚拟机",
+          "snippet": "并且还要支持 OCI 和 CRI 规范，可以与 Docker 和 Kubernetes 等容器工具很好的集成。\n\n这里简单介绍下 gVisor 和 Kata Containers。\n\n### gVisor\n\ngVisor 是使用 Go 编写的应用内核，实现了 Linux 操作系统的大部分接口。其包含了一个叫做 `runsc` 的 OCI 运行时，提供了应用和宿主机内核间的隔离层。`runsc` 也实现了与 Docker 和 Kubernetes 的集成，可以很容易的运行沙盒容器。\n\ngVisor 为每个容器提供了独立的操作系统内核。应用与 gVisor 内核提供的虚拟环境进行交互，不是直接访问宿主机的内核。gVisor 还限制和管理文件和网络操作，确保容器化应用和主机操作系统之间有两个隔离层。通过减少和限制应用与主机内核的交互，尽可能减小攻击者绕过容器隔离机制的攻击面。\n\n与大部分内核不同，gVisor 不需要固定的物理资源；相反，其利用现有的主机内核功能，并作为一个正常进程运行。换句话说，gVisor 以 Linux 的方式实现了 Linux。",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+          "snippet": "-Like containers but really lightweight VMs -Has roots in Intel Clear Containers and Hyper runV technology -Integrates seamlessly with Docker 🐳 and Kubernetes ☸ -Often mentioned alongside gVisor, which aims to solve a similar problem by filtering and redirecting system calls to a separate user space kernel (which as a result suffers from runtime performance penalties). [...] for DAX where file contents can be mapped into a memory window on the host, allowing the guest to directly access data from the host page cache -Reduced memory footprint as guest cache is bypassed -No communication necessary, (hopefully) improving I/O performance -Kata containers are OCI conformant which means that a Container Runtime Interface (CRI) that supports external runtime, e.g. CRI-O and containerd which use runC by default can instead use kata-qemu (since Kata 1.6.0 which uses 9pfs) [...] -Kata will only run on a machine configured to support nested virtualisation. -egrep --color 'vmx|svm' /proc/cpuinfo -Kata requires at least a Westmere processor architecture Considerations: hardware Considerations: virtio-9p vs virtio-fs -virtio-9p is based on existing network protocol that is not optimized for virtualization use cases -virtio-fs (available since Kata v1.7.0) takes advantage of the virtual machine’s co-location with the hypervisor -Experimental support for DAX where file",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://cloud.tencent.com/developer/article/2402071",
+          "title": "容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云",
+          "snippet": "gVisor是一个由谷歌开发的开源容器运行时。它使用轻量级的用户空间内核“沙箱”为容器提供安全执行环境。\n\ngVisor不是直接在宿主机内核上运行容器，而是在隔离的沙箱中运行，增加了额外的安全和隔离层。沙箱拦截容器的系统调用，并应用自己的内核实现，提供针对内核级漏洞的防御。\n\nKata Containers是一个将轻量级虚拟机与容器运行时结合的开源项目。它使用硬件虚拟化为每个容器启动一个独立VM，在容器之间提供高度隔离。\n\n每个VM运行一个极简的轻量级Guest OS，例如精简版Linux内核。Kata Containers旨在兼具容器的性能优势和VM的安全隔离。\n\ngVisor和Kata Containers都解决了传统容器运行时的某些安全问题。它们有助于降低容器逃逸导致攻击者未经授权访问宿主机的风险。通过增加额外隔离和安全控制，这些运行时增强了容器化workload的保护。\n\ngVisor和Kata Containers并非互斥；事实上，它们可以配合使用，Kata利用gVisor作为运行时。这种组合进一步增强了安全性，结合了VM级隔离和gVisor的额外安全措施。 [...] 腾讯云\n开发者社区\n\n文档建议反馈控制台\n\n首页\n\n文章/答案/技术大牛\n\n云云众生s\n\n社区首页 >专栏 >容器安全与安全运行环境的重要性\n\n# 容器安全与安全运行环境的重要性\n\n作者头像\n\n云云众生s\n\n发布于 2024-03-28 13:37:12\n\n发布于 2024-03-28 13:37:12\n\n8880\n\n举报\n\n文章被收录于专栏：云云众生s云云众生s\n\n了解容器运行环境的工作机制，缘何若攻击者突破容器的限制，过度耦合的运行环境可能造成主机被接管，以及gVisor和Kata Containers等安全容器运行环境的好处。\n\n译自 Container Security and the Importance of Secure Runtimes 。\n\n容器已经彻底改变了我们开发和部署应用程序的方式，它为应用程序及其依赖提供了轻量级和可移植的运行环境。但是我们如何保证容器的安全呢？\n\n我们需要关注的一个关键方面是容器运行时，这是用于启动和管理容器的软件。 [...] 它处理容器生命周期管理、进程隔离和其他底层容器操作。Runsc 与 Sentry 和 Gofer 协作，为 gVisor 中的容器化应用提供一个安全的执行环境。\n\n### Kata Containers架构\n\nKata Container 为每个容器或 Pod 封装专属的 VM，提供了额外的保护层。因为每个 VM 都有自己的内核，其中只包含容器工作负载必需的服务，这样可以减少潜在的攻击面。\n\n除增强安全性外，Kata Container 还优先考虑性能和资源效率。这种精简的占用使 Kata Container 对追求在安全需求与高效利用资源间求平衡的组织具有吸引力。\n\nKata Container 被设计成与现有的容器化应用和部署基础设施兼容，使组织能在不作重大修改的情况下采用安全运行时功能。\n\n将 Kata Container 视为集群的安全运行时，您可以从其出色的隔离性、轻量资源占用和增强的安全性中获益，这使其成为部署敏感或不可信工作负载的引人注目的选择。\n\n### 配置gVisor容器安全",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "snippet": "Both Kata-containers and Firecracker require the Linux Kernel-based Virtual Machine (KVM), which can only be supported on bare-metal instances or through nested virtualization. Since EKS manages virtualized EC2 instances with nested virtualization disabled, both these options are not viable. As for Nabla-containers, it only supports container images built specifically for Nabla, and does not support dynamic loading of libraries, along with other discouraging limitations. gVisor, on the other [...] gVisor is an application kernel that provides a sandboxed environment for containers by implementing a sandboxed guest kernel which intercepts and services most system calls, isolating containers from the host. Similarly, Nabla-containers use a library OS to reduce the attack surface by customizing the OS constructs to the applications’ needs and reducing the number of system calls to the host. On the other hand, Kata-containers run containers inside lightweight VMs, relying on hardware [...] on the other hand, handles OCI images out-of-the-box, integrates easily with EKS, and does not have any hardware virtualization requirements (KVM can be used as a platform to intercept syscalls, but ptrace is the default alternative).",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    }
+  ],
+  "final_recommendation": {
+    "winner": "gVisor",
+    "winner_rationale": "gVisor 是当前第一阶段硬约束下最可行的候选：官方文档说明 runsc 是 OCI runtime，以用户态应用内核提供隔离，并可与 Kubernetes 集成 [Source: gVisor — Official Documentation]；第三方材料称它在标准 EKS 上除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且没有硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。Kata 的硬件 VM 边界更强 [Source: Kata Containers vs gVisor | Blog — Northflank]，但需要 KVM、VT-x/AMD-V 和嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，且第三方材料称 EKS 托管节点组尚不可用、需自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，这直接违反第一阶段约束。\n\n注意：Kata 官方文档、Kubernetes/containerd/EKS 官方文档在本次检索材料中缺失；上述 Kata 约束主要来自第三方材料和机制推断，不能当作官方保证。",
+    "recommendation": "主推荐：第一阶段在 EKS 托管节点组上用 gVisor 作为不可信客户代码的标准沙箱；Kata Containers 不作为第一阶段方案，只作为明确的第二阶段触发项。落地方式：为不可信任务命名空间建立独立节点组或独立 RuntimeClass，节点上安装并配置 runsc/containerd runtime handler；用 admission policy 强制这些 Pod 只能使用 gVisor RuntimeClass，禁止 privileged、hostPath、hostNetwork、hostPID 和关闭 seccomp/AppArmor 的降级路径；先在暂存环境做兼容性与性能门禁，再按 1%、10%、100% 灰度。\n\n1. 职责边界与适用前提。gVisor：runsc 是 OCI runtime，负责每个 sandbox 的用户态应用内核、syscall 拦截/服务和容器启动；通过 containerd 的 runtime handler 与 Kubernetes RuntimeClass 集成 [Source: gVisor — Official Documentation][Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园]。它不负责网络策略、镜像扫描、编排、密钥管理、多租户配额，这些仍由 EKS/Kubernetes/CNI/策略层承担（职责边界为推断）。硬性要求方面，官方材料只明确 Linux-like 接口、Go 用户态实现和 OCI 集成，未给出具体 Linux 发行版、内核、containerd、Kubernetes 版本矩阵 [Source: gVisor — Official Documentation]；第三方称 gVisor 无硬件虚拟化要求并可在 EKS 使用 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。第一阶段在 x86_64、Amazon Linux 2023、EKS 托管节点组上高层可行，但必须在节点安装 runsc 并配置 containerd runtime handler；AL2023 内核和 containerd 版本组合是否受官方支持，本次材料无法确认，标 unknown。Kata Containers：kata-runtime 加轻量 VM（如 Firecracker/QEMU）、guest kernel 和 agent，负责硬件虚拟化隔离；不负责上述平台能力（推断）。硬性要求是 KVM、Intel VT-x/AMD-V、嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]；第三方材料称 EKS 托管节点组因覆盖 CPU Options 以支持嵌套虚拟化而尚不可用，必须使用自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。因此按现有证据，Kata 在第一阶段不成立；若未来采用，必须把自管裸金属或支持嵌套虚拟化的专用节点池写成第二阶段硬前置条件。\n\n2. 隔离机制与攻击面。gVisor 官方说明其把宿主内核实现的系统接口移入每个 sandbox 的独立用户态应用内核，以减少容器逃逸风险 [Source: gVisor — Official Documentation]；第三方材料指出它没有硬件边界，Sentry 最终仍会触达宿主内核 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。因此 gVisor 缩小了宿主内核攻击面，但仍存在 runsc/Sentry 实现漏洞、宿主 syscall 接口、侧信道和资源耗尽等逃逸面（推断）。Kata 用 microVM 和真实 guest kernel，由 CPU 硬件虚拟化强制边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Kata Containers vs gVisor | Blog — Northflank]；它把容器 syscall 挡在 guest kernel 内，但保留 hypervisor/VMM、virtio 设备、guest kernel 和 guest agent 的漏洞面。特权容器：两者都不应允许；gVisor 下 privileged 会暴露宿主能力并破坏前提，Kata 下会削弱 VM 边界，具体行为本次材料未记载，标 unknown。 /proc：gVisor 的 /proc 虚拟化程度需实测；Kata 的 /proc 在 guest 内，宿主 /proc 不应暴露（推断）。io_uring 与 eBPF：gVisor 是否支持、宿主 eBPF 是否可见，均 unknown；Kata 由 guest kernel 决定，需实测。GPU：当前无 GPU；gVisor GPU 支持 unknown；Kata 若走 passthrough/VFIO 会改变隔离边界，需单独验证，unknown。嵌套容器：两者都可能引入额外特权和内核面，不建议用于不可信任务；需实测。官方明确记载的只有 gVisor 机制 [Source: gVisor — Official Documentation]；Kata 官方文档未检索到，Kata 机制主要由第三方材料和 VM 常识支撑。\n\n3. 实际执行与数据边界。创建 Pod 的路径是：控制面/kubectl 到 kubelet，经 CRI 调 containerd，containerd 按 RuntimeClass handler 调 shim/OCI runtime [Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园][Source: Kata Containers vs gVisor | Blog — Northflank]。gVisor 下 containerd 调 runsc，runsc 启动 sandbox；第三方材料提到 Sentry 和 Gofer 组件 [Source: 容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云]。宿主机保留 kubelet、containerd、CNI、日志采集、卷插件、设备插件和 runsc 进程；应用与 gVisor 应用内核在用户态沙箱内。具体哪些文件描述符和挂载进入沙箱，需按 runsc 配置核对，unknown。Kata 下 containerd 调 kata-runtime/shim，启动 hypervisor、guest kernel 和 agent，容器在 guest 内；宿主机保留 containerd、CNI、卷/设备插件和 hypervisor 进程。stdin/stdout 和日志经 CRI/shim 跨边界；网络经 CNI 与运行时网络路径；卷和 Secret 由 kubelet 挂载后跨边界，gVisor 的 gofer 路径和 Kata 的 virtio-fs/9p 路径需按版本核对，Kata 的 virtio-fs 自 1.7.0 起可用是旧版本线索 [Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC]；设备经 device plugin 和运行时 passthrough。kubectl exec 经 kubelet/CRI/containerd 到 runsc 或 kata agent；镜像拉取由 containerd 在宿主机完成。若未设置或未强制 RuntimeClass，Pod 可能使用默认 runtime；若 handler 不存在，通常创建失败，但具体行为需验证。运行时组件不可用时，隔离不会自动成立，必须让 Pod 失败而不是静默降级。审计可留下 Kubernetes events/audit、containerd/runsc/kata/shim 日志、节点 dmesg 和指标；具体字段与保留策略 unknown。\n\n4. 性能、密度、兼容性与测量。官方材料没有给出启动延迟、内存/CPU 开销、I/O、页缓存、单节点密度或 GPU 支持数字，全部标 unknown。第三方材料称 gVisor 启动延迟可忽略、Kata Containers with Firecracker 冷启动约 5 秒，且 EKS 托管节点组尚不可用 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；这只是第三方线索，不是官方保证。测量方案：在同一 EKS Amazon Linux 2023 x86_64 托管节点组测试池中分别安装 runsc 和 Kata（Kata 若需自管节点则单列），使用相同 CNI、日志和镜像；测镜像预热与冷拉两种情况；负载覆盖 Python/Node CPU、内存、syscall（open/stat/read/write/fork/exec/thread）、小文件与顺序/随机 I/O、网络、30–120 秒短任务；并发从低到高阶梯压到 2000；指标取 schedule-to-running、runtime create-to-start、任务 p50/p95、Pod/节点 CPU 与内存、page cache、IOPS/吞吐、网络、失败率、单节点密度和每万任务成本。门槛应预先由业务定义：兼容性用例 100% 通过、无静默失败、p95 任务时长和失败率不超过既定 SLO、成本增量可接受；这些是建议阈值，不是官方数字。兼容性风险包括 Python/Node 原生依赖、seccomp、线程、FUSE、嵌套容器；gVisor 的 syscall 覆盖和 Kata guest kernel 行为都必须实测，GPU 未来另做专项。\n\n5. 失败模式、运维与退出。gVisor 下不支持的系统调用会让应用收到错误或任务失败；runsc/sandbox 启动失败表现为 CreateContainerError 或 Pod Failed；节点 AMI 轮换和小版本升级需验证 runsc 与新内核/containerd 的兼容性；CNI/eBPF 可见性 unknown；容量耗尽由 Kubernetes 调度、OOM 和节点压力体现。Kata 下 KVM/嵌套虚拟化不可用会导致 VM 启动失败；guest kernel panic、hypervisor、CNI、卷或设备问题会导致 Pod 失败；节点升级要同时验证 Kata、guest kernel 和 hypervisor 三套兼容；密度和冷启动风险更高（推断）。两者都必须保证任务退出码、stdout/stderr、日志和指标可靠上报，运行时故障不能静默变成功；建议输出只在成功退出后提交，失败任务隔离、重试并保留证据。排障入口包括 Kubernetes events/audit、containerd 日志、runsc/kata/shim 日志、节点 dmesg 和指标；关键告警包括 sandbox 创建失败率、RuntimeClass handler 不可用、任务失败率、OOM、节点 NotReady 和运行时日志错误。上线用独立节点组加 RuntimeClass 加 admission 白名单，按 1%、10%、100% 灰度；回滚时摘除 RuntimeClass/admission、drain 节点组并暂停不可信任务，而不是降级到 runc。团队 6 人且无专职内核/虚拟化工程师，gVisor 的运维负担相对较低（推断）；Kata 需要 KVM、guest kernel 和 hypervisor 排障能力 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。退出 gVisor 迁到 Kata 需要新节点池、镜像/agent、网络/卷/设备验证，成本中高；反向迁移类似；若第一阶段不引入裸金属，Kata 退出/进入成本都应按第二阶段项目立项。\n\n6. 版本、配置与适用条件。RuntimeClass 自 Kubernetes v1.12 起可用是第三方材料 [Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园]，官方 Kubernetes 文档本次未检索；containerd 需配置 runsc 或 kata handler；gVisor 需在节点安装 runsc shim [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；Kata 需 KVM/嵌套虚拟化 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，且托管节点组限制见第三方材料 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。Kata 的 9pfs 自 1.6.0、virtio-fs 自 1.7.0 是旧版本线索 [Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC]，不能作为当前选型依据。GPU、机密容器、GPU passthrough、TEE 等只在特定版本或平台配置下成立，本次材料无法确认，标 unknown。本结论仅适用于第一阶段：EKS 托管节点组、Amazon Linux 2023、x86_64、containerd、无 GPU、无机密计算、标准短任务。必须进一步核对：EKS AL2023 对 runsc 的官方支持与安装方式、containerd 版本与 runtime handler 配置、runsc 与 Kata 的官方 release notes、EKS 托管节点组自定义 AMI/启动模板、Kata 在 EKS 上的官方支持矩阵，以及 CNI/eBPF、卷、设备插件兼容性。\n\n反转结论：若官方 Kata/EKS 文档证明 Kata 可在 EKS 托管节点组上通过受支持的嵌套虚拟化运行，且团队能承担 hypervisor/guest kernel 运维，同时业务要求硬件强制边界，则应重新评估并可能切到 Kata；若受监管客户要求可证明的硬件隔离或机密计算，而 gVisor 不能满足，则触发第二阶段 Kata 加裸金属/自管节点/机密容器 PoC；若 gVisor 在关键 Python/Node 原生依赖或 syscall 兼容性测试中失败且无法修复，也应把 Kata 作为备选，但不能因此忽略第一阶段的节点前置条件。",
+    "ranked_options": [
+      {
+        "name": "gVisor",
+        "rank": 1,
+        "constraint_fit": "high",
+        "constraint_fit_reason": "不需要 KVM/嵌套虚拟化或裸金属，符合第一阶段 EKS 托管节点组约束；runsc 是 OCI runtime，可通过 containerd 与 RuntimeClass 接入 [Source: gVisor — Official Documentation][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。",
+        "rationale": "在现有约束下，gVisor 是唯一不需要改变节点虚拟化能力就能落地的候选：官方文档明确其用户态应用内核和 runsc OCI runtime [Source: gVisor — Official Documentation]；第三方材料称标准 EKS 除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且无硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。其安全边界不是硬件虚拟化，而是用户态应用内核，需接受没有硬件边界这一前提 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。",
+        "key_strength": "与 EKS 托管节点组和现有 containerd/RuntimeClass/OCI 路径兼容性最好，第一阶段不触发裸金属或自管节点前置条件 [Source: gVisor — Official Documentation][Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。",
+        "key_weakness": "没有硬件虚拟化边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；AL2023/containerd/runsc 的精确版本兼容、syscall 覆盖、I/O/密度、GPU 和机密计算支持均未在官方材料中确认，标 unknown。"
+      },
+      {
+        "name": "Kata Containers",
+        "rank": 2,
+        "constraint_fit": "low",
+        "constraint_fit_reason": "需要 KVM、Intel VT-x/AMD-V 和嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]；第三方材料称 EKS 托管节点组尚不可用，需自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，直接违反第一阶段不引入裸金属和现有托管节点组的约束。",
+        "rationale": "Kata 提供更强的硬件 VM 边界，适合高安全多租户场景 [Source: Kata Containers vs gVisor | Blog — Northflank]；但在本场景第一阶段，节点前置条件不成立。除非把自管裸金属或支持嵌套虚拟化的专用节点池列为第二阶段硬前置，否则不能作为标准沙箱。",
+        "key_strength": "每个 Pod 在 microVM 和 guest kernel 内运行，由 CPU 硬件虚拟化强制边界，理论上逃逸需先攻破 guest kernel 再攻破 hypervisor [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。",
+        "key_weakness": "依赖 KVM/嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，EKS 托管节点组存在限制 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；hypervisor、guest kernel、agent 和卷/设备路径增加运维与升级负担，6 人团队无专职虚拟化工程师时风险高。"
+      }
+    ],
+    "trade_offs": [
+      {
+        "dimension": "隔离边界强度",
+        "finding": "gVisor 用用户态应用内核缩小宿主内核攻击面，但没有硬件边界 [Source: gVisor — Official Documentation][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；Kata 用 microVM 和 CPU 硬件虚拟化提供硬件强制边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Kata Containers vs gVisor | Blog — Northflank]。Kata 官方文档未检索到，机制主要由第三方材料支撑。",
+        "impact": "影响不可信代码的逃逸风险模型，以及未来受监管客户要求可证明硬件隔离时是否必须进入第二阶段。"
+      },
+      {
+        "dimension": "第一阶段 EKS 托管节点组可行性",
+        "finding": "gVisor 被第三方材料描述为标准 EKS 除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且无硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]；Kata 需要 KVM/嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，且第三方称 EKS 托管节点组尚不可用、需自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。",
+        "impact": "这是决定第一阶段能否不引入裸金属、不新增专用节点能力的硬约束；Kata 因此只能作为第二阶段触发项。"
+      },
+      {
+        "dimension": "运维复杂度与团队技能",
+        "finding": "gVisor 主要新增 runsc/containerd handler 和节点安装配置；Kata 还引入 hypervisor、guest kernel、agent、virtio 卷/设备路径。第三方材料显示 Kata 的节点和启动链更重 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC]。",
+        "impact": "影响 6 人平台团队能否在 12–18 个月内独立升级、排障和回滚；无专职内核/虚拟化工程师时 Kata 负担更高。"
+      },
+      {
+        "dimension": "兼容性与性能",
+        "finding": "官方材料没有给出启动延迟、内存/CPU 开销、I/O、页缓存和密度数字；第三方称 gVisor 启动延迟可忽略、Kata Firecracker 冷启动约 5 秒 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，但只能作为线索。gVisor 的 syscall 覆盖和 Kata guest kernel 行为都需实测。",
+        "impact": "影响 Python/Node 原生依赖、seccomp、线程、FUSE、嵌套容器任务能否上线；必须用兼容性矩阵和阶梯压测做门禁。"
+      },
+      {
+        "dimension": "GPU 与机密计算未来需求",
+        "finding": "当前无 GPU；未来 12 个月可能增加 GPU/ML 和机密计算要求。检索材料无法确认 gVisor 或 Kata 在 EKS 上的 GPU、passthrough、机密容器支持矩阵；Kata 的 GPU passthrough 会改变隔离边界（推断）。",
+        "impact": "影响第二阶段选型触发条件；若受监管客户要求硬件隔离或机密计算，需另立 Kata/裸金属/机密容器 PoC，而不是假设当前方案自动满足。"
+      },
+      {
+        "dimension": "审计、回滚与退出成本",
+        "finding": "两者都依赖 Kubernetes events/audit、containerd 和运行时日志；具体字段与保留策略未知。gVisor 回滚主要是摘除 RuntimeClass/admission 和节点组；Kata 还涉及 hypervisor/guest kernel 和专用节点池。",
+        "impact": "影响故障时能否证明隔离成立、能否快速暂停不可信任务；Kata 的退出/迁移成本更高（推断）。"
+      }
+    ],
+    "evidence_summary": "本次检索有 22 个条目，但只有 [Source: gVisor — Official Documentation] 是 gVisor 官方文档；没有 Kata Containers 官方文档，也没有 Kubernetes、containerd、Amazon EKS 官方文档。[Source: Secure Agent Sandboxes on EKS | AWS Builder Center] 是 AWS Builder Center 的第三方文章，[Source: Kata Containers vs gVisor | Blog — Northflank][Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security] 是第三方博客/厂商材料，[Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园][Source: 容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云] 是中文社区文章；多数网页未显示发布日期。[Source: Secure Agent Sandboxes on EKS | AWS Builder Center] 的约 5 秒冷启动和可忽略启动延迟是第三方测量线索，不能作为官方保证；所有性能、密度、GPU、机密计算数字均未实测或未确认。场景中的 200 节点、10000 任务/日、2000 并发和任务规格是假设，不是实测数据。因此本推荐是基于约束匹配和机制推断，不是实测结论。",
+    "confidence": "medium",
+    "confidence_rationale": "第一阶段约束匹配非常明确：Kata 需要 KVM/嵌套虚拟化或裸金属，且第三方材料称 EKS 托管节点组尚不可用 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；gVisor 的 OCI/RuntimeClass 路径和标准 EKS 可行性有官方机制说明与第三方支持 [Source: gVisor — Official Documentation][Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。但缺少 Kata、Kubernetes、containerd 和 EKS 官方文档，缺少版本矩阵与实测性能，且 gVisor 没有硬件边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，所以不能给高置信。（自审调整：最终置信度为 medium；上述为综合判断，检查项计数与知识缺口单列，不替代上述理由。）",
+    "unresolved_questions": [
+      "Kata Containers 官方文档和 EKS 官方文档是否明确支持在托管节点组上使用 KVM/嵌套虚拟化？影响：若官方支持存在，Kata 的第一阶段硬前置条件可能被推翻。",
+      "EKS Amazon Linux 2023 托管节点组安装 runsc 的官方支持方式是什么，是否需要自定义 AMI/启动模板？影响：决定 gVisor 上线是否能在现有托管节点组内完成。",
+      "当前 EKS 的 containerd 版本与 runsc/Kata runtime handler 配置是否有官方兼容矩阵？影响：决定 RuntimeClass 能否稳定工作以及升级风险。",
+      "gVisor 对 Python/Node 原生依赖、seccomp、线程、FUSE、io_uring、eBPF 和嵌套容器的实际兼容性如何？影响：可能出现关键任务不兼容，从而改变推荐。",
+      "Kata 的 guest kernel、virtio-fs/9p、CNI/eBPF、卷和设备插件在目标版本下的行为如何？影响：决定第二阶段是否可运维。",
+      "gVisor 与 Kata 在本场景负载下的启动延迟、内存/CPU 开销、I/O、页缓存和单节点密度分别是多少？影响：可能影响成本与 SLO，但不会改变第一阶段节点约束判断。",
+      "未来 12 个月 GPU/ML 和受监管客户要求的机密计算是否有官方支持的 gVisor 或 Kata 配置？影响：决定是否触发第二阶段 Kata/裸金属/机密容器 PoC。",
+      "运行时故障时 Kubernetes events、audit、containerd 和 runsc/kata 日志能保留哪些可审计证据、保留多久？影响：决定能否满足审计与事故复盘要求。"
+    ],
+    "scene_fit_note": "gVisor 最贴合当前场景：不引入裸金属、不要求 KVM/嵌套虚拟化、沿用现有 Kubernetes/containerd/RuntimeClass/OCI 路径，适合 6 人平台团队先落地并可回滚。Kata 的硬件 VM 边界更强，但当前第一阶段约束下需要自管节点或裸金属，应明确留作第二阶段触发项：只有当官方材料证明 EKS 托管节点组可受支持地运行 Kata，或受监管客户要求硬件隔离/机密计算且 gVisor 不能满足时，才进入 Kata 专项评估。",
+    "citation_sources": {
+      "recommendation": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/v-fan/p/18843188",
+          "number": 4,
+          "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+          "url": "https://www.cnblogs.com/v-fan/p/18843188",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/v-fan/p/18843188",
+          "number": 4,
+          "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+          "url": "https://www.cnblogs.com/v-fan/p/18843188",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloud.tencent.com/developer/article/2402071",
+          "number": 14,
+          "title": "容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com/developer/article/2402071",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "number": 13,
+          "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+          "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/v-fan/p/18843188",
+          "number": 4,
+          "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+          "url": "https://www.cnblogs.com/v-fan/p/18843188",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "number": 13,
+          "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+          "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "winner_rationale": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "evidence_summary": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "number": 13,
+          "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+          "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/v-fan/p/18843188",
+          "number": 4,
+          "title": "一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园",
+          "url": "https://www.cnblogs.com/v-fan/p/18843188",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloud.tencent.com/developer/article/2402071",
+          "number": 14,
+          "title": "容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云",
+          "url": "https://cloud.tencent.com/developer/article/2402071",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "confidence_rationale": [
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=gVisor/rationale": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=gVisor/key_strength": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=gVisor/key_weakness": [
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=gVisor/constraint_fit_reason": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Kata Containers/rationale": [
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Kata Containers/key_strength": [
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Kata Containers/key_weakness": [
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Kata Containers/constraint_fit_reason": [
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=隔离边界强度/finding": [
+        {
+          "source_id": "https://gvisor.dev/docs/",
+          "number": 3,
+          "title": "gVisor — Official Documentation",
+          "url": "https://gvisor.dev/docs/",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=第一阶段 EKS 托管节点组可行性/finding": [
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "number": 11,
+          "title": "Kata Containers vs gVisor | Blog — Northflank",
+          "url": "https://northflank.com/blog/kata-containers-vs-gvisor",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "number": 15,
+          "title": "Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security",
+          "url": "https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=运维复杂度与团队技能/finding": [
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "number": 13,
+          "title": "[PDF] Disk I/O Performance of Kata Containers - StackHPC",
+          "url": "https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=兼容性与性能/finding": [
+        {
+          "source_id": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "number": 6,
+          "title": "Secure Agent Sandboxes on EKS | AWS Builder Center",
+          "url": "https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks",
+          "provenance": "",
+          "channel": ""
+        }
+      ]
+    }
+  },
+  "report": "# 我们是一家约 120 人的 B2B SaaS 公司。客户在我们的平台上上传 Python 或 Node.js 脚本，用来做数据清洗、报表生成和轻量自动化；平台把每个任务作为一次性 Pod 运行在 Kubernetes 上。客户脚本属于不可信代码，我们不能假设它不会读取其他租户的数据、探测内网、滥用系统调用或尝试利用内核漏洞。当前生产环境在 Amazon EKS 上，使用托管节点组（Amazon Linux 2023，x86_64）、containerd 运行时，约 200 个节点；日均约 10,000 个任务 Pod，峰值约 2,000 个并发，单任务通常 1–2 vCPU、2–4 GiB 内存、运行 30–120 秒。平台团队 6 人，没有专职的内核或虚拟化工程师；CI 已经构建 OCI 镜像，网络策略、日志、指标和告警也已接入现有平台。我们不打算重写任务编排或业务代码，只希望在 Kubernetes 的 RuntimeClass 与 containerd 这一层增加强隔离。 现在要在 gVisor 和 Kata Containers 之间选择，作为未来 12–18 个月运行不可信客户代码的标准沙箱。当前生产只使用 EKS 托管节点组，第一阶段不准备引入裸金属节点；如果任一候选必须依赖裸金属、特定节点类型或额外的节点能力，请把这一点写成硬性前置条件或明确的第二阶段触发条件，而不是隐含假设。我们不在选型阶段搭环境实测，也不采购第三方沙箱服务；不要依赖实时价格。场景中的并发、任务大小、节点数都是假设，不是实测数据。 请比较 gVisor 与 Kata Containers，结合上述场景给出有依据的主推荐、理由，以及具体到触发条件的反转结论。必须逐项回答以下六个问题： 1. 职责边界与适用前提：两个候选各自覆盖哪一层隔离与运行时职责，哪些能力不在其核心职责内；各自对 Linux、CPU 架构、隔离所依赖的硬件/内核能力、Kubernetes 与 containerd 版本有什么硬性要求；在 EKS 托管节点组、x86_64、无裸金属的第一阶段约束下，哪些能力成立、哪些不成立。 2. 隔离机制与攻击面：分别说明两者实现隔离的机制、依赖的内核/硬件能力，以及如何缩小宿主内核攻击面；各自仍存在哪些逃逸面；特权容器、/proc、io_uring、eBPF、GPU、嵌套容器分别会怎样影响隔离结论；区分官方文档明确记载、可从机制推出、以及需要实测/未知的部分。 3. 实际执行与数据边界：从创建 Pod 到 RuntimeClass、containerd、shim 与运行时，各自实际启动哪些组件或隔离单元；哪些东西留在宿主机、哪些进入隔离边界；stdin/stdout、日志、网络、卷、Secret、设备访问如何跨越边界；kubectl exec、镜像拉取、卷挂载、设备插件分别经过谁；控制面/节点权限不足或运行时组件不可用时，隔离是否仍成立，审计能留下什么证据。 4. 性能、密度、兼容性与测量：启动延迟、内存与 CPU 开销、I/O 与系统调用密集负载、页缓存、单节点密度、GPU 支持等，官方文档没有给出的数字必须标为未知；请给出可执行的测量方案（测什么、什么负载、什么环境、取哪些指标、什么门槛）。同时说明 Python/Node.js、原生依赖、seccomp、线程、FUSE、嵌套容器等兼容性风险，以及上线前如何验证。 5. 失败模式、运维与退出：运行时/隔离单元启动失败、不支持的系统调用、内核 panic、CNI/eBPF 交互、节点升级、镜像不兼容、容量耗尽时各自的表现、数据风险与恢复路径；排障入口（事件、日志、指标、dmesg、运行时日志）和关键告警；滚动上线、回滚、安全响应、团队技能负担；如果要退出该方案，迁移路径和成本是什么。 6. 版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（平台支持、GPU、机密容器、隔离机制依赖的内核能力、Kubernetes/containerd/内核/架构门槛）；哪些结论只适用于特定版本或部署形态；在本场景下应进一步核对哪些版本与配置组合。不要编造未实测的启动时间、内存开销、密度、吞吐或安全保证。 所有决定性事实尽量引用三个方向的官方材料：gVisor 与 Kata Containers 各自的官方文档/官方发布说明，以及 Kubernetes、containerd、Amazon EKS 的官方文档；并标明版本或日期。第三方博客、基准测试和对比文章只能作为线索，不能单独支撑决定性结论。无法确认的内容请标 unknown，并说明核对或测量方法；不要把未知写成确定结论，也不要把场景假设当成官方保证。 — 技术决策简报\n\n## What: 了解候选方案\n\n### gVisor\n- 场景适配: high\n- 约束适配依据: 不需要 KVM/嵌套虚拟化或裸金属，符合第一阶段 EKS 托管节点组约束；runsc 是 OCI runtime，可通过 containerd 与 RuntimeClass 接入 [Source: gVisor — Official Documentation][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。\n- 理由: 在现有约束下，gVisor 是唯一不需要改变节点虚拟化能力就能落地的候选：官方文档明确其用户态应用内核和 runsc OCI runtime [Source: gVisor — Official Documentation]；第三方材料称标准 EKS 除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且无硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。其安全边界不是硬件虚拟化，而是用户态应用内核，需接受没有硬件边界这一前提 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。\n- 优势: 与 EKS 托管节点组和现有 containerd/RuntimeClass/OCI 路径兼容性最好，第一阶段不触发裸金属或自管节点前置条件 [Source: gVisor — Official Documentation][Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。\n- 局限: 没有硬件虚拟化边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；AL2023/containerd/runsc 的精确版本兼容、syscall 覆盖、I/O/密度、GPU 和机密计算支持均未在官方材料中确认，标 unknown。\n\n### Kata Containers\n- 场景适配: low\n- 约束适配依据: 需要 KVM、Intel VT-x/AMD-V 和嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]；第三方材料称 EKS 托管节点组尚不可用，需自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，直接违反第一阶段不引入裸金属和现有托管节点组的约束。\n- 理由: Kata 提供更强的硬件 VM 边界，适合高安全多租户场景 [Source: Kata Containers vs gVisor | Blog — Northflank]；但在本场景第一阶段，节点前置条件不成立。除非把自管裸金属或支持嵌套虚拟化的专用节点池列为第二阶段硬前置，否则不能作为标准沙箱。\n- 优势: 每个 Pod 在 microVM 和 guest kernel 内运行，由 CPU 硬件虚拟化强制边界，理论上逃逸需先攻破 guest kernel 再攻破 hypervisor [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。\n- 局限: 依赖 KVM/嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，EKS 托管节点组存在限制 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；hypervisor、guest kernel、agent 和卷/设备路径增加运维与升级负担，6 人团队无专职虚拟化工程师时风险高。\n\n**导航链接（无正文，不能作为依据）**\n\n- [myspaghetti/macos\\-virtualbox](https://github.com/myspaghetti/macos-virtualbox)\n- [AdnanHodzic/auto\\-cpufreq](https://github.com/AdnanHodzic/auto-cpufreq)\n- [cloud\\-hypervisor/cloud\\-hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor)\n- [aidlearning/AidLearning\\-FrameWork](https://github.com/aidlearning/AidLearning-FrameWork)\n- [tianshiyeben/wgcloud](https://github.com/tianshiyeben/wgcloud)\n- [pixie\\-io/pixie](https://github.com/pixie-io/pixie)\n- [devtron\\-labs/devtron](https://github.com/devtron-labs/devtron)\n\n## Why: 依据的实际使用\n\n本次推荐实际引用了 7 个来源；引用次数表示该来源在推荐中被使用的次数，不表示其支持强度：\n\n- [gVisor — Official Documentation](https://gvisor.dev/docs/) ×11\n- [一文详解银河麒麟配置容器运行时及gVisor\\(runsc\\)、Kata\\(runv\\)详细指南 \\- 塔克拉玛攻城狮 \\- 博客园](https://www.cnblogs.com/v-fan/p/18843188) ×4\n- [Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security](https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2) ×16\n- [Kata Containers vs gVisor | Blog — Northflank](https://northflank.com/blog/kata-containers-vs-gvisor) ×15\n- [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks) ×27\n- [容器安全与安全运行环境的重要性\\-腾讯云开发者社区\\-腾讯云](https://cloud.tencent.com/developer/article/2402071) ×2\n- [\\[PDF\\] Disk I/O Performance of Kata Containers \\- StackHPC](https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf) ×4\n\n其余 15 条检索结果未进入本报告的依据，保留在原始检索记录中。\n\n> 另有 7 个高相关来源没有取得正文，未参与冲突比较；这不代表它们之间没有分歧。\n\n## 冲突检查状态\n\n**冲突检查未完成。** 没有候选对进入该检查（no_candidate_pairs）。\n缺失冲突不代表来源之间没有分歧，只代表本次没有完成判定。\n\n## 尚未可知\n\n- Kata Containers 官方文档和 EKS 官方文档是否明确支持在托管节点组上使用 KVM/嵌套虚拟化？影响：若官方支持存在，Kata 的第一阶段硬前置条件可能被推翻。\n- EKS Amazon Linux 2023 托管节点组安装 runsc 的官方支持方式是什么，是否需要自定义 AMI/启动模板？影响：决定 gVisor 上线是否能在现有托管节点组内完成。\n- 当前 EKS 的 containerd 版本与 runsc/Kata runtime handler 配置是否有官方兼容矩阵？影响：决定 RuntimeClass 能否稳定工作以及升级风险。\n- gVisor 对 Python/Node 原生依赖、seccomp、线程、FUSE、io_uring、eBPF 和嵌套容器的实际兼容性如何？影响：可能出现关键任务不兼容，从而改变推荐。\n- Kata 的 guest kernel、virtio-fs/9p、CNI/eBPF、卷和设备插件在目标版本下的行为如何？影响：决定第二阶段是否可运维。\n- gVisor 与 Kata 在本场景负载下的启动延迟、内存/CPU 开销、I/O、页缓存和单节点密度分别是多少？影响：可能影响成本与 SLO，但不会改变第一阶段节点约束判断。\n- 未来 12 个月 GPU/ML 和受监管客户要求的机密计算是否有官方支持的 gVisor 或 Kata 配置？影响：决定是否触发第二阶段 Kata/裸金属/机密容器 PoC。\n- 运行时故障时 Kubernetes events、audit、containerd 和 runsc/kata 日志能保留哪些可审计证据、保留多久？影响：决定能否满足审计与事故复盘要求。\n- Kata Containers 官方文档（docs.katacontainers.io）中关于 Kubernetes/containerd 集成、KVM 与嵌套虚拟化要求、RuntimeClass handler 配置的原文与版本适用性\n- Kata Containers 官方 release notes：Firecracker/QEMU/Cloud Hypervisor 支持、启动时间相关说明、virtio-fs/9p 现状版本\n- Amazon EKS 官方文档：托管节点组（Amazon Linux 2023）是否支持 KVM/nested virtualization，自定义 AMI/启动模板与 CPU Options 的限制\n- Amazon EKS 官方文档：在 AL2023 托管节点组安装 gVisor runsc 与配置 containerd runtime handler 的支持方式与版本要求\n- Kubernetes 官方文档 RuntimeClass 机制（版本、handler 解析失败行为、RuntimeClass 强制策略）\n- containerd 官方文档：runtime handler 配置、shim 崩溃与 CreateContainerError 行为、日志字段\n- gVisor 官方文档：syscall 兼容性矩阵，io_uring、eBPF、FUSE、GPU、nested containers 的支持状态与平台（ptrace/KVM）差异\n- gVisor/Kata 在 EKS 上运行 Python 与 Node.js 原生依赖任务的兼容性实测报告（含 seccomp、线程、小文件 I/O）\n- EKS 上 gVisor 与 Kata 的任务启动延迟、内存与 CPU 开销、页缓存行为、单节点密度实测（相同 AL2023 x86_64 节点池、相同 CNI 与镜像）\n- gVisor 或 Kata 在 EKS 上的 GPU 支持与 confidential containers（TEE）官方支持矩阵与版本前提\n\n## How: 行动路径\n\n**Winner: gVisor**\n*gVisor 是当前第一阶段硬约束下最可行的候选：官方文档说明 runsc 是 OCI runtime，以用户态应用内核提供隔离，并可与 Kubernetes 集成 [Source: gVisor — Official Documentation]；第三方材料称它在标准 EKS 上除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且没有硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。Kata 的硬件 VM 边界更强 [Source: Kata Containers vs gVisor | Blog — Northflank]，但需要 KVM、VT-x/AMD-V 和嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，且第三方材料称 EKS 托管节点组尚不可用、需自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，这直接违反第一阶段约束。 注意：Kata 官方文档、Kubernetes/containerd/EKS 官方文档在本次检索材料中缺失；上述 Kata 约束主要来自第三方材料和机制推断，不能当作官方保证。*\n\n**置信度:** medium\n*第一阶段约束匹配非常明确：Kata 需要 KVM/嵌套虚拟化或裸金属，且第三方材料称 EKS 托管节点组尚不可用 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；gVisor 的 OCI/RuntimeClass 路径和标准 EKS 可行性有官方机制说明与第三方支持 [Source: gVisor — Official Documentation][Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。但缺少 Kata、Kubernetes、containerd 和 EKS 官方文档，缺少版本矩阵与实测性能，且 gVisor 没有硬件边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，所以不能给高置信。（自审调整：最终置信度为 medium；上述为综合判断，检查项计数与知识缺口单列，不替代上述理由。）*\n\n**建议:** 主推荐：第一阶段在 EKS 托管节点组上用 gVisor 作为不可信客户代码的标准沙箱；Kata Containers 不作为第一阶段方案，只作为明确的第二阶段触发项。落地方式：为不可信任务命名空间建立独立节点组或独立 RuntimeClass，节点上安装并配置 runsc/containerd runtime handler；用 admission policy 强制这些 Pod 只能使用 gVisor RuntimeClass，禁止 privileged、hostPath、hostNetwork、hostPID 和关闭 seccomp/AppArmor 的降级路径；先在暂存环境做兼容性与性能门禁，再按 1%、10%、100% 灰度。\n\n1. 职责边界与适用前提。gVisor：runsc 是 OCI runtime，负责每个 sandbox 的用户态应用内核、syscall 拦截/服务和容器启动；通过 containerd 的 runtime handler 与 Kubernetes RuntimeClass 集成 [Source: gVisor — Official Documentation][Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园]。它不负责网络策略、镜像扫描、编排、密钥管理、多租户配额，这些仍由 EKS/Kubernetes/CNI/策略层承担（职责边界为推断）。硬性要求方面，官方材料只明确 Linux-like 接口、Go 用户态实现和 OCI 集成，未给出具体 Linux 发行版、内核、containerd、Kubernetes 版本矩阵 [Source: gVisor — Official Documentation]；第三方称 gVisor 无硬件虚拟化要求并可在 EKS 使用 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。第一阶段在 x86_64、Amazon Linux 2023、EKS 托管节点组上高层可行，但必须在节点安装 runsc 并配置 containerd runtime handler；AL2023 内核和 containerd 版本组合是否受官方支持，本次材料无法确认，标 unknown。Kata Containers：kata-runtime 加轻量 VM（如 Firecracker/QEMU）、guest kernel 和 agent，负责硬件虚拟化隔离；不负责上述平台能力（推断）。硬性要求是 KVM、Intel VT-x/AMD-V、嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]；第三方材料称 EKS 托管节点组因覆盖 CPU Options 以支持嵌套虚拟化而尚不可用，必须使用自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。因此按现有证据，Kata 在第一阶段不成立；若未来采用，必须把自管裸金属或支持嵌套虚拟化的专用节点池写成第二阶段硬前置条件。\n\n2. 隔离机制与攻击面。gVisor 官方说明其把宿主内核实现的系统接口移入每个 sandbox 的独立用户态应用内核，以减少容器逃逸风险 [Source: gVisor — Official Documentation]；第三方材料指出它没有硬件边界，Sentry 最终仍会触达宿主内核 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。因此 gVisor 缩小了宿主内核攻击面，但仍存在 runsc/Sentry 实现漏洞、宿主 syscall 接口、侧信道和资源耗尽等逃逸面（推断）。Kata 用 microVM 和真实 guest kernel，由 CPU 硬件虚拟化强制边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Kata Containers vs gVisor | Blog — Northflank]；它把容器 syscall 挡在 guest kernel 内，但保留 hypervisor/VMM、virtio 设备、guest kernel 和 guest agent 的漏洞面。特权容器：两者都不应允许；gVisor 下 privileged 会暴露宿主能力并破坏前提，Kata 下会削弱 VM 边界，具体行为本次材料未记载，标 unknown。 /proc：gVisor 的 /proc 虚拟化程度需实测；Kata 的 /proc 在 guest 内，宿主 /proc 不应暴露（推断）。io_uring 与 eBPF：gVisor 是否支持、宿主 eBPF 是否可见，均 unknown；Kata 由 guest kernel 决定，需实测。GPU：当前无 GPU；gVisor GPU 支持 unknown；Kata 若走 passthrough/VFIO 会改变隔离边界，需单独验证，unknown。嵌套容器：两者都可能引入额外特权和内核面，不建议用于不可信任务；需实测。官方明确记载的只有 gVisor 机制 [Source: gVisor — Official Documentation]；Kata 官方文档未检索到，Kata 机制主要由第三方材料和 VM 常识支撑。\n\n3. 实际执行与数据边界。创建 Pod 的路径是：控制面/kubectl 到 kubelet，经 CRI 调 containerd，containerd 按 RuntimeClass handler 调 shim/OCI runtime [Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园][Source: Kata Containers vs gVisor | Blog — Northflank]。gVisor 下 containerd 调 runsc，runsc 启动 sandbox；第三方材料提到 Sentry 和 Gofer 组件 [Source: 容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云]。宿主机保留 kubelet、containerd、CNI、日志采集、卷插件、设备插件和 runsc 进程；应用与 gVisor 应用内核在用户态沙箱内。具体哪些文件描述符和挂载进入沙箱，需按 runsc 配置核对，unknown。Kata 下 containerd 调 kata-runtime/shim，启动 hypervisor、guest kernel 和 agent，容器在 guest 内；宿主机保留 containerd、CNI、卷/设备插件和 hypervisor 进程。stdin/stdout 和日志经 CRI/shim 跨边界；网络经 CNI 与运行时网络路径；卷和 Secret 由 kubelet 挂载后跨边界，gVisor 的 gofer 路径和 Kata 的 virtio-fs/9p 路径需按版本核对，Kata 的 virtio-fs 自 1.7.0 起可用是旧版本线索 [Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC]；设备经 device plugin 和运行时 passthrough。kubectl exec 经 kubelet/CRI/containerd 到 runsc 或 kata agent；镜像拉取由 containerd 在宿主机完成。若未设置或未强制 RuntimeClass，Pod 可能使用默认 runtime；若 handler 不存在，通常创建失败，但具体行为需验证。运行时组件不可用时，隔离不会自动成立，必须让 Pod 失败而不是静默降级。审计可留下 Kubernetes events/audit、containerd/runsc/kata/shim 日志、节点 dmesg 和指标；具体字段与保留策略 unknown。\n\n4. 性能、密度、兼容性与测量。官方材料没有给出启动延迟、内存/CPU 开销、I/O、页缓存、单节点密度或 GPU 支持数字，全部标 unknown。第三方材料称 gVisor 启动延迟可忽略、Kata Containers with Firecracker 冷启动约 5 秒，且 EKS 托管节点组尚不可用 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；这只是第三方线索，不是官方保证。测量方案：在同一 EKS Amazon Linux 2023 x86_64 托管节点组测试池中分别安装 runsc 和 Kata（Kata 若需自管节点则单列），使用相同 CNI、日志和镜像；测镜像预热与冷拉两种情况；负载覆盖 Python/Node CPU、内存、syscall（open/stat/read/write/fork/exec/thread）、小文件与顺序/随机 I/O、网络、30–120 秒短任务；并发从低到高阶梯压到 2000；指标取 schedule-to-running、runtime create-to-start、任务 p50/p95、Pod/节点 CPU 与内存、page cache、IOPS/吞吐、网络、失败率、单节点密度和每万任务成本。门槛应预先由业务定义：兼容性用例 100% 通过、无静默失败、p95 任务时长和失败率不超过既定 SLO、成本增量可接受；这些是建议阈值，不是官方数字。兼容性风险包括 Python/Node 原生依赖、seccomp、线程、FUSE、嵌套容器；gVisor 的 syscall 覆盖和 Kata guest kernel 行为都必须实测，GPU 未来另做专项。\n\n5. 失败模式、运维与退出。gVisor 下不支持的系统调用会让应用收到错误或任务失败；runsc/sandbox 启动失败表现为 CreateContainerError 或 Pod Failed；节点 AMI 轮换和小版本升级需验证 runsc 与新内核/containerd 的兼容性；CNI/eBPF 可见性 unknown；容量耗尽由 Kubernetes 调度、OOM 和节点压力体现。Kata 下 KVM/嵌套虚拟化不可用会导致 VM 启动失败；guest kernel panic、hypervisor、CNI、卷或设备问题会导致 Pod 失败；节点升级要同时验证 Kata、guest kernel 和 hypervisor 三套兼容；密度和冷启动风险更高（推断）。两者都必须保证任务退出码、stdout/stderr、日志和指标可靠上报，运行时故障不能静默变成功；建议输出只在成功退出后提交，失败任务隔离、重试并保留证据。排障入口包括 Kubernetes events/audit、containerd 日志、runsc/kata/shim 日志、节点 dmesg 和指标；关键告警包括 sandbox 创建失败率、RuntimeClass handler 不可用、任务失败率、OOM、节点 NotReady 和运行时日志错误。上线用独立节点组加 RuntimeClass 加 admission 白名单，按 1%、10%、100% 灰度；回滚时摘除 RuntimeClass/admission、drain 节点组并暂停不可信任务，而不是降级到 runc。团队 6 人且无专职内核/虚拟化工程师，gVisor 的运维负担相对较低（推断）；Kata 需要 KVM、guest kernel 和 hypervisor 排障能力 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。退出 gVisor 迁到 Kata 需要新节点池、镜像/agent、网络/卷/设备验证，成本中高；反向迁移类似；若第一阶段不引入裸金属，Kata 退出/进入成本都应按第二阶段项目立项。\n\n6. 版本、配置与适用条件。RuntimeClass 自 Kubernetes v1.12 起可用是第三方材料 [Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园]，官方 Kubernetes 文档本次未检索；containerd 需配置 runsc 或 kata handler；gVisor 需在节点安装 runsc shim [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；Kata 需 KVM/嵌套虚拟化 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，且托管节点组限制见第三方材料 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。Kata 的 9pfs 自 1.6.0、virtio-fs 自 1.7.0 是旧版本线索 [Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC]，不能作为当前选型依据。GPU、机密容器、GPU passthrough、TEE 等只在特定版本或平台配置下成立，本次材料无法确认，标 unknown。本结论仅适用于第一阶段：EKS 托管节点组、Amazon Linux 2023、x86_64、containerd、无 GPU、无机密计算、标准短任务。必须进一步核对：EKS AL2023 对 runsc 的官方支持与安装方式、containerd 版本与 runtime handler 配置、runsc 与 Kata 的官方 release notes、EKS 托管节点组自定义 AMI/启动模板、Kata 在 EKS 上的官方支持矩阵，以及 CNI/eBPF、卷、设备插件兼容性。\n\n反转结论：若官方 Kata/EKS 文档证明 Kata 可在 EKS 托管节点组上通过受支持的嵌套虚拟化运行，且团队能承担 hypervisor/guest kernel 运维，同时业务要求硬件强制边界，则应重新评估并可能切到 Kata；若受监管客户要求可证明的硬件隔离或机密计算，而 gVisor 不能满足，则触发第二阶段 Kata 加裸金属/自管节点/机密容器 PoC；若 gVisor 在关键 Python/Node 原生依赖或 syscall 兼容性测试中失败且无法修复，也应把 Kata 作为备选，但不能因此忽略第一阶段的节点前置条件。\n\n### 方案排名\n- **#1 gVisor**: 在现有约束下，gVisor 是唯一不需要改变节点虚拟化能力就能落地的候选：官方文档明确其用户态应用内核和 runsc OCI runtime [Source: gVisor — Official Documentation]；第三方材料称标准 EKS 除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且无硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]。其安全边界不是硬件虚拟化，而是用户态应用内核，需接受没有硬件边界这一前提 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。\n  *Sources: [gVisor — Official Documentation](https://gvisor.dev/docs/); [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks); [Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security](https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2)*\n- **#2 Kata Containers**: Kata 提供更强的硬件 VM 边界，适合高安全多租户场景 [Source: Kata Containers vs gVisor | Blog — Northflank]；但在本场景第一阶段，节点前置条件不成立。除非把自管裸金属或支持嵌套虚拟化的专用节点池列为第二阶段硬前置，否则不能作为标准沙箱。\n  *Sources: [Kata Containers vs gVisor | Blog — Northflank](https://northflank.com/blog/kata-containers-vs-gvisor)*\n\n### 权衡\n- **隔离边界强度**: gVisor 用用户态应用内核缩小宿主内核攻击面，但没有硬件边界 [Source: gVisor — Official Documentation][Source: Secure Agent Sandboxes on EKS | AWS Builder Center]；Kata 用 microVM 和 CPU 硬件虚拟化提供硬件强制边界 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: Kata Containers vs gVisor | Blog — Northflank]。Kata 官方文档未检索到，机制主要由第三方材料支撑。\n  *Sources: [gVisor — Official Documentation](https://gvisor.dev/docs/); [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks); [Kata Containers vs gVisor | Blog — Northflank](https://northflank.com/blog/kata-containers-vs-gvisor)*\n  - 影响: 影响不可信代码的逃逸风险模型，以及未来受监管客户要求可证明硬件隔离时是否必须进入第二阶段。\n- **第一阶段 EKS 托管节点组可行性**: gVisor 被第三方材料描述为标准 EKS 除安装 runtime shim 外无需特殊配置 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，且无硬件虚拟化要求 [Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]；Kata 需要 KVM/嵌套虚拟化或裸金属 [Source: Kata Containers vs gVisor | Blog — Northflank][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security]，且第三方称 EKS 托管节点组尚不可用、需自管节点组 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]。\n  *Sources: [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks); [Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security](https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2); [Kata Containers vs gVisor | Blog — Northflank](https://northflank.com/blog/kata-containers-vs-gvisor)*\n  - 影响: 这是决定第一阶段能否不引入裸金属、不新增专用节点能力的硬约束；Kata 因此只能作为第二阶段触发项。\n- **运维复杂度与团队技能**: gVisor 主要新增 runsc/containerd handler 和节点安装配置；Kata 还引入 hypervisor、guest kernel、agent、virtio 卷/设备路径。第三方材料显示 Kata 的节点和启动链更重 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center][Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC]。\n  *Sources: [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks); [\\[PDF\\] Disk I/O Performance of Kata Containers \\- StackHPC](https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf)*\n  - 影响: 影响 6 人平台团队能否在 12–18 个月内独立升级、排障和回滚；无专职内核/虚拟化工程师时 Kata 负担更高。\n- **兼容性与性能**: 官方材料没有给出启动延迟、内存/CPU 开销、I/O、页缓存和密度数字；第三方称 gVisor 启动延迟可忽略、Kata Firecracker 冷启动约 5 秒 [Source: Secure Agent Sandboxes on EKS | AWS Builder Center]，但只能作为线索。gVisor 的 syscall 覆盖和 Kata guest kernel 行为都需实测。\n  *Sources: [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks)*\n  - 影响: 影响 Python/Node 原生依赖、seccomp、线程、FUSE、嵌套容器任务能否上线；必须用兼容性矩阵和阶梯压测做门禁。\n- **GPU 与机密计算未来需求**: 当前无 GPU；未来 12 个月可能增加 GPU/ML 和机密计算要求。检索材料无法确认 gVisor 或 Kata 在 EKS 上的 GPU、passthrough、机密容器支持矩阵；Kata 的 GPU passthrough 会改变隔离边界（推断）。\n  - 影响: 影响第二阶段选型触发条件；若受监管客户要求硬件隔离或机密计算，需另立 Kata/裸金属/机密容器 PoC，而不是假设当前方案自动满足。\n- **审计、回滚与退出成本**: 两者都依赖 Kubernetes events/audit、containerd 和运行时日志；具体字段与保留策略未知。gVisor 回滚主要是摘除 RuntimeClass/admission 和节点组；Kata 还涉及 hypervisor/guest kernel 和专用节点池。\n  - 影响: 影响故障时能否证明隔离成立、能否快速暂停不可信任务；Kata 的退出/迁移成本更高（推断）。\n\n### 证据摘要\n本次检索有 22 个条目，但只有 [Source: gVisor — Official Documentation] 是 gVisor 官方文档；没有 Kata Containers 官方文档，也没有 Kubernetes、containerd、Amazon EKS 官方文档。[Source: Secure Agent Sandboxes on EKS | AWS Builder Center] 是 AWS Builder Center 的第三方文章，[Source: Kata Containers vs gVisor | Blog — Northflank][Source: [PDF] Disk I/O Performance of Kata Containers - StackHPC][Source: Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security] 是第三方博客/厂商材料，[Source: 一文详解银河麒麟配置容器运行时及gVisor(runsc)、Kata(runv)详细指南 - 塔克拉玛攻城狮 - 博客园][Source: 容器安全与安全运行环境的重要性-腾讯云开发者社区-腾讯云] 是中文社区文章；多数网页未显示发布日期。[Source: Secure Agent Sandboxes on EKS | AWS Builder Center] 的约 5 秒冷启动和可忽略启动延迟是第三方测量线索，不能作为官方保证；所有性能、密度、GPU、机密计算数字均未实测或未确认。场景中的 200 节点、10000 任务/日、2000 并发和任务规格是假设，不是实测数据。因此本推荐是基于约束匹配和机制推断，不是实测结论。\n*Sources: [gVisor — Official Documentation](https://gvisor.dev/docs/); [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks); [Kata Containers vs gVisor | Blog — Northflank](https://northflank.com/blog/kata-containers-vs-gvisor); [\\[PDF\\] Disk I/O Performance of Kata Containers \\- StackHPC](https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf); [Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security](https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2); [一文详解银河麒麟配置容器运行时及gVisor\\(runsc\\)、Kata\\(runv\\)详细指南 \\- 塔克拉玛攻城狮 \\- 博客园](https://www.cnblogs.com/v-fan/p/18843188); [容器安全与安全运行环境的重要性\\-腾讯云开发者社区\\-腾讯云](https://cloud.tencent.com/developer/article/2402071)*\n\n**场景适配:** gVisor 最贴合当前场景：不引入裸金属、不要求 KVM/嵌套虚拟化、沿用现有 Kubernetes/containerd/RuntimeClass/OCI 路径，适合 6 人平台团队先落地并可回滚。Kata 的硬件 VM 边界更强，但当前第一阶段约束下需要自管节点或裸金属，应明确留作第二阶段触发项：只有当官方材料证明 EKS 托管节点组可受支持地运行 Kata，或受监管客户要求硬件隔离/机密计算且 gVisor 不能满足时，才进入 Kata 专项评估。\n\n### 参考来源\n- [gVisor — Official Documentation](https://gvisor.dev/docs/)\n- [一文详解银河麒麟配置容器运行时及gVisor\\(runsc\\)、Kata\\(runv\\)详细指南 \\- 塔克拉玛攻城狮 \\- 博客园](https://www.cnblogs.com/v-fan/p/18843188)\n- [Secure Compute Part 2: gVisor Runtime on EKS | Very Good Security](https://www.verygoodsecurity.com/blog/posts/secure-compute-part-2)\n- [Kata Containers vs gVisor | Blog — Northflank](https://northflank.com/blog/kata-containers-vs-gvisor)\n- [Secure Agent Sandboxes on EKS | AWS Builder Center](https://builder.aws.com/content/3ADDWTtyI2gevtzY9d2vzULAxzS/secure-agent-sandboxes-on-eks)\n- [容器安全与安全运行环境的重要性\\-腾讯云开发者社区\\-腾讯云](https://cloud.tencent.com/developer/article/2402071)\n- [\\[PDF\\] Disk I/O Performance of Kata Containers \\- StackHPC](https://www.stackhpc.com/images/IO-Performance-of-Kata-Containers-TheNewStack.pdf)",
+  "confidence": "medium",
+  "knowledge_gaps": [
+    "Kata Containers 官方文档（docs.katacontainers.io）中关于 Kubernetes/containerd 集成、KVM 与嵌套虚拟化要求、RuntimeClass handler 配置的原文与版本适用性",
+    "Kata Containers 官方 release notes：Firecracker/QEMU/Cloud Hypervisor 支持、启动时间相关说明、virtio-fs/9p 现状版本",
+    "Amazon EKS 官方文档：托管节点组（Amazon Linux 2023）是否支持 KVM/nested virtualization，自定义 AMI/启动模板与 CPU Options 的限制",
+    "Amazon EKS 官方文档：在 AL2023 托管节点组安装 gVisor runsc 与配置 containerd runtime handler 的支持方式与版本要求",
+    "Kubernetes 官方文档 RuntimeClass 机制（版本、handler 解析失败行为、RuntimeClass 强制策略）",
+    "containerd 官方文档：runtime handler 配置、shim 崩溃与 CreateContainerError 行为、日志字段",
+    "gVisor 官方文档：syscall 兼容性矩阵，io_uring、eBPF、FUSE、GPU、nested containers 的支持状态与平台（ptrace/KVM）差异",
+    "gVisor/Kata 在 EKS 上运行 Python 与 Node.js 原生依赖任务的兼容性实测报告（含 seccomp、线程、小文件 I/O）",
+    "EKS 上 gVisor 与 Kata 的任务启动延迟、内存与 CPU 开销、页缓存行为、单节点密度实测（相同 AL2023 x86_64 节点池、相同 CNI 与镜像）",
+    "gVisor 或 Kata 在 EKS 上的 GPU 支持与 confidential containers（TEE）官方支持矩阵与版本前提"
+  ],
+  "retry_count": 1,
+  "partial_failures": [],
+  "empty_sources": [
+    {
+      "source": "chroma",
+      "reason": "no_research_material"
+    }
+  ],
+  "quality_signals": [
+    {
+      "agent": "self_reviewer",
+      "review_status": "completed",
+      "review_validation_error": null,
+      "passed_count": 4,
+      "total_checks": 6,
+      "confidence": "medium",
+      "gaps_found": 10,
+      "corrections_applied": 0,
+      "corrections_rejected": 0,
+      "corrected_fields": [],
+      "report_rerendered": true,
+      "evidence_window_chars": 1600,
+      "evidence_sources_visible": 15,
+      "evidence_sources_truncated": 1,
+      "evidence_visible_chars": 12889,
+      "evidence_source_chars": 18625,
+      "evidence_page_chars": 7336,
+      "evidence_page_chars_known_sources": 1,
+      "evidence_stored_chars": 18625,
+      "evidence_page_truncated_sources": 0,
+      "evidence_page_truncated_unknown_sources": 14,
+      "evidence_stored_truncated_sources": 0
+    }
+  ],
+  "agent_timing": {
+    "query_adapter": 27.59,
+    "multi_retriever": 42.25,
+    "source_evaluator": 0.0,
+    "conflict_detector": 5.19,
+    "evidence_chain": 0.0,
+    "conclusion_synthesizer": 81.2,
+    "report_generator": 0.02,
+    "self_reviewer": 48.62
+  },
+  "token_usage": [
+    {
+      "agent": "query_adapter",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 2450,
+      "completion_tokens": 5431,
+      "total_tokens": 7881
+    },
+    {
+      "agent": "conflict_detector",
+      "model": "",
+      "calls": 0,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "total_tokens": 0
+    },
+    {
+      "agent": "conclusion_synthesizer",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 8852,
+      "completion_tokens": 15280,
+      "total_tokens": 24132
+    },
+    {
+      "agent": "self_reviewer",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 16655,
+      "completion_tokens": 10029,
+      "total_tokens": 26684
+    }
+  ]
+}

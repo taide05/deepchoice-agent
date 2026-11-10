@@ -1,0 +1,1774 @@
+{
+  "task": {
+    "query": "我们是一家约 40 人的 B2B SaaS 公司，正在整理生产数据库的高可用方案。业务服务是 Python/Django 和 Go，运行在 Amazon EKS 上；PostgreSQL 自建在 EKS 里，当前是一个主库加两个副本，分布在同一个区域的 3 个可用区，使用 EBS 卷，备份写入 S3 兼容对象存储。公司不采购 RDS、Aurora 等托管数据库，短期内也不打算迁移；团队有 3 名后端工程师，没有专职 DBA 或 SRE。\n\n现在的高可用主要靠人工步骤和零散脚本：主库故障时切换步骤不统一、时间不可预期；计划内主库切换没有固定流程；上一次节点故障后，有一个副本长时间没有重新加入复制。我们要把它改成可重复、可审计的自动化方案，同时应用连接方式尽量不变：应用通过一个稳定的读写入口连接数据库，切换时允许短暂重连，但不希望要求业务代码改动，也不希望换掉现有客户端驱动。\n\n场景假设（不是已实测的结论）：单区域三可用区；生产主库峰值约 2,000 个并发连接、数据量约 1 TB；普通业务要求已提交事务尽量不丢，因此会启用同步复制；目标是单副本故障自动恢复、计划内主库切换 60 秒内完成、非计划故障恢复 5 分钟内完成。此外还有这些约束：备份与按时间点恢复（PITR）必须有官方支持的实现，并且能写入 S3 兼容对象存储；Kubernetes 与 PostgreSQL 小版本升级尽量不停写，PostgreSQL 大版本升级要有明确路径；数据库凭据、复制凭据、备份凭据与 TLS 证书不能明文出现在 Git 或日志里；管理方式尽量声明式、少维护自研脚本，同时要保留人工干预和审计能力；未来 12 个月可能扩展到第二个集群或部分迁移到裸金属/其他云，因此需要评估锁定和退出成本。\n\n现在要在两个候选方案之间选择：CloudNativePG 和 Patroni。两者我们都愿意在生产使用，但都没有长期生产运行经验，也不打算在选型阶段搭环境实测切换耗时。请不要把官方文档未记载的切换时间、吞吐、资源占用或准确率当作事实。\n\n请比较 CloudNativePG 与 Patroni，结合上述场景给出有依据的主推荐、理由，以及具体到触发条件（什么变化会让推荐反转）的条件化结论。必须逐项回答以下六个问题：\n1. 职责边界与适用前提：两个候选各自负责 PostgreSQL 高可用的哪些环节（故障检测、选主与提升、成员管理、客户端读写入口等），哪些能力（备份/PITR、连接池、只读负载均衡、监控）不在其核心职责内或需要额外组件；各自对运行平台、外部依赖和 PostgreSQL/Kubernetes 版本有什么硬性要求；在 EKS + EBS + 自建 PostgreSQL 的约束下哪些能力成立、哪些不成立。\n2. 故障检测、选主与同步复制机制及风险取舍：两个候选分别如何判断主库失效、决定由谁提升、避免脑裂；同步复制如何配置，与 RPO 和可用性如何相互影响；关键配置项及其取舍是什么（例如检测超时、重试、计划内 switchover 与自动 failover 的区分），哪些设置会提高「误判故障导致不必要的切换」或「漏判故障导致长时间不可写」的风险；在单副本故障与网络分区两种情况下分别会发生什么。\n3. 决定性运维/安全/有效性区别以及切换时「实际发送/执行了什么」：切换、提升与副本重建时，两个候选各自执行哪些命令或 API 调用（谁调用谁，经过 Kubernetes API 还是外部协调服务）；哪些数据会跨网络发送（心跳/租约、健康状态、复制流、备份上传）；数据库超级用户、复制用户、备份对象存储凭据与 TLS 证书如何存放和轮转；控制面组件不可用或权限不足时，各自的高可用是否仍然有效；这些差异如何影响本场景的安全与有效性边界。\n4. 维护、升级与生命周期：初始集群引导、副本扩缩容、计划内 switchover、节点排空与重建、候选自身升级、PostgreSQL 小版本与大版本升级分别怎么走；备份与 PITR 是否内置、如何与对象存储集成（注意版本差异）；哪些操作需要停机或有数据风险；如何避免配置漂移，以及在两个方案之间迁移或退出的成本。\n5. 失败模式与可观察性：控制面（Kubernetes API、外部协调服务或 operator 组件）不可用、主库所在节点或存储丢失、升级失败、网络分区、备份对象存储或凭据失效时，各自的表现、数据风险与恢复路径；故障排查入口（状态命令、事件、日志、指标）和应设置的关键告警；日志与凭据脱敏注意事项；长期维护成本与团队技能负担；如果要退出该方案，迁移路径是什么。\n6. 版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（两个项目各自支持的 PostgreSQL 与 Kubernetes 版本范围、已弃用或行为变更的配置、备份实现与大版本升级能力的版本门槛）；哪些结论只适用于特定版本/部署形态；给出在本场景下应进一步核对的版本与配置组合。不要编造未实测的容量或性能数字。\n\n来源与严谨性要求：对影响推荐、候选保留/排除和风险边界的差异，优先采用两个项目的官方文档、官方仓库发布说明和维护者材料，PostgreSQL 与 Kubernetes 官方文档可作为语义依据；社区博客和第三方对比只能作为线索，不能单独支撑决定性结论。标注关键来源的 URL，以及文档版本或日期（找不到日期时说明）。区分「文档明确记载的事实」「基于文档但有前提的推论」与「当前无法确定或需要核对版本/需要实测的信息」；没有适用实测依据时，给出具体可执行的测量办法（测什么、在什么环境、如何取数），不要编造切换时间、吞吐、资源占用或准确率。来源冲突时说明冲突与取舍理由；来源不可达时按未知处理，不要据此认定某一方不具备该能力。最终必须给出实质推荐和具体反转条件，不能只留下缺口清单。",
+    "scene_context": "一家约 40 人的 B2B SaaS 公司在 Amazon EKS 上自建 PostgreSQL：单区域三个可用区、一个主库加两个副本、EBS 存储、备份写入 S3 兼容对象存储，业务为 Python/Django 与 Go 服务，不采购托管数据库。团队有 3 名后端工程师、没有专职 DBA 或 SRE；目前高可用依赖人工步骤和零散脚本，计划内主库切换没有固定流程，曾出现节点故障后副本长时间无法重新加入复制。公司希望把 PostgreSQL 高可用改造为可重复、可审计的自动化方案：应用通过一个稳定的读写入口连接，切换时允许短暂重连但不改业务代码；需要同步复制、备份与 PITR、小版本与大版本升级路径、凭据保护，并保留未来扩展到第二个集群或部分迁移到裸金属/其他云的退出选项。候选方案为 CloudNativePG 与 Patroni。",
+    "candidate_techs": [
+      "CloudNativePG",
+      "Patroni"
+    ],
+    "constraints": [
+      "自建 PostgreSQL 运行在 Amazon EKS 上：单区域 3 个可用区、1 个主库 + 2 个副本、EBS 卷、备份写入 S3 兼容对象存储；不采用 RDS/Aurora 等托管数据库，短期不迁移。",
+      "场景负载假设：生产主库峰值约 2,000 个并发连接、数据量约 1 TB（假设值，不是实测结论）。",
+      "应用通过一个稳定的读写入口连接数据库；故障切换允许短暂重连，但不能要求业务代码或客户端驱动改动。",
+      "启用同步复制，尽量不丢失已提交事务；目标为单副本故障自动恢复、计划内主库切换 ≤60 秒、非计划故障恢复 ≤5 分钟（场景目标假设，非实测）。",
+      "团队 3 名后端工程师，无专职 DBA/SRE；希望声明式管理、减少自研脚本，同时保留人工干预与审计能力。",
+      "备份与 PITR 必须有官方支持的实现，备份写入 S3 兼容对象存储，并能从中恢复。",
+      "Kubernetes 与 PostgreSQL 小版本升级尽量不停写，PostgreSQL 大版本升级要有明确路径与限制。",
+      "数据库、复制、备份凭据与 TLS 证书不得明文进入 Git 或日志；未来 12 个月可能扩展到第二个集群或部分迁移到裸金属/其他云，需要评估锁定与退出成本。"
+    ],
+    "sub_questions": [
+      "两个候选在「PostgreSQL 高可用」中的职责边界与适用前提：各自覆盖故障检测、选主与主库提升、成员管理、客户端读写入口/故障转移寻址中的哪些环节；哪些能力（备份与 PITR、连接池、只读负载均衡、监控与告警）不在其核心职责内、需要额外组件；各自对运行平台（仅 Kubernetes 还是也支持虚拟机/裸金属/混合环境）、外部依赖（Kubernetes API、DCS/etcd 等）与 PostgreSQL/Kubernetes 版本有什么硬性要求；在 EKS + EBS + 自建 PostgreSQL 的约束下哪些能力成立、哪些不成立。",
+      "故障检测、选主与同步复制的机制和风险取舍：两个候选如何判定主库失效、由谁决定提升、如何避免脑裂/双主；同步复制如何配置，与 RPO 和可用性如何相互影响；关键配置项（检测超时、重试、租约/健康检查、计划内 switchover 与自动 failover 的区分）各自的取舍是什么；哪些配置会提高「误判故障导致非必要切换」或「漏判故障导致长时间不可写」的风险；在单副本故障与网络分区下分别会发生什么。",
+      "决定性运维/安全/有效性区别，以及故障切换时实际发送/执行了什么：切换、主库提升、副本重建或重新加入时，两个候选各自执行哪些命令或 API 调用，调用链经过 Kubernetes API、外部 DCS 还是本机进程；哪些信息会跨网络发送（心跳/租约、健康状态、复制流、备份上传、证书验证）；数据库超级用户、复制用户、备份对象存储凭据与 TLS 证书如何存放和轮转；控制面组件不可用或权限不足时，各自的高可用是否仍然有效；这些差异如何影响本场景的安全与有效性边界。",
+      "维护、升级与生命周期：初始集群引导、副本扩缩容、计划内 switchover、节点排空与重建、候选自身升级、PostgreSQL 小版本与大版本升级分别怎么走；备份与 PITR 是否内置、如何与对象存储集成（注意版本差异与已弃用配置）；哪些操作需要停机或有数据风险；如何发现和避免配置漂移；在两个方案之间迁移或彻底退出的成本是什么。",
+      "失败模式与可观察性：Kubernetes API、外部 DCS、operator/实例管理组件不可用，主库节点或存储丢失，升级失败，网络分区，备份对象存储或凭据失效时，各自的表现、数据风险与恢复路径；故障排查入口（状态命令、事件、日志、指标）与建议的关键告警；日志与凭据脱敏注意事项；长期维护成本与团队技能负担；如果要退出该方案，迁移路径是什么。",
+      "版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（两个项目各自支持的 PostgreSQL 与 Kubernetes 版本范围、已弃用或行为变更的配置、备份实现与大版本升级能力的版本门槛）；哪些结论只适用于特定版本或部署形态；在本场景下应进一步核对哪些具体版本与配置组合。不要编造未实测的容量或性能数字。"
+    ],
+    "report_format": "what_why_how",
+    "language": "zh"
+  },
+  "sub_questions": [
+    "两个候选在「PostgreSQL 高可用」中的职责边界与适用前提：各自覆盖故障检测、选主与主库提升、成员管理、客户端读写入口/故障转移寻址中的哪些环节；哪些能力（备份与 PITR、连接池、只读负载均衡、监控与告警）不在其核心职责内、需要额外组件；各自对运行平台（仅 Kubernetes 还是也支持虚拟机/裸金属/混合环境）、外部依赖（Kubernetes API、DCS/etcd 等）与 PostgreSQL/Kubernetes 版本有什么硬性要求；在 EKS + EBS + 自建 PostgreSQL 的约束下哪些能力成立、哪些不成立。",
+    "故障检测、选主与同步复制的机制和风险取舍：两个候选如何判定主库失效、由谁决定提升、如何避免脑裂/双主；同步复制如何配置，与 RPO 和可用性如何相互影响；关键配置项（检测超时、重试、租约/健康检查、计划内 switchover 与自动 failover 的区分）各自的取舍是什么；哪些配置会提高「误判故障导致非必要切换」或「漏判故障导致长时间不可写」的风险；在单副本故障与网络分区下分别会发生什么。",
+    "决定性运维/安全/有效性区别，以及故障切换时实际发送/执行了什么：切换、主库提升、副本重建或重新加入时，两个候选各自执行哪些命令或 API 调用，调用链经过 Kubernetes API、外部 DCS 还是本机进程；哪些信息会跨网络发送（心跳/租约、健康状态、复制流、备份上传、证书验证）；数据库超级用户、复制用户、备份对象存储凭据与 TLS 证书如何存放和轮转；控制面组件不可用或权限不足时，各自的高可用是否仍然有效；这些差异如何影响本场景的安全与有效性边界。",
+    "维护、升级与生命周期：初始集群引导、副本扩缩容、计划内 switchover、节点排空与重建、候选自身升级、PostgreSQL 小版本与大版本升级分别怎么走；备份与 PITR 是否内置、如何与对象存储集成（注意版本差异与已弃用配置）；哪些操作需要停机或有数据风险；如何发现和避免配置漂移；在两个方案之间迁移或彻底退出的成本是什么。",
+    "失败模式与可观察性：Kubernetes API、外部 DCS、operator/实例管理组件不可用，主库节点或存储丢失，升级失败，网络分区，备份对象存储或凭据失效时，各自的表现、数据风险与恢复路径；故障排查入口（状态命令、事件、日志、指标）与建议的关键告警；日志与凭据脱敏注意事项；长期维护成本与团队技能负担；如果要退出该方案，迁移路径是什么。",
+    "版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（两个项目各自支持的 PostgreSQL 与 Kubernetes 版本范围、已弃用或行为变更的配置、备份实现与大版本升级能力的版本门槛）；哪些结论只适用于特定版本或部署形态；在本场景下应进一步核对哪些具体版本与配置组合。不要编造未实测的容量或性能数字。"
+  ],
+  "adapted_queries": {
+    "tavily": [
+      "CloudNativePG 与 Patroni 在 PostgreSQL 高可用中的职责边界对比：故障检测、选主提升、成员管理、客户端读写入口、备份与 PITR、连接池、只读负载均衡、监控分别由谁负责；对 Kubernetes、虚拟机/裸金属、etcd/DCS、PostgreSQL 与 Kubernetes 版本以及 EKS + EBS + 自建 PostgreSQL 的适用前提。",
+      "CloudNativePG 与 Patroni 故障检测与选主机制对比：如何判定主库失效、谁触发提升、如何避免脑裂与双主；同步复制配置如何影响 RPO 和可用性；检测超时、重试、租约、计划内 switchover 与自动 failover 的取舍，以及单副本故障和网络分区下的行为。",
+      "CloudNativePG 与 Patroni 在切换、主库提升、副本重建或重新加入时实际执行哪些命令和 API 调用：调用链经过 Kubernetes API、外部 DCS 还是本机进程；心跳、租约、健康状态、复制流、备份上传和证书验证有哪些跨网络数据；超级用户、复制用户、S3 备份凭据和 TLS 证书如何存放与轮转；控制面不可用或权限不足时高可用是否仍有效。",
+      "CloudNativePG 与 Patroni 生命周期运维对比：初始集群引导、副本扩缩容、计划内 switchover、节点排空与重建、自身升级、PostgreSQL 小版本和大版本升级流程；备份与 PITR 是否内置以及如何集成 S3 兼容对象存储；哪些操作需要停机或有数据风险，如何避免配置漂移，以及两个方案之间迁移或退出的成本。",
+      "CloudNativePG 与 Patroni 失败模式与可观察性对比：Kubernetes API、外部 DCS、operator 或实例管理组件不可用，主库节点或 EBS 存储丢失，升级失败，网络分区，S3 备份对象存储或凭据失效时各自的表现、数据风险和恢复路径；状态命令、事件、日志、指标、关键告警、日志与凭据脱敏、长期维护成本和退出迁移路径。",
+      "CloudNativePG 与 Patroni 版本支持矩阵和配置适用条件：各自支持的 PostgreSQL 与 Kubernetes 版本范围、已弃用或行为变更的配置、备份实现与大版本升级能力的版本门槛；在 EKS + EBS + 自建 PostgreSQL 场景下应进一步核对哪些具体版本与配置组合，不要编造未实测的容量或性能数字。"
+    ],
+    "arxiv": [
+      "CloudNativePG Patroni PostgreSQL high availability operator architecture responsibilities Kubernetes DCS failover backup PITR connection pooling read balancing prerequisites",
+      "CloudNativePG Patroni failure detection leader election quorum synchronous replication split brain network partition PostgreSQL Kubernetes",
+      "CloudNativePG Patroni switchover promotion replica rejoin Kubernetes API DCS secrets rotation TLS certificates security control plane failure",
+      "CloudNativePG Patroni lifecycle management upgrade minor major PostgreSQL backup PITR S3 object storage configuration drift migration exit cost",
+      "CloudNativePG Patroni failure modes observability Kubernetes API DCS operator outage storage loss backup credentials network partition recovery metrics alerts",
+      "CloudNativePG Patroni version compatibility PostgreSQL Kubernetes deprecated configuration backup major version upgrade release notes applicability"
+    ],
+    "github": [
+      "repo:cloudnative-pg/cloudnative-pg OR repo:zalando/patroni responsibilities failover backup PITR Kubernetes DCS EKS EBS versions",
+      "repo:cloudnative-pg/cloudnative-pg OR repo:zalando/patroni failover detection leader election synchronous replication split brain network partition timeout retry",
+      "repo:cloudnative-pg/cloudnative-pg OR repo:zalando/patroni switchover promote replica rejoin Kubernetes API DCS secret rotation TLS certificate",
+      "repo:cloudnative-pg/cloudnative-pg OR repo:zalando/patroni upgrade minor major PostgreSQL backup PITR S3 object storage configuration drift migration",
+      "repo:cloudnative-pg/cloudnative-pg OR repo:zalando/patroni failure modes observability metrics alerts restore storage loss S3 credentials network partition",
+      "repo:cloudnative-pg/cloudnative-pg OR repo:zalando/patroni release notes supported PostgreSQL Kubernetes versions deprecated config backup major upgrade"
+    ],
+    "chroma": [
+      "CloudNativePG 和 Patroni 各自负责 PostgreSQL 高可用的哪些环节，哪些能力需要额外组件，在 EKS + EBS + 自建 PostgreSQL 环境下分别有哪些硬性前提和限制？",
+      "CloudNativePG 和 Patroni 如何判定主库失效并决定由谁提升，如何避免脑裂，同步复制与 RPO、可用性、检测超时、重试、租约以及 switchover 和 failover 的取舍是什么？",
+      "CloudNativePG 和 Patroni 在故障切换时实际发送和执行了什么，调用链经过 Kubernetes API 还是 DCS，数据库与备份凭据和 TLS 证书如何存放轮转，控制面不可用时高可用是否仍有效？",
+      "CloudNativePG 和 Patroni 在初始引导、扩缩容、switchover、节点排空重建、自身升级、PostgreSQL 小版本和大版本升级、S3 备份与 PITR 集成、配置漂移和迁移退出成本上分别怎么走？",
+      "CloudNativePG 和 Patroni 在 Kubernetes API、DCS、operator 不可用，主库节点或存储丢失，升级失败，网络分区，S3 备份凭据失效时分别会怎样表现，如何排查、告警、脱敏、评估维护成本并退出迁移？",
+      "CloudNativePG 和 Patroni 哪些决定性能力只在特定版本或配置下成立，各自支持哪些 PostgreSQL 与 Kubernetes 版本，备份和大版本升级有哪些版本门槛，本场景应核对哪些版本与配置组合？"
+    ],
+    "community": [
+      "site:stackoverflow.com [postgresql] [kubernetes] [cloudnativepg] [patroni] responsibilities backup PITR connection pooling read replica EKS EBS",
+      "site:stackoverflow.com [postgresql] [patroni] [cloudnativepg] synchronous replication failover split brain network partition leader election timeout retry",
+      "site:stackoverflow.com [postgresql] [patroni] [cloudnativepg] switchover promote replica rejoin DCS Kubernetes API credentials TLS rotation control plane",
+      "site:stackoverflow.com [postgresql] [patroni] [cloudnativepg] upgrade major version backup PITR S3 object storage switchover drain migration drift",
+      "site:stackoverflow.com [postgresql] [patroni] [cloudnativepg] failure recovery metrics alerts DCS Kubernetes API storage loss backup credentials",
+      "site:stackoverflow.com [postgresql] [patroni] [cloudnativepg] supported versions Kubernetes PostgreSQL deprecated configuration backup major upgrade"
+    ],
+    "official": [
+      "CloudNativePG architecture responsibilities Patroni responsibilities backup PITR pooling read-only load balancing prerequisites Kubernetes DCS versions",
+      "CloudNativePG failover detection leader election synchronous replication Patroni failover switchover timeout retry lease split brain",
+      "CloudNativePG switchover promotion replica rejoin API calls Patroni REST API DCS secrets TLS rotation documentation",
+      "CloudNativePG backup PITR S3 major version upgrade Patroni PostgreSQL upgrade lifecycle switchover drain documentation",
+      "CloudNativePG troubleshooting metrics alerts Patroni troubleshooting observability failure modes Kubernetes API DCS storage loss backup credentials documentation",
+      "CloudNativePG supported Kubernetes PostgreSQL versions release notes deprecated configuration Patroni supported versions release notes documentation"
+    ]
+  },
+  "search_results": [
+    {
+      "source": "tavily",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "snippet": "`shared_buffers`\n`max_connections`\n`patronictl restart`\n\n## 八、与 Kubernetes 生态的集成\n\n### 8.1 云原生的部署模式\n\nPatroni 支持在 Kubernetes 上直接运行，与之配合的常见方案有：\n\n### 8.2 Spilo 镜像简介\n\nZalando 开源的 Spilo 将 PostgreSQL 和 Patroni 打包为一个容器镜像，专为 Kubernetes 环境设计。与常规部署相比，在 Kubernetes 上运行时，Patroni 使用 Kubernetes Endpoints 作为 DCS，Pod 通过 StatefulSet 管理，数据库状态通过 PVC 持久化。Patroni 完全自主协调高可用切换，Operator 主要负责资源的声明式管理，而非接管 PostgreSQL 的运行时逻辑。\n\n### 8.3 PostgreSQL + Patroni 在 Kubernetes 上的关键差异 [...] ## 二、Patroni 架构全景\n\n### 2.1 核心组件\n\n| 组件 | 角色 | 说明 |\n --- \n| Patroni | 高可用管理器 | 每个 PostgreSQL 节点运行一个实例，负责启动/停止/监控 PG 并参与 DCS 选主 |\n| DCS（etcd/Consul/ZooKeeper） | 分布式配置存储 | 存储集群拓扑、Leader 锁、同步复制状态；使用 Raft 协议确保一致性 |\n| Watchdog | 防脑裂守护 | 监控 Patroni 心跳，若 Patroni 僵死则重启系统，防止旧主库继续提供写服务 |\n| HAProxy | 负载均衡器 | 作为接入层，根据 Patroni REST API 将写流量路由到主库、读流量路由到从库 |\n| Keepalived | VIP 管理器 | 为 HAProxy 节点提供虚拟 IP 漂移，消除负载均衡器本身的单点 |\n\n### 2.2 故障切换的时间线\n\n当主库宕机时，Patroni 的自动故障转移过程如下： [...] Patroni 是一个用 Python 编写的 PostgreSQL 高可用管理工具，起源于 Compose 公司的 Governor 项目，经过社区持续开发后成为业界事实标准。它在每个数据库节点上运行一个 Patroni 进程，控制本地的 PostgreSQL 实例，同时通过一个分布式配置存储（DCS，Distributed Configuration Store）来协调集群状态和领导选举。\n\n核心设计理念：数据库的自治化运维——数据库的健康检查、角色切换、配置更新等由控制器自动完成。\n\nDCS 在 Patroni 架构中的作用，可以理解为以下三个维度：\n\n| 功能维度 | DCS 存储的内容 | 对集群的意义 |\n --- \n| 领导选举 | Leader Key + TTL | 确保持锁的唯一节点是主库 |\n| 成员注册 | 每个 Patroni 节点的 IP、端口、角色、LSN 位置 | 所有实例知晓集群完整拓扑 |\n| 集群配置 | PostgreSQL 参数、同步复制模式、TTL 等 | 一次修改、全体生效 |\n\n## 二、Patroni 架构全景",
+          "date": ""
+        },
+        {
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "snippet": "instances become simultaneously unreachable, the probe deliberately fails, causing the Kubelet to restart the pod and take the isolated primary offline. This mitigates the risk of a split-brain scenario (though it cannot arise when synchronous replication is in use). Patroni introduced a similar capability in version 3.0.0 through its DCS failsafe mode. CloudNativePG independently implemented the same concept the Kubernetes way: rather than querying peers over a REST API, it lets the liveness [...] GitHub star history for Patroni, CloudNativePG and Crunchy PGO (star-history.com)\n\nThe table below covers signals measured over the 18 months to May 2026. [...] I include Patroni in the chart below not as a direct competitor in the operator space, but as a reference point for broader PostgreSQL adoption. Patroni is the dominant HA solution for PostgreSQL on traditional Linux environments and has a significant community of its own. Seeing CloudNativePG approach and cross its star count gives a sense of the momentum behind the cloud-native Postgres movement, beyond the narrower operator category. CloudNativePG’s star growth is entirely organic: no",
+          "date": ""
+        },
+        {
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "snippet": "All users should upgrade immediately.\n\n## Security\n\n### CVE-2026-44477: metrics exporter privilege escalation and OS RCE [...] # CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix\n\nGabriele Bartolini\n\n# Gabriele Bartolini\n\n###### May 8, 2026 • 3 minutes\n\nblog image\n\nThe CloudNativePG community is releasing maintenance updates for all currently supported series: 1.29.1 and 1.28.3. [...] `github.com/jackc/pgx/v5` v5.9.2: fixes `CVE-2026-33816` (memory-safety in `pgproto3`) and `GHSA-j88v-2chj-qfwx` (SQL injection via dollar-quoted string handling in the simple protocol).\n Go 1.26.3 runtime: fixes across `crypto/x509`, `crypto/tls`, `net/http`, and `net` (CVE-2026-32280, CVE-2026-32281, CVE-2026-33810, CVE-2026-33811, CVE-2026-33814, CVE-2026-39825), plus CVE-2026-42501 in `cmd/go` module-checksum validation during release builds.",
+          "date": ""
+        },
+        {
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "snippet": "为了解决这些缺点，PostgreSQL 有许多第三方开源扩展。数据库管理员面临的挑战是，为当前场景选择正确的实用方案。\n\nPostgreSQL 通过提供 Patroni 扩展来实现 PostgreSQL 的高可用，从而解决了这一挑战。\n\n## Patroni\n\nPatroni 是一个使用 Python 实现的模板，用于创建自己的自定义高可用解决方案，以及 - 为了获得最大的可访问性 - 支持分布式配置存储，如 ZooKeeper、etcd、Consul 或 Kubernetes。\n\n### Patroni 的工作原理\n\n使用 Patroni，您可以自定义和自动化 PostgreSQL 高可用集群。它基于现代的共识算法，通过决定在集群中执行哪些操作来确保数据库的高可用，并保护您免受数据丢失。\n\nPatroni 会监控主节点和副本节点的活跃度，并可以更改所有集群成员的配置。它可以处理同步性要求和计划内切换，以及计划外故障转移。Patroni 会自动执行这些复杂的任务。此外，它可以保证始终满足某些条件，以完全排除对您的数据造成不可逆转的损害。 [...] 可通过 +86 13022832863 或 john.redrock@outlook.com 联系我们。\n\n使用 Patroni 实现 PostgreSQL 的高可用 logo 使用 Patroni 实现 PostgreSQL 的高可用 logo 使用 Patroni 实现 PostgreSQL 的高可用 - 跳到主页\n\n 主页\n 下载\n 文档\n 博客\n 教程\n English\n\n# 使用 Patroni 实现 PostgreSQL 的高可用\n\n四月 8, 2024\n\n摘要：Patroni 是一个模板，使用 Python 实现的 PostgreSQL 高可用解决方案。为了获得最大的可访问性，Patroni 支持各种分布式配置存储，如 ZooKeeper、etcd、Consul 或 Kubernetes。\n\n目录\n\n## 高可用\n\nPostgreSQL 已被广泛采用为现代的高性能事务型数据库。一个高可用的 PostgreSQL 集群可以承受由网络中断、资源饱和、硬件故障、操作系统崩溃或意外重启引起的故障。此类集群通常是企业应用环境的关键组件，其中四个 9 的可用性是最低要求。 [...] Patroni 的架构是这样的，每个 PostgreSQL 实例都有一个指定的 Patroni 实例来监视和控制它。\n\n### Patroni 的主要优点：\n\n 持续监控和自动故障转移\n 使用单个命令进行手动/计划切换\n 内置自动化功能，用于将故障节点再次带回到集群。\n 用于整个集群配置和进一步工具化的 REST API。\n 为透明的应用故障转移提供基础能力\n 每个操作和配置的分布式共识。\n 与 Linux 看门狗集成，以避免脑裂现象。\n\n## 架构布局\n\n下图显示了一个有单个领导节点的 PostgreSQL 三节点集群的架构。\n\n### 组件\n\n此架构中的组件包括：\n\n PostgreSQL 节点\n Patroni - 用于配置 PostgreSQL 高可用集群的模板。\n ETCD - 存储 PostgreSQL 集群状态的分布式配置存储。\n HAProxy - 集群的负载均衡器，是客户端应用访问的单一入口点。\n pgBackRest - PostgreSQL 的备份和恢复解决方案\n Postgres 监控和管理（PMM） - 用于监控集群运行状况的解决方案",
+          "date": ""
+        },
+        {
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "snippet": "## Conclusion\n\nThe era of “building your own” Postgres HA stack is coming to an end for those running on Kubernetes. CloudNativePG offers a streamlined, “boring” (in a good way!) approach to database management that lets you focus on your data rather than your infrastructure.\n\nGoing from zero to a production-ready, backed-up, highly available PostgreSQL cluster takes just a few Terraform resources. Compare that to wiring up Patroni, etcd, and HAProxy. It’s not even close. [...] Complexity: You aren’t just managing a database; you’re managing a distributed system (etcd) and a load balancer (HAProxy) on top of it.\n Configuration Hell: Each component has its own configuration file, its own failure modes, and its own scaling requirements.\n Maintenance Burden: Upgrading Postgres often meant carefully orchestrating updates across Patroni while making sure etcd stayed healthy throughout. [...] 1. PostgreSQL: The database itself.\n2. Patroni: A Python-based template to manage the Postgres lifecycle and replication.\n3. etcd (or Consul/Zookeeper): A distributed consensus store used by Patroni to keep track of who the leader is.\n4. HAProxy: To provide a single entry point for applications, routing traffic to the current primary.\n5. Keepalived: Often needed to provide a Virtual IP (VIP) for HAProxy itself.\n\n## The Pain Points",
+          "date": ""
+        },
+        {
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "snippet": "## Architecture, replication, and fault tolerance\n\nThis operator’s signature feature is avoiding external failover management tools, such as Patroni or Stolon (we reviewed in the first part of this series). Instead, each Pod gets its own Instance Manager (available at `/controller/manager`) that directly interacts with the Kubernetes API. [...] We really enjoyed using CloudNativePG. The features we have tried address most of the typical cluster administrator needs. You can quickly start a new PostgreSQL cluster and get fault tolerance right out of the box. We liked the variety of cluster deployment scenarios, flexible Kubernetes scheduler parameters, preconfigured metrics supplemented with exporters, as well as the ability to define custom metrics. The backup functionality is pretty capable, but easy to configure and manage. [...] In the example above, we performed PITR recovery, and the timestamp was defined by the `bootstrap.recovery.recoveryTarget.targetTime` parameter. If the `bootstrap.recovery.recoveryTarget` section is missing, the data will be restored to the last available WAL archive.\n\n## Status monitoring and alerts",
+          "date": ""
+        },
+        {
+          "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+          "snippet": "10.52.1.135  5432/TCP 32m NAME STATUS VOLUME CAPACITY ACCESS MODES STORAGECLASS AGE persistentvolumeclaim/gke-pg-cluster-1 Bound pvc-bbdd1cdd-bdd9-4e7c-8f8c-1a14a87e5329 2Gi RWO standard 32m persistentvolumeclaim/gke-pg-cluster-2 Bound pvc-e7a8b4df-6a3e-43ce-beb0-b54ec1d24011 2Gi RWO standard 31m persistentvolumeclaim/gke-pg-cluster-3 Bound pvc-dac7f931-6ac5-425f-ac61-0cfc55aae72f 2Gi RWO standard 30m NAME MIN AVAILABLE MAX UNAVAILABLE ALLOWED DISRUPTIONS AGE [...] DISRUPTIONS AGE poddisruptionbudget.policy/gke-pg-cluster 1 N/A 1 32m poddisruptionbudget.policy/gke-pg-cluster-primary 1 N/A 0 32m NAME TYPE DATA AGE secret/gke-pg-cluster-app kubernetes.io/basic-auth 3 32m secret/gke-pg-cluster-ca Opaque 2 32m secret/gke-pg-cluster-replication kubernetes.io/tls 2 32m secret/gke-pg-cluster-server kubernetes.io/tls 2 32m secret/gke-pg-cluster-superuser kubernetes.io/basic-auth 3 32m NAME DATA AGE configmap/cnpg-default-monitoring 1 32m [...] 如未另行说明，那么本页面中的内容已根据知识共享署名 4.0 许可获得了许可，并且代码示例已根据 Apache 2.0 许可获得了许可。有关详情，请参阅 Google 开发者网站政策。Java 是 Oracle 和/或其关联公司的注册商标。\n\n最后更新时间 (UTC)：2026-10-10。\n\n  \n\n,,[\"最后更新时间 (UTC)：2026-10-10。\"],[],[]]",
+          "date": ""
+        }
+      ],
+      "error": null,
+      "latency_ms": 25468
+    },
+    {
+      "source": "chroma",
+      "status": "empty",
+      "results": [],
+      "error": null,
+      "empty_reason": "no_research_material",
+      "empty_detail": "every indexed document is evaluation material",
+      "latency_ms": 5875
+    },
+    {
+      "source": "github",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://github.com/kubernetes/kubernetes",
+          "title": "kubernetes/kubernetes",
+          "snippet": "Stars: 128463, Forks: 47441, Updated: 2026-10-19T10:33:57Z, Description: Production-Grade Container Scheduling and Management",
+          "has_body": false,
+          "date": "2026-10-19T10:33:57Z"
+        },
+        {
+          "url": "https://github.com/bregman-arie/devops-exercises",
+          "title": "bregman-arie/devops-exercises",
+          "snippet": "Stars: 84908, Forks: 20396, Updated: 2026-10-19T10:24:32Z, Description: Linux, Jenkins, AWS, SRE, Prometheus, Docker, Python, Ansible, Git, Kubernetes, Terraform, OpenStack, SQL, NoSQL, Azure, GCP, DNS, Elastic, Network, Virtualization. DevOps Interview Questions",
+          "has_body": false,
+          "date": "2026-10-19T10:24:32Z"
+        },
+        {
+          "url": "https://github.com/netdata/netdata",
+          "title": "netdata/netdata",
+          "snippet": "Stars: 81024, Forks: 6684, Updated: 2026-10-19T10:24:05Z, Description: The fastest path to AI-powered full stack observability, even for lean teams.",
+          "has_body": false,
+          "date": "2026-10-19T10:24:05Z"
+        },
+        {
+          "url": "https://github.com/traefik/traefik",
+          "title": "traefik/traefik",
+          "snippet": "Stars: 65275, Forks: 6253, Updated: 2026-10-19T10:28:45Z, Description: The Cloud Native Application Proxy",
+          "has_body": false,
+          "date": "2026-10-19T10:28:45Z"
+        },
+        {
+          "url": "https://github.com/minio/minio",
+          "title": "minio/minio",
+          "snippet": "Stars: 61317, Forks: 8190, Updated: 2026-10-19T09:46:40Z, Description: MinIO is a high-performance, S3 compatible object store, open sourced under GNU AGPLv3 license.",
+          "has_body": false,
+          "date": "2026-10-19T09:46:40Z"
+        },
+        {
+          "url": "https://github.com/cloudnative-pg/cloudnative-pg",
+          "title": "cloudnative-pg/cloudnative-pg",
+          "snippet": "Stars: 9468, Forks: 796, Updated: 2026-10-19T09:56:42Z, Description: The most popular Kubernetes Operator for PostgreSQL.",
+          "has_body": false,
+          "date": "2026-10-19T09:56:42Z"
+        },
+        {
+          "url": "https://github.com/patroni/patroni",
+          "title": "patroni/patroni",
+          "snippet": "Stars: 8793, Forks: 1033, Updated: 2026-10-19T06:05:50Z, Description: A template for PostgreSQL High Availability with Etcd, Consul, ZooKeeper, or Kubernetes",
+          "has_body": false,
+          "date": "2026-10-19T06:05:50Z"
+        }
+      ],
+      "error": null,
+      "latency_ms": 15062
+    },
+    {
+      "source": "arxiv",
+      "status": "success",
+      "results": [
+        {
+          "url": "http://arxiv.org/abs/1406.5761v1",
+          "title": "A Low Cost Two-Tier Architecture Model For High Availability Clusters Application Load Balancing",
+          "snippet": "This article proposes a design and implementation of a low cost two-tier architecture model for high availability cluster combined with load-balancing and shared storage technology to achieve desired scale of three-tier architecture for application load balancing e.g. web servers. The research work proposes a design that physically omits Network File System (NFS) server nodes and implements NFS server functionalities within the cluster nodes, through Red Hat Cluster Suite (RHCS) with High Availa",
+          "date": "2014-06-22"
+        },
+        {
+          "url": "http://arxiv.org/abs/2207.13219v4",
+          "title": "Dalorex: A Data-Local Program Execution and Architecture for Memory-bound Applications",
+          "snippet": "Applications with low data reuse and frequent irregular memory accesses, such as graph or sparse linear algebra workloads, fail to scale well due to memory bottlenecks and poor core utilization. While prior work with prefetching, decoupling, or pipelining can mitigate memory latency and improve core utilization, memory bottlenecks persist due to limited off-chip bandwidth. Approaches doing processing in-memory (PIM) with Hybrid Memory Cube (HMC) overcome bandwidth limitations but fail to achieve",
+          "date": "2022-07-26"
+        },
+        {
+          "url": "http://arxiv.org/abs/2109.01561v1",
+          "title": "Ordinal Pooling",
+          "snippet": "In the framework of convolutional neural networks, downsampling is often performed with an average-pooling, where all the activations are treated equally, or with a max-pooling operation that only retains an element with maximum activation while discarding the others. Both of these operations are restrictive and have previously been shown to be sub-optimal. To address this issue, a novel pooling scheme, named\\emph{ ordinal pooling}, is introduced in this work. Ordinal pooling rearranges all the",
+          "date": "2021-09-03"
+        },
+        {
+          "url": "http://arxiv.org/abs/2207.01222v1",
+          "title": "KubeAdaptor: A Docking Framework for Workflow Containerization on Kubernetes",
+          "snippet": "As Kubernetes becomes the infrastructure of the cloud-native era, the integration of workflow systems with Kubernetes is gaining more and more popularity. To our knowledge, workflow systems employ scheduling algorithms that optimize task execution order of workflow to improve performance and execution efficiency. However, due to its inherent scheduling mechanism, Kubernetes does not execute containerized scheduling following the optimized task execution order of workflow amid migrating workflow",
+          "date": "2022-07-04"
+        },
+        {
+          "url": "http://arxiv.org/abs/2006.15275v1",
+          "title": "XI Commandments of Kubernetes Security: A Systematization of Knowledge Related to Kubernetes Security Practices",
+          "snippet": "Kubernetes is an open-source software for automating management of computerized services. Organizations, such as IBM, Capital One and Adidas use Kubernetes to deploy and manage their containers, and have reported benefits related to deployment frequency. Despite reported benefits, Kubernetes deployments are susceptible to security vulnerabilities, such as those that occurred at Tesla in 2018. A systematization of Kubernetes security practices can help practitioners mitigate vulnerabilities in th",
+          "date": "2020-06-27"
+        },
+        {
+          "url": "http://arxiv.org/abs/2604.02401v2",
+          "title": "Backup-Based Safety Filters: A Comparative Review of Backup CBF, Model Predictive Shielding, and gatekeeper",
+          "snippet": "This paper revisits three backup-based safety filters -- Backup Control Barrier Functions (Backup CBF), Model Predictive Shielding (MPS), and gatekeeper -- through a unified comparative framework. Using a common safety-filter abstraction and shared notation, we make explicit both their common backup-policy structure and their key algorithmic differences. We compare the three methods through their filter-inactive sets, i.e., the states where the nominal policy is left unchanged. In particular, we",
+          "date": "2026-04-02"
+        },
+        {
+          "url": "http://arxiv.org/abs/1804.10784v1",
+          "title": "A Resource Pooling Switch Architecture with High Performance Scheduler",
+          "snippet": "With the rapid development of network-based services and applications, current data plane solutions of network node, which focus on packets forwarding traditionally, are not optimally addressing new requirements such as function flexibility, performance expansibility and resource utilization, etc. In this paper, we propose a novel data plane structure called Resource Pooling Switch Architecture (RPSA), which utilizes global shared resource pool to provide different processing functionalities and",
+          "date": "2018-04-28"
+        }
+      ],
+      "error": null,
+      "latency_ms": 10297
+    },
+    {
+      "source": "community",
+      "status": "success",
+      "results": [],
+      "error": null,
+      "latency_ms": 7172
+    },
+    {
+      "source": "official",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://patroni.readthedocs.io/en/latest/",
+          "title": "Patroni — Official Documentation",
+          "snippet": "",
+          "has_body": false,
+          "date": ""
+        }
+      ],
+      "error": null,
+      "latency_ms": 7563
+    }
+  ],
+  "source_scores": [
+    {
+      "url": "http://arxiv.org/abs/2604.02401v2",
+      "title": "Backup-Based Safety Filters: A Comparative Review of Backup CBF, Model Predictive Shielding, and gatekeeper",
+      "snippet": "This paper revisits three backup-based safety filters -- Backup Control Barrier Functions (Backup CBF), Model Predictive Shielding (MPS), and gatekeeper -- through a unified comparative framework. Using a common safety-filter abstraction and shared notation, we make explicit both their common backup-policy structure and their key algorithmic differences. We compare the three methods through their filter-inactive sets, i.e., the states where the nominal policy is left unchanged. In particular, we",
+      "date": "2026-04-02",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 6,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 7.0,
+      "supporting_sources": [],
+      "rank": 1
+    },
+    {
+      "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+      "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+      "snippet": "10.52.1.135  5432/TCP 32m NAME STATUS VOLUME CAPACITY ACCESS MODES STORAGECLASS AGE persistentvolumeclaim/gke-pg-cluster-1 Bound pvc-bbdd1cdd-bdd9-4e7c-8f8c-1a14a87e5329 2Gi RWO standard 32m persistentvolumeclaim/gke-pg-cluster-2 Bound pvc-e7a8b4df-6a3e-43ce-beb0-b54ec1d24011 2Gi RWO standard 31m persistentvolumeclaim/gke-pg-cluster-3 Bound pvc-dac7f931-6ac5-425f-ac61-0cfc55aae72f 2Gi RWO standard 30m NAME MIN AVAILABLE MAX UNAVAILABLE ALLOWED DISRUPTIONS AGE [...] DISRUPTIONS AGE poddisruptionbudget.policy/gke-pg-cluster 1 N/A 1 32m poddisruptionbudget.policy/gke-pg-cluster-primary 1 N/A 0 32m NAME TYPE DATA AGE secret/gke-pg-cluster-app kubernetes.io/basic-auth 3 32m secret/gke-pg-cluster-ca Opaque 2 32m secret/gke-pg-cluster-replication kubernetes.io/tls 2 32m secret/gke-pg-cluster-server kubernetes.io/tls 2 32m secret/gke-pg-cluster-superuser kubernetes.io/basic-auth 3 32m NAME DATA AGE configmap/cnpg-default-monitoring 1 32m [...] 如未另行说明，那么本页面中的内容已根据知识共享署名 4.0 许可获得了许可，并且代码示例已根据 Apache 2.0 许可获得了许可。有关详情，请参阅 Google 开发者网站政策。Java 是 Oracle 和/或其关联公司的注册商标。\n\n最后更新时间 (UTC)：2026-10-10。\n\n  \n\n,,[\"最后更新时间 (UTC)：2026-10-10。\"],[],[]]",
+      "date": "",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "rank": 2
+    },
+    {
+      "url": "https://patroni.readthedocs.io/en/latest/",
+      "title": "Patroni — Official Documentation",
+      "snippet": "",
+      "date": "",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 3
+    },
+    {
+      "url": "https://github.com/kubernetes/kubernetes",
+      "title": "kubernetes/kubernetes",
+      "snippet": "Stars: 128463, Forks: 47441, Updated: 2026-10-19T10:33:57Z, Description: Production-Grade Container Scheduling and Management",
+      "date": "2026-10-19T10:33:57Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 4
+    },
+    {
+      "url": "https://github.com/bregman-arie/devops-exercises",
+      "title": "bregman-arie/devops-exercises",
+      "snippet": "Stars: 84908, Forks: 20396, Updated: 2026-10-19T10:24:32Z, Description: Linux, Jenkins, AWS, SRE, Prometheus, Docker, Python, Ansible, Git, Kubernetes, Terraform, OpenStack, SQL, NoSQL, Azure, GCP, DNS, Elastic, Network, Virtualization. DevOps Interview Questions",
+      "date": "2026-10-19T10:24:32Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 5
+    },
+    {
+      "url": "https://github.com/netdata/netdata",
+      "title": "netdata/netdata",
+      "snippet": "Stars: 81024, Forks: 6684, Updated: 2026-10-19T10:24:05Z, Description: The fastest path to AI-powered full stack observability, even for lean teams.",
+      "date": "2026-10-19T10:24:05Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 6
+    },
+    {
+      "url": "https://github.com/traefik/traefik",
+      "title": "traefik/traefik",
+      "snippet": "Stars: 65275, Forks: 6253, Updated: 2026-10-19T10:28:45Z, Description: The Cloud Native Application Proxy",
+      "date": "2026-10-19T10:28:45Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 7
+    },
+    {
+      "url": "https://github.com/minio/minio",
+      "title": "minio/minio",
+      "snippet": "Stars: 61317, Forks: 8190, Updated: 2026-10-19T09:46:40Z, Description: MinIO is a high-performance, S3 compatible object store, open sourced under GNU AGPLv3 license.",
+      "date": "2026-10-19T09:46:40Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 8
+    },
+    {
+      "url": "https://github.com/cloudnative-pg/cloudnative-pg",
+      "title": "cloudnative-pg/cloudnative-pg",
+      "snippet": "Stars: 9468, Forks: 796, Updated: 2026-10-19T09:56:42Z, Description: The most popular Kubernetes Operator for PostgreSQL.",
+      "date": "2026-10-19T09:56:42Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 9
+    },
+    {
+      "url": "https://github.com/patroni/patroni",
+      "title": "patroni/patroni",
+      "snippet": "Stars: 8793, Forks: 1033, Updated: 2026-10-19T06:05:50Z, Description: A template for PostgreSQL High Availability with Etcd, Consul, ZooKeeper, or Kubernetes",
+      "date": "2026-10-19T06:05:50Z",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 10
+    },
+    {
+      "url": "http://arxiv.org/abs/2207.13219v4",
+      "title": "Dalorex: A Data-Local Program Execution and Architecture for Memory-bound Applications",
+      "snippet": "Applications with low data reuse and frequent irregular memory accesses, such as graph or sparse linear algebra workloads, fail to scale well due to memory bottlenecks and poor core utilization. While prior work with prefetching, decoupling, or pipelining can mitigate memory latency and improve core utilization, memory bottlenecks persist due to limited off-chip bandwidth. Approaches doing processing in-memory (PIM) with Hybrid Memory Cube (HMC) overcome bandwidth limitations but fail to achieve",
+      "date": "2022-07-26",
+      "source_type": "arxiv_paper",
+      "evidence_type": "benchmark",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 8
+      },
+      "total_score": 6.4,
+      "supporting_sources": [],
+      "rank": 11
+    },
+    {
+      "url": "http://arxiv.org/abs/1804.10784v1",
+      "title": "A Resource Pooling Switch Architecture with High Performance Scheduler",
+      "snippet": "With the rapid development of network-based services and applications, current data plane solutions of network node, which focus on packets forwarding traditionally, are not optimally addressing new requirements such as function flexibility, performance expansibility and resource utilization, etc. In this paper, we propose a novel data plane structure called Resource Pooling Switch Architecture (RPSA), which utilizes global shared resource pool to provide different processing functionalities and",
+      "date": "2018-04-28",
+      "source_type": "arxiv_paper",
+      "evidence_type": "benchmark",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 8
+      },
+      "total_score": 6.4,
+      "supporting_sources": [],
+      "rank": 12
+    },
+    {
+      "url": "http://arxiv.org/abs/1406.5761v1",
+      "title": "A Low Cost Two-Tier Architecture Model For High Availability Clusters Application Load Balancing",
+      "snippet": "This article proposes a design and implementation of a low cost two-tier architecture model for high availability cluster combined with load-balancing and shared storage technology to achieve desired scale of three-tier architecture for application load balancing e.g. web servers. The research work proposes a design that physically omits Network File System (NFS) server nodes and implements NFS server functionalities within the cluster nodes, through Red Hat Cluster Suite (RHCS) with High Availa",
+      "date": "2014-06-22",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": [],
+      "rank": 13
+    },
+    {
+      "url": "http://arxiv.org/abs/2109.01561v1",
+      "title": "Ordinal Pooling",
+      "snippet": "In the framework of convolutional neural networks, downsampling is often performed with an average-pooling, where all the activations are treated equally, or with a max-pooling operation that only retains an element with maximum activation while discarding the others. Both of these operations are restrictive and have previously been shown to be sub-optimal. To address this issue, a novel pooling scheme, named\\emph{ ordinal pooling}, is introduced in this work. Ordinal pooling rearranges all the",
+      "date": "2021-09-03",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": [],
+      "rank": 14
+    },
+    {
+      "url": "http://arxiv.org/abs/2207.01222v1",
+      "title": "KubeAdaptor: A Docking Framework for Workflow Containerization on Kubernetes",
+      "snippet": "As Kubernetes becomes the infrastructure of the cloud-native era, the integration of workflow systems with Kubernetes is gaining more and more popularity. To our knowledge, workflow systems employ scheduling algorithms that optimize task execution order of workflow to improve performance and execution efficiency. However, due to its inherent scheduling mechanism, Kubernetes does not execute containerized scheduling following the optimized task execution order of workflow amid migrating workflow",
+      "date": "2022-07-04",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": [],
+      "rank": 15
+    },
+    {
+      "url": "http://arxiv.org/abs/2006.15275v1",
+      "title": "XI Commandments of Kubernetes Security: A Systematization of Knowledge Related to Kubernetes Security Practices",
+      "snippet": "Kubernetes is an open-source software for automating management of computerized services. Organizations, such as IBM, Capital One and Adidas use Kubernetes to deploy and manage their containers, and have reported benefits related to deployment frequency. Despite reported benefits, Kubernetes deployments are susceptible to security vulnerabilities, such as those that occurred at Tesla in 2018. A systematization of Kubernetes security practices can help practitioners mitigate vulnerabilities in th",
+      "date": "2020-06-27",
+      "source_type": "arxiv_paper",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 2,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.0,
+      "supporting_sources": [],
+      "rank": 16
+    },
+    {
+      "url": "https://www.cnblogs.com/kingster/p/19921172",
+      "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+      "snippet": "`shared_buffers`\n`max_connections`\n`patronictl restart`\n\n## 八、与 Kubernetes 生态的集成\n\n### 8.1 云原生的部署模式\n\nPatroni 支持在 Kubernetes 上直接运行，与之配合的常见方案有：\n\n### 8.2 Spilo 镜像简介\n\nZalando 开源的 Spilo 将 PostgreSQL 和 Patroni 打包为一个容器镜像，专为 Kubernetes 环境设计。与常规部署相比，在 Kubernetes 上运行时，Patroni 使用 Kubernetes Endpoints 作为 DCS，Pod 通过 StatefulSet 管理，数据库状态通过 PVC 持久化。Patroni 完全自主协调高可用切换，Operator 主要负责资源的声明式管理，而非接管 PostgreSQL 的运行时逻辑。\n\n### 8.3 PostgreSQL + Patroni 在 Kubernetes 上的关键差异 [...] ## 二、Patroni 架构全景\n\n### 2.1 核心组件\n\n| 组件 | 角色 | 说明 |\n --- \n| Patroni | 高可用管理器 | 每个 PostgreSQL 节点运行一个实例，负责启动/停止/监控 PG 并参与 DCS 选主 |\n| DCS（etcd/Consul/ZooKeeper） | 分布式配置存储 | 存储集群拓扑、Leader 锁、同步复制状态；使用 Raft 协议确保一致性 |\n| Watchdog | 防脑裂守护 | 监控 Patroni 心跳，若 Patroni 僵死则重启系统，防止旧主库继续提供写服务 |\n| HAProxy | 负载均衡器 | 作为接入层，根据 Patroni REST API 将写流量路由到主库、读流量路由到从库 |\n| Keepalived | VIP 管理器 | 为 HAProxy 节点提供虚拟 IP 漂移，消除负载均衡器本身的单点 |\n\n### 2.2 故障切换的时间线\n\n当主库宕机时，Patroni 的自动故障转移过程如下： [...] Patroni 是一个用 Python 编写的 PostgreSQL 高可用管理工具，起源于 Compose 公司的 Governor 项目，经过社区持续开发后成为业界事实标准。它在每个数据库节点上运行一个 Patroni 进程，控制本地的 PostgreSQL 实例，同时通过一个分布式配置存储（DCS，Distributed Configuration Store）来协调集群状态和领导选举。\n\n核心设计理念：数据库的自治化运维——数据库的健康检查、角色切换、配置更新等由控制器自动完成。\n\nDCS 在 Patroni 架构中的作用，可以理解为以下三个维度：\n\n| 功能维度 | DCS 存储的内容 | 对集群的意义 |\n --- \n| 领导选举 | Leader Key + TTL | 确保持锁的唯一节点是主库 |\n| 成员注册 | 每个 Patroni 节点的 IP、端口、角色、LSN 位置 | 所有实例知晓集群完整拓扑 |\n| 集群配置 | PostgreSQL 参数、同步复制模式、TTL 等 | 一次修改、全体生效 |\n\n## 二、Patroni 架构全景",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 17
+    },
+    {
+      "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+      "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+      "snippet": "instances become simultaneously unreachable, the probe deliberately fails, causing the Kubelet to restart the pod and take the isolated primary offline. This mitigates the risk of a split-brain scenario (though it cannot arise when synchronous replication is in use). Patroni introduced a similar capability in version 3.0.0 through its DCS failsafe mode. CloudNativePG independently implemented the same concept the Kubernetes way: rather than querying peers over a REST API, it lets the liveness [...] GitHub star history for Patroni, CloudNativePG and Crunchy PGO (star-history.com)\n\nThe table below covers signals measured over the 18 months to May 2026. [...] I include Patroni in the chart below not as a direct competitor in the operator space, but as a reference point for broader PostgreSQL adoption. Patroni is the dominant HA solution for PostgreSQL on traditional Linux environments and has a significant community of its own. Seeing CloudNativePG approach and cross its star count gives a sense of the momentum behind the cloud-native Postgres movement, beyond the narrower operator category. CloudNativePG’s star growth is entirely organic: no",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 18
+    },
+    {
+      "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+      "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+      "snippet": "All users should upgrade immediately.\n\n## Security\n\n### CVE-2026-44477: metrics exporter privilege escalation and OS RCE [...] # CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix\n\nGabriele Bartolini\n\n# Gabriele Bartolini\n\n###### May 8, 2026 • 3 minutes\n\nblog image\n\nThe CloudNativePG community is releasing maintenance updates for all currently supported series: 1.29.1 and 1.28.3. [...] `github.com/jackc/pgx/v5` v5.9.2: fixes `CVE-2026-33816` (memory-safety in `pgproto3`) and `GHSA-j88v-2chj-qfwx` (SQL injection via dollar-quoted string handling in the simple protocol).\n Go 1.26.3 runtime: fixes across `crypto/x509`, `crypto/tls`, `net/http`, and `net` (CVE-2026-32280, CVE-2026-32281, CVE-2026-33810, CVE-2026-33811, CVE-2026-33814, CVE-2026-39825), plus CVE-2026-42501 in `cmd/go` module-checksum validation during release builds.",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 19
+    },
+    {
+      "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+      "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+      "snippet": "为了解决这些缺点，PostgreSQL 有许多第三方开源扩展。数据库管理员面临的挑战是，为当前场景选择正确的实用方案。\n\nPostgreSQL 通过提供 Patroni 扩展来实现 PostgreSQL 的高可用，从而解决了这一挑战。\n\n## Patroni\n\nPatroni 是一个使用 Python 实现的模板，用于创建自己的自定义高可用解决方案，以及 - 为了获得最大的可访问性 - 支持分布式配置存储，如 ZooKeeper、etcd、Consul 或 Kubernetes。\n\n### Patroni 的工作原理\n\n使用 Patroni，您可以自定义和自动化 PostgreSQL 高可用集群。它基于现代的共识算法，通过决定在集群中执行哪些操作来确保数据库的高可用，并保护您免受数据丢失。\n\nPatroni 会监控主节点和副本节点的活跃度，并可以更改所有集群成员的配置。它可以处理同步性要求和计划内切换，以及计划外故障转移。Patroni 会自动执行这些复杂的任务。此外，它可以保证始终满足某些条件，以完全排除对您的数据造成不可逆转的损害。 [...] 可通过 +86 13022832863 或 john.redrock@outlook.com 联系我们。\n\n使用 Patroni 实现 PostgreSQL 的高可用 logo 使用 Patroni 实现 PostgreSQL 的高可用 logo 使用 Patroni 实现 PostgreSQL 的高可用 - 跳到主页\n\n 主页\n 下载\n 文档\n 博客\n 教程\n English\n\n# 使用 Patroni 实现 PostgreSQL 的高可用\n\n四月 8, 2024\n\n摘要：Patroni 是一个模板，使用 Python 实现的 PostgreSQL 高可用解决方案。为了获得最大的可访问性，Patroni 支持各种分布式配置存储，如 ZooKeeper、etcd、Consul 或 Kubernetes。\n\n目录\n\n## 高可用\n\nPostgreSQL 已被广泛采用为现代的高性能事务型数据库。一个高可用的 PostgreSQL 集群可以承受由网络中断、资源饱和、硬件故障、操作系统崩溃或意外重启引起的故障。此类集群通常是企业应用环境的关键组件，其中四个 9 的可用性是最低要求。 [...] Patroni 的架构是这样的，每个 PostgreSQL 实例都有一个指定的 Patroni 实例来监视和控制它。\n\n### Patroni 的主要优点：\n\n 持续监控和自动故障转移\n 使用单个命令进行手动/计划切换\n 内置自动化功能，用于将故障节点再次带回到集群。\n 用于整个集群配置和进一步工具化的 REST API。\n 为透明的应用故障转移提供基础能力\n 每个操作和配置的分布式共识。\n 与 Linux 看门狗集成，以避免脑裂现象。\n\n## 架构布局\n\n下图显示了一个有单个领导节点的 PostgreSQL 三节点集群的架构。\n\n### 组件\n\n此架构中的组件包括：\n\n PostgreSQL 节点\n Patroni - 用于配置 PostgreSQL 高可用集群的模板。\n ETCD - 存储 PostgreSQL 集群状态的分布式配置存储。\n HAProxy - 集群的负载均衡器，是客户端应用访问的单一入口点。\n pgBackRest - PostgreSQL 的备份和恢复解决方案\n Postgres 监控和管理（PMM） - 用于监控集群运行状况的解决方案",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 20
+    },
+    {
+      "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+      "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+      "snippet": "## Conclusion\n\nThe era of “building your own” Postgres HA stack is coming to an end for those running on Kubernetes. CloudNativePG offers a streamlined, “boring” (in a good way!) approach to database management that lets you focus on your data rather than your infrastructure.\n\nGoing from zero to a production-ready, backed-up, highly available PostgreSQL cluster takes just a few Terraform resources. Compare that to wiring up Patroni, etcd, and HAProxy. It’s not even close. [...] Complexity: You aren’t just managing a database; you’re managing a distributed system (etcd) and a load balancer (HAProxy) on top of it.\n Configuration Hell: Each component has its own configuration file, its own failure modes, and its own scaling requirements.\n Maintenance Burden: Upgrading Postgres often meant carefully orchestrating updates across Patroni while making sure etcd stayed healthy throughout. [...] 1. PostgreSQL: The database itself.\n2. Patroni: A Python-based template to manage the Postgres lifecycle and replication.\n3. etcd (or Consul/Zookeeper): A distributed consensus store used by Patroni to keep track of who the leader is.\n4. HAProxy: To provide a single entry point for applications, routing traffic to the current primary.\n5. Keepalived: Often needed to provide a Virtual IP (VIP) for HAProxy itself.\n\n## The Pain Points",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 21
+    },
+    {
+      "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+      "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+      "snippet": "## Architecture, replication, and fault tolerance\n\nThis operator’s signature feature is avoiding external failover management tools, such as Patroni or Stolon (we reviewed in the first part of this series). Instead, each Pod gets its own Instance Manager (available at `/controller/manager`) that directly interacts with the Kubernetes API. [...] We really enjoyed using CloudNativePG. The features we have tried address most of the typical cluster administrator needs. You can quickly start a new PostgreSQL cluster and get fault tolerance right out of the box. We liked the variety of cluster deployment scenarios, flexible Kubernetes scheduler parameters, preconfigured metrics supplemented with exporters, as well as the ability to define custom metrics. The backup functionality is pretty capable, but easy to configure and manage. [...] In the example above, we performed PITR recovery, and the timestamp was defined by the `bootstrap.recovery.recoveryTarget.targetTime` parameter. If the `bootstrap.recovery.recoveryTarget` section is missing, the data will be restored to the last available WAL archive.\n\n## Status monitoring and alerts",
+      "date": "",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 22
+    }
+  ],
+  "conflicts": [],
+  "conflict_check": {
+    "pairs_scanned": 9,
+    "pairs_arbitrated": 0,
+    "pairs_evidence": 0,
+    "scan_outcomes": {
+      "difference": 0,
+      "no_difference": 9,
+      "unscanned": 0
+    },
+    "sources_without_comparable_claim": 8,
+    "reason": "no_pairs_confirmed"
+  },
+  "evidence_chains": [
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2604.02401v2",
+          "title": "Backup-Based Safety Filters: A Comparative Review of Backup CBF, Model Predictive Shielding, and gatekeeper",
+          "snippet": "This paper revisits three backup-based safety filters -- Backup Control Barrier Functions (Backup CBF), Model Predictive Shielding (MPS), and gatekeeper -- through a unified comparative framework. Using a common safety-filter abstraction and shared notation, we make explicit both their common backup-policy structure and their key algorithmic differences. We compare the three methods through their filter-inactive sets, i.e., the states where the nominal policy is left unchanged. In particular, we",
+          "retrieval_score": 7.0,
+          "source_type": "arxiv_paper",
+          "date": "2026-04-02"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 7.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+          "snippet": "10.52.1.135  5432/TCP 32m NAME STATUS VOLUME CAPACITY ACCESS MODES STORAGECLASS AGE persistentvolumeclaim/gke-pg-cluster-1 Bound pvc-bbdd1cdd-bdd9-4e7c-8f8c-1a14a87e5329 2Gi RWO standard 32m persistentvolumeclaim/gke-pg-cluster-2 Bound pvc-e7a8b4df-6a3e-43ce-beb0-b54ec1d24011 2Gi RWO standard 31m persistentvolumeclaim/gke-pg-cluster-3 Bound pvc-dac7f931-6ac5-425f-ac61-0cfc55aae72f 2Gi RWO standard 30m NAME MIN AVAILABLE MAX UNAVAILABLE ALLOWED DISRUPTIONS AGE [...] DISRUPTIONS AGE poddisruptionbudget.policy/gke-pg-cluster 1 N/A 1 32m poddisruptionbudget.policy/gke-pg-cluster-primary 1 N/A 0 32m NAME TYPE DATA AGE secret/gke-pg-cluster-app kubernetes.io/basic-auth 3 32m secret/gke-pg-cluster-ca Opaque 2 32m secret/gke-pg-cluster-replication kubernetes.io/tls 2 32m secret/gke-pg-cluster-server kubernetes.io/tls 2 32m secret/gke-pg-cluster-superuser kubernetes.io/basic-auth 3 32m NAME DATA AGE configmap/cnpg-default-monitoring 1 32m [...] 如未另行说明，那么本页面中的内容已根据知识共享署名 4.0 许可获得了许可，并且代码示例已根据 Apache 2.0 许可获得了许可。有关详情，请参阅 Google 开发者网站政策。Java 是 Oracle 和/或其关联公司的注册商标。\n\n最后更新时间 (UTC)：2026-10-10。\n\n  \n\n,,[\"最后更新时间 (UTC)：2026-10-10。\"],[],[]]",
+          "retrieval_score": 6.8,
+          "source_type": "official_doc",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.8,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://patroni.readthedocs.io/en/latest/",
+          "title": "Patroni — Official Documentation",
+          "snippet": "",
+          "has_body": false,
+          "retrieval_score": 6.8,
+          "source_type": "official_doc",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.8,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/kubernetes/kubernetes",
+          "title": "kubernetes/kubernetes",
+          "snippet": "Stars: 128463, Forks: 47441, Updated: 2026-10-19T10:33:57Z, Description: Production-Grade Container Scheduling and Management",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T10:33:57Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/bregman-arie/devops-exercises",
+          "title": "bregman-arie/devops-exercises",
+          "snippet": "Stars: 84908, Forks: 20396, Updated: 2026-10-19T10:24:32Z, Description: Linux, Jenkins, AWS, SRE, Prometheus, Docker, Python, Ansible, Git, Kubernetes, Terraform, OpenStack, SQL, NoSQL, Azure, GCP, DNS, Elastic, Network, Virtualization. DevOps Interview Questions",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T10:24:32Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/netdata/netdata",
+          "title": "netdata/netdata",
+          "snippet": "Stars: 81024, Forks: 6684, Updated: 2026-10-19T10:24:05Z, Description: The fastest path to AI-powered full stack observability, even for lean teams.",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T10:24:05Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/traefik/traefik",
+          "title": "traefik/traefik",
+          "snippet": "Stars: 65275, Forks: 6253, Updated: 2026-10-19T10:28:45Z, Description: The Cloud Native Application Proxy",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T10:28:45Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/minio/minio",
+          "title": "minio/minio",
+          "snippet": "Stars: 61317, Forks: 8190, Updated: 2026-10-19T09:46:40Z, Description: MinIO is a high-performance, S3 compatible object store, open sourced under GNU AGPLv3 license.",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T09:46:40Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/cloudnative-pg/cloudnative-pg",
+          "title": "cloudnative-pg/cloudnative-pg",
+          "snippet": "Stars: 9468, Forks: 796, Updated: 2026-10-19T09:56:42Z, Description: The most popular Kubernetes Operator for PostgreSQL.",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T09:56:42Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://github.com/patroni/patroni",
+          "title": "patroni/patroni",
+          "snippet": "Stars: 8793, Forks: 1033, Updated: 2026-10-19T06:05:50Z, Description: A template for PostgreSQL High Availability with Etcd, Consul, ZooKeeper, or Kubernetes",
+          "has_body": false,
+          "retrieval_score": 6.6,
+          "source_type": "github",
+          "date": "2026-10-19T06:05:50Z"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.6,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2207.13219v4",
+          "title": "Dalorex: A Data-Local Program Execution and Architecture for Memory-bound Applications",
+          "snippet": "Applications with low data reuse and frequent irregular memory accesses, such as graph or sparse linear algebra workloads, fail to scale well due to memory bottlenecks and poor core utilization. While prior work with prefetching, decoupling, or pipelining can mitigate memory latency and improve core utilization, memory bottlenecks persist due to limited off-chip bandwidth. Approaches doing processing in-memory (PIM) with Hybrid Memory Cube (HMC) overcome bandwidth limitations but fail to achieve",
+          "retrieval_score": 6.4,
+          "source_type": "arxiv_paper",
+          "date": "2022-07-26"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.4,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/1804.10784v1",
+          "title": "A Resource Pooling Switch Architecture with High Performance Scheduler",
+          "snippet": "With the rapid development of network-based services and applications, current data plane solutions of network node, which focus on packets forwarding traditionally, are not optimally addressing new requirements such as function flexibility, performance expansibility and resource utilization, etc. In this paper, we propose a novel data plane structure called Resource Pooling Switch Architecture (RPSA), which utilizes global shared resource pool to provide different processing functionalities and",
+          "retrieval_score": 6.4,
+          "source_type": "arxiv_paper",
+          "date": "2018-04-28"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.4,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/1406.5761v1",
+          "title": "A Low Cost Two-Tier Architecture Model For High Availability Clusters Application Load Balancing",
+          "snippet": "This article proposes a design and implementation of a low cost two-tier architecture model for high availability cluster combined with load-balancing and shared storage technology to achieve desired scale of three-tier architecture for application load balancing e.g. web servers. The research work proposes a design that physically omits Network File System (NFS) server nodes and implements NFS server functionalities within the cluster nodes, through Red Hat Cluster Suite (RHCS) with High Availa",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2014-06-22"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2109.01561v1",
+          "title": "Ordinal Pooling",
+          "snippet": "In the framework of convolutional neural networks, downsampling is often performed with an average-pooling, where all the activations are treated equally, or with a max-pooling operation that only retains an element with maximum activation while discarding the others. Both of these operations are restrictive and have previously been shown to be sub-optimal. To address this issue, a novel pooling scheme, named\\emph{ ordinal pooling}, is introduced in this work. Ordinal pooling rearranges all the",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2021-09-03"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2207.01222v1",
+          "title": "KubeAdaptor: A Docking Framework for Workflow Containerization on Kubernetes",
+          "snippet": "As Kubernetes becomes the infrastructure of the cloud-native era, the integration of workflow systems with Kubernetes is gaining more and more popularity. To our knowledge, workflow systems employ scheduling algorithms that optimize task execution order of workflow to improve performance and execution efficiency. However, due to its inherent scheduling mechanism, Kubernetes does not execute containerized scheduling following the optimized task execution order of workflow amid migrating workflow",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2022-07-04"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "http://arxiv.org/abs/2006.15275v1",
+          "title": "XI Commandments of Kubernetes Security: A Systematization of Knowledge Related to Kubernetes Security Practices",
+          "snippet": "Kubernetes is an open-source software for automating management of computerized services. Organizations, such as IBM, Capital One and Adidas use Kubernetes to deploy and manage their containers, and have reported benefits related to deployment frequency. Despite reported benefits, Kubernetes deployments are susceptible to security vulnerabilities, such as those that occurred at Tesla in 2018. A systematization of Kubernetes security practices can help practitioners mitigate vulnerabilities in th",
+          "retrieval_score": 6.0,
+          "source_type": "arxiv_paper",
+          "date": "2020-06-27"
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 6.0,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "snippet": "`shared_buffers`\n`max_connections`\n`patronictl restart`\n\n## 八、与 Kubernetes 生态的集成\n\n### 8.1 云原生的部署模式\n\nPatroni 支持在 Kubernetes 上直接运行，与之配合的常见方案有：\n\n### 8.2 Spilo 镜像简介\n\nZalando 开源的 Spilo 将 PostgreSQL 和 Patroni 打包为一个容器镜像，专为 Kubernetes 环境设计。与常规部署相比，在 Kubernetes 上运行时，Patroni 使用 Kubernetes Endpoints 作为 DCS，Pod 通过 StatefulSet 管理，数据库状态通过 PVC 持久化。Patroni 完全自主协调高可用切换，Operator 主要负责资源的声明式管理，而非接管 PostgreSQL 的运行时逻辑。\n\n### 8.3 PostgreSQL + Patroni 在 Kubernetes 上的关键差异 [...] ## 二、Patroni 架构全景\n\n### 2.1 核心组件\n\n| 组件 | 角色 | 说明 |\n --- \n| Patroni | 高可用管理器 | 每个 PostgreSQL 节点运行一个实例，负责启动/停止/监控 PG 并参与 DCS 选主 |\n| DCS（etcd/Consul/ZooKeeper） | 分布式配置存储 | 存储集群拓扑、Leader 锁、同步复制状态；使用 Raft 协议确保一致性 |\n| Watchdog | 防脑裂守护 | 监控 Patroni 心跳，若 Patroni 僵死则重启系统，防止旧主库继续提供写服务 |\n| HAProxy | 负载均衡器 | 作为接入层，根据 Patroni REST API 将写流量路由到主库、读流量路由到从库 |\n| Keepalived | VIP 管理器 | 为 HAProxy 节点提供虚拟 IP 漂移，消除负载均衡器本身的单点 |\n\n### 2.2 故障切换的时间线\n\n当主库宕机时，Patroni 的自动故障转移过程如下： [...] Patroni 是一个用 Python 编写的 PostgreSQL 高可用管理工具，起源于 Compose 公司的 Governor 项目，经过社区持续开发后成为业界事实标准。它在每个数据库节点上运行一个 Patroni 进程，控制本地的 PostgreSQL 实例，同时通过一个分布式配置存储（DCS，Distributed Configuration Store）来协调集群状态和领导选举。\n\n核心设计理念：数据库的自治化运维——数据库的健康检查、角色切换、配置更新等由控制器自动完成。\n\nDCS 在 Patroni 架构中的作用，可以理解为以下三个维度：\n\n| 功能维度 | DCS 存储的内容 | 对集群的意义 |\n --- \n| 领导选举 | Leader Key + TTL | 确保持锁的唯一节点是主库 |\n| 成员注册 | 每个 Patroni 节点的 IP、端口、角色、LSN 位置 | 所有实例知晓集群完整拓扑 |\n| 集群配置 | PostgreSQL 参数、同步复制模式、TTL 等 | 一次修改、全体生效 |\n\n## 二、Patroni 架构全景",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "snippet": "instances become simultaneously unreachable, the probe deliberately fails, causing the Kubelet to restart the pod and take the isolated primary offline. This mitigates the risk of a split-brain scenario (though it cannot arise when synchronous replication is in use). Patroni introduced a similar capability in version 3.0.0 through its DCS failsafe mode. CloudNativePG independently implemented the same concept the Kubernetes way: rather than querying peers over a REST API, it lets the liveness [...] GitHub star history for Patroni, CloudNativePG and Crunchy PGO (star-history.com)\n\nThe table below covers signals measured over the 18 months to May 2026. [...] I include Patroni in the chart below not as a direct competitor in the operator space, but as a reference point for broader PostgreSQL adoption. Patroni is the dominant HA solution for PostgreSQL on traditional Linux environments and has a significant community of its own. Seeing CloudNativePG approach and cross its star count gives a sense of the momentum behind the cloud-native Postgres movement, beyond the narrower operator category. CloudNativePG’s star growth is entirely organic: no",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "snippet": "All users should upgrade immediately.\n\n## Security\n\n### CVE-2026-44477: metrics exporter privilege escalation and OS RCE [...] # CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix\n\nGabriele Bartolini\n\n# Gabriele Bartolini\n\n###### May 8, 2026 • 3 minutes\n\nblog image\n\nThe CloudNativePG community is releasing maintenance updates for all currently supported series: 1.29.1 and 1.28.3. [...] `github.com/jackc/pgx/v5` v5.9.2: fixes `CVE-2026-33816` (memory-safety in `pgproto3`) and `GHSA-j88v-2chj-qfwx` (SQL injection via dollar-quoted string handling in the simple protocol).\n Go 1.26.3 runtime: fixes across `crypto/x509`, `crypto/tls`, `net/http`, and `net` (CVE-2026-32280, CVE-2026-32281, CVE-2026-33810, CVE-2026-33811, CVE-2026-33814, CVE-2026-39825), plus CVE-2026-42501 in `cmd/go` module-checksum validation during release builds.",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "snippet": "为了解决这些缺点，PostgreSQL 有许多第三方开源扩展。数据库管理员面临的挑战是，为当前场景选择正确的实用方案。\n\nPostgreSQL 通过提供 Patroni 扩展来实现 PostgreSQL 的高可用，从而解决了这一挑战。\n\n## Patroni\n\nPatroni 是一个使用 Python 实现的模板，用于创建自己的自定义高可用解决方案，以及 - 为了获得最大的可访问性 - 支持分布式配置存储，如 ZooKeeper、etcd、Consul 或 Kubernetes。\n\n### Patroni 的工作原理\n\n使用 Patroni，您可以自定义和自动化 PostgreSQL 高可用集群。它基于现代的共识算法，通过决定在集群中执行哪些操作来确保数据库的高可用，并保护您免受数据丢失。\n\nPatroni 会监控主节点和副本节点的活跃度，并可以更改所有集群成员的配置。它可以处理同步性要求和计划内切换，以及计划外故障转移。Patroni 会自动执行这些复杂的任务。此外，它可以保证始终满足某些条件，以完全排除对您的数据造成不可逆转的损害。 [...] 可通过 +86 13022832863 或 john.redrock@outlook.com 联系我们。\n\n使用 Patroni 实现 PostgreSQL 的高可用 logo 使用 Patroni 实现 PostgreSQL 的高可用 logo 使用 Patroni 实现 PostgreSQL 的高可用 - 跳到主页\n\n 主页\n 下载\n 文档\n 博客\n 教程\n English\n\n# 使用 Patroni 实现 PostgreSQL 的高可用\n\n四月 8, 2024\n\n摘要：Patroni 是一个模板，使用 Python 实现的 PostgreSQL 高可用解决方案。为了获得最大的可访问性，Patroni 支持各种分布式配置存储，如 ZooKeeper、etcd、Consul 或 Kubernetes。\n\n目录\n\n## 高可用\n\nPostgreSQL 已被广泛采用为现代的高性能事务型数据库。一个高可用的 PostgreSQL 集群可以承受由网络中断、资源饱和、硬件故障、操作系统崩溃或意外重启引起的故障。此类集群通常是企业应用环境的关键组件，其中四个 9 的可用性是最低要求。 [...] Patroni 的架构是这样的，每个 PostgreSQL 实例都有一个指定的 Patroni 实例来监视和控制它。\n\n### Patroni 的主要优点：\n\n 持续监控和自动故障转移\n 使用单个命令进行手动/计划切换\n 内置自动化功能，用于将故障节点再次带回到集群。\n 用于整个集群配置和进一步工具化的 REST API。\n 为透明的应用故障转移提供基础能力\n 每个操作和配置的分布式共识。\n 与 Linux 看门狗集成，以避免脑裂现象。\n\n## 架构布局\n\n下图显示了一个有单个领导节点的 PostgreSQL 三节点集群的架构。\n\n### 组件\n\n此架构中的组件包括：\n\n PostgreSQL 节点\n Patroni - 用于配置 PostgreSQL 高可用集群的模板。\n ETCD - 存储 PostgreSQL 集群状态的分布式配置存储。\n HAProxy - 集群的负载均衡器，是客户端应用访问的单一入口点。\n pgBackRest - PostgreSQL 的备份和恢复解决方案\n Postgres 监控和管理（PMM） - 用于监控集群运行状况的解决方案",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "snippet": "## Conclusion\n\nThe era of “building your own” Postgres HA stack is coming to an end for those running on Kubernetes. CloudNativePG offers a streamlined, “boring” (in a good way!) approach to database management that lets you focus on your data rather than your infrastructure.\n\nGoing from zero to a production-ready, backed-up, highly available PostgreSQL cluster takes just a few Terraform resources. Compare that to wiring up Patroni, etcd, and HAProxy. It’s not even close. [...] Complexity: You aren’t just managing a database; you’re managing a distributed system (etcd) and a load balancer (HAProxy) on top of it.\n Configuration Hell: Each component has its own configuration file, its own failure modes, and its own scaling requirements.\n Maintenance Burden: Upgrading Postgres often meant carefully orchestrating updates across Patroni while making sure etcd stayed healthy throughout. [...] 1. PostgreSQL: The database itself.\n2. Patroni: A Python-based template to manage the Postgres lifecycle and replication.\n3. etcd (or Consul/Zookeeper): A distributed consensus store used by Patroni to keep track of who the leader is.\n4. HAProxy: To provide a single entry point for applications, routing traffic to the current primary.\n5. Keepalived: Often needed to provide a Virtual IP (VIP) for HAProxy itself.\n\n## The Pain Points",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    },
+    {
+      "conclusion": "",
+      "sources": [
+        {
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "snippet": "## Architecture, replication, and fault tolerance\n\nThis operator’s signature feature is avoiding external failover management tools, such as Patroni or Stolon (we reviewed in the first part of this series). Instead, each Pod gets its own Instance Manager (available at `/controller/manager`) that directly interacts with the Kubernetes API. [...] We really enjoyed using CloudNativePG. The features we have tried address most of the typical cluster administrator needs. You can quickly start a new PostgreSQL cluster and get fault tolerance right out of the box. We liked the variety of cluster deployment scenarios, flexible Kubernetes scheduler parameters, preconfigured metrics supplemented with exporters, as well as the ability to define custom metrics. The backup functionality is pretty capable, but easy to configure and manage. [...] In the example above, we performed PITR recovery, and the timestamp was defined by the `bootstrap.recovery.recoveryTarget.targetTime` parameter. If the `bootstrap.recovery.recoveryTarget` section is missing, the data will be restored to the last available WAL archive.\n\n## Status monitoring and alerts",
+          "retrieval_score": 5.7,
+          "source_type": "tech_blog",
+          "date": ""
+        }
+      ],
+      "evidence_strength": "unknown",
+      "retrieval_score": 5.7,
+      "disputed": false
+    }
+  ],
+  "final_recommendation": {
+    "winner": "CloudNativePG",
+    "winner_rationale": "在 EKS-only、少人运维且要声明式管理的约束下，CNPG 由 Instance Manager 直接对接 K8s API、避免外部故障转移组件，约束匹配度高于 Patroni [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。",
+    "recommendation": "主推荐 CloudNativePG：在 EKS 单区域三 AZ 中用 CNPG operator 管理 1 主 2 副本，应用通过 5432 Service 连接 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation][Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。GKE 教程显示 Service 与 PDB 随集群创建；Palark 称该 operator 以每 Pod Instance Manager 直接对接 K8s API、避免外部故障转移工具，并称备份功能可配置且演示了 PITR 恢复 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation][Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。但同步复制与计划内 switchover 的声明式配置、切换时是否完全无需修改现有驱动，以及官方 S3 兼容备份/PITR 支持矩阵，在现有材料中未得到证实，投产前必须核对官方文档并演练 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。Patroni 作为备选：它支持 Kubernetes Endpoints/etcd 等 DCS，并明确提供计划内 switchover 与非计划 failover [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园][Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]，但会引入 DCS 与 HAProxy 类入口组件 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。反转条件：若团队需要 Patroni 的多 DCS 控制能力，应重新评估并可能改选 Patroni；裸金属/他云迁移是否构成硬约束需核对官方平台支持 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。不要承诺 60 秒/5 分钟；在预生产同规格环境测故障注入、切换耗时、2,000 连接和 1 TB 恢复 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。",
+    "ranked_options": [
+      {
+        "name": "CloudNativePG",
+        "rank": 1,
+        "constraint_fit": "high",
+        "constraint_fit_reason": "EKS-only、声明式、少组件、稳定 Service 与 PDB 均贴合 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation][Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。",
+        "rationale": "CNPG 在 K8s 内由每 Pod 的 Instance Manager 直接与 API 交互，避免外部故障转移工具 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。第三方案例称其从零到带备份 HA 更快、组件更少 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]；GKE 教程也显示 Service 与 PDB 随集群创建 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation]。因此对无 DBA/SRE 的 EKS 场景匹配度最高 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。",
+        "key_strength": "K8s 原生、无外部故障转移工具，Instance Manager 直接访问 API [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。",
+        "key_weakness": "材料未给出官方备份/PITR、支持矩阵与切换耗时，需核对版本并实测 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。"
+      },
+      {
+        "name": "Patroni",
+        "rank": 2,
+        "constraint_fit": "medium",
+        "constraint_fit_reason": "控制力强但需 DCS/入口组件，当前团队负担更高 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。",
+        "rationale": "Patroni 支持 etcd/Consul/ZooKeeper/Kubernetes 多 DCS，并处理同步复制、计划内 switchover 与非计划 failover，控制力强 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。K8s 上可用 Endpoints 作 DCS [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]，但常见部署还需 HAProxy 类入口和 DCS 运维 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。对当前小队负担更高，故排第二 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。",
+        "key_strength": "支持 etcd/Consul/ZooKeeper/Kubernetes 多种 DCS，并明确处理同步复制、计划内 switchover 与非计划 failover [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。",
+        "key_weakness": "DCS 与入口负载均衡增加运维面 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。"
+      }
+    ],
+    "trade_offs": [
+      {
+        "dimension": "职责边界与平台依赖",
+        "finding": "CNPG 以 operator 和每 Pod Instance Manager 承担 K8s 内故障转移，避免外部 DCS/HAProxy [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]；Patroni 依赖 etcd/Consul/ZooKeeper 或 K8s Endpoints 做 DCS，并需另配入口组件 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres][Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。",
+        "impact": "决定小团队要维护多少控制面组件 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。"
+      },
+      {
+        "dimension": "故障检测与同步复制",
+        "finding": "CNPG 用 liveness probe 让隔离主库被 Kubelet 重启下线，Patroni 自 3.0.0 有 DCS failsafe；Patroni 明确处理同步复制与 switchover/failover [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes][Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。",
+        "impact": "影响误判切换与网络分区下的 RPO/可用性取舍 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。"
+      },
+      {
+        "dimension": "切换执行链与凭据",
+        "finding": "CNPG 的实例管理器直接调用 K8s API [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]，Patroni 通过 DCS 协调成员与选主 [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]；现有材料未覆盖超级用户、复制/备份凭据与 TLS 轮转细节 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。",
+        "impact": "决定审计与凭据不落 Git/日志的落地方式 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。"
+      },
+      {
+        "dimension": "备份/PITR 与升级",
+        "finding": "Palark 的第三方对比称 CNPG 备份功能可配置并演示了 PITR 恢复 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]；官方发布页只证明 1.29.1/1.28.3 维护版本与 CVE 修复，现有材料仍未证明 S3 兼容存储备份/PITR 的官方支持矩阵与大版本升级细节 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。Patroni 材料也未给备份/PITR 实现 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。",
+        "impact": "备份/PITR 是硬门槛，必须版本级验证后才能选型 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。"
+      },
+      {
+        "dimension": "可观察性与失败模式",
+        "finding": "控制面不可用时 CNPG 依赖 K8s API/实例管理器，Patroni 依赖 DCS，二者都需验证降级行为 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]；现有材料未提供完整告警与日志脱敏清单 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。",
+        "impact": "无 DBA/SRE 团队需先建告警与演练 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。"
+      },
+      {
+        "dimension": "锁定与退出成本",
+        "finding": "CNPG 绑定 K8s operator 模型 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]，Patroni 支持多种 DCS（包括 Kubernetes）[Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]；现有材料没有说明 Patroni 延伸到非 K8s 的迁移成本，也没有给出两方案之间迁移的实测数据，迁移成本仍需按数据目录、复制与入口切换单独实测。",
+        "impact": "12 个月内裸金属/他云计划会改变排序 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。"
+      }
+    ],
+    "evidence_summary": "可用材料以博客和第三方对比为主，官方仓库页面未提供可引用正文 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。CNPG 官方发布页给出 1.29.1/1.28.3 的严重 CVE 修复，但未覆盖备份/PITR 支持矩阵 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。Patroni 材料说明其依赖 DCS、支持 K8s Endpoints，并处理同步复制与 switchover/failover [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres][Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]。第三方对比称 CNPG 避免外部故障转移工具、由 Instance Manager 直连 K8s API，且上手更简单 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。关于隔离主库下线，CNPG 用 liveness probe，Patroni 自 3.0.0 有 DCS failsafe [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。现有材料没有本场景切换耗时或吞吐实测，60 秒/5 分钟目标需实测验证 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。",
+    "confidence": "low",
+    "confidence_rationale": "选择与 EKS-only、少人运维、声明式约束高度一致，但关键官方正文缺失、第三方材料占主导且无切换实测，因此信度中等 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes][Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。",
+    "unresolved_questions": [
+      "CNPG 官方备份/PITR 对 S3 兼容存储的支持矩阵、版本门槛和恢复命令是什么 [[11]]？",
+      "CNPG 计划内 switchover 的具体命令/API 调用链、审计记录与权限边界是什么 [[14]]？",
+      "在 2,000 连接与 1 TB 数据下，两方案的切换耗时、资源占用和同步复制影响应如何实测取数 [[10]]？",
+      "Patroni 在 EKS 上选 K8s Endpoints 还是 etcd 的运维成本、权限和故障域差异是什么 [[9]]？",
+      "两方案对 PostgreSQL 小版本不停写升级与大版本升级路径的官方限制是什么 [[12]]？",
+      "控制面不可用、备份对象存储凭据失效时的完整告警清单和恢复演练标准是什么 [[10]]？"
+    ],
+    "scene_fit_note": "本场景是 EKS-only、无 DBA/SRE、要求声明式与稳定读写入口，CNPG 的 K8s 原生协调更贴合 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。Patroni 的 DCS 与 HAProxy 组合增加组件 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]，但 Patroni 支持多种 DCS（包括 Kubernetes）[Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]；若未来平台迁移成为硬约束，应重新评估推荐并核对官方平台支持与迁移成本（现有材料未记载该支持矩阵）。",
+    "citation_sources": {
+      "recommendation": [
+        {
+          "source_id": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "number": 2,
+          "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+          "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "number": 2,
+          "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+          "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/kingster/p/19921172",
+          "number": 9,
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "winner_rationale": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "evidence_summary": [
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/kingster/p/19921172",
+          "number": 9,
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "scene_fit_note": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "confidence_rationale": [
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=CloudNativePG/rationale": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "number": 2,
+          "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+          "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=CloudNativePG/key_strength": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=CloudNativePG/key_weakness": [
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=CloudNativePG/constraint_fit_reason": [
+        {
+          "source_id": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "number": 2,
+          "title": "使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation",
+          "url": "https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Patroni/rationale": [
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/kingster/p/19921172",
+          "number": 9,
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Patroni/key_strength": [
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Patroni/key_weakness": [
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "option=Patroni/constraint_fit_reason": [
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=职责边界与平台依赖/finding": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/kingster/p/19921172",
+          "number": 9,
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=职责边界与平台依赖/impact": [
+        {
+          "source_id": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "number": 13,
+          "title": "CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium",
+          "url": "https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=故障检测与同步复制/finding": [
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=故障检测与同步复制/impact": [
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=切换执行链与凭据/finding": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/kingster/p/19921172",
+          "number": 9,
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=切换执行链与凭据/impact": [
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=备份/PITR 与升级/finding": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=备份/PITR 与升级/impact": [
+        {
+          "source_id": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "number": 11,
+          "title": "CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes",
+          "url": "https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=可观察性与失败模式/finding": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.cnblogs.com/kingster/p/19921172",
+          "number": 9,
+          "title": "PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园",
+          "url": "https://www.cnblogs.com/kingster/p/19921172",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=可观察性与失败模式/impact": [
+        {
+          "source_id": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "number": 10,
+          "title": "CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes",
+          "url": "https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=锁定与退出成本/finding": [
+        {
+          "source_id": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "number": 14,
+          "title": "Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark",
+          "url": "https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql",
+          "provenance": "",
+          "channel": ""
+        },
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        }
+      ],
+      "trade-off=锁定与退出成本/impact": [
+        {
+          "source_id": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "number": 12,
+          "title": "使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres",
+          "url": "https://www.rockdata.net/zh-cn/external/patroni-intro",
+          "provenance": "",
+          "channel": ""
+        }
+      ]
+    }
+  },
+  "report": "# 我们是一家约 40 人的 B2B SaaS 公司，正在整理生产数据库的高可用方案。业务服务是 Python/Django 和 Go，运行在 Amazon EKS 上；PostgreSQL 自建在 EKS 里，当前是一个主库加两个副本，分布在同一个区域的 3 个可用区，使用 EBS 卷，备份写入 S3 兼容对象存储。公司不采购 RDS、Aurora 等托管数据库，短期内也不打算迁移；团队有 3 名后端工程师，没有专职 DBA 或 SRE。 现在的高可用主要靠人工步骤和零散脚本：主库故障时切换步骤不统一、时间不可预期；计划内主库切换没有固定流程；上一次节点故障后，有一个副本长时间没有重新加入复制。我们要把它改成可重复、可审计的自动化方案，同时应用连接方式尽量不变：应用通过一个稳定的读写入口连接数据库，切换时允许短暂重连，但不希望要求业务代码改动，也不希望换掉现有客户端驱动。 场景假设（不是已实测的结论）：单区域三可用区；生产主库峰值约 2,000 个并发连接、数据量约 1 TB；普通业务要求已提交事务尽量不丢，因此会启用同步复制；目标是单副本故障自动恢复、计划内主库切换 60 秒内完成、非计划故障恢复 5 分钟内完成。此外还有这些约束：备份与按时间点恢复（PITR）必须有官方支持的实现，并且能写入 S3 兼容对象存储；Kubernetes 与 PostgreSQL 小版本升级尽量不停写，PostgreSQL 大版本升级要有明确路径；数据库凭据、复制凭据、备份凭据与 TLS 证书不能明文出现在 Git 或日志里；管理方式尽量声明式、少维护自研脚本，同时要保留人工干预和审计能力；未来 12 个月可能扩展到第二个集群或部分迁移到裸金属/其他云，因此需要评估锁定和退出成本。 现在要在两个候选方案之间选择：CloudNativePG 和 Patroni。两者我们都愿意在生产使用，但都没有长期生产运行经验，也不打算在选型阶段搭环境实测切换耗时。请不要把官方文档未记载的切换时间、吞吐、资源占用或准确率当作事实。 请比较 CloudNativePG 与 Patroni，结合上述场景给出有依据的主推荐、理由，以及具体到触发条件（什么变化会让推荐反转）的条件化结论。必须逐项回答以下六个问题： 1. 职责边界与适用前提：两个候选各自负责 PostgreSQL 高可用的哪些环节（故障检测、选主与提升、成员管理、客户端读写入口等），哪些能力（备份/PITR、连接池、只读负载均衡、监控）不在其核心职责内或需要额外组件；各自对运行平台、外部依赖和 PostgreSQL/Kubernetes 版本有什么硬性要求；在 EKS + EBS + 自建 PostgreSQL 的约束下哪些能力成立、哪些不成立。 2. 故障检测、选主与同步复制机制及风险取舍：两个候选分别如何判断主库失效、决定由谁提升、避免脑裂；同步复制如何配置，与 RPO 和可用性如何相互影响；关键配置项及其取舍是什么（例如检测超时、重试、计划内 switchover 与自动 failover 的区分），哪些设置会提高「误判故障导致不必要的切换」或「漏判故障导致长时间不可写」的风险；在单副本故障与网络分区两种情况下分别会发生什么。 3. 决定性运维/安全/有效性区别以及切换时「实际发送/执行了什么」：切换、提升与副本重建时，两个候选各自执行哪些命令或 API 调用（谁调用谁，经过 Kubernetes API 还是外部协调服务）；哪些数据会跨网络发送（心跳/租约、健康状态、复制流、备份上传）；数据库超级用户、复制用户、备份对象存储凭据与 TLS 证书如何存放和轮转；控制面组件不可用或权限不足时，各自的高可用是否仍然有效；这些差异如何影响本场景的安全与有效性边界。 4. 维护、升级与生命周期：初始集群引导、副本扩缩容、计划内 switchover、节点排空与重建、候选自身升级、PostgreSQL 小版本与大版本升级分别怎么走；备份与 PITR 是否内置、如何与对象存储集成（注意版本差异）；哪些操作需要停机或有数据风险；如何避免配置漂移，以及在两个方案之间迁移或退出的成本。 5. 失败模式与可观察性：控制面（Kubernetes API、外部协调服务或 operator 组件）不可用、主库所在节点或存储丢失、升级失败、网络分区、备份对象存储或凭据失效时，各自的表现、数据风险与恢复路径；故障排查入口（状态命令、事件、日志、指标）和应设置的关键告警；日志与凭据脱敏注意事项；长期维护成本与团队技能负担；如果要退出该方案，迁移路径是什么。 6. 版本、配置与适用条件：哪些决定性能力只在特定版本或配置下成立（两个项目各自支持的 PostgreSQL 与 Kubernetes 版本范围、已弃用或行为变更的配置、备份实现与大版本升级能力的版本门槛）；哪些结论只适用于特定版本/部署形态；给出在本场景下应进一步核对的版本与配置组合。不要编造未实测的容量或性能数字。 来源与严谨性要求：对影响推荐、候选保留/排除和风险边界的差异，优先采用两个项目的官方文档、官方仓库发布说明和维护者材料，PostgreSQL 与 Kubernetes 官方文档可作为语义依据；社区博客和第三方对比只能作为线索，不能单独支撑决定性结论。标注关键来源的 URL，以及文档版本或日期（找不到日期时说明）。区分「文档明确记载的事实」「基于文档但有前提的推论」与「当前无法确定或需要核对版本/需要实测的信息」；没有适用实测依据时，给出具体可执行的测量办法（测什么、在什么环境、如何取数），不要编造切换时间、吞吐、资源占用或准确率。来源冲突时说明冲突与取舍理由；来源不可达时按未知处理，不要据此认定某一方不具备该能力。最终必须给出实质推荐和具体反转条件，不能只留下缺口清单。 — 技术决策简报\n\n## What: 了解候选方案\n\n### CloudNativePG\n- 场景适配: high\n- 理由: CNPG 在 K8s 内由每 Pod 的 Instance Manager 直接与 API 交互，避免外部故障转移工具 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。第三方案例称其从零到带备份 HA 更快、组件更少 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]；GKE 教程也显示 Service 与 PDB 随集群创建 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE | Kubernetes Engine | Google Cloud Documentation]。因此对无 DBA/SRE 的 EKS 场景匹配度最高 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。\n- 优势: K8s 原生、无外部故障转移工具，Instance Manager 直接访问 API [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。\n- 局限: 材料未给出官方备份/PITR、支持矩阵与切换耗时，需核对版本并实测 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。\n\n### Patroni\n- 场景适配: medium\n- 理由: Patroni 支持 etcd/Consul/ZooKeeper/Kubernetes 多 DCS，并处理同步复制、计划内 switchover 与非计划 failover，控制力强 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。K8s 上可用 Endpoints 作 DCS [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]，但常见部署还需 HAProxy 类入口和 DCS 运维 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。对当前小队负担更高，故排第二 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。\n- 优势: 支持 etcd/Consul/ZooKeeper/Kubernetes 多种 DCS，并明确处理同步复制、计划内 switchover 与非计划 failover [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。\n- 局限: DCS 与入口负载均衡增加运维面 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。\n\n**导航链接（无正文，不能作为依据）**\n\n- [Patroni — Official Documentation](https://patroni.readthedocs.io/en/latest/)\n- [kubernetes/kubernetes](https://github.com/kubernetes/kubernetes)\n- [bregman\\-arie/devops\\-exercises](https://github.com/bregman-arie/devops-exercises)\n- [netdata/netdata](https://github.com/netdata/netdata)\n- [traefik/traefik](https://github.com/traefik/traefik)\n- [minio/minio](https://github.com/minio/minio)\n- [cloudnative\\-pg/cloudnative\\-pg](https://github.com/cloudnative-pg/cloudnative-pg)\n- [patroni/patroni](https://github.com/patroni/patroni)\n\n## Why: 依据的实际使用\n\n本次推荐实际引用了 7 个来源；引用次数表示该来源在推荐中被使用的次数，不表示其支持强度：\n\n- [使用 CloudNativePG 将 PostgreSQL 部署到 GKE | Kubernetes Engine | Google Cloud Documentation](https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn) ×4\n- [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql) ×14\n- [CloudNativePG 1\\.29\\.1 and 1\\.28\\.3 released: critical CVE fix | CloudNativePG \\- PostgreSQL Operator for Kubernetes](https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released) ×8\n- [PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 \\- 绩隐金 \\- 博客园](https://www.cnblogs.com/kingster/p/19921172) ×6\n- [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro) ×12\n- [CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium](https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba) ×13\n- [CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes](https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison) ×9\n\n其余 15 条检索结果未进入本报告的依据，保留在原始检索记录中。\n\n> 另有 8 个高相关来源没有取得正文，未参与冲突比较；这不代表它们之间没有分歧。\n\n## 尚未可知\n\n- CNPG 官方备份/PITR 对 S3 兼容存储的支持矩阵、版本门槛和恢复命令是什么？\n- CNPG 计划内 switchover 的具体命令/API 调用链、审计记录与权限边界是什么？\n- 在 2,000 连接与 1 TB 数据下，两方案的切换耗时、资源占用和同步复制影响应如何实测取数？\n- Patroni 在 EKS 上选 K8s Endpoints 还是 etcd 的运维成本、权限和故障域差异是什么？\n- 两方案对 PostgreSQL 小版本不停写升级与大版本升级路径的官方限制是什么？\n- 控制面不可用、备份对象存储凭据失效时的完整告警清单和恢复演练标准是什么？\n- site:cloudnative-pg.io backup PITR S3-compatible object store recovery official documentation version matrix\n- CloudNativePG supported PostgreSQL and Kubernetes versions compatibility matrix official docs\n- Patroni supported PostgreSQL and Kubernetes versions compatibility matrix official docs\n- CloudNativePG switchover promote API command audit events official docs\n- Patroni switchover failover synchronous replication configuration official docs\n- CloudNativePG synchronous replication configuration RPO availability single replica failure network partition official docs\n- Patroni synchronous replication configuration RPO availability single replica failure network partition official docs\n- CloudNativePG credential TLS certificate rotation backup credentials Kubernetes secrets official docs\n- Patroni PostgreSQL major version upgrade minor upgrade no downtime official docs\n- CloudNativePG PostgreSQL major version upgrade minor upgrade no downtime official docs\n- CNPG Patroni failover switchover benchmark methodology EKS EBS 2000 connections 1 TB\n- Patroni backup PITR S3-compatible object store implementation official docs\n- CloudNativePG Patroni control plane outage behavior alerting log redaction official docs\n\n## How: 行动路径\n\n**Winner: CloudNativePG**\n*在 EKS-only、少人运维且要声明式管理的约束下，CNPG 由 Instance Manager 直接对接 K8s API、避免外部故障转移组件，约束匹配度高于 Patroni [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。*\n\n**置信度:** low\n*选择与 EKS-only、少人运维、声明式约束高度一致，但关键官方正文缺失、第三方材料占主导且无切换实测，因此信度中等 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes][Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。*\n\n**建议:** 主推荐 CloudNativePG：在 EKS 单区域三 AZ 中用 CNPG operator 管理 1 主 2 副本，应用通过 5432 Service 连接 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation][Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。GKE 教程显示 Service 与 PDB 随集群创建；Palark 称该 operator 以每 Pod Instance Manager 直接对接 K8s API、避免外部故障转移工具，并称备份功能可配置且演示了 PITR 恢复 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation][Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。但同步复制与计划内 switchover 的声明式配置、切换时是否完全无需修改现有驱动，以及官方 S3 兼容备份/PITR 支持矩阵，在现有材料中未得到证实，投产前必须核对官方文档并演练 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。Patroni 作为备选：它支持 Kubernetes Endpoints/etcd 等 DCS，并明确提供计划内 switchover 与非计划 failover [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园][Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]，但会引入 DCS 与 HAProxy 类入口组件 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。反转条件：若团队需要 Patroni 的多 DCS 控制能力，应重新评估并可能改选 Patroni；裸金属/他云迁移是否构成硬约束需核对官方平台支持 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。不要承诺 60 秒/5 分钟；在预生产同规格环境测故障注入、切换耗时、2,000 连接和 1 TB 恢复 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。\n\n### 方案排名\n- **#1 CloudNativePG**: CNPG 在 K8s 内由每 Pod 的 Instance Manager 直接与 API 交互，避免外部故障转移工具 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。第三方案例称其从零到带备份 HA 更快、组件更少 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]；GKE 教程也显示 Service 与 PDB 随集群创建 [Source: 使用 CloudNativePG 将 PostgreSQL 部署到 GKE  |  Kubernetes Engine  |  Google Cloud Documentation]。因此对无 DBA/SRE 的 EKS 场景匹配度最高 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。\n  *Sources: [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql); [CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium](https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba); [使用 CloudNativePG 将 PostgreSQL 部署到 GKE | Kubernetes Engine | Google Cloud Documentation](https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn)*\n- **#2 Patroni**: Patroni 支持 etcd/Consul/ZooKeeper/Kubernetes 多 DCS，并处理同步复制、计划内 switchover 与非计划 failover，控制力强 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。K8s 上可用 Endpoints 作 DCS [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]，但常见部署还需 HAProxy 类入口和 DCS 运维 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。对当前小队负担更高，故排第二 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。\n  *Sources: [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro); [PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 \\- 绩隐金 \\- 博客园](https://www.cnblogs.com/kingster/p/19921172); [CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium](https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba)*\n\n### 权衡\n- **职责边界与平台依赖**: CNPG 以 operator 和每 Pod Instance Manager 承担 K8s 内故障转移，避免外部 DCS/HAProxy [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]；Patroni 依赖 etcd/Consul/ZooKeeper 或 K8s Endpoints 做 DCS，并需另配入口组件 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres][Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园][Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]。\n  *Sources: [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql); [CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium](https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba); [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro); [PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 \\- 绩隐金 \\- 博客园](https://www.cnblogs.com/kingster/p/19921172)*\n- **故障检测与同步复制**: CNPG 用 liveness probe 让隔离主库被 Kubelet 重启下线，Patroni 自 3.0.0 有 DCS failsafe；Patroni 明确处理同步复制与 switchover/failover [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes][Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。\n  *Sources: [CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes](https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison); [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro)*\n- **切换执行链与凭据**: CNPG 的实例管理器直接调用 K8s API [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]，Patroni 通过 DCS 协调成员与选主 [Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]；现有材料未覆盖超级用户、复制/备份凭据与 TLS 轮转细节 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。\n  *Sources: [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql); [PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 \\- 绩隐金 \\- 博客园](https://www.cnblogs.com/kingster/p/19921172); [CloudNativePG 1\\.29\\.1 and 1\\.28\\.3 released: critical CVE fix | CloudNativePG \\- PostgreSQL Operator for Kubernetes](https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released)*\n- **备份/PITR 与升级**: Palark 的第三方对比称 CNPG 备份功能可配置并演示了 PITR 恢复 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]；官方发布页只证明 1.29.1/1.28.3 维护版本与 CVE 修复，现有材料仍未证明 S3 兼容存储备份/PITR 的官方支持矩阵与大版本升级细节 [Source: CloudNativePG 1.29.1 and 1.28.3 released: critical CVE fix | CloudNativePG - PostgreSQL Operator for Kubernetes]。Patroni 材料也未给备份/PITR 实现 [Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]。\n  *Sources: [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql); [CloudNativePG 1\\.29\\.1 and 1\\.28\\.3 released: critical CVE fix | CloudNativePG \\- PostgreSQL Operator for Kubernetes](https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released); [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro)*\n- **可观察性与失败模式**: 控制面不可用时 CNPG 依赖 K8s API/实例管理器，Patroni 依赖 DCS，二者都需验证降级行为 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark][Source: PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 - 绩隐金 - 博客园]；现有材料未提供完整告警与日志脱敏清单 [Source: CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes]。\n  *Sources: [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql); [PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 \\- 绩隐金 \\- 博客园](https://www.cnblogs.com/kingster/p/19921172); [CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes](https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison)*\n- **锁定与退出成本**: CNPG 绑定 K8s operator 模型 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]，Patroni 支持多种 DCS（包括 Kubernetes）[Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]；现有材料没有说明 Patroni 延伸到非 K8s 的迁移成本，也没有给出两方案之间迁移的实测数据，迁移成本仍需按数据目录、复制与入口切换单独实测。\n  *Sources: [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql); [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro)*\n\n**场景适配:** 本场景是 EKS-only、无 DBA/SRE、要求声明式与稳定读写入口，CNPG 的 K8s 原生协调更贴合 [Source: Comparing Kubernetes operators for PostgreSQL. Part 2: CloudNativePG | Tech blog | Palark]。Patroni 的 DCS 与 HAProxy 组合增加组件 [Source: CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium]，但 Patroni 支持多种 DCS（包括 Kubernetes）[Source: 使用 Patroni 实现 PostgreSQL 的高可用 - Redrock Postgres]；若未来平台迁移成为硬约束，应重新评估推荐并核对官方平台支持与迁移成本（现有材料未记载该支持矩阵）。\n\n### 参考来源\n- [使用 CloudNativePG 将 PostgreSQL 部署到 GKE | Kubernetes Engine | Google Cloud Documentation](https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/stateful-workloads/cloudnativepg?hl=zh-cn)\n- [Comparing Kubernetes operators for PostgreSQL\\. Part 2: CloudNativePG | Tech blog | Palark](https://palark.com/blog/cloudnativepg-and-other-kubernetes-operators-for-postgresql)\n- [CloudNativePG 1\\.29\\.1 and 1\\.28\\.3 released: critical CVE fix | CloudNativePG \\- PostgreSQL Operator for Kubernetes](https://cloudnative-pg.io/releases/cloudnative-pg-1-29.1-released)\n- [PostgreSQL 复制与高可用系列（六）：Patroni生产级高可用集群部署——自动容灾与 K8s 集成 \\- 绩隐金 \\- 博客园](https://www.cnblogs.com/kingster/p/19921172)\n- [使用 Patroni 实现 PostgreSQL 的高可用 \\- Redrock Postgres](https://www.rockdata.net/zh-cn/external/patroni-intro)\n- [CloudnativePG: postgres database the modern way | by Pascal Töpke | Medium](https://medium.com/@pascal.toepke/cloudnativepg-postgres-database-the-modern-way-6a3bc9cf5eba)\n- [CloudNativePG and Crunchy PGO: an honest, opinionated comparison · Unleashing the Power of Postgres in Kubernetes](https://www.gabrielebartolini.it/articles/2026/05/cloudnativepg-and-crunchy-pgo-an-honest-opinionated-comparison)",
+  "confidence": "low",
+  "knowledge_gaps": [
+    "site:cloudnative-pg.io backup PITR S3-compatible object store recovery official documentation version matrix",
+    "CloudNativePG supported PostgreSQL and Kubernetes versions compatibility matrix official docs",
+    "Patroni supported PostgreSQL and Kubernetes versions compatibility matrix official docs",
+    "CloudNativePG switchover promote API command audit events official docs",
+    "Patroni switchover failover synchronous replication configuration official docs",
+    "CloudNativePG synchronous replication configuration RPO availability single replica failure network partition official docs",
+    "Patroni synchronous replication configuration RPO availability single replica failure network partition official docs",
+    "CloudNativePG credential TLS certificate rotation backup credentials Kubernetes secrets official docs",
+    "Patroni PostgreSQL major version upgrade minor upgrade no downtime official docs",
+    "CloudNativePG PostgreSQL major version upgrade minor upgrade no downtime official docs",
+    "CNPG Patroni failover switchover benchmark methodology EKS EBS 2000 connections 1 TB",
+    "Patroni backup PITR S3-compatible object store implementation official docs",
+    "CloudNativePG Patroni control plane outage behavior alerting log redaction official docs"
+  ],
+  "retry_count": 1,
+  "partial_failures": [],
+  "empty_sources": [
+    {
+      "source": "chroma",
+      "reason": "no_research_material"
+    }
+  ],
+  "quality_signals": [
+    {
+      "agent": "self_reviewer",
+      "passed_count": 3,
+      "total_checks": 6,
+      "confidence": "low",
+      "gaps_found": 13,
+      "corrections_applied": 5,
+      "corrections_rejected": 0,
+      "corrected_fields": [
+        "recommendation/recommendation",
+        "备份/PITR 与升级/finding",
+        "锁定与退出成本/finding",
+        "Patroni/key_strength",
+        "scene_fit_note/scene_fit_note"
+      ],
+      "report_rerendered": true
+    }
+  ],
+  "agent_timing": {
+    "query_adapter": 23.58,
+    "multi_retriever": 26.25,
+    "source_evaluator": 0.0,
+    "conflict_detector": 15.08,
+    "evidence_chain": 0.0,
+    "conclusion_synthesizer": 50.94,
+    "report_generator": 0.0,
+    "self_reviewer": 101.17
+  },
+  "token_usage": [
+    {
+      "agent": "query_adapter",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 2734,
+      "completion_tokens": 4643,
+      "total_tokens": 7377
+    },
+    {
+      "agent": "conflict_detector",
+      "model": "deepseek-flash",
+      "calls": 9,
+      "prompt_tokens": 16948,
+      "completion_tokens": 2167,
+      "total_tokens": 19115
+    },
+    {
+      "agent": "conclusion_synthesizer",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 7178,
+      "completion_tokens": 10983,
+      "total_tokens": 18161
+    },
+    {
+      "agent": "self_reviewer",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 13840,
+      "completion_tokens": 22477,
+      "total_tokens": 36317
+    }
+  ]
+}
