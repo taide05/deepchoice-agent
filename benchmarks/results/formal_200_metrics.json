@@ -1,0 +1,122 @@
+{
+ "dataset": "benchmarks/cases_formal_200.json",
+ "dataset_sha256": "46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807",
+ "run": {
+  "completed": 200,
+  "expected": 200,
+  "statuses": {
+   "complete": 200
+  },
+  "invalid": 0,
+  "tokens": {
+   "total": 15993977,
+   "mean": 79969.9,
+   "p50": 76674,
+   "min": 46433,
+   "max": 133724
+  },
+  "tokens_total_run": 15993977,
+  "wall_seconds": {
+   "p50": 262.8,
+   "p95": 453.8,
+   "max": 617.9
+  },
+  "confidence": {
+   "low": 117,
+   "medium": 83
+  },
+  "official_body_pages": {
+   "total": 903,
+   "mean": 4.51,
+   "zero_cases": 0
+  },
+  "server_extracted_pages": 211,
+  "evidence_budget": {
+   "budget_chars": "32000",
+   "full_included": {
+    "True": 93,
+    "False": 107
+   },
+   "omitted_chars_total": 1392641,
+   "cases_with_omission": 107
+  },
+  "citation_gap": {
+   "cases_with_gap": 33,
+   "total_markers": 493,
+   "worst": [
+    [
+     "F200-035",
+     55
+    ],
+    [
+     "F200-170",
+     55
+    ],
+    [
+     "F200-010",
+     53
+    ],
+    [
+     "F200-076",
+     51
+    ],
+    [
+     "F200-083",
+     44
+    ],
+    [
+     "F200-194",
+     36
+    ],
+    [
+     "F200-092",
+     34
+    ],
+    [
+     "F200-084",
+     22
+    ]
+   ]
+  },
+  "health": {
+   "statuses": {
+    "ok": 34,
+    "warn": 166
+   },
+   "issue_kinds": {
+    "report_claim_support": 99,
+    "report_quality": 169,
+    "page_issue": 39,
+    "report_ledger": 9
+   }
+  }
+ },
+ "content_evaluation": {
+  "review_protocol": "fixed 200 cases; internal full review + independent re-review + adjudication; AI-assisted, calibrated",
+  "C4_critical_errors": 1,
+  "usable": 199,
+  "decision_grade": 179,
+  "C2_true": 179
+ },
+ "config": {
+  "concurrency": 4,
+  "timeout_s": 1800.0,
+  "max_tokens": 16000000,
+  "started_at": "2026-11-05T14:24:38.062132+00:00",
+  "finished_at": "2026-11-05T18:24:36.843016+00:00",
+  "git": {
+   "commit": "7af8ffaa14923e3733f4dce30f14fd3f798c04be",
+   "dirty": true,
+   "source_dirty": false,
+   "source_changed_files": [],
+   "data_dirty": true
+  },
+  "python": "3.12.4 | packaged by Anaconda, Inc. | (main, Jun 18 2024, 15:03:56) [MSC v.1929 64 bit (AMD64)]"
+ },
+ "limitations": [
+  "Internal evaluation on a fixed set; not a third-party audit or human-signed acceptance record.",
+  "Content verdicts come from an AI-assisted calibrated review protocol; results are not extrapolated.",
+  "One case (F200-174) contains a known critical error (C4=1) and is disclosed rather than excluded.",
+  "Token totals are API usage, not necessarily billed cost."
+ ]
+}

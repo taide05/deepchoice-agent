@@ -1,0 +1,1341 @@
+{
+  "task": {
+    "query": "我们需要为内部遥测采集与路由层制定统一技术标准。公司约有 60 个服务，运行在 3 个 Kubernetes 集群（两个公有云、一个自建机房）和约 40 台 Linux VM 上；已有 Prometheus、Loki、Elasticsearch 和对象存储归档，部分节点已部署 Fluent Bit/Filebeat。日志约 1–2 TB/天，活跃指标序列约 50–100 万，追踪仅约 10 个服务试点。目标是以厂商中立、OTLP 优先的方式采集指标、日志和少量追踪，支持敏感字段脱敏、磁盘缓冲与背压、按环境/信号/目的地多路输出，并由 4 人平台团队在 12 个月内分阶段推广；不新增商业可观测平台，也不做完整部署审计。请比较 OpenTelemetry Collector 与 Vector，回答：1）两者在采集/路由层中的角色边界与落地前提；2）适合本场景的部署架构、数据流及故障/背压行为；3）运维、规模与资源方面的已知项和未知项；4）与现有 Prometheus/Loki/Elasticsearch 及 OTLP 生态的兼容性；5）版本、适用性与可逆性。请按 what/why/how 组织中文报告，给出有条件的建议、明确的未知和可观察的反转条件；不要仅凭厂商文档推断性能。",
+    "scene_context": "公司约 60 个服务，运行在 3 个 Kubernetes 集群（两个公有云、一个自建机房）和约 40 台 Linux VM 上；现有 Prometheus、Loki、Elasticsearch 和对象存储归档，部分节点已有 Fluent Bit/Filebeat。日志约 1–2 TB/天，活跃指标序列约 50–100 万，追踪仅约 10 个服务试点。目标是为采集/路由层制定厂商中立标准，支持 OTLP 优先、敏感字段脱敏、磁盘缓冲与背压、按环境/信号/目的地多路输出，由 4 人平台团队在 12 个月内分阶段推广；不新增商业可观测平台，不做完整部署审计。审计日志需保留一年，应用日志热存 30 天。",
+    "candidate_techs": [
+      "OpenTelemetry Collector",
+      "Vector"
+    ],
+    "constraints": [
+      "只评估采集与路由层，不以任一候选替代 Prometheus、Loki 或 Elasticsearch",
+      "OTLP 优先且不锁定后端，同时要处理少量非 OTLP 存量源",
+      "脱敏必须在数据离开 Kubernetes 集群或 VM 前完成，覆盖日志正文和属性",
+      "目的地故障时不得阻塞业务，必须有有界缓冲以及明确的丢弃、重试和恢复语义",
+      "多目的地：应用日志到 Loki，审计子集到 Elasticsearch，指标到 Prometheus，归档到对象存储",
+      "4 人平台团队、12 个月分阶段推广、无新增商业可观测平台预算",
+      "中等规模与有限 PoC，不做完整部署审计或全量迁移方案",
+      "结论必须有条件、版本范围和可观察反转条件；未知项必须显式说明"
+    ],
+    "sub_questions": [
+      "在本场景中，两个候选各自应承担采集/路由层的什么角色、边界和落地前提？哪些职责不属于它们？",
+      "针对 3 个 Kubernetes 集群和 VM，各自应采用怎样的部署拓扑与数据流，才能覆盖脱敏、缓冲/背压和多目的地路由？",
+      "当 Loki、Elasticsearch 或 Prometheus 之一不可用，缓冲区写满、节点重启或配置更新失败时，文档可支持的行为和仍未验证的语义分别是什么？",
+      "对 4 人平台团队而言，哪些运维、规模和资源问题必须在有限 PoC 中测量？应使用哪些指标和停止条件？",
+      "与现有 Prometheus、Loki、Elasticsearch、Kubernetes 元数据和 OTLP 生态的兼容性有哪些版本或信号限制？",
+      "应固定哪些版本与稳定性假设，如何判断方案在 12 个月内仍适用，以及在什么可观察条件下回退或改选？"
+    ],
+    "report_format": "what_why_how",
+    "language": "zh"
+  },
+  "state": {
+    "task": {
+      "query": "我们需要为内部遥测采集与路由层制定统一技术标准。公司约有 60 个服务，运行在 3 个 Kubernetes 集群（两个公有云、一个自建机房）和约 40 台 Linux VM 上；已有 Prometheus、Loki、Elasticsearch 和对象存储归档，部分节点已部署 Fluent Bit/Filebeat。日志约 1–2 TB/天，活跃指标序列约 50–100 万，追踪仅约 10 个服务试点。目标是以厂商中立、OTLP 优先的方式采集指标、日志和少量追踪，支持敏感字段脱敏、磁盘缓冲与背压、按环境/信号/目的地多路输出，并由 4 人平台团队在 12 个月内分阶段推广；不新增商业可观测平台，也不做完整部署审计。请比较 OpenTelemetry Collector 与 Vector，回答：1）两者在采集/路由层中的角色边界与落地前提；2）适合本场景的部署架构、数据流及故障/背压行为；3）运维、规模与资源方面的已知项和未知项；4）与现有 Prometheus/Loki/Elasticsearch 及 OTLP 生态的兼容性；5）版本、适用性与可逆性。请按 what/why/how 组织中文报告，给出有条件的建议、明确的未知和可观察的反转条件；不要仅凭厂商文档推断性能。",
+      "scene_context": "公司约 60 个服务，运行在 3 个 Kubernetes 集群（两个公有云、一个自建机房）和约 40 台 Linux VM 上；现有 Prometheus、Loki、Elasticsearch 和对象存储归档，部分节点已有 Fluent Bit/Filebeat。日志约 1–2 TB/天，活跃指标序列约 50–100 万，追踪仅约 10 个服务试点。目标是为采集/路由层制定厂商中立标准，支持 OTLP 优先、敏感字段脱敏、磁盘缓冲与背压、按环境/信号/目的地多路输出，由 4 人平台团队在 12 个月内分阶段推广；不新增商业可观测平台，不做完整部署审计。审计日志需保留一年，应用日志热存 30 天。",
+      "candidate_techs": [
+        "OpenTelemetry Collector",
+        "Vector"
+      ],
+      "constraints": [
+        "只评估采集与路由层，不以任一候选替代 Prometheus、Loki 或 Elasticsearch",
+        "OTLP 优先且不锁定后端，同时要处理少量非 OTLP 存量源",
+        "脱敏必须在数据离开 Kubernetes 集群或 VM 前完成，覆盖日志正文和属性",
+        "目的地故障时不得阻塞业务，必须有有界缓冲以及明确的丢弃、重试和恢复语义",
+        "多目的地：应用日志到 Loki，审计子集到 Elasticsearch，指标到 Prometheus，归档到对象存储",
+        "4 人平台团队、12 个月分阶段推广、无新增商业可观测平台预算",
+        "中等规模与有限 PoC，不做完整部署审计或全量迁移方案",
+        "结论必须有条件、版本范围和可观察反转条件；未知项必须显式说明"
+      ],
+      "sub_questions": [
+        "在本场景中，两个候选各自应承担采集/路由层的什么角色、边界和落地前提？哪些职责不属于它们？",
+        "针对 3 个 Kubernetes 集群和 VM，各自应采用怎样的部署拓扑与数据流，才能覆盖脱敏、缓冲/背压和多目的地路由？",
+        "当 Loki、Elasticsearch 或 Prometheus 之一不可用，缓冲区写满、节点重启或配置更新失败时，文档可支持的行为和仍未验证的语义分别是什么？",
+        "对 4 人平台团队而言，哪些运维、规模和资源问题必须在有限 PoC 中测量？应使用哪些指标和停止条件？",
+        "与现有 Prometheus、Loki、Elasticsearch、Kubernetes 元数据和 OTLP 生态的兼容性有哪些版本或信号限制？",
+        "应固定哪些版本与稳定性假设，如何判断方案在 12 个月内仍适用，以及在什么可观察条件下回退或改选？"
+      ],
+      "report_format": "what_why_how",
+      "language": "zh"
+    },
+    "sub_questions": [
+      "在本场景中，两个候选各自应承担采集/路由层的什么角色、边界和落地前提？哪些职责不属于它们？",
+      "针对 3 个 Kubernetes 集群和 VM，各自应采用怎样的部署拓扑与数据流，才能覆盖脱敏、缓冲/背压和多目的地路由？",
+      "当 Loki、Elasticsearch 或 Prometheus 之一不可用，缓冲区写满、节点重启或配置更新失败时，文档可支持的行为和仍未验证的语义分别是什么？",
+      "对 4 人平台团队而言，哪些运维、规模和资源问题必须在有限 PoC 中测量？应使用哪些指标和停止条件？",
+      "与现有 Prometheus、Loki、Elasticsearch、Kubernetes 元数据和 OTLP 生态的兼容性有哪些版本或信号限制？",
+      "应固定哪些版本与稳定性假设，如何判断方案在 12 个月内仍适用，以及在什么可观察条件下回退或改选？"
+    ],
+    "adapted_queries": {
+      "tavily": [
+        "OpenTelemetry Collector 与 Vector 在遥测采集与路由层中的角色边界、落地前提和不负责的职责是什么？请结合 2024–2025 文档与社区实践比较。",
+        "如何为 3 个 Kubernetes 集群和约 40 台 VM 设计 OpenTelemetry Collector/Vector 部署拓扑与数据流，实现脱敏、有界磁盘缓冲、背压和多目的地路由至 Loki、Elasticsearch、Prometheus、对象存储？",
+        "当 Loki、Elasticsearch 或 Prometheus 不可用、缓冲区写满、节点重启或配置更新失败时，OpenTelemetry Collector 与 Vector 的文档化行为、丢弃/重试/恢复语义和未验证边界是什么？",
+        "4 人平台团队在有限 PoC 中评估 OpenTelemetry Collector/Vector 的运维、规模和资源问题时应测哪些指标？吞吐、CPU、内存、队列深度、丢弃率、恢复时间及停止条件如何定义？",
+        "OpenTelemetry Collector 与 Vector 对 Prometheus、Loki、Elasticsearch、Kubernetes 元数据和 OTLP 生态的兼容性边界及版本/信号限制是什么？请关注 2024–2025 版本。",
+        "应固定哪些 OpenTelemetry Collector 与 Vector 版本和稳定性假设，如何判断方案 12 个月内仍适用？在哪些可观察条件下应回退或改选？"
+      ],
+      "arxiv": [
+        "OpenTelemetry Collector Vector telemetry pipeline routing architecture responsibilities boundaries prerequisites",
+        "Kubernetes telemetry collector deployment topology data flow buffering backpressure multi destination routing redaction",
+        "OpenTelemetry Collector Vector exporter failure retry queue persistent buffer backpressure restart semantics",
+        "telemetry collector PoC metrics evaluation operational scale resource utilization stop criteria throughput queue depth",
+        "OpenTelemetry OTLP Prometheus Loki Elasticsearch compatibility signal limits Kubernetes metadata",
+        "OpenTelemetry Collector Vector version stability assumptions long term applicability rollback criteria"
+      ],
+      "github": [
+        "repo:open-telemetry/opentelemetry-collector-contrib OR repo:vectordotdev/vector routing connector receiver exporter responsibilities telemetry pipeline",
+        "repo:open-telemetry/opentelemetry-collector-contrib OR repo:vectordotdev/vector kubernetes daemonset gateway file_storage memory_limiter routing multi destination",
+        "repo:open-telemetry/opentelemetry-collector-contrib OR repo:vectordotdev/vector retry_on_failure sending_queue persistent queue disk buffer config reload",
+        "repo:open-telemetry/opentelemetry-collector-contrib OR repo:vectordotdev/vector benchmark memory cpu throughput queue depth drop rate",
+        "repo:open-telemetry/opentelemetry-collector-contrib prometheusremotewrite loki elasticsearch k8sattributes otlp receiver exporter version compatibility",
+        "repo:open-telemetry/opentelemetry-collector-contrib OR repo:vectordotdev/vector releases stability breaking changes version upgrade rollback"
+      ],
+      "chroma": [
+        "OpenTelemetry Collector 和 Vector 各自在采集/路由层应该负责什么、不负责什么？落地前提和边界如何划分？",
+        "对于 3 个 Kubernetes 集群和 VM，OpenTelemetry Collector 或 Vector 的部署拓扑和数据流应如何覆盖脱敏、缓冲/背压与多目的地路由？",
+        "Loki、Elasticsearch 或 Prometheus 故障，缓冲区满、节点重启、配置更新失败时，Collector/Vector 会怎样？哪些行为有文档支持，哪些语义未验证？",
+        "平台团队做有限 PoC 时，如何测量 OpenTelemetry Collector/Vector 的运维、规模和资源指标？哪些停止条件可判断不适用？",
+        "Collector/Vector 与现有 Prometheus、Loki、Elasticsearch、Kubernetes 元数据和 OTLP 生态兼容时，有哪些版本和信号限制？",
+        "如何固定 Collector/Vector 版本与稳定性假设，判断 12 个月适用性，并设置可观察的回退/改选条件？"
+      ],
+      "community": [
+        "site:stackoverflow.com [opentelemetry-collector] [vector] telemetry pipeline routing responsibilities boundaries",
+        "site:stackoverflow.com [opentelemetry-collector] [vector] kubernetes daemonset gateway backpressure disk buffer routing",
+        "site:stackoverflow.com [opentelemetry-collector] [vector] persistent queue retry_on_failure backpressure config reload",
+        "site:stackoverflow.com [opentelemetry-collector] [vector] benchmark memory cpu throughput queue depth drop rate",
+        "site:stackoverflow.com [opentelemetry-collector] [prometheus] [loki] [elasticsearch] OTLP compatibility version limitations",
+        "site:stackoverflow.com [opentelemetry-collector] [vector] version stability breaking changes upgrade rollback"
+      ],
+      "official": [
+        "OpenTelemetry Collector routing connector responsibilities Vector source transform sink remap boundaries deployment prerequisites",
+        "OpenTelemetry Collector gateway deployment Kubernetes daemonset file_storage memory_limiter backpressure routing connector Vector topology disk buffer",
+        "OpenTelemetry Collector exporter retry_on_failure sending_queue persistent_storage Vector buffer retry config reload failure semantics",
+        "OpenTelemetry Collector performance benchmark memory_limiter metrics Vector benchmark CPU memory throughput queue depth",
+        "OpenTelemetry Collector prometheusremotewrite loki exporter elasticsearch exporter k8sattributes OTLP compatibility signal limitations",
+        "OpenTelemetry Collector releases stability guarantees Vector versioning upgrade breaking changes release notes rollback"
+      ]
+    },
+    "search_results": [
+      {
+        "source": "tavily",
+        "status": "success",
+        "results": [
+          {
+            "url": "https://www.zjusct.io/operation/observability/opentelemetry",
+            "title": "数据采集：OpenTelemetry - ZJUSCT",
+            "snippet": "载荷编码为二进制或 JSON 格式。\n 客户端使用 `POST` 请求发送数据，路径为 `v1/` 等。\n 服务端分三种情况响应：\n  + 完全成功：返回 `200 OK`。\n  + 部分成功：返回 `200 OK`，并在响应体中描述拒绝的部分和原因。\n  + 失败：返回 `4xx` 或 `5xx` 状态码，具体含义由 OTLP 定义。\n\n## OTel Collector (otelcol)¶\n\nQuote\n\n Collector - OpenTelemetry\n\n### Collector 简介¶\n\nCollector 以无关厂商的方式接收、处理和导出遥测数据。\n\nCollector 由 Receiver、Processor 和 Exporter 组成，整体架构如下：\n\n collector_arch \n\nOpenTelemetry Collector 架构\n\n \n\n Receiver 和 Exporter 灵活支持 Pull 或 Push 模式。\n Processor 可以对数据进行转换、过滤、聚合等操作。\n Connector 可以对流水线进行聚合、路由等操作。 [...] 如果对字段的语义有困惑，可以去查文档和 GitHub 上的讨论。\n\nExample\n\n```\nObservedTimestamp: 2024-10-04 15:46:26.809948211 +0000 UTC Timestamp: 2024-10-04 15:46:14 +0000 UTC SeverityText: notice SeverityNumber: Info2(10) Body: Str(<189>Oct 4 23:46:14 Huawei %%01SHELL/5/CMDRECORDl:Record command information. (Task=vt0, Ip=192.168.1.178, User=admin, Command=\"log off (ssh user)\", Result=Success) ) Attributes:  -> net.host.port: Str(514)  -> net.peer.name: Str(192.168.1.1)  -> appname: Str(%%01SHELL/5/CMDRECORD(l)) \n``` [...] 关于 Collector 和其他产品的比较，可以自己写基于 Docker 的基准测试。可观测性#案例调研 中也有一些参考资料。我们进行了 Filebeat 和 OTel Collector 的比较，仅开启 json 解析器对文件日志进行解析时：\n\n Filebeat 处理日志时 CPU 占用较高，闲时 CPU 占用率低，内存占用稳定偏高。\n OTel Collector 处理日志时 CPU 占用较低，闲时 CPU 占用相对较高，内存占用稳定偏低。\n\n### 子组件：pkg/ottl¶\n\n`pkg/ottl` 实现了 OTel Transformation Language（OTTL），用于处理和转换遥测数据。Transform Processor 的配置基于该种语言，实现的功能比 `pkg/stanza` 更强大。\n\nExample\n\n下面我们以一个具体的情境为例介绍 OTTL。假设你需要对下面的 Log 进行处理：",
+            "date": ""
+          },
+          {
+            "url": "https://tradingkey.com/zh-hans/analysis/stocks/us-stock/261863320-dell-stock-analysis-ai-infrastructure-2026",
+            "title": "戴尔股票分析：到2026年其是否仍被低估，且是最佳AI基础设施标的？",
+            "snippet": "特色工具\n\ntk_center_stock_score股票评分calendar_economicCalendar财经日历search.intelligent.strategy智能策略article_asider_weekly_report投资周报\n\n热门新闻\n\nlink\n\n英伟达GTC柏林前瞻：Rubin平台、AI智能体与欧洲主权算力成焦点\n\n美股收盘：道指升超500点，美伊谈判消息反复；部分科技股反弹，Meta连跌5日\n\n美股收盘：纳指升1.1%，科技股反弹，记忆体股涨幅居前，美光升近3%\n\n特斯拉Q3财报前瞻：汽车利润率能否企稳？华尔街最高目标价550美元\n\n特斯拉股价预测：Q3业绩即将公布，TSLA股价能否突破400美元？ [...] TradingKey2 小时前\n\n### TradingKey 每日市场简报：道指涨超1%，SpaceX盘后涨超8%，超微电脑涨超14%，奈飞跌超5%\n\nTradingKey - 截至美东时间10月20日收盘，道琼斯工业平均指数上涨1.02%至52,495.88点，纳斯达克综合指数下跌0.02%至26,424.82点，标普500指数上涨0.28%至7,712.57点。\n\nTradingKey4 小时前\n\n### 日韩股市盘初上涨，KOSPI涨超2%，SK海力士涨近4%，铠侠大涨超5%\n\nTradingKey - 10月21日，日韩股市早盘集体反弹，韩国股市和日本股市均高开。\n\nTradingKey4 小时前\n\n文章目录\n\n戴尔领跑AI优化服务器市场戴尔的传统服务器业务表现如何？智能体AI时代的戴尔存储戴尔财务状况：增长、现金与温和的估值倍数戴尔管理层2026年展望投资戴尔（Dell）前需考虑的风险因素戴尔是2026年最值得买入的AI基础设施股票吗？\n\n特色工具 [...] 注册后参与点赞\n\n## 推荐文章\n\n### Anthropic IPO招股书：上半年亏损807亿美元，7500亿美元算力支出引关注\n\nTradingKey - 据《华尔街日报》审阅的一份S-1招股说明书草案，这家Claude开发商2026年上半年实现营收163亿美元，但同期净亏损达到807亿美元，同时还可能在未来数年承担最高7500亿美元的算力及基础设施支出。\n\nTradingKey35 分钟前\n\n### SpaceX盘后涨超8%！三季度AI收入暴增830%，与特斯拉成立特别委员会评估合并\n\nTradingKey - 美东时间10月20日，埃隆·马斯克在SpaceX（SPCX）第三季度业绩电话会上透露，SpaceX与特斯拉（TSLA）已成立由独立董事组成的特别委员会，评估潜在合并。\n\nTradingKey2 小时前\n\n### 奈飞Q3财报超预期，为何股价仍跌近6%？\n\nTradingKey - 奈飞（NFLX）第三季度盈利表现好于市场预期，但营收增速放缓、广告业务增长不及预期，以及第四季度业绩指引偏弱，令投资者对公司的后续增长前景保持谨慎。\n\nTradingKey2 小时前",
+            "date": ""
+          },
+          {
+            "url": "https://opentelemetry.io/zh/docs/collector/resiliency",
+            "title": "自适应性 | OpenTelemetry",
+            "snippet": "工作原理：当配置一个导出器时，通常会包含一个发送队列，它在将数据发送到下游终端前， 会先在内存中进行缓冲。如果终端是可用的，数据会快速通过。\n 处理终端不可用情况：如果终端不可用（如网络问题或后端重启），导出器无法立即发送数据。 此时，它不会丢弃数据，而是将其加入内存中的发送队列。\n 重试机制：Collector 会使用带指数退避和抖动的重试机制。在等待一段时间后， 它会重复尝试发送缓冲数据。默认情况下，它最多重试 5 分钟。\n 数据丢失场景：\n\n  + 队列满：内存队列的大小是可配置的（默认通常为 1000 批/请求）。如果终端持续不可用且持续有新数据进入， 队列可能会被填满。一旦队列满，为防止 Collector 内存耗尽，新的数据将被丢弃。\n  + 重试超时：如果终端不可用时间超过配置的最大重试时长（默认 5 分钟），Collector 会停止重试队列中最早的数据并将其丢弃。\n 配置方式：你可以在导出器设置中配置队列大小和重试行为： [...] 工作原理：发送队列不仅在内存中缓冲数据，还会在尝试导出前将数据写入磁盘上的预写日志（WAL）。\n 处理 Collector 崩溃：如果 Collector 在数据仍在队列中时崩溃，数据会被保存在磁盘上。当 Collector 重启后，它会从 WAL 读取数据并继续尝试将其发送到终端。\n 数据丢失场景：如果磁盘发生故障、空间不足，或 Collector 重启后终端仍然长时间不可用， 仍可能导致数据丢失。其可靠性不如专门的消息队列。\n 配置方式：\n\n  1. 定义 `file_storage` 扩展。\n  2. 在导出器的 `sending_queue` 配置中引用该存储 ID。 [...] OpenTelemetry Collector 通过组件和配置设计，旨在尽可能减少遥测数据在处理和导出过程中的丢失。 然而，理解可能导致数据丢失的场景及其应对措施，对于构建一个具有自适应性的可观测性数据管道至关重要。\n\n## 理解 Collector 的自适应性\n\n一个具有自适应性的 Collector 能够在面临不利条件时依然保持遥测数据的流动和处理能力，确保整体的可观测性管道仍然可用。\n\nCollector 的自适应性主要体现在以下场景：当配置的终端（即链路、指标或日志的目标接收方）不可用，或者 Collector 实例本身发生崩溃等问题时，它是如何处理数据的。\n\n## 发送队列（内存缓冲）\n\nCollector 导出器中内建的最基本的自适应性机制是发送队列。",
+            "date": ""
+          },
+          {
+            "url": "https://opentelemetry.io/zh/docs/collector/scaling",
+            "title": "Collector 扩容 | OpenTelemetry",
+            "snippet": "另一个值得关注的指标组是导出器队列相关的指标：`otelcol_exporter_queue_capacity` 和 `otelcol_exporter_queue_size`。 Collector 会在内存中排队等待工作组件可用来发送数据。如果工作组件数不足，或后端处理速度慢，数据就会在队列中堆积。 一旦队列满了（`otelcol_exporter_queue_size` > `otelcol_exporter_queue_capacity`）， 就会拒绝新数据（`otelcol_exporter_enqueue_failed_spans`）。增加更多的工作组件通常可以提升导出能力， 但这并不总是最佳策略（参见何时不要扩容）。一般建议是当队列达到容量的 60-70% 时考虑扩容， 当队列始终较小时可以考虑缩减，但需维持最小副本数，例如 3 个，以保证系统的弹性。 [...] 当使用 `memory_limiter` 处理器时，一个重要的提示信号是指标 `otelcol_processor_refused_spans`。 该处理器限制 Collector 的内存使用量。虽然 Collector 实际内存可能会稍微超过设定的最大值，但一旦超出限制， 新数据将被阻止进入管道，并通过该指标记录下来。其他遥测数据类型也有类似的指标。如果数据频繁被拒绝进入管道， 你可能需要扩容 Collector 集群。一旦节点的内存消耗显著低于设置的限制值，则可以考虑缩减。 [...] 你还应熟悉所使用的组件，因为不同组件可能暴露不同的指标。例如， 负载均衡导出器会记录导出操作的时延信息， 以直方图 `otelcol_loadbalancer_backend_latency` 的形式暴露。你可以据此判断各后端处理请求的时间是否相近： 若某个后端特别慢，可能是 Collector 之外的问题。\n\n对于抓取类型的接收器，例如 Prometheus 接收器，一旦抓取所有目标所需的时间接近或超过抓取间隔， 就需要对抓取进行扩容或分片。此时，应增加更多抓取程序，通常是新的 Collector 实例。\n\n### 何时不能扩容\n\n判断扩容无益的场景与判断何时扩容同样重要。一个典型例子是当遥测数据库无法跟上数据写入速度时，增加 Collector 数量也无济于事，除非你同时扩容数据库。类似地，如果 Collector 与后端之间的网络带宽已饱和， 添加更多 Collector 反而会带来负面影响。",
+            "date": ""
+          },
+          {
+            "url": "https://grafana.com/docs/loki/latest/send-data/otel",
+            "title": "Ingesting logs to Loki using OpenTelemetry Collector | Grafana Loki documentation",
+            "snippet": "By default, Loki stores OpenTelemetry log attributes as\nstructured metadata. Two per-line limits apply to them:\n\n`max_structured_metadata_size`\n`max_structured_metadata_entries_count` [...] The default list of resource attributes to store as labels can be configured using `default_resource_attributes_as_index_labels` under the\ndistributor’s otlp\\_config. You can set global limits using\nlimits\\_config.otlp\\_config. If you are using Grafana Cloud, contact support to configure this setting.\n\n`default_resource_attributes_as_index_labels`\n\nCaution [...] The `set` statement must come before `delete_key`. The stack trace then counts against the log line size limit instead: `max_line_size`, 256KB by default, with `max_line_size_truncate` available to truncate rather than reject oversized lines. If you collect logs with Grafana Alloy, the otelcol.processor.transform component applies the same statements.\n\n`set`\n`delete_key`\n`max_line_size`\n`max_line_size_truncate`\n\n### Drop the attribute or adjust the limits",
+            "date": ""
+          },
+          {
+            "url": "https://aws.amazon.com/cn/blogs/china/a-guide-to-modernizing-application-observability-with-opentelemetry",
+            "title": "使用 OpenTelemetry 实现现代化应用可观测性指南 | 亚马逊AWS官方博客",
+            "snippet": "service/otel-collector ClusterIP 10.100.86.180 <none> 55680/TCP 2m38s\nservice/otel-collector-headless ClusterIP None <none> 55680/TCP 2m38s\nservice/otel-collector-monitoring ClusterIP 10.100.120.41 <none> 8888/TCP 2m38s\nNAME READY UP-TO-DATE AVAILABLE AGE\ndeployment.apps/my-collector-metrics-collector 1/1 1 1 13s\ndeployment.apps/otel-collector 1/1 1 1 2m38s\nNAME DESIRED CURRENT READY AGE\nreplicaset.apps/my-collector-metrics-collector-594cc9f59 1 1 1 13s [...] `jasonxie:~/environment/observability-blog/kubernetes $ kubectl get all -n otel-collector\nNAME READY STATUS RESTARTS AGE\npod/observability-collector-746dd54ffd-rx2h7 1/1 Running 0 37s\nNAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE\nservice/observability-collector-monitoring ClusterIP 10.100.13.19 <none> 8888/TCP 37s\nNAME READY UP-TO-DATE AVAILABLE AGE\ndeployment.apps/observability-collector 1/1 1 1 37s\nNAME DESIRED CURRENT READY AGE\nreplicaset.apps/observability-collector-746dd54ffd 1 1 1 38s [...] receivers: [otlp]\nexporters: [otlp/data-prepper]`\n`jasonxie:~/environment/observability-blog/01-otel-collector/kubernetes $ kubectl get all -n otel-collector READY STATUS RESTARTS AGE\npod/my-collector-metrics-collector-594cc9f59-c7c4g 1/1 Running 0 13s\npod/otel-collector-75cf5b767f-j8xdx 1/1 Running 0 2m38s\nNAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE\nservice/my-collector-metrics-collector-monitoring ClusterIP 10.100.31.124 <none> 8888/TCP 13s",
+            "date": ""
+          },
+          {
+            "url": "https://www.elastic.co/cn/what-is/opentelemetry",
+            "title": "什么是 OpenTelemetry？ | Elastic",
+            "snippet": "OpenTelemetry 由云原生计算基金会 (CNCF) 开发，旨在统一和标准化遥测数据的收集和导出方式。它合并了早期的 OpenTracing 和 OpenCensus 项目，以消除技术生态碎片化现象。\n\n### OpenTelemetry 协议 (OTLP) 是什么？为何重要？\n\nOTLP 是 OpenTelemetry 的默认、不受供应商影响的协议，用于在组件和后端之间传输遥测数据。它确保所有数据（日志、指标和跟踪）以一致的格式传输，从而使工具之间的集成更简单、更可靠。\n\n### OpenTelemetry Collector 是什么？\n\nOpenTelemetry Collector 是一种不受供应商影响的服务，可接收多个来源的遥测数据，进行处理（过滤、聚合或转换），并将其导出到一个或多个后端。它在单个部署中支持多种协议与格式。\n\n### OpenTelemetry 如何与 Elastic 集成？ [...] | 组件 | 用途 | 示例用法 |\n --- \n| 收集器 | 接收、处理并导出多种格式的遥测数据；不受供应商影响 | 在发送到 Elastic 之前，汇集来自 Kubernetes 集群的日志、指标和跟踪 |\n| 语言 SDK | 为特定编程语言实现 OpenTelemetry API | 使用 Python SDK 为用 Python 编写的应用程序插桩 |\n| 插桩库 | 用于生成遥测数据的自动插桩流行框架和库 | 自动从 Spring Boot 收集 HTTP 请求指标 |\n| 自动插桩 | 无需更改代码即可添加遥测功能 | 注入 Java 代理以监测基于 JVM 的微服务 |\n| 导出器 | 将收集的数据发送到一个或多个可观测性后端 | 将追踪数据导出到 Jaeger，将指标导出到 Prometheus |\n\n这些组件能够实现灵活、标准化的数据收集，而不依赖于后端的选择。\n\n我们基于 Elastic 文档的 OpenTelemetry Collector 设置方案包含完整的安装操作指南。\n\n## OpenTelemetry 的优点",
+            "date": ""
+          }
+        ],
+        "error": null,
+        "latency_ms": 21985
+      },
+      {
+        "source": "chroma",
+        "status": "empty",
+        "results": [],
+        "error": null,
+        "empty_reason": "no_research_material",
+        "empty_detail": "every indexed document is evaluation material",
+        "latency_ms": 4297
+      },
+      {
+        "source": "github",
+        "status": "success",
+        "results": [
+          {
+            "url": "https://github.com/kubernetes/kubernetes",
+            "title": "kubernetes/kubernetes",
+            "snippet": "Stars: 128473, Forks: 47069, Updated: 2026-10-22T01:29:48Z, Description: Production-Grade Container Scheduling and Management",
+            "has_body": false,
+            "date": "2026-10-22T01:29:48Z"
+          },
+          {
+            "url": "https://github.com/bregman-arie/devops-exercises",
+            "title": "bregman-arie/devops-exercises",
+            "snippet": "Stars: 84920, Forks: 20401, Updated: 2026-10-22T01:29:54Z, Description: Linux, Jenkins, AWS, SRE, Prometheus, Docker, Python, Ansible, Git, Kubernetes, Terraform, OpenStack, SQL, NoSQL, Azure, GCP, DNS, Elastic, Network, Virtualization. DevOps Interview Questions",
+            "has_body": false,
+            "date": "2026-10-22T01:29:54Z"
+          },
+          {
+            "url": "https://github.com/netdata/netdata",
+            "title": "netdata/netdata",
+            "snippet": "Stars: 81082, Forks: 6698, Updated: 2026-10-22T01:24:02Z, Description: The fastest path to AI-powered full stack observability, even for lean teams.",
+            "has_body": false,
+            "date": "2026-10-22T01:24:02Z"
+          },
+          {
+            "url": "https://github.com/traefik/traefik",
+            "title": "traefik/traefik",
+            "snippet": "Stars: 65311, Forks: 6269, Updated: 2026-10-22T00:01:35Z, Description: The Cloud Native Application Proxy",
+            "has_body": false,
+            "date": "2026-10-22T00:01:35Z"
+          },
+          {
+            "url": "https://github.com/minio/minio",
+            "title": "minio/minio",
+            "snippet": "Stars: 61310, Forks: 8213, Updated: 2026-10-21T22:35:33Z, Description: MinIO is a high-performance, S3 compatible object store, open sourced under GNU AGPLv3 license.",
+            "has_body": false,
+            "date": "2026-10-21T22:35:33Z"
+          },
+          {
+            "url": "https://github.com/grafana/grafana",
+            "title": "grafana/grafana",
+            "snippet": "Stars: 77412, Forks: 14847, Updated: 2026-10-22T01:15:10Z, Description: The open and composable observability and data visualization platform. Visualize metrics, logs, and traces from multiple sources like Prometheus, Loki, Elasticsearch, InfluxDB, Postgres and many more. ",
+            "has_body": false,
+            "date": "2026-10-22T01:15:10Z"
+          },
+          {
+            "url": "https://github.com/ktsstudio/es2loki",
+            "title": "ktsstudio/es2loki",
+            "snippet": "Stars: 47, Forks: 4, Updated: 2026-06-11T19:39:18Z, Description: Elasticsearch to Grafana Loki logs transfer library",
+            "has_body": false,
+            "date": "2026-06-11T19:39:18Z"
+          }
+        ],
+        "error": null,
+        "latency_ms": 13125
+      },
+      {
+        "source": "arxiv",
+        "status": "success",
+        "results": [
+          {
+            "url": "http://arxiv.org/abs/1403.8123v2",
+            "title": "A Percolation based M2M Networking Architecture for Data Transmission and Routing",
+            "snippet": "We propose a percolation based M2M networking architecture and its data transmission method. The proposed network architecture can be server-free and router-free, which allows us to operate routing efficiently with percolations based on six degrees of separation theory in small world network modeling. The data transmission can be divided into two phases: routing and data transmission phases. In the routing phase, probe packets will be transmitted and forwarded in the network thus multiple paths",
+            "date": "2014-03-31"
+          },
+          {
+            "url": "http://arxiv.org/abs/2207.13219v4",
+            "title": "Dalorex: A Data-Local Program Execution and Architecture for Memory-bound Applications",
+            "snippet": "Applications with low data reuse and frequent irregular memory accesses, such as graph or sparse linear algebra workloads, fail to scale well due to memory bottlenecks and poor core utilization. While prior work with prefetching, decoupling, or pipelining can mitigate memory latency and improve core utilization, memory bottlenecks persist due to limited off-chip bandwidth. Approaches doing processing in-memory (PIM) with Hybrid Memory Cube (HMC) overcome bandwidth limitations but fail to achieve",
+            "date": "2022-07-26"
+          },
+          {
+            "url": "http://arxiv.org/abs/2506.11019v1",
+            "title": "Mind the Metrics: Patterns for Telemetry-Aware In-IDE AI Application Development using the Model Context Protocol (MCP)",
+            "snippet": "AI development environments are evolving into observability first platforms that integrate real time telemetry, prompt traces, and evaluation feedback into the developer workflow. This paper introduces telemetry aware integrated development environments (IDEs) enabled by the Model Context Protocol (MCP), a system that connects IDEs with prompt metrics, trace logs, and versioned control for real time refinement. We present design patterns for local prompt iteration, CI based optimization, and aut",
+            "date": "2025-05-14"
+          },
+          {
+            "url": "http://arxiv.org/abs/2009.00804v2",
+            "title": "Architectural Implications of Graph Neural Networks",
+            "snippet": "Graph neural networks (GNN) represent an emerging line of deep learning models that operate on graph structures. It is becoming more and more popular due to its high accuracy achieved in many graph-related tasks. However, GNN is not as well understood in the system and architecture community as its counterparts such as multi-layer perceptrons and convolutional neural networks. This work tries to introduce the GNN to our community. In contrast to prior work that only presents characterizations of",
+            "date": "2020-09-02"
+          },
+          {
+            "url": "http://arxiv.org/abs/1909.06001v1",
+            "title": "Polarization diversity and equalization of frequency selective channels in telemetry environment for 16APSK",
+            "snippet": "Providing RHCP and LHCP outputs from the antennas vertical (V) and horizontal (H) dipoles in the resonant cavity within the antenna feeds is the current practice of ground-based station receivers in aeronautical telemetry. The equalizers on the market, operate on either LHCP or RHCP alone, or a combined signal created by co-phasing and adding the RHCP and LHCP outputs. In this paper, we show how to optimally combine the V and H dipole outputs and demonstrate that an equalizer operating on this o",
+            "date": "2019-09-13"
+          },
+          {
+            "url": "http://arxiv.org/abs/2111.01949v1",
+            "title": "A RISC-V Simulator and Benchmark Suite for Designing and Evaluating Vector Architectures",
+            "snippet": "Vector architectures lack tools for research. Consider the gem5 simulator, which is possibly the leading platform for computer-system architecture research. Unfortunately, gem5 does not have an available distribution that includes a flexible and customizable vector architecture model. In consequence, researchers have to develop their own simulation platform to test their ideas, which consume much research time. However, once the base simulator platform is developed, another question is the follo",
+            "date": "2021-10-29"
+          },
+          {
+            "url": "http://arxiv.org/abs/2402.19171v1",
+            "title": "Towards Assessing Spread in Sets of Software Architecture Designs",
+            "snippet": "Several approaches have recently used automated techniques to generate architecture design alternatives by means of optimization techniques. These approaches aim at improving an initial architecture with respect to quality aspects, such as performance, reliability, or maintainability. In this context, each optimization experiment usually produces a different set of architecture alternatives that is characterized by specific settings. As a consequence, the designer is left with the task of compar",
+            "date": "2024-02-29"
+          }
+        ],
+        "error": null,
+        "latency_ms": 7312
+      },
+      {
+        "source": "community",
+        "status": "success",
+        "results": [],
+        "error": null,
+        "latency_ms": 5281
+      },
+      {
+        "source": "official",
+        "status": "success",
+        "results": [
+          {
+            "url": "https://opentelemetry.io/zh/docs/collector/resiliency",
+            "title": "自适应性 | OpenTelemetry",
+            "snippet": "",
+            "has_body": false,
+            "date": "",
+            "_from_mapping": false,
+            "_from_prior_search": true,
+            "source_owner": "OpenTelemetry Collector",
+            "source_kind": "candidate",
+            "body_identity_verified": false,
+            "body_error": "content_too_large",
+            "fetch_status": "navigation"
+          },
+          {
+            "url": "https://vector.dev/docs/",
+            "title": "vector — Official Documentation",
+            "snippet": "The Vector documentation | Vector documentation The Vector documentation Your gateway to the world of Vector Welcome to the documentation for Vector! Vector is a lightweight and ultra-fast tool for building observability pipelines. If you’d like to familiarize yourself with Vector’s core concepts, we recommend reading up on Vector’s core concepts: Concepts If you feel comfortable with the concepts, we recommend our quickstart guide, which takes you through a practical example: Vector quickstart Sections Introduction Setup Architecture Administration Reference Close docs slideover panel Docs home Introduction Concepts Setup Quickstart Installation Package managers APT dpkg Helm Homebrew MSI Nix pacman RPM YUM Platforms Docker Kubernetes Operating systems Amazon Linux Arch Linux CentOS Debian macOS NixOS Raspbian RHEL Ubuntu Windows Manual From archives From source Vector installer Deployment Roles Topologies Going to Production Reference Architectures Aggregator Architecture Agent Architecture Unified Architecture Architecting Hardening High Availability Rollout Sizing and Capacity Planning Architecture Data model Log events Metric events Pipeline model Runtime model Buffering model Concurrency model Adaptive Concurrency Guarantees End-to-end Acknowledgements Administration Management Monitoring Validating Optimization PGO Reference Vector Remap Language Functions Errors Examples Expressions Configuration Sources AMQP Apache Metrics AWS ECS metrics AWS Kinesis Firehose AWS S3 AWS SQS Datadog agent Demo Logs dnstap Docker logs EventStoreDB metrics Exec File File Descriptor Fluent GCP PubSub Heroku Logplex Host metrics HTTP Client HTTP Server Internal logs Internal metrics JournalD Kafka Kubernetes logs Logstash MongoDB metrics MQTT NATS NGINX metrics Okta OpenTelemetry PostgreSQL metrics Prometheus Pushgateway Prometheus remote write Prometheus scrape Pulsar Redis Socket Splunk HEC Static metrics StatsD stdin Syslog Vector WebSocket Windows Event Log Transforms Remap with VRL Aggregate AWS EC2 metadata Dedupe Delay Exclusive Route Filter Incremental to Absolute Log to metric Lua Metric to log Reduce Route Sample Tag cardinality limit Throttle Trace to Log Window Sinks AMQP AppSignal AWS Cloudwatch logs AWS Cloudwatch metrics AWS Kinesis Data Firehose logs AWS Kinesis Streams logs AWS S3 AWS SNS AWS SQS Axiom Azure Blob Storage Azure Logs Ingestion Blackhole ClickHouse Console Databend Databricks Zerobus Datadog events Datadog logs Datadog metrics Datadog traces Doris Elasticsearch File GCP Chronicle Unstructured GCP Cloud Monitoring (formerly Stackdriver) GCP Cloud Storage GCP Stackdriver GCP PubSub GreptimeDB Logs GreptimeDB Metrics Honeycomb HTTP Humio logs Humio metrics InfluxDB logs InfluxDB metrics Kafka Keep Loki Mezmo (formerly LogDNA) MQTT NATS New Relic OpenTelemetry Papertrail Postgres Prometheus Exporter Prometheus remote write Pulsar Redis Sematext logs Sematext metrics Socket Splunk HEC logs Splunk HEC metrics StatsD Vector WebHDFS WebSocket WebSocket Server Global options Pipeline components TLS configuration API Unit tests Schema Template syntax Secrets CLI Environment Variables API Glossary Meta Security Releases Versioning Sign up to receive emails on the latest Vector content and new releases Thank you for joining our Updates Newsletter Sidebar",
+            "has_body": true,
+            "date": "",
+            "_from_mapping": false,
+            "_from_learned": true,
+            "_from_prior_search": false,
+            "source_owner": "Vector",
+            "source_kind": "candidate",
+            "body_identity_verified": true,
+            "fetch_status": "body",
+            "body_url": "https://vector.dev/docs/",
+            "body_page_chars": 3320,
+            "body_chars": 3320,
+            "body_stored_chars": 3320,
+            "body_page_truncated": false,
+            "body_stored_truncated": false,
+            "body_truncated": false,
+            "body_prose_chars": 515,
+            "body_admission": "prose_ok",
+            "body_content_type": "text/html"
+          },
+          {
+            "url": "https://elastic.co",
+            "title": "Elasticsearch — Official Documentation",
+            "snippet": "",
+            "has_body": false,
+            "date": "",
+            "_from_mapping": true,
+            "_from_learned": false,
+            "_from_prior_search": false,
+            "source_owner": "Elasticsearch",
+            "source_kind": "platform_constraint",
+            "body_identity_verified": false,
+            "body_error": "content_too_large",
+            "fetch_status": "navigation"
+          },
+          {
+            "url": "https://kubernetes.io/docs/",
+            "title": "Kubernetes — Official Documentation",
+            "snippet": "",
+            "has_body": false,
+            "date": "",
+            "_from_mapping": true,
+            "_from_learned": false,
+            "_from_prior_search": false,
+            "source_owner": "Kubernetes",
+            "source_kind": "platform_constraint",
+            "body_identity_verified": false,
+            "body_error": "content_too_large",
+            "fetch_status": "navigation"
+          },
+          {
+            "url": "https://prometheus.io",
+            "title": "Prometheus — Official Documentation",
+            "snippet": "",
+            "has_body": false,
+            "date": "",
+            "_from_mapping": true,
+            "_from_learned": false,
+            "_from_prior_search": false,
+            "source_owner": "Prometheus",
+            "source_kind": "platform_constraint",
+            "body_error": "page_attempt_budget_exhausted",
+            "fetch_status": "navigation"
+          }
+        ],
+        "error": null,
+        "latency_ms": 10297,
+        "fetch_stats": {
+          "max_page_attempts": 4,
+          "max_http_requests": 12,
+          "page_attempts": 4,
+          "http_requests": 7,
+          "probe_requests": 0,
+          "redirects": 3,
+          "body_pages": 1,
+          "navigation_pages": 0,
+          "failed_pages": 3,
+          "bytes_read": 139214,
+          "bytes_retained": 139214,
+          "failures": [
+            "content_too_large",
+            "content_too_large",
+            "content_too_large"
+          ]
+        }
+      }
+    ],
+    "source_scores": [
+      {
+        "url": "https://opentelemetry.io/zh/docs/collector/resiliency",
+        "title": "自适应性 | OpenTelemetry",
+        "snippet": "",
+        "date": "",
+        "source_type": "official_doc",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.8,
+        "supporting_sources": [],
+        "has_body": false,
+        "body_error": "content_too_large",
+        "fetch_status": "navigation"
+      },
+      {
+        "url": "https://vector.dev/docs/",
+        "title": "vector — Official Documentation",
+        "snippet": "The Vector documentation | Vector documentation The Vector documentation Your gateway to the world of Vector Welcome to the documentation for Vector! Vector is a lightweight and ultra-fast tool for building observability pipelines. If you’d like to familiarize yourself with Vector’s core concepts, we recommend reading up on Vector’s core concepts: Concepts If you feel comfortable with the concepts, we recommend our quickstart guide, which takes you through a practical example: Vector quickstart Sections Introduction Setup Architecture Administration Reference Close docs slideover panel Docs home Introduction Concepts Setup Quickstart Installation Package managers APT dpkg Helm Homebrew MSI Nix pacman RPM YUM Platforms Docker Kubernetes Operating systems Amazon Linux Arch Linux CentOS Debian macOS NixOS Raspbian RHEL Ubuntu Windows Manual From archives From source Vector installer Deployment Roles Topologies Going to Production Reference Architectures Aggregator Architecture Agent Architecture Unified Architecture Architecting Hardening High Availability Rollout Sizing and Capacity Planning Architecture Data model Log events Metric events Pipeline model Runtime model Buffering model Concurrency model Adaptive Concurrency Guarantees End-to-end Acknowledgements Administration Management Monitoring Validating Optimization PGO Reference Vector Remap Language Functions Errors Examples Expressions Configuration Sources AMQP Apache Metrics AWS ECS metrics AWS Kinesis Firehose AWS S3 AWS SQS Datadog agent Demo Logs dnstap Docker logs EventStoreDB metrics Exec File File Descriptor Fluent GCP PubSub Heroku Logplex Host metrics HTTP Client HTTP Server Internal logs Internal metrics JournalD Kafka Kubernetes logs Logstash MongoDB metrics MQTT NATS NGINX metrics Okta OpenTelemetry PostgreSQL metrics Prometheus Pushgateway Prometheus remote write Prometheus scrape Pulsar Redis Socket Splunk HEC Static metrics StatsD stdin Syslog Vector WebSocket Windows Event Log Transforms Remap with VRL Aggregate AWS EC2 metadata Dedupe Delay Exclusive Route Filter Incremental to Absolute Log to metric Lua Metric to log Reduce Route Sample Tag cardinality limit Throttle Trace to Log Window Sinks AMQP AppSignal AWS Cloudwatch logs AWS Cloudwatch metrics AWS Kinesis Data Firehose logs AWS Kinesis Streams logs AWS S3 AWS SNS AWS SQS Axiom Azure Blob Storage Azure Logs Ingestion Blackhole ClickHouse Console Databend Databricks Zerobus Datadog events Datadog logs Datadog metrics Datadog traces Doris Elasticsearch File GCP Chronicle Unstructured GCP Cloud Monitoring (formerly Stackdriver) GCP Cloud Storage GCP Stackdriver GCP PubSub GreptimeDB Logs GreptimeDB Metrics Honeycomb HTTP Humio logs Humio metrics InfluxDB logs InfluxDB metrics Kafka Keep Loki Mezmo (formerly LogDNA) MQTT NATS New Relic OpenTelemetry Papertrail Postgres Prometheus Exporter Prometheus remote write Pulsar Redis Sematext logs Sematext metrics Socket Splunk HEC logs Splunk HEC metrics StatsD Vector WebHDFS WebSocket WebSocket Server Global options Pipeline components TLS configuration API Unit tests Schema Template syntax Secrets CLI Environment Variables API Glossary Meta Security Releases Versioning Sign up to receive emails on the latest Vector content and new releases Thank you for joining our Updates Newsletter Sidebar",
+        "date": "",
+        "source_type": "official_doc",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.8,
+        "supporting_sources": [],
+        "has_body": true,
+        "body_url": "https://vector.dev/docs/",
+        "body_chars": 3320,
+        "body_page_chars": 3320,
+        "body_prose_chars": 515,
+        "body_stored_chars": 3320,
+        "body_page_truncated": false,
+        "body_stored_truncated": false,
+        "body_truncated": false,
+        "body_content_type": "text/html",
+        "body_admission": "prose_ok",
+        "fetch_status": "body"
+      },
+      {
+        "url": "https://elastic.co",
+        "title": "Elasticsearch — Official Documentation",
+        "snippet": "",
+        "date": "",
+        "source_type": "official_doc",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.8,
+        "supporting_sources": [],
+        "has_body": false,
+        "body_error": "content_too_large",
+        "fetch_status": "navigation"
+      },
+      {
+        "url": "https://kubernetes.io/docs/",
+        "title": "Kubernetes — Official Documentation",
+        "snippet": "",
+        "date": "",
+        "source_type": "official_doc",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.8,
+        "supporting_sources": [],
+        "has_body": false,
+        "body_error": "content_too_large",
+        "fetch_status": "navigation"
+      },
+      {
+        "url": "https://prometheus.io",
+        "title": "Prometheus — Official Documentation",
+        "snippet": "",
+        "date": "",
+        "source_type": "official_doc",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.8,
+        "supporting_sources": [],
+        "has_body": false,
+        "body_error": "page_attempt_budget_exhausted",
+        "fetch_status": "navigation"
+      },
+      {
+        "url": "https://github.com/kubernetes/kubernetes",
+        "title": "kubernetes/kubernetes",
+        "snippet": "Stars: 128473, Forks: 47069, Updated: 2026-10-22T01:29:48Z, Description: Production-Grade Container Scheduling and Management",
+        "date": "2026-10-22T01:29:48Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 10,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.6,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "https://github.com/bregman-arie/devops-exercises",
+        "title": "bregman-arie/devops-exercises",
+        "snippet": "Stars: 84920, Forks: 20401, Updated: 2026-10-22T01:29:54Z, Description: Linux, Jenkins, AWS, SRE, Prometheus, Docker, Python, Ansible, Git, Kubernetes, Terraform, OpenStack, SQL, NoSQL, Azure, GCP, DNS, Elastic, Network, Virtualization. DevOps Interview Questions",
+        "date": "2026-10-22T01:29:54Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 10,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.6,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "https://github.com/netdata/netdata",
+        "title": "netdata/netdata",
+        "snippet": "Stars: 81082, Forks: 6698, Updated: 2026-10-22T01:24:02Z, Description: The fastest path to AI-powered full stack observability, even for lean teams.",
+        "date": "2026-10-22T01:24:02Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 10,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.6,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "https://github.com/traefik/traefik",
+        "title": "traefik/traefik",
+        "snippet": "Stars: 65311, Forks: 6269, Updated: 2026-10-22T00:01:35Z, Description: The Cloud Native Application Proxy",
+        "date": "2026-10-22T00:01:35Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 10,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.6,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "https://github.com/minio/minio",
+        "title": "minio/minio",
+        "snippet": "Stars: 61310, Forks: 8213, Updated: 2026-10-21T22:35:33Z, Description: MinIO is a high-performance, S3 compatible object store, open sourced under GNU AGPLv3 license.",
+        "date": "2026-10-21T22:35:33Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 10,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.6,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "https://github.com/grafana/grafana",
+        "title": "grafana/grafana",
+        "snippet": "Stars: 77412, Forks: 14847, Updated: 2026-10-22T01:15:10Z, Description: The open and composable observability and data visualization platform. Visualize metrics, logs, and traces from multiple sources like Prometheus, Loki, Elasticsearch, InfluxDB, Postgres and many more. ",
+        "date": "2026-10-22T01:15:10Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 10,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.6,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "https://www.zjusct.io/operation/observability/opentelemetry",
+        "title": "数据采集：OpenTelemetry - ZJUSCT",
+        "snippet": "载荷编码为二进制或 JSON 格式。\n 客户端使用 `POST` 请求发送数据，路径为 `v1/` 等。\n 服务端分三种情况响应：\n  + 完全成功：返回 `200 OK`。\n  + 部分成功：返回 `200 OK`，并在响应体中描述拒绝的部分和原因。\n  + 失败：返回 `4xx` 或 `5xx` 状态码，具体含义由 OTLP 定义。\n\n## OTel Collector (otelcol)¶\n\nQuote\n\n Collector - OpenTelemetry\n\n### Collector 简介¶\n\nCollector 以无关厂商的方式接收、处理和导出遥测数据。\n\nCollector 由 Receiver、Processor 和 Exporter 组成，整体架构如下：\n\n collector_arch \n\nOpenTelemetry Collector 架构\n\n \n\n Receiver 和 Exporter 灵活支持 Pull 或 Push 模式。\n Processor 可以对数据进行转换、过滤、聚合等操作。\n Connector 可以对流水线进行聚合、路由等操作。 [...] 如果对字段的语义有困惑，可以去查文档和 GitHub 上的讨论。\n\nExample\n\n```\nObservedTimestamp: 2024-10-04 15:46:26.809948211 +0000 UTC Timestamp: 2024-10-04 15:46:14 +0000 UTC SeverityText: notice SeverityNumber: Info2(10) Body: Str(<189>Oct 4 23:46:14 Huawei %%01SHELL/5/CMDRECORDl:Record command information. (Task=vt0, Ip=192.168.1.178, User=admin, Command=\"log off (ssh user)\", Result=Success) ) Attributes:  -> net.host.port: Str(514)  -> net.peer.name: Str(192.168.1.1)  -> appname: Str(%%01SHELL/5/CMDRECORD(l)) \n``` [...] 关于 Collector 和其他产品的比较，可以自己写基于 Docker 的基准测试。可观测性#案例调研 中也有一些参考资料。我们进行了 Filebeat 和 OTel Collector 的比较，仅开启 json 解析器对文件日志进行解析时：\n\n Filebeat 处理日志时 CPU 占用较高，闲时 CPU 占用率低，内存占用稳定偏高。\n OTel Collector 处理日志时 CPU 占用较低，闲时 CPU 占用相对较高，内存占用稳定偏低。\n\n### 子组件：pkg/ottl¶\n\n`pkg/ottl` 实现了 OTel Transformation Language（OTTL），用于处理和转换遥测数据。Transform Processor 的配置基于该种语言，实现的功能比 `pkg/stanza` 更强大。\n\nExample\n\n下面我们以一个具体的情境为例介绍 OTTL。假设你需要对下面的 Log 进行处理：",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "code",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 10
+        },
+        "total_score": 6.5,
+        "supporting_sources": []
+      },
+      {
+        "url": "http://arxiv.org/abs/2506.11019v1",
+        "title": "Mind the Metrics: Patterns for Telemetry-Aware In-IDE AI Application Development using the Model Context Protocol (MCP)",
+        "snippet": "AI development environments are evolving into observability first platforms that integrate real time telemetry, prompt traces, and evaluation feedback into the developer workflow. This paper introduces telemetry aware integrated development environments (IDEs) enabled by the Model Context Protocol (MCP), a system that connects IDEs with prompt metrics, trace logs, and versioned control for real time refinement. We present design patterns for local prompt iteration, CI based optimization, and aut",
+        "date": "2025-05-14",
+        "source_type": "arxiv_paper",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 4,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.5,
+        "supporting_sources": []
+      },
+      {
+        "url": "http://arxiv.org/abs/2207.13219v4",
+        "title": "Dalorex: A Data-Local Program Execution and Architecture for Memory-bound Applications",
+        "snippet": "Applications with low data reuse and frequent irregular memory accesses, such as graph or sparse linear algebra workloads, fail to scale well due to memory bottlenecks and poor core utilization. While prior work with prefetching, decoupling, or pipelining can mitigate memory latency and improve core utilization, memory bottlenecks persist due to limited off-chip bandwidth. Approaches doing processing in-memory (PIM) with Hybrid Memory Cube (HMC) overcome bandwidth limitations but fail to achieve",
+        "date": "2022-07-26",
+        "source_type": "arxiv_paper",
+        "evidence_type": "benchmark",
+        "scores": {
+          "authority": 10,
+          "timeliness": 2,
+          "consistency": 4,
+          "verifiability": 8
+        },
+        "total_score": 6.4,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://opentelemetry.io/zh/docs/collector/scaling",
+        "title": "Collector 扩容 | OpenTelemetry",
+        "snippet": "另一个值得关注的指标组是导出器队列相关的指标：`otelcol_exporter_queue_capacity` 和 `otelcol_exporter_queue_size`。 Collector 会在内存中排队等待工作组件可用来发送数据。如果工作组件数不足，或后端处理速度慢，数据就会在队列中堆积。 一旦队列满了（`otelcol_exporter_queue_size` > `otelcol_exporter_queue_capacity`）， 就会拒绝新数据（`otelcol_exporter_enqueue_failed_spans`）。增加更多的工作组件通常可以提升导出能力， 但这并不总是最佳策略（参见何时不要扩容）。一般建议是当队列达到容量的 60-70% 时考虑扩容， 当队列始终较小时可以考虑缩减，但需维持最小副本数，例如 3 个，以保证系统的弹性。 [...] 当使用 `memory_limiter` 处理器时，一个重要的提示信号是指标 `otelcol_processor_refused_spans`。 该处理器限制 Collector 的内存使用量。虽然 Collector 实际内存可能会稍微超过设定的最大值，但一旦超出限制， 新数据将被阻止进入管道，并通过该指标记录下来。其他遥测数据类型也有类似的指标。如果数据频繁被拒绝进入管道， 你可能需要扩容 Collector 集群。一旦节点的内存消耗显著低于设置的限制值，则可以考虑缩减。 [...] 你还应熟悉所使用的组件，因为不同组件可能暴露不同的指标。例如， 负载均衡导出器会记录导出操作的时延信息， 以直方图 `otelcol_loadbalancer_backend_latency` 的形式暴露。你可以据此判断各后端处理请求的时间是否相近： 若某个后端特别慢，可能是 Collector 之外的问题。\n\n对于抓取类型的接收器，例如 Prometheus 接收器，一旦抓取所有目标所需的时间接近或超过抓取间隔， 就需要对抓取进行扩容或分片。此时，应增加更多抓取程序，通常是新的 Collector 实例。\n\n### 何时不能扩容\n\n判断扩容无益的场景与判断何时扩容同样重要。一个典型例子是当遥测数据库无法跟上数据写入速度时，增加 Collector 数量也无济于事，除非你同时扩容数据库。类似地，如果 Collector 与后端之间的网络带宽已饱和， 添加更多 Collector 反而会带来负面影响。",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "benchmark",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 8
+        },
+        "total_score": 6.1,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://github.com/ktsstudio/es2loki",
+        "title": "ktsstudio/es2loki",
+        "snippet": "Stars: 47, Forks: 4, Updated: 2026-06-11T19:39:18Z, Description: Elasticsearch to Grafana Loki logs transfer library",
+        "date": "2026-06-11T19:39:18Z",
+        "source_type": "github",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 6,
+          "timeliness": 8,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.1,
+        "supporting_sources": [],
+        "has_body": false
+      },
+      {
+        "url": "http://arxiv.org/abs/1403.8123v2",
+        "title": "A Percolation based M2M Networking Architecture for Data Transmission and Routing",
+        "snippet": "We propose a percolation based M2M networking architecture and its data transmission method. The proposed network architecture can be server-free and router-free, which allows us to operate routing efficiently with percolations based on six degrees of separation theory in small world network modeling. The data transmission can be divided into two phases: routing and data transmission phases. In the routing phase, probe packets will be transmitted and forwarded in the network thus multiple paths",
+        "date": "2014-03-31",
+        "source_type": "arxiv_paper",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 2,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.0,
+        "supporting_sources": []
+      },
+      {
+        "url": "http://arxiv.org/abs/2009.00804v2",
+        "title": "Architectural Implications of Graph Neural Networks",
+        "snippet": "Graph neural networks (GNN) represent an emerging line of deep learning models that operate on graph structures. It is becoming more and more popular due to its high accuracy achieved in many graph-related tasks. However, GNN is not as well understood in the system and architecture community as its counterparts such as multi-layer perceptrons and convolutional neural networks. This work tries to introduce the GNN to our community. In contrast to prior work that only presents characterizations of",
+        "date": "2020-09-02",
+        "source_type": "arxiv_paper",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 2,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.0,
+        "supporting_sources": []
+      },
+      {
+        "url": "http://arxiv.org/abs/1909.06001v1",
+        "title": "Polarization diversity and equalization of frequency selective channels in telemetry environment for 16APSK",
+        "snippet": "Providing RHCP and LHCP outputs from the antennas vertical (V) and horizontal (H) dipoles in the resonant cavity within the antenna feeds is the current practice of ground-based station receivers in aeronautical telemetry. The equalizers on the market, operate on either LHCP or RHCP alone, or a combined signal created by co-phasing and adding the RHCP and LHCP outputs. In this paper, we show how to optimally combine the V and H dipole outputs and demonstrate that an equalizer operating on this o",
+        "date": "2019-09-13",
+        "source_type": "arxiv_paper",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 2,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.0,
+        "supporting_sources": []
+      },
+      {
+        "url": "http://arxiv.org/abs/2111.01949v1",
+        "title": "A RISC-V Simulator and Benchmark Suite for Designing and Evaluating Vector Architectures",
+        "snippet": "Vector architectures lack tools for research. Consider the gem5 simulator, which is possibly the leading platform for computer-system architecture research. Unfortunately, gem5 does not have an available distribution that includes a flexible and customizable vector architecture model. In consequence, researchers have to develop their own simulation platform to test their ideas, which consume much research time. However, once the base simulator platform is developed, another question is the follo",
+        "date": "2021-10-29",
+        "source_type": "arxiv_paper",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 2,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.0,
+        "supporting_sources": []
+      },
+      {
+        "url": "http://arxiv.org/abs/2402.19171v1",
+        "title": "Towards Assessing Spread in Sets of Software Architecture Designs",
+        "snippet": "Several approaches have recently used automated techniques to generate architecture design alternatives by means of optimization techniques. These approaches aim at improving an initial architecture with respect to quality aspects, such as performance, reliability, or maintainability. In this context, each optimization experiment usually produces a different set of architecture alternatives that is characterized by specific settings. As a consequence, the designer is left with the task of compar",
+        "date": "2024-02-29",
+        "source_type": "arxiv_paper",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 10,
+          "timeliness": 2,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 6.0,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://tradingkey.com/zh-hans/analysis/stocks/us-stock/261863320-dell-stock-analysis-ai-infrastructure-2026",
+        "title": "戴尔股票分析：到2026年其是否仍被低估，且是最佳AI基础设施标的？",
+        "snippet": "特色工具\n\ntk_center_stock_score股票评分calendar_economicCalendar财经日历search.intelligent.strategy智能策略article_asider_weekly_report投资周报\n\n热门新闻\n\nlink\n\n英伟达GTC柏林前瞻：Rubin平台、AI智能体与欧洲主权算力成焦点\n\n美股收盘：道指升超500点，美伊谈判消息反复；部分科技股反弹，Meta连跌5日\n\n美股收盘：纳指升1.1%，科技股反弹，记忆体股涨幅居前，美光升近3%\n\n特斯拉Q3财报前瞻：汽车利润率能否企稳？华尔街最高目标价550美元\n\n特斯拉股价预测：Q3业绩即将公布，TSLA股价能否突破400美元？ [...] TradingKey2 小时前\n\n### TradingKey 每日市场简报：道指涨超1%，SpaceX盘后涨超8%，超微电脑涨超14%，奈飞跌超5%\n\nTradingKey - 截至美东时间10月20日收盘，道琼斯工业平均指数上涨1.02%至52,495.88点，纳斯达克综合指数下跌0.02%至26,424.82点，标普500指数上涨0.28%至7,712.57点。\n\nTradingKey4 小时前\n\n### 日韩股市盘初上涨，KOSPI涨超2%，SK海力士涨近4%，铠侠大涨超5%\n\nTradingKey - 10月21日，日韩股市早盘集体反弹，韩国股市和日本股市均高开。\n\nTradingKey4 小时前\n\n文章目录\n\n戴尔领跑AI优化服务器市场戴尔的传统服务器业务表现如何？智能体AI时代的戴尔存储戴尔财务状况：增长、现金与温和的估值倍数戴尔管理层2026年展望投资戴尔（Dell）前需考虑的风险因素戴尔是2026年最值得买入的AI基础设施股票吗？\n\n特色工具 [...] 注册后参与点赞\n\n## 推荐文章\n\n### Anthropic IPO招股书：上半年亏损807亿美元，7500亿美元算力支出引关注\n\nTradingKey - 据《华尔街日报》审阅的一份S-1招股说明书草案，这家Claude开发商2026年上半年实现营收163亿美元，但同期净亏损达到807亿美元，同时还可能在未来数年承担最高7500亿美元的算力及基础设施支出。\n\nTradingKey35 分钟前\n\n### SpaceX盘后涨超8%！三季度AI收入暴增830%，与特斯拉成立特别委员会评估合并\n\nTradingKey - 美东时间10月20日，埃隆·马斯克在SpaceX（SPCX）第三季度业绩电话会上透露，SpaceX与特斯拉（TSLA）已成立由独立董事组成的特别委员会，评估潜在合并。\n\nTradingKey2 小时前\n\n### 奈飞Q3财报超预期，为何股价仍跌近6%？\n\nTradingKey - 奈飞（NFLX）第三季度盈利表现好于市场预期，但营收增速放缓、广告业务增长不及预期，以及第四季度业绩指引偏弱，令投资者对公司的后续增长前景保持谨慎。\n\nTradingKey2 小时前",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 5.7,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://opentelemetry.io/zh/docs/collector/resiliency",
+        "title": "自适应性 | OpenTelemetry",
+        "snippet": "工作原理：当配置一个导出器时，通常会包含一个发送队列，它在将数据发送到下游终端前， 会先在内存中进行缓冲。如果终端是可用的，数据会快速通过。\n 处理终端不可用情况：如果终端不可用（如网络问题或后端重启），导出器无法立即发送数据。 此时，它不会丢弃数据，而是将其加入内存中的发送队列。\n 重试机制：Collector 会使用带指数退避和抖动的重试机制。在等待一段时间后， 它会重复尝试发送缓冲数据。默认情况下，它最多重试 5 分钟。\n 数据丢失场景：\n\n  + 队列满：内存队列的大小是可配置的（默认通常为 1000 批/请求）。如果终端持续不可用且持续有新数据进入， 队列可能会被填满。一旦队列满，为防止 Collector 内存耗尽，新的数据将被丢弃。\n  + 重试超时：如果终端不可用时间超过配置的最大重试时长（默认 5 分钟），Collector 会停止重试队列中最早的数据并将其丢弃。\n 配置方式：你可以在导出器设置中配置队列大小和重试行为： [...] 工作原理：发送队列不仅在内存中缓冲数据，还会在尝试导出前将数据写入磁盘上的预写日志（WAL）。\n 处理 Collector 崩溃：如果 Collector 在数据仍在队列中时崩溃，数据会被保存在磁盘上。当 Collector 重启后，它会从 WAL 读取数据并继续尝试将其发送到终端。\n 数据丢失场景：如果磁盘发生故障、空间不足，或 Collector 重启后终端仍然长时间不可用， 仍可能导致数据丢失。其可靠性不如专门的消息队列。\n 配置方式：\n\n  1. 定义 `file_storage` 扩展。\n  2. 在导出器的 `sending_queue` 配置中引用该存储 ID。 [...] OpenTelemetry Collector 通过组件和配置设计，旨在尽可能减少遥测数据在处理和导出过程中的丢失。 然而，理解可能导致数据丢失的场景及其应对措施，对于构建一个具有自适应性的可观测性数据管道至关重要。\n\n## 理解 Collector 的自适应性\n\n一个具有自适应性的 Collector 能够在面临不利条件时依然保持遥测数据的流动和处理能力，确保整体的可观测性管道仍然可用。\n\nCollector 的自适应性主要体现在以下场景：当配置的终端（即链路、指标或日志的目标接收方）不可用，或者 Collector 实例本身发生崩溃等问题时，它是如何处理数据的。\n\n## 发送队列（内存缓冲）\n\nCollector 导出器中内建的最基本的自适应性机制是发送队列。",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 5.7,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://grafana.com/docs/loki/latest/send-data/otel",
+        "title": "Ingesting logs to Loki using OpenTelemetry Collector | Grafana Loki documentation",
+        "snippet": "By default, Loki stores OpenTelemetry log attributes as\nstructured metadata. Two per-line limits apply to them:\n\n`max_structured_metadata_size`\n`max_structured_metadata_entries_count` [...] The default list of resource attributes to store as labels can be configured using `default_resource_attributes_as_index_labels` under the\ndistributor’s otlp\\_config. You can set global limits using\nlimits\\_config.otlp\\_config. If you are using Grafana Cloud, contact support to configure this setting.\n\n`default_resource_attributes_as_index_labels`\n\nCaution [...] The `set` statement must come before `delete_key`. The stack trace then counts against the log line size limit instead: `max_line_size`, 256KB by default, with `max_line_size_truncate` available to truncate rather than reject oversized lines. If you collect logs with Grafana Alloy, the otelcol.processor.transform component applies the same statements.\n\n`set`\n`delete_key`\n`max_line_size`\n`max_line_size_truncate`\n\n### Drop the attribute or adjust the limits",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 5.7,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://aws.amazon.com/cn/blogs/china/a-guide-to-modernizing-application-observability-with-opentelemetry",
+        "title": "使用 OpenTelemetry 实现现代化应用可观测性指南 | 亚马逊AWS官方博客",
+        "snippet": "service/otel-collector ClusterIP 10.100.86.180 <none> 55680/TCP 2m38s\nservice/otel-collector-headless ClusterIP None <none> 55680/TCP 2m38s\nservice/otel-collector-monitoring ClusterIP 10.100.120.41 <none> 8888/TCP 2m38s\nNAME READY UP-TO-DATE AVAILABLE AGE\ndeployment.apps/my-collector-metrics-collector 1/1 1 1 13s\ndeployment.apps/otel-collector 1/1 1 1 2m38s\nNAME DESIRED CURRENT READY AGE\nreplicaset.apps/my-collector-metrics-collector-594cc9f59 1 1 1 13s [...] `jasonxie:~/environment/observability-blog/kubernetes $ kubectl get all -n otel-collector\nNAME READY STATUS RESTARTS AGE\npod/observability-collector-746dd54ffd-rx2h7 1/1 Running 0 37s\nNAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE\nservice/observability-collector-monitoring ClusterIP 10.100.13.19 <none> 8888/TCP 37s\nNAME READY UP-TO-DATE AVAILABLE AGE\ndeployment.apps/observability-collector 1/1 1 1 37s\nNAME DESIRED CURRENT READY AGE\nreplicaset.apps/observability-collector-746dd54ffd 1 1 1 38s [...] receivers: [otlp]\nexporters: [otlp/data-prepper]`\n`jasonxie:~/environment/observability-blog/01-otel-collector/kubernetes $ kubectl get all -n otel-collector READY STATUS RESTARTS AGE\npod/my-collector-metrics-collector-594cc9f59-c7c4g 1/1 Running 0 13s\npod/otel-collector-75cf5b767f-j8xdx 1/1 Running 0 2m38s\nNAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE\nservice/my-collector-metrics-collector-monitoring ClusterIP 10.100.31.124 <none> 8888/TCP 13s",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 5.7,
+        "supporting_sources": []
+      },
+      {
+        "url": "https://www.elastic.co/cn/what-is/opentelemetry",
+        "title": "什么是 OpenTelemetry？ | Elastic",
+        "snippet": "OpenTelemetry 由云原生计算基金会 (CNCF) 开发，旨在统一和标准化遥测数据的收集和导出方式。它合并了早期的 OpenTracing 和 OpenCensus 项目，以消除技术生态碎片化现象。\n\n### OpenTelemetry 协议 (OTLP) 是什么？为何重要？\n\nOTLP 是 OpenTelemetry 的默认、不受供应商影响的协议，用于在组件和后端之间传输遥测数据。它确保所有数据（日志、指标和跟踪）以一致的格式传输，从而使工具之间的集成更简单、更可靠。\n\n### OpenTelemetry Collector 是什么？\n\nOpenTelemetry Collector 是一种不受供应商影响的服务，可接收多个来源的遥测数据，进行处理（过滤、聚合或转换），并将其导出到一个或多个后端。它在单个部署中支持多种协议与格式。\n\n### OpenTelemetry 如何与 Elastic 集成？ [...] | 组件 | 用途 | 示例用法 |\n --- \n| 收集器 | 接收、处理并导出多种格式的遥测数据；不受供应商影响 | 在发送到 Elastic 之前，汇集来自 Kubernetes 集群的日志、指标和跟踪 |\n| 语言 SDK | 为特定编程语言实现 OpenTelemetry API | 使用 Python SDK 为用 Python 编写的应用程序插桩 |\n| 插桩库 | 用于生成遥测数据的自动插桩流行框架和库 | 自动从 Spring Boot 收集 HTTP 请求指标 |\n| 自动插桩 | 无需更改代码即可添加遥测功能 | 注入 Java 代理以监测基于 JVM 的微服务 |\n| 导出器 | 将收集的数据发送到一个或多个可观测性后端 | 将追踪数据导出到 Jaeger，将指标导出到 Prometheus |\n\n这些组件能够实现灵活、标准化的数据收集，而不依赖于后端的选择。\n\n我们基于 Elastic 文档的 OpenTelemetry Collector 设置方案包含完整的安装操作指南。\n\n## OpenTelemetry 的优点",
+        "date": "",
+        "source_type": "tech_blog",
+        "evidence_type": "citation",
+        "scores": {
+          "authority": 7,
+          "timeliness": 5,
+          "consistency": 4,
+          "verifiability": 6
+        },
+        "total_score": 5.7,
+        "supporting_sources": []
+      }
+    ],
+    "conflicts": [],
+    "conflict_check": {},
+    "evidence_chains": [],
+    "final_recommendation": {},
+    "report": "",
+    "confidence": "",
+    "knowledge_gaps": [],
+    "retry_count": 0,
+    "partial_failures": [],
+    "empty_sources": [
+      {
+        "source": "chroma",
+        "reason": "no_research_material"
+      }
+    ],
+    "quality_signals": [
+      {
+        "agent": "source_evaluator",
+        "sources_scored": 26,
+        "avg_score": 6.3,
+        "high_score_count": 0,
+        "low_score_count": 0,
+        "support_unestablished": 26
+      }
+    ],
+    "current_phase": "shared_collection",
+    "agent_timing": {},
+    "token_usage": [
+      {
+        "agent": "query_adapter",
+        "model": "deepseek-flash",
+        "calls": 1,
+        "prompt_tokens": 1082,
+        "completion_tokens": 3906,
+        "total_tokens": 4988
+      }
+    ],
+    "shared_evidence_summary": {
+      "package_sha256": "c5d23e9841fbcde24d39f76d01fa85ed968919e0becda94eedd3420de672b6a1",
+      "entries_signature": "4ace26b14382268e1dc6ab7630cd66ae6b177a18db2388ef25716025d1d65349",
+      "package": {
+        "budget_chars": 24000,
+        "total_stored_chars": 14823,
+        "visible_chars": 14823,
+        "omitted_chars": 0,
+        "full_included": true,
+        "sources": 15,
+        "views": {
+          "1": {
+            "text": "The Vector documentation | Vector documentation The Vector documentation Your gateway to the world of Vector Welcome to the documentation for Vector! Vector is a lightweight and ultra-fast tool for building observability pipelines. If you’d like to familiarize yourself with Vector’s core concepts, we recommend reading up on Vector’s core concepts: Concepts If you feel comfortable with the concepts, we recommend our quickstart guide, which takes you through a practical example: Vector quickstart Sections Introduction Setup Architecture Administration Reference Close docs slideover panel Docs home Introduction Concepts Setup Quickstart Installation Package managers APT dpkg Helm Homebrew MSI Nix pacman RPM YUM Platforms Docker Kubernetes Operating systems Amazon Linux Arch Linux CentOS Debian macOS NixOS Raspbian RHEL Ubuntu Windows Manual From archives From source Vector installer Deployment Roles Topologies Going to Production Reference Architectures Aggregator Architecture Agent Architecture Unified Architecture Architecting Hardening High Availability Rollout Sizing and Capacity Planning Architecture Data model Log events Metric events Pipeline model Runtime model Buffering model Concurrency model Adaptive Concurrency Guarantees End-to-end Acknowledgements Administration Management Monitoring Validating Optimization PGO Reference Vector Remap Language Functions Errors Examples Expressions Configuration Sources AMQP Apache Metrics AWS ECS metrics AWS Kinesis Firehose AWS S3 AWS SQS Datadog agent Demo Logs dnstap Docker logs EventStoreDB metrics Exec File File Descriptor Fluent GCP PubSub Heroku Logplex Host metrics HTTP Client HTTP Server Internal logs Internal metrics JournalD Kafka Kubernetes logs Logstash MongoDB metrics MQTT NATS NGINX metrics Okta OpenTelemetry PostgreSQL metrics Prometheus Pushgateway Prometheus remote write Prometheus scrape Pulsar Redis Socket Splunk HEC Static metrics StatsD stdin Syslog Vector WebSocket Windows Event Log Transforms Remap with VRL Aggregate AWS EC2 metadata Dedupe Delay Exclusive Route Filter Incremental to Absolute Log to metric Lua Metric to log Reduce Route Sample Tag cardinality limit Throttle Trace to Log Window Sinks AMQP AppSignal AWS Cloudwatch logs AWS Cloudwatch metrics AWS Kinesis Data Firehose logs AWS Kinesis Streams logs AWS S3 AWS SNS AWS SQS Axiom Azure Blob Storage Azure Logs Ingestion Blackhole ClickHouse Console Databend Databricks Zerobus Datadog events Datadog logs Datadog metrics Datadog traces Doris Elasticsearch File GCP Chronicle Unstructured GCP Cloud Monitoring (formerly Stackdriver) GCP Cloud Storage GCP Stackdriver GCP PubSub GreptimeDB Logs GreptimeDB Metrics Honeycomb HTTP Humio logs Humio metrics InfluxDB logs InfluxDB metrics Kafka Keep Loki Mezmo (formerly LogDNA) MQTT NATS New Relic OpenTelemetry Papertrail Postgres Prometheus Exporter Prometheus remote write Pulsar Redis Sematext logs Sematext metrics Socket Splunk HEC logs Splunk HEC metrics StatsD Vector WebHDFS WebSocket WebSocket Server Global options Pipeline components TLS configuration API Unit tests Schema Template syntax Secrets CLI Environment Variables API Glossary Meta Security Releases Versioning Sign up to receive emails on the latest Vector content and new releases Thank you for joining our Updates Newsletter Sidebar",
+            "body_url": "https://vector.dev/docs/",
+            "page_chars": 3320,
+            "page_chars_known": true,
+            "stored_chars": 3320,
+            "source_chars": 3320,
+            "visible_chars": 3320,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                3320
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": false,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "2": {
+            "text": "载荷编码为二进制或 JSON 格式。 客户端使用 `POST` 请求发送数据，路径为 `v1/` 等。 服务端分三种情况响应： + 完全成功：返回 `200 OK`。 + 部分成功：返回 `200 OK`，并在响应体中描述拒绝的部分和原因。 + 失败：返回 `4xx` 或 `5xx` 状态码，具体含义由 OTLP 定义。 ## OTel Collector (otelcol)¶ Quote Collector - OpenTelemetry ### Collector 简介¶ Collector 以无关厂商的方式接收、处理和导出遥测数据。 Collector 由 Receiver、Processor 和 Exporter 组成，整体架构如下： collector_arch OpenTelemetry Collector 架构 Receiver 和 Exporter 灵活支持 Pull 或 Push 模式。 Processor 可以对数据进行转换、过滤、聚合等操作。 Connector 可以对流水线进行聚合、路由等操作。 [...] 如果对字段的语义有困惑，可以去查文档和 GitHub 上的讨论。 Example ``` ObservedTimestamp: 2024-10-04 15:46:26.809948211 +0000 UTC Timestamp: 2024-10-04 15:46:14 +0000 UTC SeverityText: notice SeverityNumber: Info2(10) Body: Str(<189>Oct 4 23:46:14 Huawei %%01SHELL/5/CMDRECORDl:Record command information. (Task=vt0, Ip=192.168.1.178, User=admin, Command=\"log off (ssh user)\", Result=Success) ) Attributes: -> net.host.port: Str(514) -> net.peer.name: Str(192.168.1.1) -> appname: Str(%%01SHELL/5/CMDRECORD(l)) ``` [...] 关于 Collector 和其他产品的比较，可以自己写基于 Docker 的基准测试。可观测性#案例调研 中也有一些参考资料。我们进行了 Filebeat 和 OTel Collector 的比较，仅开启 json 解析器对文件日志进行解析时： Filebeat 处理日志时 CPU 占用较高，闲时 CPU 占用率低，内存占用稳定偏高。 OTel Collector 处理日志时 CPU 占用较低，闲时 CPU 占用相对较高，内存占用稳定偏低。 ### 子组件：pkg/ottl¶ `pkg/ottl` 实现了 OTel Transformation Language（OTTL），用于处理和转换遥测数据。Transform Processor 的配置基于该种语言，实现的功能比 `pkg/stanza` 更强大。 Example 下面我们以一个具体的情境为例介绍 OTTL。假设你需要对下面的 Log 进行处理：",
+            "body_url": "https://www.zjusct.io/operation/observability/opentelemetry",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 1375,
+            "source_chars": 1375,
+            "visible_chars": 1375,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                1375
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "3": {
+            "text": "AI development environments are evolving into observability first platforms that integrate real time telemetry, prompt traces, and evaluation feedback into the developer workflow. This paper introduces telemetry aware integrated development environments (IDEs) enabled by the Model Context Protocol (MCP), a system that connects IDEs with prompt metrics, trace logs, and versioned control for real time refinement. We present design patterns for local prompt iteration, CI based optimization, and aut",
+            "body_url": "http://arxiv.org/abs/2506.11019v1",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 500,
+            "source_chars": 500,
+            "visible_chars": 500,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                500
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "4": {
+            "text": "Applications with low data reuse and frequent irregular memory accesses, such as graph or sparse linear algebra workloads, fail to scale well due to memory bottlenecks and poor core utilization. While prior work with prefetching, decoupling, or pipelining can mitigate memory latency and improve core utilization, memory bottlenecks persist due to limited off-chip bandwidth. Approaches doing processing in-memory (PIM) with Hybrid Memory Cube (HMC) overcome bandwidth limitations but fail to achieve",
+            "body_url": "http://arxiv.org/abs/2207.13219v4",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 500,
+            "source_chars": 500,
+            "visible_chars": 500,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                500
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "5": {
+            "text": "另一个值得关注的指标组是导出器队列相关的指标：`otelcol_exporter_queue_capacity` 和 `otelcol_exporter_queue_size`。 Collector 会在内存中排队等待工作组件可用来发送数据。如果工作组件数不足，或后端处理速度慢，数据就会在队列中堆积。 一旦队列满了（`otelcol_exporter_queue_size` > `otelcol_exporter_queue_capacity`）， 就会拒绝新数据（`otelcol_exporter_enqueue_failed_spans`）。增加更多的工作组件通常可以提升导出能力， 但这并不总是最佳策略（参见何时不要扩容）。一般建议是当队列达到容量的 60-70% 时考虑扩容， 当队列始终较小时可以考虑缩减，但需维持最小副本数，例如 3 个，以保证系统的弹性。 [...] 当使用 `memory_limiter` 处理器时，一个重要的提示信号是指标 `otelcol_processor_refused_spans`。 该处理器限制 Collector 的内存使用量。虽然 Collector 实际内存可能会稍微超过设定的最大值，但一旦超出限制， 新数据将被阻止进入管道，并通过该指标记录下来。其他遥测数据类型也有类似的指标。如果数据频繁被拒绝进入管道， 你可能需要扩容 Collector 集群。一旦节点的内存消耗显著低于设置的限制值，则可以考虑缩减。 [...] 你还应熟悉所使用的组件，因为不同组件可能暴露不同的指标。例如， 负载均衡导出器会记录导出操作的时延信息， 以直方图 `otelcol_loadbalancer_backend_latency` 的形式暴露。你可以据此判断各后端处理请求的时间是否相近： 若某个后端特别慢，可能是 Collector 之外的问题。 对于抓取类型的接收器，例如 Prometheus 接收器，一旦抓取所有目标所需的时间接近或超过抓取间隔， 就需要对抓取进行扩容或分片。此时，应增加更多抓取程序，通常是新的 Collector 实例。 ### 何时不能扩容 判断扩容无益的场景与判断何时扩容同样重要。一个典型例子是当遥测数据库无法跟上数据写入速度时，增加 Collector 数量也无济于事，除非你同时扩容数据库。类似地，如果 Collector 与后端之间的网络带宽已饱和， 添加更多 Collector 反而会带来负面影响。",
+            "body_url": "https://opentelemetry.io/zh/docs/collector/scaling",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 1044,
+            "source_chars": 1044,
+            "visible_chars": 1044,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                1044
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "6": {
+            "text": "We propose a percolation based M2M networking architecture and its data transmission method. The proposed network architecture can be server-free and router-free, which allows us to operate routing efficiently with percolations based on six degrees of separation theory in small world network modeling. The data transmission can be divided into two phases: routing and data transmission phases. In the routing phase, probe packets will be transmitted and forwarded in the network thus multiple paths",
+            "body_url": "http://arxiv.org/abs/1403.8123v2",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 499,
+            "source_chars": 499,
+            "visible_chars": 499,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                499
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "7": {
+            "text": "Graph neural networks (GNN) represent an emerging line of deep learning models that operate on graph structures. It is becoming more and more popular due to its high accuracy achieved in many graph-related tasks. However, GNN is not as well understood in the system and architecture community as its counterparts such as multi-layer perceptrons and convolutional neural networks. This work tries to introduce the GNN to our community. In contrast to prior work that only presents characterizations of",
+            "body_url": "http://arxiv.org/abs/2009.00804v2",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 500,
+            "source_chars": 500,
+            "visible_chars": 500,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                500
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "8": {
+            "text": "Providing RHCP and LHCP outputs from the antennas vertical (V) and horizontal (H) dipoles in the resonant cavity within the antenna feeds is the current practice of ground-based station receivers in aeronautical telemetry. The equalizers on the market, operate on either LHCP or RHCP alone, or a combined signal created by co-phasing and adding the RHCP and LHCP outputs. In this paper, we show how to optimally combine the V and H dipole outputs and demonstrate that an equalizer operating on this o",
+            "body_url": "http://arxiv.org/abs/1909.06001v1",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 500,
+            "source_chars": 500,
+            "visible_chars": 500,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                500
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "9": {
+            "text": "Vector architectures lack tools for research. Consider the gem5 simulator, which is possibly the leading platform for computer-system architecture research. Unfortunately, gem5 does not have an available distribution that includes a flexible and customizable vector architecture model. In consequence, researchers have to develop their own simulation platform to test their ideas, which consume much research time. However, once the base simulator platform is developed, another question is the follo",
+            "body_url": "http://arxiv.org/abs/2111.01949v1",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 500,
+            "source_chars": 500,
+            "visible_chars": 500,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                500
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "10": {
+            "text": "Several approaches have recently used automated techniques to generate architecture design alternatives by means of optimization techniques. These approaches aim at improving an initial architecture with respect to quality aspects, such as performance, reliability, or maintainability. In this context, each optimization experiment usually produces a different set of architecture alternatives that is characterized by specific settings. As a consequence, the designer is left with the task of compar",
+            "body_url": "http://arxiv.org/abs/2402.19171v1",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 500,
+            "source_chars": 500,
+            "visible_chars": 500,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                500
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "11": {
+            "text": "特色工具 tk_center_stock_score股票评分calendar_economicCalendar财经日历search.intelligent.strategy智能策略article_asider_weekly_report投资周报 热门新闻 link 英伟达GTC柏林前瞻：Rubin平台、AI智能体与欧洲主权算力成焦点 美股收盘：道指升超500点，美伊谈判消息反复；部分科技股反弹，Meta连跌5日 美股收盘：纳指升1.1%，科技股反弹，记忆体股涨幅居前，美光升近3% 特斯拉Q3财报前瞻：汽车利润率能否企稳？华尔街最高目标价550美元 特斯拉股价预测：Q3业绩即将公布，TSLA股价能否突破400美元？ [...] TradingKey2 小时前 ### TradingKey 每日市场简报：道指涨超1%，SpaceX盘后涨超8%，超微电脑涨超14%，奈飞跌超5% TradingKey - 截至美东时间10月20日收盘，道琼斯工业平均指数上涨1.02%至52,495.88点，纳斯达克综合指数下跌0.02%至26,424.82点，标普500指数上涨0.28%至7,712.57点。 TradingKey4 小时前 ### 日韩股市盘初上涨，KOSPI涨超2%，SK海力士涨近4%，铠侠大涨超5% TradingKey - 10月21日，日韩股市早盘集体反弹，韩国股市和日本股市均高开。 TradingKey4 小时前 文章目录 戴尔领跑AI优化服务器市场戴尔的传统服务器业务表现如何？智能体AI时代的戴尔存储戴尔财务状况：增长、现金与温和的估值倍数戴尔管理层2026年展望投资戴尔（Dell）前需考虑的风险因素戴尔是2026年最值得买入的AI基础设施股票吗？ 特色工具 [...] 注册后参与点赞 ## 推荐文章 ### Anthropic IPO招股书：上半年亏损807亿美元，7500亿美元算力支出引关注 TradingKey - 据《华尔街日报》审阅的一份S-1招股说明书草案，这家Claude开发商2026年上半年实现营收163亿美元，但同期净亏损达到807亿美元，同时还可能在未来数年承担最高7500亿美元的算力及基础设施支出。 TradingKey35 分钟前 ### SpaceX盘后涨超8%！三季度AI收入暴增830%，与特斯拉成立特别委员会评估合并 TradingKey - 美东时间10月20日，埃隆·马斯克在SpaceX（SPCX）第三季度业绩电话会上透露，SpaceX与特斯拉（TSLA）已成立由独立董事组成的特别委员会，评估潜在合并。 TradingKey2 小时前 ### 奈飞Q3财报超预期，为何股价仍跌近6%？ TradingKey - 奈飞（NFLX）第三季度盈利表现好于市场预期，但营收增速放缓、广告业务增长不及预期，以及第四季度业绩指引偏弱，令投资者对公司的后续增长前景保持谨慎。 TradingKey2 小时前",
+            "body_url": "https://tradingkey.com/zh-hans/analysis/stocks/us-stock/261863320-dell-stock-analysis-ai-infrastructure-2026",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 1235,
+            "source_chars": 1235,
+            "visible_chars": 1235,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                1235
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "12": {
+            "text": "工作原理：当配置一个导出器时，通常会包含一个发送队列，它在将数据发送到下游终端前， 会先在内存中进行缓冲。如果终端是可用的，数据会快速通过。 处理终端不可用情况：如果终端不可用（如网络问题或后端重启），导出器无法立即发送数据。 此时，它不会丢弃数据，而是将其加入内存中的发送队列。 重试机制：Collector 会使用带指数退避和抖动的重试机制。在等待一段时间后， 它会重复尝试发送缓冲数据。默认情况下，它最多重试 5 分钟。 数据丢失场景： + 队列满：内存队列的大小是可配置的（默认通常为 1000 批/请求）。如果终端持续不可用且持续有新数据进入， 队列可能会被填满。一旦队列满，为防止 Collector 内存耗尽，新的数据将被丢弃。 + 重试超时：如果终端不可用时间超过配置的最大重试时长（默认 5 分钟），Collector 会停止重试队列中最早的数据并将其丢弃。 配置方式：你可以在导出器设置中配置队列大小和重试行为： [...] 工作原理：发送队列不仅在内存中缓冲数据，还会在尝试导出前将数据写入磁盘上的预写日志（WAL）。 处理 Collector 崩溃：如果 Collector 在数据仍在队列中时崩溃，数据会被保存在磁盘上。当 Collector 重启后，它会从 WAL 读取数据并继续尝试将其发送到终端。 数据丢失场景：如果磁盘发生故障、空间不足，或 Collector 重启后终端仍然长时间不可用， 仍可能导致数据丢失。其可靠性不如专门的消息队列。 配置方式： 1. 定义 `file_storage` 扩展。 2. 在导出器的 `sending_queue` 配置中引用该存储 ID。 [...] OpenTelemetry Collector 通过组件和配置设计，旨在尽可能减少遥测数据在处理和导出过程中的丢失。 然而，理解可能导致数据丢失的场景及其应对措施，对于构建一个具有自适应性的可观测性数据管道至关重要。 ## 理解 Collector 的自适应性 一个具有自适应性的 Collector 能够在面临不利条件时依然保持遥测数据的流动和处理能力，确保整体的可观测性管道仍然可用。 Collector 的自适应性主要体现在以下场景：当配置的终端（即链路、指标或日志的目标接收方）不可用，或者 Collector 实例本身发生崩溃等问题时，它是如何处理数据的。 ## 发送队列（内存缓冲） Collector 导出器中内建的最基本的自适应性机制是发送队列。",
+            "body_url": "https://opentelemetry.io/zh/docs/collector/resiliency",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 1044,
+            "source_chars": 1044,
+            "visible_chars": 1044,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                1044
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "13": {
+            "text": "By default, Loki stores OpenTelemetry log attributes as structured metadata. Two per-line limits apply to them: `max_structured_metadata_size` `max_structured_metadata_entries_count` [...] The default list of resource attributes to store as labels can be configured using `default_resource_attributes_as_index_labels` under the distributor’s otlp\\_config. You can set global limits using limits\\_config.otlp\\_config. If you are using Grafana Cloud, contact support to configure this setting. `default_resource_attributes_as_index_labels` Caution [...] The `set` statement must come before `delete_key`. The stack trace then counts against the log line size limit instead: `max_line_size`, 256KB by default, with `max_line_size_truncate` available to truncate rather than reject oversized lines. If you collect logs with Grafana Alloy, the otelcol.processor.transform component applies the same statements. `set` `delete_key` `max_line_size` `max_line_size_truncate` ### Drop the attribute or adjust the limits",
+            "body_url": "https://grafana.com/docs/loki/latest/send-data/otel",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 1009,
+            "source_chars": 1009,
+            "visible_chars": 1009,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                1009
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "14": {
+            "text": "service/otel-collector ClusterIP 10.100.86.180 <none> 55680/TCP 2m38s service/otel-collector-headless ClusterIP None <none> 55680/TCP 2m38s service/otel-collector-monitoring ClusterIP 10.100.120.41 <none> 8888/TCP 2m38s NAME READY UP-TO-DATE AVAILABLE AGE deployment.apps/my-collector-metrics-collector 1/1 1 1 13s deployment.apps/otel-collector 1/1 1 1 2m38s NAME DESIRED CURRENT READY AGE replicaset.apps/my-collector-metrics-collector-594cc9f59 1 1 1 13s [...] `jasonxie:~/environment/observability-blog/kubernetes $ kubectl get all -n otel-collector NAME READY STATUS RESTARTS AGE pod/observability-collector-746dd54ffd-rx2h7 1/1 Running 0 37s NAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE service/observability-collector-monitoring ClusterIP 10.100.13.19 <none> 8888/TCP 37s NAME READY UP-TO-DATE AVAILABLE AGE deployment.apps/observability-collector 1/1 1 1 37s NAME DESIRED CURRENT READY AGE replicaset.apps/observability-collector-746dd54ffd 1 1 1 38s [...] receivers: [otlp] exporters: [otlp/data-prepper]` `jasonxie:~/environment/observability-blog/01-otel-collector/kubernetes $ kubectl get all -n otel-collector READY STATUS RESTARTS AGE pod/my-collector-metrics-collector-594cc9f59-c7c4g 1/1 Running 0 13s pod/otel-collector-75cf5b767f-j8xdx 1/1 Running 0 2m38s NAME TYPE CLUSTER-IP EXTERNAL-IP PORT(S) AGE service/my-collector-metrics-collector-monitoring ClusterIP 10.100.31.124 <none> 8888/TCP 13s",
+            "body_url": "https://aws.amazon.com/cn/blogs/china/a-guide-to-modernizing-application-observability-with-opentelemetry",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 1412,
+            "source_chars": 1412,
+            "visible_chars": 1412,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                1412
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          },
+          "15": {
+            "text": "OpenTelemetry 由云原生计算基金会 (CNCF) 开发，旨在统一和标准化遥测数据的收集和导出方式。它合并了早期的 OpenTracing 和 OpenCensus 项目，以消除技术生态碎片化现象。 ### OpenTelemetry 协议 (OTLP) 是什么？为何重要？ OTLP 是 OpenTelemetry 的默认、不受供应商影响的协议，用于在组件和后端之间传输遥测数据。它确保所有数据（日志、指标和跟踪）以一致的格式传输，从而使工具之间的集成更简单、更可靠。 ### OpenTelemetry Collector 是什么？ OpenTelemetry Collector 是一种不受供应商影响的服务，可接收多个来源的遥测数据，进行处理（过滤、聚合或转换），并将其导出到一个或多个后端。它在单个部署中支持多种协议与格式。 ### OpenTelemetry 如何与 Elastic 集成？ [...] | 组件 | 用途 | 示例用法 | --- | 收集器 | 接收、处理并导出多种格式的遥测数据；不受供应商影响 | 在发送到 Elastic 之前，汇集来自 Kubernetes 集群的日志、指标和跟踪 | | 语言 SDK | 为特定编程语言实现 OpenTelemetry API | 使用 Python SDK 为用 Python 编写的应用程序插桩 | | 插桩库 | 用于生成遥测数据的自动插桩流行框架和库 | 自动从 Spring Boot 收集 HTTP 请求指标 | | 自动插桩 | 无需更改代码即可添加遥测功能 | 注入 Java 代理以监测基于 JVM 的微服务 | | 导出器 | 将收集的数据发送到一个或多个可观测性后端 | 将追踪数据导出到 Jaeger，将指标导出到 Prometheus | 这些组件能够实现灵活、标准化的数据收集，而不依赖于后端的选择。 我们基于 Elastic 文档的 OpenTelemetry Collector 设置方案包含完整的安装操作指南。 ## OpenTelemetry 的优点",
+            "body_url": "https://www.elastic.co/cn/what-is/opentelemetry",
+            "page_chars": null,
+            "page_chars_known": false,
+            "stored_chars": 885,
+            "source_chars": 885,
+            "visible_chars": 885,
+            "omitted_chars": 0,
+            "selection_ranges": [
+              [
+                0,
+                885
+              ]
+            ],
+            "full_included": true,
+            "page_truncated": null,
+            "stored_truncated": false,
+            "visible_truncated": false,
+            "truncated": false,
+            "has_body": true
+          }
+        },
+        "focus_terms": [
+          "OpenTelemetry Collector",
+          "Vector",
+          "Prometheus",
+          "Loki",
+          "Elasticsearch",
+          "OTLP",
+          "Kubernetes",
+          "Linux",
+          "Fluent",
+          "Filebeat",
+          "OpenTelemetry",
+          "Collector",
+          "what"
+        ]
+      },
+      "coverage": {
+        "candidates": {
+          "OpenTelemetry Collector": {
+            "mentioned_source_count": 8,
+            "mentioned_urls": [
+              "https://opentelemetry.io/zh/docs/collector/resiliency",
+              "https://vector.dev/docs/",
+              "https://www.zjusct.io/operation/observability/opentelemetry",
+              "https://opentelemetry.io/zh/docs/collector/scaling",
+              "https://opentelemetry.io/zh/docs/collector/resiliency",
+              "https://grafana.com/docs/loki/latest/send-data/otel",
+              "https://aws.amazon.com/cn/blogs/china/a-guide-to-modernizing-application-observability-with-opentelemetry",
+              "https://www.elastic.co/cn/what-is/opentelemetry"
+            ],
+            "official_body_source_count": 1,
+            "official_body_urls": [
+              "https://vector.dev/docs/"
+            ],
+            "official_body_missing": false
+          },
+          "Vector": {
+            "mentioned_source_count": 2,
+            "mentioned_urls": [
+              "https://vector.dev/docs/",
+              "http://arxiv.org/abs/2111.01949v1"
+            ],
+            "official_body_source_count": 1,
+            "official_body_urls": [
+              "https://vector.dev/docs/"
+            ],
+            "official_body_missing": false
+          }
+        },
+        "official_body_total": 1,
+        "source_count": 26
+      }
+    }
+  },
+  "shared_retrieval_source_envelopes": 6,
+  "shared_retrieval_counts": {
+    "llm_requests": 1,
+    "tavily_posts": 7,
+    "official_http_requests": 7,
+    "official_page_attempts": 4,
+    "official_redirects": 3,
+    "official_body_pages": 1,
+    "http_requests": null,
+    "http_requests_complete": false
+  },
+  "run_limits_start": {
+    "llm_requests": 0,
+    "tavily_posts": 0,
+    "llm_rejected": 0,
+    "tavily_rejected": 0,
+    "started_at": 7883.828,
+    "run_started_at": 7882.156,
+    "stop_reason": null,
+    "stop_at": null,
+    "events": [],
+    "run_started_at_epoch": 1792633098.8779492,
+    "run_ended": false,
+    "counts_at_start": {
+      "llm_requests": 0,
+      "tavily_posts": 0
+    },
+    "task_id": "v11pair-a42b7594fa47",
+    "llm_requests_max": 48,
+    "tavily_posts_max": 24,
+    "wall_clock_max_s": 1800.0,
+    "elapsed_s": 1.0,
+    "run_elapsed_s": 2.6
+  },
+  "run_limits_end": {
+    "llm_requests": 1,
+    "tavily_posts": 7,
+    "llm_rejected": 0,
+    "tavily_rejected": 0,
+    "started_at": 7883.828,
+    "run_started_at": 7882.156,
+    "stop_reason": null,
+    "stop_at": null,
+    "events": [],
+    "run_started_at_epoch": 1792633098.8779492,
+    "run_ended": false,
+    "counts_at_start": {
+      "llm_requests": 0,
+      "tavily_posts": 0
+    },
+    "task_id": "v11pair-a42b7594fa47",
+    "llm_requests_max": 48,
+    "tavily_posts_max": 24,
+    "wall_clock_max_s": 1800.0,
+    "elapsed_s": 52.7,
+    "run_elapsed_s": 54.4
+  },
+  "shared_error": null,
+  "saved_at": 1792633153.2302752
+}

@@ -64,6 +64,8 @@ Observation statistics from the same evaluation run:
   case ID, no replacement) and re-reviewed under the same rubric.
 - The review is **AI-assisted**; it is not a human signature and not a blind third-party benchmark.
 
+Deterministic metrics: [`benchmarks/results/formal_200_metrics.json`](benchmarks/results/formal_200_metrics.json).
+
 ## Reproducing a run
 
 1. Install the project and provide credentials (see README).

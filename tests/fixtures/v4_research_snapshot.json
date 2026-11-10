@@ -1,0 +1,1010 @@
+{
+  "task": {
+    "query": "为在线会话与热点数据缓存层做技术选型：在「缓存值以序列化的会话对象为主，单条约 200 KB；需要对在线用户集合与去重计数做 hash/list 这类结构化操作；缓存允许丢失，源数据在 RDS，回源可接受；峰值读约 8 万 QPS、读写比约 20:1；团队为 3 名 Python 后端，已在用 AWS 且没有专职运维；要求扩容与节点故障切换不需要人工介入」的约束下，应选择 Amazon ElastiCache for Redis 还是 Amazon ElastiCache for Memcached？请给出条件化推荐：在什么情况下选哪一个，并说明哪些结论有官方文档或公开基准支撑、哪些需要实测才能确认。",
+    "scene_context": "一个中型 SaaS 平台，后端为 Python/Django，会话数据序列化后存缓存，源数据在 RDS。当前缓存层需要同时承担三类访问：一是每个请求读取会话对象（约 200 KB，读多写少，读写比约 20:1）；二是维护在线用户集合与去重计数，需要对单个键做字段级操作或集合操作；三是热点数据预热。缓存允许丢失，回源可接受，但要避免缓存整体失效时把 RDS 打满。峰值读约 8 万 QPS。团队 3 名 Python 后端，没有专职运维，已在使用 AWS，希望扩容与节点故障切换不需要人工介入。",
+    "candidate_techs": [
+      "Amazon ElastiCache for Redis",
+      "Amazon ElastiCache for Memcached"
+    ],
+    "constraints": [
+      "缓存值以序列化会话对象为主，单条约 200 KB",
+      "需要对在线用户集合与去重计数做 hash/list 这类结构化操作",
+      "缓存允许丢失，源数据在 RDS，回源可接受",
+      "峰值读约 8 万 QPS，读写比约 20:1",
+      "团队 3 名 Python 后端，没有专职运维",
+      "已在使用 AWS，要求扩容与节点故障切换不需要人工介入"
+    ],
+    "sub_questions": [
+      "在单条约 200 KB、峰值读 8 万 QPS 的规模下，两个候选的容量估算与扩展方式分别是什么？",
+      "hash/list 这类结构化操作在两个候选上分别有什么可行做法与限制？",
+      "两个候选在持久化、故障切换与副本能力上的差异是什么，对“缓存可丢失但要避免打满 RDS”这一约束意味着什么？",
+      "支持该推荐需要哪些决定性依据（官方文档/公开基准），以及在什么条件下应改选另一个候选？"
+    ],
+    "report_format": "what_why_how",
+    "language": "zh"
+  },
+  "sub_questions": [
+    "在单条约 200 KB、峰值读 8 万 QPS 的规模下，两个候选的容量估算与扩展方式分别是什么？",
+    "hash/list 这类结构化操作在两个候选上分别有什么可行做法与限制？",
+    "两个候选在持久化、故障切换与副本能力上的差异是什么，对“缓存可丢失但要避免打满 RDS”这一约束意味着什么？",
+    "支持该推荐需要哪些决定性依据（官方文档/公开基准），以及在什么条件下应改选另一个候选？"
+  ],
+  "adapted_queries": {
+    "tavily": [
+      "在单条缓存值约 200 KB、峰值读 8 万 QPS 的场景下，Amazon ElastiCache for Redis 与 ElastiCache for Memcached 分别如何做容量估算和扩展？",
+      "Amazon ElastiCache for Redis 与 ElastiCache for Memcached 在实现 hash/list 这类结构化操作时分别有哪些可行做法和限制？",
+      "ElastiCache for Redis 与 ElastiCache for Memcached 在持久化、故障切换和副本能力上的差异是什么，缓存丢失后如何避免回源打满 RDS？",
+      "选择 Amazon ElastiCache for Redis 还是 ElastiCache for Memcached 需要哪些官方文档或公开基准作为决定性依据，什么条件下应改选另一个？"
+    ],
+    "arxiv": [
+      "ElastiCache Redis Memcached capacity planning large values 200KB QPS scaling",
+      "Redis hash list data structures Memcached key value limitations structured operations",
+      "Redis persistence replication failover Memcached availability cache miss RDS load",
+      "Redis Memcached benchmark performance comparison decision criteria official documentation"
+    ],
+    "github": [
+      "elasticache redis memcached capacity planning 200KB 80000 QPS scaling",
+      "elasticache redis hash list memcached online users deduplication structured operations",
+      "elasticache redis memcached failover replicas persistence cache miss RDS overload",
+      "elasticache redis memcached benchmark comparison decision criteria choose"
+    ],
+    "chroma": [
+      "ElastiCache Redis 与 Memcached 在单条约 200KB、峰值读 8 万 QPS 时，容量估算与横向扩展方式有什么差异？",
+      "需要对在线用户集合与去重计数做 hash/list 操作时，ElastiCache Redis 和 Memcached 各有什么可行做法与限制？",
+      "ElastiCache Redis 与 Memcached 在持久化、故障切换、副本能力上的差异，会如何影响缓存丢失后回源 RDS 的压力？",
+      "做 ElastiCache Redis 与 Memcached 选型时，哪些决定性依据有官方文档或公开基准支撑，什么条件下应改选另一个候选？"
+    ],
+    "community": [
+      "site:stackoverflow.com [amazon-elasticache] [redis] [memcached] capacity planning 200KB 80000 QPS scaling",
+      "site:stackoverflow.com [amazon-elasticache] [redis] [memcached] hash list structured operations limitations",
+      "site:stackoverflow.com [amazon-elasticache] [redis] [memcached] failover replication persistence cache miss RDS",
+      "site:stackoverflow.com [amazon-elasticache] [redis] [memcached] which to choose benchmarks official docs"
+    ],
+    "official": [
+      "ElastiCache Redis Memcached capacity planning scaling nodes shards read replicas 200 KB 80000 QPS",
+      "ElastiCache Redis data structures hashes lists Memcached supported commands limitations",
+      "ElastiCache Redis persistence Multi-AZ automatic failover read replicas Memcached high availability",
+      "ElastiCache choosing between Memcached and Redis comparison benchmarks documentation decision criteria"
+    ]
+  },
+  "search_results": [
+    {
+      "source": "tavily",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://aws.amazon.com/elasticache/pricing",
+          "title": "Amazon ElastiCache Pricing",
+          "snippet": "Scenario: You have a straightforward database caching use case that uses Amazon ElastiCache for Memcached. You require high availability for your cache to avoid application performance degradation in case of a node or AZ failure. You estimate that the application has a total cache dataset size of 20 GB in the idle state and grows to 150 GB during peaks. Your application accesses this cache using Memcached set and get commands to read and write objects of 500 bytes in size. You estimate that [...] Scenario: You are building an application that requires a cache that provides fast data access to enable a responsive, real-time user experience for an e-commerce website. You estimate that the application has a total cache dataset size of 10 GB in the idle state and grows to 100 GB during peaks for two hours during the day. Your application accesses this cache using Valkey and Redis OSS SET and GET commands to read and write objects of 500 bytes in size. You estimate that your typical request [...] Minimum metered data storage: 100 MB per cache for ElastiCache Serverless for Valkey and 1 GB per cache for ElastiCache for Memcached and ElastiCache for Redis OSS.\n\n## On-demand nodes",
+          "date": ""
+        },
+        {
+          "url": "https://aws.amazon.com/cn/elasticache/pricing",
+          "title": "Amazon ElastiCache 定价",
+          "snippet": "场景：您有一个使用 Amazon ElastiCache for Memcached 的简单数据库缓存使用案例。您需要缓存具有高可用性，以避免在节点或可用区发生故障时应用程序性能下降。您估计应用程序在空闲状态下的缓存数据集总大小为 20GB，并在高峰期间增长到 150GB。您的应用程序使用 Memcached set 和 get 命令访问此缓存，以读取和写入大小为 500 字节的对象。您估计典型的请求率为每秒 10 万个请求，每天两个小时内，每日峰值为每秒 50 万个请求。您选择在美国东部（弗吉尼亚州北部）部署工作负载。\n\n决定：由于其简单性，您选择开始使用 ElastiCache Serverless 构建应用程序。您还可以选择通过使用按需节点配置自己的集群来运行工作负载。由于您需要高可用性，因此您需要运行两个 ElastiCache for Memcached 集群，并从您的应用程序向这两个集群写入数据。您可以比较这两个选项的定价。\n\n无服务器选项 [...] ElastiCache 处理单元（ECPU）：您需要为 ElastiCache 处理单元（ECPU）中的 ElastiCache Serverless 请求付费，该单元包括 vCPU 时间和传输的数据。对于传输的每千字节（KB）数据，读取和写入需要 1 个 ECPU。例如，传输 3.2 KB 数据的 GET 命令将消耗 3.2 个 ECPU。需要额外 vCPU 时间或传输超过 1KB 数据的命令将按比例消耗更多 ECPU。\n\n最低计量数据存储：ElastiCache Serverless for Valkey 每个缓存 100MB，ElastiCache for Memcached 和 ElastiCache for Redis OSS 每个缓存 1GB。\n\n## 按需节点\n\n您可以通过选择缓存节点类型和缓存节点数量来设计自己的 ElastiCache 集群。节点是 ElastiCache 集群的最小构建块。通常，与其等效上一代节点类型相比，最新一代的类型可按较低成本提供更多内存和算力。如需了解应使用哪种节点大小，请参阅支持的节点类型和选择您的节点大小。 [...] ### ElastiCache 处理单元（ECPU）如何计算？\n\n您需要为 ECPU 中的 ElastiCache Serverless 请求付费。您的请求消耗的 ECPU 数量取决于 vCPU 所用时间和传输的数据量。每个简单的读取和写入（例如 Valkey 和 Redis OSS GET 和 SET 命令或 Memcached get 和 set 命令）每传输一千字节（KB）数据需要 1 个 ECPU。例如，传输 3.2 KiB 数据的 GET 命令将消耗 3.2 个 ECPU。\n\n某些对内存数据结构进行操作的 Valkey 和 Redis OSS 命令消耗的 vCPU 时间可能比 GET 或 SET 命令更多。ElastiCache 根据命令所花费的 vCPU 时间与 Redis OSS SET 或 GET 命令所花费的 vCPU 时间的基准进行比较，计算消耗的 ECPU 数量。例如，一个 SORT 命令所花费的 vCPU 时间是 SET 或 GET 命令所用时间的三倍，并且传输 2 KiB 数据，这将消耗 3 个 ECPU。",
+          "date": ""
+        },
+        {
+          "url": "https://aws.amazon.com/blogs/database/best-practices-for-sizing-your-amazon-elasticache-for-redis-clusters",
+          "title": "Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog",
+          "snippet": "of cores as well as sufficient network bandwidth capacity. For instance, suppose we have a key with a 4 KB value that, at peak times, is read at a rate of 10,000 requests per second. The extra bandwidth (above steady-state usage) required for any node in the cluster would be 300 Mbit/s. [...] For example, suppose our application requires a total of 1.2 Gbit/s bandwidth at steady state but occasionally sees a spike due to a hot key or hash slot. We could use either two shards based on m7g.large instances, or at the same cost, use a single shard based on an m7g.xlarge instance. In both cases, the total available bandwidth is 1.876 Gbit/s. However, with the two large instances, we use 600 Mbit/s at steady state on each instance, leaving only 337 Mbit/s extra capacity for single key [...] After you have identified the type of workload by its most dominant resource and have chosen the most appropriate instance type, it can be straightforward to create an effective auto scaling policy that can automatically detect and respond to usage changes and add additional shards. For instance, a CPU-bound workload can set policies based on the EngineCPUUtilization CloudWatch metric, a memory-bound workload can use the BytesUsedForCache metric, and a network-bound workload can use the",
+          "date": ""
+        },
+        {
+          "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html",
+          "title": "Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache",
+          "snippet": "`HDEL`\n\n  Deletes one or more fields and their values from a hash. Deletes the hash if no fields remain.\n\n  Learn more\n `HEXISTS`\n\n  Determines whether a field exists in a hash.\n\n  Learn more\n `HGET`\n\n  Returns the value of a field in a hash.\n\n  Learn more\n `HGETALL`\n\n  Returns all fields and values in a hash.\n\n  Learn more\n `HINCRBY`\n\n  Increments the integer value of a field in a hash by a number. Uses 0 as initial value if the field doesn't exist.\n\n  Learn more\n `HINCRBYFLOAT` [...] Sets fields in a hash with per-field expiration times. Supports `NX` (set only if field does not exist) and `XX` (set only if field already exists) flags. Creates the key if it doesn't exist.\n\n  Learn more\n `HGETEX`\n\n  Returns the values of fields in a hash and optionally sets their expiration.\n\n  Learn more\n `HGETDEL`\n\n  Returns the values of fields in a hash and deletes them.\n\n  Learn more\n `HEXPIRE`\n\n  Sets the expiration time of a hash field in seconds.\n\n  Learn more\n `HEXPIREAT` [...] Sets the expiration time of a hash field to a Unix timestamp.\n\n  Learn more\n `HPEXPIRE`\n\n  Sets the expiration time of a hash field in milliseconds.\n\n  Learn more\n `HPEXPIREAT`\n\n  Sets the expiration time of a hash field to a Unix milliseconds timestamp.\n\n  Learn more\n `HPERSIST`\n\n  Removes the expiration time from a hash field.\n\n  Learn more\n `HTTL`\n\n  Returns the remaining time to live of a hash field in seconds.\n\n  Learn more\n `HPTTL`",
+          "date": ""
+        },
+        {
+          "url": "https://aws.amazon.com/cn/elasticache/faqs",
+          "title": "与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS",
+          "snippet": "ElastiCache 兼容 Memcached 协议。因此，您可以使用标准的 Memcached 操作，如 get、set、incr 和 decr，使用方式也和您现有的 Memcached 部署完全相同。ElastiCache 支持文本和双字节协议。它还支持大多数标准的统计结果，也可通过 CloudWatch 以图形方式查看。因此，您可以无缝切换为使用 ElastiCache，无需重新编译或重新链接您的应用程序，您使用的库可以继续工作。要配置应用程序所访问的缓存服务器，请更新应用程序的 Memcached 配置文件，将我们为您预置的服务器（节点）端点包含在内。可以使用控制台中的“复制节点端点”选项或 DescribeCacheClusters API，获取端点列表。与任何迁移过程相同，我们建议您先对新的 ElastiCache 部署进行完整的测试，而后再完成当前解决方案的割接工作。 [...] Amazon ElastiCache 是一项 Web 服务，可简化云中符合 Valkey、Memcached 或 Redis OSS 协议的缓存的部署和运行。ElastiCache 支持您从快速的托管型内存系统检索信息，而不是依赖于速度较慢、基于磁盘的系统，从而提高了应用程序的性能。本服务可简化并减少内存环境的管理、监控和运营任务，让您的工程资源专注于应用程序开发。借助 ElastiCache，您不仅能够改善用户操作和查询的加载与响应时间，还可降低扩展 Web 应用程序所需的费用。 [...] ElastiCache 可以自动化执行运营分布式内存键值环境所需的常见管理任务。借助 ElastiCache，只需在 AWS 管理控制台内执行几个步骤，即可在几分钟内为您的应用程序架构添加缓存或内存层。ElastiCache 旨在自动保持高可用性，并提供 99.99% 可用性的服务水平协议（SLA）。ElastiCache 符合 Valkey、Memcached 和 Redis OSS 协议，因此，您在当前 Valkey、Memcached 或 Redis OSS 环境中使用的代码、应用程序和常用工具都能与本服务无缝协作。您无需预先投资，而且只需为所使用的资源付费。\n\n#### 什么是内存缓存，它对应用程序有何帮助？\n\nElastiCache 提供的内存缓存可以大幅改善许多高读取应用程序工作负载（如社交网络、游戏、媒体分享和问答门户）或计算密集型负载（如推荐引擎）的延迟性和吞吐量。内存缓存可将重要数据存储在内存中以实现低延迟访问，从而提高应用程序性能。缓存信息可能包括 I/O 密集型数据库查询的结果或计算密集型计算的结果。",
+          "date": ""
+        },
+        {
+          "url": "https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html",
+          "title": "ElastiCache 文档历史记录 - Amazon ElastiCache",
+          "snippet": "| 对 Redis OSS 集群的支持 | ElastiCache 增加了对 Redis OSS 集群的支持（增强版）。使用 Redis OSS 集群的客户可将其数据分配到最多 15 个分片（节点组）。每个分片都支持每分片最多 5 个只读副本的复制。Redis OSS 集群自动失效转移用时约为早期版本的四分之一。  本版本包含重新设计的管理控制台，采用与业界用法一致的术语。  有关更多信息，请参阅下列内容：   比较 Memcached 和 Redis OSS  ElastiCache 组件和功能 – 请注意与“节点”、“分片”、“集群”和“复制”有关的部分。  ElastiCache 术语 | 2016 年 10 月 12 日 | [...] | 支持 Mem ElastiCache cached 按需垂直扩展和自动水平扩展 | ElastiCache 使用 Memcached 现在支持按需垂直缩放和自动水平扩展。这包括操作 `elasticache:ModifyCacheCluster` 的策略更新 | 2025 年 4 月 10 日 |\n| 支持 Val ElastiCache key | ElastiCache 现在支持 Valkey。Valkey 7.2.6 与 Redis OSS 7.2 兼容。有关更多信息，请参阅 Valkey。 | 2024 年 10 月 8 日 |\n|  | ElastiCache 现在支持 Si ze 灵活预留节点。有关更多信息，请参阅 Amazon ElastiCache 定价。 | 2024 年 10 月 1 日 | [...] | 对 Memcach ElastiCache ed 1.6.22 的支持 | ElastiCache 适用于 Memcached 现在支持 Memcached 1.6.22。它包括从版本 1.6.18 开始的累积错误修复。有关更多信息，请参阅 Memcached 版本 1.6.22。 | 2024 年 1 月 10 日 |\n| ElastiCache 适用于 Redis 的 OSS 增加了对额外 c7gN 节点大小的支持 | ElastiCache 适用于 Redis 的 OSS 增加了对额外 c7gN 节点大小的支持。 | 2024 年 1 月 10 日 |",
+          "date": ""
+        },
+        {
+          "url": "https://redis.ac.cn/compare/elasticache",
+          "title": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+          "snippet": "dot Redis 8 来了——它是开源的\n\nWhite Redis Logo  返回;)\n\n#### 比较\n\n# Redis 对比 ElastiCache 不要满足于现状\n\nElastiCache 不是 Redis。在 Redis 7.2 版本发布后，ElastiCache 不再基于 Redis 构建——这意味着您无法从原始的 Redis 专家那里获得 ElastiCache 的支持或产品创新。\n\n联系销售\n\n## Redis 和 ElastiCache 的比较\n\nAWS ElastiCache\n\n部署灵活性和架构\n\n可作为完全托管的 DBaaS 使用\n\n战略性基础技术\n\n可部署在本地、混合云和多云环境中\n\nAWS、Azure、Google Cloud\n\nRedis\n\n仅限 AWS\n\nValkey\n\n—\n\n避免高昂的停机成本\n\nSLA 可用性\n\n自动化故障检测，小于 10 秒\n\n支持 RDB 快照\n\n使用 AOF 持久化每次操作\n\n99.999%\n\n---\n\n99.99%\n\n—\n\n---\n\n—\n\n花更少的钱，做更多的事\n\n可以利用 SSD 技术在规模上降低成本 [...] 在这里了解更多：从 ElastiCache 迁移到 Redis Cloud 的三种方法\n\n### 在集成和生态系统方面有哪些区别？ plus-white minus-white\n\n集成能力及其周边生态系统是缓存解决方案普及程度和有效性的关键因素。Redis 和 Amazon ElastiCache 都提供了一系列集成选项，但在生态系统支持和合作伙伴关系方面有所不同。值得注意的是，Redis 提供了 Redis Data Integration (RDI)，用于在 Redis 和记录系统数据库之间进行近乎实时的数据同步，这是 Memorystore 不提供的功能。\n\n### 这两种解决方案如何确保数据安全？ plus-white minus-white [...] ### 什么是 Amazon ElastiCache？ plus-white minus-white\n\nAmazon ElastiCache 是 Amazon Web Services (AWS) 提供的一项 Web 服务，用于在 AWS 中部署一个替代 Redis 的缓存服务。它由亚马逊完全托管，常用于基本缓存和会话存储。\n\n### ElastiCache 是 Redis 吗？ plus-white minus-white\n\n不，ElastiCache 不是 Redis。虽然 Amazon ElastiCache 提供基于开源 Redis 7.2 的托管服务，但亚马逊已选择不再授权未来版本的 Redis。Redis Cloud 是 AWS 上唯一提供未来版本 Redis 的服务。除了 Redis 7.2 的所有功能外，Redis Cloud 还包括 Redis Query Engine、Active-Active 地理复制以及许多其他高级功能。\n\n### Redis 和 ElastiCache 的主要区别是什么？ plus-white minus-white",
+          "date": ""
+        }
+      ],
+      "error": null,
+      "latency_ms": 43407
+    },
+    {
+      "source": "chroma",
+      "status": "success",
+      "results": [
+        {
+          "url": "file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md",
+          "title": "redis-vs-memcached",
+          "snippet": "# Redis vs Memcached\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis has richer data structures (lists, hashes, sets, sorted sets), persistence options, and built-in replication. Memcached is purely a key-value cache. For modern backend caching, Redis wins unless you have extreme memory efficiency requirements and only need simple get/set.\n\n## Known Contradictions\n\n### Memory efficiency\n- Position A: Memcached is more memory-efficient for simple key-value workloads\n-",
+          "date": ""
+        },
+        {
+          "url": "file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md",
+          "title": "redis-vs-postgresql",
+          "snippet": "# Redis vs PostgreSQL\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis's in-memory storage, TTL-based expiry, and sub-millisecond latency make it the ideal session store. PostgreSQL can store sessions but disk I/O per request adds unnecessary latency for ephemeral session data.\n\n## Known Contradictions\n\n### Infrastructure simplicity\n- Position A: Using PostgreSQL for sessions means one less service to manage\n- Position B: The latency penalty of disk-based session look",
+          "date": ""
+        },
+        {
+          "url": "file:///kb/chroma_kb/data/blogs/meilisearch-vs-elasticsearch.md",
+          "title": "meilisearch-vs-elasticsearch",
+          "snippet": "# Meilisearch vs Elasticsearch\n\n**Category**: Infrastructure\n**Expected winner**: Meilisearch\n\n## Analysis\n\nMeilisearch is dramatically simpler to deploy and maintain, with excellent relevance out of the box. Elasticsearch is more powerful for complex aggregations and petabyte-scale but is operational overkill for mid-size SaaS search.\n\n## Known Contradictions\n\n### Scalability\n- Position A: Elasticsearch scales horizontally to handle billions of documents\n- Position B: When you reach the scale w",
+          "date": ""
+        }
+      ],
+      "error": null,
+      "latency_ms": 29047
+    },
+    {
+      "source": "github",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://github.com/link1st/go-stress-testing",
+          "title": "link1st/go-stress-testing",
+          "snippet": "Stars: 4407, Forks: 832, Updated: 2026-10-16T00:58:27Z, Description: go 实现的压测工具，ab、locust、Jmeter压测工具介绍【单台机器100w连接压测实战】",
+          "date": "2026-10-16T00:58:27Z"
+        },
+        {
+          "url": "https://github.com/kanwangzjm/funiture",
+          "title": "kanwangzjm/funiture",
+          "snippet": "Stars: 1863, Forks: 779, Updated: 2026-10-02T15:14:37Z, Description:  github: https://github.com/kanwangzjm/funiture, spring项目，权限管理、系统监控、定时任务动态调整、qps限制、sql监控(邮件)、验证码服务、短链接服务、动态配置等",
+          "date": "2026-10-02T15:14:37Z"
+        },
+        {
+          "url": "https://github.com/xiaojiaqi/10billionhongbaos",
+          "title": "xiaojiaqi/10billionhongbaos",
+          "snippet": "Stars: 1690, Forks: 382, Updated: 2026-10-13T22:09:22Z, Description: golang 实现单机支持100万用户，同时模拟了2015年微信红包的1400万QPS的场景，让服务器在压力下，轻松地完成业务。",
+          "date": "2026-10-13T22:09:22Z"
+        },
+        {
+          "url": "https://github.com/Gooddbird/tinyrpc",
+          "title": "Gooddbird/tinyrpc",
+          "snippet": "Stars: 1663, Forks: 236, Updated: 2026-09-30T06:31:14Z, Description: c++ async rpc framework. 14w+qps.",
+          "date": "2026-09-30T06:31:14Z"
+        },
+        {
+          "url": "https://github.com/ydf0509/funboost",
+          "title": "ydf0509/funboost",
+          "snippet": "Stars: 894, Forks: 165, Updated: 2026-10-16T07:51:31Z, Description: pip install funboost，python全功能分布式函数调度框架,funboost的功能是全面性重量级，用户能想得到的功能99%全都有;funboost的使用方式是轻量级，只有@boost一行代码需要写。支持python所有类型的并发模式和一切知名消息队列中间件，支持如 celery dramatiq等框架整体作为funboost中间件，python函数加速器，框架包罗万象，用户能想到的控制功能全都有。一统编程思维，兼容50% python业务场景，适用范围广。只需要一行代码即可分布式执行python一切函数，99%用过funboost的pythoner 感受是　简易 方便 自由 强大，相见恨晚 。",
+          "date": "2026-10-16T07:51:31Z"
+        },
+        {
+          "url": "https://github.com/monitoringartist/grafana-aws-cloudwatch-dashboards",
+          "title": "monitoringartist/grafana-aws-cloudwatch-dashboards",
+          "snippet": "Stars: 2271, Forks: 799, Updated: 2026-10-14T08:19:10Z, Description: :cloud: 40+ Grafana dashboards for AWS CloudWatch metrics: EC2, Lambda, S3, ELB, EMR, EBS, SNS, SES, SQS, RDS, EFS, ElastiCache, Billing, API Gateway, VPN, Step Functions, Route 53, CodeBuild, ...",
+          "date": "2026-10-14T08:19:10Z"
+        },
+        {
+          "url": "https://github.com/aws-samples/custom-lens-wa-hub",
+          "title": "aws-samples/custom-lens-wa-hub",
+          "snippet": "Stars: 2089, Forks: 133, Updated: 2026-10-16T05:58:03Z, Description: Provide JSON file template that demonstrate how to create customize Well-Architected reviews using Custom lenses.",
+          "date": "2026-10-16T05:58:03Z"
+        }
+      ],
+      "error": null,
+      "latency_ms": 28406
+    },
+    {
+      "source": "arxiv",
+      "status": "failed",
+      "results": [],
+      "error": "RuntimeError: no outbound channel available for source: arxiv",
+      "latency_ms": 28625
+    },
+    {
+      "source": "community",
+      "status": "success",
+      "results": [],
+      "error": null,
+      "latency_ms": 14672
+    },
+    {
+      "source": "official",
+      "status": "success",
+      "results": [
+        {
+          "url": "https://docs.aws.amazon.com/ses/latest/dg/configure-sns-notifications.html",
+          "title": "Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service",
+          "snippet": "",
+          "has_body": false,
+          "date": ""
+        },
+        {
+          "url": "https://memcached.org",
+          "title": "Memcached — Official Documentation",
+          "snippet": "",
+          "has_body": false,
+          "date": ""
+        }
+      ],
+      "error": null,
+      "latency_ms": 32
+    }
+  ],
+  "source_scores": [
+    {
+      "url": "https://github.com/ydf0509/funboost",
+      "title": "ydf0509/funboost",
+      "snippet": "Stars: 894, Forks: 165, Updated: 2026-10-16T07:51:31Z, Description: pip install funboost，python全功能分布式函数调度框架,funboost的功能是全面性重量级，用户能想得到的功能99%全都有;funboost的使用方式是轻量级，只有@boost一行代码需要写。支持python所有类型的并发模式和一切知名消息队列中间件，支持如 celery dramatiq等框架整体作为funboost中间件，python函数加速器，框架包罗万象，用户能想到的控制功能全都有。一统编程思维，兼容50% python业务场景，适用范围广。只需要一行代码即可分布式执行python一切函数，99%用过funboost的pythoner 感受是　简易 方便 自由 强大，相见恨晚 。",
+      "source_type": "github",
+      "evidence_type": "code",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 10
+      },
+      "total_score": 7.4,
+      "supporting_sources": [],
+      "rank": 1
+    },
+    {
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html",
+      "title": "Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache",
+      "snippet": "`HDEL`\n\n  Deletes one or more fields and their values from a hash. Deletes the hash if no fields remain.\n\n  Learn more\n `HEXISTS`\n\n  Determines whether a field exists in a hash.\n\n  Learn more\n `HGET`\n\n  Returns the value of a field in a hash.\n\n  Learn more\n `HGETALL`\n\n  Returns all fields and values in a hash.\n\n  Learn more\n `HINCRBY`\n\n  Increments the integer value of a field in a hash by a number. Uses 0 as initial value if the field doesn't exist.\n\n  Learn more\n `HINCRBYFLOAT` [...] Sets fields in a hash with per-field expiration times. Supports `NX` (set only if field does not exist) and `XX` (set only if field already exists) flags. Creates the key if it doesn't exist.\n\n  Learn more\n `HGETEX`\n\n  Returns the values of fields in a hash and optionally sets their expiration.\n\n  Learn more\n `HGETDEL`\n\n  Returns the values of fields in a hash and deletes them.\n\n  Learn more\n `HEXPIRE`\n\n  Sets the expiration time of a hash field in seconds.\n\n  Learn more\n `HEXPIREAT` [...] Sets the expiration time of a hash field to a Unix timestamp.\n\n  Learn more\n `HPEXPIRE`\n\n  Sets the expiration time of a hash field in milliseconds.\n\n  Learn more\n `HPEXPIREAT`\n\n  Sets the expiration time of a hash field to a Unix milliseconds timestamp.\n\n  Learn more\n `HPERSIST`\n\n  Removes the expiration time from a hash field.\n\n  Learn more\n `HTTL`\n\n  Returns the remaining time to live of a hash field in seconds.\n\n  Learn more\n `HPTTL`",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "rank": 2
+    },
+    {
+      "url": "https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html",
+      "title": "ElastiCache 文档历史记录 - Amazon ElastiCache",
+      "snippet": "| 对 Redis OSS 集群的支持 | ElastiCache 增加了对 Redis OSS 集群的支持（增强版）。使用 Redis OSS 集群的客户可将其数据分配到最多 15 个分片（节点组）。每个分片都支持每分片最多 5 个只读副本的复制。Redis OSS 集群自动失效转移用时约为早期版本的四分之一。  本版本包含重新设计的管理控制台，采用与业界用法一致的术语。  有关更多信息，请参阅下列内容：   比较 Memcached 和 Redis OSS  ElastiCache 组件和功能 – 请注意与“节点”、“分片”、“集群”和“复制”有关的部分。  ElastiCache 术语 | 2016 年 10 月 12 日 | [...] | 支持 Mem ElastiCache cached 按需垂直扩展和自动水平扩展 | ElastiCache 使用 Memcached 现在支持按需垂直缩放和自动水平扩展。这包括操作 `elasticache:ModifyCacheCluster` 的策略更新 | 2025 年 4 月 10 日 |\n| 支持 Val ElastiCache key | ElastiCache 现在支持 Valkey。Valkey 7.2.6 与 Redis OSS 7.2 兼容。有关更多信息，请参阅 Valkey。 | 2024 年 10 月 8 日 |\n|  | ElastiCache 现在支持 Si ze 灵活预留节点。有关更多信息，请参阅 Amazon ElastiCache 定价。 | 2024 年 10 月 1 日 | [...] | 对 Memcach ElastiCache ed 1.6.22 的支持 | ElastiCache 适用于 Memcached 现在支持 Memcached 1.6.22。它包括从版本 1.6.18 开始的累积错误修复。有关更多信息，请参阅 Memcached 版本 1.6.22。 | 2024 年 1 月 10 日 |\n| ElastiCache 适用于 Redis 的 OSS 增加了对额外 c7gN 节点大小的支持 | ElastiCache 适用于 Redis 的 OSS 增加了对额外 c7gN 节点大小的支持。 | 2024 年 1 月 10 日 |",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "rank": 3
+    },
+    {
+      "url": "https://docs.aws.amazon.com/ses/latest/dg/configure-sns-notifications.html",
+      "title": "Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service",
+      "snippet": "",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 4
+    },
+    {
+      "url": "https://memcached.org",
+      "title": "Memcached — Official Documentation",
+      "snippet": "",
+      "source_type": "official_doc",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 10,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.8,
+      "supporting_sources": [],
+      "has_body": false,
+      "rank": 5
+    },
+    {
+      "url": "https://github.com/link1st/go-stress-testing",
+      "title": "link1st/go-stress-testing",
+      "snippet": "Stars: 4407, Forks: 832, Updated: 2026-10-16T00:58:27Z, Description: go 实现的压测工具，ab、locust、Jmeter压测工具介绍【单台机器100w连接压测实战】",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "rank": 6
+    },
+    {
+      "url": "https://github.com/kanwangzjm/funiture",
+      "title": "kanwangzjm/funiture",
+      "snippet": "Stars: 1863, Forks: 779, Updated: 2026-10-02T15:14:37Z, Description:  github: https://github.com/kanwangzjm/funiture, spring项目，权限管理、系统监控、定时任务动态调整、qps限制、sql监控(邮件)、验证码服务、短链接服务、动态配置等",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "rank": 7
+    },
+    {
+      "url": "https://github.com/xiaojiaqi/10billionhongbaos",
+      "title": "xiaojiaqi/10billionhongbaos",
+      "snippet": "Stars: 1690, Forks: 382, Updated: 2026-10-13T22:09:22Z, Description: golang 实现单机支持100万用户，同时模拟了2015年微信红包的1400万QPS的场景，让服务器在压力下，轻松地完成业务。",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "rank": 8
+    },
+    {
+      "url": "https://github.com/Gooddbird/tinyrpc",
+      "title": "Gooddbird/tinyrpc",
+      "snippet": "Stars: 1663, Forks: 236, Updated: 2026-09-30T06:31:14Z, Description: c++ async rpc framework. 14w+qps.",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "rank": 9
+    },
+    {
+      "url": "https://github.com/monitoringartist/grafana-aws-cloudwatch-dashboards",
+      "title": "monitoringartist/grafana-aws-cloudwatch-dashboards",
+      "snippet": "Stars: 2271, Forks: 799, Updated: 2026-10-14T08:19:10Z, Description: :cloud: 40+ Grafana dashboards for AWS CloudWatch metrics: EC2, Lambda, S3, ELB, EMR, EBS, SNS, SES, SQS, RDS, EFS, ElastiCache, Billing, API Gateway, VPN, Step Functions, Route 53, CodeBuild, ...",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "rank": 10
+    },
+    {
+      "url": "https://github.com/aws-samples/custom-lens-wa-hub",
+      "title": "aws-samples/custom-lens-wa-hub",
+      "snippet": "Stars: 2089, Forks: 133, Updated: 2026-10-16T05:58:03Z, Description: Provide JSON file template that demonstrate how to create customize Well-Architected reviews using Custom lenses.",
+      "source_type": "github",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 6,
+        "timeliness": 10,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 6.6,
+      "supporting_sources": [],
+      "rank": 11
+    },
+    {
+      "url": "file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md",
+      "title": "redis-vs-postgresql",
+      "snippet": "# Redis vs PostgreSQL\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis's in-memory storage, TTL-based expiry, and sub-millisecond latency make it the ideal session store. PostgreSQL can store sessions but disk I/O per request adds unnecessary latency for ephemeral session data.\n\n## Known Contradictions\n\n### Infrastructure simplicity\n- Position A: Using PostgreSQL for sessions means one less service to manage\n- Position B: The latency penalty of disk-based session look",
+      "source_type": "tech_blog",
+      "evidence_type": "benchmark",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 8
+      },
+      "total_score": 6.1,
+      "supporting_sources": [],
+      "rank": 12
+    },
+    {
+      "url": "https://aws.amazon.com/elasticache/pricing",
+      "title": "Amazon ElastiCache Pricing",
+      "snippet": "Scenario: You have a straightforward database caching use case that uses Amazon ElastiCache for Memcached. You require high availability for your cache to avoid application performance degradation in case of a node or AZ failure. You estimate that the application has a total cache dataset size of 20 GB in the idle state and grows to 150 GB during peaks. Your application accesses this cache using Memcached set and get commands to read and write objects of 500 bytes in size. You estimate that [...] Scenario: You are building an application that requires a cache that provides fast data access to enable a responsive, real-time user experience for an e-commerce website. You estimate that the application has a total cache dataset size of 10 GB in the idle state and grows to 100 GB during peaks for two hours during the day. Your application accesses this cache using Valkey and Redis OSS SET and GET commands to read and write objects of 500 bytes in size. You estimate that your typical request [...] Minimum metered data storage: 100 MB per cache for ElastiCache Serverless for Valkey and 1 GB per cache for ElastiCache for Memcached and ElastiCache for Redis OSS.\n\n## On-demand nodes",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 13
+    },
+    {
+      "url": "https://aws.amazon.com/cn/elasticache/pricing",
+      "title": "Amazon ElastiCache 定价",
+      "snippet": "场景：您有一个使用 Amazon ElastiCache for Memcached 的简单数据库缓存使用案例。您需要缓存具有高可用性，以避免在节点或可用区发生故障时应用程序性能下降。您估计应用程序在空闲状态下的缓存数据集总大小为 20GB，并在高峰期间增长到 150GB。您的应用程序使用 Memcached set 和 get 命令访问此缓存，以读取和写入大小为 500 字节的对象。您估计典型的请求率为每秒 10 万个请求，每天两个小时内，每日峰值为每秒 50 万个请求。您选择在美国东部（弗吉尼亚州北部）部署工作负载。\n\n决定：由于其简单性，您选择开始使用 ElastiCache Serverless 构建应用程序。您还可以选择通过使用按需节点配置自己的集群来运行工作负载。由于您需要高可用性，因此您需要运行两个 ElastiCache for Memcached 集群，并从您的应用程序向这两个集群写入数据。您可以比较这两个选项的定价。\n\n无服务器选项 [...] ElastiCache 处理单元（ECPU）：您需要为 ElastiCache 处理单元（ECPU）中的 ElastiCache Serverless 请求付费，该单元包括 vCPU 时间和传输的数据。对于传输的每千字节（KB）数据，读取和写入需要 1 个 ECPU。例如，传输 3.2 KB 数据的 GET 命令将消耗 3.2 个 ECPU。需要额外 vCPU 时间或传输超过 1KB 数据的命令将按比例消耗更多 ECPU。\n\n最低计量数据存储：ElastiCache Serverless for Valkey 每个缓存 100MB，ElastiCache for Memcached 和 ElastiCache for Redis OSS 每个缓存 1GB。\n\n## 按需节点\n\n您可以通过选择缓存节点类型和缓存节点数量来设计自己的 ElastiCache 集群。节点是 ElastiCache 集群的最小构建块。通常，与其等效上一代节点类型相比，最新一代的类型可按较低成本提供更多内存和算力。如需了解应使用哪种节点大小，请参阅支持的节点类型和选择您的节点大小。 [...] ### ElastiCache 处理单元（ECPU）如何计算？\n\n您需要为 ECPU 中的 ElastiCache Serverless 请求付费。您的请求消耗的 ECPU 数量取决于 vCPU 所用时间和传输的数据量。每个简单的读取和写入（例如 Valkey 和 Redis OSS GET 和 SET 命令或 Memcached get 和 set 命令）每传输一千字节（KB）数据需要 1 个 ECPU。例如，传输 3.2 KiB 数据的 GET 命令将消耗 3.2 个 ECPU。\n\n某些对内存数据结构进行操作的 Valkey 和 Redis OSS 命令消耗的 vCPU 时间可能比 GET 或 SET 命令更多。ElastiCache 根据命令所花费的 vCPU 时间与 Redis OSS SET 或 GET 命令所花费的 vCPU 时间的基准进行比较，计算消耗的 ECPU 数量。例如，一个 SORT 命令所花费的 vCPU 时间是 SET 或 GET 命令所用时间的三倍，并且传输 2 KiB 数据，这将消耗 3 个 ECPU。",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 14
+    },
+    {
+      "url": "https://aws.amazon.com/blogs/database/best-practices-for-sizing-your-amazon-elasticache-for-redis-clusters",
+      "title": "Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog",
+      "snippet": "of cores as well as sufficient network bandwidth capacity. For instance, suppose we have a key with a 4 KB value that, at peak times, is read at a rate of 10,000 requests per second. The extra bandwidth (above steady-state usage) required for any node in the cluster would be 300 Mbit/s. [...] For example, suppose our application requires a total of 1.2 Gbit/s bandwidth at steady state but occasionally sees a spike due to a hot key or hash slot. We could use either two shards based on m7g.large instances, or at the same cost, use a single shard based on an m7g.xlarge instance. In both cases, the total available bandwidth is 1.876 Gbit/s. However, with the two large instances, we use 600 Mbit/s at steady state on each instance, leaving only 337 Mbit/s extra capacity for single key [...] After you have identified the type of workload by its most dominant resource and have chosen the most appropriate instance type, it can be straightforward to create an effective auto scaling policy that can automatically detect and respond to usage changes and add additional shards. For instance, a CPU-bound workload can set policies based on the EngineCPUUtilization CloudWatch metric, a memory-bound workload can use the BytesUsedForCache metric, and a network-bound workload can use the",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 15
+    },
+    {
+      "url": "https://aws.amazon.com/cn/elasticache/faqs",
+      "title": "与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS",
+      "snippet": "ElastiCache 兼容 Memcached 协议。因此，您可以使用标准的 Memcached 操作，如 get、set、incr 和 decr，使用方式也和您现有的 Memcached 部署完全相同。ElastiCache 支持文本和双字节协议。它还支持大多数标准的统计结果，也可通过 CloudWatch 以图形方式查看。因此，您可以无缝切换为使用 ElastiCache，无需重新编译或重新链接您的应用程序，您使用的库可以继续工作。要配置应用程序所访问的缓存服务器，请更新应用程序的 Memcached 配置文件，将我们为您预置的服务器（节点）端点包含在内。可以使用控制台中的“复制节点端点”选项或 DescribeCacheClusters API，获取端点列表。与任何迁移过程相同，我们建议您先对新的 ElastiCache 部署进行完整的测试，而后再完成当前解决方案的割接工作。 [...] Amazon ElastiCache 是一项 Web 服务，可简化云中符合 Valkey、Memcached 或 Redis OSS 协议的缓存的部署和运行。ElastiCache 支持您从快速的托管型内存系统检索信息，而不是依赖于速度较慢、基于磁盘的系统，从而提高了应用程序的性能。本服务可简化并减少内存环境的管理、监控和运营任务，让您的工程资源专注于应用程序开发。借助 ElastiCache，您不仅能够改善用户操作和查询的加载与响应时间，还可降低扩展 Web 应用程序所需的费用。 [...] ElastiCache 可以自动化执行运营分布式内存键值环境所需的常见管理任务。借助 ElastiCache，只需在 AWS 管理控制台内执行几个步骤，即可在几分钟内为您的应用程序架构添加缓存或内存层。ElastiCache 旨在自动保持高可用性，并提供 99.99% 可用性的服务水平协议（SLA）。ElastiCache 符合 Valkey、Memcached 和 Redis OSS 协议，因此，您在当前 Valkey、Memcached 或 Redis OSS 环境中使用的代码、应用程序和常用工具都能与本服务无缝协作。您无需预先投资，而且只需为所使用的资源付费。\n\n#### 什么是内存缓存，它对应用程序有何帮助？\n\nElastiCache 提供的内存缓存可以大幅改善许多高读取应用程序工作负载（如社交网络、游戏、媒体分享和问答门户）或计算密集型负载（如推荐引擎）的延迟性和吞吐量。内存缓存可将重要数据存储在内存中以实现低延迟访问，从而提高应用程序性能。缓存信息可能包括 I/O 密集型数据库查询的结果或计算密集型计算的结果。",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 16
+    },
+    {
+      "url": "https://redis.ac.cn/compare/elasticache",
+      "title": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+      "snippet": "dot Redis 8 来了——它是开源的\n\nWhite Redis Logo  返回;)\n\n#### 比较\n\n# Redis 对比 ElastiCache 不要满足于现状\n\nElastiCache 不是 Redis。在 Redis 7.2 版本发布后，ElastiCache 不再基于 Redis 构建——这意味着您无法从原始的 Redis 专家那里获得 ElastiCache 的支持或产品创新。\n\n联系销售\n\n## Redis 和 ElastiCache 的比较\n\nAWS ElastiCache\n\n部署灵活性和架构\n\n可作为完全托管的 DBaaS 使用\n\n战略性基础技术\n\n可部署在本地、混合云和多云环境中\n\nAWS、Azure、Google Cloud\n\nRedis\n\n仅限 AWS\n\nValkey\n\n—\n\n避免高昂的停机成本\n\nSLA 可用性\n\n自动化故障检测，小于 10 秒\n\n支持 RDB 快照\n\n使用 AOF 持久化每次操作\n\n99.999%\n\n---\n\n99.99%\n\n—\n\n---\n\n—\n\n花更少的钱，做更多的事\n\n可以利用 SSD 技术在规模上降低成本 [...] 在这里了解更多：从 ElastiCache 迁移到 Redis Cloud 的三种方法\n\n### 在集成和生态系统方面有哪些区别？ plus-white minus-white\n\n集成能力及其周边生态系统是缓存解决方案普及程度和有效性的关键因素。Redis 和 Amazon ElastiCache 都提供了一系列集成选项，但在生态系统支持和合作伙伴关系方面有所不同。值得注意的是，Redis 提供了 Redis Data Integration (RDI)，用于在 Redis 和记录系统数据库之间进行近乎实时的数据同步，这是 Memorystore 不提供的功能。\n\n### 这两种解决方案如何确保数据安全？ plus-white minus-white [...] ### 什么是 Amazon ElastiCache？ plus-white minus-white\n\nAmazon ElastiCache 是 Amazon Web Services (AWS) 提供的一项 Web 服务，用于在 AWS 中部署一个替代 Redis 的缓存服务。它由亚马逊完全托管，常用于基本缓存和会话存储。\n\n### ElastiCache 是 Redis 吗？ plus-white minus-white\n\n不，ElastiCache 不是 Redis。虽然 Amazon ElastiCache 提供基于开源 Redis 7.2 的托管服务，但亚马逊已选择不再授权未来版本的 Redis。Redis Cloud 是 AWS 上唯一提供未来版本 Redis 的服务。除了 Redis 7.2 的所有功能外，Redis Cloud 还包括 Redis Query Engine、Active-Active 地理复制以及许多其他高级功能。\n\n### Redis 和 ElastiCache 的主要区别是什么？ plus-white minus-white",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 17
+    },
+    {
+      "url": "file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md",
+      "title": "redis-vs-memcached",
+      "snippet": "# Redis vs Memcached\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis has richer data structures (lists, hashes, sets, sorted sets), persistence options, and built-in replication. Memcached is purely a key-value cache. For modern backend caching, Redis wins unless you have extreme memory efficiency requirements and only need simple get/set.\n\n## Known Contradictions\n\n### Memory efficiency\n- Position A: Memcached is more memory-efficient for simple key-value workloads\n-",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 18
+    },
+    {
+      "url": "file:///kb/chroma_kb/data/blogs/meilisearch-vs-elasticsearch.md",
+      "title": "meilisearch-vs-elasticsearch",
+      "snippet": "# Meilisearch vs Elasticsearch\n\n**Category**: Infrastructure\n**Expected winner**: Meilisearch\n\n## Analysis\n\nMeilisearch is dramatically simpler to deploy and maintain, with excellent relevance out of the box. Elasticsearch is more powerful for complex aggregations and petabyte-scale but is operational overkill for mid-size SaaS search.\n\n## Known Contradictions\n\n### Scalability\n- Position A: Elasticsearch scales horizontally to handle billions of documents\n- Position B: When you reach the scale w",
+      "source_type": "tech_blog",
+      "evidence_type": "citation",
+      "scores": {
+        "authority": 7,
+        "timeliness": 5,
+        "consistency": 4,
+        "verifiability": 6
+      },
+      "total_score": 5.7,
+      "supporting_sources": [],
+      "rank": 19
+    }
+  ],
+  "conflicts": [
+    {
+      "claim_a": "与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS",
+      "claim_b": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+      "source_a": {
+        "url": "https://aws.amazon.com/cn/elasticache/faqs",
+        "score": 5.7,
+        "snippet": "ElastiCache 兼容 Memcached 协议。因此，您可以使用标准的 Memcached 操作，如 get、set、incr 和 decr，使用方式也和您现有的 Memcached 部署完全相同。ElastiCache 支持文本和双字节协议。它还支持大多数标准的统计结果，也可通过 CloudWatch 以图形方式查看。因此，您可以无缝切换为使用 ElastiCache，无需重新编译或重新链接您的应用程序，您使用的库可以继续工作。要配置应用程序所访问的缓存服务器，请更新应用程序的 Memcached 配置文件，将我们为您预置的服务器（节点）端点包含在内。可以使用控制台中的“复制节点端点”选项或 DescribeCacheClusters API，获取端点列表。与任何迁移过程相同，我们建议您先对新的 ElastiCache 部署进行完整的测试，而后再完成当前解决方案的割接工作。 [...] Amazon ElastiCache 是一项 Web 服务，可简化云中符合 Valkey、Memcached 或 Redis OSS 协议的缓存的部署和运行。ElastiCache 支持您从快速的托管型内存系统检索信息，而不是依赖于速度较慢、基于磁盘的系统，从而提高了应用程序的性能。本服务可简化并减少内存环境的管理、监控和运营任务，让您的工程资源专注于应用程序开发。借助 ElastiCache，您不仅能够改善用户操作和查询的加载与响应时间，还可降低扩展 Web 应用程序所需的费用。 [...] ElastiCache 可以自动化执行运营分布式内存键值环境所需的常见管理任务。借助 ElastiCache，只需在 AWS 管理控制台内执行几个步骤，即可在几分钟内为您的应用程序架构添加缓存或内存层。ElastiCache 旨在自动保持高可用性，并提供 99.99% 可用性的服务水平协议（SLA）。ElastiCache 符合 Valkey、Memcached 和 Redis OSS 协议，因此，您在当前 Valkey、Memcached 或 Redis OSS 环境中使用的代码、应用程序和常用工具都能与本服务无缝协作。您无需预先投资，而且只需为所使用的资源付费。\n\n#### 什么是内存缓存，它对应用程序有何帮助？\n\nElastiCache 提供的内存缓存可以大幅改善许多高读取应用程序工作负载（如社交网络、游戏、媒体分享和问答门户）或计算密集型负载（如推荐引擎）的延迟性和吞吐量。内存缓存可将重要数据存储在内存中以实现低延迟访问，从而提高应用程序性能。缓存信息可能包括 I/O 密集型数据库查询的结果或计算密集型计算的结果。"
+      },
+      "source_b": {
+        "url": "https://redis.ac.cn/compare/elasticache",
+        "score": 5.7,
+        "snippet": "dot Redis 8 来了——它是开源的\n\nWhite Redis Logo  返回;)\n\n#### 比较\n\n# Redis 对比 ElastiCache 不要满足于现状\n\nElastiCache 不是 Redis。在 Redis 7.2 版本发布后，ElastiCache 不再基于 Redis 构建——这意味着您无法从原始的 Redis 专家那里获得 ElastiCache 的支持或产品创新。\n\n联系销售\n\n## Redis 和 ElastiCache 的比较\n\nAWS ElastiCache\n\n部署灵活性和架构\n\n可作为完全托管的 DBaaS 使用\n\n战略性基础技术\n\n可部署在本地、混合云和多云环境中\n\nAWS、Azure、Google Cloud\n\nRedis\n\n仅限 AWS\n\nValkey\n\n—\n\n避免高昂的停机成本\n\nSLA 可用性\n\n自动化故障检测，小于 10 秒\n\n支持 RDB 快照\n\n使用 AOF 持久化每次操作\n\n99.999%\n\n---\n\n99.99%\n\n—\n\n---\n\n—\n\n花更少的钱，做更多的事\n\n可以利用 SSD 技术在规模上降低成本 [...] 在这里了解更多：从 ElastiCache 迁移到 Redis Cloud 的三种方法\n\n### 在集成和生态系统方面有哪些区别？ plus-white minus-white\n\n集成能力及其周边生态系统是缓存解决方案普及程度和有效性的关键因素。Redis 和 Amazon ElastiCache 都提供了一系列集成选项，但在生态系统支持和合作伙伴关系方面有所不同。值得注意的是，Redis 提供了 Redis Data Integration (RDI)，用于在 Redis 和记录系统数据库之间进行近乎实时的数据同步，这是 Memorystore 不提供的功能。\n\n### 这两种解决方案如何确保数据安全？ plus-white minus-white [...] ### 什么是 Amazon ElastiCache？ plus-white minus-white\n\nAmazon ElastiCache 是 Amazon Web Services (AWS) 提供的一项 Web 服务，用于在 AWS 中部署一个替代 Redis 的缓存服务。它由亚马逊完全托管，常用于基本缓存和会话存储。\n\n### ElastiCache 是 Redis 吗？ plus-white minus-white\n\n不，ElastiCache 不是 Redis。虽然 Amazon ElastiCache 提供基于开源 Redis 7.2 的托管服务，但亚马逊已选择不再授权未来版本的 Redis。Redis Cloud 是 AWS 上唯一提供未来版本 Redis 的服务。除了 Redis 7.2 的所有功能外，Redis Cloud 还包括 Redis Query Engine、Active-Active 地理复制以及许多其他高级功能。\n\n### Redis 和 ElastiCache 的主要区别是什么？ plus-white minus-white"
+      },
+      "similarity": 0.707,
+      "resolution": "insufficient_data",
+      "confidence": "high",
+      "reasoning": "Both sources have identical scores (5.7/10) and authority (7), so the >=2.5-point rule does not apply. Both provide only citation-level evidence—an AWS ElastiCache FAQ and a Redis Enterprise tutorial—without code, benchmarks, or a direct conditional recommendation on Redis vs Memcached for the stated workload. Source B is also vendor-oriented, but neither source supplies enough substantive comparative evidence to declare one correct.",
+      "key_factor": "No score difference and only citation-level, non-comparative evidence from both sources.",
+      "arbiter_model": "deepseek-flash",
+      "evidence_collected": "",
+      "difference_type": "vendor_bias",
+      "difference_explanation": "Source A is AWS official documentation describing ElastiCache compatibility, while Source B is from Redis (a competitor) and frames ElastiCache negatively as 'not Redis,' so its perspective is vendor-biased."
+    },
+    {
+      "claim_a": "Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog",
+      "claim_b": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+      "source_a": {
+        "url": "https://aws.amazon.com/blogs/database/best-practices-for-sizing-your-amazon-elasticache-for-redis-clusters",
+        "score": 5.7,
+        "snippet": "of cores as well as sufficient network bandwidth capacity. For instance, suppose we have a key with a 4 KB value that, at peak times, is read at a rate of 10,000 requests per second. The extra bandwidth (above steady-state usage) required for any node in the cluster would be 300 Mbit/s. [...] For example, suppose our application requires a total of 1.2 Gbit/s bandwidth at steady state but occasionally sees a spike due to a hot key or hash slot. We could use either two shards based on m7g.large instances, or at the same cost, use a single shard based on an m7g.xlarge instance. In both cases, the total available bandwidth is 1.876 Gbit/s. However, with the two large instances, we use 600 Mbit/s at steady state on each instance, leaving only 337 Mbit/s extra capacity for single key [...] After you have identified the type of workload by its most dominant resource and have chosen the most appropriate instance type, it can be straightforward to create an effective auto scaling policy that can automatically detect and respond to usage changes and add additional shards. For instance, a CPU-bound workload can set policies based on the EngineCPUUtilization CloudWatch metric, a memory-bound workload can use the BytesUsedForCache metric, and a network-bound workload can use the"
+      },
+      "source_b": {
+        "url": "https://redis.ac.cn/compare/elasticache",
+        "score": 5.7,
+        "snippet": "dot Redis 8 来了——它是开源的\n\nWhite Redis Logo  返回;)\n\n#### 比较\n\n# Redis 对比 ElastiCache 不要满足于现状\n\nElastiCache 不是 Redis。在 Redis 7.2 版本发布后，ElastiCache 不再基于 Redis 构建——这意味着您无法从原始的 Redis 专家那里获得 ElastiCache 的支持或产品创新。\n\n联系销售\n\n## Redis 和 ElastiCache 的比较\n\nAWS ElastiCache\n\n部署灵活性和架构\n\n可作为完全托管的 DBaaS 使用\n\n战略性基础技术\n\n可部署在本地、混合云和多云环境中\n\nAWS、Azure、Google Cloud\n\nRedis\n\n仅限 AWS\n\nValkey\n\n—\n\n避免高昂的停机成本\n\nSLA 可用性\n\n自动化故障检测，小于 10 秒\n\n支持 RDB 快照\n\n使用 AOF 持久化每次操作\n\n99.999%\n\n---\n\n99.99%\n\n—\n\n---\n\n—\n\n花更少的钱，做更多的事\n\n可以利用 SSD 技术在规模上降低成本 [...] 在这里了解更多：从 ElastiCache 迁移到 Redis Cloud 的三种方法\n\n### 在集成和生态系统方面有哪些区别？ plus-white minus-white\n\n集成能力及其周边生态系统是缓存解决方案普及程度和有效性的关键因素。Redis 和 Amazon ElastiCache 都提供了一系列集成选项，但在生态系统支持和合作伙伴关系方面有所不同。值得注意的是，Redis 提供了 Redis Data Integration (RDI)，用于在 Redis 和记录系统数据库之间进行近乎实时的数据同步，这是 Memorystore 不提供的功能。\n\n### 这两种解决方案如何确保数据安全？ plus-white minus-white [...] ### 什么是 Amazon ElastiCache？ plus-white minus-white\n\nAmazon ElastiCache 是 Amazon Web Services (AWS) 提供的一项 Web 服务，用于在 AWS 中部署一个替代 Redis 的缓存服务。它由亚马逊完全托管，常用于基本缓存和会话存储。\n\n### ElastiCache 是 Redis 吗？ plus-white minus-white\n\n不，ElastiCache 不是 Redis。虽然 Amazon ElastiCache 提供基于开源 Redis 7.2 的托管服务，但亚马逊已选择不再授权未来版本的 Redis。Redis Cloud 是 AWS 上唯一提供未来版本 Redis 的服务。除了 Redis 7.2 的所有功能外，Redis Cloud 还包括 Redis Query Engine、Active-Active 地理复制以及许多其他高级功能。\n\n### Redis 和 ElastiCache 的主要区别是什么？ plus-white minus-white"
+      },
+      "similarity": 0.698,
+      "resolution": "insufficient_data",
+      "confidence": "medium",
+      "reasoning": "Source A and Source B both score 5.7/10 with authority 7 and citation evidence, so the score difference is 0 (<2.5) and neither has code or benchmark evidence. They also appear to address different contexts (Redis sizing best practices vs Redis Enterprise comparison), so no decisive evidence difference supports one over the other.",
+      "key_factor": "No score advantage and only citation-level evidence on both sides",
+      "arbiter_model": "deepseek-flash",
+      "evidence_collected": "",
+      "difference_type": "vendor_bias",
+      "difference_explanation": "Source B is a Redis-vendor comparison arguing ElastiCache is not really Redis and lacks Redis innovation/support, while Source A is AWS's own sizing guidance for ElastiCache for Redis; neither directly compares Redis vs Memcached, but Source B's obvious vendor bias contrasts with Source A's AWS operational perspective."
+    },
+    {
+      "claim_a": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+      "claim_b": "redis-vs-memcached",
+      "source_a": {
+        "url": "https://redis.ac.cn/compare/elasticache",
+        "score": 5.7,
+        "snippet": "dot Redis 8 来了——它是开源的\n\nWhite Redis Logo  返回;)\n\n#### 比较\n\n# Redis 对比 ElastiCache 不要满足于现状\n\nElastiCache 不是 Redis。在 Redis 7.2 版本发布后，ElastiCache 不再基于 Redis 构建——这意味着您无法从原始的 Redis 专家那里获得 ElastiCache 的支持或产品创新。\n\n联系销售\n\n## Redis 和 ElastiCache 的比较\n\nAWS ElastiCache\n\n部署灵活性和架构\n\n可作为完全托管的 DBaaS 使用\n\n战略性基础技术\n\n可部署在本地、混合云和多云环境中\n\nAWS、Azure、Google Cloud\n\nRedis\n\n仅限 AWS\n\nValkey\n\n—\n\n避免高昂的停机成本\n\nSLA 可用性\n\n自动化故障检测，小于 10 秒\n\n支持 RDB 快照\n\n使用 AOF 持久化每次操作\n\n99.999%\n\n---\n\n99.99%\n\n—\n\n---\n\n—\n\n花更少的钱，做更多的事\n\n可以利用 SSD 技术在规模上降低成本 [...] 在这里了解更多：从 ElastiCache 迁移到 Redis Cloud 的三种方法\n\n### 在集成和生态系统方面有哪些区别？ plus-white minus-white\n\n集成能力及其周边生态系统是缓存解决方案普及程度和有效性的关键因素。Redis 和 Amazon ElastiCache 都提供了一系列集成选项，但在生态系统支持和合作伙伴关系方面有所不同。值得注意的是，Redis 提供了 Redis Data Integration (RDI)，用于在 Redis 和记录系统数据库之间进行近乎实时的数据同步，这是 Memorystore 不提供的功能。\n\n### 这两种解决方案如何确保数据安全？ plus-white minus-white [...] ### 什么是 Amazon ElastiCache？ plus-white minus-white\n\nAmazon ElastiCache 是 Amazon Web Services (AWS) 提供的一项 Web 服务，用于在 AWS 中部署一个替代 Redis 的缓存服务。它由亚马逊完全托管，常用于基本缓存和会话存储。\n\n### ElastiCache 是 Redis 吗？ plus-white minus-white\n\n不，ElastiCache 不是 Redis。虽然 Amazon ElastiCache 提供基于开源 Redis 7.2 的托管服务，但亚马逊已选择不再授权未来版本的 Redis。Redis Cloud 是 AWS 上唯一提供未来版本 Redis 的服务。除了 Redis 7.2 的所有功能外，Redis Cloud 还包括 Redis Query Engine、Active-Active 地理复制以及许多其他高级功能。\n\n### Redis 和 ElastiCache 的主要区别是什么？ plus-white minus-white"
+      },
+      "source_b": {
+        "url": "file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md",
+        "score": 5.7,
+        "snippet": "# Redis vs Memcached\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis has richer data structures (lists, hashes, sets, sorted sets), persistence options, and built-in replication. Memcached is purely a key-value cache. For modern backend caching, Redis wins unless you have extreme memory efficiency requirements and only need simple get/set.\n\n## Known Contradictions\n\n### Memory efficiency\n- Position A: Memcached is more memory-efficient for simple key-value workloads\n-"
+      },
+      "similarity": 0.689,
+      "resolution": "insufficient_data",
+      "confidence": "high",
+      "reasoning": "Both sources have identical scores (5.7/10) and the same evidence type (citation), so neither dominates under the score-difference rule. Neither source provides code or benchmark evidence for the specific 80k QPS, 200 KB serialized session workload, nor for ElastiCache Redis vs Memcached managed failover/no-ops behavior. Source A compares Redis Enterprise vs ElastiCache rather than Redis vs Memcached, and Source B is generic redis-vs-memcached; both may inform feature tradeoffs but cannot decisively resolve the conditional selection without workload-specific testing.",
+      "key_factor": "No score or evidence-type advantage and no workload-specific benchmark evidence, so the arbitration rule requires insufficient_data.",
+      "arbiter_model": "deepseek-flash",
+      "evidence_collected": "",
+      "difference_type": "vendor_bias",
+      "difference_explanation": "Source A is Redis vendor content comparing Redis Enterprise against AWS ElastiCache rather than Memcached, while Source B is a generic Redis-vs-Memcached analysis favoring Redis, so the sources address different comparisons and Source A carries clear vendor bias."
+    }
+  ],
+  "conflict_check": {
+    "pairs_scanned": 3,
+    "pairs_arbitrated": 3,
+    "pairs_evidence": 0,
+    "pairs_arbitration_failed": 0,
+    "scan_outcomes": {
+      "difference": 3,
+      "no_difference": 10,
+      "unscanned": 0
+    },
+    "stage_timing_s": {
+      "scan_s": 32.81,
+      "initial_arbitration_s": 10.75
+    }
+  },
+  "evidence_chains": [
+    {
+      "conclusion": "ydf0509/funboost",
+      "sources": [
+        {
+          "url": "https://github.com/ydf0509/funboost",
+          "title": "ydf0509/funboost",
+          "snippet": "Stars: 894, Forks: 165, Updated: 2026-10-16T07:51:31Z, Description: pip install funboost，python全功能分布式函数调度框架,funboost的功能是全面性重量级，用户能想得到的功能99%全都有;funboost的使用方式是轻量级，只有@boost一行代码需要写。支持python所有类型的并发模式和一切知名消息队列中间件，支持如 celery dramatiq等框架整体作为funboost中间件，python函数加速器，框架包罗万象，用户能想到的控制功能全都有。一统编程思维，兼容50% python业务场景，适用范围广。只需要一行代码即可分布式执行python一切函数，99%用过funboost的pythoner 感受是　简易 方便 自由 强大，相见恨晚 。",
+          "score": 7.4
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache",
+      "sources": [
+        {
+          "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html",
+          "title": "Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache",
+          "snippet": "`HDEL`\n\n  Deletes one or more fields and their values from a hash. Deletes the hash if no fields remain.\n\n  Learn more\n `HEXISTS`\n\n  Determines whether a field exists in a hash.\n\n  Learn more\n `HGET`\n\n  Returns the value of a field in a hash.\n\n  Learn more\n `HGETALL`\n\n  Returns all fields and values in a hash.\n\n  Learn more\n `HINCRBY`\n\n  Increments the integer value of a field in a hash by a number. Uses 0 as initial value if the field doesn't exist.\n\n  Learn more\n `HINCRBYFLOAT` [...] Sets fields in a hash with per-field expiration times. Supports `NX` (set only if field does not exist) and `XX` (set only if field already exists) flags. Creates the key if it doesn't exist.\n\n  Learn more\n `HGETEX`\n\n  Returns the values of fields in a hash and optionally sets their expiration.\n\n  Learn more\n `HGETDEL`\n\n  Returns the values of fields in a hash and deletes them.\n\n  Learn more\n `HEXPIRE`\n\n  Sets the expiration time of a hash field in seconds.\n\n  Learn more\n `HEXPIREAT` [...] Sets the expiration time of a hash field to a Unix timestamp.\n\n  Learn more\n `HPEXPIRE`\n\n  Sets the expiration time of a hash field in milliseconds.\n\n  Learn more\n `HPEXPIREAT`\n\n  Sets the expiration time of a hash field to a Unix milliseconds timestamp.\n\n  Learn more\n `HPERSIST`\n\n  Removes the expiration time from a hash field.\n\n  Learn more\n `HTTL`\n\n  Returns the remaining time to live of a hash field in seconds.\n\n  Learn more\n `HPTTL`",
+          "score": 6.8
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "ElastiCache 文档历史记录 - Amazon ElastiCache",
+      "sources": [
+        {
+          "url": "https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html",
+          "title": "ElastiCache 文档历史记录 - Amazon ElastiCache",
+          "snippet": "| 对 Redis OSS 集群的支持 | ElastiCache 增加了对 Redis OSS 集群的支持（增强版）。使用 Redis OSS 集群的客户可将其数据分配到最多 15 个分片（节点组）。每个分片都支持每分片最多 5 个只读副本的复制。Redis OSS 集群自动失效转移用时约为早期版本的四分之一。  本版本包含重新设计的管理控制台，采用与业界用法一致的术语。  有关更多信息，请参阅下列内容：   比较 Memcached 和 Redis OSS  ElastiCache 组件和功能 – 请注意与“节点”、“分片”、“集群”和“复制”有关的部分。  ElastiCache 术语 | 2016 年 10 月 12 日 | [...] | 支持 Mem ElastiCache cached 按需垂直扩展和自动水平扩展 | ElastiCache 使用 Memcached 现在支持按需垂直缩放和自动水平扩展。这包括操作 `elasticache:ModifyCacheCluster` 的策略更新 | 2025 年 4 月 10 日 |\n| 支持 Val ElastiCache key | ElastiCache 现在支持 Valkey。Valkey 7.2.6 与 Redis OSS 7.2 兼容。有关更多信息，请参阅 Valkey。 | 2024 年 10 月 8 日 |\n|  | ElastiCache 现在支持 Si ze 灵活预留节点。有关更多信息，请参阅 Amazon ElastiCache 定价。 | 2024 年 10 月 1 日 | [...] | 对 Memcach ElastiCache ed 1.6.22 的支持 | ElastiCache 适用于 Memcached 现在支持 Memcached 1.6.22。它包括从版本 1.6.18 开始的累积错误修复。有关更多信息，请参阅 Memcached 版本 1.6.22。 | 2024 年 1 月 10 日 |\n| ElastiCache 适用于 Redis 的 OSS 增加了对额外 c7gN 节点大小的支持 | ElastiCache 适用于 Redis 的 OSS 增加了对额外 c7gN 节点大小的支持。 | 2024 年 1 月 10 日 |",
+          "score": 6.8
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service",
+      "sources": [
+        {
+          "url": "https://docs.aws.amazon.com/ses/latest/dg/configure-sns-notifications.html",
+          "title": "Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service",
+          "snippet": "",
+          "has_body": false,
+          "score": 6.8
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "Memcached — Official Documentation",
+      "sources": [
+        {
+          "url": "https://memcached.org",
+          "title": "Memcached — Official Documentation",
+          "snippet": "",
+          "has_body": false,
+          "score": 6.8
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "link1st/go-stress-testing",
+      "sources": [
+        {
+          "url": "https://github.com/link1st/go-stress-testing",
+          "title": "link1st/go-stress-testing",
+          "snippet": "Stars: 4407, Forks: 832, Updated: 2026-10-16T00:58:27Z, Description: go 实现的压测工具，ab、locust、Jmeter压测工具介绍【单台机器100w连接压测实战】",
+          "score": 6.6
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "kanwangzjm/funiture",
+      "sources": [
+        {
+          "url": "https://github.com/kanwangzjm/funiture",
+          "title": "kanwangzjm/funiture",
+          "snippet": "Stars: 1863, Forks: 779, Updated: 2026-10-02T15:14:37Z, Description:  github: https://github.com/kanwangzjm/funiture, spring项目，权限管理、系统监控、定时任务动态调整、qps限制、sql监控(邮件)、验证码服务、短链接服务、动态配置等",
+          "score": 6.6
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "xiaojiaqi/10billionhongbaos",
+      "sources": [
+        {
+          "url": "https://github.com/xiaojiaqi/10billionhongbaos",
+          "title": "xiaojiaqi/10billionhongbaos",
+          "snippet": "Stars: 1690, Forks: 382, Updated: 2026-10-13T22:09:22Z, Description: golang 实现单机支持100万用户，同时模拟了2015年微信红包的1400万QPS的场景，让服务器在压力下，轻松地完成业务。",
+          "score": 6.6
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "Gooddbird/tinyrpc",
+      "sources": [
+        {
+          "url": "https://github.com/Gooddbird/tinyrpc",
+          "title": "Gooddbird/tinyrpc",
+          "snippet": "Stars: 1663, Forks: 236, Updated: 2026-09-30T06:31:14Z, Description: c++ async rpc framework. 14w+qps.",
+          "score": 6.6
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "monitoringartist/grafana-aws-cloudwatch-dashboards",
+      "sources": [
+        {
+          "url": "https://github.com/monitoringartist/grafana-aws-cloudwatch-dashboards",
+          "title": "monitoringartist/grafana-aws-cloudwatch-dashboards",
+          "snippet": "Stars: 2271, Forks: 799, Updated: 2026-10-14T08:19:10Z, Description: :cloud: 40+ Grafana dashboards for AWS CloudWatch metrics: EC2, Lambda, S3, ELB, EMR, EBS, SNS, SES, SQS, RDS, EFS, ElastiCache, Billing, API Gateway, VPN, Step Functions, Route 53, CodeBuild, ...",
+          "score": 6.6
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "aws-samples/custom-lens-wa-hub",
+      "sources": [
+        {
+          "url": "https://github.com/aws-samples/custom-lens-wa-hub",
+          "title": "aws-samples/custom-lens-wa-hub",
+          "snippet": "Stars: 2089, Forks: 133, Updated: 2026-10-16T05:58:03Z, Description: Provide JSON file template that demonstrate how to create customize Well-Architected reviews using Custom lenses.",
+          "score": 6.6
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "redis-vs-postgresql",
+      "sources": [
+        {
+          "url": "file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md",
+          "title": "redis-vs-postgresql",
+          "snippet": "# Redis vs PostgreSQL\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis's in-memory storage, TTL-based expiry, and sub-millisecond latency make it the ideal session store. PostgreSQL can store sessions but disk I/O per request adds unnecessary latency for ephemeral session data.\n\n## Known Contradictions\n\n### Infrastructure simplicity\n- Position A: Using PostgreSQL for sessions means one less service to manage\n- Position B: The latency penalty of disk-based session look",
+          "score": 6.1
+        }
+      ],
+      "evidence_strength": "moderate",
+      "disputed": false
+    },
+    {
+      "conclusion": "Amazon ElastiCache Pricing",
+      "sources": [
+        {
+          "url": "https://aws.amazon.com/elasticache/pricing",
+          "title": "Amazon ElastiCache Pricing",
+          "snippet": "Scenario: You have a straightforward database caching use case that uses Amazon ElastiCache for Memcached. You require high availability for your cache to avoid application performance degradation in case of a node or AZ failure. You estimate that the application has a total cache dataset size of 20 GB in the idle state and grows to 150 GB during peaks. Your application accesses this cache using Memcached set and get commands to read and write objects of 500 bytes in size. You estimate that [...] Scenario: You are building an application that requires a cache that provides fast data access to enable a responsive, real-time user experience for an e-commerce website. You estimate that the application has a total cache dataset size of 10 GB in the idle state and grows to 100 GB during peaks for two hours during the day. Your application accesses this cache using Valkey and Redis OSS SET and GET commands to read and write objects of 500 bytes in size. You estimate that your typical request [...] Minimum metered data storage: 100 MB per cache for ElastiCache Serverless for Valkey and 1 GB per cache for ElastiCache for Memcached and ElastiCache for Redis OSS.\n\n## On-demand nodes",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": false
+    },
+    {
+      "conclusion": "Amazon ElastiCache 定价",
+      "sources": [
+        {
+          "url": "https://aws.amazon.com/cn/elasticache/pricing",
+          "title": "Amazon ElastiCache 定价",
+          "snippet": "场景：您有一个使用 Amazon ElastiCache for Memcached 的简单数据库缓存使用案例。您需要缓存具有高可用性，以避免在节点或可用区发生故障时应用程序性能下降。您估计应用程序在空闲状态下的缓存数据集总大小为 20GB，并在高峰期间增长到 150GB。您的应用程序使用 Memcached set 和 get 命令访问此缓存，以读取和写入大小为 500 字节的对象。您估计典型的请求率为每秒 10 万个请求，每天两个小时内，每日峰值为每秒 50 万个请求。您选择在美国东部（弗吉尼亚州北部）部署工作负载。\n\n决定：由于其简单性，您选择开始使用 ElastiCache Serverless 构建应用程序。您还可以选择通过使用按需节点配置自己的集群来运行工作负载。由于您需要高可用性，因此您需要运行两个 ElastiCache for Memcached 集群，并从您的应用程序向这两个集群写入数据。您可以比较这两个选项的定价。\n\n无服务器选项 [...] ElastiCache 处理单元（ECPU）：您需要为 ElastiCache 处理单元（ECPU）中的 ElastiCache Serverless 请求付费，该单元包括 vCPU 时间和传输的数据。对于传输的每千字节（KB）数据，读取和写入需要 1 个 ECPU。例如，传输 3.2 KB 数据的 GET 命令将消耗 3.2 个 ECPU。需要额外 vCPU 时间或传输超过 1KB 数据的命令将按比例消耗更多 ECPU。\n\n最低计量数据存储：ElastiCache Serverless for Valkey 每个缓存 100MB，ElastiCache for Memcached 和 ElastiCache for Redis OSS 每个缓存 1GB。\n\n## 按需节点\n\n您可以通过选择缓存节点类型和缓存节点数量来设计自己的 ElastiCache 集群。节点是 ElastiCache 集群的最小构建块。通常，与其等效上一代节点类型相比，最新一代的类型可按较低成本提供更多内存和算力。如需了解应使用哪种节点大小，请参阅支持的节点类型和选择您的节点大小。 [...] ### ElastiCache 处理单元（ECPU）如何计算？\n\n您需要为 ECPU 中的 ElastiCache Serverless 请求付费。您的请求消耗的 ECPU 数量取决于 vCPU 所用时间和传输的数据量。每个简单的读取和写入（例如 Valkey 和 Redis OSS GET 和 SET 命令或 Memcached get 和 set 命令）每传输一千字节（KB）数据需要 1 个 ECPU。例如，传输 3.2 KiB 数据的 GET 命令将消耗 3.2 个 ECPU。\n\n某些对内存数据结构进行操作的 Valkey 和 Redis OSS 命令消耗的 vCPU 时间可能比 GET 或 SET 命令更多。ElastiCache 根据命令所花费的 vCPU 时间与 Redis OSS SET 或 GET 命令所花费的 vCPU 时间的基准进行比较，计算消耗的 ECPU 数量。例如，一个 SORT 命令所花费的 vCPU 时间是 SET 或 GET 命令所用时间的三倍，并且传输 2 KiB 数据，这将消耗 3 个 ECPU。",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": false
+    },
+    {
+      "conclusion": "Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog",
+      "sources": [
+        {
+          "url": "https://aws.amazon.com/blogs/database/best-practices-for-sizing-your-amazon-elasticache-for-redis-clusters",
+          "title": "Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog",
+          "snippet": "of cores as well as sufficient network bandwidth capacity. For instance, suppose we have a key with a 4 KB value that, at peak times, is read at a rate of 10,000 requests per second. The extra bandwidth (above steady-state usage) required for any node in the cluster would be 300 Mbit/s. [...] For example, suppose our application requires a total of 1.2 Gbit/s bandwidth at steady state but occasionally sees a spike due to a hot key or hash slot. We could use either two shards based on m7g.large instances, or at the same cost, use a single shard based on an m7g.xlarge instance. In both cases, the total available bandwidth is 1.876 Gbit/s. However, with the two large instances, we use 600 Mbit/s at steady state on each instance, leaving only 337 Mbit/s extra capacity for single key [...] After you have identified the type of workload by its most dominant resource and have chosen the most appropriate instance type, it can be straightforward to create an effective auto scaling policy that can automatically detect and respond to usage changes and add additional shards. For instance, a CPU-bound workload can set policies based on the EngineCPUUtilization CloudWatch metric, a memory-bound workload can use the BytesUsedForCache metric, and a network-bound workload can use the",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": true
+    },
+    {
+      "conclusion": "与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS",
+      "sources": [
+        {
+          "url": "https://aws.amazon.com/cn/elasticache/faqs",
+          "title": "与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS",
+          "snippet": "ElastiCache 兼容 Memcached 协议。因此，您可以使用标准的 Memcached 操作，如 get、set、incr 和 decr，使用方式也和您现有的 Memcached 部署完全相同。ElastiCache 支持文本和双字节协议。它还支持大多数标准的统计结果，也可通过 CloudWatch 以图形方式查看。因此，您可以无缝切换为使用 ElastiCache，无需重新编译或重新链接您的应用程序，您使用的库可以继续工作。要配置应用程序所访问的缓存服务器，请更新应用程序的 Memcached 配置文件，将我们为您预置的服务器（节点）端点包含在内。可以使用控制台中的“复制节点端点”选项或 DescribeCacheClusters API，获取端点列表。与任何迁移过程相同，我们建议您先对新的 ElastiCache 部署进行完整的测试，而后再完成当前解决方案的割接工作。 [...] Amazon ElastiCache 是一项 Web 服务，可简化云中符合 Valkey、Memcached 或 Redis OSS 协议的缓存的部署和运行。ElastiCache 支持您从快速的托管型内存系统检索信息，而不是依赖于速度较慢、基于磁盘的系统，从而提高了应用程序的性能。本服务可简化并减少内存环境的管理、监控和运营任务，让您的工程资源专注于应用程序开发。借助 ElastiCache，您不仅能够改善用户操作和查询的加载与响应时间，还可降低扩展 Web 应用程序所需的费用。 [...] ElastiCache 可以自动化执行运营分布式内存键值环境所需的常见管理任务。借助 ElastiCache，只需在 AWS 管理控制台内执行几个步骤，即可在几分钟内为您的应用程序架构添加缓存或内存层。ElastiCache 旨在自动保持高可用性，并提供 99.99% 可用性的服务水平协议（SLA）。ElastiCache 符合 Valkey、Memcached 和 Redis OSS 协议，因此，您在当前 Valkey、Memcached 或 Redis OSS 环境中使用的代码、应用程序和常用工具都能与本服务无缝协作。您无需预先投资，而且只需为所使用的资源付费。\n\n#### 什么是内存缓存，它对应用程序有何帮助？\n\nElastiCache 提供的内存缓存可以大幅改善许多高读取应用程序工作负载（如社交网络、游戏、媒体分享和问答门户）或计算密集型负载（如推荐引擎）的延迟性和吞吐量。内存缓存可将重要数据存储在内存中以实现低延迟访问，从而提高应用程序性能。缓存信息可能包括 I/O 密集型数据库查询的结果或计算密集型计算的结果。",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": true
+    },
+    {
+      "conclusion": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+      "sources": [
+        {
+          "url": "https://redis.ac.cn/compare/elasticache",
+          "title": "Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程",
+          "snippet": "dot Redis 8 来了——它是开源的\n\nWhite Redis Logo  返回;)\n\n#### 比较\n\n# Redis 对比 ElastiCache 不要满足于现状\n\nElastiCache 不是 Redis。在 Redis 7.2 版本发布后，ElastiCache 不再基于 Redis 构建——这意味着您无法从原始的 Redis 专家那里获得 ElastiCache 的支持或产品创新。\n\n联系销售\n\n## Redis 和 ElastiCache 的比较\n\nAWS ElastiCache\n\n部署灵活性和架构\n\n可作为完全托管的 DBaaS 使用\n\n战略性基础技术\n\n可部署在本地、混合云和多云环境中\n\nAWS、Azure、Google Cloud\n\nRedis\n\n仅限 AWS\n\nValkey\n\n—\n\n避免高昂的停机成本\n\nSLA 可用性\n\n自动化故障检测，小于 10 秒\n\n支持 RDB 快照\n\n使用 AOF 持久化每次操作\n\n99.999%\n\n---\n\n99.99%\n\n—\n\n---\n\n—\n\n花更少的钱，做更多的事\n\n可以利用 SSD 技术在规模上降低成本 [...] 在这里了解更多：从 ElastiCache 迁移到 Redis Cloud 的三种方法\n\n### 在集成和生态系统方面有哪些区别？ plus-white minus-white\n\n集成能力及其周边生态系统是缓存解决方案普及程度和有效性的关键因素。Redis 和 Amazon ElastiCache 都提供了一系列集成选项，但在生态系统支持和合作伙伴关系方面有所不同。值得注意的是，Redis 提供了 Redis Data Integration (RDI)，用于在 Redis 和记录系统数据库之间进行近乎实时的数据同步，这是 Memorystore 不提供的功能。\n\n### 这两种解决方案如何确保数据安全？ plus-white minus-white [...] ### 什么是 Amazon ElastiCache？ plus-white minus-white\n\nAmazon ElastiCache 是 Amazon Web Services (AWS) 提供的一项 Web 服务，用于在 AWS 中部署一个替代 Redis 的缓存服务。它由亚马逊完全托管，常用于基本缓存和会话存储。\n\n### ElastiCache 是 Redis 吗？ plus-white minus-white\n\n不，ElastiCache 不是 Redis。虽然 Amazon ElastiCache 提供基于开源 Redis 7.2 的托管服务，但亚马逊已选择不再授权未来版本的 Redis。Redis Cloud 是 AWS 上唯一提供未来版本 Redis 的服务。除了 Redis 7.2 的所有功能外，Redis Cloud 还包括 Redis Query Engine、Active-Active 地理复制以及许多其他高级功能。\n\n### Redis 和 ElastiCache 的主要区别是什么？ plus-white minus-white",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": true
+    },
+    {
+      "conclusion": "redis-vs-memcached",
+      "sources": [
+        {
+          "url": "file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md",
+          "title": "redis-vs-memcached",
+          "snippet": "# Redis vs Memcached\n\n**Category**: Infrastructure\n**Expected winner**: Redis\n\n## Analysis\n\nRedis has richer data structures (lists, hashes, sets, sorted sets), persistence options, and built-in replication. Memcached is purely a key-value cache. For modern backend caching, Redis wins unless you have extreme memory efficiency requirements and only need simple get/set.\n\n## Known Contradictions\n\n### Memory efficiency\n- Position A: Memcached is more memory-efficient for simple key-value workloads\n-",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": true
+    },
+    {
+      "conclusion": "meilisearch-vs-elasticsearch",
+      "sources": [
+        {
+          "url": "file:///kb/chroma_kb/data/blogs/meilisearch-vs-elasticsearch.md",
+          "title": "meilisearch-vs-elasticsearch",
+          "snippet": "# Meilisearch vs Elasticsearch\n\n**Category**: Infrastructure\n**Expected winner**: Meilisearch\n\n## Analysis\n\nMeilisearch is dramatically simpler to deploy and maintain, with excellent relevance out of the box. Elasticsearch is more powerful for complex aggregations and petabyte-scale but is operational overkill for mid-size SaaS search.\n\n## Known Contradictions\n\n### Scalability\n- Position A: Elasticsearch scales horizontally to handle billions of documents\n- Position B: When you reach the scale w",
+          "score": 5.7
+        }
+      ],
+      "evidence_strength": "weak",
+      "disputed": false
+    }
+  ],
+  "final_recommendation": {
+    "winner": "Amazon ElastiCache for Redis",
+    "winner_rationale": "结构化操作是硬约束：ElastiCache for Redis OSS 明确支持 hash 族命令 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]，集群模式提供自动失效转移 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；而 Memcached 是纯 KV，无法承载集合去重 [Source: redis-vs-memcached]。",
+    "recommendation": "推荐 Amazon ElastiCache for Redis [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]。决定性约束是「需要对在线用户集合与去重计数做 hash/list 结构化操作」：ElastiCache 文档确认 Redis OSS 支持 HDEL/HGET/HINCRBY 等 hash 族命令 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]，而 Memcached 侧只被描述为 get/set/incr/decr 的标准协议 [Source: 与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS]，公开对比也指出 Memcached 是纯键值、没有 list/hash/set [Source: redis-vs-memcached]。其次是无人工介入的故障切换：Redis OSS 集群模式支持最多 15 个分片、每分片 5 个只读副本，自动失效转移耗时约为早期版本的四分之一 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；Memcached 虽已支持按需垂直扩缩和自动水平扩缩 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]，但简单 KV 模型无法承载集合去重。第三，200 KB × 8 万 QPS 意味着极高网络吞吐，必须依靠分片加副本横向扩展，具体分片数与实例规格需实测——官方 sizing 博客给出 4 KB 值 @1 万 QPS 需约 300 Mbit/s 的带宽估算 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。只有当你放弃集合类操作、仅保留 get/set 且极致追求内存效率时，才选 Memcached [Source: redis-vs-memcached]。",
+    "ranked_options": [
+      {
+        "name": "Amazon ElastiCache for Redis",
+        "rank": 1,
+        "constraint_fit": "high",
+        "constraint_fit_reason": "同时满足结构化 hash/list 操作 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]、自动分片与失效转移 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]，且 AWS 原生托管、无需专职运维 [Source: 与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS]。",
+        "rationale": "hash/set 操作与在线用户去重计数是本场景的硬需求，只有 Redis OSS 的命令族覆盖 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]；集群模式的自动失效转移与只读副本满足“不人工介入”要求 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；会话缓存的低延迟内存语义也与其定位一致 [Source: redis-vs-postgresql]。",
+        "key_strength": "官方命令列表确认 hash 族完整可用（HDEL/HGET/HINCRBY/字段级过期）[Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]。",
+        "key_weakness": "200 KB 大值在高 QPS 下的带宽与分片成本需实测，官方 sizing 数据基于 4 KB 小值 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。"
+      },
+      {
+        "name": "Amazon ElastiCache for Memcached",
+        "rank": 2,
+        "constraint_fit": "low",
+        "constraint_fit_reason": "仅有 get/set/incr/decr 简单键值协议 [Source: 与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS]，无法对单个键做字段级或集合操作 [Source: redis-vs-memcached]。",
+        "rationale": "在纯 KV 缓存与内存效率场景下成立 [Source: redis-vs-memcached]，且已支持按需垂直扩缩和自动水平扩缩 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；但本场景需要在线用户集合与去重计数，缺失 list/hash/set 使其不具备承接能力 [Source: redis-vs-memcached]，故排后。",
+        "key_strength": "简单 KV 语义清晰，定价文档给出大流量 set/get 场景的成熟计费模型 [Source: Amazon ElastiCache Pricing]。",
+        "key_weakness": "不支持集合/哈希类结构化操作，无法做字段级或集合去重 [Source: redis-vs-memcached]。"
+      }
+    ],
+    "trade_offs": [
+      {
+        "dimension": "数据结构能力 [[16]]",
+        "finding": "Redis 提供 list/hash/set/sorted set 与复制，Memcached 仅为纯键值 [Source: redis-vs-memcached]；ElastiCache 侧 hash 命令族已在官方支持列表中列出 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]。",
+        "impact": "需要在单键上做字段级更新或集合去重的在线用户统计场景。"
+      },
+      {
+        "dimension": "内存效率与成本 [[16]]",
+        "finding": "公开对比提到 Memcached 在极致内存效率的简单 KV 上可能更省 [Source: redis-vs-memcached]；但 ElastiCache Serverless 按传输的每千字节计 1 个 ECPU，官方示例中传输 3.2 KB 数据的 GET 命令消耗 3.2 个 ECPU，200 KB 大值成本会被放大 [Source: Amazon ElastiCache 定价]。",
+        "impact": "会话对象体积大且 QPS 高、对单位成本敏感的成本负责人。"
+      },
+      {
+        "dimension": "可用性与自动故障切换 [[3]]",
+        "finding": "Redis OSS 集群模式支持最多 15 分片、每分片 5 个只读副本，自动失效转移约为此前版本的四分之一 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；Memcached 支持自动水平扩缩但架构上无同构复制表述 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]。",
+        "impact": "无专职运维、要求节点故障与扩容全自动的 3 人后端团队。"
+      },
+      {
+        "dimension": "会话缓存定位 [[10]]",
+        "finding": "内存型存储加 TTL 过期被视为理想的会话存储，磁盘型方案每条请求的 I/O 会引入额外延迟 [Source: redis-vs-postgresql]。",
+        "impact": "以 Django 会话为主的读多写少路径设计者。"
+      }
+    ],
+    "evidence_summary": "证据整体偏弱：无 strong 链，仅若干 moderate/weak 官方文档与博客，且 Memcached 官方文档与 SES/SNS 两条链无正文，构成材料缺口。可用事实集中在三点：ElastiCache 官方命令列表确认 Redis OSS 支持 hash 族命令 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]；文档历史记录表明 Redis OSS 集群模式支持 15 分片、每分片 5 副本且自动失效转移更快，Memcached 已支持按需垂直扩缩与自动水平扩缩 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；FAQ 与公开对比指出 Memcached 为纯 KV、仅 get/set/incr/decr 。带宽估算来自被标注 disputed 的官方 sizing 博客 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]，Redis Enterprise 与 ElastiCache 的对比属厂商立场、存在争议 [Source: Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程]，不宜作为选型依据。",
+    "confidence": "medium",
+    "confidence_rationale": "结构化操作与自动失效转移这两条关键结论有官方文档支撑 ，但无 strong 链、无一手基准确认 200 KB 大值在 8 万 QPS 下的表现 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。",
+    "unresolved_questions": [
+      "200 KB 值在 8 万 QPS 读下的实际网络吞吐与节点规格/分片数，官方 sizing 示例只覆盖 4 KB 值 [[13]]",
+      "ElastiCache for Memcached 是否具备跨节点复制与自动失效转移的完整语义，现有证据仅提及自动扩缩 [[3]]",
+      "是否应将会话对象拆分或压缩以降低每请求传输量与 Serverless ECPU 成本 [[12]]",
+      "缓存整体失效时回源 RDS 的限流与预热策略应如何设计，证据中无相关数据 [[3]]"
+    ],
+    "scene_fit_note": "场景的三类访问中，集合/去重与前缀计数直接指向 Redis 的 hash 与 set 能力 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]；无专职运维由托管集群的自动失效转移与副本承接 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；AWS 既有栈与 Python 客户端可直接对接标准协议 [Source: 与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS]。唯一需实测的是 200 KB × 8 万 QPS 的带宽与成本 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。"
+  },
+  "report": "# 为在线会话与热点数据缓存层做技术选型：在「缓存值以序列化的会话对象为主，单条约 200 KB；需要对在线用户集合与去重计数做 hash/list 这类结构化操作；缓存允许丢失，源数据在 RDS，回源可接受；峰值读约 8 万 QPS、读写比约 20:1；团队为 3 名 Python 后端，已在用 AWS 且没有专职运维；要求扩容与节点故障切换不需要人工介入」的约束下，应选择 Amazon ElastiCache for Redis 还是 Amazon ElastiCache for Memcached？请给出条件化推荐：在什么情况下选哪一个，并说明哪些结论有官方文档或公开基准支撑、哪些需要实测才能确认。 — 技术决策简报\n\n## What: 了解候选方案\n\n### Amazon ElastiCache for Redis\n- 场景适配: high\n- 理由: hash/set 操作与在线用户去重计数是本场景的硬需求，只有 Redis OSS 的命令族覆盖 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]；集群模式的自动失效转移与只读副本满足“不人工介入”要求 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；会话缓存的低延迟内存语义也与其定位一致 [Source: redis-vs-postgresql]。\n- 优势: 官方命令列表确认 hash 族完整可用（HDEL/HGET/HINCRBY/字段级过期）[Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]。\n- 局限: 200 KB 大值在高 QPS 下的带宽与分片成本需实测，官方 sizing 数据基于 4 KB 小值 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。\n\n### Amazon ElastiCache for Memcached\n- 场景适配: low\n- 理由: 在纯 KV 缓存与内存效率场景下成立 [Source: redis-vs-memcached]，且已支持按需垂直扩缩和自动水平扩缩 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；但本场景需要在线用户集合与去重计数，缺失 list/hash/set 使其不具备承接能力 [Source: redis-vs-memcached]，故排后。\n- 优势: 简单 KV 语义清晰，定价文档给出大流量 set/get 场景的成熟计费模型 [Source: Amazon ElastiCache Pricing]。\n- 局限: 不支持集合/哈希类结构化操作，无法做字段级或集合去重 [Source: redis-vs-memcached]。\n\n**引用来源**\n\n- [Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html)\n- [ElastiCache 文档历史记录 - Amazon ElastiCache](https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html)\n- [redis-vs-postgresql](file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md)\n- [与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS](https://aws.amazon.com/cn/elasticache/faqs)\n- [Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog](https://aws.amazon.com/blogs/database/best-practices-for-sizing-your-amazon-elasticache-for-redis-clusters)\n- [redis-vs-memcached](file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md)\n- [Amazon ElastiCache Pricing](https://aws.amazon.com/elasticache/pricing)\n\n**导航链接（无正文，不能作为依据）**\n\n- [Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service](https://docs.aws.amazon.com/ses/latest/dg/configure-sns-notifications.html)\n- [Memcached — Official Documentation](https://memcached.org)\n\n## Why: 证据驱动的判断\n\n### ydf0509/funboost\n**证据强度:** moderate\n- [ydf0509/funboost](https://github.com/ydf0509/funboost) — score: 7.4\n\n### Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache\n**证据强度:** moderate\n- [Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html) — score: 6.8\n\n### ElastiCache 文档历史记录 - Amazon ElastiCache\n**证据强度:** moderate\n- [ElastiCache 文档历史记录 - Amazon ElastiCache](https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html) — score: 6.8\n\n### Configuring Amazon SNS notifications for Amazon SES - Amazon Simple Email Service\n**证据强度:** moderate\n- 无正文来源；本条无法支撑论断，记为资料缺口。\n\n### Memcached — Official Documentation\n**证据强度:** moderate\n- 无正文来源；本条无法支撑论断，记为资料缺口。\n\n### link1st/go-stress-testing\n**证据强度:** moderate\n- [link1st/go-stress-testing](https://github.com/link1st/go-stress-testing) — score: 6.6\n\n### kanwangzjm/funiture\n**证据强度:** moderate\n- [kanwangzjm/funiture](https://github.com/kanwangzjm/funiture) — score: 6.6\n\n### xiaojiaqi/10billionhongbaos\n**证据强度:** moderate\n- [xiaojiaqi/10billionhongbaos](https://github.com/xiaojiaqi/10billionhongbaos) — score: 6.6\n\n### Gooddbird/tinyrpc\n**证据强度:** moderate\n- [Gooddbird/tinyrpc](https://github.com/Gooddbird/tinyrpc) — score: 6.6\n\n### monitoringartist/grafana-aws-cloudwatch-dashboards\n**证据强度:** moderate\n- [monitoringartist/grafana-aws-cloudwatch-dashboards](https://github.com/monitoringartist/grafana-aws-cloudwatch-dashboards) — score: 6.6\n\n*(+9 more evidence chains — see full report via API)*\n\n## 争议与裁决\n\n### 争议 1: insufficient_data\n- 主张 A: [与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS](https://aws.amazon.com/cn/elasticache/faqs) (score: 5.7)\n- 主张 B: [Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程](https://redis.ac.cn/compare/elasticache) (score: 5.7)\n- 裁决: Both sources have identical scores (5.7/10) and authority (7), so the >=2.5-point rule does not apply. Both provide only citation-level evidence—an AWS ElastiCache FAQ and a Redis Enterprise tutorial—without code, benchmarks, or a direct conditional recommendation on Redis vs Memcached for the stated workload. Source B is also vendor-oriented, but neither source supplies enough substantive comparative evidence to declare one correct.\n- 关键因素: No score difference and only citation-level, non-comparative evidence from both sources.\n- 置信度: high\n\n### 争议 2: insufficient_data\n- 主张 A: [Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog](https://aws.amazon.com/blogs/database/best-practices-for-sizing-your-amazon-elasticache-for-redis-clusters) (score: 5.7)\n- 主张 B: [Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程](https://redis.ac.cn/compare/elasticache) (score: 5.7)\n- 裁决: Source A and Source B both score 5.7/10 with authority 7 and citation evidence, so the score difference is 0 (<2.5) and neither has code or benchmark evidence. They also appear to address different contexts (Redis sizing best practices vs Redis Enterprise comparison), so no decisive evidence difference supports one over the other.\n- 关键因素: No score advantage and only citation-level evidence on both sides\n- 置信度: medium\n\n### 争议 3: insufficient_data\n- 主张 A: [Redis Enterprise vs. AWS ElastiCache - 了解差异 - Redis 教程](https://redis.ac.cn/compare/elasticache) (score: 5.7)\n- 主张 B: [redis-vs-memcached](file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md) (score: 5.7)\n- 裁决: Both sources have identical scores (5.7/10) and the same evidence type (citation), so neither dominates under the score-difference rule. Neither source provides code or benchmark evidence for the specific 80k QPS, 200 KB serialized session workload, nor for ElastiCache Redis vs Memcached managed failover/no-ops behavior. Source A compares Redis Enterprise vs ElastiCache rather than Redis vs Memcached, and Source B is generic redis-vs-memcached; both may inform feature tradeoffs but cannot decisively resolve the conditional selection without workload-specific testing.\n- 关键因素: No score or evidence-type advantage and no workload-specific benchmark evidence, so the arbitration rule requires insufficient_data.\n- 置信度: high\n\n## How: 行动路径\n\n**Winner: Amazon ElastiCache for Redis**\n*结构化操作是硬约束：ElastiCache for Redis OSS 明确支持 hash 族命令 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]，集群模式提供自动失效转移 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；而 Memcached 是纯 KV，无法承载集合去重 [Source: redis-vs-memcached]。*\n\n**置信度:** medium\n*结构化操作与自动失效转移这两条关键结论有官方文档支撑 ，但无 strong 链、无一手基准确认 200 KB 大值在 8 万 QPS 下的表现 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。*\n\n**建议:** 推荐 Amazon ElastiCache for Redis [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]。决定性约束是「需要对在线用户集合与去重计数做 hash/list 结构化操作」：ElastiCache 文档确认 Redis OSS 支持 HDEL/HGET/HINCRBY 等 hash 族命令 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]，而 Memcached 侧只被描述为 get/set/incr/decr 的标准协议 [Source: 与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS]，公开对比也指出 Memcached 是纯键值、没有 list/hash/set [Source: redis-vs-memcached]。其次是无人工介入的故障切换：Redis OSS 集群模式支持最多 15 个分片、每分片 5 个只读副本，自动失效转移耗时约为早期版本的四分之一 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；Memcached 虽已支持按需垂直扩缩和自动水平扩缩 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]，但简单 KV 模型无法承载集合去重。第三，200 KB × 8 万 QPS 意味着极高网络吞吐，必须依靠分片加副本横向扩展，具体分片数与实例规格需实测——官方 sizing 博客给出 4 KB 值 @1 万 QPS 需约 300 Mbit/s 的带宽估算 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。只有当你放弃集合类操作、仅保留 get/set 且极致追求内存效率时，才选 Memcached [Source: redis-vs-memcached]。\n\n### 方案排名\n- **#1 Amazon ElastiCache for Redis**: hash/set 操作与在线用户去重计数是本场景的硬需求，只有 Redis OSS 的命令族覆盖 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]；集群模式的自动失效转移与只读副本满足“不人工介入”要求 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；会话缓存的低延迟内存语义也与其定位一致 [Source: redis-vs-postgresql]。\n  *Sources: [Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html); [ElastiCache 文档历史记录 - Amazon ElastiCache](https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html); [redis-vs-postgresql](file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md)*\n- **#2 Amazon ElastiCache for Memcached**: 在纯 KV 缓存与内存效率场景下成立 [Source: redis-vs-memcached]，且已支持按需垂直扩缩和自动水平扩缩 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；但本场景需要在线用户集合与去重计数，缺失 list/hash/set 使其不具备承接能力 [Source: redis-vs-memcached]，故排后。\n  *Sources: [redis-vs-memcached](file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md); [ElastiCache 文档历史记录 - Amazon ElastiCache](https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html)*\n\n### 权衡\n- **数据结构能力 [[16]]**: Redis 提供 list/hash/set/sorted set 与复制，Memcached 仅为纯键值 [Source: redis-vs-memcached]；ElastiCache 侧 hash 命令族已在官方支持列表中列出 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]。\n  *Sources: [redis-vs-memcached](file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md); [Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html)*\n- **内存效率与成本 [[16]]**: 公开对比提到 Memcached 在极致内存效率的简单 KV 上可能更省 [Source: redis-vs-memcached]；但 ElastiCache Serverless 按传输的每千字节计 1 个 ECPU，官方示例中传输 3.2 KB 数据的 GET 命令消耗 3.2 个 ECPU，200 KB 大值成本会被放大 [Source: Amazon ElastiCache 定价]。\n  *Sources: [redis-vs-memcached](file:///kb/chroma_kb/data/blogs/redis-vs-memcached.md); [Amazon ElastiCache 定价](https://aws.amazon.com/cn/elasticache/pricing)*\n- **可用性与自动故障切换 [[3]]**: Redis OSS 集群模式支持最多 15 分片、每分片 5 个只读副本，自动失效转移约为此前版本的四分之一 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；Memcached 支持自动水平扩缩但架构上无同构复制表述 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]。\n  *Sources: [ElastiCache 文档历史记录 - Amazon ElastiCache](https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html)*\n- **会话缓存定位 [[10]]**: 内存型存储加 TTL 过期被视为理想的会话存储，磁盘型方案每条请求的 I/O 会引入额外延迟 [Source: redis-vs-postgresql]。\n  *Sources: [redis-vs-postgresql](file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md)*\n\n**场景适配:** 场景的三类访问中，集合/去重与前缀计数直接指向 Redis 的 hash 与 set 能力 [Source: Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache]；无专职运维由托管集群的自动失效转移与副本承接 [Source: ElastiCache 文档历史记录 - Amazon ElastiCache]；AWS 既有栈与 Python 客户端可直接对接标准协议 [Source: 与 Valkey、Memcached 和 Redis OSS 兼容的缓存 — Amazon ElastiCache 常见问题 — AWS]。唯一需实测的是 200 KB × 8 万 QPS 的带宽与成本 [Source: Best practices for sizing your Amazon ElastiCache for Redis clusters | AWS Database Blog]。\n\n### 参考来源\n- [ydf0509/funboost](https://github.com/ydf0509/funboost)\n- [Supported and restricted Valkey, Memcached, and Redis OSS commands - Amazon ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SupportedCommands.html)\n- [ElastiCache 文档历史记录 - Amazon ElastiCache](https://docs.aws.amazon.com/zh_cn/AmazonElastiCache/latest/dg/WhatsNew.html)\n- [link1st/go-stress-testing](https://github.com/link1st/go-stress-testing)\n- [kanwangzjm/funiture](https://github.com/kanwangzjm/funiture)\n- [xiaojiaqi/10billionhongbaos](https://github.com/xiaojiaqi/10billionhongbaos)\n- [Gooddbird/tinyrpc](https://github.com/Gooddbird/tinyrpc)\n- [monitoringartist/grafana-aws-cloudwatch-dashboards](https://github.com/monitoringartist/grafana-aws-cloudwatch-dashboards)\n- [aws-samples/custom-lens-wa-hub](https://github.com/aws-samples/custom-lens-wa-hub)\n- [redis-vs-postgresql](file:///kb/chroma_kb/data/blogs/redis-vs-postgresql.md)\n- [Amazon ElastiCache Pricing](https://aws.amazon.com/elasticache/pricing)\n- [Amazon ElastiCache 定价](https://aws.amazon.com/cn/elasticache/pricing)\n*(+5 more sources)",
+  "confidence": "medium",
+  "knowledge_gaps": [
+    "Memcached (ElastiCache) capacity and scaling estimate at 200 KB values and 80k read QPS — node count, network bandwidth per node type, auto-scaling behaviour",
+    "ElastiCache for Redis persistence options (RDB snapshot / AOF) and Multi-AZ automatic failover behaviour, and what they imply for a lossy cache that must not stampede RDS",
+    "ElastiCache for Memcached Multi-AZ / auto-failover semantics and whether it supports replication (to verify the 'no isomorphic replication' absence claim)",
+    "Python client ecosystem comparison for ElastiCache Redis vs Memcached (redis-py, pymemcached, connection pooling, cluster-mode support) — developer experience dimension missing",
+    "Official AWS SLA / availability numbers for ElastiCache Redis vs Memcached to substantiate the ecosystem/operability dimension"
+  ],
+  "retry_count": 1,
+  "partial_failures": [
+    "arxiv"
+  ],
+  "quality_signals": [
+    {
+      "agent": "self_reviewer",
+      "passed_count": 3,
+      "total_checks": 6,
+      "confidence": "medium",
+      "gaps_found": 5,
+      "corrections_applied": 1,
+      "corrections_rejected": 0,
+      "corrected_fields": [
+        "内存效率与成本 [[16]]/finding"
+      ],
+      "report_rerendered": true
+    }
+  ],
+  "agent_timing": {
+    "query_adapter": 17.78,
+    "multi_retriever": 51.33,
+    "source_evaluator": 0.0,
+    "conflict_detector": 45.28,
+    "conflict_detector:scan_s": 32.81,
+    "conflict_detector:initial_arbitration_s": 10.75,
+    "evidence_chain": 0.0,
+    "conclusion_synthesizer": 19.94,
+    "report_generator": 0.0,
+    "self_reviewer": 17.05
+  },
+  "token_usage": [
+    {
+      "agent": "query_adapter",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 768,
+      "completion_tokens": 2643,
+      "total_tokens": 3411
+    },
+    {
+      "agent": "conflict_detector",
+      "model": "deepseek-flash",
+      "calls": 16,
+      "prompt_tokens": 10869,
+      "completion_tokens": 6188,
+      "total_tokens": 17057
+    },
+    {
+      "agent": "conclusion_synthesizer",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 5508,
+      "completion_tokens": 3239,
+      "total_tokens": 8747
+    },
+    {
+      "agent": "self_reviewer",
+      "model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 9832,
+      "completion_tokens": 3177,
+      "total_tokens": 13009
+    }
+  ]
+}

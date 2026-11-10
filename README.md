@@ -39,6 +39,14 @@ DeepChoice 是一个基于 Python / LangGraph 的技术选型深度研究 Agent�
 - **Reproducible evaluation harness** — fixed 200-case set, deterministic metrics and a documented
   evaluation protocol (see [EVALUATION.md](EVALUATION.md)).
 
+## Example output
+
+A generated report renders as a decision-first document with cited evidence and explicit conditions:
+
+![DeepChoice report preview](docs/report-preview.png)
+
+More examples (and the questions they answer) are in [`examples/`](examples/README.md).
+
 ## Architecture
 
 ```
@@ -152,6 +160,8 @@ A fixed 200-case evaluation set is included in [`benchmarks/cases_formal_200.jso
 ‡ A report is *decision-grade* when it is usable and its key claims are evidence-comparable and conditions
 are stated. Full protocol, definitions and limitations: [EVALUATION.md](EVALUATION.md).
 
+Raw deterministic metrics: [`benchmarks/results/formal_200_metrics.json`](benchmarks/results/formal_200_metrics.json).
+
 > The numbers above are an **internal evaluation** (fixed set, fixed review protocol, AI-assisted calibrated
 > content review). They are not a third-party audit or a human-signed acceptance record, and results should
 > not be extrapolated beyond the fixed set. See [EVALUATION.md](EVALUATION.md) for methodology and residual risks.
@@ -194,7 +204,8 @@ pyflakes src/ tests/            # static check (CI)
 vulture src/                    # dead-code check (CI)
 ```
 
-CI runs on Ubuntu (Python 3.12): install → `pytest -q` → `pyflakes` → `vulture`.
+CI runs on Ubuntu and Windows (Python 3.12): `pytest -q` on both, plus `pyflakes`/`vulture` on Ubuntu.
+The preserved-run regression fixtures are shipped in `tests/fixtures/` (sanitized), so the full suite runs in CI.
 
 ## License
 
