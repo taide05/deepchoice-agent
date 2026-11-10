@@ -57,3 +57,6 @@ set_current_case  # public API
 handle_starttag  # public API
 handle_endtag  # public API
 handle_data  # public API
+
+# Starlette invokes middleware.dispatch dynamically.
+dispatch  # Starlette middleware entrypoint
