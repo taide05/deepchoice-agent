@@ -213,7 +213,7 @@ tests/            # test suite (pytest)
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                       # 902 tests
+pytest -q                       # 908 tests
 pyflakes src/ tests/            # static check (CI)
 vulture src/                    # dead-code check (CI)
 ```
