@@ -9,10 +9,15 @@
 | Item | Value |
 |---|---|
 | Cases | 200 (`benchmarks/cases_formal_200.json`) |
-| Domains | Frontend, backend, database, infrastructure, AI/ML |
-| Languages | Chinese and English inputs |
+| Categories | 12 categories: Frontend 20, Backend 28, Database 24, Infra 32, AI/ML 20, CI/CD 16, Messaging 8, Observability 12, Security 8, Data 12, Python 12, Containers 8 |
+| Scene split | solo 50 / team 50 / enterprise 50 / migration 50 |
+| Language | Chinese (`language=zh`) for all 200 cases |
 | Case schema | `query`, `scene_context`, `candidate_techs`, `constraints`, `report_format`, `language` |
-| SHA-256 (at evaluation time) | `46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807` |
+| SHA-256 (evaluation file, internal `.scratch/cases/cases_formal_200.json`) | `46728f209aa12760afa39e0467b1c6c8fae1b0dac130b20e76ff1810031e3807` |
+| SHA-256 (public `benchmarks/cases_formal_200.json`) | `b207106ec8061fb5e722483b63da07e90c25d985f49bd297020d2d16a12e21b7` |
+
+The public file is a content-equivalent copy of the internal evaluation file; JSON serialization differs,
+so the byte hashes differ.
 
 Each case is a realistic technology-selection question with a usage scene, constraints and two or more
 candidates. The task is to produce a condition-aware recommendation grounded in cited evidence.
@@ -44,6 +49,10 @@ Report-level checks:
 | Usable | **199 / 200 (99.5%)** |
 | Decision-grade | **179 / 200 (89.5%)** |
 | Critical errors (C4) | **1 / 200** |
+
+> Run: 2026-11-05 22:24 – 2026-11-06 02:24 (local); review finalized 2026-11-07.
+> The final 200 is a mixed-code batch: 161 baseline reports + 39 repair reruns (35 repair39 + 4 fix4last),
+> not a single-commit full rerun.
 
 Observation statistics from the same evaluation run:
 

@@ -160,7 +160,8 @@ See [`.env.example`](.env.example) for a template.
 ## Evaluation
 
 A fixed 200-case evaluation set is included in [`benchmarks/cases_formal_200.json`](benchmarks/cases_formal_200.json)
-(200 cases across frontend/backend/database/infra/AI scenarios; Chinese and English inputs).
+(200 Chinese-language cases across 12 categories — Frontend, Backend, Database, Infra, AI/ML, CI/CD,
+Messaging, Observability, Security, Data, Python, Containers — with 50 cases each for solo/team/enterprise/migration).
 
 | Metric | Result |
 |---|---|
@@ -172,6 +173,9 @@ A fixed 200-case evaluation set is included in [`benchmarks/cases_formal_200.jso
 † A report is *usable* when it answers the question and contains no critical (decision-misleading) error.
 ‡ A report is *decision-grade* when it is usable and its key claims are evidence-comparable and conditions
 are stated. Full protocol, definitions and limitations: [EVALUATION.md](EVALUATION.md).
+
+> Run: 2026-11-05/06; review finalized 2026-11-07. The final batch is 161 baseline reports + 39 repair
+> reruns, not a single-commit full rerun.
 
 Raw deterministic metrics: [`benchmarks/results/formal_200_metrics.json`](benchmarks/results/formal_200_metrics.json).
 
