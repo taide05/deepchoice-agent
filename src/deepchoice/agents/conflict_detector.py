@@ -391,39 +391,53 @@ Return ONLY a JSON object:
     return None
 
 
-# Coverage of the conflict check for the current run. A completed scan that found
-# no difference and a scan that never completed are different facts, and a bare
-# conflict list cannot express the difference. This is a plain counter dict, not
-# a state framework.
-conflict_detector_coverage: dict = {}
-
-
-def _record_coverage(**fields) -> dict:
-    """Replace the coverage record. Never merged, so a stale run cannot leak."""
-    conflict_detector_coverage.clear()
-    conflict_detector_coverage.update(fields)
-    return dict(conflict_detector_coverage)
-
-
-# Per-stage elapsed seconds for this node, so a slow run can be read as scan vs
-# arbitration vs evidence vs re-arbitration instead of one opaque node duration.
-# Plain dict of floats; not a tracing system.
-conflict_stage_timing: dict = {}
-
-
-def _stage(name: str, started: float) -> None:
-    conflict_stage_timing[name] = round(
-        conflict_stage_timing.get(name, 0.0) + (time.monotonic() - started), 2)
-
-
 # Outcomes the scan can report. Anything else is not a completed judgement.
 SCAN_DIFFERENCE = "difference"
 SCAN_NO_DIFFERENCE = "no_difference"
 SCAN_UNSCANNED = "unscanned"
 
+# Early exits: the check never reached a candidate pair (too few sources, too few
+# comparable claims, or no similar pair), so "no conflict" was never tested.
+EARLY_EXIT_REASONS = (
+    "too_few_comparable_sources",
+    "too_few_high_score_sources",
+    "no_candidate_pairs",
+)
 
-def conflict_check_incomplete() -> bool:
+
+def empty_scan_outcomes() -> dict:
+    """A zeroed outcome counter for one run's scan."""
+    return {SCAN_DIFFERENCE: 0, SCAN_NO_DIFFERENCE: 0, SCAN_UNSCANNED: 0}
+
+
+def scanned_pair_count(outcomes: dict) -> int:
+    """Total candidate pairs the scan classified, under any outcome."""
+    return sum(int(outcomes.get(key) or 0)
+               for key in (SCAN_DIFFERENCE, SCAN_NO_DIFFERENCE, SCAN_UNSCANNED))
+
+
+def _record(coverage: dict | None, **fields) -> None:
+    """Write scan-owned diagnostic fields into the caller's coverage dict.
+
+    There is no module-level record: a run that passes no dict simply keeps its
+    diagnostics local, and a concurrent run can never read another's.
+    """
+    if coverage is not None:
+        coverage.update(fields)
+
+
+# Per-stage elapsed seconds for one run, so a slow run can be read as scan vs
+# arbitration vs evidence vs re-arbitration instead of one opaque node duration.
+# Plain dict of floats owned by the agent's run; not a tracing system.
+def _stage(timing: dict, name: str, started: float) -> None:
+    timing[name] = round(timing.get(name, 0.0) + (time.monotonic() - started), 2)
+
+
+def conflict_check_incomplete(coverage: dict | None) -> bool:
     """Whether any confirmed difference was left without a resolution.
+
+    Pure function over one run's own coverage record; it reads no module state,
+    so a concurrent run cannot make another run's check read as incomplete.
 
     Two ways the check can be unfinished, and both read as incomplete:
 
@@ -435,36 +449,34 @@ def conflict_check_incomplete() -> bool:
     The second case must not read as "check complete, no conflicts": the
     disagreement exists and simply was not adjudicated.
     """
-    outcomes = getattr(find_contradictions, "last_outcomes", None) or {}
-    if outcomes.get(SCAN_UNSCANNED):
+    check = coverage if isinstance(coverage, dict) else {}
+    outcomes = check.get("scan_outcomes") or {}
+    if int(outcomes.get(SCAN_UNSCANNED) or 0):
         return True
     # A check that never reached a candidate pair (too few sources, too few
     # comparable claims, or no similar pair) cannot be reported as a completed
     # "no conflict" result either.
-    early_reason = conflict_detector_coverage.get("reason")
-    if early_reason in ("too_few_comparable_sources", "too_few_high_score_sources",
-                        "no_candidate_pairs"):
+    if check.get("reason") in EARLY_EXIT_REASONS:
         return True
-    return bool(conflict_detector_coverage.get("pairs_arbitration_failed"))
+    return bool(check.get("pairs_arbitration_failed"))
 
 
 async def find_contradictions(source_scores: list[dict], query_topic: str = "",
                                threshold: float = 0.65,
-                               usage: list | None = None) -> list[dict]:
+                               usage: list | None = None,
+                               coverage: dict | None = None) -> list[dict]:
     """Find contradictory source pairs using LLM semantic scan.
 
     Pipeline: BGE similarity pre-filter → LLM contradiction scan
     (replaces old negation-word matching).
+
+    `coverage`, when the caller passes one, is this run's own diagnostic record:
+    the scan writes its outcome counts and any early-exit reason there. No module
+    state is read or written, so concurrent runs cannot see each other's counts.
     """
-    # Reset the outcome record for this call so a later reader can never see a
-    # previous call's counts and read an incomplete scan as a clean one.
-    find_contradictions.last_outcomes = {
-        "difference": 0, "no_difference": 0, "unscanned": 0}
-    find_contradictions.last_rejected = {}
-    find_contradictions.last_insufficient_claim = 0
-    # A completed scan with no differences records no coverage of its own; clear
-    # the previous run's diagnostic so a later node cannot read a stale reason.
-    conflict_detector_coverage.clear()
+    if coverage is not None:
+        # Reset so a reused dict can never show a previous call's counts.
+        coverage.clear()
     model = get_embedding_model()
     high_score_sources = [s for s in source_scores if s["total_score"] >= 5.0]
     # Only sources that actually carry a body can supply a comparable claim.
@@ -473,16 +485,13 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
     # disagreement between article names. Keep the count visible instead of
     # silently dropping the ineligible sources.
     eligible_sources = [s for s in high_score_sources if comparable_claim(s)]
-    find_contradictions.last_insufficient_claim = (
-        len(high_score_sources) - len(eligible_sources))
+    sources_without_claim = len(high_score_sources) - len(eligible_sources)
     high_score_sources = eligible_sources
     if len(high_score_sources) < 2:
-        _record_coverage(
-            pairs_scanned=0,
-            pairs_arbitrated=0,
-            pairs_evidence=0,
-            scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
-            sources_without_comparable_claim=find_contradictions.last_insufficient_claim,
+        _record(
+            coverage,
+            scan_outcomes=empty_scan_outcomes(),
+            sources_without_comparable_claim=sources_without_claim,
             reason="too_few_comparable_sources",
         )
         return []
@@ -513,12 +522,10 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
             f"(missing_title={rejected['missing_title']})",
             agent="CONFLICT_DETECTOR",
         )
-        _record_coverage(
-            pairs_scanned=0,
-            pairs_arbitrated=0,
-            pairs_evidence=0,
-            scan_outcomes={"difference": 0, "no_difference": 0, "unscanned": 0},
-            sources_without_comparable_claim=find_contradictions.last_insufficient_claim,
+        _record(
+            coverage,
+            scan_outcomes=empty_scan_outcomes(),
+            sources_without_comparable_claim=sources_without_claim,
             reason="no_candidate_pairs",
         )
         return []
@@ -554,9 +561,7 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
         f"LLM scanning {len(candidates)} candidate pairs for contradictions",
         agent="CONFLICT_DETECTOR",
     )
-    _scan_started = time.monotonic()
     scan_results = await asyncio.gather(*[_scan(c) for c in candidates])
-    _stage("scan_s", _scan_started)
 
     pairs = []
     for r in scan_results:
@@ -586,15 +591,13 @@ async def find_contradictions(source_scores: list[dict], query_topic: str = "",
         f"unscanned={outcomes['unscanned']}",
         agent="CONFLICT_DETECTOR",
     )
-    find_contradictions.last_outcomes = dict(outcomes)
-    find_contradictions.last_rejected = dict(rejected)
+    _record(
+        coverage,
+        scan_outcomes=dict(outcomes),
+        sources_without_comparable_claim=sources_without_claim,
+    )
 
     return pairs
-
-
-find_contradictions.last_outcomes = {}
-find_contradictions.last_rejected = {}
-find_contradictions.last_insufficient_claim = 0
 
 
 # ---------------------------------------------------------------------------
@@ -619,28 +622,39 @@ class ConflictDetectorAgent:
         )
 
         local_usage: list = []
-        pairs = await find_contradictions(source_scores, query_topic=query, usage=local_usage)
+        # This run owns its coverage record and stage timings: plain local dicts,
+        # never module state, so a concurrent run in the same server process
+        # cannot read or overwrite them.
+        coverage: dict = {}
+        timing: dict = {}
+        _scan_started = time.monotonic()
+        pairs = await find_contradictions(
+            source_scores, query_topic=query, usage=local_usage, coverage=coverage)
+        _stage(timing, "scan_s", _scan_started)
         if not pairs:
-            outcomes = dict(getattr(find_contradictions, "last_outcomes", {}))
+            outcomes = dict(coverage.get("scan_outcomes") or empty_scan_outcomes())
             # Keep the diagnostic recorded by an early return (too few sources /
             # too few comparable claims / no candidate pairs); a completed scan
             # with no differences has no earlier reason.
-            diagnostic_reason = (
-                dict(conflict_detector_coverage).get("reason") or "no_pairs_confirmed")
-            check = _record_coverage(
+            diagnostic_reason = coverage.get("reason") or "no_pairs_confirmed"
+            check = {
                 # The scan did run; the count comes from what it classified.
                 # Reporting 0 here would say no pair was ever examined.
-                pairs_scanned=(int(outcomes.get(SCAN_DIFFERENCE, 0))
-                               + int(outcomes.get(SCAN_NO_DIFFERENCE, 0))
-                               + int(outcomes.get(SCAN_UNSCANNED, 0))),
-                pairs_arbitrated=0,
-                pairs_evidence=0,
-                scan_outcomes=outcomes,
-                sources_without_comparable_claim=(
-                    getattr(find_contradictions, "last_insufficient_claim", 0)),
-                reason=diagnostic_reason,
-            )
-            incomplete = conflict_check_incomplete()
+                "pairs_scanned": scanned_pair_count(outcomes),
+                "pairs_confirmed_difference": 0,
+                "pairs_arbitrated": 0,
+                "pairs_arbitration_failed": 0,
+                "pairs_evidence_requested": 0,
+                "pairs_evidence_collected": 0,
+                # Deprecated alias kept one release: it always meant "requested".
+                "pairs_evidence": 0,
+                "scan_outcomes": outcomes,
+                "sources_without_comparable_claim": int(
+                    coverage.get("sources_without_comparable_claim") or 0),
+                "reason": diagnostic_reason,
+                "stage_timing_s": dict(timing),
+            }
+            incomplete = conflict_check_incomplete(check)
             print_agent_output(
                 f"No confirmed contradictory pairs "
                 f"(scan {outcomes}, incomplete={incomplete})",
@@ -749,7 +763,7 @@ class ConflictDetectorAgent:
         raw_conflicts = await asyncio.gather(
             *[_arbitrate_one(p) for p in pairs], return_exceptions=True,
         )
-        _stage("initial_arbitration_s", _arb_started)
+        _stage(timing, "initial_arbitration_s", _arb_started)
 
         conflicts = []
         # Track the pair index alongside its conflict row, so a later stage can
@@ -778,6 +792,9 @@ class ConflictDetectorAgent:
                 f"Evidence gathering disabled: {len(low_confidence)} ambiguous pair(s)",
                 agent="CONFLICT_DETECTOR",
             )
+        # Requested is not collected: only a re-arbitration that succeeds with
+        # non-empty evidence counts here.
+        evidence_collected = 0
         for index in evidence_pairs:
             pair = conflict_pairs[index]
             evidence = ""
@@ -793,7 +810,7 @@ class ConflictDetectorAgent:
                 print_agent_output(
                     f"Evidence gathering failed: {e}", agent="CONFLICT_DETECTOR")
             finally:
-                _stage("evidence_gathering_s", _ev_started)
+                _stage(timing, "evidence_gathering_s", _ev_started)
             if not evidence:
                 continue
             _re_started = time.monotonic()
@@ -804,33 +821,42 @@ class ConflictDetectorAgent:
                     f"Evidence arbitration failed: {e}", agent="CONFLICT_DETECTOR")
                 continue
             finally:
-                _stage("re_arbitration_s", _re_started)
+                _stage(timing, "re_arbitration_s", _re_started)
             revised["evidence_collected"] = evidence[:500]
             conflicts[index] = revised
+            evidence_collected += 1
 
-        coverage = {
-            "pairs_scanned": len(pairs),
+        outcomes = dict(coverage.get("scan_outcomes") or empty_scan_outcomes())
+        check = {
+            # Distinct fact families: how many candidate pairs were examined at
+            # all, how many showed a confirmed difference, how many were
+            # arbitrated, and how many evidence passes were requested/completed.
+            "pairs_scanned": scanned_pair_count(outcomes),
+            "pairs_confirmed_difference": len(pairs),
             "pairs_arbitrated": len(conflicts),
-            "pairs_evidence": len(evidence_pairs),
             # A scan-confirmed pair whose arbitration failed produced no conflict
             # row. Recorded so the loss is visible instead of looking like the
             # scan never found anything.
             "pairs_arbitration_failed": failed_arbitrations,
-            "scan_outcomes": dict(getattr(find_contradictions, "last_outcomes", {})),
+            "pairs_evidence_requested": len(evidence_pairs),
+            "pairs_evidence_collected": evidence_collected,
+            # Deprecated alias kept one release: it always meant "requested".
+            "pairs_evidence": len(evidence_pairs),
+            "scan_outcomes": outcomes,
             # Sources that could not supply a comparable claim (navigation or
             # repository metadata). They are not silently treated as agreeing.
-            "sources_without_comparable_claim": (
-                getattr(find_contradictions, "last_insufficient_claim", 0)),
+            "sources_without_comparable_claim": int(
+                coverage.get("sources_without_comparable_claim") or 0),
+            "reason": "pairs_confirmed",
             # Where this node's time went, so a slow run reads as scan vs
             # arbitration vs evidence vs re-arbitration.
-            "stage_timing_s": dict(conflict_stage_timing),
+            "stage_timing_s": dict(timing),
         }
-        conflict_detector_coverage.clear()
-        conflict_detector_coverage.update(coverage)
+        incomplete = conflict_check_incomplete(check)
 
         return {
             "conflicts": conflicts,
-            "conflict_check": dict(conflict_detector_coverage),
+            "conflict_check": check,
             "quality_signals": [{
                 "agent": "conflict_detector",
                 "conflicts_found": len(conflicts),
@@ -844,11 +870,12 @@ class ConflictDetectorAgent:
                 ),
                 # Pairs the scan could not classify, so partial coverage stays
                 # visible instead of looking like a clean empty result.
-                "scan_unscanned": coverage["scan_outcomes"].get(SCAN_UNSCANNED, 0),
-                "scan_no_difference": coverage["scan_outcomes"].get(SCAN_NO_DIFFERENCE, 0),
-                "sources_without_comparable_claim": coverage.get(
-                    "sources_without_comparable_claim", 0),
-                "conflict_check_incomplete": conflict_check_incomplete(),
+                "scan_unscanned": outcomes.get(SCAN_UNSCANNED, 0),
+                "scan_no_difference": outcomes.get(SCAN_NO_DIFFERENCE, 0),
+                "sources_without_comparable_claim": check[
+                    "sources_without_comparable_claim"],
+                "conflict_check_incomplete": incomplete,
+                "pairs_confirmed_difference": len(pairs),
                 "pairs_arbitrated": len(conflicts),
             }],
             "token_usage": research_state.get("token_usage", [])
