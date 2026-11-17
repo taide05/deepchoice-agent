@@ -70,6 +70,22 @@ class ChiefEditorAgent:
             timing = dict(state.get("agent_timing", {}))
             timing[name] = elapsed
             result["agent_timing"] = timing
+            # quality_signals accumulates explicitly here. The state field has no
+            # LangGraph reducer, so a node return would replace the whole list:
+            # the final state kept only the last writer's signal and the
+            # self-reviewer read one agent instead of the pipeline. A reducer is
+            # deliberately not used — it would append again when a node replays.
+            prior_signals = list(state.get("quality_signals") or [])
+            node_signals = result.get("quality_signals")
+            if node_signals is None:
+                # The node published no signal of its own: keep what came before.
+                if prior_signals:
+                    result["quality_signals"] = prior_signals
+            else:
+                result["quality_signals"] = prior_signals + [
+                    signal for signal in node_signals
+                    if signal not in prior_signals
+                ]
             # Carry any sub-stage split the node published (conflict_detector
             # reports scan / arbitration / evidence / re-arbitration seconds), so
             # a slow node reads as its real stages instead of one opaque total.
