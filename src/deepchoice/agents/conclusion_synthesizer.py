@@ -350,6 +350,9 @@ def _summarize_conflicts(conflicts: list[dict], conflict_check: dict | None = No
     check = conflict_check or {}
     outcomes = check.get("scan_outcomes") or {}
     unscanned = int(outcomes.get("unscanned") or 0)
+    # `pairs_scanned` is the total classified candidate pairs (difference +
+    # no_difference + unscanned), not the number of confirmed differences; the
+    # confirmed count is the separate `pairs_confirmed_difference` field.
     scanned = int(check.get("pairs_scanned") or 0)
     arbitration_failed = int(check.get("pairs_arbitration_failed") or 0)
     # High-scoring sources without a collected body cannot supply a comparable
@@ -1280,7 +1283,7 @@ class ConclusionSynthesizerAgent:
 
         local_usage: list = []
         try:
-            result = await call_model(prompt, model="qwen-flash", response_format="json", tag="conclusion_synthesizer",
+            result = await call_model(prompt, model="deepseek-flash", response_format="json", tag="conclusion_synthesizer",
                                       usage=local_usage,
                                       timeout=SYNTHESIS_CALL_TIMEOUT_S)
         except Exception as e:

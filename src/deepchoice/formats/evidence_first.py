@@ -246,7 +246,8 @@ def render(state: dict) -> str:
 
     lines.extend(["", T["unknown"][lang], "", f"**{T['confidence'][lang]}:** {rec.get('confidence', state.get('confidence', 'unknown'))}"])
     # User-facing gaps come from the synthesis result. `knowledge_gaps` on the
-    # state are self-review retry search targets and are not report prose.
+    # state are state/snapshot only: no retry routing consumes them, so they are
+    # not report prose.
     from .what_why_how import _display_text
 
     for gap in rec.get("unresolved_questions") or []:

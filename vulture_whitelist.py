@@ -7,7 +7,6 @@ meaningful for genuinely dead code without flagging public API surface.
 
 canonical_source_title  # public API
 resolve_citations  # public API
-last_rejected  # public API
 run_research_task  # public API
 run_probe  # public API
 run_arm_limited  # public API
@@ -45,6 +44,8 @@ clarify_message  # public API
 clarify_status  # public API
 clarify_finalize  # public API
 final_recommendation  # public API
+knowledge_gaps  # public state field (synthesis/report contract)
+set_readonly  # public API (benchmark entry point opt-out)
 retry_count  # public API
 current_phase  # public API
 agent_timing  # public API

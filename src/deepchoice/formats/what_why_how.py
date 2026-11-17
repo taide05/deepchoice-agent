@@ -378,8 +378,10 @@ def render(state: dict) -> str:
     query = task.get("query", "Technology Selection")
     chains = state.get("evidence_chains", [])
     conflicts = state.get("conflicts", [])
-    # `knowledge_gaps` are self-review retry search targets; they stay in the
-    # snapshot and are not user-facing report prose.
+    # `knowledge_gaps` are state/snapshot only: the graph has no retry routing,
+    # and user-visible gaps come from the synthesis result's
+    # `unresolved_questions`. Keeping them out of the report body avoids
+    # presenting raw search strings as "what we don't know".
     # Read once, before the sections that reuse it, so the candidate
     # explanations, the ranking and the references all come from this one result.
     rec = state.get("final_recommendation", {}) or {}
@@ -672,9 +674,10 @@ def render(state: dict) -> str:
                               "it means the judgement was not finished.", ""])
 
     # Open questions are the synthesis result's `unresolved_questions` (a gap with
-    # its decision impact). `knowledge_gaps` on the state are self-review retry
-    # search targets, not report prose; they stay in the snapshot and are never
-    # rendered. Mixing them here put raw search strings under "what we don't know".
+    # its decision impact). `knowledge_gaps` on the state are state/snapshot only:
+    # no retry routing consumes them and they are never rendered. User-visible
+    # gaps come from `unresolved_questions`; mixing raw gap strings in here put
+    # search strings under "what we don't know".
     unresolved: list[str] = []
     for question in rec.get("unresolved_questions") or []:
         item = str(question).strip()
