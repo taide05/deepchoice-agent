@@ -136,3 +136,31 @@ def test_output_constraint_is_opt_in_and_appears_in_prompt(monkeypatch):
         asyncio.run(sr.SelfReviewerAgent().run(_state()))
     assert "Cost Experiment Output Constraint" in captured["prompts"][0]
     assert "at most 20 words" in captured["prompts"][0]
+
+
+def test_full_review_keeps_retry_count_at_zero(monkeypatch):
+    """A completed review must not announce a retry the graph cannot take."""
+    monkeypatch.delenv("SELF_REVIEW_MODE", raising=False)
+    with patch.object(sr, "call_model", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _review_json()
+        out = asyncio.run(sr.SelfReviewerAgent().run(_state(retry_count=1)))
+    assert mock_llm.await_count == 1
+    assert out["retry_count"] == 0
+
+
+def test_low_confidence_review_does_not_increment_retry_count(monkeypatch):
+    """A low-confidence review is terminal: the counter stays 0.
+
+    The reviewed result is served as-is and `knowledge_gaps` record what is still
+    unknown; there is no retry edge, so the deprecated field must not increment.
+    """
+    monkeypatch.delenv("SELF_REVIEW_MODE", raising=False)
+    low = _review_json()
+    low["confidence"] = "low"
+    low["knowledge_gaps"] = ["gap query"]
+    with patch.object(sr, "call_model", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = low
+        out = asyncio.run(sr.SelfReviewerAgent().run(_state()))
+    assert out["confidence"] == "low"
+    assert out["retry_count"] == 0
+    assert out["knowledge_gaps"] == ["gap query"]

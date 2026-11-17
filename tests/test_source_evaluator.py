@@ -140,6 +140,38 @@ class TestClassifySourceType:
             "https://docs.confluent.io/kafka", "chroma") == "web_document"
 
 
+class TestScoringContract:
+    """Locked current scoring conventions; the repair plan does not change them."""
+
+    def test_consistency_stays_the_conservative_constant(self):
+        """Consistency is 4 for every row because no support is established.
+
+        The decision record keeps the value deliberately: `supporting_sources` is
+        always empty (title overlap is not corroboration), so consistency keeps
+        its empty-support value. Zeroing it would lower every total by 0.8
+        against unchanged thresholds — that is a scoring change, not this repair.
+        """
+        assert score_consistency([]) == 4
+        assert SourceEvaluatorAgent is not None
+
+    @pytest.mark.asyncio
+    async def test_unknown_source_defaults_to_web_document_authority_4(self):
+        """`anonymous=2` is a dead mapping: the classifier returns web_document.
+
+        The decision record keeps the score for now; this test records the actual
+        behaviour so a later scoring change cannot happen silently.
+        """
+        state = {"search_results": [{"source": "community", "results": [{
+            "url": "https://unlikely.example/posts/1",
+            "title": "Unidentifiable source",
+            "snippet": "a bounded body claim about the candidate",
+        }]}]}
+        row = (await SourceEvaluatorAgent().run(state))["source_scores"][0]
+        assert row["source_type"] == "web_document"
+        assert row["scores"]["authority"] == 4
+        assert row["scores"]["consistency"] == 4
+
+
 class TestClassifyEvidenceType:
     def test_code_block_is_code(self):
         assert classify_evidence_type("here is a ```python\nimport foo\n``` example") == "code"

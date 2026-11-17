@@ -6,6 +6,7 @@ none of them contacts a service.
 """
 from __future__ import annotations
 
+import asyncio
 import types
 
 import numpy as np
@@ -97,7 +98,12 @@ class TestScanWorkBound:
         assert len(gathered) == 1, f"evidence gathered for {len(gathered)} pairs"
         assert "conflict_rearbitration" not in arbitrated
         check = result["conflict_check"]
-        assert check["pairs_evidence"] == 1
+        # One requested evidence pass that actually completed. The deprecated
+        # `pairs_evidence` alias means "requested"; the collected counter is what
+        # proves the re-arbitration ran.
+        assert check["pairs_evidence_requested"] == 1
+        assert check["pairs_evidence_collected"] == 1
+        assert check["pairs_evidence"] == check["pairs_evidence_requested"]
         assert check["pairs_scanned"] <= 15
 
     @pytest.mark.asyncio
@@ -249,16 +255,18 @@ class TestIncompleteIsNotNoDifference:
                 return _reply
 
             monkeypatch.setattr(cd, "call_model", fake_call_model)
-            # The real _scan_pair_contradiction is under test here.
-            await cd.find_contradictions(_sources(3), "t", usage=[])
+            # The real _scan_pair_contradiction is under test here. Coverage is
+            # the caller's own dict; there is no module-level record to read.
+            coverage: dict = {}
+            await cd.find_contradictions(_sources(3), "t", usage=[], coverage=coverage)
 
-            outcomes = cd.find_contradictions.last_outcomes
+            outcomes = coverage["scan_outcomes"]
             assert outcomes["no_difference"] == 0, \
                 f"reply {reply!r} was recorded as no difference: {outcomes}"
             assert outcomes["difference"] == 0, \
                 f"reply {reply!r} manufactured a difference: {outcomes}"
             assert outcomes["unscanned"] > 0, f"reply {reply!r}: {outcomes}"
-            assert cd.conflict_check_incomplete() is True
+            assert cd.conflict_check_incomplete(coverage) is True
 
     @pytest.mark.asyncio
     async def test_failed_arbitration_reads_as_unresolved_not_as_no_conflict(
@@ -294,7 +302,7 @@ class TestIncompleteIsNotNoDifference:
         assert result["conflicts"] == []
         assert check["scan_outcomes"]["difference"] > 0, check
         assert check["pairs_arbitration_failed"] > 0, check
-        assert cd.conflict_check_incomplete() is True, check
+        assert cd.conflict_check_incomplete(check) is True, check
 
         # The synthesizer must be told this is unfinished, not conflict-free.
         told = _summarize_conflicts(result["conflicts"], check)
@@ -319,24 +327,27 @@ class TestIncompleteIsNotNoDifference:
             assert "No major disputes" not in out, name
 
     @pytest.mark.asyncio
-    async def test_coverage_is_replaced_not_merged_between_runs(self, monkeypatch):
-        """A second run must not inherit the first run's coverage or reason.
+    async def test_coverage_is_owned_by_each_run_not_shared(self, monkeypatch):
+        """Concurrent runs must not read or overwrite each other's coverage.
 
-        The coverage record is module-level, so in a long-lived server a merged
-        update would leave a stale reason or count visible to a later run.
+        Coverage used to be a module-level record, so a second run's fields could
+        merge into, or overwrite, the first run's diagnosed reason. Each run now
+        owns its own dict: the early-exit reason stays with the run that recorded
+        it, and the completed run never inherits it.
         """
         monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
 
         # Run 1: too few high-score sources, which records a specific reason.
+        first_coverage: dict = {}
         await cd.find_contradictions(
             [{"url": "https://only", "title": "Only source",
-          "snippet": "A single source with a comparable body claim.",
-              "total_score": 7.0, "scores": {"authority": 7}}], "t", usage=[])
-        first = dict(cd.conflict_detector_coverage)
-        assert first.get("reason") == "too_few_comparable_sources", first
+              "snippet": "A single source with a comparable body claim.",
+              "total_score": 7.0, "scores": {"authority": 7}}],
+            "t", usage=[], coverage=first_coverage)
+        assert first_coverage.get("reason") == "too_few_comparable_sources", first_coverage
 
-        # Run 2: a different outcome that takes the conflict path and sets its own
-        # fields, without the "reason" key run 1 recorded.
+        # Run 2: a different run on its own coverage dict, taking the conflict
+        # path. It must neither write into run 1's record nor inherit its reason.
         async def fake_scan(src_a, src_b, query, usage=None):
             return {"has_difference": True, "type": "tradeoff_disagreement",
                     "explanation": "e"}
@@ -346,16 +357,17 @@ class TestIncompleteIsNotNoDifference:
 
         monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
         monkeypatch.setattr(cd, "call_model", fake_call_model)
-        await cd.ConflictDetectorAgent(gather_evidence=False).run({
+        second = await cd.ConflictDetectorAgent(gather_evidence=False).run({
             "source_scores": _sources(4), "task": {"query": "t"}, "token_usage": [],
         })
-        second = dict(cd.conflict_detector_coverage)
+        second_check = second["conflict_check"]
 
-        assert second.get("pairs_scanned", 0) > 0, second
-        assert second.get("pairs_arbitrated", 0) > 0, second
-        # The first run's reason must not survive into the second record.
-        assert "reason" not in second, \
-            f"run 1 coverage leaked into run 2: {second}"
+        assert second_check["pairs_scanned"] > 0, second_check
+        assert second_check["pairs_arbitrated"] > 0, second_check
+        assert second_check["reason"] == "pairs_confirmed", second_check
+        # Run 1's coverage is untouched by run 2.
+        assert first_coverage.get("reason") == "too_few_comparable_sources", first_coverage
+        assert "pairs_arbitrated" not in first_coverage, first_coverage
 
     @pytest.mark.asyncio
     async def test_a_real_negative_verdict_still_counts_as_completed(self, monkeypatch):
@@ -366,12 +378,13 @@ class TestIncompleteIsNotNoDifference:
             return {"has_difference": False, "type": "none", "explanation": ""}
 
         monkeypatch.setattr(cd, "call_model", fake_call_model)
-        await cd.find_contradictions(_sources(3), "t", usage=[])
+        coverage: dict = {}
+        await cd.find_contradictions(_sources(3), "t", usage=[], coverage=coverage)
 
-        outcomes = cd.find_contradictions.last_outcomes
+        outcomes = coverage["scan_outcomes"]
         assert outcomes["no_difference"] > 0
         assert outcomes["unscanned"] == 0
-        assert cd.conflict_check_incomplete() is False
+        assert cd.conflict_check_incomplete(coverage) is False
 
     @pytest.mark.asyncio
     async def test_synthesizer_is_not_told_no_conflicts_when_incomplete(self):
@@ -590,3 +603,182 @@ class TestBodylessCoverageIsVisible:
         # evidence_summary and readers counted it against another population
         # (final-200 review: 198/200 reports carried a mismatched count).
         assert "2 high-scoring" not in text, text
+
+
+CONFLICT_CHECK_KEYS = {
+    "pairs_scanned",
+    "pairs_confirmed_difference",
+    "pairs_arbitrated",
+    "pairs_arbitration_failed",
+    "pairs_evidence_requested",
+    "pairs_evidence_collected",
+    "pairs_evidence",  # deprecated alias for pairs_evidence_requested
+    "scan_outcomes",
+    "sources_without_comparable_claim",
+    "reason",
+    "stage_timing_s",
+}
+
+
+def _assert_schema(check: dict) -> None:
+    missing = CONFLICT_CHECK_KEYS - set(check)
+    assert not missing, f"conflict_check is missing {sorted(missing)}: {check}"
+
+
+class TestConflictCheckContract:
+    @pytest.mark.asyncio
+    async def test_both_return_branches_share_one_key_set(self, monkeypatch):
+        """A reader must not need to know which branch produced conflict_check.
+
+        The confirmed-pairs branch and the no-pairs branch used to disagree on
+        which keys exist, so every consumer had to guard every lookup. Both now
+        write the same schema.
+        """
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "e"}
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            return {"resolution": "a", "confidence": "high", "reasoning": "r"}
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+        with_pairs = (await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": _sources(4), "task": {"query": "t"}, "token_usage": [],
+        }))["conflict_check"]
+
+        no_pairs = (await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": _sources(1), "task": {"query": "t"}, "token_usage": [],
+        }))["conflict_check"]
+
+        _assert_schema(with_pairs)
+        _assert_schema(no_pairs)
+        assert set(with_pairs) == set(no_pairs)
+
+    @pytest.mark.asyncio
+    async def test_pairs_scanned_is_the_total_classified_count(self, monkeypatch):
+        """pairs_scanned counts every classified pair, not only the confirmed ones.
+
+        Six sources give 15 candidate pairs. With one confirmed difference the
+        record must still say 15 pairs were scanned; the confirmed-difference
+        count is a separate field.
+        """
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+        sources = _sources(6)
+        difference_pair = frozenset((sources[0]["url"], sources[1]["url"]))
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            pair = frozenset((src_a["url"], src_b["url"]))
+            if pair == difference_pair:
+                return {"has_difference": True, "type": "tradeoff_disagreement",
+                        "explanation": "e"}
+            return {"has_difference": False, "type": "none"}
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            return {"resolution": "a", "confidence": "high", "reasoning": "r"}
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+        result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
+            "source_scores": sources, "task": {"query": "t"}, "token_usage": [],
+        })
+        check = result["conflict_check"]
+        assert check["scan_outcomes"]["difference"] == 1, check
+        assert check["pairs_scanned"] == 15, check
+        assert check["pairs_confirmed_difference"] == 1, check
+        assert check["pairs_arbitrated"] == 1, check
+        assert check["stage_timing_s"], check
+
+    @pytest.mark.asyncio
+    async def test_failed_evidence_arbitration_keeps_requested_and_collected_apart(
+            self, monkeypatch):
+        """Requested evidence is not collected evidence.
+
+        The single ambiguous pair asks for one evidence pass; when the re-ruling
+        with that evidence fails, the requested counter stays 1 while the
+        collected counter stays 0 — an attempt is not a success.
+        """
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            return {"has_difference": True, "type": "tradeoff_disagreement",
+                    "explanation": "e"}
+
+        gathered = []
+        calls = {"n": 0}
+
+        async def fake_gather(topic, claim_a, claim_b, usage=None):
+            gathered.append(claim_a)
+            return "gathered evidence"
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return {"resolution": "a", "confidence": "low", "reasoning": "r"}
+            raise RuntimeError("re-arbitration provider down")
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "_gather_evidence", fake_gather)
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+        result = await cd.ConflictDetectorAgent(gather_evidence=True).run({
+            "source_scores": _sources(3), "task": {"query": "t"}, "token_usage": [],
+        })
+        check = result["conflict_check"]
+        assert gathered, "the ambiguous pair must still get one evidence pass"
+        assert check["pairs_evidence_requested"] == 1, check
+        assert check["pairs_evidence_collected"] == 0, check
+        assert check["pairs_evidence"] == check["pairs_evidence_requested"], check
+
+    @pytest.mark.asyncio
+    async def test_concurrent_runs_keep_their_own_conflict_check(self, monkeypatch):
+        """Two runs interleaved on the same event loop must not share counts.
+
+        The module-level coverage/timing records let a concurrent run read the
+        other run's outcomes. Each run now owns its dicts, so the two checks
+        below describe only their own sources.
+        """
+        monkeypatch.setattr(cd, "get_embedding_model", lambda: _embedding_all_similar())
+
+        async def fake_scan(src_a, src_b, query, usage=None):
+            await asyncio.sleep(0)
+            if "run-a" in src_a["url"]:
+                return {"has_difference": True, "type": "tradeoff_disagreement",
+                        "explanation": "e"}
+            return None  # run B: unusable replies -> unscanned
+
+        async def fake_call_model(prompt, model="x", tag="", **kwargs):
+            await asyncio.sleep(0)
+            return {"resolution": "a", "confidence": "high", "reasoning": "r"}
+
+        monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
+        monkeypatch.setattr(cd, "call_model", fake_call_model)
+
+        def _sources_for(prefix: str, count: int) -> list[dict]:
+            rows = _sources(count)
+            for index, row in enumerate(rows):
+                row["url"] = f"https://{prefix}-{index}.example.invalid/"
+            return rows
+
+        for _ in range(20):
+            results = await asyncio.gather(
+                cd.ConflictDetectorAgent(gather_evidence=False).run({
+                    "source_scores": _sources_for("run-a", 4),
+                    "task": {"query": "a vs b"}, "token_usage": [],
+                }),
+                cd.ConflictDetectorAgent(gather_evidence=False).run({
+                    "source_scores": _sources_for("run-b", 6),
+                    "task": {"query": "c vs d"}, "token_usage": [],
+                }),
+            )
+            check_a = results[0]["conflict_check"]
+            check_b = results[1]["conflict_check"]
+            assert check_a["scan_outcomes"]["unscanned"] == 0, check_a
+            assert check_a["scan_outcomes"]["difference"] == 6, check_a
+            assert check_a["pairs_confirmed_difference"] == 6, check_a
+            assert check_a["pairs_arbitration_failed"] == 0, check_a
+            assert check_b["pairs_confirmed_difference"] == 0, check_b
+            assert check_b["scan_outcomes"]["unscanned"] == 15, check_b
+            assert check_b["scan_outcomes"]["difference"] == 0, check_b
+            assert check_b["reason"] == "no_pairs_confirmed", check_b
