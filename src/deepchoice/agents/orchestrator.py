@@ -151,19 +151,43 @@ class ChiefEditorAgent:
         result = await chain.ainvoke(initial_state, config=config)
         return result
 
-    async def astream_research_task(self, task: dict | None = None):
+    async def astream_research_task(self, task: dict | None = None,
+                                    resume: bool = False):
         task = task or self.task
         has_sub_questions = bool(task.get("sub_questions"))
         start_from = "query_adapter" if has_sub_questions else "query_analyzer"
 
-        print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
+        if resume:
+            # A resume must NOT pass the normal initial state: LangGraph continues
+            # from the latest checkpoint for this thread_id only when the input is
+            # None. Passing {"task": ...} would start again at the entry point and
+            # re-run nodes that already completed (and were already paid for).
+            print_agent_output(
+                "Resuming research from the latest checkpoint", agent="ORCHESTRATOR")
+        else:
+            print_agent_output(
+                f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
         config = self._make_config()
-        initial_state = {"task": task}
-        if has_sub_questions:
-            initial_state["sub_questions"] = task["sub_questions"]
+
+        initial_state = None
+        if not resume:
+            initial_state = {"task": task}
+            if has_sub_questions:
+                initial_state["sub_questions"] = task["sub_questions"]
 
         async for event in chain.astream(initial_state, config=config, stream_mode="updates"):
+            yield event
+
+    async def resume_research_task(self):
+        """Continue a previous run from its latest checkpoint.
+
+        The caller is responsible for re-creating the orchestrator with the
+        original thread_id and a live checkpointer. Attempt limits, checkpoint
+        schema version and concurrency are validated by the server before this
+        is called; this method only streams the remaining nodes.
+        """
+        async for event in self.astream_research_task(resume=True):
             yield event
 
     async def get_state(self):

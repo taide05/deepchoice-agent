@@ -38,6 +38,13 @@ LLM_REQUESTS_MAX = int(os.environ.get("PRECODEX_LLM_MAX", "40"))
 TAVILY_POSTS_MAX = int(os.environ.get("PRECODEX_TAVILY_MAX", "24"))
 WALL_CLOCK_MAX_S = float(os.environ.get("PRECODEX_WALL_MAX_S", "900"))
 
+# The graph's checkpoint schema version, recorded in every run record. Bump it
+# whenever ResearchState changes in a way that makes an older checkpoint unsafe
+# to continue from (for example the retry_count Step B removal). The resume path
+# refuses a task recorded under another version; see the resume design record:
+# internal_docs/fix_plans/CHECKPOINT_RESUME_DESIGN_2026-11-17.md.
+GRAPH_SCHEMA_VERSION = 2
+
 _state: dict = {
     "llm_requests": 0,
     "tavily_posts": 0,
@@ -48,6 +55,9 @@ _state: dict = {
     "stop_reason": None,
     "stop_at": None,
     "events": [],
+    # Which attempt of this task is running: 1 for a normal start, >1 for a
+    # resume. Each attempt gets its own wall clock and dispatch budget.
+    "attempt": 1,
 }
 
 # Verification-only: shifts the research clock so a deadline can be exercised
@@ -117,6 +127,7 @@ def _iso(epoch: float | None) -> str | None:
 
 def _run_state(mutate: dict | None = None) -> dict:
     """Current run-state record, optionally updated with `mutate`."""
+    attempt = max(1, int(_state.get("attempt") or 1))
     record = {
         "task_id": _task_id,
         "state": "running",
@@ -124,6 +135,11 @@ def _run_state(mutate: dict | None = None) -> dict:
         # The launcher's per-service token: how its guard knows this run belongs
         # to the child it started, without depending on process ids.
         "service_token": os.environ.get("DEEPCHOICE_SERVICE_TOKEN"),
+        # Which attempt this record describes, and whether it continues an earlier
+        # run. The server's resume path reads these to enforce its attempt cap.
+        "attempt": attempt,
+        "resumed": attempt > 1,
+        "graph_schema_version": GRAPH_SCHEMA_VERSION,
         "started_at_epoch": _state.get("run_started_at_epoch"),
         "started_at_iso": _iso(_state.get("run_started_at_epoch")),
         "ended_at_epoch": None,
@@ -169,22 +185,30 @@ def _persist_active() -> bool:
     return (_run_dir / "run_limits_counts.json").is_file()
 
 
-def begin_run(task_id: str, directory: str) -> None:
+def begin_run(task_id: str, directory: str, attempt: int = 1) -> None:
     """Record the run's identity at the moment research actually starts.
 
     This is a precondition for dispatch, not a courtesy log line: if the identity,
     start time and limits cannot be written, the caller must not enter the graph
     or make a research outbound call, and raises RunRecordError.
+
+    `attempt` is 1 for a normal start and increases for each resume. Every attempt
+    opens its own wall-clock window and its own dispatch budget: the process
+    counters are global, so `_check` measures the delta since `counts_at_start`.
     """
     global _run_dir, _task_id
+    attempt = max(1, int(attempt))
     _run_dir = pathlib.Path(directory)
     _task_id = task_id
+    _state["attempt"] = attempt
     # Each run gets its own clock. Reusing an earlier run's start would make the
     # guard treat a fresh run as already near its deadline.
     _state["run_started_at_epoch"] = time.time()
     if _state.get("run_started_at") is None or _state.get("run_ended"):
         _state["run_started_at"] = time.monotonic()
         _state["run_ended"] = False
+    # Each attempt gets its own dispatch budget; the counters themselves are
+    # process-wide, so the budget is the delta from this snapshot.
     _state["counts_at_start"] = {
         "llm_requests": _state["llm_requests"],
         "tavily_posts": _state["tavily_posts"],
@@ -259,10 +283,14 @@ def set_wall_clock_max(seconds: float) -> None:
 
 
 def _check(kind: str) -> None:
-    """Raise if this run may no longer dispatch.
+    """Raise if this attempt may no longer dispatch.
 
     Order matters: the shared stop flag is consulted first, so once any category
     has tripped, every later dispatch of either category is refused.
+
+    The dispatch budgets are per attempt (not per process): a resumed attempt is
+    measured from the counts captured by `begin_run`. A first attempt starts from
+    zero, which is the old behaviour.
     """
     if stopped():
         raise DispatchLimitReached(
@@ -274,10 +302,13 @@ def _check(kind: str) -> None:
         raise DispatchLimitReached(
             f"research wall clock reached ({WALL_CLOCK_MAX_S}s)"
         )
-    if kind == "llm" and _state["llm_requests"] >= LLM_REQUESTS_MAX:
+    counts_at_start = _state.get("counts_at_start") or {}
+    attempt_llm = _state["llm_requests"] - int(counts_at_start.get("llm_requests", 0))
+    attempt_tavily = _state["tavily_posts"] - int(counts_at_start.get("tavily_posts", 0))
+    if kind == "llm" and attempt_llm >= LLM_REQUESTS_MAX:
         _note("llm_requests", f"cap {LLM_REQUESTS_MAX} reached")
         raise DispatchLimitReached(f"LLM request stop line reached ({LLM_REQUESTS_MAX})")
-    if kind == "tavily" and _state["tavily_posts"] >= TAVILY_POSTS_MAX:
+    if kind == "tavily" and attempt_tavily >= TAVILY_POSTS_MAX:
         _note("tavily_posts", f"cap {TAVILY_POSTS_MAX} reached")
         raise DispatchLimitReached(f"Tavily POST stop line reached ({TAVILY_POSTS_MAX})")
 
@@ -286,6 +317,8 @@ def snapshot() -> dict:
     out = dict(_state)
     out.update(
         task_id=_task_id,
+        attempt=max(1, int(_state.get("attempt") or 1)),
+        graph_schema_version=GRAPH_SCHEMA_VERSION,
         llm_requests_max=LLM_REQUESTS_MAX,
         tavily_posts_max=TAVILY_POSTS_MAX,
         wall_clock_max_s=WALL_CLOCK_MAX_S,

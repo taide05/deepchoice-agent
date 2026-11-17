@@ -8,6 +8,7 @@ meaningful for genuinely dead code without flagging public API surface.
 canonical_source_title  # public API
 resolve_citations  # public API
 run_research_task  # public API
+resume_research_task  # public API (server resume path, exercised from tests)
 run_probe  # public API
 run_arm_limited  # public API
 default_evidence_budget  # public API
