@@ -58,7 +58,6 @@ def _initial_state(task: dict) -> dict:
         "report": "",
         "confidence": "",
         "knowledge_gaps": [],
-        "retry_count": 0,
         "partial_failures": [],
         "empty_sources": [],
         "quality_signals": [],

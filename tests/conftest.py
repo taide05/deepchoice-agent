@@ -25,7 +25,6 @@ def sample_state(sample_task):
         "report": "",
         "confidence": "",
         "knowledge_gaps": [],
-        "retry_count": 0,
         "partial_failures": [],
         "current_phase": "",
     }

@@ -47,7 +47,6 @@ clarify_finalize  # public API
 final_recommendation  # public API
 knowledge_gaps  # public state field (synthesis/report contract)
 set_readonly  # public API (benchmark entry point opt-out)
-retry_count  # public API
 current_phase  # public API
 agent_timing  # public API
 candidate_tokens  # public API

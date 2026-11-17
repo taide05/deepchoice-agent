@@ -104,7 +104,7 @@ def _pipeline_patches(calls: _NodeCalls, fail_once: dict[str, Exception]):
                                    "confidence": "medium"},
         "report_generator": {"report": "# R"},
         "self_reviewer": {"report": "# R", "confidence": "high",
-                          "knowledge_gaps": [], "retry_count": 0,
+                          "knowledge_gaps": [],
                           "final_recommendation": {}},
     }
     class_names = {
@@ -196,7 +196,9 @@ def test_run_record_carries_attempt_and_schema_version(monkeypatch):
     assert record["attempt"] == 2
     assert record["resumed"] is True
     assert record["graph_schema_version"] == run_limits.GRAPH_SCHEMA_VERSION
-    assert run_limits.GRAPH_SCHEMA_VERSION >= 2
+    # v3 removed retry_count from ResearchState; bump this deliberately whenever
+    # the state contract changes, because resume refuses older checkpoints.
+    assert run_limits.GRAPH_SCHEMA_VERSION == 3
 
     run_limits._state["attempt"] = 1
     first = run_limits._run_state()

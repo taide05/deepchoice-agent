@@ -83,7 +83,7 @@ class TestFullPipeline:
         assert result["confidence"] == "high"
         assert result["report"] == MOCK_REPORT
         assert len(result["evidence_chains"]) == 1
-        assert result.get("retry_count", 0) == 0
+        assert "retry_count" not in result, "the removed retry state must not come back"
         assert result["current_phase"] == "self_reviewer"
         all_nodes = {
             "query_analyzer", "query_adapter", "multi_retriever", "source_evaluator",

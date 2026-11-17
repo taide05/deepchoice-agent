@@ -1,9 +1,10 @@
-"""Unreachable retry paths are gone: nothing routes on retry_count any more.
+"""Knowledge gaps never become search targets: the graph has no retry edge.
 
-The graph has no retry edge (`self_reviewer` is terminal), so `knowledge_gaps`
-never become new search targets and `retry_count` is a deprecated constant. These
-tests pin the observable result: a run that still carries knowledge_gaps and
-retry_count=1 adapts and searches the original sub-questions, not the gaps.
+`self_reviewer` is terminal, so a low-confidence review serves the result as-is
+and `knowledge_gaps` stay in the state/snapshot. There is no retry routing, and
+the deprecated `retry_count` field was removed (2026-11-17 Step B). These tests
+pin the observable result: a run that still carries knowledge_gaps adapts and
+searches the original sub-questions, not the gaps.
 """
 from __future__ import annotations
 
@@ -26,7 +27,6 @@ def test_query_adapter_ignores_retry_targets(monkeypatch):
         "task": {"query": "Kafka vs Redis", "constraints": []},
         "sub_questions": ["throughput comparison question"],
         "knowledge_gaps": ["a gap query"],
-        "retry_count": 1,
     }))
 
     assert "throughput comparison question" in captured["prompt"]
@@ -54,7 +54,6 @@ def test_multi_retriever_ignores_retry_targets(monkeypatch):
         "sub_questions": ["throughput comparison question"],
         "adapted_queries": {},
         "knowledge_gaps": ["a gap query"],
-        "retry_count": 1,
         "token_usage": [],
     }))
 

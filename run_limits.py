@@ -40,10 +40,10 @@ WALL_CLOCK_MAX_S = float(os.environ.get("PRECODEX_WALL_MAX_S", "900"))
 
 # The graph's checkpoint schema version, recorded in every run record. Bump it
 # whenever ResearchState changes in a way that makes an older checkpoint unsafe
-# to continue from (for example the retry_count Step B removal). The resume path
-# refuses a task recorded under another version; see the resume design record:
-# internal_docs/fix_plans/CHECKPOINT_RESUME_DESIGN_2026-11-17.md.
-GRAPH_SCHEMA_VERSION = 2
+# to continue from. History: v2 = post-repair contract; v3 = retry_count removed
+# (2026-11-17 Step B). The resume path refuses a task recorded under another
+# version; see internal_docs/fix_plans/CHECKPOINT_RESUME_DESIGN_2026-11-17.md.
+GRAPH_SCHEMA_VERSION = 3
 
 _state: dict = {
     "llm_requests": 0,
