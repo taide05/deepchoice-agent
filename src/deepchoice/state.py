@@ -14,12 +14,18 @@ class ResearchState(TypedDict):
     report: str
     confidence: str
     knowledge_gaps: list[str]
+    # deprecated: always 0. The graph has no retry edge (self_reviewer is
+    # terminal), so nothing re-enters the pipeline with these gaps. Kept for one
+    # release so saved snapshots and readers do not break.
     retry_count: int
     partial_failures: list[str]
     # Sources that returned no research material (as opposed to failing). Kept in
     # state so the snapshot preserves which source is empty and why; an
     # undeclared field would be dropped by the graph on write.
     empty_sources: list[dict]
+    # Per-node quality signals, accumulated explicitly in
+    # orchestrator._timed_node. Deliberately no `Annotated` reducer: the graph
+    # must not append a node's own signal twice when that node replays.
     quality_signals: list[dict]
     current_phase: str
     agent_timing: dict
