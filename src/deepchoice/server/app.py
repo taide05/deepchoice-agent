@@ -133,13 +133,18 @@ def _resume_metadata(state, attempt: int) -> dict:
     }
 
 
-def _failed_status_payload(task_id: str, error: str) -> dict:
-    """Status body for a failed task, including whether it can be resumed."""
+def _partial_status_payload(task_id: str, error: str | None = None) -> dict:
+    """Status body for a failed/cancelled task, including whether it can be resumed.
+
+    The status comes from the persisted attempt snapshot (`_status`): a cancelled
+    run must not be reported as failed, even though both are resumable.
+    """
     info = _resume_info(task_id)
+    partial = load_failed_snapshot(task_id) or {}
     return {
         "task_id": task_id,
-        "status": "failed",
-        "error": error,
+        "status": partial.get("_status") or "failed",
+        "error": error if error is not None else partial.get("_error", ""),
         "attempt": info["attempt"],
         "max_attempts": info["max_attempts"],
         "resumable": info["resumable"],
@@ -277,7 +282,19 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent,
         end_state = "complete"
     except asyncio.CancelledError:
         # Normal cancellation (HTTP cancel or stream timer). Recorded as
-        # cancelled — never as complete, and never as a forced stop.
+        # cancelled — never as complete, and never as a forced stop. The partial
+        # snapshot keeps the checkpoint position so the task can be resumed later.
+        try:
+            state = await orchestrator.get_state()
+            partial = dict(state.values) if state and state.values else {}
+            partial["_resume"] = _resume_metadata(state, resume_attempt)
+            save_failed_snapshot(task_id, partial, "research cancelled",
+                                 attempt=resume_attempt, status="cancelled")
+            entry["resume"] = partial["_resume"]
+        except Exception as persist_err:
+            print_agent_output(
+                f"Failed to persist cancelled snapshot for {task_id}: {persist_err}",
+                agent="SERVER")
         entry["status"] = "cancelled"
         entry["events"].append({"__error__": {"detail": "research cancelled"}})
         entry["queue"].put_nowait(_STREAM_ERROR)
@@ -292,7 +309,8 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent,
             state = await orchestrator.get_state()
             partial = dict(state.values) if state and state.values else {}
             partial["_resume"] = _resume_metadata(state, resume_attempt)
-            save_failed_snapshot(task_id, partial, str(e))
+            save_failed_snapshot(task_id, partial, str(e),
+                                 attempt=resume_attempt, status="failed")
             entry["resume"] = partial["_resume"]
         except Exception as persist_err:
             print_agent_output(f"Failed to persist failure snapshot for {task_id}: {persist_err}", agent="SERVER")
@@ -370,7 +388,9 @@ async def research_status(task_id: str):
             "reason": "already_complete",
         }
     if entry and entry.get("status") == "failed":
-        return _failed_status_payload(task_id, entry.get("error", ""))
+        return _partial_status_payload(task_id, entry.get("error"))
+    if entry and entry.get("status") == "cancelled":
+        return _partial_status_payload(task_id, entry.get("error"))
     if entry and entry.get("status") == "resuming":
         orchestrator = entry.get("orchestrator")
         return {
@@ -412,10 +432,10 @@ async def research_status(task_id: str):
             }
         failed = load_failed_snapshot(task_id)
         if failed:
-            # A failed run stays inspectable after a restart instead of reading
-            # as "task not found"; the partial snapshot carries what ended it and
-            # whether the checkpoint has pending nodes to resume from.
-            return _failed_status_payload(task_id, failed.get("_error", ""))
+            # A failed/cancelled run stays inspectable after a restart instead of
+            # reading as "task not found"; the latest attempt snapshot carries
+            # what ended it and whether the checkpoint has pending nodes.
+            return _partial_status_payload(task_id, failed.get("_error"))
         raise HTTPException(status_code=404, detail="Task not found")
 
     return {
@@ -650,12 +670,19 @@ async def research_export(task_id: str, format: str = "md", report_format: str =
 
 
 @app.get("/research/{task_id}/snapshot")
-async def research_snapshot(task_id: str):
+async def research_snapshot(task_id: str, attempt: int | None = None):
+    if attempt is not None:
+        # Explicit attempt inspection: any persisted partial attempt can be read
+        # by number, even after the task was later completed by another attempt.
+        partial = load_failed_snapshot(task_id, attempt=attempt)
+        if not partial:
+            raise HTTPException(status_code=404, detail="Attempt not found")
+        return partial
     snapshot = load_snapshot(task_id)
     if not snapshot:
-        # A failed run persists its partial snapshot under a separate file. It is
-        # served here (marked `_status: failed` and carrying `_error`) so the
-        # partial result is inspectable rather than answering 404.
+        # A failed/cancelled run persists a partial snapshot per attempt. The
+        # latest one is served here (marked `_status` and carrying `_error`) so
+        # the partial result is inspectable rather than answering 404.
         snapshot = load_failed_snapshot(task_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Task not found")

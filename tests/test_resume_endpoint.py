@@ -131,7 +131,7 @@ def _write_failed_snapshot(task_id: str, next_nodes=("evidence_chain",),
     snapshot_store.save_failed_snapshot(
         task_id, {"task": {"query": "Kafka vs Redis"}, "confidence": "low"},
         "boom")
-    path = snapshot_store.OUTPUT_DIR / task_id / "research_snapshot_failed.json"
+    path = snapshot_store.failed_snapshot_path(task_id, 1)
     data = json.loads(path.read_text(encoding="utf-8"))
     data["_resume"] = {
         "attempt": 1,

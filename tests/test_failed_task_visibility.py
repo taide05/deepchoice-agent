@@ -1,10 +1,10 @@
 """A failed research run must stay inspectable after the process restarts.
 
 The server persists a failed run's partial state to
-`outputs/{task_id}/research_snapshot_failed.json` (save_failed_snapshot), but no
-endpoint read that file: after a restart the failed task answered 404 while its
-partial evidence sat on disk. These tests pin the read paths for the snapshot,
-status and history endpoints.
+`outputs/{task_id}/research_snapshot_failed_attempt{N}.json`
+(save_failed_snapshot), but no endpoint read that file: after a restart the
+failed task answered 404 while its partial evidence sat on disk. These tests pin
+the read paths for the snapshot, status and history endpoints.
 """
 from __future__ import annotations
 
