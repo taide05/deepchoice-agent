@@ -549,8 +549,8 @@ class TestMultiRetriever:
         assert signal["retrievers_succeeded"] == 1
         assert signal["retrievers_failed"] == 1
         assert signal["retrievers_empty"] == 1
-        # Deprecated alias still means "registered", so old readers do not break.
-        assert signal["retrievers_used"] == signal["retrievers_registered"]
+        # The old single counter was removed after its one-release window.
+        assert "retrievers_used" not in signal
 
 
 def test_tech_aliases_target_existing_keys():

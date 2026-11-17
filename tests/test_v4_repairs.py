@@ -101,7 +101,6 @@ class TestFlaggedSourcesAreNotCalledConfirmedContradictions:
         ]
         state["conflict_check"] = {"pairs_scanned": len(resolutions),
                                    "pairs_arbitrated": len(resolutions),
-                                   "pairs_evidence": 0,
                                    "pairs_arbitration_failed": 0,
                                    "scan_outcomes": {"difference": len(resolutions),
                                                      "no_difference": 0, "unscanned": 0}}

@@ -43,29 +43,18 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
-# Tier -> provider config (user decision 2026-09-01). The two tier names are:
-# deepseek-flash (the hot, high-frequency path) and the deprecated qwen-flash
-# alias below.
+# Tier -> provider config (user decision 2026-09-01). Only `deepseek-flash`
+# remains: it serves the hot, high-frequency path and report synthesis alike.
 #
 # RECOVERY ADAPTER (2026-10-14): this revision is 48b32bd + a service
 # adaptation, NOT a reproduction of the historical model setup. The retired
-# Qwen/DashScope tier no longer has credentials, so the qwen-flash tier name is
-# kept for call sites/snapshots that still name it but served by the current
-# DeepSeek service and credential. The Qwen-only `enable_thinking` payload is
-# dropped because it is not part of the DeepSeek request contract. No research
-# node, prompt or answer-handling rule is changed; only the transport target.
-#
-# DEPRECATED ALIAS (2026-11-17): `qwen-flash` resolves to the same service and
-# model as `deepseek-flash`. New code must ask for "deepseek-flash"; the alias is
-# kept one release for snapshots and external callers that still name the tier.
+# Qwen/DashScope tier no longer has credentials; it was kept as a `qwen-flash`
+# alias for one release (removed 2026-11) and now resolves to deepseek-flash. The
+# Qwen-only `enable_thinking` payload is dropped because it is not part of the
+# DeepSeek request contract. No research node, prompt or answer-handling rule is
+# changed; only the transport target.
 TIERS = {
     "deepseek-flash": {
-        "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
-        "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
-        "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),
-    },
-    # Deprecated alias — see the note above.
-    "qwen-flash": {
         "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
         "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
         "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),

@@ -187,6 +187,9 @@ class TestSummarizeUsage:
         }
 
     def test_mixed_models_joins_unique_names(self):
+        # Historical token_usage rows (saved before the retired tier alias was
+        # removed) can still carry a different model name; summarize reads the
+        # data, not the current tier table.
         records = [
             {"model": "deepseek-flash", "prompt_tokens": 10,
              "completion_tokens": 5, "total_tokens": 15},

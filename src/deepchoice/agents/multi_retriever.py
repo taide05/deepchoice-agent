@@ -140,9 +140,9 @@ class MultiRetrieverAgent:
             1 for r in search_results if r.get("status") == "success")
         quality_signal = {
             "agent": "multi_retriever",
-            # Registered is not the same fact as succeeded: `retrievers_used` was
-            # the registration count and read as "how many were used", which was
-            # wrong whenever a source failed or came back empty.
+            # Registered is not the same fact as succeeded: the old single counter
+            # read as "how many were used" while carrying the registration count,
+            # which was wrong whenever a source failed or came back empty.
             "retrievers_registered": len(RETRIEVER_REGISTRY),
             "retrievers_succeeded": retrievers_succeeded,
             "retrievers_failed": len(partial_failures),
@@ -154,9 +154,6 @@ class MultiRetrieverAgent:
             "source_result_rows": source_rows,
             "official_page_attempts": (official_stats or {}).get("page_attempts"),
             "official_http_requests": (official_stats or {}).get("http_requests"),
-            # Deprecated alias kept one release for snapshots/readers: it has
-            # always been the registration count.
-            "retrievers_used": len(RETRIEVER_REGISTRY),
         }
         return {
             "search_results": search_results,

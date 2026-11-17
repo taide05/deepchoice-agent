@@ -98,12 +98,10 @@ class TestScanWorkBound:
         assert len(gathered) == 1, f"evidence gathered for {len(gathered)} pairs"
         assert "conflict_rearbitration" not in arbitrated
         check = result["conflict_check"]
-        # One requested evidence pass that actually completed. The deprecated
-        # `pairs_evidence` alias means "requested"; the collected counter is what
-        # proves the re-arbitration ran.
+        # One requested evidence pass that actually completed. The collected
+        # counter is what proves the re-arbitration ran.
         assert check["pairs_evidence_requested"] == 1
         assert check["pairs_evidence_collected"] == 1
-        assert check["pairs_evidence"] == check["pairs_evidence_requested"]
         assert check["pairs_scanned"] <= 15
 
     @pytest.mark.asyncio
@@ -612,7 +610,6 @@ CONFLICT_CHECK_KEYS = {
     "pairs_arbitration_failed",
     "pairs_evidence_requested",
     "pairs_evidence_collected",
-    "pairs_evidence",  # deprecated alias for pairs_evidence_requested
     "scan_outcomes",
     "sources_without_comparable_claim",
     "reason",
@@ -729,7 +726,6 @@ class TestConflictCheckContract:
         assert gathered, "the ambiguous pair must still get one evidence pass"
         assert check["pairs_evidence_requested"] == 1, check
         assert check["pairs_evidence_collected"] == 0, check
-        assert check["pairs_evidence"] == check["pairs_evidence_requested"], check
 
     @pytest.mark.asyncio
     async def test_concurrent_runs_keep_their_own_conflict_check(self, monkeypatch):

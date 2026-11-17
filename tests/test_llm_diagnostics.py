@@ -87,7 +87,7 @@ class TestRecordCallback:
         assert result == "plain"
 
     @pytest.mark.asyncio
-    async def test_default_tag_falls_back_to_tier(self):
+    async def test_unknown_tier_falls_back_to_deepseek_flash(self):
         records = []
 
         async def cb(e):
@@ -96,8 +96,11 @@ class TestRecordCallback:
         set_record_callback(cb)
         with patch("deepchoice.utils.llm._get_client",
                    return_value=_Client(_resp("plain"))):
+            # A retired tier name (or a manual caller) resolves to the only
+            # configured tier instead of raising.
             await call_model([{"role": "user", "content": "hi"}], model="qwen-flash")
-        assert records[0]["tag"] == "qwen-flash"
+        assert records[0]["tier"] == "deepseek-flash"
+        assert records[0]["tag"] == "deepseek-flash"
 
 
 class _CaptureClient:
@@ -113,21 +116,20 @@ class _CaptureClient:
 
 class TestExtraBody:
     @pytest.mark.asyncio
-    async def test_per_call_extra_body_overrides_tier_default(self):
+    async def test_per_call_extra_body_is_passed_through(self):
         c = _CaptureClient(_resp('{"a": 1}'))
         with patch("deepchoice.utils.llm._get_client", return_value=c):
             await call_model(
                 [{"role": "user", "content": "json please"}],
-                model="qwen-flash", response_format="json",
+                model="deepseek-flash", response_format="json",
                 extra_body={"enable_thinking": True},
             )
         assert c.kwargs["extra_body"] == {"enable_thinking": True}
 
     @pytest.mark.asyncio
-    async def test_no_extra_body_on_the_report_tier(self):
-        # The report tier used to send the Qwen-only enable_thinking payload.
-        # RECOVERY ADAPTER: that tier is served by DeepSeek now, which has no such
-        # field, so a call without an explicit extra_body must send none.
+    async def test_retired_tier_name_sends_no_qwen_only_payload(self):
+        # A saved artifact or manual caller may still name the retired tier; it
+        # resolves to DeepSeek now and must not carry the Qwen-only payload.
         c = _CaptureClient(_resp('{"a": 1}'))
         with patch("deepchoice.utils.llm._get_client", return_value=c):
             await call_model(

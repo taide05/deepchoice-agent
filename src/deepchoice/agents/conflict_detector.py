@@ -646,8 +646,6 @@ class ConflictDetectorAgent:
                 "pairs_arbitration_failed": 0,
                 "pairs_evidence_requested": 0,
                 "pairs_evidence_collected": 0,
-                # Deprecated alias kept one release: it always meant "requested".
-                "pairs_evidence": 0,
                 "scan_outcomes": outcomes,
                 "sources_without_comparable_claim": int(
                     coverage.get("sources_without_comparable_claim") or 0),
@@ -840,8 +838,6 @@ class ConflictDetectorAgent:
             "pairs_arbitration_failed": failed_arbitrations,
             "pairs_evidence_requested": len(evidence_pairs),
             "pairs_evidence_collected": evidence_collected,
-            # Deprecated alias kept one release: it always meant "requested".
-            "pairs_evidence": len(evidence_pairs),
             "scan_outcomes": outcomes,
             # Sources that could not supply a comparable claim (navigation or
             # repository metadata). They are not silently treated as agreeing.
