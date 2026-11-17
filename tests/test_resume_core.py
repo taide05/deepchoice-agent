@@ -267,9 +267,9 @@ def test_checkpoint_stats_counts_tables_and_top_threads():
     stats_module = _load_checkpoint_stats_module()
     conn = sqlite3.connect(":memory:")
     try:
+        # langgraph-checkpoint-sqlite 3.x on-disk schema (verified against the
+        # installed saver): `checkpoints` + `writes`.
         conn.execute("create table checkpoints (thread_id text, checkpoint_id text)")
-        conn.execute("create table checkpoint_writes (thread_id text)")
-        conn.execute("create table checkpoint_blobs (thread_id text)")
         conn.execute("create table writes (thread_id text)")
         conn.executemany(
             "insert into checkpoints values (?, ?)",
@@ -281,7 +281,8 @@ def test_checkpoint_stats_counts_tables_and_top_threads():
     finally:
         conn.close()
 
-    assert stats["missing_required_tables"] == []
+    assert stats["missing_expected_tables"] == []
+    assert stats["unexpected_tables"] == []
     assert stats["tables"]["checkpoints"] == 6
     assert stats["thread_count"] == 3
     assert [row["thread_id"] for row in stats["top_threads"]] == ["t1", "t2"]
@@ -299,7 +300,8 @@ def test_checkpoint_stats_reports_missing_tables_without_failing():
     finally:
         conn.close()
 
-    assert "checkpoints" in stats["missing_required_tables"]
+    assert set(stats["missing_expected_tables"]) == {"checkpoints", "writes"}
+    assert stats["unexpected_tables"] == ["unrelated"]
     assert stats["thread_count"] == 0
     assert stats["top_threads"] == []
 

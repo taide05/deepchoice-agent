@@ -5,17 +5,19 @@ resume design was written) and has no retention policy. This script answers the
 questions a retention decision needs: how big is the file, how many threads does
 it hold, and which threads own the most checkpoints.
 
-It is deliberately read-only. Deleting LangGraph rows touches the version-specific
-tables (`checkpoints`, `checkpoint_writes`, `checkpoint_blobs`) and must be an
-explicit, backed-up admin action; no destructive mode is offered here.
+It is deliberately read-only. Deleting LangGraph rows means deleting the
+thread's rows from the version-specific tables (`checkpoints` and `writes` for
+langgraph-checkpoint-sqlite 3.x) and must be an explicit, backed-up admin
+action; no destructive mode is offered here.
 
 Design record: internal_docs/fix_plans/CHECKPOINT_RESUME_DESIGN_2026-11-17.md
 (decision D3 and milestone M0). Recommended retention: keep the most recent 30
 days or the most recent 200 tasks, whichever is larger; archive the rest.
 
-Usage:
-    python scripts/checkpoint_stats.py
-    python scripts/checkpoint_stats.py --db outputs/checkpoints.db --top 20
+Observed on 2026-11-17: 2,342.5 MB, 1,541 threads, 16,904 checkpoint rows and
+90,627 write rows. The on-disk schema matches langgraph-checkpoint-sqlite 3.x
+(`checkpoints` + `writes`); resume compatibility is gated by the per-task
+`run_state.json` `graph_schema_version`, not by the database tables.
 """
 
 from __future__ import annotations
@@ -31,8 +33,10 @@ from pathlib import Path
 RETENTION_DAYS = 30
 RETENTION_TASKS = 200
 
-# Tables that must exist for the database to be a LangGraph checkpoint store.
-REQUIRED_TABLES = ("checkpoints", "checkpoint_writes", "checkpoint_blobs", "writes")
+# On-disk tables used by langgraph-checkpoint-sqlite 3.x (verified by opening the
+# installed saver and reading sqlite_master). A database without them is not the
+# checkpoint store this tool inventories.
+EXPECTED_TABLES = ("checkpoints", "writes")
 
 
 def open_readonly(db_path: Path) -> sqlite3.Connection:
@@ -60,7 +64,8 @@ def collect_stats(conn: sqlite3.Connection, top: int = 20) -> dict:
     tables = [row[0] for row in conn.execute(
         "select name from sqlite_master where type='table' order by name")]
     table_counts = {table: _table_rows(conn, table) for table in tables}
-    missing = [table for table in REQUIRED_TABLES if table not in tables]
+    missing = [table for table in EXPECTED_TABLES if table not in tables]
+    unexpected = [table for table in tables if table not in EXPECTED_TABLES]
 
     thread_count = 0
     top_threads: list[dict] = []
@@ -80,7 +85,8 @@ def collect_stats(conn: sqlite3.Connection, top: int = 20) -> dict:
 
     return {
         "tables": table_counts,
-        "missing_required_tables": missing,
+        "missing_expected_tables": missing,
+        "unexpected_tables": unexpected,
         "thread_count": thread_count,
         "top_threads": top_threads,
         "retention_policy": {
