@@ -34,6 +34,7 @@ start_research  # public API
 cancel_research  # public API
 stream_research  # public API
 research_checkpoints  # public API
+resume_research  # public API (FastAPI route registered by decorator)
 research_report  # public API
 research_annotated  # public API
 research_export  # public API
