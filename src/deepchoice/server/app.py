@@ -22,6 +22,7 @@ from .clarify_routes import router as clarify_router
 from .security import ApiSecurityMiddleware
 from .snapshot_store import (
     list_history,
+    load_failed_snapshot,
     load_snapshot,
     save_failed_snapshot,
     save_report,
@@ -301,6 +302,15 @@ async def research_status(task_id: str):
         snapshot = load_snapshot(task_id)
         if snapshot:
             return {"task_id": task_id, "status": "complete"}
+        failed = load_failed_snapshot(task_id)
+        if failed:
+            # A failed run stays inspectable after a restart instead of reading
+            # as "task not found"; the partial snapshot carries what ended it.
+            return {
+                "task_id": task_id,
+                "status": "failed",
+                "error": failed.get("_error", ""),
+            }
         raise HTTPException(status_code=404, detail="Task not found")
 
     return {
@@ -418,6 +428,11 @@ async def research_export(task_id: str, format: str = "md", report_format: str =
 @app.get("/research/{task_id}/snapshot")
 async def research_snapshot(task_id: str):
     snapshot = load_snapshot(task_id)
+    if not snapshot:
+        # A failed run persists its partial snapshot under a separate file. It is
+        # served here (marked `_status: failed` and carrying `_error`) so the
+        # partial result is inspectable rather than answering 404.
+        snapshot = load_failed_snapshot(task_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Task not found")
     return snapshot

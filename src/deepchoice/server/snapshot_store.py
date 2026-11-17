@@ -38,12 +38,32 @@ def load_snapshot(task_id: str) -> dict | None:
     return json.loads(snapshot_path.read_text(encoding="utf-8"))
 
 
+def load_failed_snapshot(task_id: str) -> dict | None:
+    """The partial snapshot persisted for a run that ended in failure.
+
+    A failed run is still inspectable: the server saves whatever the checkpoint
+    held when the exception ended the run, plus the error that ended it. Returns
+    None when the task never failed (or has no persisted failure at all).
+    """
+    if not _valid_task_id(task_id):
+        return None
+    snapshot_path = OUTPUT_DIR / task_id / "research_snapshot_failed.json"
+    if not snapshot_path.exists():
+        return None
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    # Failed snapshots written before this marker existed are still failures: the
+    # file itself is the evidence, so the status is not inferred from the caller.
+    snapshot.setdefault("_status", "failed")
+    return snapshot
+
+
 def save_failed_snapshot(task_id: str, state: dict, error: str) -> Path:
     task_dir = OUTPUT_DIR / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = task_dir / "research_snapshot_failed.json"
     serializable = {k: v for k, v in state.items() if k != "current_phase"}
     serializable["_error"] = error
+    serializable["_status"] = "failed"
     _atomic_write_text(
         snapshot_path,
         json.dumps(serializable, ensure_ascii=False, indent=2, default=str),
@@ -63,12 +83,26 @@ def list_history() -> list[dict]:
         return []
     history = []
     for task_dir in sorted(OUTPUT_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        if task_dir.is_dir():
-            snapshot = load_snapshot(task_dir.name)
-            if snapshot:
-                history.append({
-                    "task_id": task_dir.name,
-                    "query": snapshot.get("task", {}).get("query", ""),
-                    "confidence": snapshot.get("confidence", ""),
-                })
+        if not task_dir.is_dir():
+            continue
+        snapshot = load_snapshot(task_dir.name)
+        if snapshot:
+            history.append({
+                "task_id": task_dir.name,
+                "query": snapshot.get("task", {}).get("query", ""),
+                "confidence": snapshot.get("confidence", ""),
+                "status": "complete",
+            })
+            continue
+        # A failed run is part of the history too: it is inspectable through the
+        # same snapshot/status endpoints, so it must not silently disappear.
+        failed = load_failed_snapshot(task_dir.name)
+        if failed:
+            history.append({
+                "task_id": task_dir.name,
+                "query": failed.get("task", {}).get("query", ""),
+                "confidence": failed.get("confidence", ""),
+                "status": "failed",
+                "error": failed.get("_error", ""),
+            })
     return history[:50]
