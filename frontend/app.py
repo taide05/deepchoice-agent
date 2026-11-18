@@ -50,6 +50,22 @@ T = {
         "loss_connection": "与研究服务器连接中断:",
         "no_data_error": "没有研究数据，请返回重新澄清需求。",
         "restart_btn": "重新开始",
+        "research_state_failed": "研究运行失败",
+        "research_state_cancelled": "研究已取消",
+        "research_state_interrupted": "研究被中断（进程停止）",
+        "research_state_unknown": "研究状态未知",
+        "resume_btn": "从断点继续运行",
+        "resume_breakpoint": "断点位置：{node}（第 {step} 步）",
+        "resume_attempts": "已尝试 {attempt}/{max} 次",
+        "resume_reason_disabled": "续跑功能未启用（RESUME_ENABLED=0）",
+        "resume_reason_complete": "任务已完成，无需续跑",
+        "resume_reason_no_record": "没有可用的运行记录",
+        "resume_reason_schema": "运行记录的图版本与当前服务不兼容",
+        "resume_reason_exhausted": "续跑次数已用尽",
+        "resume_reason_no_checkpoint": "没有可续跑的检查点位置",
+        "resume_reason_unknown": "无法续跑（原因未知）",
+        "resume_in_progress": "已有续跑在进行中，正在接入…",
+        "resume_confirm_required": "需要确认后才能续跑",
         "stats_chains": "证据链",
         "stats_conflicts": "发现矛盾",
         "stats_confidence": "置信度",
@@ -146,6 +162,22 @@ T = {
         "loss_connection": "Lost connection to research server:",
         "no_data_error": "No research data. Please go back and re-clarify.",
         "restart_btn": "Restart",
+        "research_state_failed": "Research failed",
+        "research_state_cancelled": "Research cancelled",
+        "research_state_interrupted": "Research was interrupted (process stopped)",
+        "research_state_unknown": "Unknown research state",
+        "resume_btn": "Resume from checkpoint",
+        "resume_breakpoint": "Checkpoint: {node} (step {step})",
+        "resume_attempts": "Attempts used: {attempt}/{max}",
+        "resume_reason_disabled": "Resume is disabled (RESUME_ENABLED=0)",
+        "resume_reason_complete": "The task is already complete; nothing to resume",
+        "resume_reason_no_record": "No run record is available",
+        "resume_reason_schema": "The checkpoint graph version is incompatible with this server",
+        "resume_reason_exhausted": "The resume attempt limit has been reached",
+        "resume_reason_no_checkpoint": "There is no checkpoint position to resume from",
+        "resume_reason_unknown": "Cannot resume (unknown reason)",
+        "resume_in_progress": "A resume is already in progress; attaching…",
+        "resume_confirm_required": "A confirmation is required to resume",
         "stats_chains": "Evidence Chains",
         "stats_conflicts": "Conflicts Found",
         "stats_confidence": "Confidence",
@@ -242,6 +274,22 @@ T = {
         "loss_connection": "サーバー接続が失われました:",
         "no_data_error": "研究データがありません。戻って再確認してください。",
         "restart_btn": "再開始",
+        "research_state_failed": "研究実行に失敗しました",
+        "research_state_cancelled": "研究はキャンセルされました",
+        "research_state_interrupted": "研究が中断されました（プロセス停止）",
+        "research_state_unknown": "研究状態が不明です",
+        "resume_btn": "チェックポイントから再開",
+        "resume_breakpoint": "再開位置：{node}（ステップ {step}）",
+        "resume_attempts": "試行回数：{attempt}/{max}",
+        "resume_reason_disabled": "再開機能が無効です（RESUME_ENABLED=0）",
+        "resume_reason_complete": "タスクは完了済みです（再開は不要）",
+        "resume_reason_no_record": "実行記録がありません",
+        "resume_reason_schema": "実行記録のグラフ版が現在のサービスと互換性がありません",
+        "resume_reason_exhausted": "再開回数の上限に達しました",
+        "resume_reason_no_checkpoint": "再開できるチェックポイント位置がありません",
+        "resume_reason_unknown": "再開できません（原因不明）",
+        "resume_in_progress": "再開処理が既に進行中です。接続しています…",
+        "resume_confirm_required": "再開には確認が必要です",
         "stats_chains": "証拠チェーン",
         "stats_conflicts": "検出された矛盾",
         "stats_confidence": "信頼度",
@@ -338,6 +386,22 @@ T = {
         "loss_connection": "연구 서버 연결 손실:",
         "no_data_error": "연구 데이터가 없습니다. 돌아가서 다시 확인해 주세요.",
         "restart_btn": "다시 시작",
+        "research_state_failed": "연구 실행 실패",
+        "research_state_cancelled": "연구가 취소되었습니다",
+        "research_state_interrupted": "연구가 중단되었습니다(프로세스 중지)",
+        "research_state_unknown": "연구 상태를 알 수 없습니다",
+        "resume_btn": "체크포인트에서 계속",
+        "resume_breakpoint": "체크포인트 위치: {node} (단계 {step})",
+        "resume_attempts": "시도 횟수: {attempt}/{max}",
+        "resume_reason_disabled": "재개 기능이 비활성화됨(RESUME_ENABLED=0)",
+        "resume_reason_complete": "작업이 이미 완료되어 재개할 필요가 없습니다",
+        "resume_reason_no_record": "실행 기록이 없습니다",
+        "resume_reason_schema": "실행 기록의 그래프 버전이 현재 서비스와 호환되지 않습니다",
+        "resume_reason_exhausted": "재개 횟수 한도에 도달했습니다",
+        "resume_reason_no_checkpoint": "재개할 체크포인트 위치가 없습니다",
+        "resume_reason_unknown": "재개할 수 없습니다(원인 불명)",
+        "resume_in_progress": "이미 재개가 진행 중입니다. 연결 중…",
+        "resume_confirm_required": "재개하려면 확인이 필요합니다",
         "stats_chains": "증거 체인",
         "stats_conflicts": "발견된 충돌",
         "stats_confidence": "신뢰도",
@@ -648,6 +712,10 @@ DEFAULTS = {
     "research_running": False,
     "research_complete": False,
     "research_failed": False,
+    "research_status": None,
+    "research_resume_error": None,
+    "research_resume_attempt": None,
+    "research_error_detail": None,
     "research_events": [],
     "lang": "zh",
 }
@@ -895,11 +963,7 @@ def render_research_phase():
         _render_results()
 
     if st.session_state.research_failed:
-        st.error(t("loss_connection", lang))
-        if st.button(t("restart_btn", lang)):
-            for k in DEFAULTS:
-                st.session_state[k] = DEFAULTS[k]
-            st.rerun()
+        _render_failure_panel()
 
 
 def _start_research(task: dict, sub_questions: list[str]):
@@ -910,11 +974,160 @@ def _start_research(task: dict, sub_questions: list[str]):
             st.session_state.research_task_id = resp.json()["task_id"]
             st.session_state.research_running = True
         else:
-            st.error(f"Failed to start research: HTTP {resp.status_code}")
-            st.session_state.research_failed = True
+            _mark_research_failed(f"HTTP {resp.status_code}")
     except Exception as e:
-        st.error(f"Failed to start research: {e}")
-        st.session_state.research_failed = True
+        _mark_research_failed(str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Resume-from-checkpoint UI (M4)
+# A run that failed, was cancelled or was interrupted by a process stop keeps a
+# backend checkpoint. The panel asks /status for the resumable details and offers
+# exactly one explicit action; every refusal is explained in the UI language.
+# ═══════════════════════════════════════════════════════════════════════════
+_RESEARCH_STATE_KEYS = {
+    "failed": "research_state_failed",
+    "cancelled": "research_state_cancelled",
+    "interrupted": "research_state_interrupted",
+}
+_RESUME_REASON_KEYS = {
+    "feature_disabled": "resume_reason_disabled",
+    "already_complete": "resume_reason_complete",
+    "no_run_record": "resume_reason_no_record",
+    "schema_mismatch": "resume_reason_schema",
+    "attempts_exhausted": "resume_reason_exhausted",
+    "no_checkpoint": "resume_reason_no_checkpoint",
+}
+# POST /resume refusal details are "CODE: reason"; map the code to UI copy.
+_RESUME_ERROR_KEYS = {
+    "RESUME_DISABLED": "resume_reason_disabled",
+    "ALREADY_COMPLETE": "resume_reason_complete",
+    "RESUME_EXHAUSTED": "resume_reason_exhausted",
+    "SCHEMA_MISMATCH": "resume_reason_schema",
+    "NOT_RESUMABLE": "resume_reason_no_checkpoint",
+    "RESUME_IN_PROGRESS": "resume_in_progress",
+    "RESUME_CONFIRM_REQUIRED": "resume_confirm_required",
+}
+
+
+def _mark_research_failed(detail: str | None = None) -> None:
+    """Record an ended run locally; the failure panel fetches the live status."""
+    st.session_state.research_running = False
+    st.session_state.research_failed = True
+    st.session_state.research_status = None
+    st.session_state.research_resume_error = None
+    st.session_state.research_error_detail = detail
+
+
+def _status_payload(task_id: str | None) -> dict:
+    if not task_id:
+        return {}
+    try:
+        payload = httpx.get(f"{API_BASE}/research/{task_id}/status", timeout=10).json()
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _resume_error_text(detail: str | None) -> str:
+    """Localized explanation for a /resume refusal detail."""
+    raw = str(detail or "")
+    code = raw.split(":", 1)[0].strip()
+    key = _RESUME_ERROR_KEYS.get(code)
+    if key:
+        return t(key, lang)
+    return raw or t("resume_reason_unknown", lang)
+
+
+def _resume_research():
+    """POST the explicit resume confirmation, then attach to the new stream."""
+    task_id = st.session_state.research_task_id
+    st.session_state.research_resume_error = None
+    try:
+        resp = httpx.post(f"{API_BASE}/research/{task_id}/resume",
+                          json={"confirm": True}, timeout=15)
+    except Exception as e:
+        st.session_state.research_resume_error = str(e)
+        st.rerun()
+        return
+    if resp.status_code == 202:
+        st.session_state.research_running = True
+        st.session_state.research_failed = False
+        st.session_state.research_complete = False
+        st.session_state.research_status = None
+        st.session_state.research_error_detail = None
+        attempt = resp.json().get("attempt")
+        if attempt:
+            st.session_state.research_resume_attempt = attempt
+        st.rerun()
+        return
+    try:
+        detail = resp.json().get("detail") or f"HTTP {resp.status_code}"
+    except Exception:
+        detail = f"HTTP {resp.status_code}"
+    if resp.status_code == 409 and str(detail).split(":", 1)[0].strip() == "RESUME_IN_PROGRESS":
+        # Somebody else already resumed it — attach to the running stream.
+        st.session_state.research_running = True
+        st.session_state.research_failed = False
+        st.session_state.research_status = None
+        st.rerun()
+        return
+    st.session_state.research_resume_error = detail
+    st.session_state.research_status = None
+    st.rerun()
+
+
+def _render_failure_panel():
+    """Failure/cancel/interrupted view: what ended the run and why it can/can't resume."""
+    task_id = st.session_state.research_task_id
+    status = st.session_state.get("research_status")
+    if not status:
+        status = _status_payload(task_id)
+        st.session_state.research_status = status
+    status = status or {}
+    state = str(status.get("status") or "failed")
+    state_key = _RESEARCH_STATE_KEYS.get(state, "research_state_unknown")
+    detail = status.get("error") or st.session_state.get("research_error_detail") or ""
+    detail_html = (
+        f'<div style="margin-top:8px;font-size:0.82rem;color:#a1a1aa;word-break:break-word;">'
+        f'{_esc(str(detail)[:500])}</div>'
+        if detail else ""
+    )
+    st.markdown(
+        f'<div class="glass-card" style="border-color:rgba(239,68,68,0.3);">'
+        f'<div style="font-size:1.05rem;font-weight:700;color:#f87171;">{_esc(t(state_key, lang))}</div>'
+        f'{detail_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+    resume_error = st.session_state.get("research_resume_error")
+    if resume_error:
+        st.error(_resume_error_text(resume_error))
+
+    if status.get("resumable"):
+        bits = []
+        next_node = status.get("next_node")
+        step = status.get("checkpoint_step")
+        if next_node:
+            bits.append(t("resume_breakpoint", lang,
+                          node=_node_label(str(next_node), lang),
+                          step=step if step is not None else "?"))
+        if status.get("attempt") and status.get("max_attempts"):
+            bits.append(t("resume_attempts", lang,
+                          attempt=status["attempt"], max=status["max_attempts"]))
+        if bits:
+            st.caption(" · ".join(bits))
+        if st.button(t("resume_btn", lang), type="primary", key="resume_research_btn"):
+            _resume_research()
+    else:
+        reason_key = _RESUME_REASON_KEYS.get(str(status.get("reason") or ""))
+        if reason_key:
+            st.caption(t(reason_key, lang))
+
+    if st.button(t("restart_btn", lang), key="restart_after_failure_btn"):
+        for k in DEFAULTS:
+            st.session_state[k] = DEFAULTS[k]
+        st.rerun()
 
 
 def _render_research_progress():
@@ -955,9 +1168,7 @@ def _render_research_progress():
                     got_done = True
                     _complete()
                 elif node == "__error__":
-                    st.error(f"{t('loss_connection', lang)} {event.get('detail') or ''}")
-                    st.session_state.research_running = False
-                    st.session_state.research_failed = True
+                    _mark_research_failed(event.get("detail") or "")
                     return
                 else:
                     phase = event.get("phase") or NODE_TO_PHASE.get(node, "")
@@ -1018,13 +1229,10 @@ def _render_research_progress():
                 if status.get("status") == "complete":
                     _complete()
                 else:
-                    st.error(t("loss_connection", lang))
-                    st.session_state.research_running = False
-                    st.session_state.research_failed = True
+                    _mark_research_failed()
+                    st.session_state.research_status = status or None
     except Exception as e:
-        st.error(f"{t('loss_connection', lang)} {e}")
-        st.session_state.research_running = False
-        st.session_state.research_failed = True
+        _mark_research_failed(str(e))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
