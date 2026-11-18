@@ -12,10 +12,13 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src/ src/
 
-# Online install via the Tsinghua mirror — no local wheels directory is
-# required, so `git clone && docker build` works out of the box.
+# Online install through a configurable index (default: the Tsinghua mirror used
+# locally). CI overrides it with the public PyPI so the required image job does
+# not depend on a single mirror's reachability.
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 RUN pip install --no-cache-dir \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn .
+    -i "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST" .
 
 
 # ===== Stage 2: Runtime =====
