@@ -32,15 +32,6 @@ class MultiRetrieverAgent:
         sub_questions = research_state.get("sub_questions", [])
         adapted_queries = research_state.get("adapted_queries", {})
 
-        # On retry, knowledge_gaps are the new search targets
-        knowledge_gaps = research_state.get("knowledge_gaps", [])
-        if knowledge_gaps and research_state.get("retry_count", 0) > 0:
-            sub_questions = knowledge_gaps
-            print_agent_output(
-                f"Retry search targeting {len(knowledge_gaps)} knowledge gaps",
-                agent="MULTI_RETRIEVER",
-            )
-
         print_agent_output(f"Searching 6 sources for: {query}", agent="MULTI_RETRIEVER")
 
         # Fallback: if LLM-decomposed sub_questions are too generic,
@@ -145,9 +136,15 @@ class MultiRetrieverAgent:
              if r.get("source") == "official" and isinstance(r.get("fetch_stats"), dict)),
             None)
         source_rows = sum(len(r.get("results", [])) for r in search_results)
+        retrievers_succeeded = sum(
+            1 for r in search_results if r.get("status") == "success")
         quality_signal = {
             "agent": "multi_retriever",
-            "retrievers_used": len(RETRIEVER_REGISTRY),
+            # Registered is not the same fact as succeeded: `retrievers_used` was
+            # the registration count and read as "how many were used", which was
+            # wrong whenever a source failed or came back empty.
+            "retrievers_registered": len(RETRIEVER_REGISTRY),
+            "retrievers_succeeded": retrievers_succeeded,
             "retrievers_failed": len(partial_failures),
             "retrievers_empty": len(empty_sources),
             "total_results": source_rows,
@@ -157,6 +154,9 @@ class MultiRetrieverAgent:
             "source_result_rows": source_rows,
             "official_page_attempts": (official_stats or {}).get("page_attempts"),
             "official_http_requests": (official_stats or {}).get("http_requests"),
+            # Deprecated alias kept one release for snapshots/readers: it has
+            # always been the registration count.
+            "retrievers_used": len(RETRIEVER_REGISTRY),
         }
         return {
             "search_results": search_results,

@@ -1,5 +1,7 @@
 # ===== Stage 1: Builder =====
-FROM python:3.13-slim AS builder
+# Python 3.12 matches .github/workflows/ci.yml. A 3.13 CI matrix is tracked
+# separately and must not be mixed into this alignment.
+FROM python:3.12-slim AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc \
@@ -17,7 +19,7 @@ RUN pip install --no-cache-dir \
 
 
 # ===== Stage 2: Runtime =====
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 # CJK font for PDF report export (xhtml2pdf). fonts-wqy-zenhei is TrueType-outlined
 # (reportlab can open it with subfontIndex=0); NotoSansCJK is CFF-based and cannot.
@@ -25,7 +27,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY chroma_kb/ /app/chroma_kb/

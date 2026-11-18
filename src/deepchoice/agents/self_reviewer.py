@@ -514,7 +514,6 @@ def _skipped_review_result(research_state: dict, reason: str) -> dict:
         "final_recommendation": recommendation,
         "confidence": research_state.get("confidence"),
         "knowledge_gaps": list(research_state.get("knowledge_gaps") or []),
-        "retry_count": research_state.get("retry_count", 0),
         "quality_signals": [{
             "agent": "self_reviewer",
             "review_status": "skipped_by_trigger",
@@ -881,10 +880,7 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
 {recorded_text}
 
 ## Pipeline Quality Signals
-{signals_text}
-
-## Retry Count
-{research_state.get("retry_count", 0)}{_OUTPUT_CONSTRAINT_TEXT if _self_review_output_constraint() else ""}"""
+{signals_text}{_OUTPUT_CONSTRAINT_TEXT if _self_review_output_constraint() else ""}"""
 
         prompt = [
             {"role": "system", "content": REVIEW_SYSTEM},
@@ -1029,7 +1025,6 @@ if so, downgrade it to a PoC hypothesis or remove the ordering claim.
             "final_recommendation": recommendation,
             "confidence": confidence,
             "knowledge_gaps": reported_gaps,
-            "retry_count": research_state.get("retry_count", 0) + 1,
             "quality_signals": [{
                 "agent": "self_reviewer",
                 "review_status": "completed" if review_usable else "unavailable",

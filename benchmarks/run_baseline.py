@@ -6,9 +6,14 @@ all metrics, and saves timestamped results for trend tracking.
 Usage:
     cd D:/deepchoice-agent
     python -m benchmarks.run_baseline              # 50 annotated cases (serial)
-    python -m benchmarks.run_baseline --full        # 200 cases (serial)
-    python -m benchmarks.run_baseline --full --concurrency 10  # 200 cases (10 concurrent)
+    python -m benchmarks.run_baseline --full        # 200 cases
+    python -m benchmarks.run_baseline --full --concurrency 4   # 200 cases, 4 concurrent
     python -m benchmarks.run_baseline --cases 5     # first 5 cases (quick)
+
+Reproducibility freeze: before deepchoice is imported this entry point sets
+LEARNED_DOCS_READONLY=1 and RETRIEVAL_CACHE_ENABLED=0, so a case cannot learn a
+term that pollutes a later case. Pass --allow-learning to explicitly allow the
+official-docs cache to learn during a run.
 
 Requires: .env with DEEPSEEK_API_KEY, TAVILY_API_KEY, GITHUB_TOKEN
 """
@@ -27,9 +32,42 @@ from typing import Any
 # Ensure src/ is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+
+def _freeze_evaluation_env() -> None:
+    """Apply the benchmark reproducibility defaults before deepchoice loads.
+
+    `learned_docs` reads its read-only flag at import time, so this must run
+    before the first deepchoice import. `setdefault` keeps an explicitly exported
+    value; --allow-learning is the documented opt-out.
+
+    Import-time side effect (documented, review finding R5): importing this
+    module sets the two variables for the whole process. The benchmark entry point
+    is a dedicated process, but a test/tool that imports this module inherits the
+    frozen environment. `learned_docs._READONLY` is fixed at its own import time,
+    so an already-imported learned_docs is not retroactively frozen; tests pin
+    that behaviour (tests/test_run_baseline_env.py).
+    """
+    os.environ.setdefault("LEARNED_DOCS_READONLY", "1")
+    os.environ.setdefault("RETRIEVAL_CACHE_ENABLED", "0")
+
+
+_freeze_evaluation_env()
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def allow_learning_mode() -> None:
+    """Explicit opt-out of the benchmark freeze (CLI --allow-learning).
+
+    Runs that need the official-docs cache to update must ask for it; the default
+    is the frozen, reproducible state.
+    """
+    os.environ["LEARNED_DOCS_READONLY"] = "0"
+    from deepchoice.retrievers import learned_docs
+
+    learned_docs.set_readonly(False)
 
 from benchmarks.judge import _judge_conflict_match
 from benchmarks.metrics import (
@@ -132,7 +170,10 @@ RUNS_DIR = BENCHMARKS_DIR / "runs"
 ANNOTATED_CASES_PATH = BENCHMARKS_DIR / "annotated_cases.json"
 FULL_CASES_PATH = BENCHMARKS_DIR / "cases_200.json"
 TIMEOUT_PER_CASE_S = 600  # 10 minutes per case (thinking synthesis adds latency)
-DEFAULT_CONCURRENCY = 8
+# One default for the entry point, the function signature and the CLI help. The
+# historical inconsistencies (10 in the header example, 8 here, 5 in the
+# docstring) made a "default" run unreproducible.
+DEFAULT_CONCURRENCY = 4
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +224,6 @@ def _strip_run(run: dict) -> dict:
         "elapsed_s": run.get("elapsed_s", 0),
         "search_results": run.get("search_results", []),
         "conflicts": run.get("conflicts", []),
-        "retry_count": run.get("retry_count", 0),
         "confidence": run.get("confidence", ""),
         "knowledge_gaps": run.get("knowledge_gaps", []),
         "agent_timing": run.get("agent_timing", {}),
@@ -261,7 +301,6 @@ async def run_single_case(case: dict, verbose: bool = False,
             "report": report,
             "error": None,
             "elapsed_s": elapsed,
-            "retry_count": state.get("retry_count", 0),
             "confidence": state.get("confidence", ""),
             "search_results": state.get("search_results", []),
             "conflicts": state.get("conflicts", []),
@@ -284,7 +323,6 @@ async def run_single_case(case: dict, verbose: bool = False,
             "report": "",
             "error": f"timeout ({TIMEOUT_PER_CASE_S}s)",
             "elapsed_s": elapsed,
-            "retry_count": 0,
             "confidence": "",
         }
 
@@ -299,7 +337,6 @@ async def run_single_case(case: dict, verbose: bool = False,
             "report": "",
             "error": str(exc),
             "elapsed_s": elapsed,
-            "retry_count": 0,
             "confidence": "",
         }
 
@@ -322,7 +359,7 @@ async def run_baseline(
         verbose: Print per-case progress.
         batch: Batch number (1-indexed, 0 = run all).
         batch_size: Cases per batch (default 10).
-        concurrency: Max concurrent cases (default 5). Case execution is I/O-bound
+        concurrency: Max concurrent cases (default 4). Case execution is I/O-bound
             (API calls + LLM), so parallelism cuts total wall-clock time roughly
             by concurrency factor.
 
@@ -663,6 +700,11 @@ if __name__ == "__main__":
         help="Dump every LLM call's raw response per case into this dir (diagnostics)",
     )
     parser.add_argument(
+        "--allow-learning", action="store_true",
+        help="Explicitly allow the official-docs cache to learn during the run "
+             "(default: frozen, LEARNED_DOCS_READONLY=1)",
+    )
+    parser.add_argument(
         "--health-check", action="store_true",
         help="Probe all retrieval sources/channels, print diagnostics, exit (no cases)",
     )
@@ -675,6 +717,9 @@ if __name__ == "__main__":
         help="Proceed even when the health check reports degraded sources",
     )
     args = parser.parse_args()
+
+    if args.allow_learning:
+        allow_learning_mode()
 
     if args.debug_dump_dir:
         _setup_debug_dump(Path(args.debug_dump_dir))

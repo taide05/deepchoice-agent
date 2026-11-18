@@ -277,7 +277,6 @@ class TestAgentTokenUsageWiring:
             "evidence_chains": [],
             "sub_questions": [],
             "quality_signals": [],
-            "retry_count": 0,
         }
         checks = ",".join(
             '{"item": %d, "passed": %s, "note": "t"}'
@@ -287,8 +286,7 @@ class TestAgentTokenUsageWiring:
         with patch("deepchoice.utils.llm._get_client",
                    return_value=_fake_client(_fake_response(content))):
             first = await SelfReviewerAgent().run(state)
-            second_state = {**state, "token_usage": first["token_usage"],
-                            "retry_count": first["retry_count"]}
+            second_state = {**state, "token_usage": first["token_usage"]}
             second = await SelfReviewerAgent().run(second_state)
 
         rows = second["token_usage"]

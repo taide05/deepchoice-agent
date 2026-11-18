@@ -31,6 +31,18 @@ _write_lock = threading.Lock()
 _READONLY = os.environ.get("LEARNED_DOCS_READONLY", "") == "1"
 
 
+def set_readonly(readonly: bool) -> None:
+    """Force the read-only flag at runtime (benchmark entry-point opt-out).
+
+    The module-level value is fixed when the module is imported, so a fresh
+    benchmark process that sets LEARNED_DOCS_READONLY before importing
+    deepchoice starts frozen. `--allow-learning` is the explicit opt-out and
+    flips this flag back for the few runs that need the cache to update.
+    """
+    global _READONLY
+    _READONLY = readonly
+
+
 def _atomic_write_text(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")

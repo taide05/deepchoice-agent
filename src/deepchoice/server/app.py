@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -9,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..agents.orchestrator import ChiefEditorAgent, _get_sqlite_saver
 from ..formats.citations import build_toc, inject_citations, number_sources
@@ -19,18 +20,26 @@ from ..formats.pdf import render_pdf
 from ..formats.what_why_how import render as render_what_why_how
 from ..utils.views import print_agent_output
 from .clarify_routes import router as clarify_router
+from .resume import (
+    REASON_ALREADY_COMPLETE,
+    REASON_ATTEMPTS_EXHAUSTED,
+    REASON_NO_CHECKPOINT,
+    REASON_NO_RUN_RECORD,
+    REASON_SCHEMA_MISMATCH,
+    build_resume_info,
+    build_resume_metadata,
+    read_task_run_state,
+    resume_enabled,
+)
 from .security import ApiSecurityMiddleware
 from .snapshot_store import (
     list_history,
+    load_failed_snapshot,
     load_snapshot,
     save_failed_snapshot,
     save_report,
     save_snapshot,
 )
-
-app = FastAPI(title="DeepChoice API", version="0.1.0")
-app.add_middleware(ApiSecurityMiddleware)
-app.include_router(clarify_router)
 
 OUTPUT_DIR = Path("./outputs")
 _active_tasks: dict[str, dict] = {}
@@ -39,6 +48,33 @@ FORMAT_RENDERERS = {
     "evidence_first": render_evidence_first,
     "comparison_matrix": render_comparison_matrix,
 }
+
+
+@asynccontextmanager
+async def _app_lifespan(_app):
+    """Startup work: recover research tasks whose process died mid-run.
+
+    Only when the resume feature is enabled. Recovery is best effort: a broken
+    task (or a broken recovery read) must never stop the service from booting.
+    """
+    if resume_enabled():
+        try:
+            from . import recovery
+
+            recovered = await recovery.recover_interrupted_tasks(OUTPUT_DIR)
+            if recovered:
+                print_agent_output(
+                    f"Recovered {len(recovered)} interrupted task(s): "
+                    f"{', '.join(recovered[:5])}", agent="SERVER")
+        except Exception as exc:
+            print_agent_output(f"Interrupted-task recovery failed: {exc}",
+                               agent="SERVER")
+    yield
+
+
+app = FastAPI(title="DeepChoice API", version="0.1.0", lifespan=_app_lifespan)
+app.add_middleware(ApiSecurityMiddleware)
+app.include_router(clarify_router)
 
 # Single source of truth: workflow node name -> progress phase. The 7 phase names
 # match the frontend PHASES list; keep the fallback copy in frontend/app.py in sync.
@@ -66,6 +102,66 @@ async def health():
 _STREAM_TICK = object()
 _STREAM_DONE = object()
 _STREAM_ERROR = object()
+
+# One lock per task, so a double-click / retried request cannot resume the same
+# task twice. The deployment is a single uvicorn worker, so an in-process lock is
+# sufficient; it is released by _run_research when the resumed attempt ends.
+_resume_locks: dict[str, asyncio.Lock] = {}
+
+# reason -> (HTTP detail code, status code) for refusals the endpoint can return.
+# The feature flag is checked before this mapping, so feature-disabled never
+# reaches it; every reason here is a 409.
+_RESUME_REASON_ERRORS = {
+    REASON_ALREADY_COMPLETE: ("ALREADY_COMPLETE", 409),
+    REASON_NO_RUN_RECORD: ("NOT_RESUMABLE", 409),
+    REASON_SCHEMA_MISMATCH: ("SCHEMA_MISMATCH", 409),
+    REASON_ATTEMPTS_EXHAUSTED: ("RESUME_EXHAUSTED", 409),
+    REASON_NO_CHECKPOINT: ("NOT_RESUMABLE", 409),
+}
+
+
+def _current_schema_version() -> int:
+    """The graph schema version this build writes/accepts (0 when unknown)."""
+    try:
+        import run_limits
+
+        return int(run_limits.GRAPH_SCHEMA_VERSION)
+    except Exception:
+        return 0
+
+
+def _task_run_state(task_id: str) -> dict:
+    return read_task_run_state(OUTPUT_DIR / task_id)
+
+
+def _resume_info(task_id: str) -> dict:
+    return build_resume_info(
+        complete_snapshot=load_snapshot(task_id),
+        failed_snapshot=load_failed_snapshot(task_id),
+        run_state=_task_run_state(task_id),
+        current_schema_version=_current_schema_version(),
+    )
+
+
+def _partial_status_payload(task_id: str, error: str | None = None) -> dict:
+    """Status body for a failed/cancelled task, including whether it can be resumed.
+
+    The status comes from the persisted attempt snapshot (`_status`): a cancelled
+    run must not be reported as failed, even though both are resumable.
+    """
+    info = _resume_info(task_id)
+    partial = load_failed_snapshot(task_id) or {}
+    return {
+        "task_id": task_id,
+        "status": partial.get("_status") or "failed",
+        "error": error if error is not None else partial.get("_error", ""),
+        "attempt": info["attempt"],
+        "max_attempts": info["max_attempts"],
+        "resumable": info["resumable"],
+        "reason": info["reason"],
+        "next_node": info["next_node"],
+        "checkpoint_step": info["checkpoint_step"],
+    }
 
 
 @app.post("/research")
@@ -155,26 +251,41 @@ async def _fail_before_dispatch(task_id: str, entry: dict, detail: str) -> None:
         run_limits.persist_counts(str(OUTPUT_DIR / task_id))
     except Exception:
         pass
+    # A resumed attempt took this lock before starting. The streaming finally
+    # block never runs on this path, so release it here or the task can never be
+    # resumed again in this process (every later POST would answer IN_PROGRESS).
+    lock = entry.get("resume_lock")
+    if lock is not None and lock.locked():
+        try:
+            lock.release()
+        except RuntimeError:
+            pass
 
 
-async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
+async def _run_research(task_id: str, orchestrator: ChiefEditorAgent,
+                        resume: bool = False):
     entry = _active_tasks[task_id]
+    resume_attempt = max(1, int(entry.get("resume_attempt") or 1))
 
     # The run record starts from here — the moment research actually begins —
     # not from service start, and before the first node can block. The launcher's
     # guard takes its deadline from this record, so if it cannot be established
     # the task fails here: no node runs and no research outbound call is made.
+    # A resumed attempt writes its own record: new attempt number, own budget.
     import run_limits
 
     try:
-        run_limits.begin_run(task_id, str(OUTPUT_DIR / task_id))
+        run_limits.begin_run(task_id, str(OUTPUT_DIR / task_id),
+                             attempt=resume_attempt)
     except Exception as record_err:
         await _fail_before_dispatch(task_id, entry, str(record_err))
         return
 
     end_state = "failed"
     try:
-        async for event in orchestrator.astream_research_task():
+        stream = (orchestrator.resume_research_task() if resume
+                  else orchestrator.astream_research_task())
+        async for event in stream:
             entry["events"].append(event)
             entry["queue"].put_nowait(_STREAM_TICK)
 
@@ -190,7 +301,19 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
         end_state = "complete"
     except asyncio.CancelledError:
         # Normal cancellation (HTTP cancel or stream timer). Recorded as
-        # cancelled — never as complete, and never as a forced stop.
+        # cancelled — never as complete, and never as a forced stop. The partial
+        # snapshot keeps the checkpoint position so the task can be resumed later.
+        try:
+            state = await orchestrator.get_state()
+            partial = dict(state.values) if state and state.values else {}
+            partial["_resume"] = build_resume_metadata(state, resume_attempt)
+            save_failed_snapshot(task_id, partial, "research cancelled",
+                                 attempt=resume_attempt, status="cancelled")
+            entry["resume"] = partial["_resume"]
+        except Exception as persist_err:
+            print_agent_output(
+                f"Failed to persist cancelled snapshot for {task_id}: {persist_err}",
+                agent="SERVER")
         entry["status"] = "cancelled"
         entry["events"].append({"__error__": {"detail": "research cancelled"}})
         entry["queue"].put_nowait(_STREAM_ERROR)
@@ -199,10 +322,15 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
     except Exception as e:
         # I1 fix: persist whatever the checkpoint holds so a failed run is
         # inspectable after restart instead of vanishing with process memory.
+        # The checkpoint position is saved with it so a later resume knows where
+        # to continue without opening the checkpoint database.
         try:
             state = await orchestrator.get_state()
-            partial = state.values if state else {}
-            save_failed_snapshot(task_id, partial, str(e))
+            partial = dict(state.values) if state and state.values else {}
+            partial["_resume"] = build_resume_metadata(state, resume_attempt)
+            save_failed_snapshot(task_id, partial, str(e),
+                                 attempt=resume_attempt, status="failed")
+            entry["resume"] = partial["_resume"]
         except Exception as persist_err:
             print_agent_output(f"Failed to persist failure snapshot for {task_id}: {persist_err}", agent="SERVER")
         entry["status"] = "failed"
@@ -218,6 +346,13 @@ async def _run_research(task_id: str, orchestrator: ChiefEditorAgent):
             try:
                 await conn.close()
             except Exception:
+                pass
+        # A resumed attempt owns its lock until it ends, whatever the outcome.
+        lock = entry.get("resume_lock")
+        if lock is not None and lock.locked():
+            try:
+                lock.release()
+            except RuntimeError:
                 pass
         # Save the request counters when this research ends, whatever the
         # outcome, instead of waiting for the whole service to stop. This
@@ -268,12 +403,20 @@ async def research_status(task_id: str):
             "task_id": task_id,
             "status": "complete",
             "confidence": entry.get("result", {}).get("confidence", ""),
+            "resumable": False,
+            "reason": "already_complete",
         }
     if entry and entry.get("status") == "failed":
+        return _partial_status_payload(task_id, entry.get("error"))
+    if entry and entry.get("status") == "cancelled":
+        return _partial_status_payload(task_id, entry.get("error"))
+    if entry and entry.get("status") == "resuming":
+        orchestrator = entry.get("orchestrator")
         return {
             "task_id": task_id,
-            "status": "failed",
-            "error": entry.get("error", ""),
+            "status": "resuming",
+            "attempt": entry.get("resume_attempt"),
+            "phase": getattr(orchestrator, "live_phase", None) or "starting",
         }
 
     orchestrator = entry.get("orchestrator") if entry else None
@@ -300,14 +443,162 @@ async def research_status(task_id: str):
     if not entry:
         snapshot = load_snapshot(task_id)
         if snapshot:
-            return {"task_id": task_id, "status": "complete"}
-        raise HTTPException(status_code=404, detail="Task not found")
+            return {
+                "task_id": task_id,
+                "status": "complete",
+                "resumable": False,
+                "reason": "already_complete",
+            }
+        failed = load_failed_snapshot(task_id)
+        if failed:
+            # A failed/cancelled run stays inspectable after a restart instead of
+            # reading as "task not found"; the latest attempt snapshot carries
+            # what ended it and whether the checkpoint has pending nodes.
+            return _partial_status_payload(task_id, failed.get("_error"))
+        # A run whose process died before it could persist a partial snapshot has
+        # only its run record. Report it instead of "not found"; startup recovery
+        # (when enabled) turns it into an inspectable/resumable attempt.
+        run_state = _task_run_state(task_id)
+        if not run_state:
+            raise HTTPException(status_code=404, detail="Task not found")
+        info = _resume_info(task_id)
+        recorded_state = str(run_state.get("state") or "unknown")
+        return {
+            "task_id": task_id,
+            "status": "interrupted" if recorded_state == "running" else recorded_state,
+            "error": str(run_state.get("detail") or ""),
+            "attempt": info["attempt"],
+            "max_attempts": info["max_attempts"],
+            "resumable": info["resumable"],
+            "reason": info["reason"],
+            "next_node": info["next_node"],
+            "checkpoint_step": info["checkpoint_step"],
+        }
 
     return {
         "task_id": task_id,
         "status": "running",
         "phase": "unknown",
     }
+
+
+@app.post("/research/{task_id}/resume")
+async def resume_research(task_id: str, body: dict | None = None):
+    """Continue a failed task from its latest checkpoint.
+
+    Disabled by default (RESUME_ENABLED=0). Every refusal is explicit: the caller
+    learns whether the task is complete, exhausted, written by another graph
+    schema, or simply has no pending checkpoint nodes.
+    """
+    if not resume_enabled():
+        raise HTTPException(
+            status_code=404,
+            detail="RESUME_DISABLED: resume is disabled (RESUME_ENABLED=0)",
+        )
+    if not body or body.get("confirm") is not True:
+        raise HTTPException(
+            status_code=400,
+            detail='RESUME_CONFIRM_REQUIRED: pass {"confirm": true}',
+        )
+
+    complete = load_snapshot(task_id)
+    failed = load_failed_snapshot(task_id)
+    run_state = _task_run_state(task_id)
+    if not complete and not failed and not run_state:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    info = build_resume_info(
+        complete_snapshot=complete,
+        failed_snapshot=failed,
+        run_state=run_state,
+        current_schema_version=_current_schema_version(),
+    )
+    if not info["resumable"]:
+        code, status_code = _RESUME_REASON_ERRORS.get(
+            info["reason"], ("NOT_RESUMABLE", 409))
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"{code}: {info['reason']}",
+        )
+
+    entry = _active_tasks.get(task_id)
+    if entry and entry.get("status") in {"running", "resuming"}:
+        raise HTTPException(
+            status_code=409,
+            detail="RESUME_IN_PROGRESS: task is already running",
+        )
+    lock = _resume_locks.setdefault(task_id, asyncio.Lock())
+    if lock.locked():
+        raise HTTPException(
+            status_code=409,
+            detail="RESUME_IN_PROGRESS: a resume is already in progress",
+        )
+    await lock.acquire()
+
+    spawned = False
+    checkpointer = None
+    try:
+        checkpointer = await _get_sqlite_saver()
+        if checkpointer is None:
+            raise HTTPException(
+                status_code=409,
+                detail="NOT_RESUMABLE: checkpoint store unavailable",
+            )
+        task = (failed or {}).get("task") or {}
+        # Confirm the checkpoint really has pending nodes before starting: the
+        # saved metadata can be stale if the database was pruned.
+        probe = ChiefEditorAgent(task, checkpointer=checkpointer,
+                                 thread_id=task_id)
+        state = await probe.get_state()
+        next_nodes = list(getattr(state, "next", None) or ())
+        if not next_nodes:
+            raise HTTPException(
+                status_code=409,
+                detail="NOT_RESUMABLE: no pending checkpoint nodes",
+            )
+
+        orchestrator = ChiefEditorAgent(task, checkpointer=checkpointer,
+                                        thread_id=task_id)
+        attempt = int(info["attempt"]) + 1
+        _active_tasks[task_id] = {
+            "thread_id": task_id,
+            "orchestrator": orchestrator,
+            "queue": asyncio.Queue(),
+            "events": [],
+            "status": "resuming",
+            "cancel_requested": False,
+            "resume_attempt": attempt,
+            "resume_lock": lock,
+        }
+        _active_tasks[task_id]["task"] = asyncio.create_task(
+            _run_research(task_id, orchestrator, resume=True))
+        spawned = True
+        print_agent_output(
+            f"Resuming {task_id} from checkpoint (attempt {attempt}/"
+            f"{info['max_attempts']})", agent="SERVER")
+        return JSONResponse(status_code=202, content={
+            "task_id": task_id,
+            "status": "resuming",
+            "attempt": attempt,
+            "max_attempts": info["max_attempts"],
+            "next_nodes": next_nodes,
+            "next_node": next_nodes[0],
+            "checkpoint_step": info["checkpoint_step"],
+        })
+    finally:
+        if not spawned:
+            if checkpointer is not None:
+                conn = getattr(checkpointer, "conn", None)
+                if conn is not None:
+                    try:
+                        await conn.close()
+                    except Exception:
+                        pass
+            if lock.locked():
+                try:
+                    lock.release()
+                except RuntimeError:
+                    pass
 
 
 @app.get("/research/{task_id}/checkpoints")
@@ -416,8 +707,23 @@ async def research_export(task_id: str, format: str = "md", report_format: str =
 
 
 @app.get("/research/{task_id}/snapshot")
-async def research_snapshot(task_id: str):
+async def research_snapshot(task_id: str, attempt: int | None = None):
+    if attempt is not None:
+        if attempt < 1:
+            raise HTTPException(status_code=422,
+                                detail="attempt must be a positive integer")
+        # Explicit attempt inspection: any persisted partial attempt can be read
+        # by number, even after the task was later completed by another attempt.
+        partial = load_failed_snapshot(task_id, attempt=attempt)
+        if not partial:
+            raise HTTPException(status_code=404, detail="Attempt not found")
+        return partial
     snapshot = load_snapshot(task_id)
+    if not snapshot:
+        # A failed/cancelled run persists a partial snapshot per attempt. The
+        # latest one is served here (marked `_status` and carrying `_error`) so
+        # the partial result is inspectable rather than answering 404.
+        snapshot = load_failed_snapshot(task_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Task not found")
     return snapshot

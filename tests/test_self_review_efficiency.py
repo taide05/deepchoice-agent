@@ -33,7 +33,6 @@ def _state(**overrides):
         "quality_signals": [],
         "token_usage": [],
         "conflicts": [],
-        "retry_count": 0,
         "report": "# A vs B\n" + "[Source: x] " * 25,
     }
     state.update(overrides)
@@ -71,7 +70,7 @@ def test_triggered_mode_skips_low_risk_case_without_calling_model(monkeypatch):
     assert signal["review_status"] == "skipped_by_trigger"
     assert signal["review_mode"] == "triggered"
     assert signal["skip_reason"] == "skip:low_risk"
-    assert out["retry_count"] == 0
+    assert "retry_count" not in out, "the removed retry state must not come back"
     assert out["final_recommendation"]["recommendation"] == "分支A选A，分支B选B。"
 
 
@@ -136,3 +135,31 @@ def test_output_constraint_is_opt_in_and_appears_in_prompt(monkeypatch):
         asyncio.run(sr.SelfReviewerAgent().run(_state()))
     assert "Cost Experiment Output Constraint" in captured["prompts"][0]
     assert "at most 20 words" in captured["prompts"][0]
+
+
+def test_full_review_returns_no_retry_count(monkeypatch):
+    """A completed review is terminal and carries no retry state."""
+    monkeypatch.delenv("SELF_REVIEW_MODE", raising=False)
+    with patch.object(sr, "call_model", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = _review_json()
+        out = asyncio.run(sr.SelfReviewerAgent().run(_state()))
+    assert mock_llm.await_count == 1
+    assert "retry_count" not in out
+
+
+def test_low_confidence_review_carries_no_retry_state(monkeypatch):
+    """A low-confidence review is terminal: no retry field is returned.
+
+    The reviewed result is served as-is and `knowledge_gaps` record what is still
+    unknown; there is no retry edge, so no retry counter exists any more.
+    """
+    monkeypatch.delenv("SELF_REVIEW_MODE", raising=False)
+    low = _review_json()
+    low["confidence"] = "low"
+    low["knowledge_gaps"] = ["gap query"]
+    with patch.object(sr, "call_model", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = low
+        out = asyncio.run(sr.SelfReviewerAgent().run(_state()))
+    assert out["confidence"] == "low"
+    assert "retry_count" not in out
+    assert out["knowledge_gaps"] == ["gap query"]

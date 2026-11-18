@@ -153,8 +153,10 @@ class TestBackgroundRun:
 
     def test_run_failure_saves_partial_and_records_error(self, monkeypatch):
         saved = {}
-        monkeypatch.setattr(app_module, "save_failed_snapshot",
-                            lambda task_id, state, error: saved.setdefault("partial", (state, error)) or None)
+        monkeypatch.setattr(
+            app_module, "save_failed_snapshot",
+            lambda task_id, state, error, attempt=1, status="failed":
+                saved.setdefault("partial", (state, error, attempt, status)) or None)
 
         orch = FakeOrchestrator(
             events=NODE_EVENTS[:2], exc=RuntimeError("boom"),
@@ -168,8 +170,13 @@ class TestBackgroundRun:
         assert entry["status"] == "failed"
         assert entry["error"] == "boom"
         assert entry["events"][-1] == {"__error__": {"detail": "boom"}}
-        partial_state, error = saved["partial"]
+        partial_state, error, attempt, status = saved["partial"]
         assert partial_state["task"] == {"query": "x"}
+        # The attempt number and the status are persisted with the partial state
+        # so the attempt can be inspected and resumed later.
+        assert attempt == 1
+        assert status == "failed"
+        assert partial_state["_resume"]["attempt"] == 1
         assert error == "boom"
 
     def test_run_closes_checkpointer_connection(self, monkeypatch):

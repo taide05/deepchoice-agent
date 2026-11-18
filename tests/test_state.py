@@ -13,9 +13,8 @@ class TestResearchState:
             report="",
             confidence="",
             knowledge_gaps=[],
-            retry_count=0,
             partial_failures=[],
             current_phase="",
         )
-        assert len(state) == 12
-        assert state["retry_count"] == 0
+        assert len(state) == 11
+        assert "retry_count" not in state

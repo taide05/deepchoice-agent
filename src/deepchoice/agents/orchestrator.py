@@ -70,6 +70,22 @@ class ChiefEditorAgent:
             timing = dict(state.get("agent_timing", {}))
             timing[name] = elapsed
             result["agent_timing"] = timing
+            # quality_signals accumulates explicitly here. The state field has no
+            # LangGraph reducer, so a node return would replace the whole list:
+            # the final state kept only the last writer's signal and the
+            # self-reviewer read one agent instead of the pipeline. A reducer is
+            # deliberately not used — it would append again when a node replays.
+            prior_signals = list(state.get("quality_signals") or [])
+            node_signals = result.get("quality_signals")
+            if node_signals is None:
+                # The node published no signal of its own: keep what came before.
+                if prior_signals:
+                    result["quality_signals"] = prior_signals
+            else:
+                result["quality_signals"] = prior_signals + [
+                    signal for signal in node_signals
+                    if signal not in prior_signals
+                ]
             # Carry any sub-stage split the node published (conflict_detector
             # reports scan / arbitration / evidence / re-arbitration seconds), so
             # a slow node reads as its real stages instead of one opaque total.
@@ -135,19 +151,43 @@ class ChiefEditorAgent:
         result = await chain.ainvoke(initial_state, config=config)
         return result
 
-    async def astream_research_task(self, task: dict | None = None):
+    async def astream_research_task(self, task: dict | None = None,
+                                    resume: bool = False):
         task = task or self.task
         has_sub_questions = bool(task.get("sub_questions"))
         start_from = "query_adapter" if has_sub_questions else "query_analyzer"
 
-        print_agent_output(f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
+        if resume:
+            # A resume must NOT pass the normal initial state: LangGraph continues
+            # from the latest checkpoint for this thread_id only when the input is
+            # None. Passing {"task": ...} would start again at the entry point and
+            # re-run nodes that already completed (and were already paid for).
+            print_agent_output(
+                "Resuming research from the latest checkpoint", agent="ORCHESTRATOR")
+        else:
+            print_agent_output(
+                f"Starting research stream from: {start_from}", agent="ORCHESTRATOR")
         chain = self.init_research_team(start_from=start_from)
         config = self._make_config()
-        initial_state = {"task": task}
-        if has_sub_questions:
-            initial_state["sub_questions"] = task["sub_questions"]
+
+        initial_state = None
+        if not resume:
+            initial_state = {"task": task}
+            if has_sub_questions:
+                initial_state["sub_questions"] = task["sub_questions"]
 
         async for event in chain.astream(initial_state, config=config, stream_mode="updates"):
+            yield event
+
+    async def resume_research_task(self):
+        """Continue a previous run from its latest checkpoint.
+
+        The caller is responsible for re-creating the orchestrator with the
+        original thread_id and a live checkpointer. Attempt limits, checkpoint
+        schema version and concurrency are validated by the server before this
+        is called; this method only streams the remaining nodes.
+        """
+        async for event in self.astream_research_task(resume=True):
             yield event
 
     async def get_state(self):

@@ -43,24 +43,28 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
-# Tier -> provider config (user decision 2026-09-01): two flash tiers —
-# deepseek-flash (the hot, high-frequency path) and qwen-flash (report
-# synthesis + conflict re-arbitration).
+# Tier -> provider config (user decision 2026-09-01). The two tier names are:
+# deepseek-flash (the hot, high-frequency path) and the deprecated qwen-flash
+# alias below.
 #
 # RECOVERY ADAPTER (2026-10-14): this revision is 48b32bd + a service
 # adaptation, NOT a reproduction of the historical model setup. The retired
 # Qwen/DashScope tier no longer has credentials, so the qwen-flash tier name is
-# kept for the unchanged call sites but served by the current DeepSeek service
-# and credential. The Qwen-only `enable_thinking` payload is dropped because it
-# is not part of the DeepSeek request contract. No research node, prompt or
-# answer-handling rule is changed; only the transport target. Callers that still
-# request `model="qwen-flash"` therefore no longer select a second provider.
+# kept for call sites/snapshots that still name it but served by the current
+# DeepSeek service and credential. The Qwen-only `enable_thinking` payload is
+# dropped because it is not part of the DeepSeek request contract. No research
+# node, prompt or answer-handling rule is changed; only the transport target.
+#
+# DEPRECATED ALIAS (2026-11-17): `qwen-flash` resolves to the same service and
+# model as `deepseek-flash`. New code must ask for "deepseek-flash"; the alias is
+# kept one release for snapshots and external callers that still name the tier.
 TIERS = {
     "deepseek-flash": {
         "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
         "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
         "key": _env("DS_FLASH_API_KEY", "FLASH_API_KEY", "DEEPSEEK_API_KEY"),
     },
+    # Deprecated alias — see the note above.
     "qwen-flash": {
         "model": _env("DS_FLASH_MODEL", "FLASH_MODEL", default="deepseek-v4-flash"),
         "base": _env("DS_FLASH_BASE_URL", "FLASH_BASE_URL", "DEEPSEEK_BASE_URL", default=DEEPSEEK_BASE),
@@ -136,9 +140,9 @@ async def call_model(
         prompt = list(prompt)
     client = _get_client(timeout=timeout, tier=tier, max_retries=0)
     kwargs = {"model": model, "messages": prompt, "temperature": 0}
-    # Per-call extra_body overrides the tier default; otherwise the tier's
-    # default (qwen-flash disables thinking) applies. This lets a single node
-    # opt back into thinking without forking the tier table.
+    # Per-call extra_body overrides the tier default; otherwise the tier's own
+    # default applies. This lets a single node opt into a different transport
+    # shape without forking the tier table.
     extra = extra_body if extra_body is not None else cfg.get("extra_body")
     if extra:
         kwargs["extra_body"] = extra
