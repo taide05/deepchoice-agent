@@ -49,3 +49,18 @@ def test_docker_job_is_required_after_first_green_build():
     ci = _ci_text()
     assert "continue-on-error: true" not in ci
     assert "docker build -t deepchoice:ci ." in ci
+
+
+def test_ci_uses_node24_actions_and_a_pinned_runner():
+    """GitHub deprecated Node 20 in the pinned actions; ubuntu-latest is migrating.
+
+    Both are non-blocking annotations today but will become failures/behaviour
+    changes, so CI pins the Node 24 action releases and an explicit runner image.
+    """
+    ci = _ci_text()
+    assert ci.count("actions/checkout@v7") == 3
+    assert ci.count("actions/setup-python@v7") == 2
+    assert "actions/checkout@v4" not in ci
+    assert "actions/setup-python@v5" not in ci
+    assert ci.count("runs-on: ubuntu-24.04") == 3
+    assert "runs-on: ubuntu-latest" not in ci
