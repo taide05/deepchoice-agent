@@ -117,6 +117,27 @@ def test_legacy_single_file_is_read_as_attempt_one(store):
     assert snapshot["_error"] == "old"
     assert snapshot_store.list_failed_attempts(TASK_ID) == [
         {"attempt": 1, "status": "failed", "error": "old"}]
+    # Explicit attempt=1 must reach the same legacy file as the default view.
+    assert snapshot_store.load_failed_snapshot(TASK_ID, attempt=1)["_error"] == "old"
+
+
+def test_legacy_single_file_is_served_when_attempt_is_explicit(store):
+    outputs, task_dir = store
+    (task_dir / "research_snapshot_failed.json").write_text(
+        json.dumps({"task": {"query": "legacy"}, "_error": "old"}),
+        encoding="utf-8")
+
+    response = client.get(f"/research/{TASK_ID}/snapshot", params={"attempt": 1})
+
+    assert response.status_code == 200
+    assert response.json()["_error"] == "old"
+
+
+def test_snapshot_attempt_must_be_positive(store):
+    assert client.get(f"/research/{TASK_ID}/snapshot",
+                      params={"attempt": 0}).status_code == 422
+    assert client.get(f"/research/{TASK_ID}/snapshot",
+                      params={"attempt": -3}).status_code == 422
 
 
 def test_unknown_attempt_returns_none(store):
@@ -181,6 +202,8 @@ def test_history_reports_attempts_and_latest_status(store):
     assert rows[TASK_ID]["status"] == "cancelled"
     assert rows[TASK_ID]["error"] == "research cancelled"
     assert rows[TASK_ID]["attempts"] == 2
+    # M3 regression fix: the failed/cancelled row keeps the snapshot confidence.
+    assert rows[TASK_ID]["confidence"] == "low"
     assert rows[complete_id]["status"] == "complete"
     assert rows[complete_id]["attempts"] == 2
 
@@ -232,6 +255,39 @@ def test_resume_accepts_a_cancelled_run(store, monkeypatch):
 # ---------------------------------------------------------------------------
 # Cancellation persists its own partial attempt
 # ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_begin_run_failure_releases_the_resume_lock(store, monkeypatch):
+    """A resumed attempt that cannot write its record must not keep the task locked."""
+    import run_limits
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("run record could not be established")
+
+    monkeypatch.setattr(run_limits, "begin_run", _boom)
+
+    class Stub:
+        checkpointer = None
+
+    lock = asyncio.Lock()
+    await lock.acquire()
+    app_module._active_tasks[TASK_ID] = {
+        "thread_id": TASK_ID,
+        "orchestrator": Stub(),
+        "queue": asyncio.Queue(),
+        "events": [],
+        "status": "resuming",
+        "resume_attempt": 2,
+        "resume_lock": lock,
+    }
+
+    await app_module._run_research(TASK_ID, Stub(), resume=True)
+
+    entry = app_module._active_tasks[TASK_ID]
+    assert entry["status"] == "failed"
+    assert "research not started" in entry["error"]
+    assert not lock.locked(), "a failed record write must release the resume lock"
+
 
 @pytest.mark.asyncio
 async def test_cancellation_persists_a_resumable_partial_snapshot(store):

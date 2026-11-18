@@ -630,6 +630,9 @@ class ConflictDetectorAgent:
         _scan_started = time.monotonic()
         pairs = await find_contradictions(
             source_scores, query_topic=query, usage=local_usage, coverage=coverage)
+        # scan_s times the whole find_contradictions call (candidate prefilter +
+        # similarity gate + LLM scan), not only the scan loop; stage numbers are
+        # therefore not directly comparable with pre-2026-11 snapshots.
         _stage(timing, "scan_s", _scan_started)
         if not pairs:
             outcomes = dict(coverage.get("scan_outcomes") or empty_scan_outcomes())
@@ -667,9 +670,16 @@ class ConflictDetectorAgent:
                     "agent": "conflict_detector",
                     "conflicts_found": 0,
                     "resolved_count": 0,
+                    "unresolved_count": 0,
                     "scan_no_difference": outcomes.get(SCAN_NO_DIFFERENCE, 0),
                     "scan_unscanned": outcomes.get(SCAN_UNSCANNED, 0),
+                    "sources_without_comparable_claim": check[
+                        "sources_without_comparable_claim"],
                     "conflict_check_incomplete": incomplete,
+                    # Same keys as the confirmed-difference branch, so a reader of
+                    # quality_signals never needs to know which branch produced it.
+                    "pairs_confirmed_difference": 0,
+                    "pairs_arbitrated": 0,
                 }],
                 "token_usage": research_state.get("token_usage", [])
                 + [summarize_usage("conflict_detector", local_usage)],

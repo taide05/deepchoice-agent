@@ -54,6 +54,8 @@ def test_policy_reasons(monkeypatch):
     assert _policy(complete_snapshot={"task": {}})["reason"] == "already_complete"
     monkeypatch.setenv("RESUME_ENABLED", "0")
     assert _policy()["reason"] == "feature_disabled"
+    # The capability flag wins even for a completed task in the pure function.
+    assert _policy(complete_snapshot={"task": {}})["reason"] == "feature_disabled"
     monkeypatch.setenv("RESUME_ENABLED", "1")
     assert _policy(run_state={})["reason"] == "no_run_record"
     assert _policy(run_state={"attempt": 1,

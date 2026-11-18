@@ -645,17 +645,21 @@ class TestConflictCheckContract:
 
         monkeypatch.setattr(cd, "_scan_pair_contradiction", fake_scan)
         monkeypatch.setattr(cd, "call_model", fake_call_model)
-        with_pairs = (await cd.ConflictDetectorAgent(gather_evidence=False).run({
+        with_pairs_result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
             "source_scores": _sources(4), "task": {"query": "t"}, "token_usage": [],
-        }))["conflict_check"]
-
-        no_pairs = (await cd.ConflictDetectorAgent(gather_evidence=False).run({
+        })
+        no_pairs_result = await cd.ConflictDetectorAgent(gather_evidence=False).run({
             "source_scores": _sources(1), "task": {"query": "t"}, "token_usage": [],
-        }))["conflict_check"]
+        })
+        with_pairs = with_pairs_result["conflict_check"]
+        no_pairs = no_pairs_result["conflict_check"]
 
         _assert_schema(with_pairs)
         _assert_schema(no_pairs)
         assert set(with_pairs) == set(no_pairs)
+        # quality_signals must not depend on which branch produced them either.
+        assert (set(with_pairs_result["quality_signals"][0])
+                == set(no_pairs_result["quality_signals"][0]))
 
     @pytest.mark.asyncio
     async def test_pairs_scanned_is_the_total_classified_count(self, monkeypatch):

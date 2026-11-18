@@ -69,3 +69,21 @@ def test_entry_point_freezes_learned_docs_in_a_fresh_process():
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180,
     )
     assert proc.returncode == 0
+
+
+def test_import_freeze_does_not_retroactively_freeze_learned_docs():
+    """Review finding R5: the import-time env freeze is contained by import order.
+
+    Importing this module sets the environment for the whole process. An already
+    imported `learned_docs` keeps the flag value it captured at its own import,
+    so a test/tool that imports the benchmark entry point does not suddenly get a
+    read-only knowledge base. This pins that containment; if learned_docs ever
+    starts reading the environment lazily, this test must be revisited.
+    """
+    from deepchoice.retrievers import learned_docs
+
+    before = learned_docs._READONLY
+    import benchmarks.run_baseline as baseline_module  # the import side effect is the subject
+
+    assert learned_docs._READONLY is before
+    assert baseline_module.DEFAULT_CONCURRENCY == 4

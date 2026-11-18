@@ -80,6 +80,12 @@ def load_failed_snapshot(task_id: str, attempt: int | None = None) -> dict | Non
         return None
     if attempt is not None:
         snapshot_path = failed_snapshot_path(task_id, attempt)
+        if not snapshot_path.exists() and attempt == 1:
+            # A legacy single-file snapshot IS attempt 1; reading it by explicit
+            # attempt number must behave the same as the default view.
+            legacy_path = OUTPUT_DIR / task_id / LEGACY_FAILED_SNAPSHOT_NAME
+            if legacy_path.exists():
+                snapshot_path = legacy_path
         if not snapshot_path.exists():
             return None
     else:
@@ -151,12 +157,20 @@ def save_report(task_id: str, report_md: str) -> Path:
     return report_path
 
 
+def _task_run_state(task_dir: Path) -> dict:
+    """The task's run record (empty when it was never written / unreadable)."""
+    try:
+        record = json.loads((task_dir / "run_state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
 def _task_attempts(task_dir: Path) -> int:
     """Attempts used by the task, from its run record (1 when unreadable)."""
     try:
-        record = json.loads((task_dir / "run_state.json").read_text(encoding="utf-8"))
-        return max(1, int(record.get("attempt") or 1))
-    except (OSError, ValueError, TypeError):
+        return max(1, int(_task_run_state(task_dir).get("attempt") or 1))
+    except (TypeError, ValueError):
         return 1
 
 
@@ -183,13 +197,30 @@ def list_history() -> list[dict]:
         partials = list_failed_attempts(task_dir.name)
         if partials:
             latest = partials[-1]
+            latest_snapshot = load_failed_snapshot(task_dir.name,
+                                                   latest["attempt"]) or {}
             history.append({
                 "task_id": task_dir.name,
-                "query": load_failed_snapshot(task_dir.name, latest["attempt"]).get(
-                    "task", {}).get("query", ""),
-                "confidence": "",
+                "query": latest_snapshot.get("task", {}).get("query", ""),
+                "confidence": latest_snapshot.get("confidence", ""),
                 "status": latest["status"],
                 "attempts": max(attempts, len(partials)),
                 "error": latest["error"],
+            })
+            continue
+        # A run whose process died before it could persist a partial snapshot has
+        # only its run record. Show it (as interrupted) instead of vanishing;
+        # startup recovery turns it into an inspectable/resumable attempt.
+        run_state = _task_run_state(task_dir)
+        if run_state:
+            recorded_state = str(run_state.get("state") or "unknown")
+            history.append({
+                "task_id": task_dir.name,
+                "query": "",
+                "confidence": "",
+                "status": ("interrupted" if recorded_state == "running"
+                           else recorded_state),
+                "attempts": attempts,
+                "error": str(run_state.get("detail") or ""),
             })
     return history[:50]

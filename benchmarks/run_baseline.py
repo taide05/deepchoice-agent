@@ -39,6 +39,13 @@ def _freeze_evaluation_env() -> None:
     `learned_docs` reads its read-only flag at import time, so this must run
     before the first deepchoice import. `setdefault` keeps an explicitly exported
     value; --allow-learning is the documented opt-out.
+
+    Import-time side effect (documented, review finding R5): importing this
+    module sets the two variables for the whole process. The benchmark entry point
+    is a dedicated process, but a test/tool that imports this module inherits the
+    frozen environment. `learned_docs._READONLY` is fixed at its own import time,
+    so an already-imported learned_docs is not retroactively frozen; tests pin
+    that behaviour (tests/test_run_baseline_env.py).
     """
     os.environ.setdefault("LEARNED_DOCS_READONLY", "1")
     os.environ.setdefault("RETRIEVAL_CACHE_ENABLED", "0")

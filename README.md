@@ -124,8 +124,9 @@ The response contains a `task_id`; poll `/research/{task_id}/status`, stream eve
 | `GET /research/{task_id}/stream` | SSE progress stream |
 | `GET /research/{task_id}/report` | Final report (Markdown) |
 | `GET /research/{task_id}/export?format=md\|pdf` | Export report |
-| `GET /research/{task_id}/history`, `/snapshot` | History / snapshot |
+| `GET /research/{task_id}/history`, `/snapshot` | History / snapshot (`?attempt=N` inspects one partial attempt) |
 | `POST /research/{task_id}/cancel` | Cancel a running task |
+| `POST /research/{task_id}/resume` | Continue a failed/cancelled/interrupted task from its checkpoint (feature flag, off by default) |
 | `POST /clarify/start`, `/clarify/{sid}/message`, `/clarify/{sid}/finalize` | Optional pre-research clarification |
 | `GET /health` | Health check |
 
@@ -146,6 +147,8 @@ See [`.env.example`](.env.example) for a template.
 | `CHROMA_PATH` | no | Local knowledge-base path |
 | `PRECODEX_LLM_MAX` / `PRECODEX_TAVILY_MAX` / `PRECODEX_WALL_MAX_S` | no | Local run stop lines (default 40 / 24 / 900) |
 | `LEARNED_DOCS_READONLY` / `RETRIEVAL_CACHE_ENABLED` | no | Freeze knowledge-base writes / retrieval cache for evaluation runs |
+| `RESUME_ENABLED` | no | Enable checkpoint resume: the `/resume` endpoint and startup recovery of interrupted tasks (default `0`, off) |
+| `RESUME_MAX_ATTEMPTS` | no | Per-task attempt cap when resume is enabled (default 2) |
 | `DEEPCHOICE_API_KEY` | no | When set, require `X-API-Key` on all non-public endpoints (off by default) |
 | `DEEPCHOICE_RATE_LIMIT_PER_MINUTE` | no | Limit mutating requests per client per minute (0 = disabled) |
 

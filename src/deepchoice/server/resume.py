@@ -60,6 +60,22 @@ def _failed_resume_meta(failed_snapshot: dict | None) -> dict:
     return meta if isinstance(meta, dict) else {}
 
 
+def build_resume_metadata(state, attempt: int) -> dict:
+    """Checkpoint position saved into a partial snapshot for a later resume.
+
+    Pure: reads the LangGraph StateSnapshot attributes, nothing else.
+    """
+    next_nodes = list(getattr(state, "next", None) or ())
+    metadata = getattr(state, "metadata", None)
+    step = metadata.get("step") if isinstance(metadata, dict) else None
+    return {
+        "attempt": max(1, int(attempt)),
+        "max_attempts": max_attempts(),
+        "next_nodes": [str(node) for node in next_nodes],
+        "checkpoint_step": step,
+    }
+
+
 def build_resume_info(*, complete_snapshot: dict | None,
                       failed_snapshot: dict | None,
                       run_state: dict,
@@ -81,11 +97,14 @@ def build_resume_info(*, complete_snapshot: dict | None,
         "resumable": False,
         "reason": None,
     }
-    if complete_snapshot:
-        info["reason"] = REASON_ALREADY_COMPLETE
-        return info
+    # The capability flag wins first: with resume disabled even a completed task
+    # is reported as "feature disabled" by the pure function. (The endpoint checks
+    # the flag before calling this, for the same reason.)
     if not resume_enabled():
         info["reason"] = REASON_FEATURE_DISABLED
+        return info
+    if complete_snapshot:
+        info["reason"] = REASON_ALREADY_COMPLETE
         return info
     if not run_state:
         info["reason"] = REASON_NO_RUN_RECORD
