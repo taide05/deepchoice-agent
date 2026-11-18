@@ -8,7 +8,9 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned runner image: ubuntu-latest is migrating (Ubuntu 26 rollout), and a
+    # pinned 24.04 keeps the "green image = shipped image" check reproducible.
+    runs-on: ubuntu-24.04
     strategy:
       # The 3.13 leg is experimental: it must not turn the workflow red while
       # dependency support is observed. The image deliberately stays on 3.12
@@ -19,9 +21,9 @@ jobs:
         python-version: ["3.12", "3.13"]
     continue-on-error: ${{ matrix.python-version == '3.13' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -35,11 +37,11 @@ jobs:
   static:
     # Static analysis does not depend on the interpreter version, so it runs once
     # instead of once per matrix leg.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -58,9 +60,9 @@ jobs:
     # validate the Dockerfile/CI Python alignment. It became a required job after
     # the first green CI image build (run 44212336183, 2026-11-18).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build image
         run: docker build -t deepchoice:ci .
