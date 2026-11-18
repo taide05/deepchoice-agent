@@ -65,4 +65,16 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Build image
-        run: docker build -t deepchoice:ci .
+        # Required job: use the public PyPI (the Dockerfile default is a local
+        # mirror) and retry once, so a transient network error while fetching
+        # build dependencies does not fail an otherwise-good main push.
+        run: |
+          for attempt in 1 2; do
+            docker build \
+              --build-arg PIP_INDEX_URL=https://pypi.org/simple \
+              --build-arg PIP_TRUSTED_HOST=pypi.org \
+              -t deepchoice:ci . && exit 0
+            echo "image build attempt ${attempt} failed; retrying"
+            sleep 10
+          done
+          exit 1

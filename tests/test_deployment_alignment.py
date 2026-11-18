@@ -44,11 +44,24 @@ def test_docker_job_is_required_after_first_green_build():
     """The image build was experimental until the first green CI build.
 
     The first green build was run 44212336183 on 2026-11-18, so a broken image
-    must now fail the workflow instead of being tolerated.
+    must now fail the workflow instead of being tolerated. The required job uses
+    the public PyPI and retries once, because a transient network error while
+    fetching build dependencies must not fail an otherwise-good push.
     """
     ci = _ci_text()
     assert "continue-on-error: true" not in ci
-    assert "docker build -t deepchoice:ci ." in ci
+    assert "docker build" in ci
+    assert "--build-arg PIP_INDEX_URL=https://pypi.org/simple" in ci
+    assert "--build-arg PIP_TRUSTED_HOST=pypi.org" in ci
+    assert "for attempt in 1 2; do" in ci
+
+
+def test_dockerfile_pip_index_is_configurable():
+    """The Dockerfile keeps the local mirror default; CI overrides it."""
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple" in dockerfile
+    assert "ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn" in dockerfile
+    assert '-i "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"' in dockerfile
 
 
 def test_ci_uses_node24_actions_and_a_pinned_runner():
