@@ -91,11 +91,32 @@ class _FakeStream:
 
 class _FakeBackend:
     """httpx double. stream_events = [(node, phase, ts), ...]; status_complete
-    controls the /status answer used by the EOF fallback path."""
+    controls the /status answer used by the EOF fallback path.
 
-    def __init__(self, stream_events, status_complete):
+    status_payload overrides /status entirely (failure/cancel/interrupted states).
+    resume_payload/resume_status control POST /resume; resume_then_complete makes
+    the stream after a resume end in __done__ and /status answer complete, so the
+    whole failure -> resume -> results flow can be observed in AppTest.
+    """
+
+    def __init__(self, stream_events, status_complete, status_payload=None,
+                 resume_payload=None, resume_status=202,
+                 resume_then_complete=False):
         self.stream_events = stream_events
         self.status_complete = status_complete
+        self.status_payload = status_payload
+        self.resume_payload = resume_payload or {
+            "task_id": "t1", "status": "resuming", "attempt": 2}
+        self.resume_status = resume_status
+        self.resume_then_complete = resume_then_complete
+        self.resume_calls = []
+
+    def _status(self):
+        if self.resume_calls and self.resume_then_complete:
+            return {"status": "complete"}
+        if self.status_payload is not None:
+            return self.status_payload
+        return {"status": "complete"} if self.status_complete else {"status": "started"}
 
     def get(self, url, **kw):
         if url.endswith("/snapshot"):
@@ -110,13 +131,18 @@ class _FakeBackend:
                 return _FakeResp({"detail": "not installed"}, status_code=501)
             return _FakeResp({}, content=b"# Fake report\n")
         if url.endswith("/status"):
-            return _FakeResp({"status": "complete"} if self.status_complete else {"status": "started"})
+            return _FakeResp(self._status())
         return _FakeResp({"status": "started"})
 
     def post(self, url, **kw):
+        if url.endswith("/resume"):
+            self.resume_calls.append({"url": url, "json": kw.get("json")})
+            return _FakeResp(self.resume_payload, status_code=self.resume_status)
         return _FakeResp({"task_id": "t1", "status": "started"})
 
     def stream(self, method, url, **kw):
+        if self.resume_calls and self.resume_then_complete:
+            return _FakeStream([("__done__", "complete", 1000.0)])
         return _FakeStream(self.stream_events)
 
 
@@ -261,3 +287,90 @@ def test_report_tab_reading_view(monkeypatch):
     dl_buttons = at.get("download_button")
     assert len(dl_buttons) >= 1, f"MD download button missing: {dl_buttons!r}"
     assert "PDF 不可用" in cap, f"PDF fallback caption missing: {cap!r}"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# M4 — resume from checkpoint after a failed/cancelled/interrupted run
+# ═══════════════════════════════════════════════════════════════════════════
+def _captions(at):
+    return "\n".join(str(c.value) for c in at.caption)
+
+
+def _button_labels(at):
+    return [str(b.label) for b in at.button]
+
+
+_FAILED_STATUS = {
+    "task_id": "t1", "status": "failed", "error": "provider down",
+    "attempt": 1, "max_attempts": 2, "resumable": True,
+    "reason": None, "next_node": "evidence_chain", "checkpoint_step": 5,
+}
+
+
+def test_failure_panel_offers_resume_from_the_checkpoint(monkeypatch):
+    backend = _FakeBackend(
+        stream_events=[], status_complete=False,
+        status_payload=dict(_FAILED_STATUS),
+        resume_then_complete=True,
+    )
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    assert not at.exception, f"initial run: {at.exception}"
+
+    _enter_research_phase(at)
+    at.run()
+    assert not at.exception, f"failure run: {at.exception}"
+
+    md = _md_text(at)
+    cap = _captions(at)
+    labels = _button_labels(at)
+    assert at.session_state["research_failed"] is True
+    assert "研究运行失败" in md, f"failure title missing: {md!r}"
+    assert "provider down" in md, f"error detail missing: {md!r}"
+    assert "断点位置：证据链构建（第 5 步）" in cap, f"breakpoint caption missing: {cap!r}"
+    assert "已尝试 1/2 次" in cap, f"attempt caption missing: {cap!r}"
+    assert "从断点继续运行" in labels, f"resume button missing: {labels!r}"
+
+    # The button performs one explicit confirmed resume and attaches to the
+    # stream, which then completes normally.
+    at.button[labels.index("从断点继续运行")].click().run()
+    assert not at.exception, f"resume run: {at.exception}"
+    assert backend.resume_calls, "POST /resume was not called"
+    assert backend.resume_calls[0]["url"].endswith("/research/t1/resume")
+    assert backend.resume_calls[0]["json"] == {"confirm": True}
+    assert at.session_state["research_complete"] is True
+    assert at.session_state["research_failed"] is False
+
+
+def test_non_resumable_failure_explains_the_reason(monkeypatch):
+    """A cancelled run with exhausted attempts shows why it cannot resume."""
+    backend = _FakeBackend(
+        stream_events=[], status_complete=False,
+        status_payload={
+            "task_id": "t1", "status": "cancelled",
+            "error": "research cancelled", "attempt": 2, "max_attempts": 2,
+            "resumable": False, "reason": "attempts_exhausted",
+        },
+    )
+    monkeypatch.setattr(httpx, "get", backend.get)
+    monkeypatch.setattr(httpx, "post", backend.post)
+    monkeypatch.setattr(httpx, "stream", backend.stream)
+
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    assert not at.exception, f"initial run: {at.exception}"
+
+    _enter_research_phase(at)
+    at.run()
+    assert not at.exception, f"failure run: {at.exception}"
+
+    md = _md_text(at)
+    cap = _captions(at)
+    labels = _button_labels(at)
+    assert "研究已取消" in md, f"cancelled title missing: {md!r}"
+    assert "续跑次数已用尽" in cap, f"reason caption missing: {cap!r}"
+    assert "从断点继续运行" not in labels, "no resume button for an exhausted run"
