@@ -55,11 +55,10 @@ jobs:
   docker:
     # Building the image installs the full dependency set, so it is expensive and
     # deliberately not run on every pull request: main pushes and manual runs
-    # validate the Dockerfile/CI Python alignment. Experimental until the first
-    # green build in CI, then remove continue-on-error.
+    # validate the Dockerfile/CI Python alignment. It became a required job after
+    # the first green CI image build (run 44212336183, 2026-11-18).
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

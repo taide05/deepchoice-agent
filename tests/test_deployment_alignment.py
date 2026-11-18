@@ -38,3 +38,14 @@ def test_static_checks_run_once_not_per_version():
     ci = _ci_text()
     assert ci.count("pyflakes src/ tests/") == 1
     assert ci.count("vulture src/ vulture_whitelist.py") == 1
+
+
+def test_docker_job_is_required_after_first_green_build():
+    """The image build was experimental until the first green CI build.
+
+    The first green build was run 44212336183 on 2026-11-18, so a broken image
+    must now fail the workflow instead of being tolerated.
+    """
+    ci = _ci_text()
+    assert "continue-on-error: true" not in ci
+    assert "docker build -t deepchoice:ci ." in ci
