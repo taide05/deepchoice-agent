@@ -161,6 +161,24 @@ See [`.env.example`](.env.example) for a template.
 | `DEEPCHOICE_API_KEY` | no | When set, require `X-API-Key` on all non-public endpoints (off by default) |
 | `DEEPCHOICE_RATE_LIMIT_PER_MINUTE` | no | Limit mutating requests per client per minute (0 = disabled) |
 
+### Checkpoint resume (feature-flagged)
+
+Resume is off by default (`RESUME_ENABLED=0`). When enabled, a run that failed, was cancelled, or was
+interrupted by a process stop keeps its checkpoint position and can be continued instead of restarted:
+
+- `POST /research/{task_id}/resume` with `{"confirm": true}` continues from the last checkpoint; refusals
+  explain themselves (feature disabled, already complete, attempt limit, incompatible graph version, or no
+  pending checkpoint).
+- `GET /research/{task_id}/status` reports `resumable`, `reason`, `next_node`, `checkpoint_step`, `attempt`
+  and `max_attempts`; the UI only shows the resume action when `resumable` is true.
+- Attempts are capped by `RESUME_MAX_ATTEMPTS` (default 2). Partial results are kept per attempt
+  (`research_snapshot_failed_attempt{N}.json`); `GET /research/{task_id}/snapshot?attempt=N` inspects one.
+- With `RESUME_ENABLED=1` the server also recovers interrupted tasks at startup: dead `running` records
+  past their own wall-clock limit are turned into inspectable/resumable `interrupted` tasks (completed
+  tasks are skipped). `RESUME_RECOVERY_GRACE_S` (default 30) widens the staleness margin.
+- Before enabling it on an existing deployment, review the read-only audit:
+  `python scripts/resume_audit.py` (resumable count, refusal reasons, startup-recovery candidates).
+
 ## Evaluation
 
 A fixed 200-case evaluation set is included in [`benchmarks/cases_formal_200.json`](benchmarks/cases_formal_200.json)
