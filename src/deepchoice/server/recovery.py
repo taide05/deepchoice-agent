@@ -87,6 +87,11 @@ async def recover_interrupted_tasks(outputs_dir: Path, *,
     for task_dir in outputs_dir.iterdir():
         if not task_dir.is_dir():
             continue
+        # A completed task can still carry an old `running` run record (outputs
+        # written before the record was finalized). It cannot need recovery, and
+        # probing the checkpoint for it would only delay startup.
+        if (task_dir / "research_snapshot.json").exists():
+            continue
         record = read_run_state(task_dir)
         if record.get("state") != "running":
             continue

@@ -226,6 +226,25 @@ def test_stale_record_without_checkpoint_is_marked_and_status_visible(outputs,
     assert rows["dead_task_1"]["status"] == "interrupted"
 
 
+def test_a_completed_task_with_a_stale_running_record_is_not_touched(outputs):
+    """Historical outputs can carry a stale `running` record on a completed task.
+
+    Recovery must skip it: the task is complete, so it needs no interrupted
+    snapshot, and probing the checkpoint for it would only delay startup.
+    """
+    task_dir = outputs / "completed_with_stale_record"
+    (task_dir).mkdir(parents=True, exist_ok=True)
+    snapshot_store.save_snapshot(task_dir.name, {"task": {"query": "done"},
+                                                 "confidence": "high"})
+    _write_stale_run_state(task_dir)
+
+    assert asyncio.run(recovery.recover_interrupted_tasks(outputs, grace_s=0)) == []
+
+    record = json.loads((task_dir / "run_state.json").read_text(encoding="utf-8"))
+    assert record["state"] == "running", "a completed task must not be re-marked"
+    assert not list(task_dir.glob("research_snapshot_failed_attempt*.json"))
+
+
 def test_lifespan_skips_recovery_when_disabled(monkeypatch, tmp_path):
     calls = []
 
