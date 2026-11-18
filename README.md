@@ -36,7 +36,8 @@ DeepChoice 是一个基于 Python / LangGraph 的技术选型深度研究 Agent�
   matrix; Markdown / PDF export.
 - **Operational features** — FastAPI backend, SSE progress stream, cancellation, history and snapshot
   queries, SQLite checkpointing, Streamlit frontend, optional API-key auth + per-client rate limiting
-  for shared deployments (env-gated, off by default).
+  for shared deployments (env-gated, off by default). A feature-flagged resume path can continue a
+  failed/cancelled/interrupted run from its checkpoint, from the API and the UI (`RESUME_ENABLED=1`).
 - **Reproducible evaluation harness** — fixed 200-case set, deterministic metrics and a documented
   evaluation protocol (see [EVALUATION.md](EVALUATION.md)).
 
