@@ -7,8 +7,8 @@ meaningful for genuinely dead code without flagging public API surface.
 
 canonical_source_title  # public API
 resolve_citations  # public API
-last_rejected  # public API
 run_research_task  # public API
+resume_research_task  # public API (server resume path, exercised from tests)
 run_probe  # public API
 run_arm_limited  # public API
 default_evidence_budget  # public API
@@ -34,6 +34,7 @@ start_research  # public API
 cancel_research  # public API
 stream_research  # public API
 research_checkpoints  # public API
+resume_research  # public API (FastAPI route registered by decorator)
 research_report  # public API
 research_annotated  # public API
 research_export  # public API
@@ -45,7 +46,8 @@ clarify_message  # public API
 clarify_status  # public API
 clarify_finalize  # public API
 final_recommendation  # public API
-retry_count  # public API
+knowledge_gaps  # public state field (synthesis/report contract)
+set_readonly  # public API (benchmark entry point opt-out)
 current_phase  # public API
 agent_timing  # public API
 candidate_tokens  # public API

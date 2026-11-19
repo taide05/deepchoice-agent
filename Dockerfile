@@ -1,5 +1,7 @@
 # ===== Stage 1: Builder =====
-FROM python:3.13-slim AS builder
+# Python 3.12 matches .github/workflows/ci.yml. A 3.13 CI matrix is tracked
+# separately and must not be mixed into this alignment.
+FROM python:3.12-slim AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc \
@@ -10,14 +12,17 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src/ src/
 
-# Online install via the Tsinghua mirror — no local wheels directory is
-# required, so `git clone && docker build` works out of the box.
+# Online install through a configurable index (default: the Tsinghua mirror used
+# locally). CI overrides it with the public PyPI so the required image job does
+# not depend on a single mirror's reachability.
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 RUN pip install --no-cache-dir \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn .
+    -i "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST" .
 
 
 # ===== Stage 2: Runtime =====
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 # CJK font for PDF report export (xhtml2pdf). fonts-wqy-zenhei is TrueType-outlined
 # (reportlab can open it with subfontIndex=0); NotoSansCJK is CFF-based and cannot.
@@ -25,7 +30,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY chroma_kb/ /app/chroma_kb/

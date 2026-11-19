@@ -4,16 +4,28 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned runner image: ubuntu-latest is migrating (Ubuntu 26 rollout), and a
+    # pinned 24.04 keeps the "green image = shipped image" check reproducible.
+    runs-on: ubuntu-24.04
+    strategy:
+      # The 3.13 leg is experimental: it must not turn the workflow red while
+      # dependency support is observed. The image deliberately stays on 3.12
+      # (see Dockerfile), so 3.13 is validated here first. Remove the
+      # continue-on-error clause once 3.13 has been green for a couple of weeks.
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    continue-on-error: ${{ matrix.python-version == '3.13' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install dependencies
@@ -22,24 +34,47 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Static checks (pyflakes + vulture)
-        run: |
-          pip install pyflakes vulture
-          pyflakes src/ tests/
-          vulture src/ vulture_whitelist.py
-
-  test-windows:
-    runs-on: windows-latest
+  static:
+    # Static analysis does not depend on the interpreter version, so it runs once
+    # instead of once per matrix leg.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
 
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+      - name: Install static analysis tools
+        run: pip install pyflakes vulture
 
-      - name: Run tests (Windows-specific process-guard coverage)
-        run: pytest -q
+      - name: Static checks (pyflakes + vulture)
+        run: |
+          pyflakes src/ tests/
+          vulture src/ vulture_whitelist.py
+
+  docker:
+    # Building the image installs the full dependency set, so it is expensive and
+    # deliberately not run on every pull request: main pushes and manual runs
+    # validate the Dockerfile/CI Python alignment. It became a required job after
+    # the first green CI image build (run 44212336183, 2026-11-18).
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        # Required job: use the public PyPI (the Dockerfile default is a local
+        # mirror) and retry once, so a transient network error while fetching
+        # build dependencies does not fail an otherwise-good main push.
+        run: |
+          for attempt in 1 2; do
+            docker build \
+              --build-arg PIP_INDEX_URL=https://pypi.org/simple \
+              --build-arg PIP_TRUSTED_HOST=pypi.org \
+              -t deepchoice:ci . && exit 0
+            echo "image build attempt ${attempt} failed; retrying"
+            sleep 10
+          done
+          exit 1

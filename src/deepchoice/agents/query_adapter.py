@@ -64,15 +64,6 @@ class QueryAdapterAgent:
         task = research_state["task"]
         sub_questions = research_state.get("sub_questions", [])
 
-        # On retry, knowledge_gaps are the new adaptation targets
-        knowledge_gaps = research_state.get("knowledge_gaps", [])
-        if knowledge_gaps and research_state.get("retry_count", 0) > 0:
-            sub_questions = knowledge_gaps
-            print_agent_output(
-                f"Retry adaptation: targeting {len(knowledge_gaps)} knowledge gaps",
-                agent="QUERY_ADAPTER",
-            )
-
         if not sub_questions:
             return {
                 "adapted_queries": {},

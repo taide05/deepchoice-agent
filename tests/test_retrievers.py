@@ -502,6 +502,56 @@ class TestMultiRetriever:
         assert result["partial_failures"] == ["fail1"]
         assert result["search_results"][0]["status"] == "failed"
 
+    @pytest.mark.asyncio
+    async def test_registered_count_is_not_reported_as_success_count(self, monkeypatch):
+        """`retrievers_used` is the registration count, not how many succeeded.
+
+        The old field read as "how many retrievers were used" while carrying
+        len(RETRIEVER_REGISTRY). The harness now reports registered and succeeded
+        separately; the deprecated alias keeps its old meaning for readers.
+        """
+        state = {
+            "task": {"query": "test", "scene_context": "solo",
+                     "constraints": [], "report_format": "what_why_how"},
+            "sub_questions": [],
+        }
+
+        class OkRetriever:
+            async def search(self, query, sub_questions, adapted_queries=None,
+                             candidate_techs=None):
+                return {"source": "ok", "status": "success", "results": [],
+                        "error": None, "latency_ms": 1}
+
+        class FailingRetriever:
+            async def search(self, query, sub_questions, adapted_queries=None,
+                             candidate_techs=None):
+                raise Exception("broken")
+
+        class EmptyRetriever:
+            async def search(self, query, sub_questions, adapted_queries=None,
+                             candidate_techs=None):
+                return {"source": "empty", "status": "empty",
+                        "empty_reason": "no_results", "results": [],
+                        "error": None, "latency_ms": 1}
+
+        monkeypatch.setattr(
+            "deepchoice.agents.multi_retriever.harvest",
+            lambda terms, results, existing=None: [])
+        with patch.dict(
+            "deepchoice.agents.multi_retriever.RETRIEVER_REGISTRY",
+            {"ok": OkRetriever, "fail": FailingRetriever,
+             "empty": EmptyRetriever}, clear=True,
+        ):
+            result = await MultiRetrieverAgent().run(state)
+
+        signal = result["quality_signals"][0]
+        assert signal["retrievers_registered"] == 3
+        assert signal["retrievers_succeeded"] == 1
+        assert signal["retrievers_failed"] == 1
+        assert signal["retrievers_empty"] == 1
+        # Deprecated alias still means "registered", so old readers do not break.
+        assert signal["retrievers_used"] == signal["retrievers_registered"]
+
 
 def test_tech_aliases_target_existing_keys():
     from deepchoice.retrievers.official import _TECH_ALIASES, TECH_DOCS

@@ -65,7 +65,7 @@ def _state():
                             "results": [{"url": "https://example.com/a"}]}],
         "conflicts": [], "conflict_check": {}, "evidence_chains": [],
         "quality_signals": [], "token_usage": [], "partial_failures": [],
-        "empty_sources": [], "retry_count": 0,
+        "empty_sources": [],
     }
 
 

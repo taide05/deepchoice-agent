@@ -36,7 +36,8 @@ DeepChoice 是一个基于 Python / LangGraph 的技术选型深度研究 Agent�
   matrix; Markdown / PDF export.
 - **Operational features** — FastAPI backend, SSE progress stream, cancellation, history and snapshot
   queries, SQLite checkpointing, Streamlit frontend, optional API-key auth + per-client rate limiting
-  for shared deployments (env-gated, off by default).
+  for shared deployments (env-gated, off by default). A feature-flagged resume path can continue a
+  failed/cancelled/interrupted run from its checkpoint, from the API and the UI (`RESUME_ENABLED=1`).
 - **Reproducible evaluation harness** — fixed 200-case set, deterministic metrics and a documented
   evaluation protocol (see [EVALUATION.md](EVALUATION.md)).
 
@@ -132,8 +133,9 @@ The response contains a `task_id`; poll `/research/{task_id}/status`, stream eve
 | `GET /research/{task_id}/stream` | SSE progress stream |
 | `GET /research/{task_id}/report` | Final report (Markdown) |
 | `GET /research/{task_id}/export?format=md\|pdf` | Export report |
-| `GET /research/{task_id}/history`, `/snapshot` | History / snapshot |
+| `GET /research/{task_id}/history`, `/snapshot` | History / snapshot (`?attempt=N` inspects one partial attempt) |
 | `POST /research/{task_id}/cancel` | Cancel a running task |
+| `POST /research/{task_id}/resume` | Continue a failed/cancelled/interrupted task from its checkpoint (feature flag, off by default) |
 | `POST /clarify/start`, `/clarify/{sid}/message`, `/clarify/{sid}/finalize` | Optional pre-research clarification |
 | `GET /health` | Health check |
 
@@ -154,8 +156,28 @@ See [`.env.example`](.env.example) for a template.
 | `CHROMA_PATH` | no | Local knowledge-base path |
 | `PRECODEX_LLM_MAX` / `PRECODEX_TAVILY_MAX` / `PRECODEX_WALL_MAX_S` | no | Local run stop lines (default 40 / 24 / 900) |
 | `LEARNED_DOCS_READONLY` / `RETRIEVAL_CACHE_ENABLED` | no | Freeze knowledge-base writes / retrieval cache for evaluation runs |
+| `RESUME_ENABLED` | no | Enable checkpoint resume: the `/resume` endpoint and startup recovery of interrupted tasks (default `0`, off) |
+| `RESUME_MAX_ATTEMPTS` | no | Per-task attempt cap when resume is enabled (default 2) |
 | `DEEPCHOICE_API_KEY` | no | When set, require `X-API-Key` on all non-public endpoints (off by default) |
 | `DEEPCHOICE_RATE_LIMIT_PER_MINUTE` | no | Limit mutating requests per client per minute (0 = disabled) |
+
+### Checkpoint resume (feature-flagged)
+
+Resume is off by default (`RESUME_ENABLED=0`). When enabled, a run that failed, was cancelled, or was
+interrupted by a process stop keeps its checkpoint position and can be continued instead of restarted:
+
+- `POST /research/{task_id}/resume` with `{"confirm": true}` continues from the last checkpoint; refusals
+  explain themselves (feature disabled, already complete, attempt limit, incompatible graph version, or no
+  pending checkpoint).
+- `GET /research/{task_id}/status` reports `resumable`, `reason`, `next_node`, `checkpoint_step`, `attempt`
+  and `max_attempts`; the UI only shows the resume action when `resumable` is true.
+- Attempts are capped by `RESUME_MAX_ATTEMPTS` (default 2). Partial results are kept per attempt
+  (`research_snapshot_failed_attempt{N}.json`); `GET /research/{task_id}/snapshot?attempt=N` inspects one.
+- With `RESUME_ENABLED=1` the server also recovers interrupted tasks at startup: dead `running` records
+  past their own wall-clock limit are turned into inspectable/resumable `interrupted` tasks (completed
+  tasks are skipped). `RESUME_RECOVERY_GRACE_S` (default 30) widens the staleness margin.
+- Before enabling it on an existing deployment, review the read-only audit:
+  `python scripts/resume_audit.py` (resumable count, refusal reasons, startup-recovery candidates).
 
 ## Evaluation
 

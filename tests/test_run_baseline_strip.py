@@ -12,7 +12,6 @@ def test_strip_run_keeps_final_recommendation_and_drops_state():
         "elapsed_s": 1.0,
         "search_results": [],
         "conflicts": [],
-        "retry_count": 0,
         "confidence": "high",
         "knowledge_gaps": [],
         "agent_timing": {},
