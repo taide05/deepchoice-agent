@@ -13,7 +13,9 @@ import json
 import re
 from pathlib import Path
 
-OUTPUT_DIR = Path("./outputs")
+from .env_config import output_dir
+
+OUTPUT_DIR = output_dir()
 
 _TASK_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _FAILED_SNAPSHOT_RE = re.compile(r"^research_snapshot_failed_attempt(\d+)\.json$")

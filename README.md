@@ -158,8 +158,15 @@ See [`.env.example`](.env.example) for a template.
 | `LEARNED_DOCS_READONLY` / `RETRIEVAL_CACHE_ENABLED` | no | Freeze knowledge-base writes / retrieval cache for evaluation runs |
 | `RESUME_ENABLED` | no | Enable checkpoint resume: the `/resume` endpoint and startup recovery of interrupted tasks (default `0`, off) |
 | `RESUME_MAX_ATTEMPTS` | no | Per-task attempt cap when resume is enabled (default 2) |
+| `DEEPCHOICE_ENV_FILE` | no | Load one dotenv file from outside the checkout instead of relying on per-checkout `.env` discovery (useful with multiple git worktrees) |
+| `DEEPCHOICE_OUTPUT_DIR` | no | Directory for run outputs and `checkpoints.db`, shared across worktrees (default `./outputs`) |
 | `DEEPCHOICE_API_KEY` | no | When set, require `X-API-Key` on all non-public endpoints (off by default) |
 | `DEEPCHOICE_RATE_LIMIT_PER_MINUTE` | no | Limit mutating requests per client per minute (0 = disabled) |
+
+If the repository has several git worktrees, keep secrets and data outside the checkouts:
+set `DEEPCHOICE_ENV_FILE` to one dotenv file (for example `D:\deepchoice-data\.env`) and
+`DEEPCHOICE_OUTPUT_DIR` to one shared data directory (for example `D:\deepchoice-data\outputs`).
+`HF_HOME` can similarly point at a shared model cache.
 
 ### Checkpoint resume (feature-flagged)
 

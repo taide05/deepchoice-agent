@@ -199,8 +199,10 @@ def _human_report(report: dict, limit: int) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Read-only pre-enable audit for checkpoint resume.")
-    parser.add_argument("--outputs", default=str(REPO_ROOT / "outputs"),
-                        help="outputs directory to audit (default: <repo>/outputs)")
+    parser.add_argument(
+        "--outputs",
+        default=os.environ.get("DEEPCHOICE_OUTPUT_DIR") or str(REPO_ROOT / "outputs"),
+        help="outputs directory to audit (default: $DEEPCHOICE_OUTPUT_DIR or <repo>/outputs)")
     parser.add_argument("--limit", type=int, default=20,
                         help="max task ids listed per section (default: 20)")
     parser.add_argument("--json", action="store_true",

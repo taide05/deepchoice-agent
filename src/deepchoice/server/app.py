@@ -3,11 +3,10 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from dotenv import load_dotenv
+from .env_config import load_environment, output_dir
 
-load_dotenv()
+load_environment()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -41,7 +40,7 @@ from .snapshot_store import (
     save_snapshot,
 )
 
-OUTPUT_DIR = Path("./outputs")
+OUTPUT_DIR = output_dir()
 _active_tasks: dict[str, dict] = {}
 FORMAT_RENDERERS = {
     "what_why_how": render_what_why_how,

@@ -1,6 +1,14 @@
+import os
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+
+# Test isolation: tests must never load a developer's deployment dotenv file.
+# Point the shared-config loader at a path that does not exist before any test
+# module imports the server (app import calls load_environment()).
+os.environ["DEEPCHOICE_ENV_FILE"] = str(
+    Path(__file__).resolve().parent / "no-deployment-config")
 
 
 @pytest.fixture
