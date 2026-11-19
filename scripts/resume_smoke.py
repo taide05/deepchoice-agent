@@ -49,8 +49,14 @@ def _headers(api_key: str | None) -> dict:
     return {"X-API-Key": api_key} if api_key else {}
 
 
-def _sse_events(response) -> list[tuple[str | None, dict]]:
-    events = []
+def _sse_events(response):
+    """Yield (node, event) pairs lazily.
+
+    Lazy is mandatory: the caller stops after N completed nodes and closes the
+    stream so the run can be interrupted. Materialising the whole response first
+    would let a fast run finish before the cancel is sent (regression caught by
+    the real uvicorn smoke).
+    """
     for line in response.iter_lines():
         if not line.startswith("data:"):
             continue
@@ -59,8 +65,7 @@ def _sse_events(response) -> list[tuple[str | None, dict]]:
         except json.JSONDecodeError:
             continue
         if isinstance(event, dict):
-            events.append((event.get("node"), event))
-    return events
+            yield event.get("node"), event
 
 
 def _read_stream(client: httpx.Client, base_url: str, task_id: str, *,
@@ -164,7 +169,8 @@ def verify(client: httpx.Client, base_url: str, task_id: str,
     snapshot = client.get(f"{base_url}/research/{task_id}/snapshot")
     attempt_snapshot = client.get(f"{base_url}/research/{task_id}/snapshot",
                                   params={"attempt": 1})
-    history = client.get(f"{base_url}/research/{task_id}/history")
+    # The history endpoint is global (`GET /history`), not per-task.
+    history = client.get(f"{base_url}/history")
     rows = []
     if history.status_code == 200:
         body = history.json()

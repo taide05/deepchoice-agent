@@ -94,7 +94,7 @@ def _handler(state: dict):
                     "_status": "failed", "_error": "boom"})
             return httpx.Response(200, json={
                 "task": {"query": "q"}, "report": "# R", "confidence": "high"})
-        if request.method == "GET" and path.endswith("/history"):
+        if request.method == "GET" and path == "/history":
             return httpx.Response(200, json={"tasks": [{
                 "task_id": state["task_id"], "attempts": 2,
                 "status": "complete"}]})
@@ -127,6 +127,11 @@ def test_full_smoke_passes_and_drives_the_contract():
     assert posts.count("/research/smoke-task-1/cancel") == 1
     assert posts.count("/research/smoke-task-1/resume") == 1
     assert state["stream_calls"] == 2
+    # The history contract check must use the global endpoint; the per-task path
+    # does not exist (real-uvicorn regression: it made history_attempts fail).
+    gets = [path for method, path, _ in state["calls"] if method == "GET"]
+    assert "/history" in gets
+    assert not any("/research/smoke-task-1/history" == path for path in gets)
 
 
 def test_existing_task_mode_skips_creation_and_cancellation():
@@ -180,3 +185,58 @@ def test_verification_detects_a_missing_first_attempt_snapshot():
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(smoke.SmokeError, match="first_attempt_snapshot"):
             smoke.run_smoke(client, "http://smoke.test", timeout_s=30)
+
+
+class _LazySseStream:
+    """Response double whose SSE body is produced lazily, one event per read."""
+
+    def __init__(self, total_events: int):
+        self.total_events = total_events
+        self.consumed = 0
+
+    def iter_lines(self):
+        for index in range(self.total_events):
+            self.consumed += 1
+            yield f'data: {{"node": "node_{index}", "ts": {index}}}\n\n'
+
+
+class _FakeStreamResponse:
+    status_code = 200
+
+    def __init__(self, stream: _LazySseStream):
+        self.stream = stream
+
+    def iter_lines(self):
+        return self.stream.iter_lines()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeStreamingClient:
+    def __init__(self, stream: _LazySseStream):
+        self._stream = stream
+
+    def stream(self, method, url, **kwargs):
+        return _FakeStreamResponse(self._stream)
+
+
+def test_stream_reader_stops_after_min_nodes_and_leaves_the_rest_unread():
+    """Real-uvicorn regression: the reader must stop lazily, not drain the stream.
+
+    Draining the whole SSE body before checking min_nodes lets a fast run finish
+    before the smoke sends its cancel, so the "interrupted" run is already
+    complete (this actually happened against a real uvicorn server).
+    """
+    stream = _LazySseStream(total_events=50)
+    client = _FakeStreamingClient(stream)
+
+    events, terminator = smoke._read_stream(
+        client, "http://smoke.test", "task", min_nodes=2, timeout_s=30)
+
+    assert terminator is None
+    assert [node for node, _ in events] == ["node_0", "node_1"]
+    assert stream.consumed == 2, "the reader drained the SSE stream instead of stopping early"
