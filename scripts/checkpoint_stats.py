@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -109,8 +110,11 @@ def build_report(db_path: Path, stats: dict) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Read-only LangGraph checkpoint database inventory")
-    parser.add_argument("--db", type=Path, default=Path("outputs/checkpoints.db"),
-                        help="path to checkpoints.db (default: outputs/checkpoints.db)")
+    parser.add_argument(
+        "--db", type=Path,
+        default=Path(os.environ.get("DEEPCHOICE_OUTPUT_DIR", "outputs")) / "checkpoints.db",
+        help="path to checkpoints.db (default: $DEEPCHOICE_OUTPUT_DIR/checkpoints.db "
+             "or outputs/checkpoints.db)")
     parser.add_argument("--top", type=int, default=20,
                         help="how many largest threads to list (default: 20)")
     args = parser.parse_args(argv)
